@@ -52,7 +52,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "11px", color: "var(--fg-4)",
-          letterSpacing: "1px", marginTop: "8px",
+          letterSpacing: "0.09em", marginTop: "8px",
         }}>
           sorted by current day
         </p>
@@ -65,7 +65,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
           gridTemplateColumns: "32px 1fr 64px 64px 64px",
           gap: "12px", padding: "8px 12px",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "9px", color: "var(--fg-4)",
+          fontSize: "11px", color: "var(--fg-4)",
           letterSpacing: "0.12em", textTransform: "uppercase",
         }}>
           <span>#</span>

@@ -61,6 +61,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
 
       {/* Block C: CTA */}
       <button
+        type="button"
         onClick={onBegin}
         style={{
           background: "rgba(232, 228, 222, 0.04)",

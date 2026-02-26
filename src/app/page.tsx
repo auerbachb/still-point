@@ -241,6 +241,7 @@ export default function StillPoint() {
         }}>
           {navItems.map(v => (
             <button
+              type="button"
               key={v}
               onClick={() => setView(v)}
               style={{

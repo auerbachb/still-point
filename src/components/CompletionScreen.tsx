@@ -46,7 +46,7 @@ export function CompletionScreen({
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "13px", color: "rgba(74,222,128,0.6)",
-          marginTop: "12px", letterSpacing: "1px",
+          marginTop: "12px", letterSpacing: "0.07em",
         }}>
           {duration} seconds of sustained attention
         </p>
@@ -120,7 +120,7 @@ export function CompletionScreen({
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
               fontSize: "11px", color: "rgba(74,222,128,0.5)",
-              letterSpacing: "1px",
+              letterSpacing: "0.09em",
             }}>
               note saved
             </div>

@@ -140,7 +140,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         <div style={{
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           fontSize: "14px", color: "var(--fg-2)",
-          marginBottom: "20px", letterSpacing: "1px", textTransform: "uppercase",
+          marginBottom: "20px", letterSpacing: "0.07em", textTransform: "uppercase",
         }}>
           Journey
         </div>
@@ -277,7 +277,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                       <div key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
                           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                          fontSize: "9px", color: "rgba(251,191,36,0.3)", whiteSpace: "nowrap",
+                          fontSize: "11px", color: "rgba(251,191,36,0.3)", whiteSpace: "nowrap",
                         }}>
                           @{t.timeInSession}s
                         </span>
