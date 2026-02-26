@@ -245,9 +245,11 @@ export default function StillPoint() {
                 background: "none", border: "none",
                 color: view === v ? "rgba(232,228,222,0.8)" : "rgba(232,228,222,0.25)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
+                fontSize: isMobile ? "13px" : "11px",
+                letterSpacing: isMobile ? "1.5px" : "2px",
+                textTransform: "uppercase",
                 cursor: "pointer",
-                padding: isMobile ? "10px 12px" : "8px",
+                padding: isMobile ? "12px 14px" : "8px",
                 minWidth: isMobile ? "44px" : undefined,
                 minHeight: isMobile ? "44px" : undefined,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -260,14 +262,16 @@ export default function StillPoint() {
         </div>
       )}
 
-      {/* Username badge */}
-      {!isMobile && view !== "settings" && view !== "session" && (
+      {/* Welcome header */}
+      {view !== "session" && (
         <div style={{
-          position: "absolute", top: "28px", left: "24px",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "11px", color: "rgba(232,228,222,0.2)",
+          fontSize: "11px", color: "rgba(232,228,222,0.25)",
+          letterSpacing: "2px",
+          textAlign: "center",
+          marginBottom: "8px",
         }}>
-          {user.username}
+          <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
         </div>
       )}
 
