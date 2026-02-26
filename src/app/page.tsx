@@ -222,7 +222,7 @@ export default function StillPoint() {
       alignItems: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
-        ? "var(--s4) var(--s3) calc(96px + env(safe-area-inset-bottom, 0px))"
+        ? "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
         : "var(--s4) var(--s4)",
     }}>
       {/* Nav */}
@@ -230,7 +230,7 @@ export default function StillPoint() {
         <div style={isMobile ? {
           position: "fixed", bottom: 0, left: 0, right: 0,
           display: "flex", justifyContent: "space-around",
-          background: "rgba(26,24,22,0.92)", backdropFilter: "blur(10px)",
+          background: "rgba(var(--bg-rgb), 0.92)", backdropFilter: "blur(10px)",
           borderTop: "1px solid var(--border-1)",
           padding: "10px 0 env(safe-area-inset-bottom, 8px)",
           zIndex: 100,

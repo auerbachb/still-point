@@ -46,14 +46,14 @@ export function CompletionScreen({
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "13px", color: "rgba(74,222,128,0.6)",
-          marginTop: "12px", letterSpacing: "0.07em",
+          marginTop: "var(--s2)", letterSpacing: "0.07em",
         }}>
           {duration} seconds of sustained attention
         </p>
 
         <div style={{
-          display: "flex", gap: "32px", justifyContent: "center",
-          marginTop: "24px",
+          display: "flex", gap: "var(--s5)", justifyContent: "center",
+          marginTop: "var(--s4)",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
         }}>
           <div style={{ textAlign: "center" }}>
@@ -151,6 +151,8 @@ export function CompletionScreen({
                     try {
                       await onSaveNote(note.trim());
                       setNoteSaved(true);
+                    } catch (err) {
+                      console.error("Failed to save note:", err);
                     } finally {
                       setSaving(false);
                     }

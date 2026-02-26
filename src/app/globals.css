@@ -16,6 +16,10 @@
   --s4: 24px;
   --s5: 32px;
   --s6: 48px;
+
+  /* Surface / layout */
+  --bg-rgb: 26, 24, 22;
+  --nav-h: 96px;
 }
 
 * {
