@@ -46,7 +46,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       gap: "32px", animation: "fadeIn 0.6s ease",
-      width: "100%", maxWidth: "min(400px, calc(100vw - 24px))",
+      width: "100%", maxWidth: "min(400px, calc(100vw - 40px))",
     }}>
       <h2 style={{
         fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
