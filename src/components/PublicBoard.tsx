@@ -10,6 +10,10 @@ type PublicBoardProps = {
 export function PublicBoard({ currentUsername }: PublicBoardProps) {
   const [board, setBoard] = useState<BoardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const containerStyle: React.CSSProperties = {
+    display: "flex", flexDirection: "column", alignItems: "center",
+    gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
+  };
 
   useEffect(() => {
     fetch("/api/board")
@@ -25,10 +29,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
 
   if (loading) {
     return (
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center",
-        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
-      }}>
+      <div style={containerStyle}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
           Practitioners
@@ -42,10 +43,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
   }
 
   return (
-    <div style={{
-      display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
-    }}>
+    <div style={containerStyle}>
       <div style={{ textAlign: "center" }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>

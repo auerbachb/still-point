@@ -10,7 +10,7 @@ type MindStateBarProps = {
 export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState }: MindStateBarProps) {
   if (elapsed <= 0) return null;
 
-  const barWidth = 460;
+  const barWidth = "min(460px, calc(100vw - 40px))";
   const segments: Array<{ start: number; end: number; state: string }> = [];
   let lastTime = 0;
   let lastState = "clear";
@@ -35,7 +35,7 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
   }
 
   return (
-    <div style={{ width: `${barWidth}px`, margin: "0 auto" }}>
+    <div style={{ width: barWidth, margin: "0 auto" }}>
       <div style={{
         height: "8px", borderRadius: "4px", overflow: "hidden",
         display: "flex", background: "rgba(232,228,222,0.06)",

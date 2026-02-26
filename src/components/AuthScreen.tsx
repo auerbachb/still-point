@@ -65,7 +65,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "40px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "340px",
+      gap: "40px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(340px, calc(100vw - 40px))",
     }}>
       <div style={{ textAlign: "center" }}>
         <h1 style={{

@@ -35,7 +35,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
       display: "flex", flexDirection: "column", gap: "10px",
       padding: "16px 20px", background: "rgba(251,191,36,0.06)",
       border: "1px solid rgba(251,191,36,0.15)", borderRadius: "12px",
-      width: "100%", maxWidth: "380px", animation: "fadeIn 0.2s ease",
+      width: "100%", maxWidth: "min(380px, calc(100vw - 40px))", animation: "fadeIn 0.2s ease",
     }}>
       <input
         ref={inputRef}

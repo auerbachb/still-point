@@ -9,6 +9,7 @@ import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
 import { PublicBoard } from "@/components/PublicBoard";
 import { SettingsView } from "@/components/SettingsView";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type View = "home" | "session" | "complete" | "history" | "journal" | "board" | "settings";
 
@@ -34,6 +35,7 @@ export default function StillPoint() {
   const [view, setView] = useState<View>("home");
   const [authChecked, setAuthChecked] = useState(false);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -217,11 +219,21 @@ export default function StillPoint() {
       minHeight: "100vh", display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-      padding: "40px 20px", position: "relative",
+      padding: isMobile
+        ? "20px 12px calc(80px + env(safe-area-inset-bottom, 0px))"
+        : "40px 20px",
+      position: "relative",
     }}>
       {/* Nav */}
       {view !== "session" && (
-        <div style={{
+        <div style={isMobile ? {
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          display: "flex", justifyContent: "space-around",
+          background: "rgba(26,24,22,0.92)", backdropFilter: "blur(8px)",
+          borderTop: "1px solid rgba(232,228,222,0.06)",
+          padding: "10px 0 env(safe-area-inset-bottom, 8px)",
+          zIndex: 100,
+        } : {
           position: "absolute", top: "24px", right: "24px",
           display: "flex", gap: "16px",
         }}>
@@ -234,7 +246,12 @@ export default function StillPoint() {
                 color: view === v ? "rgba(232,228,222,0.8)" : "rgba(232,228,222,0.25)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
-                cursor: "pointer", padding: "8px", transition: "color 0.3s",
+                cursor: "pointer",
+                padding: isMobile ? "10px 12px" : "8px",
+                minWidth: isMobile ? "44px" : undefined,
+                minHeight: isMobile ? "44px" : undefined,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                transition: "color 0.3s",
               }}
             >
               {v}
@@ -244,7 +261,7 @@ export default function StillPoint() {
       )}
 
       {/* Username badge */}
-      {view !== "settings" && view !== "session" && (
+      {!isMobile && view !== "settings" && view !== "session" && (
         <div style={{
           position: "absolute", top: "28px", left: "24px",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",

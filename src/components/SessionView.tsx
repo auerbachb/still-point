@@ -54,10 +54,12 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     window.addEventListener("mousemove", resetTimer);
     window.addEventListener("mousedown", resetTimer);
     window.addEventListener("keydown", resetTimer);
+    window.addEventListener("touchstart", resetTimer, { passive: true });
     return () => {
       window.removeEventListener("mousemove", resetTimer);
       window.removeEventListener("mousedown", resetTimer);
       window.removeEventListener("keydown", resetTimer);
+      window.removeEventListener("touchstart", resetTimer);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
   }, []);
@@ -207,7 +209,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         )}
 
         {!showThoughtInput && (
-          <div style={{ display: "flex", justifyContent: "center", gap: "24px", marginTop: "32px" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px", flexWrap: "wrap" }}>
             <button
               onClick={() => setIsActive(!isActive)}
               style={{

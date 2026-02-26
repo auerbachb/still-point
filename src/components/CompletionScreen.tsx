@@ -80,7 +80,7 @@ export function CompletionScreen({
             marginTop: "24px", padding: "14px 18px",
             background: "rgba(232,228,222,0.02)", borderRadius: "8px",
             borderLeft: "2px solid rgba(251,191,36,0.15)",
-            textAlign: "left", maxWidth: "350px", margin: "24px auto 0",
+            textAlign: "left", maxWidth: "min(350px, calc(100vw - 40px))", margin: "24px auto 0",
           }}>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
@@ -112,7 +112,7 @@ export function CompletionScreen({
       {/* Session note */}
       {onSaveNote && (
         <div style={{
-          width: "100%", maxWidth: "380px",
+          width: "100%", maxWidth: "min(380px, calc(100vw - 40px))",
           display: "flex", flexDirection: "column", alignItems: "center", gap: "10px",
         }}>
           {noteSaved ? (
