@@ -1,3 +1,23 @@
+:root {
+  /* Color tiers — warm off-white on dark */
+  --fg:   rgba(232, 228, 222, 0.92);
+  --fg-2: rgba(232, 228, 222, 0.70);
+  --fg-3: rgba(232, 228, 222, 0.52);
+  --fg-4: rgba(232, 228, 222, 0.28);
+
+  /* Borders */
+  --border-1: rgba(232, 228, 222, 0.08);
+  --border-2: rgba(232, 228, 222, 0.18);
+
+  /* Spacing scale (8px base) */
+  --s1: 8px;
+  --s2: 12px;
+  --s3: 16px;
+  --s4: 24px;
+  --s5: 32px;
+  --s6: 48px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -34,4 +54,12 @@ a {
 @keyframes breathe {
   0%, 100% { transform: scale(1); opacity: 0.6; }
   50% { transform: scale(1.02); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

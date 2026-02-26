@@ -94,11 +94,11 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
           Progress
         </h2>
         <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "12px", color: "rgba(232,228,222,0.3)" }}>
+          fontSize: "12px", color: "var(--fg-3)" }}>
           Loading...
         </div>
       </div>
@@ -111,7 +111,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
     }}>
       <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
         Progress
       </h2>
 
@@ -127,8 +127,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
           { label: "\uD83D\uDCAD/min", value: String(stats.avgThoughtsPerMinute) },
         ].map(s => (
           <div key={s.label} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 200, color: "#e8e4de" }}>{s.value}</div>
-            <div style={{ fontSize: "10px", color: "rgba(232,228,222,0.3)", letterSpacing: "2px", textTransform: "uppercase", marginTop: "4px" }}>
+            <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--fg)" }}>{s.value}</div>
+            <div style={{ fontSize: "11px", color: "var(--fg-3)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px" }}>
               {s.label}
             </div>
           </div>
@@ -139,7 +139,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       <div style={{ width: "100%", maxWidth: "660px" }}>
         <div style={{
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-          fontSize: "14px", color: "rgba(232,228,222,0.4)",
+          fontSize: "14px", color: "var(--fg-2)",
           marginBottom: "20px", letterSpacing: "1px", textTransform: "uppercase",
         }}>
           Journey
@@ -164,7 +164,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   {!isMobile && (
                     <div style={{
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "10px", color: "rgba(232,228,222,0.2)",
+                      fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
                       {dateLabel}
@@ -172,19 +172,19 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px", color: "rgba(232,228,222,0.3)",
+                    fontSize: "11px", color: "var(--fg-3)",
                     width: "32px", textAlign: "right",
                   }}>
                     &mdash;
                   </div>
                   <div style={{
                     flex: 1, height: "24px", borderRadius: "3px",
-                    border: "1px dashed rgba(232,228,222,0.08)",
+                    border: "1px dashed var(--border-1)",
                     display: "flex", alignItems: "center", paddingLeft: "10px",
                   }}>
                     <span style={{
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "10px", color: "rgba(232,228,222,0.2)", fontStyle: "italic",
+                      fontSize: "11px", color: "var(--fg-4)", fontStyle: "italic",
                     }}>
                       missed
                     </span>
@@ -218,7 +218,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   {!isMobile && (
                     <div style={{
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "10px", color: "rgba(232,228,222,0.2)",
+                      fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
                       {dateLabel}
@@ -226,7 +226,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px", color: "rgba(232,228,222,0.3)",
+                    fontSize: "11px", color: "var(--fg-3)",
                     width: "32px", textAlign: "right",
                   }}>
                     D{entry.day}
@@ -258,10 +258,10 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     color: entry.completed ? "rgba(74,222,128,0.5)" : "rgba(239,68,68,0.5)",
                     width: isMobile ? "80px" : "120px", display: "flex", gap: "6px", flexWrap: "wrap",
                   }}>
-                    <span style={{ color: "rgba(232,228,222,0.3)" }}>{entry.actualTime}s</span>
-                    <span style={{ color: "rgba(232,228,222,0.2)" }}>&middot;</span>
+                    <span style={{ color: "var(--fg-3)" }}>{entry.actualTime}s</span>
+                    <span style={{ color: "var(--fg-4)" }}>&middot;</span>
                     <span>{entry.clearPercent}%</span>
-                    <span style={{ color: "rgba(232,228,222,0.2)" }}>&middot;</span>
+                    <span style={{ color: "var(--fg-4)" }}>&middot;</span>
                     <span style={{ color: "rgba(251,191,36,0.4)" }}>{entry.thoughtCount}\uD83D\uDCAD</span>
                   </div>
                 </div>
@@ -283,7 +283,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                         </span>
                         <span style={{
                           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-                          fontSize: "13px", fontStyle: "italic", color: "rgba(232,228,222,0.45)",
+                          fontSize: "13px", fontStyle: "italic", color: "var(--fg-2)",
                         }}>
                           {t.text}
                         </span>
@@ -300,7 +300,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             {!isMobile && (
               <div style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "10px", color: "rgba(232,228,222,0.15)",
+                fontSize: "11px", color: "var(--fg-4)",
                 width: "160px", textAlign: "right", whiteSpace: "nowrap",
               }}>
                 today
@@ -308,7 +308,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             )}
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(232,228,222,0.25)",
+              fontSize: "11px", color: "var(--fg-4)",
               width: "32px", textAlign: "right",
             }}>
               D{currentDay}
@@ -327,7 +327,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             </div>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(232,228,222,0.2)", width: isMobile ? "80px" : "120px",
+              fontSize: "11px", color: "var(--fg-4)", width: isMobile ? "80px" : "120px",
             }}>
               {todayDuration}s
             </div>
@@ -344,7 +344,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             <div key={l.label} style={{
               display: "flex", alignItems: "center", gap: "6px",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "10px", color: "rgba(232,228,222,0.3)",
+              fontSize: "11px", color: "var(--fg-3)",
             }}>
               <div style={{
                 width: "10px", height: "10px", borderRadius: "2px",
@@ -358,7 +358,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
       <p style={{
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-        fontSize: "10px", color: "rgba(232,228,222,0.2)", textAlign: "center",
+        fontSize: "11px", color: "var(--fg-4)", textAlign: "center",
       }}>
         click any day to see captured thoughts
       </p>

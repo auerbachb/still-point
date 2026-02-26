@@ -51,6 +51,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
       <h2 style={{
         fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        color: "var(--fg)",
       }}>
         Settings
       </h2>
@@ -65,20 +66,20 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         }}>
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "10px", color: "rgba(232,228,222,0.25)",
-            letterSpacing: "2px", textTransform: "uppercase",
+            fontSize: "11px", color: "var(--fg-4)",
+            letterSpacing: "0.12em", textTransform: "uppercase",
           }}>
             ACCOUNT
           </div>
           <div style={{
             fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "16px", color: "#e8e4de",
+            fontSize: "16px", color: "var(--fg)",
           }}>
             {user.username}
           </div>
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "12px", color: "rgba(232,228,222,0.3)",
+            fontSize: "12px", color: "var(--fg-3)",
           }}>
             {user.email}
           </div>
@@ -94,14 +95,14 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
           <div>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "12px", color: "#e8e4de", marginBottom: "4px",
+              fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
             }}>
               Public Board
             </div>
             <div style={{
               fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
               fontSize: "13px", fontStyle: "italic",
-              color: "rgba(232,228,222,0.35)",
+              color: "var(--fg-3)",
             }}>
               Show your stats alongside other practitioners
             </div>
@@ -139,7 +140,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
             border: "1px solid rgba(239,68,68,0.15)",
             color: "rgba(239,68,68,0.5)",
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "11px", letterSpacing: "2px",
+            fontSize: "11px", letterSpacing: "0.12em",
             textTransform: "uppercase", padding: "12px",
             borderRadius: "8px", cursor: "pointer",
             transition: "all 0.3s", marginTop: "8px",

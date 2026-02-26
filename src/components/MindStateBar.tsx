@@ -38,7 +38,7 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
     <div style={{ width: barWidth, margin: "0 auto" }}>
       <div style={{
         height: "8px", borderRadius: "4px", overflow: "hidden",
-        display: "flex", background: "rgba(232,228,222,0.06)",
+        display: "flex", background: "rgba(232, 228, 222, 0.06)",
       }}>
         {segments.map((seg, i) => (
           <div key={i} style={{
@@ -53,7 +53,7 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
       <div style={{
         display: "flex", justifyContent: "space-between", marginTop: "6px",
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-        fontSize: "10px", color: "rgba(232,228,222,0.25)",
+        fontSize: "11px", color: "var(--fg-4)",
       }}>
         <span>0s</span>
         <span>{totalSeconds}s</span>

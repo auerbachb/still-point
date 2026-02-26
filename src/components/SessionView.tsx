@@ -184,7 +184,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 : "rgba(74,222,128,0.2)"}`,
               color: mindState === "thinking" ? "#fbbf24" : "#4ade80",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase",
+              fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase",
               padding: "12px 28px", borderRadius: "24px",
               cursor: "pointer", transition: "all 0.3s", minWidth: "160px",
             }}
@@ -194,7 +194,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
           {sessionThoughtCount > 0 && (
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(251,191,36,0.4)",
+              fontSize: "11px", color: "rgba(251, 191, 36, 0.4)",
               display: "flex", alignItems: "center", gap: "4px",
             }}>
               \uD83D\uDCAD {sessionThoughtCount}
@@ -214,10 +214,10 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               onClick={() => setIsActive(!isActive)}
               style={{
                 background: "none",
-                border: "1px solid rgba(232,228,222,0.15)",
-                color: "rgba(232,228,222,0.5)",
+                border: "1px solid var(--border-2)",
+                color: "var(--fg-3)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
+                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
                 padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
               }}
             >
@@ -230,7 +230,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 border: "1px solid rgba(74,222,128,0.2)",
                 color: "rgba(74,222,128,0.5)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
+                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
                 padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
               }}
             >
@@ -243,7 +243,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 border: "1px solid rgba(239,68,68,0.2)",
                 color: "rgba(239,68,68,0.5)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
+                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
                 padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
               }}
             >
@@ -256,7 +256,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         <div style={{
           display: "flex", justifyContent: "center", gap: "16px", marginTop: "24px",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "10px", letterSpacing: "1px",
+          fontSize: "11px", letterSpacing: "0.1em",
         }}>
           {([
             ["tick", "tick"],
@@ -273,8 +273,8 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 color: soundPrefs[key]
-                  ? "rgba(232,228,222,0.5)"
-                  : "rgba(232,228,222,0.15)",
+                  ? "var(--fg-3)"
+                  : "var(--fg-4)",
                 transition: "color 0.3s",
                 padding: "4px 8px",
               }}

@@ -47,7 +47,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         style={{
           background: "rgba(0,0,0,0.3)",
           border: "1px solid rgba(251,191,36,0.2)",
-          borderRadius: "8px", padding: "10px 14px", color: "#e8e4de",
+          borderRadius: "8px", padding: "10px 14px", color: "var(--fg)",
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           fontSize: "15px", fontStyle: "italic", outline: "none",
           width: "100%", boxSizing: "border-box" as const,
@@ -56,9 +56,9 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
         <button onClick={onCancel} style={{
           background: "none", border: "none",
-          color: "rgba(232,228,222,0.3)",
+          color: "var(--fg-4)",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+          fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase",
           cursor: "pointer", padding: "6px 12px",
         }}>
           skip
@@ -68,7 +68,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
           border: "1px solid rgba(251,191,36,0.3)",
           color: "#fbbf24",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+          fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase",
           cursor: "pointer", padding: "6px 16px", borderRadius: "12px",
         }}>
           save &amp; clear

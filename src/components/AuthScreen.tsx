@@ -52,10 +52,10 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const inputStyle: React.CSSProperties = {
     background: "rgba(0,0,0,0.3)",
-    border: "1px solid rgba(232,228,222,0.12)",
+    border: "1px solid var(--border-1)",
     borderRadius: "8px",
     padding: "12px 16px",
-    color: "#e8e4de",
+    color: "var(--fg)",
     fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
     fontSize: "15px",
     outline: "none",
@@ -72,15 +72,16 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       <div style={{ textAlign: "center" }}>
         <h1 style={{
           fontSize: "42px", fontWeight: 300, margin: 0,
-          letterSpacing: "-1px", fontStyle: "italic",
+          letterSpacing: "-0.02em", fontStyle: "italic",
+          color: "var(--fg)",
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
         }}>
           Still Point
         </h1>
         <p style={{
-          fontSize: "13px", color: "rgba(232,228,222,0.35)",
+          fontSize: "13px", color: "var(--fg-2)",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          letterSpacing: "3px", textTransform: "uppercase", marginTop: "12px",
+          letterSpacing: "0.15em", textTransform: "uppercase", marginTop: "var(--s1)",
         }}>
           attention training
         </p>
@@ -99,9 +100,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             style={{
               background: mode === m ? "rgba(232,228,222,0.1)" : "none",
               border: "none",
-              color: mode === m ? "#e8e4de" : "rgba(232,228,222,0.3)",
+              color: mode === m ? "var(--fg)" : "var(--fg-4)",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", letterSpacing: "2px",
+              fontSize: "11px", letterSpacing: "0.15em",
               textTransform: "uppercase", cursor: "pointer",
               padding: "8px 20px", borderRadius: "17px",
               transition: "all 0.3s",
@@ -122,8 +123,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onKeyDown={handleKeyDown}
           placeholder="email"
           style={inputStyle}
-          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
-          onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
+          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+          onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
         />
         {mode === "signup" && (
           <input
@@ -133,8 +134,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             onKeyDown={handleKeyDown}
             placeholder="username"
             style={inputStyle}
-            onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
-            onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
+            onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+            onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
           />
         )}
         <input
@@ -144,8 +145,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onKeyDown={handleKeyDown}
           placeholder="password"
           style={inputStyle}
-          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
-          onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
+          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+          onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
         />
         {error && (
           <div style={{
@@ -160,26 +161,26 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onClick={handleSubmit}
           disabled={loading}
           style={{
-            background: "none",
-            border: "1px solid rgba(232,228,222,0.2)",
-            color: "#e8e4de",
+            background: "rgba(232, 228, 222, 0.04)",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg)",
             fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
             fontSize: "16px", fontStyle: "italic",
             padding: "14px", borderRadius: "30px",
             cursor: loading ? "wait" : "pointer",
             transition: "all 0.3s",
-            marginTop: "8px",
+            marginTop: "var(--s1)",
             opacity: loading ? 0.5 : 1,
           }}
           onMouseEnter={e => {
             if (!loading) {
-              e.currentTarget.style.borderColor = "rgba(232,228,222,0.4)";
-              e.currentTarget.style.background = "rgba(232,228,222,0.05)";
+              e.currentTarget.style.borderColor = "rgba(232, 228, 222, 0.35)";
+              e.currentTarget.style.background = "rgba(232, 228, 222, 0.08)";
             }
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "rgba(232,228,222,0.2)";
-            e.currentTarget.style.background = "none";
+            e.currentTarget.style.borderColor = "var(--border-2)";
+            e.currentTarget.style.background = "rgba(232, 228, 222, 0.04)";
           }}
         >
           {loading ? "..." : mode === "login" ? "Enter" : "Begin the journey"}

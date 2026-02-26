@@ -164,8 +164,8 @@ export function BlockTimer({
       <div key={`${block.type}-${block.startTime}`} style={{
         width: `${blockSize}px`, height: `${blockSize}px`, borderRadius: "10px",
         position: "relative", overflow: "hidden",
-        border: `1px solid ${isFilled ? "rgba(74,222,128,0.3)" : isCurrent ? "rgba(251,191,36,0.4)" : "rgba(232,228,222,0.12)"}`,
-        background: "rgba(232,228,222,0.04)",
+        border: `1px solid ${isFilled ? "rgba(74,222,128,0.3)" : isCurrent ? "rgba(251,191,36,0.4)" : "var(--border-1)"}`,
+        background: "rgba(232, 228, 222, 0.04)",
         transition: "border-color 0.5s",
       }}>
         <div style={{
@@ -182,7 +182,7 @@ export function BlockTimer({
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: `${blockLabelSize}px`,
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          color: isFilled ? "rgba(0,0,0,0.5)" : "rgba(232,228,222,0.2)",
+          color: isFilled ? "rgba(0,0,0,0.5)" : "var(--fg-4)",
           fontWeight: 500, zIndex: 1,
         }}>
           {block.label}
@@ -204,8 +204,8 @@ export function BlockTimer({
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
       <div style={{
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
-        fontSize: "min(120px, 18vw)", fontWeight: 200, letterSpacing: "6px",
-        color: elapsed >= totalSeconds ? "#4ade80" : "#e8e4de",
+        fontSize: "min(120px, 18vw)", fontWeight: 200, letterSpacing: "0.05em",
+        color: elapsed >= totalSeconds ? "#4ade80" : "var(--fg)",
         textShadow: elapsed >= totalSeconds ? "0 0 40px rgba(74,222,128,0.3)" : "none",
         transition: "color 0.8s, text-shadow 0.8s",
       }}>
@@ -216,7 +216,7 @@ export function BlockTimer({
       <div style={{ width: "min(460px, calc(100vw - 40px))", margin: "0 auto" }}>
         <div style={{
           height: "8px", borderRadius: "4px", overflow: "hidden",
-          background: "rgba(232,228,222,0.06)",
+          background: "rgba(232, 228, 222, 0.06)",
         }}>
           <div style={{
             width: `${elapsed >= totalSeconds ? 100 : ((elapsed % 60) / 60) * 100}%`,
@@ -240,14 +240,14 @@ export function BlockTimer({
             {minuteBlocks.map(b => renderBlock(b))}
           </div>
           <div style={{
-            width: "100%", borderTop: "1px solid rgba(232,228,222,0.08)",
+            width: "100%", borderTop: "1px solid var(--border-1)",
             paddingTop: "4px",
           }}>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "9px", color: "rgba(232,228,222,0.2)",
+              fontSize: "11px", color: "var(--fg-4)",
               textAlign: "center", marginBottom: "8px",
-              letterSpacing: "1px", textTransform: "uppercase",
+              letterSpacing: "0.1em", textTransform: "uppercase",
             }}>
               final minute
             </div>
@@ -277,8 +277,8 @@ export function BlockTimer({
 
       <div style={{
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-        fontSize: "14px", color: "rgba(232,228,222,0.4)",
-        letterSpacing: "2px", textTransform: "uppercase",
+        fontSize: "14px", color: "var(--fg-3)",
+        letterSpacing: "0.15em", textTransform: "uppercase",
       }}>
         {statusLabel}
       </div>
