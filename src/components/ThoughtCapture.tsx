@@ -1,0 +1,79 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+
+type ThoughtCaptureProps = {
+  onSave: (text: string) => void;
+  onCancel: () => void;
+};
+
+export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
+  const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSave = () => {
+    if (text.trim()) {
+      onSave(text.trim());
+      setText("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSave();
+    }
+    if (e.key === "Escape") onCancel();
+  };
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", gap: "10px",
+      padding: "16px 20px", background: "rgba(251,191,36,0.06)",
+      border: "1px solid rgba(251,191,36,0.15)", borderRadius: "12px",
+      width: "100%", maxWidth: "380px", animation: "fadeIn 0.2s ease",
+    }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="thought I need to not forget"
+        style={{
+          background: "rgba(0,0,0,0.3)",
+          border: "1px solid rgba(251,191,36,0.2)",
+          borderRadius: "8px", padding: "10px 14px", color: "#e8e4de",
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontSize: "15px", fontStyle: "italic", outline: "none",
+          width: "100%", boxSizing: "border-box" as const,
+        }}
+      />
+      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{
+          background: "none", border: "none",
+          color: "rgba(232,228,222,0.3)",
+          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+          cursor: "pointer", padding: "6px 12px",
+        }}>
+          skip
+        </button>
+        <button onClick={handleSave} style={{
+          background: "rgba(251,191,36,0.15)",
+          border: "1px solid rgba(251,191,36,0.3)",
+          color: "#fbbf24",
+          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+          cursor: "pointer", padding: "6px 16px", borderRadius: "12px",
+        }}>
+          save &amp; clear
+        </button>
+      </div>
+    </div>
+  );
+}

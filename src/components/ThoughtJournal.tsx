@@ -1,0 +1,128 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import type { Thought } from "@/lib/api";
+
+type ThoughtJournalProps = {
+  username: string;
+};
+
+export function ThoughtJournal({ username }: ThoughtJournalProps) {
+  const [thoughts, setThoughts] = useState<Thought[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/thoughts")
+      .then(r => r.json())
+      .then(data => {
+        setThoughts(data.thoughts || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const grouped = thoughts.reduce<Record<number, Thought[]>>((acc, t) => {
+    if (!acc[t.dayNumber]) acc[t.dayNumber] = [];
+    acc[t.dayNumber].push(t);
+    return acc;
+  }, {});
+
+  const totalCount = thoughts.length;
+
+  if (loading) {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+      }}>
+        <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+          Thought Journal
+        </h2>
+        <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontSize: "12px", color: "rgba(232,228,222,0.3)" }}>
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+    }}>
+      <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
+        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+        Thought Journal
+      </h2>
+
+      <div style={{
+        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        textAlign: "center",
+      }}>
+        <div style={{ fontSize: "28px", fontWeight: 200, color: "#fbbf24" }}>{totalCount}</div>
+        <div style={{
+          fontSize: "10px", color: "rgba(232,228,222,0.3)",
+          letterSpacing: "2px", textTransform: "uppercase", marginTop: "4px",
+        }}>
+          thoughts captured
+        </div>
+      </div>
+
+      <div style={{ width: "100%", maxWidth: "500px" }}>
+        <p style={{
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontSize: "14px", fontStyle: "italic", color: "rgba(232,228,222,0.25)",
+          marginBottom: "24px", lineHeight: 1.6,
+        }}>
+          Every thought that felt urgent in the moment. Looking back &mdash; how many actually needed your attention right then?
+        </p>
+
+        {Object.entries(grouped).reverse().map(([day, dayThoughts]) => (
+          <div key={day} style={{ marginBottom: "20px" }}>
+            <div style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px", color: "rgba(232,228,222,0.3)",
+              letterSpacing: "2px", marginBottom: "8px",
+            }}>
+              DAY {day}
+            </div>
+            {dayThoughts.map((t, i) => (
+              <div key={i} style={{
+                display: "flex", gap: "12px", alignItems: "baseline",
+                padding: "5px 0", borderBottom: "1px solid rgba(232,228,222,0.04)",
+              }}>
+                <span style={{
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "10px",
+                  color: t.timeInSession === -1 ? "rgba(74,222,128,0.25)" : "rgba(251,191,36,0.25)",
+                  whiteSpace: "nowrap", minWidth: "32px",
+                }}>
+                  {t.timeInSession === -1 ? "note" : `@${t.timeInSession}s`}
+                </span>
+                <span style={{
+                  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  fontSize: "14px", fontStyle: "italic",
+                  color: "rgba(232,228,222,0.5)", lineHeight: 1.4,
+                }}>
+                  {t.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {totalCount === 0 && (
+          <p style={{
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "14px", fontStyle: "italic", color: "rgba(232,228,222,0.2)",
+            textAlign: "center", marginTop: "40px",
+          }}>
+            No thoughts captured yet. Complete a session to begin.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
