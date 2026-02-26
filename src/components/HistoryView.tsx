@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type HistoryEntry = {
   day: number | null;
@@ -26,6 +27,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [stats, setStats] = useState({ streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0 });
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     Promise.all([
@@ -89,7 +91,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
     return (
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center",
-        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "720px",
+        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
@@ -106,7 +108,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "720px",
+      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
     }}>
       <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
@@ -115,7 +117,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
       {/* Stats */}
       <div style={{
-        display: "flex", gap: "28px",
+        display: "flex", gap: isMobile ? "16px" : "28px", flexWrap: "wrap", justifyContent: "center",
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
       }}>
         {[
@@ -156,16 +158,18 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
               const dateLabel = `${dow} ${mon} ${day} (${y}.${mm}.${dd})`;
               return (
                 <div key={`missed-${idx}`} style={{
-                  display: "flex", alignItems: "center", gap: "12px",
+                  display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
                   padding: "2px 0", opacity: 0.35,
                 }}>
-                  <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "10px", color: "rgba(232,228,222,0.2)",
-                    width: "160px", textAlign: "right", whiteSpace: "nowrap",
-                  }}>
-                    {dateLabel}
-                  </div>
+                  {!isMobile && (
+                    <div style={{
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "10px", color: "rgba(232,228,222,0.2)",
+                      width: "160px", textAlign: "right", whiteSpace: "nowrap",
+                    }}>
+                      {dateLabel}
+                    </div>
+                  )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", color: "rgba(232,228,222,0.3)",
@@ -185,7 +189,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                       missed
                     </span>
                   </div>
-                  <div style={{ width: "120px" }} />
+                  <div style={{ width: isMobile ? "80px" : "120px" }} />
                 </div>
               );
             }
@@ -204,20 +208,22 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                 <div
                   onClick={() => setExpandedDay(expandedDay === entry.day ? null : entry.day)}
                   style={{
-                    display: "flex", alignItems: "center", gap: "12px",
+                    display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
                     cursor: "pointer", padding: "2px 0", borderRadius: "4px",
                     transition: "background 0.2s",
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = "rgba(232,228,222,0.03)"}
                   onMouseLeave={e => e.currentTarget.style.background = "none"}
                 >
-                  <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "10px", color: "rgba(232,228,222,0.2)",
-                    width: "160px", textAlign: "right", whiteSpace: "nowrap",
-                  }}>
-                    {dateLabel}
-                  </div>
+                  {!isMobile && (
+                    <div style={{
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "10px", color: "rgba(232,228,222,0.2)",
+                      width: "160px", textAlign: "right", whiteSpace: "nowrap",
+                    }}>
+                      {dateLabel}
+                    </div>
+                  )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", color: "rgba(232,228,222,0.3)",
@@ -250,7 +256,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px",
                     color: entry.completed ? "rgba(74,222,128,0.5)" : "rgba(239,68,68,0.5)",
-                    width: "120px", display: "flex", gap: "6px",
+                    width: isMobile ? "80px" : "120px", display: "flex", gap: "6px", flexWrap: "wrap",
                   }}>
                     <span style={{ color: "rgba(232,228,222,0.3)" }}>{entry.actualTime}s</span>
                     <span style={{ color: "rgba(232,228,222,0.2)" }}>&middot;</span>
@@ -262,7 +268,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
                 {expandedDay === entry.day && dayThoughts.length > 0 && (
                   <div style={{
-                    marginLeft: "216px", marginTop: "4px", marginBottom: "8px",
+                    marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
                     padding: "10px 14px", background: "rgba(232,228,222,0.02)",
                     borderLeft: "2px solid rgba(251,191,36,0.15)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
@@ -290,14 +296,16 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
           })}
 
           {/* Current day preview */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "10px", color: "rgba(232,228,222,0.15)",
-              width: "160px", textAlign: "right", whiteSpace: "nowrap",
-            }}>
-              today
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px" }}>
+            {!isMobile && (
+              <div style={{
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "10px", color: "rgba(232,228,222,0.15)",
+                width: "160px", textAlign: "right", whiteSpace: "nowrap",
+              }}>
+                today
+              </div>
+            )}
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
               fontSize: "11px", color: "rgba(232,228,222,0.25)",
@@ -319,7 +327,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             </div>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(232,228,222,0.2)", width: "120px",
+              fontSize: "11px", color: "rgba(232,228,222,0.2)", width: isMobile ? "80px" : "120px",
             }}>
               {todayDuration}s
             </div>

@@ -27,7 +27,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
     return (
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center",
-        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
@@ -44,7 +44,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
     }}>
       <div style={{ textAlign: "center" }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,

@@ -35,7 +35,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
 
       <div style={{ textAlign: "center", animation: "breathe 4s ease-in-out infinite" }}>
         <div style={{
-          fontSize: "120px", fontWeight: 200,
+          fontSize: "min(120px, 20vw)", fontWeight: 200,
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           lineHeight: 1, color: "rgba(232,228,222,0.15)",
         }}>
@@ -74,7 +74,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
       </button>
 
       {/* FAQ */}
-      <div style={{ marginTop: "24px", maxWidth: "400px", width: "100%" }}>
+      <div style={{ marginTop: "24px", maxWidth: "min(400px, calc(100vw - 40px))", width: "100%" }}>
         <div style={{
           borderTop: "1px solid rgba(232,228,222,0.06)",
           paddingTop: "24px",

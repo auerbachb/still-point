@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
 import { playTick, playChime, playCompletion, type SoundPrefs } from "@/lib/audio";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type BlockTimerProps = {
   totalSeconds: number;
@@ -41,6 +42,9 @@ export function BlockTimer({
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
   const lastChimeMinRef = useRef(Math.ceil(totalSeconds / 60));
+  const isMobile = useIsMobile();
+  const blockSize = isMobile ? 56 : 75;
+  const blockLabelSize = isMobile ? 13 : 17;
 
   // Build block definitions
   const useMinuteBlocks = totalSeconds > 120;
@@ -158,7 +162,7 @@ export function BlockTimer({
 
     return (
       <div key={`${block.type}-${block.startTime}`} style={{
-        width: "75px", height: "75px", borderRadius: "10px",
+        width: `${blockSize}px`, height: `${blockSize}px`, borderRadius: "10px",
         position: "relative", overflow: "hidden",
         border: `1px solid ${isFilled ? "rgba(74,222,128,0.3)" : isCurrent ? "rgba(251,191,36,0.4)" : "rgba(232,228,222,0.12)"}`,
         background: "rgba(232,228,222,0.04)",
@@ -176,7 +180,7 @@ export function BlockTimer({
         <div style={{
           position: "absolute", inset: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "17px",
+          fontSize: `${blockLabelSize}px`,
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           color: isFilled ? "rgba(0,0,0,0.5)" : "rgba(232,228,222,0.2)",
           fontWeight: 500, zIndex: 1,
@@ -194,14 +198,13 @@ export function BlockTimer({
     );
   };
 
-  // 6 blocks per row: 6*56 + 5*8 = 376px
-  const rowMaxWidth = "505px";
+  const rowMaxWidth = "min(505px, calc(100vw - 24px))";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
       <div style={{
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
-        fontSize: "120px", fontWeight: 200, letterSpacing: "6px",
+        fontSize: "min(120px, 18vw)", fontWeight: 200, letterSpacing: "6px",
         color: elapsed >= totalSeconds ? "#4ade80" : "#e8e4de",
         textShadow: elapsed >= totalSeconds ? "0 0 40px rgba(74,222,128,0.3)" : "none",
         transition: "color 0.8s, text-shadow 0.8s",
@@ -210,7 +213,7 @@ export function BlockTimer({
       </div>
 
       {/* 60-second progress bar */}
-      <div style={{ width: "460px", margin: "0 auto" }}>
+      <div style={{ width: "min(460px, calc(100vw - 40px))", margin: "0 auto" }}>
         <div style={{
           height: "8px", borderRadius: "4px", overflow: "hidden",
           background: "rgba(232,228,222,0.06)",

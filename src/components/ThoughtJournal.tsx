@@ -33,7 +33,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
     return (
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center",
-        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+        gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
@@ -50,7 +50,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "560px",
+      gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
     }}>
       <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
@@ -70,7 +70,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
         </div>
       </div>
 
-      <div style={{ width: "100%", maxWidth: "500px" }}>
+      <div style={{ width: "100%", maxWidth: "min(500px, calc(100vw - 40px))" }}>
         <p style={{
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           fontSize: "14px", fontStyle: "italic", color: "rgba(232,228,222,0.25)",
