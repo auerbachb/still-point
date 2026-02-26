@@ -243,7 +243,12 @@ export default function StillPoint() {
                 color: view === v ? "rgba(232,228,222,0.8)" : "rgba(232,228,222,0.25)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
-                cursor: "pointer", padding: "8px", transition: "color 0.3s",
+                cursor: "pointer",
+                padding: isMobile ? "10px 12px" : "8px",
+                minWidth: isMobile ? "44px" : undefined,
+                minHeight: isMobile ? "44px" : undefined,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                transition: "color 0.3s",
               }}
             >
               {v}
