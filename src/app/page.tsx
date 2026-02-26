@@ -267,11 +267,11 @@ export default function StillPoint() {
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "11px", color: "rgba(232,228,222,0.25)",
-          letterSpacing: "2px", textTransform: "uppercase",
+          letterSpacing: "2px",
           textAlign: "center",
           marginBottom: "8px",
         }}>
-          Welcome, {user.username}
+          <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
         </div>
       )}
 
