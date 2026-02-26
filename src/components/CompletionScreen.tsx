@@ -25,6 +25,7 @@ export function CompletionScreen({
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const nextDuration = duration + INCREMENT;
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
 
@@ -144,15 +145,26 @@ export function CompletionScreen({
                   outline: "none",
                 }}
               />
+              {saveError && (
+                <div style={{
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "11px", color: "rgba(239,68,68,0.7)",
+                  letterSpacing: "0.09em",
+                }}>
+                  failed to save — tap to retry
+                </div>
+              )}
               {note.trim() && (
                 <button
                   onClick={async () => {
                     setSaving(true);
                     try {
+                      setSaveError(false);
                       await onSaveNote(note.trim());
                       setNoteSaved(true);
                     } catch (err) {
                       console.error("Failed to save note:", err);
+                      setSaveError(true);
                     } finally {
                       setSaving(false);
                     }
@@ -160,8 +172,12 @@ export function CompletionScreen({
                   disabled={saving}
                   style={{
                     background: "none",
-                    border: "1px solid rgba(74,222,128,0.2)",
-                    color: "rgba(74,222,128,0.6)",
+                    border: saveError
+                      ? "1px solid rgba(239,68,68,0.3)"
+                      : "1px solid rgba(74,222,128,0.2)",
+                    color: saveError
+                      ? "rgba(239,68,68,0.7)"
+                      : "rgba(74,222,128,0.6)",
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
                     padding: "8px 24px", borderRadius: "20px",
@@ -169,7 +185,7 @@ export function CompletionScreen({
                     opacity: saving ? 0.5 : 1,
                   }}
                 >
-                  {saving ? "saving..." : "save note"}
+                  {saving ? "saving..." : saveError ? "retry" : "save note"}
                 </button>
               )}
             </>
