@@ -54,7 +54,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     window.addEventListener("mousemove", resetTimer);
     window.addEventListener("mousedown", resetTimer);
     window.addEventListener("keydown", resetTimer);
-    window.addEventListener("touchstart", resetTimer);
+    window.addEventListener("touchstart", resetTimer, { passive: true });
     return () => {
       window.removeEventListener("mousemove", resetTimer);
       window.removeEventListener("mousedown", resetTimer);
