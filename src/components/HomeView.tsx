@@ -72,6 +72,39 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
       >
         Begin
       </button>
+
+      {/* FAQ */}
+      <div style={{ marginTop: "24px", maxWidth: "400px", width: "100%" }}>
+        <div style={{
+          borderTop: "1px solid rgba(232,228,222,0.06)",
+          paddingTop: "24px",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "10px", color: "rgba(232,228,222,0.2)",
+            letterSpacing: "2px", textTransform: "uppercase", marginBottom: "16px",
+            textAlign: "center",
+          }}>
+            FAQ
+          </div>
+          <div style={{ padding: "0 8px" }}>
+            <p style={{
+              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontSize: "14px", fontStyle: "italic",
+              color: "rgba(232,228,222,0.35)", margin: "0 0 6px",
+            }}>
+              &ldquo;This app is incredibly boring, what&rsquo;s the point of it?&rdquo;
+            </p>
+            <p style={{
+              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontSize: "14px", fontStyle: "italic",
+              color: "rgba(232,228,222,0.55)", margin: 0,
+            }}>
+              That is the point.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
