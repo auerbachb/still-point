@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, username, password } = await request.json();
+    const { email, password } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
@@ -20,15 +20,6 @@ export async function POST(request: NextRequest) {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
-
-    // Update username if changed
-    if (username && username !== user.username) {
-      const existingUsername = await db.select().from(users).where(eq(users.username, username)).limit(1);
-      if (existingUsername.length === 0) {
-        await db.update(users).set({ username, updatedAt: new Date() }).where(eq(users.id, user.id));
-        user.username = username;
-      }
     }
 
     const token = await createToken({ userId: user.id, email: user.email });
