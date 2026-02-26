@@ -15,8 +15,10 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email || !username || !password) {
-      setError("All fields required");
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedUsername = username.trim();
+    if (!trimmedEmail || !password || (mode === "signup" && !trimmedUsername)) {
+      setError(mode === "signup" ? "All fields required" : "Email and password required");
       return;
     }
     setError("");
@@ -27,7 +29,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, username, password }),
+        body: JSON.stringify(mode === "signup" ? { email: trimmedEmail, username: trimmedUsername, password } : { email: trimmedEmail, password }),
       });
       const data = await res.json();
 
@@ -123,16 +125,18 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
           onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
         />
-        <input
-          type="text"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="username"
-          style={inputStyle}
-          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
-          onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
-        />
+        {mode === "signup" && (
+          <input
+            type="text"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="username"
+            style={inputStyle}
+            onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.3)"}
+            onBlur={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.12)"}
+          />
+        )}
         <input
           type="password"
           value={password}
