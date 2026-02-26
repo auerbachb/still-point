@@ -15,7 +15,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email || !password || (mode === "signup" && !username)) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedUsername = username.trim();
+    if (!trimmedEmail || !password || (mode === "signup" && !trimmedUsername)) {
       setError(mode === "signup" ? "All fields required" : "Email and password required");
       return;
     }
@@ -27,7 +29,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "signup" ? { email, username, password } : { email, password }),
+        body: JSON.stringify(mode === "signup" ? { email: trimmedEmail, username: trimmedUsername, password } : { email: trimmedEmail, password }),
       });
       const data = await res.json();
 
