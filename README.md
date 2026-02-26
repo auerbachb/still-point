@@ -1,5 +1,7 @@
 # Still Point
 
+**The app is live at [still-point.vercel.app](https://still-point.vercel.app)**
+
 Practice focus by watching the clock without thinking for fixed blocks of time.
 
 Start at 60 seconds. Add 10 seconds each day. Track when your mind wanders. Review the thoughts that felt urgent later — most of them weren't.
