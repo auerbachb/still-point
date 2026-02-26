@@ -81,8 +81,10 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
           e.currentTarget.style.background = "rgba(232, 228, 222, 0.04)";
         }}
         onFocus={e => {
-          e.currentTarget.style.outline = "2px solid rgba(232, 228, 222, 0.35)";
-          e.currentTarget.style.outlineOffset = "3px";
+          if (e.currentTarget.matches(":focus-visible")) {
+            e.currentTarget.style.outline = "2px solid rgba(232, 228, 222, 0.35)";
+            e.currentTarget.style.outlineOffset = "3px";
+          }
         }}
         onBlur={e => {
           e.currentTarget.style.outline = "none";

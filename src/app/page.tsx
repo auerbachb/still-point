@@ -218,7 +218,7 @@ export default function StillPoint() {
     <div style={{
       minHeight: "100svh",
       display: "grid",
-      gridTemplateRows: "auto 1fr auto",
+      gridTemplateRows: view === "session" ? "1fr" : "auto 1fr auto",
       alignItems: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile

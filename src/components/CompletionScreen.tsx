@@ -148,9 +148,12 @@ export function CompletionScreen({
                 <button
                   onClick={async () => {
                     setSaving(true);
-                    await onSaveNote(note.trim());
-                    setSaving(false);
-                    setNoteSaved(true);
+                    try {
+                      await onSaveNote(note.trim());
+                      setNoteSaved(true);
+                    } finally {
+                      setSaving(false);
+                    }
                   }}
                   disabled={saving}
                   style={{
