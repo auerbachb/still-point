@@ -266,10 +266,11 @@ export default function StillPoint() {
       {view !== "session" && (
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "11px", color: "rgba(232,228,222,0.25)",
-          letterSpacing: "2px",
+          fontSize: "12px", color: "rgba(232,228,222,0.45)",
+          letterSpacing: "1.5px",
+          fontWeight: 500,
           textAlign: "center",
-          marginBottom: "8px",
+          marginBottom: "24px",
         }}>
           <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
         </div>
