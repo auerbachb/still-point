@@ -145,9 +145,13 @@ src/
 
 ## Database schema
 
-**users** — accounts with progressive day counter
-**sessions** — one per completed/abandoned sitting, tracks duration, clear %, mind state log
-**thoughts** — captured during sessions (timeInSession >= 0) or as end-of-session notes (timeInSession = -1)
+| Table | Purpose | Key fields |
+|-------|---------|------------|
+| **users** | Accounts with progressive day counter | email, username, currentDay, isPublic |
+| **sessions** | One per completed or abandoned sitting | dayNumber, duration, clearPercent, thoughtCount, mindStateLog, sessionDate |
+| **thoughts** | Captured during sessions or as end-of-session notes | sessionId, dayNumber, timeInSession, text |
+
+Thoughts with `timeInSession >= 0` were captured mid-session. Thoughts with `timeInSession = -1` are end-of-session journal notes.
 
 ## License
 
