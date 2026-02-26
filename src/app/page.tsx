@@ -219,7 +219,10 @@ export default function StillPoint() {
       minHeight: "100vh", display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-      padding: isMobile ? "20px 12px 80px" : "40px 20px", position: "relative",
+      padding: isMobile
+        ? "20px 12px calc(80px + env(safe-area-inset-bottom, 0px))"
+        : "40px 20px",
+      position: "relative",
     }}>
       {/* Nav */}
       {view !== "session" && (
