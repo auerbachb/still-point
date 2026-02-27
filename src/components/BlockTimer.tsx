@@ -182,7 +182,7 @@ export function BlockTimer({
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: `${blockLabelSize}px`,
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          color: isFilled ? "rgba(0,0,0,0.5)" : "var(--fg-4)",
+          color: isFilled ? "var(--overlay-text)" : "var(--fg-4)",
           fontWeight: 500, zIndex: 1,
         }}>
           {block.label}

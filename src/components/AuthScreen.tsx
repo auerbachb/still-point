@@ -51,7 +51,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   const inputStyle: React.CSSProperties = {
-    background: "rgba(0,0,0,0.3)",
+    background: "var(--overlay-bg)",
     border: "1px solid var(--border-1)",
     borderRadius: "8px",
     padding: "12px 16px",

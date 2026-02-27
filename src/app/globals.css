@@ -58,6 +58,10 @@
   --accent-danger-border: rgba(239, 68, 68, 0.2);
   --accent-danger-border-subtle: rgba(239, 68, 68, 0.15);
 
+  /* Overlay — dark text/bg on colored surfaces */
+  --overlay-text: rgba(0, 0, 0, 0.5);
+  --overlay-bg: rgba(0, 0, 0, 0.3);
+
   /* Layout */
   --bg-rgb: 26, 24, 22;
   --nav-h: 96px;

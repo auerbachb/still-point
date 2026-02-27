@@ -45,7 +45,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         onKeyDown={handleKeyDown}
         placeholder="thought I need to not forget"
         style={{
-          background: "rgba(0,0,0,0.3)",
+          background: "var(--overlay-bg)",
           border: "1px solid var(--accent-amber-border-subtle)",
           borderRadius: "8px", padding: "10px 14px", color: "var(--fg)",
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
