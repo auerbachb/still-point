@@ -25,7 +25,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [stats, setStats] = useState({ streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0 });
-  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
 
@@ -85,7 +85,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   );
 
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
-  const dayThoughts = expandedDay !== null ? thoughts.filter(t => t.dayNumber === expandedDay) : [];
+  const getThoughtsForDay = (day: number | null) =>
+    day === null ? [] : thoughts.filter(t => t.dayNumber === day);
 
   if (loading) {
     return (
@@ -203,18 +204,22 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             const dd = String(dayOfMonth).padStart(2, "0");
             const dateLabel = `${dow} ${mon} ${dayOfMonth} (${y}.${mm}.${dd})`;
 
+            const entryId = `day-${entry.day}-${idx}`;
+            const isExpanded = expandedEntryId === entryId;
+            const entryThoughts = getThoughtsForDay(entry.day);
+
             return (
-              <div key={`${entry.day}-${idx}`}>
+              <div key={entryId}>
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-expanded={expandedDay === entry.day}
-                  aria-controls={`day-${entry.day}-${idx}-thoughts`}
-                  onClick={() => setExpandedDay(expandedDay === entry.day ? null : entry.day)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`${entryId}-thoughts`}
+                  onClick={() => setExpandedEntryId(isExpanded ? null : entryId)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setExpandedDay(expandedDay === entry.day ? null : entry.day);
+                      setExpandedEntryId(isExpanded ? null : entryId);
                     }
                   }}
                   style={{
@@ -287,18 +292,18 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   </div>
                 </div>
 
-                {expandedDay === entry.day && dayThoughts.length > 0 && (
+                {isExpanded && entryThoughts.length > 0 && (
                   <div
-                    id={`day-${entry.day}-${idx}-thoughts`}
+                    id={`${entryId}-thoughts`}
                     role="region"
-                    aria-label={`Day ${entry.day} captured thoughts`}
+                    aria-label={`Day ${entry.day} captured thoughts (entry ${idx + 1})`}
                     style={{
                     marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
                     padding: "10px 14px", background: "var(--surface-1)",
                     borderLeft: "2px solid var(--accent-amber-bg)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
                   }}>
-                    {dayThoughts.map((t, i) => (
+                    {entryThoughts.map((t, i) => (
                       <div key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
                           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
