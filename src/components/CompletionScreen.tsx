@@ -132,6 +132,7 @@ export function CompletionScreen({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="end-of-session note..."
                 rows={3}
+                maxLength={1000}
                 style={{
                   width: "100%",
                   background: "var(--surface-1)",
