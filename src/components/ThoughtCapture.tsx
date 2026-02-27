@@ -54,7 +54,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         }}
       />
       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-        <button onClick={onCancel} style={{
+        <button type="button" onClick={onCancel} style={{
           background: "none", border: "none",
           color: "var(--fg-4)",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
@@ -63,7 +63,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         }}>
           skip
         </button>
-        <button onClick={handleSave} style={{
+        <button type="button" onClick={handleSave} style={{
           background: "rgba(251,191,36,0.15)",
           border: "1px solid rgba(251,191,36,0.3)",
           color: "#fbbf24",

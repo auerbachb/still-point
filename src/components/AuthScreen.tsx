@@ -95,6 +95,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       }}>
         {(["login", "signup"] as const).map(m => (
           <button
+            type="button"
             key={m}
             onClick={() => { setMode(m); setError(""); }}
             style={{
@@ -158,6 +159,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           </div>
         )}
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={loading}
           style={{

@@ -174,6 +174,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "32px", justifyContent: "center" }}>
           <button
+            type="button"
             onClick={handleThinkingToggle}
             style={{
               background: mindState === "thinking"
@@ -211,6 +212,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         {!showThoughtInput && (
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px", flexWrap: "wrap" }}>
             <button
+              type="button"
               onClick={() => setIsActive(!isActive)}
               style={{
                 background: "none",
@@ -224,6 +226,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               {isActive ? "pause" : "resume"}
             </button>
             <button
+              type="button"
               onClick={handleEndEarly}
               style={{
                 background: "none",
@@ -237,6 +240,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               end early &amp; keep
             </button>
             <button
+              type="button"
               onClick={handleAbandon}
               style={{
                 background: "none",
@@ -264,6 +268,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
             ["completion", "end"],
           ] as const).map(([key, label]) => (
             <button
+              type="button"
               key={key}
               onClick={() => {
                 const next = { ...soundPrefs, [key]: !soundPrefs[key] };

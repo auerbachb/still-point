@@ -108,6 +108,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
             </div>
           </div>
           <button
+            type="button"
             onClick={handleToggle}
             disabled={toggling}
             style={{
@@ -134,6 +135,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
 
         {/* Logout */}
         <button
+          type="button"
           onClick={handleLogout}
           style={{
             background: "none",
