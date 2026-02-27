@@ -109,6 +109,8 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
           </div>
           <button
             type="button"
+            aria-label={user.isPublic ? "Disable public board" : "Enable public board"}
+            aria-pressed={user.isPublic}
             onClick={handleToggle}
             disabled={toggling}
             style={{
