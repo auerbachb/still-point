@@ -73,7 +73,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
           cursor: "pointer", transition: "all 0.3s", letterSpacing: "0.04em",
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.borderColor = "rgba(232, 228, 222, 0.35)";
+          e.currentTarget.style.borderColor = "var(--border-3)";
           e.currentTarget.style.background = "var(--surface-2)";
         }}
         onMouseLeave={e => {

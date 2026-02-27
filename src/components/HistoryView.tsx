@@ -212,7 +212,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     cursor: "pointer", padding: "2px 0", borderRadius: "4px",
                     transition: "background 0.2s",
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = "rgba(232,228,222,0.03)"}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--surface-1)"}
                   onMouseLeave={e => e.currentTarget.style.background = "none"}
                 >
                   {!isMobile && (

@@ -99,7 +99,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             key={m}
             onClick={() => { setMode(m); setError(""); }}
             style={{
-              background: mode === m ? "rgba(232,228,222,0.1)" : "none",
+              background: mode === m ? "var(--surface-3)" : "none",
               border: "none",
               color: mode === m ? "var(--fg)" : "var(--fg-4)",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",

@@ -60,7 +60,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         {/* User info */}
         <div style={{
           padding: "16px 20px",
-          background: "rgba(232,228,222,0.03)",
+          background: "var(--surface-1)",
           borderRadius: "10px",
           display: "flex", flexDirection: "column", gap: "8px",
         }}>
@@ -88,7 +88,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         {/* Public board toggle */}
         <div style={{
           padding: "16px 20px",
-          background: "rgba(232,228,222,0.03)",
+          background: "var(--surface-1)",
           borderRadius: "10px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
@@ -116,7 +116,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
               borderRadius: "13px", border: "none",
               background: user.isPublic
                 ? "rgba(74,222,128,0.4)"
-                : "rgba(232,228,222,0.1)",
+                : "var(--surface-3)",
               position: "relative", cursor: "pointer",
               transition: "background 0.3s",
               flexShrink: 0, marginLeft: "16px",
@@ -125,7 +125,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
             <div style={{
               width: "20px", height: "20px",
               borderRadius: "10px",
-              background: user.isPublic ? "#4ade80" : "rgba(232,228,222,0.3)",
+              background: user.isPublic ? "#4ade80" : "var(--border-3)",
               position: "absolute", top: "3px",
               left: user.isPublic ? "25px" : "3px",
               transition: "all 0.3s",

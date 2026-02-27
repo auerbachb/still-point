@@ -20,6 +20,10 @@
   /* Surfaces — low-emphasis fills */
   --surface-1: rgba(232, 228, 222, 0.04);
   --surface-2: rgba(232, 228, 222, 0.06);
+  --surface-3: rgba(232, 228, 222, 0.10);
+
+  /* Border tier for hover/active states */
+  --border-3: rgba(232, 228, 222, 0.35);
 
   /* Layout */
   --bg-rgb: 26, 24, 22;
