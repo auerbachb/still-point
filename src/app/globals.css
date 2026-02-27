@@ -78,8 +78,8 @@ html, body {
 }
 
 body {
-  background: #1a1816;
-  color: #e8e4de;
+  background: rgb(var(--bg-rgb));
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
