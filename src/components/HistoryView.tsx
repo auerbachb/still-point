@@ -269,7 +269,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                 {expandedDay === entry.day && dayThoughts.length > 0 && (
                   <div style={{
                     marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
-                    padding: "10px 14px", background: "rgba(232,228,222,0.02)",
+                    padding: "10px 14px", background: "var(--surface-1)",
                     borderLeft: "2px solid rgba(251,191,36,0.15)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
                   }}>
@@ -316,12 +316,12 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             <div style={{
               flex: 1, height: "24px", borderRadius: "3px", overflow: "hidden",
               background: "var(--surface-1)",
-              border: "1px dashed rgba(232,228,222,0.1)",
+              border: "1px dashed var(--surface-3)",
             }}>
               <div style={{
                 height: "100%",
                 width: `${(todayDuration / maxDuration) * 100}%`,
-                background: "linear-gradient(to right, rgba(232,228,222,0.1), rgba(232,228,222,0.05))",
+                background: "linear-gradient(to right, var(--surface-3), var(--surface-1))",
                 borderRadius: "3px",
               }} />
             </div>
@@ -339,7 +339,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
           {[
             { color: "#4ade80", label: "clear mind" },
             { color: "#fbbf24", label: "thinking" },
-            { color: "rgba(232,228,222,0.15)", label: "today" },
+            { color: "var(--border-2)", label: "today" },
           ].map(l => (
             <div key={l.label} style={{
               display: "flex", alignItems: "center", gap: "6px",

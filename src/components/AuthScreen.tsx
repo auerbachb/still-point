@@ -124,7 +124,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onKeyDown={handleKeyDown}
           placeholder="email"
           style={inputStyle}
-          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+          onFocus={e => e.currentTarget.style.borderColor = "var(--border-3)"}
           onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
         />
         {mode === "signup" && (
@@ -135,7 +135,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             onKeyDown={handleKeyDown}
             placeholder="username"
             style={inputStyle}
-            onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+            onFocus={e => e.currentTarget.style.borderColor = "var(--border-3)"}
             onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
           />
         )}
@@ -146,7 +146,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onKeyDown={handleKeyDown}
           placeholder="password"
           style={inputStyle}
-          onFocus={e => e.currentTarget.style.borderColor = "rgba(232,228,222,0.35)"}
+          onFocus={e => e.currentTarget.style.borderColor = "var(--border-3)"}
           onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
         />
         {error && (
@@ -176,7 +176,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           }}
           onMouseEnter={e => {
             if (!loading) {
-              e.currentTarget.style.borderColor = "rgba(232, 228, 222, 0.35)";
+              e.currentTarget.style.borderColor = "var(--border-3)";
               e.currentTarget.style.background = "var(--surface-2)";
             }
           }}

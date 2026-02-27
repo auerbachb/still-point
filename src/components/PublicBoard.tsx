@@ -87,7 +87,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 background: isMe
                   ? "rgba(74,222,128,0.06)"
                   : i % 2 === 0
-                    ? "rgba(232,228,222,0.02)"
+                    ? "var(--surface-1)"
                     : "transparent",
                 border: isMe
                   ? "1px solid rgba(74,222,128,0.15)"
