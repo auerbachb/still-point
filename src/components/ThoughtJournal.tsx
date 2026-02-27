@@ -83,7 +83,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
           <div key={day} style={{ marginBottom: "20px" }}>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "var(--fg-3)",
+              fontSize: "12px", color: "var(--fg-3)",
               letterSpacing: "0.12em", marginBottom: "8px",
             }}>
               DAY {day}
