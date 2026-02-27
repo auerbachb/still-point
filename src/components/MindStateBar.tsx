@@ -44,8 +44,8 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
           <div key={i} style={{
             width: `${(seg.end - seg.start) * 100}%`, height: "100%",
             background: seg.state === "clear"
-              ? "linear-gradient(to right, #4ade80, #22c55e)"
-              : "linear-gradient(to right, #fbbf24, #f59e0b)",
+              ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
+              : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
             opacity: 0.7,
           }} />
         ))}

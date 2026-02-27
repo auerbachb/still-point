@@ -195,7 +195,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
           {sessionThoughtCount > 0 && (
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(251, 191, 36, 0.4)",
+              fontSize: "11px", color: "var(--accent-amber-border)",
               display: "flex", alignItems: "center", gap: "4px",
             }}>
               \uD83D\uDCAD {sessionThoughtCount}
@@ -230,8 +230,8 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               onClick={handleEndEarly}
               style={{
                 background: "none",
-                border: "1px solid rgba(74,222,128,0.2)",
-                color: "rgba(74,222,128,0.5)",
+                border: "1px solid var(--accent-green-border)",
+                color: "var(--accent-green-dim)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
                 padding: "10px 24px", borderRadius: "20px", cursor: "pointer",

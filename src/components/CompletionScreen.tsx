@@ -46,7 +46,7 @@ export function CompletionScreen({
         </h2>
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "13px", color: "rgba(74,222,128,0.6)",
+          fontSize: "13px", color: "var(--accent-green-text)",
           marginTop: "var(--s2)", letterSpacing: "0.07em",
         }}>
           {duration} seconds of sustained attention
@@ -58,7 +58,7 @@ export function CompletionScreen({
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
         }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 200, color: "#4ade80" }}>{clearPercent}%</div>
+            <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-green)" }}>{clearPercent}%</div>
             <div style={{
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
@@ -67,7 +67,7 @@ export function CompletionScreen({
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 200, color: "#fbbf24" }}>{thoughtCount}</div>
+            <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-amber)" }}>{thoughtCount}</div>
             <div style={{
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
@@ -81,7 +81,7 @@ export function CompletionScreen({
           <div style={{
             marginTop: "24px", padding: "14px 18px",
             background: "var(--surface-1)", borderRadius: "8px",
-            borderLeft: "2px solid rgba(251,191,36,0.15)",
+            borderLeft: "2px solid var(--accent-amber-bg)",
             textAlign: "left", maxWidth: "min(350px, calc(100vw - 40px))", margin: "24px auto 0",
           }}>
             <div style={{
@@ -120,7 +120,7 @@ export function CompletionScreen({
           {noteSaved ? (
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "rgba(74,222,128,0.5)",
+              fontSize: "11px", color: "var(--accent-green-dim)",
               letterSpacing: "0.09em",
             }}>
               note saved

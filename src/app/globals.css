@@ -28,20 +28,29 @@
 
   /* Accent — green/success */
   --accent-green: #4ade80;
-  --accent-green-bg: rgba(74, 222, 128, 0.4);
-  --accent-green-muted: rgba(74, 222, 128, 0.25);
+  --accent-green-end: #22c55e;
+  --accent-green-strong: rgba(74, 222, 128, 0.7);
   --accent-green-text: rgba(74, 222, 128, 0.6);
   --accent-green-dim: rgba(74, 222, 128, 0.5);
+  --accent-green-bg: rgba(74, 222, 128, 0.4);
+  --accent-green-glow: rgba(74, 222, 128, 0.3);
+  --accent-green-muted: rgba(74, 222, 128, 0.25);
   --accent-green-border: rgba(74, 222, 128, 0.2);
-  --accent-green-end: #22c55e;
+  --accent-green-border-subtle: rgba(74, 222, 128, 0.15);
   --accent-green-bg-subtle: rgba(74, 222, 128, 0.08);
+  --accent-green-bg-faint: rgba(74, 222, 128, 0.06);
 
   /* Accent — amber/thinking */
   --accent-amber: #fbbf24;
   --accent-amber-end: #f59e0b;
-  --accent-amber-muted: rgba(251, 191, 36, 0.25);
-  --accent-amber-bg: rgba(251, 191, 36, 0.15);
+  --accent-amber-text: rgba(251, 191, 36, 0.6);
+  --accent-amber-dim: rgba(251, 191, 36, 0.5);
   --accent-amber-border: rgba(251, 191, 36, 0.4);
+  --accent-amber-hint: rgba(251, 191, 36, 0.3);
+  --accent-amber-muted: rgba(251, 191, 36, 0.25);
+  --accent-amber-border-subtle: rgba(251, 191, 36, 0.2);
+  --accent-amber-bg: rgba(251, 191, 36, 0.15);
+  --accent-amber-bg-faint: rgba(251, 191, 36, 0.06);
 
   /* Accent — red/danger */
   --accent-danger: rgba(239, 68, 68, 0.7);

@@ -85,12 +85,12 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 gridTemplateColumns: "32px 1fr 64px 64px 64px",
                 gap: "12px", padding: "10px 12px", borderRadius: "6px",
                 background: isMe
-                  ? "rgba(74,222,128,0.06)"
+                  ? "var(--accent-green-bg-faint)"
                   : i % 2 === 0
                     ? "var(--surface-1)"
                     : "transparent",
                 border: isMe
-                  ? "1px solid rgba(74,222,128,0.15)"
+                  ? "1px solid var(--accent-green-border-subtle)"
                   : "1px solid transparent",
                 alignItems: "center",
               }}
@@ -98,7 +98,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "12px",
-                color: i < 3 ? "rgba(251,191,36,0.6)" : "var(--fg-4)",
+                color: i < 3 ? "var(--accent-amber-text)" : "var(--fg-4)",
                 fontWeight: i < 3 ? 500 : 300,
               }}>
                 {i + 1}
@@ -106,7 +106,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
                 fontSize: "15px",
-                color: isMe ? "#4ade80" : "var(--fg)",
+                color: isMe ? "var(--accent-green)" : "var(--fg)",
                 fontStyle: isMe ? "italic" : "normal",
               }}>
                 {user.username}{" "}
@@ -122,7 +122,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "14px",
-                color: user.streak >= 7 ? "rgba(74,222,128,0.7)" : "var(--fg-2)",
+                color: user.streak >= 7 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.streak}
@@ -130,7 +130,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "14px",
-                color: user.avgClear >= 80 ? "rgba(74,222,128,0.7)" : "var(--fg-2)",
+                color: user.avgClear >= 80 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.avgClear}%

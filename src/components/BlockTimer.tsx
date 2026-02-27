@@ -164,7 +164,7 @@ export function BlockTimer({
       <div key={`${block.type}-${block.startTime}`} style={{
         width: `${blockSize}px`, height: `${blockSize}px`, borderRadius: "10px",
         position: "relative", overflow: "hidden",
-        border: `1px solid ${isFilled ? "rgba(74,222,128,0.3)" : isCurrent ? "rgba(251,191,36,0.4)" : "var(--border-1)"}`,
+        border: `1px solid ${isFilled ? "var(--accent-green-border)" : isCurrent ? "var(--accent-amber-border)" : "var(--border-1)"}`,
         background: "var(--surface-1)",
         transition: "border-color 0.5s",
       }}>
@@ -172,8 +172,8 @@ export function BlockTimer({
           position: "absolute", bottom: 0, left: 0, right: 0,
           height: `${progress * 100}%`,
           background: isFilled
-            ? "linear-gradient(to top, #4ade80, #22c55e)"
-            : "linear-gradient(to top, #fbbf24, #f59e0b)",
+            ? "linear-gradient(to top, var(--accent-green), var(--accent-green-end))"
+            : "linear-gradient(to top, var(--accent-amber), var(--accent-amber-end))",
           transition: isFilled ? "height 0.3s" : "none",
           opacity: isFilled ? 0.85 : 0.7,
         }} />
@@ -190,7 +190,7 @@ export function BlockTimer({
         {isCurrent && (
           <div style={{
             position: "absolute", inset: "-1px", borderRadius: "10px",
-            border: "1px solid rgba(251,191,36,0.5)",
+            border: "1px solid var(--accent-amber-dim)",
             animation: "pulse 2s ease-in-out infinite",
           }} />
         )}
@@ -205,8 +205,8 @@ export function BlockTimer({
       <div style={{
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
         fontSize: "min(120px, 18vw)", fontWeight: 200, letterSpacing: "0.05em",
-        color: elapsed >= totalSeconds ? "#4ade80" : "var(--fg)",
-        textShadow: elapsed >= totalSeconds ? "0 0 40px rgba(74,222,128,0.3)" : "none",
+        color: elapsed >= totalSeconds ? "var(--accent-green)" : "var(--fg)",
+        textShadow: elapsed >= totalSeconds ? "0 0 40px var(--accent-green-glow)" : "none",
         transition: "color 0.8s, text-shadow 0.8s",
       }}>
         {minutes}:{seconds.toString().padStart(2, "0")}
@@ -222,8 +222,8 @@ export function BlockTimer({
             width: `${elapsed >= totalSeconds ? 100 : ((elapsed % 60) / 60) * 100}%`,
             height: "100%",
             background: elapsed >= totalSeconds
-              ? "linear-gradient(to right, #4ade80, #22c55e)"
-              : "linear-gradient(to right, #fbbf24, #f59e0b)",
+              ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
+              : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
             opacity: 0.7,
             transition: elapsed >= totalSeconds ? "width 0.3s" : "none",
             borderRadius: "4px",

@@ -33,8 +33,8 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", gap: "10px",
-      padding: "16px 20px", background: "rgba(251,191,36,0.06)",
-      border: "1px solid rgba(251,191,36,0.15)", borderRadius: "12px",
+      padding: "16px 20px", background: "var(--accent-amber-bg-faint)",
+      border: "1px solid var(--accent-amber-bg)", borderRadius: "12px",
       width: "100%", maxWidth: "min(380px, calc(100vw - 40px))", animation: "fadeIn 0.2s ease",
     }}>
       <input
@@ -46,7 +46,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         placeholder="thought I need to not forget"
         style={{
           background: "rgba(0,0,0,0.3)",
-          border: "1px solid rgba(251,191,36,0.2)",
+          border: "1px solid var(--accent-amber-border-subtle)",
           borderRadius: "8px", padding: "10px 14px", color: "var(--fg)",
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           fontSize: "15px", fontStyle: "italic", outline: "none",
@@ -64,9 +64,9 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
           skip
         </button>
         <button type="button" onClick={handleSave} style={{
-          background: "rgba(251,191,36,0.15)",
-          border: "1px solid rgba(251,191,36,0.3)",
-          color: "#fbbf24",
+          background: "var(--accent-amber-bg)",
+          border: "1px solid var(--accent-amber-muted)",
+          color: "var(--accent-amber)",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase",
           cursor: "pointer", padding: "6px 16px", borderRadius: "12px",

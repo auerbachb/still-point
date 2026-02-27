@@ -282,7 +282,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     <span style={{ color: "var(--fg-5)" }}>&middot;</span>
                     <span>{entry.clearPercent}%</span>
                     <span style={{ color: "var(--fg-5)" }}>&middot;</span>
-                    <span style={{ color: "rgba(251,191,36,0.4)" }}>{entry.thoughtCount}\uD83D\uDCAD</span>
+                    <span style={{ color: "var(--accent-amber-border)" }}>{entry.thoughtCount}\uD83D\uDCAD</span>
                   </div>
                 </div>
 
@@ -290,14 +290,14 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   <div style={{
                     marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
                     padding: "10px 14px", background: "var(--surface-1)",
-                    borderLeft: "2px solid rgba(251,191,36,0.15)",
+                    borderLeft: "2px solid var(--accent-amber-bg)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
                   }}>
                     {dayThoughts.map((t, i) => (
                       <div key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
                           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                          fontSize: "11px", color: "rgba(251,191,36,0.3)", whiteSpace: "nowrap",
+                          fontSize: "11px", color: "var(--accent-amber-hint)", whiteSpace: "nowrap",
                         }}>
                           @{t.timeInSession}s
                         </span>
@@ -357,8 +357,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         {/* Legend */}
         <div style={{ display: "flex", gap: "20px", marginTop: "20px", justifyContent: "center" }}>
           {[
-            { color: "#4ade80", label: "clear mind" },
-            { color: "#fbbf24", label: "thinking" },
+            { color: "var(--accent-green)", label: "clear mind" },
+            { color: "var(--accent-amber)", label: "thinking" },
             { color: "var(--border-2)", label: "today" },
           ].map(l => (
             <div key={l.label} style={{

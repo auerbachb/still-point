@@ -61,7 +61,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
         textAlign: "center",
       }}>
-        <div style={{ fontSize: "28px", fontWeight: 200, color: "#fbbf24" }}>{totalCount}</div>
+        <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-amber)" }}>{totalCount}</div>
         <div style={{
           fontSize: "11px", color: "var(--fg-3)",
           letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
