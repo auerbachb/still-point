@@ -146,16 +146,21 @@ export function CompletionScreen({
                 }}
               />
               {saveError && (
-                <div style={{
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                  fontSize: "11px", color: "rgba(239,68,68,0.7)",
-                  letterSpacing: "0.09em",
-                }}>
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", color: "rgba(239,68,68,0.7)",
+                    letterSpacing: "0.09em",
+                  }}
+                >
                   failed to save — tap to retry
                 </div>
               )}
               {note.trim() && (
                 <button
+                  type="button"
                   onClick={async () => {
                     setSaving(true);
                     try {
@@ -194,6 +199,7 @@ export function CompletionScreen({
       )}
 
       <button
+        type="button"
         onClick={onReturn}
         style={{
           background: "none",
