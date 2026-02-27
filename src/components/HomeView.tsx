@@ -64,7 +64,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
         type="button"
         onClick={onBegin}
         style={{
-          background: "rgba(232, 228, 222, 0.04)",
+          background: "var(--surface-1)",
           border: "1px solid var(--border-2)",
           color: "var(--fg)",
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
@@ -74,11 +74,11 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
         }}
         onMouseEnter={e => {
           e.currentTarget.style.borderColor = "rgba(232, 228, 222, 0.35)";
-          e.currentTarget.style.background = "rgba(232, 228, 222, 0.08)";
+          e.currentTarget.style.background = "var(--surface-2)";
         }}
         onMouseLeave={e => {
           e.currentTarget.style.borderColor = "var(--border-2)";
-          e.currentTarget.style.background = "rgba(232, 228, 222, 0.04)";
+          e.currentTarget.style.background = "var(--surface-1)";
         }}
         onFocus={e => {
           if (e.currentTarget.matches(":focus-visible")) {

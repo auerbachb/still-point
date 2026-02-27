@@ -134,7 +134,7 @@ export function CompletionScreen({
                 rows={3}
                 style={{
                   width: "100%",
-                  background: "rgba(232,228,222,0.04)",
+                  background: "var(--surface-1)",
                   border: "1px solid var(--border-1)",
                   borderRadius: "10px",
                   color: "var(--fg)",

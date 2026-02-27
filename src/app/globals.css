@@ -17,7 +17,11 @@
   --s5: 32px;
   --s6: 48px;
 
-  /* Surface / layout */
+  /* Surfaces — low-emphasis fills */
+  --surface-1: rgba(232, 228, 222, 0.04);
+  --surface-2: rgba(232, 228, 222, 0.06);
+
+  /* Layout */
   --bg-rgb: 26, 24, 22;
   --nav-h: 96px;
 }

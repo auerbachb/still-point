@@ -38,7 +38,7 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
     <div style={{ width: barWidth, margin: "0 auto" }}>
       <div style={{
         height: "8px", borderRadius: "4px", overflow: "hidden",
-        display: "flex", background: "rgba(232, 228, 222, 0.06)",
+        display: "flex", background: "var(--surface-2)",
       }}>
         {segments.map((seg, i) => (
           <div key={i} style={{

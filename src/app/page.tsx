@@ -311,18 +311,17 @@ export default function StillPoint() {
           onReturn={() => setView("home")}
           onSaveNote={async (text: string) => {
             if (!completionData.sessionId) return;
-            try {
-              await fetch("/api/thoughts/batch", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  sessionId: completionData.sessionId,
-                  dayNumber: completionData.dayNumber,
-                  thoughts: [{ timeInSession: -1, text }],
-                }),
-              });
-            } catch (error) {
-              console.error("Failed to save note:", error);
+            const res = await fetch("/api/thoughts/batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sessionId: completionData.sessionId,
+                dayNumber: completionData.dayNumber,
+                thoughts: [{ timeInSession: -1, text }],
+              }),
+            });
+            if (!res.ok) {
+              throw new Error("Failed to save note");
             }
           }}
         />

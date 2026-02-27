@@ -233,7 +233,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   </div>
                   <div style={{
                     flex: 1, height: "24px", borderRadius: "3px", overflow: "hidden",
-                    background: "rgba(232,228,222,0.04)", position: "relative",
+                    background: "var(--surface-1)", position: "relative",
                   }}>
                     <div style={{
                       height: "100%",
@@ -315,7 +315,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             </div>
             <div style={{
               flex: 1, height: "24px", borderRadius: "3px", overflow: "hidden",
-              background: "rgba(232,228,222,0.04)",
+              background: "var(--surface-1)",
               border: "1px dashed rgba(232,228,222,0.1)",
             }}>
               <div style={{

@@ -165,7 +165,7 @@ export function BlockTimer({
         width: `${blockSize}px`, height: `${blockSize}px`, borderRadius: "10px",
         position: "relative", overflow: "hidden",
         border: `1px solid ${isFilled ? "rgba(74,222,128,0.3)" : isCurrent ? "rgba(251,191,36,0.4)" : "var(--border-1)"}`,
-        background: "rgba(232, 228, 222, 0.04)",
+        background: "var(--surface-1)",
         transition: "border-color 0.5s",
       }}>
         <div style={{
@@ -216,7 +216,7 @@ export function BlockTimer({
       <div style={{ width: "min(460px, calc(100vw - 40px))", margin: "0 auto" }}>
         <div style={{
           height: "8px", borderRadius: "4px", overflow: "hidden",
-          background: "rgba(232, 228, 222, 0.06)",
+          background: "var(--surface-2)",
         }}>
           <div style={{
             width: `${elapsed >= totalSeconds ? 100 : ((elapsed % 60) / 60) * 100}%`,

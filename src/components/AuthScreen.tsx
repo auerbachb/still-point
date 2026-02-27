@@ -89,7 +89,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
 
       <div style={{
         display: "flex", gap: "0",
-        background: "rgba(232,228,222,0.04)",
+        background: "var(--surface-1)",
         borderRadius: "20px",
         padding: "3px",
       }}>
@@ -163,7 +163,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onClick={handleSubmit}
           disabled={loading}
           style={{
-            background: "rgba(232, 228, 222, 0.04)",
+            background: "var(--surface-1)",
             border: "1px solid var(--border-2)",
             color: "var(--fg)",
             fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
@@ -177,12 +177,12 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onMouseEnter={e => {
             if (!loading) {
               e.currentTarget.style.borderColor = "rgba(232, 228, 222, 0.35)";
-              e.currentTarget.style.background = "rgba(232, 228, 222, 0.08)";
+              e.currentTarget.style.background = "var(--surface-2)";
             }
           }}
           onMouseLeave={e => {
             e.currentTarget.style.borderColor = "var(--border-2)";
-            e.currentTarget.style.background = "rgba(232, 228, 222, 0.04)";
+            e.currentTarget.style.background = "var(--surface-1)";
           }}
         >
           {loading ? "..." : mode === "login" ? "Enter" : "Begin the journey"}
