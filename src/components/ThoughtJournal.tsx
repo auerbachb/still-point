@@ -96,7 +96,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
                 <span style={{
                   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                   fontSize: "11px",
-                  color: t.timeInSession === -1 ? "rgba(74,222,128,0.25)" : "rgba(251,191,36,0.25)",
+                  color: t.timeInSession === -1 ? "var(--accent-green-muted)" : "var(--accent-amber-muted)",
                   whiteSpace: "nowrap", minWidth: "32px",
                 }}>
                   {t.timeInSession === -1 ? "note" : `@${t.timeInSession}s`}

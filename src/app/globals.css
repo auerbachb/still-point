@@ -3,7 +3,7 @@
   --fg:   rgba(232, 228, 222, 0.92);
   --fg-2: rgba(232, 228, 222, 0.70);
   --fg-3: rgba(232, 228, 222, 0.52);
-  --fg-4: rgba(232, 228, 222, 0.40);
+  --fg-4: rgba(232, 228, 222, 0.45);
   --fg-5: rgba(232, 228, 222, 0.28); /* decorative-only */
 
   /* Borders */
@@ -25,6 +25,14 @@
 
   /* Border tier for hover/active states */
   --border-3: rgba(232, 228, 222, 0.35);
+
+  /* Accent — green/success */
+  --accent-green: #4ade80;
+  --accent-green-bg: rgba(74, 222, 128, 0.4);
+  --accent-green-muted: rgba(74, 222, 128, 0.25);
+
+  /* Accent — amber/thinking */
+  --accent-amber-muted: rgba(251, 191, 36, 0.25);
 
   /* Layout */
   --bg-rgb: 26, 24, 22;

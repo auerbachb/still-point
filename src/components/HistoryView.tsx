@@ -206,7 +206,16 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             return (
               <div key={`${entry.day}-${idx}`}>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedDay === entry.day}
                   onClick={() => setExpandedDay(expandedDay === entry.day ? null : entry.day)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setExpandedDay(expandedDay === entry.day ? null : entry.day);
+                    }
+                  }}
                   style={{
                     display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
                     cursor: "pointer", padding: "2px 0", borderRadius: "4px",

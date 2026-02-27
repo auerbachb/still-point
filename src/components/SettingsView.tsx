@@ -117,7 +117,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
               width: "48px", height: "26px",
               borderRadius: "13px", border: "none",
               background: user.isPublic
-                ? "rgba(74,222,128,0.4)"
+                ? "var(--accent-green-bg)"
                 : "var(--surface-3)",
               position: "relative", cursor: "pointer",
               transition: "background 0.3s",
@@ -127,7 +127,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
             <div style={{
               width: "20px", height: "20px",
               borderRadius: "10px",
-              background: user.isPublic ? "#4ade80" : "var(--border-3)",
+              background: user.isPublic ? "var(--accent-green)" : "var(--border-3)",
               position: "absolute", top: "3px",
               left: user.isPublic ? "25px" : "3px",
               transition: "all 0.3s",
