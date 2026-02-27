@@ -191,7 +191,7 @@ export default function StillPoint() {
       }}>
         <div style={{
           fontSize: "42px", fontWeight: 300, fontStyle: "italic",
-          color: "rgba(232,228,222,0.3)", animation: "breathe 4s ease-in-out infinite",
+          color: "var(--fg-4)", animation: "breathe 4s ease-in-out infinite",
         }}>
           Still Point
         </div>
@@ -216,37 +216,40 @@ export default function StillPoint() {
   // Logged in
   return (
     <div style={{
-      minHeight: "100vh", display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
+      minHeight: "100svh",
+      display: "grid",
+      gridTemplateRows: view === "session" ? "1fr" : "auto 1fr auto",
+      alignItems: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
-        ? "20px 12px calc(80px + env(safe-area-inset-bottom, 0px))"
-        : "40px 20px",
-      position: "relative",
+        ? "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
+        : "var(--s4) var(--s4)",
     }}>
       {/* Nav */}
       {view !== "session" && (
         <div style={isMobile ? {
           position: "fixed", bottom: 0, left: 0, right: 0,
           display: "flex", justifyContent: "space-around",
-          background: "rgba(26,24,22,0.92)", backdropFilter: "blur(8px)",
-          borderTop: "1px solid rgba(232,228,222,0.06)",
+          background: "rgba(var(--bg-rgb), 0.92)", backdropFilter: "blur(10px)",
+          borderTop: "1px solid var(--border-1)",
           padding: "10px 0 env(safe-area-inset-bottom, 8px)",
           zIndex: 100,
         } : {
-          position: "absolute", top: "24px", right: "24px",
-          display: "flex", gap: "16px",
+          position: "fixed", top: "var(--s4)", right: "var(--s4)",
+          display: "flex", gap: "var(--s3)",
+          zIndex: 100,
         }}>
           {navItems.map(v => (
             <button
+              type="button"
               key={v}
               onClick={() => setView(v)}
               style={{
                 background: "none", border: "none",
-                color: view === v ? "rgba(232,228,222,0.8)" : "rgba(232,228,222,0.25)",
+                color: view === v ? "var(--fg)" : "var(--fg-2)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: isMobile ? "13px" : "11px",
-                letterSpacing: isMobile ? "1.5px" : "2px",
+                letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 cursor: "pointer",
                 padding: isMobile ? "12px 14px" : "8px",
@@ -254,9 +257,17 @@ export default function StillPoint() {
                 minHeight: isMobile ? "44px" : undefined,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 transition: "color 0.3s",
+                position: "relative",
               }}
             >
               {v}
+              {view === v && isMobile && (
+                <span style={{
+                  position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)",
+                  width: "16px", height: "2px", borderRadius: "1px",
+                  background: "var(--fg)",
+                }} />
+              )}
             </button>
           ))}
         </div>
@@ -266,11 +277,12 @@ export default function StillPoint() {
       {view !== "session" && (
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "12px", color: "rgba(232,228,222,0.45)",
-          letterSpacing: "1.5px",
-          fontWeight: 500,
+          fontSize: "12px", color: "var(--fg-3)",
+          letterSpacing: "0.12em",
+          fontWeight: 400,
           textAlign: "center",
-          marginBottom: "24px",
+          paddingTop: isMobile ? "var(--s1)" : "var(--s5)",
+          marginBottom: "var(--s4)",
         }}>
           <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
         </div>
@@ -297,22 +309,20 @@ export default function StillPoint() {
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
           onReturn={() => setView("home")}
-          onSaveNote={async (text: string) => {
-            if (!completionData.sessionId) return;
-            try {
-              await fetch("/api/thoughts/batch", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  sessionId: completionData.sessionId,
-                  dayNumber: completionData.dayNumber,
-                  thoughts: [{ timeInSession: -1, text }],
-                }),
-              });
-            } catch (error) {
-              console.error("Failed to save note:", error);
+          onSaveNote={completionData.sessionId ? async (text: string) => {
+            const res = await fetch("/api/thoughts/batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sessionId: completionData.sessionId,
+                dayNumber: completionData.dayNumber,
+                thoughts: [{ timeInSession: -1, text }],
+              }),
+            });
+            if (!res.ok) {
+              throw new Error("Failed to save note");
             }
-          }}
+          } : undefined}
         />
       )}
 

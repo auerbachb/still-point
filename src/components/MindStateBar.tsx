@@ -38,14 +38,14 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
     <div style={{ width: barWidth, margin: "0 auto" }}>
       <div style={{
         height: "8px", borderRadius: "4px", overflow: "hidden",
-        display: "flex", background: "rgba(232,228,222,0.06)",
+        display: "flex", background: "var(--surface-2)",
       }}>
         {segments.map((seg, i) => (
           <div key={i} style={{
             width: `${(seg.end - seg.start) * 100}%`, height: "100%",
             background: seg.state === "clear"
-              ? "linear-gradient(to right, #4ade80, #22c55e)"
-              : "linear-gradient(to right, #fbbf24, #f59e0b)",
+              ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
+              : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
             opacity: 0.7,
           }} />
         ))}
@@ -53,7 +53,7 @@ export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState
       <div style={{
         display: "flex", justifyContent: "space-between", marginTop: "6px",
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-        fontSize: "10px", color: "rgba(232,228,222,0.25)",
+        fontSize: "11px", color: "var(--fg-4)",
       }}>
         <span>0s</span>
         <span>{totalSeconds}s</span>

@@ -51,6 +51,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
       <h2 style={{
         fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        color: "var(--fg)",
       }}>
         Settings
       </h2>
@@ -59,26 +60,26 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         {/* User info */}
         <div style={{
           padding: "16px 20px",
-          background: "rgba(232,228,222,0.03)",
+          background: "var(--surface-1)",
           borderRadius: "10px",
           display: "flex", flexDirection: "column", gap: "8px",
         }}>
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "10px", color: "rgba(232,228,222,0.25)",
-            letterSpacing: "2px", textTransform: "uppercase",
+            fontSize: "11px", color: "var(--fg-4)",
+            letterSpacing: "0.12em", textTransform: "uppercase",
           }}>
             ACCOUNT
           </div>
           <div style={{
             fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "16px", color: "#e8e4de",
+            fontSize: "16px", color: "var(--fg)",
           }}>
             {user.username}
           </div>
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "12px", color: "rgba(232,228,222,0.3)",
+            fontSize: "12px", color: "var(--fg-3)",
           }}>
             {user.email}
           </div>
@@ -87,34 +88,37 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         {/* Public board toggle */}
         <div style={{
           padding: "16px 20px",
-          background: "rgba(232,228,222,0.03)",
+          background: "var(--surface-1)",
           borderRadius: "10px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div>
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "12px", color: "#e8e4de", marginBottom: "4px",
+              fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
             }}>
               Public Board
             </div>
             <div style={{
               fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
               fontSize: "13px", fontStyle: "italic",
-              color: "rgba(232,228,222,0.35)",
+              color: "var(--fg-3)",
             }}>
               Show your stats alongside other practitioners
             </div>
           </div>
           <button
+            type="button"
+            aria-label={user.isPublic ? "Disable public board" : "Enable public board"}
+            aria-pressed={user.isPublic}
             onClick={handleToggle}
             disabled={toggling}
             style={{
               width: "48px", height: "26px",
               borderRadius: "13px", border: "none",
               background: user.isPublic
-                ? "rgba(74,222,128,0.4)"
-                : "rgba(232,228,222,0.1)",
+                ? "var(--accent-green-bg)"
+                : "var(--surface-3)",
               position: "relative", cursor: "pointer",
               transition: "background 0.3s",
               flexShrink: 0, marginLeft: "16px",
@@ -123,7 +127,7 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
             <div style={{
               width: "20px", height: "20px",
               borderRadius: "10px",
-              background: user.isPublic ? "#4ade80" : "rgba(232,228,222,0.3)",
+              background: user.isPublic ? "var(--accent-green)" : "var(--border-3)",
               position: "absolute", top: "3px",
               left: user.isPublic ? "25px" : "3px",
               transition: "all 0.3s",
@@ -133,13 +137,14 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
 
         {/* Logout */}
         <button
+          type="button"
           onClick={handleLogout}
           style={{
             background: "none",
-            border: "1px solid rgba(239,68,68,0.15)",
-            color: "rgba(239,68,68,0.5)",
+            border: "1px solid var(--accent-danger-border-subtle)",
+            color: "var(--accent-danger-muted)",
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "11px", letterSpacing: "2px",
+            fontSize: "11px", letterSpacing: "0.12em",
             textTransform: "uppercase", padding: "12px",
             borderRadius: "8px", cursor: "pointer",
             transition: "all 0.3s", marginTop: "8px",

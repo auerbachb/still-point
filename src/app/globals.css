@@ -1,3 +1,71 @@
+:root {
+  /* Color tiers — warm off-white on dark */
+  --fg:   rgba(232, 228, 222, 0.92);
+  --fg-2: rgba(232, 228, 222, 0.70);
+  --fg-3: rgba(232, 228, 222, 0.52);
+  --fg-4: rgba(232, 228, 222, 0.45);
+
+  /* Borders */
+  --border-1: rgba(232, 228, 222, 0.08);
+  --border-2: rgba(232, 228, 222, 0.18);
+
+  /* Spacing scale */
+  --s1: 8px;
+  --s2: 12px;
+  --s3: 16px;
+  --s4: 24px;
+  --s5: 32px;
+  --s6: 48px;
+
+  /* Surfaces — low-emphasis fills */
+  --surface-1: rgba(232, 228, 222, 0.04);
+  --surface-2: rgba(232, 228, 222, 0.06);
+  --surface-3: rgba(232, 228, 222, 0.10);
+
+  /* Border tier for hover/active states */
+  --border-3: rgba(232, 228, 222, 0.35);
+
+  /* Accent — green/success */
+  --accent-green: #4ade80;
+  --accent-green-end: #22c55e;
+  --accent-green-strong: rgba(74, 222, 128, 0.7);
+  --accent-green-text: rgba(74, 222, 128, 0.6);
+  --accent-green-dim: rgba(74, 222, 128, 0.5);
+  --accent-green-bg: rgba(74, 222, 128, 0.4);
+  --accent-green-glow: rgba(74, 222, 128, 0.3);
+  --accent-green-muted: rgba(74, 222, 128, 0.25);
+  --accent-green-border: rgba(74, 222, 128, 0.2);
+  --accent-green-border-subtle: rgba(74, 222, 128, 0.15);
+  --accent-green-bg-subtle: rgba(74, 222, 128, 0.08);
+  --accent-green-bg-faint: rgba(74, 222, 128, 0.06);
+
+  /* Accent — amber/thinking */
+  --accent-amber: #fbbf24;
+  --accent-amber-end: #f59e0b;
+  --accent-amber-text: rgba(251, 191, 36, 0.6);
+  --accent-amber-dim: rgba(251, 191, 36, 0.5);
+  --accent-amber-border: rgba(251, 191, 36, 0.4);
+  --accent-amber-hint: rgba(251, 191, 36, 0.3);
+  --accent-amber-muted: rgba(251, 191, 36, 0.25);
+  --accent-amber-border-subtle: rgba(251, 191, 36, 0.2);
+  --accent-amber-bg: rgba(251, 191, 36, 0.15);
+  --accent-amber-bg-faint: rgba(251, 191, 36, 0.06);
+
+  /* Accent — red/danger */
+  --accent-danger: rgba(239, 68, 68, 0.7);
+  --accent-danger-muted: rgba(239, 68, 68, 0.5);
+  --accent-danger-border: rgba(239, 68, 68, 0.2);
+  --accent-danger-border-subtle: rgba(239, 68, 68, 0.15);
+
+  /* Overlay — dark text/bg on colored surfaces */
+  --overlay-text: rgba(0, 0, 0, 0.5);
+  --overlay-bg: rgba(0, 0, 0, 0.3);
+
+  /* Layout */
+  --bg-rgb: 26, 24, 22;
+  --nav-h: 96px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -10,8 +78,8 @@ html, body {
 }
 
 body {
-  background: #1a1816;
-  color: #e8e4de;
+  background: rgb(var(--bg-rgb));
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -34,4 +102,12 @@ a {
 @keyframes breathe {
   0%, 100% { transform: scale(1); opacity: 0.6; }
   50% { transform: scale(1.02); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

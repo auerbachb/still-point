@@ -31,11 +31,11 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
     return (
       <div style={containerStyle}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
           Practitioners
         </h2>
         <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "12px", color: "rgba(232,228,222,0.3)" }}>
+          fontSize: "12px", color: "var(--fg-3)" }}>
           Loading...
         </div>
       </div>
@@ -46,13 +46,13 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
     <div style={containerStyle}>
       <div style={{ textAlign: "center" }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif" }}>
+          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
           Practitioners
         </h2>
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "11px", color: "rgba(232,228,222,0.25)",
-          letterSpacing: "1px", marginTop: "8px",
+          fontSize: "11px", color: "var(--fg-4)",
+          letterSpacing: "0.09em", marginTop: "8px",
         }}>
           sorted by current day
         </p>
@@ -65,8 +65,8 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
           gridTemplateColumns: "32px 1fr 64px 64px 64px",
           gap: "12px", padding: "8px 12px",
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "9px", color: "rgba(232,228,222,0.2)",
-          letterSpacing: "2px", textTransform: "uppercase",
+          fontSize: "11px", color: "var(--fg-4)",
+          letterSpacing: "0.12em", textTransform: "uppercase",
         }}>
           <span>#</span>
           <span>user</span>
@@ -85,12 +85,12 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 gridTemplateColumns: "32px 1fr 64px 64px 64px",
                 gap: "12px", padding: "10px 12px", borderRadius: "6px",
                 background: isMe
-                  ? "rgba(74,222,128,0.06)"
+                  ? "var(--accent-green-bg-faint)"
                   : i % 2 === 0
-                    ? "rgba(232,228,222,0.02)"
+                    ? "var(--surface-1)"
                     : "transparent",
                 border: isMe
-                  ? "1px solid rgba(74,222,128,0.15)"
+                  ? "1px solid var(--accent-green-border-subtle)"
                   : "1px solid transparent",
                 alignItems: "center",
               }}
@@ -98,7 +98,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "12px",
-                color: i < 3 ? "rgba(251,191,36,0.6)" : "rgba(232,228,222,0.2)",
+                color: i < 3 ? "var(--accent-amber-text)" : "var(--fg-4)",
                 fontWeight: i < 3 ? 500 : 300,
               }}>
                 {i + 1}
@@ -106,7 +106,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
                 fontSize: "15px",
-                color: isMe ? "#4ade80" : "#e8e4de",
+                color: isMe ? "var(--accent-green)" : "var(--fg)",
                 fontStyle: isMe ? "italic" : "normal",
               }}>
                 {user.username}{" "}
@@ -114,7 +114,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               </span>
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "14px", color: "#e8e4de",
+                fontSize: "14px", color: "var(--fg)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.currentDay}
@@ -122,7 +122,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "14px",
-                color: user.streak >= 7 ? "rgba(74,222,128,0.7)" : "rgba(232,228,222,0.4)",
+                color: user.streak >= 7 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.streak}
@@ -130,7 +130,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               <span style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "14px",
-                color: user.avgClear >= 80 ? "rgba(74,222,128,0.7)" : "rgba(232,228,222,0.4)",
+                color: user.avgClear >= 80 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.avgClear}%
@@ -142,7 +142,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
         {sorted.length === 0 && (
           <p style={{
             fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "14px", fontStyle: "italic", color: "rgba(232,228,222,0.2)",
+            fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
             textAlign: "center", padding: "40px 0",
           }}>
             No public practitioners yet. Be the first to opt in via Settings.
@@ -153,7 +153,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
       <p style={{
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
         fontSize: "13px", fontStyle: "italic",
-        color: "rgba(232,228,222,0.2)", textAlign: "center", lineHeight: 1.5,
+        color: "var(--fg-4)", textAlign: "center", lineHeight: 1.5,
       }}>
         Not a competition &mdash; a community of people training attention together.
         <br />
