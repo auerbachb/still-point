@@ -259,9 +259,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     width: isMobile ? "80px" : "120px", display: "flex", gap: "6px", flexWrap: "wrap",
                   }}>
                     <span style={{ color: "var(--fg-3)" }}>{entry.actualTime}s</span>
-                    <span style={{ color: "var(--fg-4)" }}>&middot;</span>
+                    <span style={{ color: "var(--fg-5)" }}>&middot;</span>
                     <span>{entry.clearPercent}%</span>
-                    <span style={{ color: "var(--fg-4)" }}>&middot;</span>
+                    <span style={{ color: "var(--fg-5)" }}>&middot;</span>
                     <span style={{ color: "rgba(251,191,36,0.4)" }}>{entry.thoughtCount}\uD83D\uDCAD</span>
                   </div>
                 </div>

@@ -46,7 +46,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
         <div style={{
           fontSize: "min(120px, 20vw)", fontWeight: 200,
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          lineHeight: 1, color: "var(--fg-4)",
+          lineHeight: 1, color: "var(--fg-5)",
         }}>
           {currentDay}
         </div>
@@ -103,7 +103,7 @@ export function HomeView({ currentDay, onBegin }: HomeViewProps) {
         }}>
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "11px", color: "var(--fg-3)",
+            fontSize: "12px", color: "var(--fg-3)",
             letterSpacing: "0.15em", textTransform: "uppercase",
             marginBottom: "var(--s3)",
             textAlign: "center",
