@@ -38,6 +38,7 @@ export type Session = {
 
 export type Thought = {
   id: string;
+  sessionId: string;
   dayNumber: number;
   timeInSession: number;
   text: string;

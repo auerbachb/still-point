@@ -13,6 +13,7 @@ export async function GET() {
 
     const userThoughts = await db.select({
       id: thoughts.id,
+      sessionId: thoughts.sessionId,
       dayNumber: thoughts.dayNumber,
       timeInSession: thoughts.timeInSession,
       text: thoughts.text,

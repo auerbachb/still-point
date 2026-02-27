@@ -6,6 +6,7 @@ import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 type HistoryEntry = {
+  sessionId?: string;
   day: number | null;
   duration: number;
   actualTime: number;
@@ -68,6 +69,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       }
     }
     history.push({
+      sessionId: s.id,
       day: s.dayNumber,
       duration: s.duration,
       actualTime: s.actualTime ?? s.duration,
@@ -85,8 +87,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   );
 
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
-  const getThoughtsForDay = (day: number | null) =>
-    day === null ? [] : thoughts.filter(t => t.dayNumber === day);
+  const getThoughtsForSession = (sessionId?: string) =>
+    sessionId ? thoughts.filter(t => t.sessionId === sessionId) : [];
 
   if (loading) {
     return (
@@ -206,25 +208,28 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
             const entryId = `day-${entry.day}-${idx}`;
             const isExpanded = expandedEntryId === entryId;
-            const entryThoughts = getThoughtsForDay(entry.day);
+            const entryThoughts = getThoughtsForSession(entry.sessionId);
+            const canExpand = entryThoughts.length > 0;
 
             return (
               <div key={entryId}>
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-expanded={isExpanded}
-                  aria-controls={`${entryId}-thoughts`}
-                  onClick={() => setExpandedEntryId(isExpanded ? null : entryId)}
+                  aria-expanded={canExpand ? isExpanded : undefined}
+                  aria-controls={canExpand ? `${entryId}-thoughts` : undefined}
+                  onClick={() => {
+                    if (canExpand) setExpandedEntryId(isExpanded ? null : entryId);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setExpandedEntryId(isExpanded ? null : entryId);
+                      if (canExpand) setExpandedEntryId(isExpanded ? null : entryId);
                     }
                   }}
                   style={{
                     display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
-                    cursor: "pointer", padding: "2px 0", borderRadius: "4px",
+                    cursor: canExpand ? "pointer" : "default", padding: "2px 0", borderRadius: "4px",
                     transition: "background 0.2s", outline: "none",
                   }}
                   onFocus={e => {
@@ -292,7 +297,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   </div>
                 </div>
 
-                {isExpanded && entryThoughts.length > 0 && (
+                {canExpand && isExpanded && (
                   <div
                     id={`${entryId}-thoughts`}
                     role="region"
