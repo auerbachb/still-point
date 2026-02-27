@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 type HistoryEntry = {
+  sessionId?: string;
   day: number | null;
   duration: number;
   actualTime: number;
@@ -25,7 +26,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [stats, setStats] = useState({ streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0 });
-  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
 
@@ -68,6 +69,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       }
     }
     history.push({
+      sessionId: s.id,
       day: s.dayNumber,
       duration: s.duration,
       actualTime: s.actualTime ?? s.duration,
@@ -85,7 +87,16 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   );
 
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
-  const dayThoughts = expandedDay !== null ? thoughts.filter(t => t.dayNumber === expandedDay) : [];
+  const thoughtsBySession = useMemo(() => {
+    const grouped: Record<string, Thought[]> = {};
+    for (const t of thoughts) {
+      (grouped[t.sessionId] ??= []).push(t);
+    }
+    return grouped;
+  }, [thoughts]);
+
+  const getThoughtsForSession = (sessionId?: string) =>
+    sessionId ? (thoughtsBySession[sessionId] ?? []) : [];
 
   if (loading) {
     return (
@@ -203,23 +214,30 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             const dd = String(dayOfMonth).padStart(2, "0");
             const dateLabel = `${dow} ${mon} ${dayOfMonth} (${y}.${mm}.${dd})`;
 
+            const entryId = `day-${entry.day}-${idx}`;
+            const isExpanded = expandedEntryId === entryId;
+            const entryThoughts = getThoughtsForSession(entry.sessionId);
+            const canExpand = entryThoughts.length > 0;
+
             return (
-              <div key={`${entry.day}-${idx}`}>
+              <div key={entryId}>
                 <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={expandedDay === entry.day}
-                  aria-controls={`day-${entry.day}-thoughts`}
-                  onClick={() => setExpandedDay(expandedDay === entry.day ? null : entry.day)}
+                  role={canExpand ? "button" : undefined}
+                  tabIndex={canExpand ? 0 : undefined}
+                  aria-expanded={canExpand ? isExpanded : undefined}
+                  aria-controls={canExpand ? `${entryId}-thoughts` : undefined}
+                  onClick={() => {
+                    if (canExpand) setExpandedEntryId(isExpanded ? null : entryId);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setExpandedDay(expandedDay === entry.day ? null : entry.day);
+                      if (canExpand) setExpandedEntryId(isExpanded ? null : entryId);
                     }
                   }}
                   style={{
                     display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
-                    cursor: "pointer", padding: "2px 0", borderRadius: "4px",
+                    cursor: canExpand ? "pointer" : "default", padding: "2px 0", borderRadius: "4px",
                     transition: "background 0.2s", outline: "none",
                   }}
                   onFocus={e => {
@@ -287,19 +305,19 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   </div>
                 </div>
 
-                {expandedDay === entry.day && dayThoughts.length > 0 && (
+                {canExpand && isExpanded && (
                   <div
-                    id={`day-${entry.day}-thoughts`}
+                    id={`${entryId}-thoughts`}
                     role="region"
-                    aria-label={`Day ${entry.day} captured thoughts`}
+                    aria-label={`Day ${entry.day} captured thoughts (entry ${idx + 1})`}
                     style={{
                     marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
                     padding: "10px 14px", background: "var(--surface-1)",
                     borderLeft: "2px solid var(--accent-amber-bg)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
                   }}>
-                    {dayThoughts.map((t, i) => (
-                      <div key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
+                    {entryThoughts.map((t) => (
+                      <div key={t.id} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
                           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                           fontSize: "11px", color: "var(--accent-amber-hint)", whiteSpace: "nowrap",
