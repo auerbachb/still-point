@@ -209,7 +209,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   role="button"
                   tabIndex={0}
                   aria-expanded={expandedDay === entry.day}
-                  aria-controls={`day-${entry.day}-thoughts`}
+                  aria-controls={`day-${entry.day}-${idx}-thoughts`}
                   onClick={() => setExpandedDay(expandedDay === entry.day ? null : entry.day)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -289,7 +289,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
                 {expandedDay === entry.day && dayThoughts.length > 0 && (
                   <div
-                    id={`day-${entry.day}-thoughts`}
+                    id={`day-${entry.day}-${idx}-thoughts`}
                     role="region"
                     aria-label={`Day ${entry.day} captured thoughts`}
                     style={{
