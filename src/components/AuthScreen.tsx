@@ -152,7 +152,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         {error && (
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "11px", color: "rgba(239,68,68,0.7)",
+            fontSize: "11px", color: "var(--accent-danger)",
             textAlign: "center",
           }}>
             {error}

@@ -244,8 +244,8 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               onClick={handleAbandon}
               style={{
                 background: "none",
-                border: "1px solid rgba(239,68,68,0.2)",
-                color: "rgba(239,68,68,0.5)",
+                border: "1px solid var(--accent-danger-border)",
+                color: "var(--accent-danger-muted)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
                 padding: "10px 24px", borderRadius: "20px", cursor: "pointer",

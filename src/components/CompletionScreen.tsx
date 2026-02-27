@@ -152,7 +152,7 @@ export function CompletionScreen({
                   aria-live="assertive"
                   style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px", color: "rgba(239,68,68,0.7)",
+                    fontSize: "11px", color: "var(--accent-danger)",
                     letterSpacing: "0.09em",
                   }}
                 >
@@ -179,11 +179,11 @@ export function CompletionScreen({
                   style={{
                     background: "none",
                     border: saveError
-                      ? "1px solid rgba(239,68,68,0.3)"
-                      : "1px solid rgba(74,222,128,0.2)",
+                      ? "1px solid var(--accent-danger-border)"
+                      : "1px solid var(--accent-green-border)",
                     color: saveError
-                      ? "rgba(239,68,68,0.7)"
-                      : "rgba(74,222,128,0.6)",
+                      ? "var(--accent-danger)"
+                      : "var(--accent-green-text)",
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
                     padding: "8px 24px", borderRadius: "20px",

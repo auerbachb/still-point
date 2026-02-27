@@ -141,8 +141,8 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
           onClick={handleLogout}
           style={{
             background: "none",
-            border: "1px solid rgba(239,68,68,0.15)",
-            color: "rgba(239,68,68,0.5)",
+            border: "1px solid var(--accent-danger-border-subtle)",
+            color: "var(--accent-danger-muted)",
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
             fontSize: "11px", letterSpacing: "0.12em",
             textTransform: "uppercase", padding: "12px",

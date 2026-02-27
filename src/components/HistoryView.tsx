@@ -275,7 +275,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px",
-                    color: entry.completed ? "rgba(74,222,128,0.5)" : "rgba(239,68,68,0.5)",
+                    color: entry.completed ? "var(--accent-green-dim)" : "var(--accent-danger-muted)",
                     width: isMobile ? "80px" : "120px", display: "flex", gap: "6px", flexWrap: "wrap",
                   }}>
                     <span style={{ color: "var(--fg-3)" }}>{entry.actualTime}s</span>
