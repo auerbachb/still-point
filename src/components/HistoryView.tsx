@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -87,8 +87,16 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   );
 
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
+  const thoughtsBySession = useMemo(() => {
+    const grouped: Record<string, Thought[]> = {};
+    for (const t of thoughts) {
+      (grouped[t.sessionId] ??= []).push(t);
+    }
+    return grouped;
+  }, [thoughts]);
+
   const getThoughtsForSession = (sessionId?: string) =>
-    sessionId ? thoughts.filter(t => t.sessionId === sessionId) : [];
+    sessionId ? (thoughtsBySession[sessionId] ?? []) : [];
 
   if (loading) {
     return (
@@ -214,8 +222,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             return (
               <div key={entryId}>
                 <div
-                  role="button"
-                  tabIndex={0}
+                  role={canExpand ? "button" : undefined}
+                  tabIndex={canExpand ? 0 : undefined}
                   aria-expanded={canExpand ? isExpanded : undefined}
                   aria-controls={canExpand ? `${entryId}-thoughts` : undefined}
                   onClick={() => {
