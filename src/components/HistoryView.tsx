@@ -316,8 +316,8 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     borderLeft: "2px solid var(--accent-amber-bg)",
                     borderRadius: "0 6px 6px 0", animation: "fadeIn 0.2s ease",
                   }}>
-                    {entryThoughts.map((t, i) => (
-                      <div key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
+                    {entryThoughts.map((t) => (
+                      <div key={t.id} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
                           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                           fontSize: "11px", color: "var(--accent-amber-hint)", whiteSpace: "nowrap",
