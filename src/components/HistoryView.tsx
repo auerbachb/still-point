@@ -219,7 +219,18 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   style={{
                     display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
                     cursor: "pointer", padding: "2px 0", borderRadius: "4px",
-                    transition: "background 0.2s",
+                    transition: "background 0.2s", outline: "none",
+                  }}
+                  onFocus={e => {
+                    if (e.currentTarget.matches(":focus-visible")) {
+                      e.currentTarget.style.background = "var(--surface-1)";
+                      e.currentTarget.style.outline = "2px solid var(--border-3)";
+                      e.currentTarget.style.outlineOffset = "2px";
+                    }
+                  }}
+                  onBlur={e => {
+                    e.currentTarget.style.outline = "none";
+                    e.currentTarget.style.background = "none";
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = "var(--surface-1)"}
                   onMouseLeave={e => e.currentTarget.style.background = "none"}

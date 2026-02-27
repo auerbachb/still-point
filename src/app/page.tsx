@@ -309,8 +309,7 @@ export default function StillPoint() {
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
           onReturn={() => setView("home")}
-          onSaveNote={async (text: string) => {
-            if (!completionData.sessionId) throw new Error("Missing session ID");
+          onSaveNote={completionData.sessionId ? async (text: string) => {
             const res = await fetch("/api/thoughts/batch", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -323,7 +322,7 @@ export default function StillPoint() {
             if (!res.ok) {
               throw new Error("Failed to save note");
             }
-          }}
+          } : undefined}
         />
       )}
 
