@@ -178,12 +178,12 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
             onClick={handleThinkingToggle}
             style={{
               background: mindState === "thinking"
-                ? "rgba(251,191,36,0.15)"
-                : "rgba(74,222,128,0.08)",
+                ? "var(--accent-amber-bg)"
+                : "var(--accent-green-bg-subtle)",
               border: `1px solid ${mindState === "thinking"
-                ? "rgba(251,191,36,0.4)"
-                : "rgba(74,222,128,0.2)"}`,
-              color: mindState === "thinking" ? "#fbbf24" : "#4ade80",
+                ? "var(--accent-amber-border)"
+                : "var(--accent-green-border)"}`,
+              color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
               fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase",
               padding: "12px 28px", borderRadius: "24px",

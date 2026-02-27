@@ -262,12 +262,12 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     }}>
                       <div style={{
                         width: `${entry.clearPercent}%`, height: "100%",
-                        background: "linear-gradient(to right, #4ade80, #22c55e)",
+                        background: "linear-gradient(to right, var(--accent-green), var(--accent-green-end))",
                         opacity: entry.completed ? 0.7 : 0.4,
                       }} />
                       <div style={{
                         width: `${100 - entry.clearPercent}%`, height: "100%",
-                        background: "linear-gradient(to right, #fbbf24, #f59e0b)",
+                        background: "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
                         opacity: entry.completed ? 0.5 : 0.3,
                       }} />
                     </div>
