@@ -1,0 +1,270 @@
+import SwiftUI
+import Combine
+import StillPointShared
+
+@Observable
+final class SessionViewModel {
+    // Session config
+    let dayNumber: Int
+    let totalSeconds: Int
+
+    // Timer state
+    var elapsed: Double = 0
+    var isActive = false
+    var isPaused = false
+    var isComplete = false
+    /// Whether the session completed naturally (timer ran out) vs ended early
+    var completedNaturally = false
+    /// Whether the user explicitly abandoned (discard data, don't save)
+    var isAbandoned = false
+
+    // Mind state
+    var mindState: String = "clear"
+    var mindStateLog: [MindStateEntry] = []
+    var thoughtCount = 0
+    var capturedThoughts: [CapturedThought] = []
+
+    // UI state
+    var showThoughtCapture = false
+    var controlsVisible = true
+    var soundPrefs: AudioEngine.SoundPrefs
+
+    // Internal
+    private var startDate: Date?
+    private var pausedElapsed: Double = 0
+    private var timer: AnyCancellable?
+    private var lastTickSec = -1
+    private var lastChimeMinutesLeft: Int
+    private var controlHideTimer: AnyCancellable?
+
+    var remaining: Double {
+        max(0, Double(totalSeconds) - elapsed)
+    }
+
+    var minutes: Int {
+        Int(remaining) / 60
+    }
+
+    var seconds: Int {
+        Int(remaining) % 60
+    }
+
+    var clearPercent: Int {
+        SessionLogic.calculateClearPercent(
+            mindStateLog: mindStateLog,
+            totalElapsed: elapsed
+        )
+    }
+
+    var blocks: [BlockDef] {
+        SessionLogic.buildBlocks(totalSeconds: totalSeconds)
+    }
+
+    var statusLabel: String {
+        SessionLogic.statusLabel(
+            elapsed: elapsed,
+            totalSeconds: totalSeconds,
+            blocks: blocks
+        )
+    }
+
+    var timeString: String {
+        "\(minutes):\(String(format: "%02d", seconds))"
+    }
+
+    init(dayNumber: Int) {
+        self.dayNumber = dayNumber
+        self.totalSeconds = StillPoint.duration(forDay: dayNumber)
+        self.soundPrefs = AudioEngine.loadPrefs()
+        // Initialize to ceil so the first tick doesn't immediately fire chimes
+        self.lastChimeMinutesLeft = Int(ceil(Double(self.totalSeconds) / 60.0))
+        // Initial mind state log entry
+        self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
+    }
+
+    func start() {
+        isActive = true
+        isPaused = false
+        startDate = Date().addingTimeInterval(-pausedElapsed)
+        startTimer()
+        scheduleControlHide()
+    }
+
+    func pause() {
+        isPaused = true
+        isActive = false
+        pausedElapsed = elapsed
+        timer?.cancel()
+        controlsVisible = true
+    }
+
+    func resume() {
+        start()
+    }
+
+    func toggleMindState() {
+        if mindState == "clear" {
+            mindState = "thinking"
+            thoughtCount += 1
+            showThoughtCapture = true
+        } else {
+            mindState = "clear"
+            showThoughtCapture = false
+        }
+        mindStateLog.append(MindStateEntry(time: elapsed, state: mindState))
+        userInteracted()
+    }
+
+    func captureThought(_ text: String) {
+        guard !text.isEmpty else { return }
+        capturedThoughts.append(CapturedThought(
+            timeInSession: Int(elapsed),
+            text: text
+        ))
+        showThoughtCapture = false
+    }
+
+    func dismissThoughtCapture() {
+        showThoughtCapture = false
+    }
+
+    func userInteracted() {
+        controlsVisible = true
+        scheduleControlHide()
+    }
+
+    func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        soundPrefs[keyPath: keyPath].toggle()
+        AudioEngine.savePrefs(soundPrefs)
+    }
+
+    /// End session early but keep the data
+    func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
+        timer?.cancel()
+        isActive = false
+        isComplete = true
+        return (clearPercent, thoughtCount, capturedThoughts)
+    }
+
+    /// Abandon session — discard all data, don't save
+    func abandon() {
+        timer?.cancel()
+        isActive = false
+        isAbandoned = true
+        isComplete = true
+    }
+
+    /// Save session to the API. Returns the session on success.
+    /// Thought batch failure is logged but does not fail the session save.
+    func saveSession(completed: Bool) async -> SessionDTO? {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+
+        let request = CreateSessionRequest(
+            dayNumber: dayNumber,
+            duration: totalSeconds,
+            completed: completed,
+            actualTime: Int(elapsed),
+            clearPercent: clearPercent,
+            thoughtCount: thoughtCount,
+            mindStateLog: mindStateLog,
+            sessionDate: dateFormatter.string(from: Date())
+        )
+
+        do {
+            let session = try await APIClient.shared.createSession(request)
+
+            // Batch save thoughts — failure here is non-fatal since the session is already persisted
+            let allThoughts = capturedThoughts.map {
+                BatchThoughtsRequest.ThoughtInput(
+                    timeInSession: $0.timeInSession,
+                    text: $0.text
+                )
+            }
+
+            if !allThoughts.isEmpty {
+                do {
+                    _ = try await APIClient.shared.batchThoughts(
+                        BatchThoughtsRequest(
+                            sessionId: session.id,
+                            dayNumber: dayNumber,
+                            thoughts: allThoughts
+                        )
+                    )
+                } catch {
+                    print("Failed to save thoughts (session was saved): \(error)")
+                }
+            }
+
+            return session
+        } catch {
+            print("Failed to save session: \(error)")
+            return nil
+        }
+    }
+
+    // MARK: - Private
+
+    private func startTimer() {
+        timer = Timer.publish(every: 0.05, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.tick()
+            }
+    }
+
+    private func tick() {
+        guard let startDate, isActive else { return }
+
+        let newElapsed = Date().timeIntervalSince(startDate)
+
+        if newElapsed >= Double(totalSeconds) {
+            elapsed = Double(totalSeconds)
+            pausedElapsed = elapsed
+            timer?.cancel()
+            isActive = false
+            completedNaturally = true
+            isComplete = true
+            if soundPrefs.completion {
+                AudioEngine.shared.playCompletion()
+            }
+            return
+        }
+
+        elapsed = newElapsed
+        pausedElapsed = newElapsed
+
+        let currentSec = Int(newElapsed)
+        let remainingTime = Double(totalSeconds) - newElapsed
+
+        // Tick sound — once per second
+        if soundPrefs.tick && currentSec > lastTickSec {
+            lastTickSec = currentSec
+            AudioEngine.shared.playTick()
+        }
+
+        // Minute chime — fire when remaining crosses a whole minute boundary downward
+        if soundPrefs.chime {
+            let wholeMinutesLeft = Int(floor(remainingTime / 60))
+            if wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMinutesLeft {
+                AudioEngine.shared.playChime(count: wholeMinutesLeft)
+            }
+            lastChimeMinutesLeft = wholeMinutesLeft
+        }
+    }
+
+    private func scheduleControlHide() {
+        controlHideTimer?.cancel()
+        controlHideTimer = Timer.publish(every: 3.0, on: .main, in: .common)
+            .autoconnect()
+            .first()
+            .sink { [weak self] _ in
+                guard let self, self.isActive else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    self.controlsVisible = false
+                }
+            }
+    }
+}
