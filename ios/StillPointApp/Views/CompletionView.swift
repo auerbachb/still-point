@@ -104,6 +104,7 @@ struct CompletionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(SPColor.border2)
                         )
+                        .disabled(isSaving || noteSaved)
 
                     if !endNote.isEmpty && !noteSaved && !isSaving {
                         Button {
@@ -202,7 +203,8 @@ struct CompletionView: View {
     }
 
     private func saveEndNote() {
-        guard !endNote.isEmpty, !sessionId.isEmpty else { return }
+        let noteToSave = endNote
+        guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving, !noteSaved else { return }
         isSaving = true
         saveError = nil
         Task { @MainActor in
@@ -213,7 +215,7 @@ struct CompletionView: View {
                     thoughts: [
                         BatchThoughtsRequest.ThoughtInput(
                             timeInSession: -1,
-                            text: endNote
+                            text: noteToSave
                         )
                     ]
                 )
