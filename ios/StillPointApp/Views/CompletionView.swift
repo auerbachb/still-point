@@ -102,21 +102,33 @@ struct CompletionView: View {
                                 .stroke(SPColor.border2)
                         )
 
-                    if !endNote.isEmpty && !noteSaved {
-                        Button {
-                            saveEndNote()
-                        } label: {
-                            Text("Save note")
-                                .font(SPFont.mono(12, weight: .medium))
-                                .foregroundStyle(SPColor.green)
-                        }
+                    Button {
+                        saveEndNote()
+                    } label: {
+                        Text(noteSaved ? "Saved" : "Save note")
+                            .font(SPFont.serifItalic(18, weight: .light))
+                            .foregroundStyle(
+                                endNote.isEmpty || noteSaved
+                                    ? Color(SPColor.fg3)
+                                    : Color(SPColor.bg)
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, SPSpacing.s2)
+                            .background(
+                                endNote.isEmpty || noteSaved
+                                    ? SPColor.surface2
+                                    : SPColor.green
+                            )
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule().stroke(
+                                    endNote.isEmpty || noteSaved
+                                        ? SPColor.border2
+                                        : Color.clear
+                                )
+                            )
                     }
-
-                    if noteSaved {
-                        Text("saved")
-                            .font(SPFont.mono(11))
-                            .foregroundStyle(SPColor.greenDim)
-                    }
+                    .disabled(endNote.isEmpty || noteSaved)
                 }
 
                 // Tomorrow preview
