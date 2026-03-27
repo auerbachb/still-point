@@ -15,6 +15,7 @@ struct CompletionView: View {
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
+    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved }
 
     var body: some View {
         ScrollView {
@@ -101,34 +102,25 @@ struct CompletionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(SPColor.border2)
                         )
+                        .onChange(of: endNote) {
+                            if noteSaved { noteSaved = false }
+                        }
 
                     Button {
                         saveEndNote()
                     } label: {
                         Text(noteSaved ? "Saved" : "Save note")
                             .font(SPFont.serifItalic(18, weight: .light))
-                            .foregroundStyle(
-                                endNote.isEmpty || noteSaved
-                                    ? Color(SPColor.fg3)
-                                    : Color(SPColor.bg)
-                            )
+                            .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, SPSpacing.s2)
-                            .background(
-                                endNote.isEmpty || noteSaved
-                                    ? SPColor.surface2
-                                    : SPColor.green
-                            )
+                            .background(isSaveDisabled ? SPColor.surface2 : SPColor.green)
                             .clipShape(Capsule())
                             .overlay(
-                                Capsule().stroke(
-                                    endNote.isEmpty || noteSaved
-                                        ? SPColor.border2
-                                        : Color.clear
-                                )
+                                Capsule().stroke(isSaveDisabled ? SPColor.border2 : Color.clear)
                             )
                     }
-                    .disabled(endNote.isEmpty || noteSaved)
+                    .disabled(isSaveDisabled)
                 }
 
                 // Tomorrow preview
