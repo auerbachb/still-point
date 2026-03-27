@@ -65,6 +65,7 @@ struct HomeView: View {
                 faqSection
             }
             .padding(.horizontal, SPSpacing.s4)
+            .safeAreaPadding(.bottom, SPSpacing.s4)
         }
         .stillPointBackground()
     }
