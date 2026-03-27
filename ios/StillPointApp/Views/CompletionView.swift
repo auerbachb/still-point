@@ -170,6 +170,9 @@ struct CompletionView: View {
             .padding(.horizontal, SPSpacing.s4)
         }
         .stillPointBackground()
+        .onChange(of: endNote) { _, _ in
+            saveError = nil
+        }
     }
 
     private func statCard(
@@ -202,7 +205,7 @@ struct CompletionView: View {
         guard !endNote.isEmpty, !sessionId.isEmpty else { return }
         isSaving = true
         saveError = nil
-        Task {
+        Task { @MainActor in
             do {
                 let request = BatchThoughtsRequest(
                     sessionId: sessionId,
