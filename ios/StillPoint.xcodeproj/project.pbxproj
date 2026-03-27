@@ -1,0 +1,492 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
+		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
+		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
+		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
+		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
+		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
+		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
+		4D652980F04840078B8FC938 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F95E6E47148AEF494393FDB /* SessionView.swift */; };
+		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
+		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
+		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
+		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
+		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
+		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
+		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
+		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
+		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
+		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
+		B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */; };
+		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
+		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
+		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
+		F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EAF998E3470CBB4056699F /* BlockGridView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
+		0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardViewModel.swift; sourceTree = "<group>"; };
+		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
+		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
+		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
+		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
+		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
+		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
+		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
+		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
+		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
+		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
+		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		60417DAC61CFEF1804125570 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0125A97693D46BCCED4DC74E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
+				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
+				C7766937C968433C205A250C /* HistoryView.swift */,
+				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
+				0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */,
+				C683A9F0586D58020E60DD87 /* RootView.swift */,
+				2F95E6E47148AEF494393FDB /* SessionView.swift */,
+				D356465C1B0F69C57FE47A80 /* SettingsView.swift */,
+				44912B427658554F984CCC3A /* ThoughtJournalView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		09EA4336C05552F95AE85178 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9311B0CBDED4DF207E799ACC /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		489EB05EBE530B8F6E4F1C7F /* StillPointApp */ = {
+			isa = PBXGroup;
+			children = (
+				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
+				4DB1C67E76477BADB30F0F77 /* Components */,
+				551003AC2B5AD8A7B3C3D426 /* Navigation */,
+				09EA4336C05552F95AE85178 /* Resources */,
+				AC788F412B1414C8C2BDB3CB /* Theme */,
+				B5DCE12E19F7C00786209F0E /* ViewModels */,
+				0125A97693D46BCCED4DC74E /* Views */,
+			);
+			path = StillPointApp;
+			sourceTree = "<group>";
+		};
+		4DB1C67E76477BADB30F0F77 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				85EAF998E3470CBB4056699F /* BlockGridView.swift */,
+				7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */,
+				71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		551003AC2B5AD8A7B3C3D426 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		70234ED5699E0294984184EC = {
+			isa = PBXGroup;
+			children = (
+				72C36256C4A12941449D9B2F /* Packages */,
+				489EB05EBE530B8F6E4F1C7F /* StillPointApp */,
+				D6729D98E36CD4883502F855 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		72C36256C4A12941449D9B2F /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				A67F64CE400EF98ED2925FF9 /* StillPointShared */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		AC788F412B1414C8C2BDB3CB /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		B5DCE12E19F7C00786209F0E /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				218693B76FDAF56B6E0321DE /* AppViewModel.swift */,
+				B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */,
+				0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */,
+				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
+				FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */,
+				42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		D6729D98E36CD4883502F855 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D15A7FF17302B1E2FD147920 /* StillPoint.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1EC3D1ED76F9038154716BEC /* StillPoint */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC3F99DC4FB6A54504D97FB8 /* Build configuration list for PBXNativeTarget "StillPoint" */;
+			buildPhases = (
+				788E99323C1F4CDCA2A903FC /* Sources */,
+				0B31A9FD8CF7CD832FD44715 /* Resources */,
+				60417DAC61CFEF1804125570 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StillPoint;
+			packageProductDependencies = (
+				FE1475755D9C9BA63C80748F /* StillPointShared */,
+			);
+			productName = StillPoint;
+			productReference = D15A7FF17302B1E2FD147920 /* StillPoint.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		17E69AC4DBE973C4774D38B6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					1EC3D1ED76F9038154716BEC = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A869842DC3454C47D11359A9 /* Build configuration list for PBXProject "StillPoint" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 70234ED5699E0294984184EC;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				33432E91F4550EE24838A4B5 /* XCLocalSwiftPackageReference "StillPointShared" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D6729D98E36CD4883502F855 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1EC3D1ED76F9038154716BEC /* StillPoint */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0B31A9FD8CF7CD832FD44715 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		788E99323C1F4CDCA2A903FC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
+				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
+				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
+				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
+				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
+				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
+				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
+				74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */,
+				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,
+				1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */,
+				B106890588723F191CC4AEAA /* MainTabView.swift in Sources */,
+				80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */,
+				DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */,
+				15177B86F124B5A10AB03456 /* RootView.swift in Sources */,
+				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
+				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
+				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
+				E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */,
+				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
+				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
+				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		11E27EB55EEE0D1829FD2125 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StillPointApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stillpoint.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		79085E6777D72FCC1A887CA8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StillPointApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stillpoint.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A8F838B8B64A8B8B4310D79B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		EA94A2D84868963AA6284D06 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A869842DC3454C47D11359A9 /* Build configuration list for PBXProject "StillPoint" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8F838B8B64A8B8B4310D79B /* Debug */,
+				EA94A2D84868963AA6284D06 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BC3F99DC4FB6A54504D97FB8 /* Build configuration list for PBXNativeTarget "StillPoint" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				79085E6777D72FCC1A887CA8 /* Debug */,
+				11E27EB55EEE0D1829FD2125 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		33432E91F4550EE24838A4B5 /* XCLocalSwiftPackageReference "StillPointShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = StillPointShared;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FE1475755D9C9BA63C80748F /* StillPointShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StillPointShared;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 17E69AC4DBE973C4774D38B6 /* Project object */;
+}
