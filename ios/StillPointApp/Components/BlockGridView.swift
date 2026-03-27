@@ -102,16 +102,15 @@ struct BlockGridView: View {
                 .font(SPFont.mono(13, weight: .medium))
                 .foregroundStyle(isFilled ? SPColor.overlayText : Color(SPColor.fg4))
 
-            // Current block pulse border
+            // Current block pulse border — uses phaseAnimator for continuous pulse
             if isCurrent {
                 RoundedRectangle(cornerRadius: blockRadius)
                     .stroke(SPColor.amberDim, lineWidth: 1)
-                    .opacity(isPulsing ? 1.0 : 0.4)
-                    .onAppear { isPulsing = true }
-                    .animation(
-                        .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
-                        value: isPulsing
-                    )
+                    .phaseAnimator([false, true]) { content, phase in
+                        content.opacity(phase ? 1.0 : 0.4)
+                    } animation: { _ in
+                        .easeInOut(duration: 1.0)
+                    }
             }
         }
         .frame(width: blockSize, height: blockSize)
@@ -125,6 +124,4 @@ struct BlockGridView: View {
                 )
         )
     }
-
-    @State private var isPulsing = false
 }

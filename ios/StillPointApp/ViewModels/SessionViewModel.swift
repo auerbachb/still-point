@@ -15,6 +15,8 @@ final class SessionViewModel {
     var isComplete = false
     /// Whether the session completed naturally (timer ran out) vs ended early
     var completedNaturally = false
+    /// Whether the user explicitly abandoned (discard data, don't save)
+    var isAbandoned = false
 
     // Mind state
     var mindState: String = "clear"
@@ -144,10 +146,11 @@ final class SessionViewModel {
         return (clearPercent, thoughtCount, capturedThoughts)
     }
 
-    /// Abandon session — discard all data
+    /// Abandon session — discard all data, don't save
     func abandon() {
         timer?.cancel()
         isActive = false
+        isAbandoned = true
         isComplete = true
     }
 

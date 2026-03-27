@@ -12,6 +12,7 @@ final class HistoryViewModel {
     var dayThoughts: [Int: [ThoughtDTO]] = [:]
 
     func load() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

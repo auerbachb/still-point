@@ -91,7 +91,7 @@ struct SessionView: View {
             vm.start()
         }
         .onChange(of: vm.isComplete) { _, isComplete in
-            if isComplete {
+            if isComplete && !vm.isAbandoned {
                 handleCompletion()
             }
         }
