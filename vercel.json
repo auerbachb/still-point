@@ -1,3 +1,3 @@
 {
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':!ios' ':!.claude'"
+  "ignoreCommand": "git rev-parse HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- . ':!ios' ':!.claude' || exit 1"
 }
