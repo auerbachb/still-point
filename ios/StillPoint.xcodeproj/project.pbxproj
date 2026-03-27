@@ -14,14 +14,17 @@
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
+		4BC69FCAE79FAF2487A6E152 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */; };
 		4D652980F04840078B8FC938 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F95E6E47148AEF494393FDB /* SessionView.swift */; };
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
+		5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */; };
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
 		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
 		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
+		977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */; };
 		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
@@ -42,13 +45,17 @@
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
+		4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Italic-Variable.ttf"; sourceTree = "<group>"; };
+		59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Variable.ttf"; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
+		797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
 		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
+		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
@@ -91,13 +98,25 @@
 			isa = PBXGroup;
 			children = (
 				9311B0CBDED4DF207E799ACC /* Assets.xcassets */,
+				2FCF8A365AA13FD0F3338059 /* Fonts */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		2FCF8A365AA13FD0F3338059 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */,
+				4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */,
+				59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		489EB05EBE530B8F6E4F1C7F /* StillPointApp */ = {
 			isa = PBXGroup;
 			children = (
+				AB8762D63FDB945A01DEA97F /* Info.plist */,
 				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
 				4DB1C67E76477BADB30F0F77 /* Components */,
 				551003AC2B5AD8A7B3C3D426 /* Navigation */,
@@ -239,6 +258,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */,
+				4BC69FCAE79FAF2487A6E152 /* JetBrainsMono-Variable.ttf in Resources */,
+				5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */,
+				977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,7 +307,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -313,7 +334,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
