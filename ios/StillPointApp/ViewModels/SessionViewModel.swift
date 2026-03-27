@@ -13,6 +13,8 @@ final class SessionViewModel {
     var isActive = false
     var isPaused = false
     var isComplete = false
+    /// Whether the session completed naturally (timer ran out) vs ended early
+    var completedNaturally = false
 
     // Mind state
     var mindState: String = "clear"
@@ -220,6 +222,7 @@ final class SessionViewModel {
             pausedElapsed = elapsed
             timer?.cancel()
             isActive = false
+            completedNaturally = true
             isComplete = true
             if soundPrefs.completion {
                 AudioEngine.shared.playCompletion()

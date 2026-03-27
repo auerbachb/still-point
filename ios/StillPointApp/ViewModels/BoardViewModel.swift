@@ -1,6 +1,7 @@
 import SwiftUI
 import StillPointShared
 
+@MainActor
 @Observable
 final class BoardViewModel {
     var entries: [BoardEntryDTO] = []

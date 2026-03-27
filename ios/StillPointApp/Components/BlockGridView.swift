@@ -107,6 +107,7 @@ struct BlockGridView: View {
                 RoundedRectangle(cornerRadius: blockRadius)
                     .stroke(SPColor.amberDim, lineWidth: 1)
                     .opacity(isPulsing ? 1.0 : 0.4)
+                    .onAppear { isPulsing = true }
                     .animation(
                         .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
                         value: isPulsing
@@ -126,11 +127,4 @@ struct BlockGridView: View {
     }
 
     @State private var isPulsing = false
-
-    init(blocks: [BlockDef], elapsed: Double, totalSeconds: Int) {
-        self.blocks = blocks
-        self.elapsed = elapsed
-        self.totalSeconds = totalSeconds
-        self._isPulsing = State(initialValue: true)
-    }
 }

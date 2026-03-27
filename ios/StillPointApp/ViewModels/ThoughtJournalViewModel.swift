@@ -1,6 +1,7 @@
 import SwiftUI
 import StillPointShared
 
+@MainActor
 @Observable
 final class ThoughtJournalViewModel {
     var thoughts: [ThoughtDTO] = []
@@ -18,6 +19,7 @@ final class ThoughtJournalViewModel {
     var totalCount: Int { thoughts.count }
 
     func load() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

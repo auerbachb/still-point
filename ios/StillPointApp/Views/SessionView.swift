@@ -189,19 +189,9 @@ struct SessionView: View {
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
 
-                // End Early
+                // End Early — sets isComplete, onChange handles save + navigation
                 Button {
-                    let result = vm.endEarly()
-                    Task {
-                        _ = await vm.saveSession(completed: false)
-                        appVM.completeSession(
-                            clearPercent: result.clearPercent,
-                            thoughtCount: result.thoughtCount,
-                            thoughts: result.thoughts,
-                            dayNumber: vm.dayNumber,
-                            duration: vm.totalSeconds
-                        )
-                    }
+                    _ = vm.endEarly()
                 } label: {
                     Text("End Early")
                         .font(SPFont.mono(12, weight: .medium))
@@ -267,7 +257,7 @@ struct SessionView: View {
     private func handleCompletion() {
         Task {
             // Persist session before navigating to completion screen
-            _ = await vm.saveSession(completed: true)
+            _ = await vm.saveSession(completed: vm.completedNaturally)
             appVM.completeSession(
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
