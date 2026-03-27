@@ -87,13 +87,11 @@ struct BlockGridView: View {
 
             // Fill from bottom
             GeometryReader { geo in
-                VStack {
-                    Spacer()
-                    Rectangle()
-                        .fill(isFilled ? LinearGradient.greenFill : LinearGradient.amberFill)
-                        .frame(height: geo.size.height * progress)
-                        .opacity(isFilled ? 0.85 : 0.7)
-                }
+                Rectangle()
+                    .fill(isFilled ? LinearGradient.greenFill : LinearGradient.amberFill)
+                    .frame(height: geo.size.height * progress)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .opacity(isFilled ? 0.85 : 0.7)
             }
             .clipShape(RoundedRectangle(cornerRadius: blockRadius))
 
