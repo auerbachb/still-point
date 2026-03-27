@@ -102,12 +102,10 @@ final class AppViewModel {
         )
     }
 
-    func returnHome() {
-        // Refresh user data to get updated currentDay
-        Task {
-            if let user = try? await APIClient.shared.me() {
-                currentUser = user
-            }
+    func returnHome() async {
+        // Refresh user data to get updated currentDay BEFORE navigating
+        if let user = try? await APIClient.shared.me() {
+            currentUser = user
         }
         currentView = .home
     }

@@ -6,11 +6,13 @@ final class HistoryViewModel {
     var sessions: [SessionDTO] = []
     var stats: StatsDTO?
     var isLoading = false
+    var errorMessage: String?
     var expandedDay: Int?
     var dayThoughts: [Int: [ThoughtDTO]] = [:]
 
     func load() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
 
         do {
@@ -18,6 +20,7 @@ final class HistoryViewModel {
             sessions = result.sessions.sorted { $0.dayNumber < $1.dayNumber }
             stats = result.stats
         } catch {
+            errorMessage = "Failed to load sessions. Check your connection."
             print("Failed to load sessions: \(error)")
         }
     }

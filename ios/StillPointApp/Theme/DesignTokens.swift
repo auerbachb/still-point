@@ -71,21 +71,40 @@ public enum SPSpacing {
 }
 
 // MARK: - Fonts
+//
+// Custom fonts: Newsreader (serif) and JetBrains Mono (monospace).
+// Both are OFL-licensed Google Fonts. To bundle them:
+//   1. Download .ttf files into StillPointApp/Resources/Fonts/
+//   2. Add to target's "Copy Bundle Resources" build phase
+//   3. Register in Info.plist under UIAppFonts (ATSApplicationFontsPath)
+//
+// Until bundled, these helpers fall back to system serif / monospaced fonts.
 
 public enum SPFont {
-    /// Serif font for body text, headings, brand — Newsreader
+    // Check if a custom font is available; fall back to system equivalent
+    private static func customOrFallback(_ name: String, size: CGFloat, fallback: Font.Design) -> Font {
+        if UIFont(name: name, size: size) != nil {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, design: fallback)
+    }
+
+    /// Serif font for body text, headings, brand — Newsreader (fallback: system serif)
     static func serif(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("Newsreader", size: size).weight(weight)
+        customOrFallback("Newsreader-Regular", size: size, fallback: .serif).weight(weight)
     }
 
     /// Serif italic for brand lockup and emphasis
     static func serifItalic(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("Newsreader-Italic", size: size).weight(weight)
+        if UIFont(name: "Newsreader-Italic", size: size) != nil {
+            return .custom("Newsreader-Italic", size: size).weight(weight)
+        }
+        return .system(size: size, design: .serif).weight(weight).italic()
     }
 
-    /// Monospace for labels, stats, data — JetBrains Mono
+    /// Monospace for labels, stats, data — JetBrains Mono (fallback: system monospaced)
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("JetBrainsMono", size: size).weight(weight)
+        customOrFallback("JetBrainsMono-Regular", size: size, fallback: .monospaced).weight(weight)
     }
 
     // Common presets

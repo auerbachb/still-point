@@ -12,7 +12,8 @@ public enum StillPoint {
 
     /// Calculate session duration for a given day number
     public static func duration(forDay day: Int) -> Int {
-        baseDuration + (day - 1) * increment
+        precondition(day >= 1, "Day must be >= 1")
+        return baseDuration + (day - 1) * increment
     }
 
     /// Calculate number of blocks for a given duration

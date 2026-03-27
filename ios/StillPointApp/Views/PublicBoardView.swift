@@ -86,6 +86,8 @@ struct PublicBoardView: View {
                 .foregroundStyle(isTopThree && !isHeader ? SPColor.amber : Color(SPColor.fg3))
             Text(isCurrentUser ? "\(username) (you)" : username)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Text(day)
                 .frame(width: 44, alignment: .center)
             Text(streak)

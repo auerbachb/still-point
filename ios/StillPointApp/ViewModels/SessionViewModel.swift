@@ -30,7 +30,7 @@ final class SessionViewModel {
     private var pausedElapsed: Double = 0
     private var timer: AnyCancellable?
     private var lastTickSec = -1
-    private var lastChimeMin: Int
+    private var lastChimeMinutesLeft: Int
     private var controlHideTimer: AnyCancellable?
 
     var remaining: Double {
@@ -72,7 +72,8 @@ final class SessionViewModel {
         self.dayNumber = dayNumber
         self.totalSeconds = StillPoint.duration(forDay: dayNumber)
         self.soundPrefs = AudioEngine.loadPrefs()
-        self.lastChimeMin = Int(ceil(Double(self.totalSeconds) / 60.0))
+        // Initialize to ceil so the first tick doesn't immediately fire chimes
+        self.lastChimeMinutesLeft = Int(ceil(Double(self.totalSeconds) / 60.0))
         // Initial mind state log entry
         self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
     }
@@ -148,10 +149,13 @@ final class SessionViewModel {
         isComplete = true
     }
 
-    /// Save session to the API
+    /// Save session to the API. Returns the session on success.
+    /// Thought batch failure is logged but does not fail the session save.
     func saveSession(completed: Bool) async -> SessionDTO? {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
 
         let request = CreateSessionRequest(
             dayNumber: dayNumber,
@@ -167,7 +171,7 @@ final class SessionViewModel {
         do {
             let session = try await APIClient.shared.createSession(request)
 
-            // Batch save thoughts if any
+            // Batch save thoughts — failure here is non-fatal since the session is already persisted
             let allThoughts = capturedThoughts.map {
                 BatchThoughtsRequest.ThoughtInput(
                     timeInSession: $0.timeInSession,
@@ -176,13 +180,17 @@ final class SessionViewModel {
             }
 
             if !allThoughts.isEmpty {
-                _ = try await APIClient.shared.batchThoughts(
-                    BatchThoughtsRequest(
-                        sessionId: session.id,
-                        dayNumber: dayNumber,
-                        thoughts: allThoughts
+                do {
+                    _ = try await APIClient.shared.batchThoughts(
+                        BatchThoughtsRequest(
+                            sessionId: session.id,
+                            dayNumber: dayNumber,
+                            thoughts: allThoughts
+                        )
                     )
-                )
+                } catch {
+                    print("Failed to save thoughts (session was saved): \(error)")
+                }
             }
 
             return session
@@ -231,13 +239,13 @@ final class SessionViewModel {
             AudioEngine.shared.playTick()
         }
 
-        // Minute chime
+        // Minute chime — fire when remaining crosses a whole minute boundary downward
         if soundPrefs.chime {
-            let wholeMinutesLeft = Int(remainingTime / 60)
-            if wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMin {
+            let wholeMinutesLeft = Int(floor(remainingTime / 60))
+            if wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMinutesLeft {
                 AudioEngine.shared.playChime(count: wholeMinutesLeft)
             }
-            lastChimeMin = wholeMinutesLeft
+            lastChimeMinutesLeft = wholeMinutesLeft
         }
     }
 

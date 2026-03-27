@@ -38,11 +38,19 @@ struct MainTabView: View {
         }
         .tint(SPColor.green)
         .onAppear {
-            let appearance = UITabBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = UIColor(SPColor.bg)
-            UITabBar.appearance().standardAppearance = appearance
-            UITabBar.appearance().scrollEdgeAppearance = appearance
+            Self.configureTabBarAppearance()
         }
+    }
+
+    private static var tabBarConfigured = false
+
+    private static func configureTabBarAppearance() {
+        guard !tabBarConfigured else { return }
+        tabBarConfigured = true
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(SPColor.bg)
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 }

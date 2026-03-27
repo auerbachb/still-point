@@ -106,7 +106,11 @@ struct BlockGridView: View {
             if isCurrent {
                 RoundedRectangle(cornerRadius: blockRadius)
                     .stroke(SPColor.amberDim, lineWidth: 1)
-                    .opacity(pulseOpacity())
+                    .opacity(isPulsing ? 1.0 : 0.4)
+                    .animation(
+                        .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                        value: isPulsing
+                    )
             }
         }
         .frame(width: blockSize, height: blockSize)
@@ -121,11 +125,12 @@ struct BlockGridView: View {
         )
     }
 
-    @State private var pulsePhase = false
+    @State private var isPulsing = false
 
-    private func pulseOpacity() -> Double {
-        // Simple alternating pulse
-        let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in }
-        return 0.7
+    init(blocks: [BlockDef], elapsed: Double, totalSeconds: Int) {
+        self.blocks = blocks
+        self.elapsed = elapsed
+        self.totalSeconds = totalSeconds
+        self._isPulsing = State(initialValue: true)
     }
 }

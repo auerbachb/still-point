@@ -42,8 +42,7 @@ struct SessionView: View {
                     MindStateBarView(
                         elapsed: vm.elapsed,
                         totalSeconds: vm.totalSeconds,
-                        mindStateLog: vm.mindStateLog,
-                        currentState: vm.mindState
+                        mindStateLog: vm.mindStateLog
                     )
 
                     // Status label
@@ -195,14 +194,14 @@ struct SessionView: View {
                     let result = vm.endEarly()
                     Task {
                         _ = await vm.saveSession(completed: false)
+                        appVM.completeSession(
+                            clearPercent: result.clearPercent,
+                            thoughtCount: result.thoughtCount,
+                            thoughts: result.thoughts,
+                            dayNumber: vm.dayNumber,
+                            duration: vm.totalSeconds
+                        )
                     }
-                    appVM.completeSession(
-                        clearPercent: result.clearPercent,
-                        thoughtCount: result.thoughtCount,
-                        thoughts: result.thoughts,
-                        dayNumber: vm.dayNumber,
-                        duration: vm.totalSeconds
-                    )
                 } label: {
                     Text("End Early")
                         .font(SPFont.mono(12, weight: .medium))
@@ -217,7 +216,7 @@ struct SessionView: View {
                 // Abandon
                 Button {
                     vm.abandon()
-                    appVM.returnHome()
+                    Task { await appVM.returnHome() }
                 } label: {
                     Text("Abandon")
                         .font(SPFont.mono(12, weight: .medium))
@@ -267,14 +266,15 @@ struct SessionView: View {
 
     private func handleCompletion() {
         Task {
+            // Persist session before navigating to completion screen
             _ = await vm.saveSession(completed: true)
+            appVM.completeSession(
+                clearPercent: vm.clearPercent,
+                thoughtCount: vm.thoughtCount,
+                thoughts: vm.capturedThoughts,
+                dayNumber: vm.dayNumber,
+                duration: vm.totalSeconds
+            )
         }
-        appVM.completeSession(
-            clearPercent: vm.clearPercent,
-            thoughtCount: vm.thoughtCount,
-            thoughts: vm.capturedThoughts,
-            dayNumber: vm.dayNumber,
-            duration: vm.totalSeconds
-        )
     }
 }

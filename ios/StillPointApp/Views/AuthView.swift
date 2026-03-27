@@ -39,12 +39,12 @@ struct AuthView: View {
                     styledField("Email", text: $vm.email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
 
                     if vm.isSignUp {
                         styledField("Username", text: $vm.username)
                             .textContentType(.username)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
                     }
 
                     SecureField("Password", text: $vm.password)

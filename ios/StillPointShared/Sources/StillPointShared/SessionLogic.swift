@@ -74,11 +74,20 @@ public enum SessionLogic {
     ) -> Int {
         guard totalElapsed > 0 else { return 100 }
 
+        // If log is empty, the entire session was clear (no state changes)
+        guard !mindStateLog.isEmpty else { return 100 }
+
+        // Ensure we account for time from 0 to the first entry
+        var effectiveLog = mindStateLog
+        if effectiveLog[0].time > 0 {
+            effectiveLog.insert(MindStateEntry(time: 0, state: "clear"), at: 0)
+        }
+
         var clearTime: Double = 0
-        for (index, entry) in mindStateLog.enumerated() {
+        for (index, entry) in effectiveLog.enumerated() {
             let endTime: Double
-            if index + 1 < mindStateLog.count {
-                endTime = mindStateLog[index + 1].time
+            if index + 1 < effectiveLog.count {
+                endTime = effectiveLog[index + 1].time
             } else {
                 endTime = totalElapsed
             }

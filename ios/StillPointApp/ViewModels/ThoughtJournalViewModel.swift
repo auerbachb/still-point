@@ -5,6 +5,7 @@ import StillPointShared
 final class ThoughtJournalViewModel {
     var thoughts: [ThoughtDTO] = []
     var isLoading = false
+    var errorMessage: String?
 
     /// Thoughts grouped by day number, sorted descending
     var groupedThoughts: [(dayNumber: Int, thoughts: [ThoughtDTO])] {
@@ -18,11 +19,13 @@ final class ThoughtJournalViewModel {
 
     func load() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
 
         do {
             thoughts = try await APIClient.shared.getThoughts()
         } catch {
+            errorMessage = "Failed to load thoughts. Check your connection."
             print("Failed to load thoughts: \(error)")
         }
     }

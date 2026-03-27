@@ -21,23 +21,49 @@ struct HistoryView: View {
                     .font(SPFont.serifItalic(28, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
 
-                // Aggregate stats
-                if let stats = vm.stats {
-                    LazyVGrid(columns: [
-                        GridItem(.flexible()),
-                        GridItem(.flexible()),
-                        GridItem(.flexible()),
-                        GridItem(.flexible()),
-                    ], spacing: SPSpacing.s3) {
-                        statCell(value: "\(stats.streak)", label: "STREAK")
-                        statCell(value: "\(stats.avgClearPercent)%", label: "AVG CLEAR")
-                        statCell(value: String(format: "%.1f", stats.avgThoughtsPerSession), label: "THOUGHTS/SESSION")
-                        statCell(value: String(format: "%.2f", stats.avgThoughtsPerMinute), label: "THOUGHTS/MIN")
+                if vm.isLoading {
+                    ProgressView()
+                        .tint(SPColor.green)
+                        .padding(.top, SPSpacing.s6)
+                } else if let errorMessage = vm.errorMessage {
+                    VStack(spacing: SPSpacing.s3) {
+                        Text(errorMessage)
+                            .font(SPFont.serif(15))
+                            .foregroundStyle(SPColor.dangerMuted)
+                            .multilineTextAlignment(.center)
+                        Button("Retry") {
+                            Task { await vm.load() }
+                        }
+                        .font(SPFont.mono(13, weight: .medium))
+                        .foregroundStyle(SPColor.green)
                     }
-                }
+                    .padding(.top, SPSpacing.s6)
+                } else if vm.sessions.isEmpty {
+                    VStack(spacing: SPSpacing.s3) {
+                        Text("No sessions yet")
+                            .font(SPFont.serifItalic(15))
+                            .foregroundStyle(Color(SPColor.fg4))
 
-                // Journey
-                if !vm.sessions.isEmpty {
+                        todayPreview
+                    }
+                    .padding(.top, SPSpacing.s6)
+                } else {
+                    // Aggregate stats
+                    if let stats = vm.stats {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                        ], spacing: SPSpacing.s3) {
+                            statCell(value: "\(stats.streak)", label: "STREAK")
+                            statCell(value: "\(stats.avgClearPercent)%", label: "AVG CLEAR")
+                            statCell(value: String(format: "%.1f", stats.avgThoughtsPerSession), label: "THOUGHTS/SESSION")
+                            statCell(value: String(format: "%.2f", stats.avgThoughtsPerMinute), label: "THOUGHTS/MIN")
+                        }
+                    }
+
+                    // Journey
                     VStack(alignment: .leading, spacing: SPSpacing.s2) {
                         Text("JOURNEY")
                             .font(SPFont.mono(11, weight: .medium))
@@ -48,7 +74,6 @@ struct HistoryView: View {
                             sessionRow(session)
                         }
 
-                        // Today preview
                         todayPreview
                     }
                 }

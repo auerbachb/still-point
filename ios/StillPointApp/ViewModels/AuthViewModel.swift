@@ -22,7 +22,7 @@ final class AuthViewModel {
     }
 
     func submit() async -> UserDTO? {
-        guard isValid else { return nil }
+        guard isValid, !isSubmitting else { return nil }
         isSubmitting = true
         error = nil
         defer { isSubmitting = false }

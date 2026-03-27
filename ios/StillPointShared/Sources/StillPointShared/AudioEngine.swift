@@ -3,11 +3,12 @@ import Foundation
 
 /// Synthesized audio matching the web app's Web Audio API sounds.
 /// All sounds are generated programmatically — no external files needed.
+/// Thread-safe: all public methods dispatch to a serial queue.
 public final class AudioEngine: @unchecked Sendable {
     public static let shared = AudioEngine()
 
-    private var engine: AVAudioEngine?
     private let sampleRate: Double = 44100
+    private let serialQueue = DispatchQueue(label: "com.stillpoint.audioengine")
 
     private init() {
         configureAudioSession()
@@ -26,6 +27,10 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Tick (800Hz sine, 60ms, gain 0.06 → 0.001)
 
     public func playTick() {
+        serialQueue.async { [self] in self._playTick() }
+    }
+
+    private func _playTick() {
         playSynthesized(duration: 0.06) { phase in
             let frequency = 800.0
             let t = phase / self.sampleRate
@@ -40,6 +45,10 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Chime (1200→800Hz sine, repeated `count` times, 400ms spacing)
 
     public func playChime(count: Int) {
+        serialQueue.async { [self] in self._playChime(count: count) }
+    }
+
+    private func _playChime(count: Int) {
         let totalDuration = Double(count) * 0.4 + 0.1
         playSynthesized(duration: totalDuration) { phase in
             let t = phase / self.sampleRate
@@ -68,6 +77,10 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Completion (528Hz + 660Hz, gain 0.2 hold 800ms then ramp to 0.001 at 2.5s)
 
     public func playCompletion() {
+        serialQueue.async { [self] in self._playCompletion() }
+    }
+
+    private func _playCompletion() {
         let totalDuration = 2.5
         playSynthesized(duration: totalDuration) { phase in
             let t = phase / self.sampleRate
@@ -90,12 +103,18 @@ public final class AudioEngine: @unchecked Sendable {
 
     // MARK: - Synthesizer Core
 
+    /// Reference-type wrapper so the render callback captures a single mutable box
+    /// instead of a stack-allocated var (avoids data race between audio thread and main).
+    private final class PhaseBox {
+        var value: Double = 0
+    }
+
     private func playSynthesized(duration: Double, generator: @escaping (Double) -> Float) {
         let engine = AVAudioEngine()
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
 
         let totalFrames = Int(duration * sampleRate)
-        var currentPhase: Double = 0
+        let phase = PhaseBox()
 
         let sourceNode = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
             let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
@@ -106,14 +125,14 @@ public final class AudioEngine: @unchecked Sendable {
             }
 
             for frame in 0..<frames {
-                if Int(currentPhase) + frame >= totalFrames {
+                if Int(phase.value) + frame >= totalFrames {
                     data[frame] = 0
                 } else {
-                    data[frame] = generator(currentPhase + Double(frame))
+                    data[frame] = generator(phase.value + Double(frame))
                 }
             }
 
-            currentPhase += Double(frames)
+            phase.value += Double(frames)
             return noErr
         }
 

@@ -133,7 +133,7 @@ struct CompletionView: View {
 
                 // Return button
                 Button {
-                    appVM.returnHome()
+                    Task { await appVM.returnHome() }
                 } label: {
                     Text("Return")
                         .font(SPFont.serifItalic(18, weight: .light))
@@ -180,11 +180,9 @@ struct CompletionView: View {
 
     private func saveEndNote() {
         guard !endNote.isEmpty else { return }
-        // Save as a thought with timeInSession = -1 (end note)
-        Task {
-            // The session should already be saved; we need its ID
-            // For now, save via a direct API call
-            noteSaved = true
-        }
+        // TODO: Wire end-of-session note persistence once sessionId is passed into CompletionView.
+        // Requires calling APIClient.shared.batchThoughts with timeInSession = -1.
+        // For now, mark as saved — the note is captured locally but not synced.
+        noteSaved = true
     }
 }

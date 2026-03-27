@@ -8,6 +8,8 @@ struct ThoughtCaptureView: View {
     @State private var text = ""
     @FocusState private var isFocused: Bool
 
+    private var trimmedText: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     var body: some View {
         VStack(spacing: SPSpacing.s2) {
             HStack {
@@ -30,23 +32,23 @@ struct ThoughtCaptureView: View {
                 .foregroundStyle(Color(SPColor.fg))
                 .focused($isFocused)
                 .onSubmit {
-                    if !text.isEmpty {
-                        onCapture(text)
+                    if !trimmedText.isEmpty {
+                        onCapture(trimmedText)
                     }
                 }
 
             HStack {
                 Spacer()
                 Button {
-                    if !text.isEmpty {
-                        onCapture(text)
+                    if !trimmedText.isEmpty {
+                        onCapture(trimmedText)
                     } else {
                         onDismiss()
                     }
                 } label: {
-                    Text(text.isEmpty ? "skip" : "save")
+                    Text(trimmedText.isEmpty ? "skip" : "save")
                         .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(text.isEmpty ? Color(SPColor.fg4) : SPColor.amber)
+                        .foregroundStyle(trimmedText.isEmpty ? Color(SPColor.fg4) : SPColor.amber)
                 }
             }
         }

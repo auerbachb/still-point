@@ -69,7 +69,9 @@ struct SettingsView: View {
                         }
                     }
                     .tint(SPColor.green)
+                    .disabled(isUpdating)
                     .onChange(of: isPublic) { _, newValue in
+                        guard !isUpdating else { return }
                         Task {
                             isUpdating = true
                             defer { isUpdating = false }
