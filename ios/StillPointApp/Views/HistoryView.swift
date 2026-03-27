@@ -110,8 +110,8 @@ struct HistoryView: View {
 
     @ViewBuilder
     private func sessionRow(_ entry: HistoryEntry) -> some View {
-        let dayNumber = entry.dayNumber ?? 0
-        let isExpanded = vm.expandedDay == dayNumber
+        if let dayNumber = entry.dayNumber {
+            let isExpanded = vm.expandedDay == dayNumber
 
         VStack(spacing: 0) {
             Button {
@@ -201,6 +201,7 @@ struct HistoryView: View {
                 .padding(.vertical, 4)
             }
         }
+        } // if let dayNumber
     }
 
     // MARK: - Missed Row
@@ -262,7 +263,7 @@ struct HistoryView: View {
             GeometryReader { geo in
                 let barFraction = vm.maxDuration > 0
                     ? CGFloat(todayDuration) / CGFloat(vm.maxDuration)
-                    : 1.0
+                    : 0
                 let barWidth = geo.size.width * barFraction
 
                 ZStack(alignment: .leading) {
@@ -290,13 +291,23 @@ struct HistoryView: View {
 
     // MARK: - Helpers
 
-    /// Format "YYYY-MM-DD" → "Mon Mar 16" (short, fits mobile).
-    private func shortDateLabel(_ isoDate: String) -> String {
+    // MARK: - Cached Formatters
+
+    private static let isoDateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
-        guard let date = df.date(from: isoDate) else { return isoDate }
-        let out = DateFormatter()
-        out.dateFormat = "EEE MMM d"
-        return out.string(from: date)
+        return df
+    }()
+
+    private static let displayDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "EEE MMM d"
+        return df
+    }()
+
+    /// Format "YYYY-MM-DD" → "Mon Mar 16" (short, fits mobile).
+    private func shortDateLabel(_ isoDate: String) -> String {
+        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        return Self.displayDateFormatter.string(from: date)
     }
 }

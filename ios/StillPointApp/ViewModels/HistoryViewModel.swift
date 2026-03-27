@@ -39,7 +39,7 @@ final class HistoryViewModel {
 
         do {
             let result = try await APIClient.shared.getSessions()
-            sessions = result.sessions.sorted { $0.dayNumber < $1.dayNumber }
+            sessions = result.sessions.sorted { $0.sessionDate < $1.sessionDate }
             stats = result.stats
             buildHistory()
         } catch {
