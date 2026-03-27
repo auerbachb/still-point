@@ -3,6 +3,7 @@ import StillPointShared
 
 struct CompletionView: View {
     let appVM: AppViewModel
+    let sessionId: String
     let clearPercent: Int
     let thoughtCount: Int
     let thoughts: [CapturedThought]
@@ -11,6 +12,8 @@ struct CompletionView: View {
 
     @State private var endNote = ""
     @State private var noteSaved = false
+    @State private var isSaving = false
+    @State private var saveError: String?
 
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
@@ -102,7 +105,7 @@ struct CompletionView: View {
                                 .stroke(SPColor.border2)
                         )
 
-                    if !endNote.isEmpty && !noteSaved {
+                    if !endNote.isEmpty && !noteSaved && !isSaving {
                         Button {
                             saveEndNote()
                         } label: {
@@ -110,12 +113,29 @@ struct CompletionView: View {
                                 .font(SPFont.mono(12, weight: .medium))
                                 .foregroundStyle(SPColor.green)
                         }
+                        .disabled(sessionId.isEmpty)
+                    }
+
+                    if isSaving {
+                        HStack(spacing: SPSpacing.s1) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("saving…")
+                                .font(SPFont.mono(11))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
                     }
 
                     if noteSaved {
                         Text("saved")
                             .font(SPFont.mono(11))
                             .foregroundStyle(SPColor.greenDim)
+                    }
+
+                    if let saveError {
+                        Text(saveError)
+                            .font(SPFont.mono(11))
+                            .foregroundStyle(SPColor.dangerMuted)
                     }
                 }
 
@@ -179,10 +199,28 @@ struct CompletionView: View {
     }
 
     private func saveEndNote() {
-        guard !endNote.isEmpty else { return }
-        // TODO: Wire end-of-session note persistence once sessionId is passed into CompletionView.
-        // Requires calling APIClient.shared.batchThoughts with timeInSession = -1.
-        // For now, mark as saved — the note is captured locally but not synced.
-        noteSaved = true
+        guard !endNote.isEmpty, !sessionId.isEmpty else { return }
+        isSaving = true
+        saveError = nil
+        Task {
+            do {
+                let request = BatchThoughtsRequest(
+                    sessionId: sessionId,
+                    dayNumber: dayNumber,
+                    thoughts: [
+                        BatchThoughtsRequest.ThoughtInput(
+                            timeInSession: -1,
+                            text: endNote
+                        )
+                    ]
+                )
+                _ = try await APIClient.shared.batchThoughts(request)
+                isSaving = false
+                noteSaved = true
+            } catch {
+                isSaving = false
+                saveError = "Failed to save note"
+            }
+        }
     }
 }

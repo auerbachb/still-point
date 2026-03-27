@@ -6,7 +6,7 @@ enum AppView: Equatable {
     case auth
     case home
     case session
-    case completion(clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought], dayNumber: Int, duration: Int)
+    case completion(sessionId: String, clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought], dayNumber: Int, duration: Int)
     case history
     case journal
     case board
@@ -87,6 +87,7 @@ final class AppViewModel {
     }
 
     func completeSession(
+        sessionId: String,
         clearPercent: Int,
         thoughtCount: Int,
         thoughts: [CapturedThought],
@@ -94,6 +95,7 @@ final class AppViewModel {
         duration: Int
     ) {
         currentView = .completion(
+            sessionId: sessionId,
             clearPercent: clearPercent,
             thoughtCount: thoughtCount,
             thoughts: thoughts,

@@ -29,9 +29,10 @@ struct RootView: View {
                     SessionView(appVM: appVM)
                         .transition(.opacity)
 
-                case .completion(let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):
+                case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):
                     CompletionView(
                         appVM: appVM,
+                        sessionId: sessionId,
                         clearPercent: clearPercent,
                         thoughtCount: thoughtCount,
                         thoughts: thoughts,

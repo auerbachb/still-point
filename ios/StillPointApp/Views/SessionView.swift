@@ -257,8 +257,9 @@ struct SessionView: View {
     private func handleCompletion() {
         Task {
             // Persist session before navigating to completion screen
-            _ = await vm.saveSession(completed: vm.completedNaturally)
+            let session = await vm.saveSession(completed: vm.completedNaturally)
             appVM.completeSession(
+                sessionId: session?.id ?? "",
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,
