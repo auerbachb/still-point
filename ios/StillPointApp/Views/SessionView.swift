@@ -2,7 +2,8 @@ import SwiftUI
 import StillPointShared
 
 struct SessionView: View {
-    /// Estimated height of the controls overlay (mind state toggle + action buttons + sound toggles + padding)
+    /// Estimated height of the controls overlay:
+    /// mind state toggle (~44) + action buttons (~36) + sound toggles (~24) + VStack spacing (3×16=48) + padding (top 16 + bottom 12 = 28) ≈ 160pt
     private static let controlPanelHeight: CGFloat = 160
 
     let appVM: AppViewModel

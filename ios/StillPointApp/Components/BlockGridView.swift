@@ -45,7 +45,7 @@ struct BlockGridView: View {
 
         let dividerSpace: CGFloat = useMinuteBlocks ? 40 : 0
         let totalSpacing = (rows - 1) * blockSpacing + dividerSpace
-        let maxBlockHeight = (availableHeight - totalSpacing) / rows
+        let maxBlockHeight = max(0, availableHeight - totalSpacing) / rows
 
         // Clamp between 32pt minimum and 56pt maximum
         return min(56, max(32, maxBlockHeight))
