@@ -221,6 +221,7 @@ struct CompletionView: View {
                 isSaving = false
                 noteSaved = true
             } catch {
+                print("Failed to save end note: \(error)")
                 isSaving = false
                 saveError = "Failed to save note"
             }
