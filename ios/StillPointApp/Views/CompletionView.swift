@@ -18,7 +18,7 @@ struct CompletionView: View {
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
-    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved }
+    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
 
     var body: some View {
         ScrollView {
@@ -110,10 +110,22 @@ struct CompletionView: View {
                             if noteSaved { noteSaved = false }
                         }
 
-                    Button {
-                        saveEndNote()
-                    } label: {
-                        Text(noteSaved ? "Saved" : "Save note")
+                    if noteSaved {
+                        Text("Saved")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .foregroundStyle(SPColor.green)
+                    } else {
+                        Button {
+                            saveEndNote()
+                        } label: {
+                            HStack(spacing: SPSpacing.s1) {
+                                if isSaving {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(Color(SPColor.bg))
+                                }
+                                Text(isSaving ? "Saving…" : "Save note")
+                            }
                             .font(SPFont.serifItalic(18, weight: .light))
                             .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
                             .frame(maxWidth: .infinity)
@@ -123,8 +135,9 @@ struct CompletionView: View {
                             .overlay(
                                 Capsule().stroke(isSaveDisabled ? SPColor.border2 : Color.clear)
                             )
+                        }
+                        .disabled(isSaveDisabled)
                     }
-                    .disabled(isSaveDisabled)
 
                     if let saveError {
                         Text(saveError)
