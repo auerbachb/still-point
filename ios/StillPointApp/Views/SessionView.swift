@@ -8,6 +8,7 @@ struct SessionView: View {
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
+    @State private var showSaveError = false
 
     init(appVM: AppViewModel) {
         self.appVM = appVM
@@ -102,6 +103,21 @@ struct SessionView: View {
             if isComplete && !vm.isAbandoned {
                 handleCompletion()
             }
+        }
+        .alert("Session could not be saved", isPresented: $showSaveError) {
+            Button("Retry") { handleCompletion() }
+            Button("Continue without saving", role: .destructive) {
+                appVM.completeSession(
+                    sessionId: "",
+                    clearPercent: vm.clearPercent,
+                    thoughtCount: vm.thoughtCount,
+                    thoughts: vm.capturedThoughts,
+                    dayNumber: vm.dayNumber,
+                    duration: vm.totalSeconds
+                )
+            }
+        } message: {
+            Text("Your session data couldn't be saved. You can retry or continue without saving.")
         }
     }
 
@@ -267,8 +283,12 @@ struct SessionView: View {
     private func handleCompletion() {
         Task {
             // Persist session before navigating to completion screen
-            _ = await vm.saveSession(completed: vm.completedNaturally)
+            guard let session = await vm.saveSession(completed: vm.completedNaturally) else {
+                showSaveError = true
+                return
+            }
             appVM.completeSession(
+                sessionId: session.id,
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,

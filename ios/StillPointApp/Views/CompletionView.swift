@@ -3,6 +3,7 @@ import StillPointShared
 
 struct CompletionView: View {
     let appVM: AppViewModel
+    let sessionId: String
     let clearPercent: Int
     let thoughtCount: Int
     let thoughts: [CapturedThought]
@@ -11,11 +12,13 @@ struct CompletionView: View {
 
     @State private var endNote = ""
     @State private var noteSaved = false
+    @State private var isSaving = false
+    @State private var saveError: String?
 
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
-    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved }
+    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
 
     var body: some View {
         ScrollView {
@@ -102,14 +105,27 @@ struct CompletionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(SPColor.border2)
                         )
+                        .disabled(isSaving || noteSaved)
                         .onChange(of: endNote) {
                             if noteSaved { noteSaved = false }
                         }
 
-                    Button {
-                        saveEndNote()
-                    } label: {
-                        Text(noteSaved ? "Saved" : "Save note")
+                    if noteSaved {
+                        Text("Saved")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .foregroundStyle(SPColor.green)
+                    } else {
+                        Button {
+                            saveEndNote()
+                        } label: {
+                            HStack(spacing: SPSpacing.s1) {
+                                if isSaving {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(Color(SPColor.bg))
+                                }
+                                Text(isSaving ? "Saving…" : "Save note")
+                            }
                             .font(SPFont.serifItalic(18, weight: .light))
                             .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
                             .frame(maxWidth: .infinity)
@@ -119,8 +135,15 @@ struct CompletionView: View {
                             .overlay(
                                 Capsule().stroke(isSaveDisabled ? SPColor.border2 : Color.clear)
                             )
+                        }
+                        .disabled(isSaveDisabled)
                     }
-                    .disabled(isSaveDisabled)
+
+                    if let saveError {
+                        Text(saveError)
+                            .font(SPFont.mono(11))
+                            .foregroundStyle(SPColor.dangerMuted)
+                    }
                 }
 
                 // Tomorrow preview
@@ -154,6 +177,9 @@ struct CompletionView: View {
             .padding(.horizontal, SPSpacing.s4)
         }
         .stillPointBackground()
+        .onChange(of: endNote) { _, _ in
+            saveError = nil
+        }
     }
 
     private func statCard(
@@ -183,10 +209,30 @@ struct CompletionView: View {
     }
 
     private func saveEndNote() {
-        guard !endNote.isEmpty else { return }
-        // TODO: Wire end-of-session note persistence once sessionId is passed into CompletionView.
-        // Requires calling APIClient.shared.batchThoughts with timeInSession = -1.
-        // For now, mark as saved — the note is captured locally but not synced.
-        noteSaved = true
+        let noteToSave = endNote
+        guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving, !noteSaved else { return }
+        isSaving = true
+        saveError = nil
+        Task { @MainActor in
+            do {
+                let request = BatchThoughtsRequest(
+                    sessionId: sessionId,
+                    dayNumber: dayNumber,
+                    thoughts: [
+                        BatchThoughtsRequest.ThoughtInput(
+                            timeInSession: -1,
+                            text: noteToSave
+                        )
+                    ]
+                )
+                _ = try await APIClient.shared.batchThoughts(request)
+                isSaving = false
+                noteSaved = true
+            } catch {
+                print("Failed to save end note: \(error)")
+                isSaving = false
+                saveError = "Failed to save note"
+            }
+        }
     }
 }
