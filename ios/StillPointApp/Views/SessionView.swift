@@ -2,6 +2,10 @@ import SwiftUI
 import StillPointShared
 
 struct SessionView: View {
+    /// Estimated height of the controls overlay:
+    /// mind state toggle (~44) + action buttons (~36) + sound toggles (~24) + VStack spacing (3×16=48) + padding (top 16 + bottom 12 = 28) ≈ 160pt
+    private static let controlPanelHeight: CGFloat = 160
+
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
 
@@ -14,47 +18,51 @@ struct SessionView: View {
         ZStack {
             SPColor.bg.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: SPSpacing.s5) {
-                    Spacer().frame(height: SPSpacing.s3)
+            GeometryReader { geo in
+                let contentHeight = geo.size.height - Self.controlPanelHeight
 
-                    // Timer display
-                    Text(vm.timeString)
-                        .font(SPFont.timerDisplay)
-                        .foregroundStyle(
-                            vm.isComplete ? SPColor.green : Color(SPColor.fg)
+                VStack(spacing: 0) {
+                    // Main content — fits in viewport above controls
+                    VStack(spacing: SPSpacing.s3) {
+                        // Timer display
+                        Text(vm.timeString)
+                            .font(SPFont.timerDisplay)
+                            .foregroundStyle(
+                                vm.isComplete ? SPColor.green : Color(SPColor.fg)
+                            )
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+
+                        // 60-second progress bar
+                        progressBar
+
+                        // Block grid — dynamic sizing to fill available space
+                        BlockGridView(
+                            blocks: vm.blocks,
+                            elapsed: vm.elapsed,
+                            totalSeconds: vm.totalSeconds,
+                            availableHeight: contentHeight * 0.4,
+                            availableWidth: geo.size.width - SPSpacing.s2 * 2
                         )
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
+                        .padding(.horizontal, SPSpacing.s2)
 
-                    // 60-second progress bar
-                    progressBar
+                        // Mind state bar
+                        MindStateBarView(
+                            elapsed: vm.elapsed,
+                            totalSeconds: vm.totalSeconds,
+                            mindStateLog: vm.mindStateLog
+                        )
 
-                    // Block grid
-                    BlockGridView(
-                        blocks: vm.blocks,
-                        elapsed: vm.elapsed,
-                        totalSeconds: vm.totalSeconds
-                    )
-                    .padding(.horizontal, SPSpacing.s2)
-
-                    // Mind state bar
-                    MindStateBarView(
-                        elapsed: vm.elapsed,
-                        totalSeconds: vm.totalSeconds,
-                        mindStateLog: vm.mindStateLog
-                    )
-
-                    // Status label
-                    Text(vm.statusLabel.uppercased())
-                        .font(SPFont.mono(14))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .tracking(2)
-
-                    Spacer().frame(height: SPSpacing.s3)
+                        // Status label
+                        Text(vm.statusLabel.uppercased())
+                            .font(SPFont.mono(14))
+                            .foregroundStyle(Color(SPColor.fg3))
+                            .tracking(2)
+                    }
+                    .frame(height: contentHeight)
+                    .padding(.top, SPSpacing.s2)
                 }
             }
-            .scrollIndicators(.hidden)
 
             // Controls overlay (auto-hide)
             VStack {
@@ -79,7 +87,7 @@ struct SessionView: View {
                         }
                     )
                     .padding(.horizontal, SPSpacing.s4)
-                    .padding(.bottom, 160)
+                    .padding(.bottom, Self.controlPanelHeight)
                 }
                 .transition(.opacity)
             }
@@ -233,10 +241,12 @@ struct SessionView: View {
             }
         }
         .padding(.horizontal, SPSpacing.s4)
-        .padding(.vertical, SPSpacing.s3)
+        .padding(.top, SPSpacing.s3)
+        .padding(.bottom, SPSpacing.s2)
         .background(
             SPColor.bg.opacity(0.9)
                 .background(.ultraThinMaterial)
+                .ignoresSafeArea(edges: .bottom)
         )
     }
 

@@ -64,14 +64,19 @@ struct HistoryView: View {
                     }
 
                     // Journey
-                    VStack(alignment: .leading, spacing: SPSpacing.s2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("JOURNEY")
                             .font(SPFont.mono(11, weight: .medium))
                             .foregroundStyle(Color(SPColor.fg4))
                             .tracking(2)
+                            .padding(.bottom, 4)
 
-                        ForEach(vm.sessions, id: \.id) { session in
-                            sessionRow(session)
+                        ForEach(vm.history) { entry in
+                            if entry.missed {
+                                missedRow(entry)
+                            } else {
+                                sessionRow(entry)
+                            }
                         }
 
                         todayPreview
@@ -101,47 +106,83 @@ struct HistoryView: View {
         }
     }
 
+    // MARK: - Session Row
+
     @ViewBuilder
-    private func sessionRow(_ session: SessionDTO) -> some View {
-        let isExpanded = vm.expandedDay == session.dayNumber
+    private func sessionRow(_ entry: HistoryEntry) -> some View {
+        if let dayNumber = entry.dayNumber {
+            let isExpanded = vm.expandedDay == dayNumber
 
         VStack(spacing: 0) {
             Button {
-                Task { await vm.toggleDay(session.dayNumber) }
+                Task { await vm.toggleDay(dayNumber) }
             } label: {
-                HStack(spacing: SPSpacing.s2) {
-                    Text("D\(session.dayNumber)")
-                        .font(SPFont.mono(12, weight: .medium))
+                HStack(spacing: 8) {
+                    // Date label
+                    Text(shortDateLabel(entry.date))
+                        .font(SPFont.mono(10))
+                        .foregroundStyle(Color(SPColor.fg4))
+                        .frame(width: 56, alignment: .trailing)
+                        .lineLimit(1)
+
+                    // Day number
+                    Text("D\(dayNumber)")
+                        .font(SPFont.mono(11, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg3))
-                        .frame(width: 36, alignment: .leading)
+                        .frame(width: 28, alignment: .trailing)
 
-                    // Stacked bar
+                    // Proportional bar
                     GeometryReader { geo in
-                        let clearWidth = geo.size.width * Double(session.clearPercent) / 100.0
-                        let thinkWidth = geo.size.width - clearWidth
+                        let barFraction = vm.maxDuration > 0
+                            ? CGFloat(entry.actualTime) / CGFloat(vm.maxDuration)
+                            : 0
+                        let barWidth = geo.size.width * barFraction
+                        let clearWidth = barWidth * CGFloat(entry.clearPercent) / 100.0
+                        let thinkWidth = barWidth - clearWidth
 
-                        HStack(spacing: 0) {
-                            Rectangle()
-                                .fill(SPColor.green.opacity(0.6))
-                                .frame(width: max(0, clearWidth))
-                            Rectangle()
-                                .fill(SPColor.amber.opacity(0.5))
-                                .frame(width: max(0, thinkWidth))
+                        ZStack(alignment: .leading) {
+                            // Background track
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(SPColor.surface1))
+                                .frame(width: geo.size.width, height: 16)
+
+                            // Proportional filled portion
+                            HStack(spacing: 0) {
+                                Rectangle()
+                                    .fill(SPColor.green.opacity(entry.completed ? 0.7 : 0.4))
+                                    .frame(width: max(0, clearWidth))
+                                Rectangle()
+                                    .fill(SPColor.amber.opacity(entry.completed ? 0.5 : 0.3))
+                                    .frame(width: max(0, thinkWidth))
+                            }
+                            .frame(height: 16)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
                     .frame(height: 16)
 
-                    Text("\(session.clearPercent)%")
-                        .font(SPFont.mono(11))
-                        .foregroundStyle(SPColor.greenText)
-                        .frame(width: 36, alignment: .trailing)
+                    // Metadata: duration · clear% · thoughts
+                    HStack(spacing: 4) {
+                        Text("\(entry.actualTime)s")
+                            .foregroundStyle(Color(SPColor.fg3))
+                        Text("·")
+                            .foregroundStyle(Color(SPColor.fg4))
+                        Text("\(entry.clearPercent)%")
+                            .foregroundStyle(SPColor.greenText)
+                        Text("·")
+                            .foregroundStyle(Color(SPColor.fg4))
+                        Text("\(entry.thoughtCount)\u{1F4AD}")
+                            .foregroundStyle(SPColor.amberText)
+                    }
+                    .font(SPFont.mono(10))
+                    .frame(width: 100, alignment: .leading)
+                    .lineLimit(1)
                 }
-                .padding(.vertical, SPSpacing.s1)
+                .padding(.vertical, 2)
             }
 
             // Expanded thoughts
-            if isExpanded, let thoughts = vm.dayThoughts[session.dayNumber] {
+            if isExpanded, let thoughts = vm.dayThoughts[dayNumber] {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(thoughts, id: \.id) { thought in
                         HStack(alignment: .top, spacing: SPSpacing.s2) {
@@ -157,27 +198,118 @@ struct HistoryView: View {
                     }
                 }
                 .padding(.leading, 44)
-                .padding(.vertical, SPSpacing.s1)
+                .padding(.vertical, 4)
             }
         }
+        } // if let dayNumber
     }
 
-    private var todayPreview: some View {
-        HStack(spacing: SPSpacing.s2) {
-            Text("D\(appVM.currentDay)")
-                .font(SPFont.mono(12, weight: .medium))
-                .foregroundStyle(Color(SPColor.fg4))
-                .frame(width: 36, alignment: .leading)
+    // MARK: - Missed Row
 
+    private func missedRow(_ entry: HistoryEntry) -> some View {
+        HStack(spacing: 8) {
+            // Date label
+            Text(shortDateLabel(entry.date))
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(width: 56, alignment: .trailing)
+                .lineLimit(1)
+
+            // Em-dash instead of day number
+            Text("\u{2014}")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg3))
+                .frame(width: 28, alignment: .trailing)
+
+            // Dashed border container
             RoundedRectangle(cornerRadius: 3)
                 .stroke(SPColor.border2, style: StrokeStyle(lineWidth: 1, dash: [4]))
                 .frame(height: 16)
+                .overlay(alignment: .leading) {
+                    Text("missed")
+                        .font(SPFont.mono(10))
+                        .foregroundStyle(Color(SPColor.fg4))
+                        .italic()
+                        .padding(.leading, 8)
+                }
 
-            Text("\(appVM.todayDuration)s")
-                .font(SPFont.mono(11))
-                .foregroundStyle(Color(SPColor.fg4))
-                .frame(width: 36, alignment: .trailing)
+            // Empty metadata spacer
+            Color.clear
+                .frame(width: 100)
         }
-        .padding(.vertical, SPSpacing.s1)
+        .padding(.vertical, 2)
+        .opacity(0.35)
+    }
+
+    // MARK: - Today Preview
+
+    private var todayPreview: some View {
+        let todayDuration = appVM.todayDuration
+
+        return HStack(spacing: 8) {
+            // Date label
+            Text("today")
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(width: 56, alignment: .trailing)
+
+            // Day number
+            Text("D\(appVM.currentDay)")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(width: 28, alignment: .trailing)
+
+            // Proportional dashed bar
+            GeometryReader { geo in
+                let barFraction = vm.maxDuration > 0
+                    ? CGFloat(todayDuration) / CGFloat(vm.maxDuration)
+                    : 0
+                let barWidth = geo.size.width * barFraction
+
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color(SPColor.surface1))
+                        .frame(width: geo.size.width, height: 16)
+
+                    // Dashed outline scaled to duration
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(SPColor.border2, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        .frame(width: max(0, barWidth), height: 16)
+                }
+            }
+            .frame(height: 16)
+
+            // Duration label
+            Text("\(todayDuration)s")
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(width: 100, alignment: .leading)
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Helpers
+
+    // MARK: - Cached Formatters
+
+    private static let isoDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.calendar = Calendar(identifier: .gregorian)
+        return df
+    }()
+
+    private static let displayDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "EEE MMM d"
+        return df
+    }()
+
+    /// Format "YYYY-MM-DD" → "Mon Mar 16" (short, fits mobile).
+    private func shortDateLabel(_ isoDate: String) -> String {
+        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        return Self.displayDateFormatter.string(from: date)
     }
 }
