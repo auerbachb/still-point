@@ -52,20 +52,31 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | tr -d '"')
 
-          # Apply provisioning profile
+          # Apply provisioning profile and extract UUID for manual signing
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PP_PATH" "$PP_INSTALL_PATH"
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i $PP_PATH)")
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PP_UUID}.mobileprovision
 
       - name: Build archive
         working-directory: ios
+        env:
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
         run: |
+          # Extract provisioning profile UUID for manual signing
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i $PP_PATH)")
+
           xcodebuild archive \
             -project StillPoint.xcodeproj \
             -scheme StillPoint \
             -configuration Release \
             -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
             -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=T5UU4BP6AV \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+            CODE_SIGN_IDENTITY="Apple Distribution"
 
       - name: Upload to App Store Connect
         env:
