@@ -100,8 +100,10 @@ jobs:
             --apiKey "$APPSTORE_API_KEY_ID" \
             --apiIssuer "$APPSTORE_API_ISSUER_ID"
 
-      - name: Clean up keychain and provisioning profile
+      - name: Clean up keychain, provisioning profile, and API key
         if: always()
         run: |
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
-          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision
+          rm -f $RUNNER_TEMP/build_pp.mobileprovision 2>/dev/null || true
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision 2>/dev/null || true
+          rm -rf ~/.private_keys 2>/dev/null || true
