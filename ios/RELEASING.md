@@ -7,7 +7,7 @@ The following GitHub repository secrets must be configured (Settings → Secrets
 | Secret | Description | How to get it |
 |--------|-------------|---------------|
 | `BUILD_CERTIFICATE_BASE64` | Base64-encoded `.p12` distribution certificate | Export from Keychain Access, then `base64 -i cert.p12 \| pbcopy` |
-| `P12_PASSWORD` | Password used when exporting the `.p12` | Stored in the project root `.env` file as `P12_PASSWORD` |
+| `P12_PASSWORD` | Password used when exporting the `.p12` | The password you set during `.p12` export |
 | `BUILD_PROVISION_PROFILE_BASE64` | Base64-encoded `.mobileprovision` file | Download from developer.apple.com, then `base64 -i profile.mobileprovision \| pbcopy` |
 | `APPSTORE_API_KEY_ID` | App Store Connect API Key ID | From appstoreconnect.apple.com → Users and Access → Integrations |
 | `APPSTORE_API_ISSUER_ID` | App Store Connect API Issuer ID | Same page as above |
@@ -30,7 +30,7 @@ The following GitHub repository secrets must be configured (Settings → Secrets
 3. Tag and push:
    ```bash
    git tag ios-v1.1.0
-   git push origin main --tags
+   git push origin ios-v1.1.0
    ```
 
 4. The GitHub Actions workflow builds and uploads to TestFlight automatically.
