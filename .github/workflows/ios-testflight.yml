@@ -75,7 +75,7 @@ jobs:
         run: |
           # Write API key to file for authentication
           mkdir -p ~/.private_keys
-          echo "$APPSTORE_API_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
 
           # Export and upload in one step using xcodebuild
           # The ExportOptions.plist has destination=upload and method=app-store-connect
