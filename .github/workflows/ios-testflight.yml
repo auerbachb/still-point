@@ -36,6 +36,7 @@ jobs:
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          PP_INSTALL_PATH=~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision
 
           # Import certificate and provisioning profile from secrets
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
@@ -53,7 +54,7 @@ jobs:
 
           # Apply provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" "$PP_INSTALL_PATH"
 
       - name: Build archive
         working-directory: ios
@@ -68,37 +69,27 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             -allowProvisioningUpdates
 
-      - name: Export IPA
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
-            -exportOptionsPlist ios/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export \
-            -allowProvisioningUpdates
-
-      - name: Upload to TestFlight
+      - name: Upload to App Store Connect
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
-          # Write API key to file
+          # Write API key to file for authentication
           mkdir -p ~/.private_keys
           echo "$APPSTORE_API_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
 
-          # Find the IPA
-          IPA_PATH=$(find $RUNNER_TEMP/export -name '*.ipa' | head -1)
-          if [ -z "$IPA_PATH" ]; then
-            echo "Error: No IPA file found in $RUNNER_TEMP/export"
-            exit 1
-          fi
-          echo "Uploading $IPA_PATH"
-
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$IPA_PATH" \
-            --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_API_ISSUER_ID"
+          # Export and upload in one step using xcodebuild
+          # The ExportOptions.plist has destination=upload and method=app-store-connect
+          # which makes xcodebuild upload directly to App Store Connect / TestFlight
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8 \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
 
       - name: Clean up keychain, provisioning profile, and API key
         if: always()
