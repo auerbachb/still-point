@@ -65,8 +65,6 @@ jobs:
             -configuration Release \
             -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
             -destination 'generic/platform=iOS' \
-            DEVELOPMENT_TEAM=T5UU4BP6AV \
-            CODE_SIGN_STYLE=Automatic \
             -allowProvisioningUpdates
 
       - name: Upload to App Store Connect
