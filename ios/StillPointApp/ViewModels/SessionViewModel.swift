@@ -33,7 +33,7 @@ final class SessionViewModel {
     private var startDate: Date?
     private var pausedElapsed: Double = 0
     private var timer: AnyCancellable?
-    private var lastTickSec = -1
+    private var lastTickSec = 0
     private var lastChimeMinutesLeft: Int
     private var controlHideTimer: AnyCancellable?
 
@@ -41,12 +41,16 @@ final class SessionViewModel {
         max(0, Double(totalSeconds) - elapsed)
     }
 
+    private var displaySeconds: Int {
+        remaining == 0 ? 0 : Int(ceil(remaining))
+    }
+
     var minutes: Int {
-        Int(remaining) / 60
+        displaySeconds / 60
     }
 
     var seconds: Int {
-        Int(remaining) % 60
+        displaySeconds % 60
     }
 
     var clearPercent: Int {
