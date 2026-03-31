@@ -78,20 +78,22 @@ final class HistoryViewModel {
                let prevDate = df.date(from: sessions[i - 1].sessionDate),
                let currDate = df.date(from: session.sessionDate) {
                 let daysBetween = cal.dateComponents([.day], from: prevDate, to: currDate).day ?? 0
-                for gap in 1..<daysBetween {
-                    if let missedDate = cal.date(byAdding: .day, value: gap, to: prevDate) {
-                        entries.append(HistoryEntry(
-                            id: "missed-\(df.string(from: missedDate))",
-                            sessionId: nil,
-                            dayNumber: nil,
-                            duration: 0,
-                            actualTime: 0,
-                            completed: false,
-                            date: df.string(from: missedDate),
-                            clearPercent: 0,
-                            thoughtCount: 0,
-                            missed: true
-                        ))
+                if daysBetween > 1 {
+                    for gap in 1..<daysBetween {
+                        if let missedDate = cal.date(byAdding: .day, value: gap, to: prevDate) {
+                            entries.append(HistoryEntry(
+                                id: "missed-\(df.string(from: missedDate))",
+                                sessionId: nil,
+                                dayNumber: nil,
+                                duration: 0,
+                                actualTime: 0,
+                                completed: false,
+                                date: df.string(from: missedDate),
+                                clearPercent: 0,
+                                thoughtCount: 0,
+                                missed: true
+                            ))
+                        }
                     }
                 }
             }
