@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
 
     const inserted = await db.insert(thoughts).values(values).returning({
       id: thoughts.id,
+      sessionId: thoughts.sessionId,
       dayNumber: thoughts.dayNumber,
       timeInSession: thoughts.timeInSession,
       text: thoughts.text,
