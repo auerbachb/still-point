@@ -23,7 +23,7 @@ Before your first TestFlight release, configure a tester group and handle encryp
 4. Under the group's `Automatic Distribution` setting, enable it so new builds are distributed to the group automatically.
 5. On the first build upload, App Store Connect presents an encryption compliance questionnaire. Select **"None of the algorithms mentioned above"** — Still Point only uses standard HTTPS via `URLSession`, which is exempt.
 
-> **Note:** [#58](https://github.com/auerbachb/still-point/issues/58) has automated the encryption compliance step by setting `ITSAppUsesNonExemptEncryption` to `NO` in the `Info.plist`, so the questionnaire is no longer shown for subsequent uploads.
+> **Note:** [#58](https://github.com/auerbachb/still-point/issues/58) tracks automating this via `ITSAppUsesNonExemptEncryption` in `Info.plist`. Until that key is merged and present, expect the encryption questionnaire during upload.
 
 ## Releasing to TestFlight
 
