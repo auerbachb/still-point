@@ -41,7 +41,7 @@ export function BlockTimer({
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
-  const lastChimeMinRef = useRef(Math.ceil(totalSeconds / 60));
+  const lastChimedBlockIndexRef = useRef(-1);
   const isMobile = useIsMobile();
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
@@ -110,13 +110,18 @@ export function BlockTimer({
             playTick();
           }
 
-          // Minute chime — fire when remaining crosses a whole minute boundary downward
-          if (soundPrefsRef.current?.chime) {
-            const wholeMinutesLeft = Math.floor(remaining / 60);
-            if (wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMinRef.current) {
-              playChime(wholeMinutesLeft);
+          // Minute-block chime — fire when each visual minute block completes
+          if (soundPrefsRef.current?.chime && totalSeconds > 120) {
+            const fullMinutes = Math.floor(totalSeconds / 60);
+            const minuteBlockCount = (totalSeconds % 60 > 0) ? fullMinutes : fullMinutes - 1;
+            if (lastChimedBlockIndexRef.current < minuteBlockCount &&
+                newElapsed >= (lastChimedBlockIndexRef.current + 2) * 60) {
+              const chimeCount = Math.floor(remaining / 60);
+              if (chimeCount >= 1) {
+                playChime(chimeCount);
+              }
+              lastChimedBlockIndexRef.current++;
             }
-            lastChimeMinRef.current = wholeMinutesLeft;
           }
         }
       }, 50);
