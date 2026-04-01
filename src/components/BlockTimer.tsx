@@ -48,13 +48,13 @@ export function BlockTimer({
 
   // Build block definitions
   const useMinuteBlocks = totalSeconds > 120;
+  const fullMinutes = Math.floor(totalSeconds / 60);
+  const minuteBlockCount = useMinuteBlocks
+    ? (totalSeconds % 60 > 0 ? fullMinutes : fullMinutes - 1)
+    : 0;
   const blocks: BlockDef[] = [];
 
   if (useMinuteBlocks) {
-    const fullMinutes = Math.floor(totalSeconds / 60);
-    const remainingSeconds = totalSeconds % 60;
-    const minuteBlockCount = remainingSeconds > 0 ? fullMinutes : fullMinutes - 1;
-
     for (let i = 0; i < minuteBlockCount; i++) {
       blocks.push({ duration: 60, startTime: i * 60, label: `${i + 1}m`, type: "minute" });
     }
@@ -86,6 +86,10 @@ export function BlockTimer({
   const secondBlocks = blocks.filter(b => b.type === "second");
 
   useEffect(() => {
+    // Reset refs so stale values from a prior session don't suppress chimes/ticks
+    lastChimedBlockIndexRef.current = -1;
+    lastTickSecRef.current = -1;
+
     if (isActive) {
       startTimeRef.current = Date.now() - pausedElapsedRef.current * 1000;
       intervalRef.current = setInterval(() => {
@@ -111,9 +115,8 @@ export function BlockTimer({
           }
 
           // Minute-block chime — fire when each visual minute block completes
-          if (soundPrefsRef.current?.chime && totalSeconds > 120) {
-            const fullMinutes = Math.floor(totalSeconds / 60);
-            const minuteBlockCount = (totalSeconds % 60 > 0) ? fullMinutes : fullMinutes - 1;
+          if (soundPrefsRef.current?.chime && useMinuteBlocks) {
+            // Block i ends at (i+1)*60; ref starts at -1, so threshold = (ref+1+1)*60
             if (lastChimedBlockIndexRef.current < minuteBlockCount &&
                 newElapsed >= (lastChimedBlockIndexRef.current + 2) * 60) {
               const chimeCount = Math.floor(remaining / 60);
