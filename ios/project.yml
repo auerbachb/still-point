@@ -29,6 +29,7 @@ targets:
           - Fonts/Newsreader-Italic-Variable.ttf
           - Fonts/JetBrainsMono-Variable.ttf
         CFBundleIconName: AppIcon
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
