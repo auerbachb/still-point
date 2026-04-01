@@ -41,20 +41,20 @@ export function BlockTimer({
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
-  const lastChimeMinRef = useRef(Math.ceil(totalSeconds / 60));
+  const lastCompletedBlockIndexRef = useRef(-1);
   const isMobile = useIsMobile();
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
 
   // Build block definitions
   const useMinuteBlocks = totalSeconds > 120;
+  const fullMinutes = Math.floor(totalSeconds / 60);
+  const minuteBlockCount = useMinuteBlocks
+    ? (totalSeconds % 60 > 0 ? fullMinutes : fullMinutes - 1)
+    : 0;
   const blocks: BlockDef[] = [];
 
   if (useMinuteBlocks) {
-    const fullMinutes = Math.floor(totalSeconds / 60);
-    const remainingSeconds = totalSeconds % 60;
-    const minuteBlockCount = remainingSeconds > 0 ? fullMinutes : fullMinutes - 1;
-
     for (let i = 0; i < minuteBlockCount; i++) {
       blocks.push({ duration: 60, startTime: i * 60, label: `${i + 1}m`, type: "minute" });
     }
@@ -86,6 +86,23 @@ export function BlockTimer({
   const secondBlocks = blocks.filter(b => b.type === "second");
 
   useEffect(() => {
+    // Reset or seed refs based on whether this is a fresh session or a resume
+    const resumeElapsed = pausedElapsedRef.current;
+    const isResume = resumeElapsed > 0 && resumeElapsed < totalSeconds;
+
+    if (isResume) {
+      lastTickSecRef.current = Math.floor(resumeElapsed);
+      lastCompletedBlockIndexRef.current = useMinuteBlocks
+        ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
+        : -1;
+    } else {
+      // Fresh session — clear all accumulated state
+      lastCompletedBlockIndexRef.current = -1;
+      lastTickSecRef.current = -1;
+      pausedElapsedRef.current = 0;
+      setElapsed(0);
+    }
+
     if (isActive) {
       startTimeRef.current = Date.now() - pausedElapsedRef.current * 1000;
       intervalRef.current = setInterval(() => {
@@ -110,13 +127,24 @@ export function BlockTimer({
             playTick();
           }
 
-          // Minute chime — fire when remaining crosses a whole minute boundary downward
-          if (soundPrefsRef.current?.chime) {
-            const wholeMinutesLeft = Math.floor(remaining / 60);
-            if (wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMinRef.current) {
-              playChime(wholeMinutesLeft);
+          // Always advance block progress so re-enabling chimes doesn't replay history
+          if (useMinuteBlocks) {
+            const completedBlockIndex = Math.min(
+              minuteBlockCount - 1,
+              Math.floor(newElapsed / 60) - 1,
+            );
+
+            if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
+              lastCompletedBlockIndexRef.current = completedBlockIndex;
+
+              if (soundPrefsRef.current?.chime) {
+                const blockEnd = (completedBlockIndex + 1) * 60;
+                const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
+                if (chimeCount >= 1) {
+                  playChime(chimeCount);
+                }
+              }
             }
-            lastChimeMinRef.current = wholeMinutesLeft;
           }
         }
       }, 50);
