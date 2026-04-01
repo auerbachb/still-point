@@ -41,7 +41,7 @@ export function BlockTimer({
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
-  const lastChimedBlockIndexRef = useRef(-1);
+  const lastCompletedBlockIndexRef = useRef(-1);
   const isMobile = useIsMobile();
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
@@ -92,12 +92,12 @@ export function BlockTimer({
 
     if (isResume) {
       lastTickSecRef.current = Math.floor(resumeElapsed);
-      lastChimedBlockIndexRef.current = useMinuteBlocks
+      lastCompletedBlockIndexRef.current = useMinuteBlocks
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
     } else {
       // Fresh session — clear all accumulated state
-      lastChimedBlockIndexRef.current = -1;
+      lastCompletedBlockIndexRef.current = -1;
       lastTickSecRef.current = -1;
       pausedElapsedRef.current = 0;
       setElapsed(0);
@@ -134,8 +134,8 @@ export function BlockTimer({
               Math.floor(newElapsed / 60) - 1,
             );
 
-            if (completedBlockIndex > lastChimedBlockIndexRef.current) {
-              lastChimedBlockIndexRef.current = completedBlockIndex;
+            if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
+              lastCompletedBlockIndexRef.current = completedBlockIndex;
 
               if (soundPrefsRef.current?.chime) {
                 const blockEnd = (completedBlockIndex + 1) * 60;
