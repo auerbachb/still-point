@@ -96,8 +96,11 @@ export function BlockTimer({
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
     } else {
+      // Fresh session — clear all accumulated state
       lastChimedBlockIndexRef.current = -1;
       lastTickSecRef.current = -1;
+      pausedElapsedRef.current = 0;
+      setElapsed(0);
     }
 
     if (isActive) {
