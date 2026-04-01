@@ -86,9 +86,19 @@ export function BlockTimer({
   const secondBlocks = blocks.filter(b => b.type === "second");
 
   useEffect(() => {
-    // Reset refs so stale values from a prior session don't suppress chimes/ticks
-    lastChimedBlockIndexRef.current = -1;
-    lastTickSecRef.current = -1;
+    // Reset or seed refs based on whether this is a fresh session or a resume
+    const resumeElapsed = pausedElapsedRef.current;
+    const isResume = resumeElapsed > 0 && resumeElapsed < totalSeconds;
+
+    if (isResume) {
+      lastTickSecRef.current = Math.floor(resumeElapsed);
+      lastChimedBlockIndexRef.current = useMinuteBlocks
+        ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
+        : -1;
+    } else {
+      lastChimedBlockIndexRef.current = -1;
+      lastTickSecRef.current = -1;
+    }
 
     if (isActive) {
       startTimeRef.current = Date.now() - pausedElapsedRef.current * 1000;
@@ -117,9 +127,11 @@ export function BlockTimer({
           // Minute-block chime — fire when each visual minute block completes
           if (soundPrefsRef.current?.chime && useMinuteBlocks) {
             // Block i ends at (i+1)*60; ref starts at -1, so threshold = (ref+1+1)*60
+            const nextBlockEnd = (lastChimedBlockIndexRef.current + 2) * 60;
             if (lastChimedBlockIndexRef.current < minuteBlockCount &&
-                newElapsed >= (lastChimedBlockIndexRef.current + 2) * 60) {
-              const chimeCount = Math.floor(remaining / 60);
+                newElapsed >= nextBlockEnd) {
+              // Use integer block boundary to avoid float precision issues
+              const chimeCount = Math.floor((totalSeconds - nextBlockEnd) / 60);
               if (chimeCount >= 1) {
                 playChime(chimeCount);
               }
