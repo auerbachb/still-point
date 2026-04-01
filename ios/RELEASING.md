@@ -13,6 +13,18 @@ The following GitHub repository secrets must be configured (Settings → Secrets
 | `APPSTORE_API_ISSUER_ID` | App Store Connect API Issuer ID | Same page as above |
 | `APPSTORE_API_PRIVATE_KEY` | Contents of the `.p8` API key file | Paste the full file contents including BEGIN/END lines |
 
+## First-Time Setup
+
+Before your first TestFlight release, configure a tester group and handle encryption compliance:
+
+1. Open [App Store Connect](https://appstoreconnect.apple.com) and navigate to your app.
+2. Go to `TestFlight` → `Internal Testing` and click the `+` button to create a new group (e.g., "Internal Testers").
+3. Add testers to the group by clicking `Add Testers` and entering their Apple ID email addresses.
+4. Under the group's `Automatic Distribution` setting, enable it so new builds are distributed to the group automatically.
+5. On the first build upload, App Store Connect presents an encryption compliance questionnaire. Select **"None of the algorithms mentioned above"** — Still Point only uses standard HTTPS via `URLSession`, which is exempt.
+
+> **Note:** [#58](https://github.com/auerbachb/still-point/issues/58) tracks automating this via `ITSAppUsesNonExemptEncryption` in `Info.plist`. Until that key is merged and present, expect the encryption questionnaire during upload.
+
 ## Releasing to TestFlight
 
 1. Update the version in `ios/project.yml`:
