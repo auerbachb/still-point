@@ -127,18 +127,23 @@ export function BlockTimer({
             playTick();
           }
 
-          // Minute-block chime — fire when each visual minute block completes
-          if (soundPrefsRef.current?.chime && useMinuteBlocks) {
-            // Block i ends at (i+1)*60; ref starts at -1, so threshold = (ref+1+1)*60
-            const nextBlockEnd = (lastChimedBlockIndexRef.current + 2) * 60;
-            if (lastChimedBlockIndexRef.current < minuteBlockCount &&
-                newElapsed >= nextBlockEnd) {
-              // Use integer block boundary to avoid float precision issues
-              const chimeCount = Math.floor((totalSeconds - nextBlockEnd) / 60);
-              if (chimeCount >= 1) {
-                playChime(chimeCount);
+          // Always advance block progress so re-enabling chimes doesn't replay history
+          if (useMinuteBlocks) {
+            const completedBlockIndex = Math.min(
+              minuteBlockCount - 1,
+              Math.floor(newElapsed / 60) - 1,
+            );
+
+            if (completedBlockIndex > lastChimedBlockIndexRef.current) {
+              lastChimedBlockIndexRef.current = completedBlockIndex;
+
+              if (soundPrefsRef.current?.chime) {
+                const blockEnd = (completedBlockIndex + 1) * 60;
+                const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
+                if (chimeCount >= 1) {
+                  playChime(chimeCount);
+                }
               }
-              lastChimedBlockIndexRef.current++;
             }
           }
         }
