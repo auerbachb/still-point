@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
@@ -13,14 +14,6 @@ import { useIsMobile } from "@/lib/useIsMobile";
 
 type View = "home" | "session" | "complete" | "history" | "journal" | "board" | "settings";
 
-type User = {
-  id: string;
-  email: string;
-  username: string;
-  isPublic: boolean;
-  currentDay: number;
-};
-
 type CompletionData = {
   sessionId: string | null;
   dayNumber: number;
@@ -30,24 +23,69 @@ type CompletionData = {
   thoughts: Array<{ timeInSession: number; text: string }>;
 };
 
+function getLocalIsoDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function StillPoint() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<View>("home");
   const [authChecked, setAuthChecked] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authRetryKey, setAuthRetryKey] = useState(0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.user) {
-          setUser(data.user);
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (cancelled) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data?.user ?? null);
+          setAuthError(null);
+          setAuthChecked(true);
+          return;
         }
+
+        if (res.status === 401 || res.status === 403) {
+          setUser(null);
+          setAuthError(null);
+          setAuthChecked(true);
+          return;
+        }
+
+        if (res.status >= 500) {
+          setAuthError("Unable to verify your sign-in due to a server issue. Please retry.");
+          setAuthChecked(true);
+          return;
+        }
+
+        setUser(null);
+        setAuthError(null);
         setAuthChecked(true);
-      })
-      .catch(() => setAuthChecked(true));
-  }, []);
+      } catch {
+        if (!cancelled) {
+          setAuthError("Unable to verify your sign-in due to a network issue. Please retry.");
+          setAuthChecked(true);
+        }
+      }
+    }
+
+    checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetryKey]);
 
   const handleLogin = (userData: User) => {
     setUser(userData);
@@ -88,7 +126,7 @@ export default function StillPoint() {
           clearPercent: data.clearPercent,
           thoughtCount: data.thoughtCount,
           mindStateLog: data.mindStateLog,
-          sessionDate: new Date().toISOString().split("T")[0],
+          sessionDate: getLocalIsoDate(),
         }),
       });
 
@@ -154,7 +192,7 @@ export default function StillPoint() {
           clearPercent: data.clearPercent,
           thoughtCount: data.thoughtCount,
           mindStateLog: data.mindStateLog,
-          sessionDate: new Date().toISOString().split("T")[0],
+          sessionDate: getLocalIsoDate(),
         }),
       });
 
@@ -195,6 +233,48 @@ export default function StillPoint() {
         }}>
           Still Point
         </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: "var(--s3)",
+        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        padding: "40px 20px",
+        textAlign: "center",
+      }}>
+        <div style={{ fontSize: "28px", fontStyle: "italic", color: "var(--fg)" }}>
+          Still Point
+        </div>
+        <p style={{ maxWidth: "44ch", color: "var(--fg-2)", lineHeight: 1.5 }}>
+          {authError}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthChecked(false);
+            setAuthError(null);
+            setAuthRetryKey((prev) => prev + 1);
+          }}
+          style={{
+            border: "1px solid var(--border-2)",
+            background: "transparent",
+            color: "var(--fg)",
+            borderRadius: "999px",
+            padding: "10px 16px",
+            cursor: "pointer",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "12px",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Retry
+        </button>
       </div>
     );
   }
