@@ -28,7 +28,25 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${newsreader.variable} ${jetbrainsMono.variable}`}>
-        {children}
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          <main style={{ flex: 1 }}>{children}</main>
+          <footer
+            style={{
+              padding: "14px 20px",
+              borderTop: "1px solid var(--border-1)",
+              color: "var(--fg-3)",
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px",
+              letterSpacing: "0.03em",
+              textAlign: "center",
+            }}
+          >
+            © Bretton Auerbach 2026 |{" "}
+            <a href="https://brettonauerbach.com" style={{ color: "inherit" }}>
+              brettonauerbach.com
+            </a>
+          </footer>
+        </div>
       </body>
     </html>
   );
