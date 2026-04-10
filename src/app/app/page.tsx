@@ -224,7 +224,7 @@ export default function StillPoint() {
   if (!authChecked) {
     return (
       <div style={{
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center",
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       }}>
         <div style={{
@@ -240,7 +240,7 @@ export default function StillPoint() {
   if (authError) {
     return (
       <div style={{
-        minHeight: "100vh", display: "flex", flexDirection: "column",
+        minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: "var(--s3)",
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
@@ -283,7 +283,7 @@ export default function StillPoint() {
   if (!user) {
     return (
       <div style={{
-        minHeight: "100vh", display: "flex", flexDirection: "column",
+        minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
         padding: "40px 20px",
@@ -296,7 +296,7 @@ export default function StillPoint() {
   // Logged in
   return (
     <div style={{
-      minHeight: "100svh",
+      minHeight: "100%",
       display: "grid",
       gridTemplateRows: view === "session" ? "1fr" : "auto 1fr auto",
       alignItems: "center",
