@@ -18,6 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify Xcode and iOS SDK versions
+        shell: bash
+        run: |
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iPhoneOS SDK: ${SDK_VERSION}"
+          [[ "${SDK_VERSION%%.*}" -ge 26 ]]
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
