@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Newsreader, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://still-point.me"),
   title: "Still Point",
   description: "Attention training",
 };
@@ -45,6 +47,18 @@ export default function RootLayout({
             <a href="https://brettonauerbach.com" style={{ color: "inherit" }}>
               brettonauerbach.com
             </a>
+            {" | "}
+            <Link
+              href="/privacy"
+              prefetch={false}
+              style={{
+                color: "inherit",
+                textDecoration: "underline",
+                textUnderlineOffset: "2px",
+              }}
+            >
+              Privacy Policy
+            </Link>
           </footer>
         </div>
       </body>
