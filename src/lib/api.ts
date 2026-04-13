@@ -72,6 +72,16 @@ export type FriendRequestRecord = {
   updatedAt: string;
 };
 
+export type FriendRequestPatchResult = {
+  request: {
+    id: string;
+    status: string;
+    updatedAt: string;
+    fromUserId?: string;
+    toUserId?: string;
+  };
+};
+
 export const api = {
   signup: (data: { email: string; username: string; password: string }) =>
     request<{ user: User }>("/api/auth/signup", { method: "POST", body: JSON.stringify(data) }),
@@ -121,8 +131,13 @@ export const api = {
 
   getFriends: () => request<{ friends: FriendPublicUser[] }>("/api/friends"),
 
-  searchFriends: (q: string) =>
-    request<{ users: FriendPublicUser[] }>(`/api/friends/search?q=${encodeURIComponent(q)}`),
+  searchFriends: (q: string) => {
+    const t = q.trim();
+    if (t.length < 2) {
+      return Promise.resolve({ users: [] as FriendPublicUser[] });
+    }
+    return request<{ users: FriendPublicUser[] }>(`/api/friends/search?q=${encodeURIComponent(t)}`);
+  },
 
   getFriendRequests: () =>
     request<{ incoming: FriendRequestRow[]; outgoing: FriendRequestRow[] }>("/api/friends/requests"),
@@ -134,7 +149,7 @@ export const api = {
     }),
 
   updateFriendRequest: (id: string, action: "accept" | "reject" | "cancel") =>
-    request<{ request: Partial<FriendRequestRecord> }>(`/api/friends/requests/${id}`, {
+    request<FriendRequestPatchResult>(`/api/friends/requests/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ action }),
     }),

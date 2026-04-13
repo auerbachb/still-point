@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { friendRequests, friendships } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { orderedUserPair } from "@/lib/friends";
+import { orderedUserPair, isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
 type Params = { params: Promise<{ id: string }> };
@@ -15,6 +15,9 @@ export async function PATCH(request: NextRequest, context: Params) {
     }
 
     const { id } = await context.params;
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
+    }
 
     let body: { action?: string };
     try {
@@ -54,6 +57,12 @@ export async function PATCH(request: NextRequest, context: Params) {
           status: friendRequests.status,
           updatedAt: friendRequests.updatedAt,
         });
+      if (!updated) {
+        return NextResponse.json(
+          { error: "Request changed concurrently; try again" },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ request: updated });
     }
 
@@ -71,35 +80,48 @@ export async function PATCH(request: NextRequest, context: Params) {
           status: friendRequests.status,
           updatedAt: friendRequests.updatedAt,
         });
+      if (!updated) {
+        return NextResponse.json(
+          { error: "Request changed concurrently; try again" },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ request: updated });
     }
 
-    // accept
+    // accept — single transaction so friendship is not orphaned if insert fails
     const [u1, u2] = orderedUserPair(row.fromUserId, row.toUserId);
 
-    const [updated] = await db
-      .update(friendRequests)
-      .set({ status: "accepted", updatedAt: new Date() })
-      .where(
-        and(
-          eq(friendRequests.id, id),
-          eq(friendRequests.status, "pending"),
-          eq(friendRequests.toUserId, auth.userId),
-        ),
-      )
-      .returning({
-        id: friendRequests.id,
-        fromUserId: friendRequests.fromUserId,
-        toUserId: friendRequests.toUserId,
-        status: friendRequests.status,
-        updatedAt: friendRequests.updatedAt,
-      });
+    const updated = await db.transaction(async (tx) => {
+      const [u] = await tx
+        .update(friendRequests)
+        .set({ status: "accepted", updatedAt: new Date() })
+        .where(
+          and(
+            eq(friendRequests.id, id),
+            eq(friendRequests.status, "pending"),
+            eq(friendRequests.toUserId, auth.userId),
+          ),
+        )
+        .returning({
+          id: friendRequests.id,
+          fromUserId: friendRequests.fromUserId,
+          toUserId: friendRequests.toUserId,
+          status: friendRequests.status,
+          updatedAt: friendRequests.updatedAt,
+        });
+
+      if (!u) {
+        return null;
+      }
+
+      await tx.insert(friendships).values({ user1Id: u1, user2Id: u2 }).onConflictDoNothing();
+      return u;
+    });
 
     if (!updated) {
       return NextResponse.json({ error: "Could not accept this request" }, { status: 409 });
     }
-
-    await db.insert(friendships).values({ user1Id: u1, user2Id: u2 }).onConflictDoNothing();
 
     return NextResponse.json({ request: updated });
   } catch (error) {

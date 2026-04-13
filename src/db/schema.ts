@@ -69,9 +69,11 @@ export const friendRequests = pgTable("friend_requests", {
     "friend_requests_status_allowed",
     sql`${table.status} in ('pending', 'accepted', 'rejected', 'cancelled')`,
   ),
-  pendingPairUnique: uniqueIndex("friend_requests_pending_from_to").on(table.fromUserId, table.toUserId).where(
-    sql`${table.status} = 'pending'`,
-  ),
+  /** At most one pending request per unordered pair (blocks A→B and B→A simultaneously). */
+  pendingUsersPairUnique: uniqueIndex("friend_requests_pending_user_pair").on(
+    sql`least(${table.fromUserId}, ${table.toUserId})`,
+    sql`greatest(${table.fromUserId}, ${table.toUserId})`,
+  ).where(sql`${table.status} = 'pending'`),
   fromIdx: index("idx_friend_requests_from").on(table.fromUserId),
   toIdx: index("idx_friend_requests_to").on(table.toUserId),
 }));

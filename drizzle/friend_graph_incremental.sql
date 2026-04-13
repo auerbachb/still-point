@@ -26,7 +26,12 @@ ALTER TABLE "friend_requests" ADD CONSTRAINT "friend_requests_to_user_id_users_i
 ALTER TABLE "friendships" ADD CONSTRAINT "friendships_user1_id_users_id_fk" FOREIGN KEY ("user1_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "friendships" ADD CONSTRAINT "friendships_user2_id_users_id_fk" FOREIGN KEY ("user2_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 
-CREATE UNIQUE INDEX IF NOT EXISTS "friend_requests_pending_from_to" ON "friend_requests" USING btree ("from_user_id","to_user_id") WHERE "status" = 'pending';
+-- Replace legacy directional pending index with unordered pair (run once if upgrading from #116 initial schema).
+DROP INDEX IF EXISTS "friend_requests_pending_from_to";
+CREATE UNIQUE INDEX IF NOT EXISTS "friend_requests_pending_user_pair" ON "friend_requests" USING btree (
+  LEAST("from_user_id", "to_user_id"),
+  GREATEST("from_user_id", "to_user_id")
+) WHERE "status" = 'pending';
 CREATE INDEX IF NOT EXISTS "idx_friend_requests_from" ON "friend_requests" USING btree ("from_user_id");
 CREATE INDEX IF NOT EXISTS "idx_friend_requests_to" ON "friend_requests" USING btree ("to_user_id");
 CREATE INDEX IF NOT EXISTS "idx_friendships_user1" ON "friendships" USING btree ("user1_id");

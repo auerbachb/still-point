@@ -1,14 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-type PublicUser = { id: string; username: string };
-
-type RequestRow = {
-  id: string;
-  createdAt: string;
-  user: PublicUser;
-};
+import { api, ApiError, type FriendPublicUser, type FriendRequestRow } from "@/lib/api";
 
 const labelStyle: React.CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
@@ -41,22 +34,13 @@ const btnOutline: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-async function readError(res: Response): Promise<string> {
-  try {
-    const data = await res.json();
-    return typeof data?.error === "string" ? data.error : res.statusText;
-  } catch {
-    return res.statusText;
-  }
-}
-
 export function FriendsView() {
   const [q, setQ] = useState("");
-  const [searchResults, setSearchResults] = useState<PublicUser[]>([]);
+  const [searchResults, setSearchResults] = useState<FriendPublicUser[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [friends, setFriends] = useState<PublicUser[]>([]);
-  const [incoming, setIncoming] = useState<RequestRow[]>([]);
-  const [outgoing, setOutgoing] = useState<RequestRow[]>([]);
+  const [friends, setFriends] = useState<FriendPublicUser[]>([]);
+  const [incoming, setIncoming] = useState<FriendRequestRow[]>([]);
+  const [outgoing, setOutgoing] = useState<FriendRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -64,18 +48,13 @@ export function FriendsView() {
   const loadLists = useCallback(async () => {
     setLoading(true);
     try {
-      const [frRes, reqRes] = await Promise.all([
-        fetch("/api/friends"),
-        fetch("/api/friends/requests"),
-      ]);
-      if (frRes.ok) {
-        const data = await frRes.json();
-        setFriends(data.friends ?? []);
-      }
-      if (reqRes.ok) {
-        const data = await reqRes.json();
-        setIncoming(data.incoming ?? []);
-        setOutgoing(data.outgoing ?? []);
+      const [fr, req] = await Promise.all([api.getFriends(), api.getFriendRequests()]);
+      setFriends(fr.friends);
+      setIncoming(req.incoming);
+      setOutgoing(req.outgoing);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setBanner(e.message);
       }
     } finally {
       setLoading(false);
@@ -95,14 +74,13 @@ export function FriendsView() {
     setSearchLoading(true);
     setBanner(null);
     try {
-      const res = await fetch(`/api/friends/search?q=${encodeURIComponent(trimmed)}`);
-      if (!res.ok) {
-        setBanner(await readError(res));
-        setSearchResults([]);
-        return;
+      const data = await api.searchFriends(trimmed);
+      setSearchResults(data.users);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setBanner(e.message);
       }
-      const data = await res.json();
-      setSearchResults(data.users ?? []);
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
@@ -112,17 +90,13 @@ export function FriendsView() {
     setActionId(toUserId);
     setBanner(null);
     try {
-      const res = await fetch("/api/friends/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toUserId }),
-      });
-      if (!res.ok) {
-        setBanner(await readError(res));
-        return;
-      }
+      await api.sendFriendRequest(toUserId);
       setBanner("Request sent.");
       await loadLists();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setBanner(e.message);
+      }
     } finally {
       setActionId(null);
     }
@@ -132,16 +106,12 @@ export function FriendsView() {
     setActionId(id);
     setBanner(null);
     try {
-      const res = await fetch(`/api/friends/requests/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        setBanner(await readError(res));
-        return;
-      }
+      await api.updateFriendRequest(id, action);
       await loadLists();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setBanner(e.message);
+      }
     } finally {
       setActionId(null);
     }
@@ -151,12 +121,12 @@ export function FriendsView() {
     setActionId(friendUserId);
     setBanner(null);
     try {
-      const res = await fetch(`/api/friends/${friendUserId}`, { method: "DELETE" });
-      if (!res.ok) {
-        setBanner(await readError(res));
-        return;
-      }
+      await api.removeFriend(friendUserId);
       await loadLists();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setBanner(e.message);
+      }
     } finally {
       setActionId(null);
     }
@@ -319,7 +289,9 @@ export function FriendsView() {
 
       <div style={{ ...cardStyle, gap: "16px" }}>
         <div style={labelStyle}>Your outgoing requests</div>
-        {!loading && outgoing.length === 0 ? (
+        {loading ? (
+          <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>Loading…</span>
+        ) : outgoing.length === 0 ? (
           <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>None.</span>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -342,7 +314,9 @@ export function FriendsView() {
 
       <div style={{ ...cardStyle, gap: "16px" }}>
         <div style={labelStyle}>Your friends</div>
-        {!loading && friends.length === 0 ? (
+        {loading ? (
+          <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>Loading…</span>
+        ) : friends.length === 0 ? (
           <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>No friends yet.</span>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
