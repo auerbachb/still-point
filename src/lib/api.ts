@@ -82,6 +82,32 @@ export type FriendRequestPatchResult = {
   };
 };
 
+export type BuddyParticipantSnap = {
+  userId: string;
+  username: string;
+  isHost: boolean;
+  ready: boolean;
+  joinedAt: string;
+  leftAt: string | null;
+  connected: boolean;
+  participantCompletedAt: string | null;
+};
+
+export type BuddySnapshot = {
+  id: string;
+  state: string;
+  revision: number;
+  durationSeconds: number;
+  startedAt: string | null;
+  serverNow: string;
+  endsAt: string | null;
+  elapsedSeconds: number | null;
+  remainingSeconds: number | null;
+  hostUserId: string;
+  isHost: boolean;
+  participants: BuddyParticipantSnap[];
+};
+
 export const api = {
   signup: (data: { email: string; username: string; password: string }) =>
     request<{ user: User }>("/api/auth/signup", { method: "POST", body: JSON.stringify(data) }),
@@ -156,4 +182,46 @@ export const api = {
 
   removeFriend: (friendUserId: string) =>
     request<{ ok: boolean }>(`/api/friends/${friendUserId}`, { method: "DELETE" }),
+
+  createBuddySession: () =>
+    request<{
+      session: { id: string; shareToken: string; sharePath: string; durationSeconds: number };
+    }>("/api/buddy/sessions", { method: "POST" }),
+
+  joinBuddySession: (token: string) =>
+    request<{ sessionId: string }>("/api/buddy/sessions/join", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+
+  getBuddySnapshot: (sessionId: string) =>
+    request<{ snapshot: BuddySnapshot }>(`/api/buddy/sessions/${sessionId}`),
+
+  setBuddyReady: (sessionId: string, ready: boolean) =>
+    request<{ ok: boolean }>(`/api/buddy/sessions/${sessionId}/ready`, {
+      method: "PATCH",
+      body: JSON.stringify({ ready }),
+    }),
+
+  startBuddySession: (sessionId: string) =>
+    request<{ ok: boolean; startedAt: string }>(
+      `/api/buddy/sessions/${sessionId}/start`,
+      { method: "POST" },
+    ),
+
+  leaveBuddySession: (sessionId: string) =>
+    request<{ ok: boolean }>(`/api/buddy/sessions/${sessionId}/leave`, {
+      method: "POST",
+    }),
+
+  cancelBuddySession: (sessionId: string) =>
+    request<{ ok: boolean }>(`/api/buddy/sessions/${sessionId}/cancel`, {
+      method: "POST",
+    }),
+
+  buddyParticipantComplete: (sessionId: string) =>
+    request<{ ok: boolean; already?: boolean; participantCompletedAt?: string }>(
+      `/api/buddy/sessions/${sessionId}/participant-complete`,
+      { method: "POST" },
+    ),
 };
