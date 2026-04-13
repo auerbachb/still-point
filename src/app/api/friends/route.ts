@@ -13,19 +13,23 @@ export async function GET() {
 
     const uid = auth.userId;
 
-    const asUser1 = await db
-      .select({ id: users.id, username: users.username })
+    const friendSelect = { id: users.id, username: users.username };
+
+    const asUser1 = db
+      .select(friendSelect)
       .from(friendships)
       .innerJoin(users, eq(friendships.user2Id, users.id))
       .where(eq(friendships.user1Id, uid));
 
-    const asUser2 = await db
-      .select({ id: users.id, username: users.username })
+    const asUser2 = db
+      .select(friendSelect)
       .from(friendships)
       .innerJoin(users, eq(friendships.user1Id, users.id))
       .where(eq(friendships.user2Id, uid));
 
-    return NextResponse.json({ friends: [...asUser1, ...asUser2] });
+    const rows = await asUser1.union(asUser2);
+
+    return NextResponse.json({ friends: rows });
   } catch (error) {
     console.error("Friends list error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

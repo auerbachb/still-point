@@ -198,6 +198,7 @@ export function FriendsView() {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && runSearch()}
             placeholder="Username (min 2 chars)"
+            aria-label="Search for users by username"
             style={{
               flex: "1 1 160px",
               minWidth: 0,

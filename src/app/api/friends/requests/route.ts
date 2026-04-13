@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { friendRequests, friendships, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
+import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, or } from "drizzle-orm";
 
 export async function GET() {
@@ -51,14 +52,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let body: { toUserId?: string };
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const json = await readJsonObject(request);
+    if (!json.ok) {
+      return json.response;
     }
 
-    const toUserId = body.toUserId;
+    const toUserId = json.body.toUserId;
     if (!toUserId || typeof toUserId !== "string") {
       return NextResponse.json({ error: "toUserId is required" }, { status: 400 });
     }

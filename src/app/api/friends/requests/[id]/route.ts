@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { friendRequests, friendships } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
-import { and, eq } from "drizzle-orm";
+import { readJsonObject } from "@/lib/readJsonObject";
+import { and, eq, ne } from "drizzle-orm";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,14 +20,15 @@ export async function PATCH(request: NextRequest, context: Params) {
       return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
     }
 
-    let body: { action?: string };
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const json = await readJsonObject(request);
+    if (!json.ok) {
+      return json.response;
     }
 
-    const action = body.action;
+    const action = json.body.action;
+    if (typeof action !== "string") {
+      return NextResponse.json({ error: "action is required" }, { status: 400 });
+    }
     if (action !== "accept" && action !== "reject" && action !== "cancel") {
       return NextResponse.json(
         { error: "action must be \"accept\", \"reject\", or \"cancel\"" },
@@ -116,6 +118,20 @@ export async function PATCH(request: NextRequest, context: Params) {
       }
 
       await tx.insert(friendships).values({ user1Id: u1, user2Id: u2 }).onConflictDoNothing();
+
+      // Clear any legacy reverse-direction pending row for the same pair (pre-LEAST/GREATEST index DBs).
+      await tx
+        .update(friendRequests)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(
+          and(
+            ne(friendRequests.id, id),
+            eq(friendRequests.fromUserId, row.toUserId),
+            eq(friendRequests.toUserId, row.fromUserId),
+            eq(friendRequests.status, "pending"),
+          ),
+        );
+
       return u;
     });
 
