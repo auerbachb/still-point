@@ -10,9 +10,10 @@ import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
 import { PublicBoard } from "@/components/PublicBoard";
 import { SettingsView } from "@/components/SettingsView";
+import { FriendsView } from "@/components/FriendsView";
 import { useIsMobile } from "@/lib/useIsMobile";
 
-type View = "home" | "session" | "complete" | "history" | "journal" | "board" | "settings";
+type View = "home" | "session" | "complete" | "history" | "journal" | "board" | "friends" | "settings";
 
 type CompletionData = {
   sessionId: string | null;
@@ -218,7 +219,7 @@ export default function StillPoint() {
     setView("home");
   }, []);
 
-  const navItems: View[] = ["home", "history", "journal", "board", "settings"];
+  const navItems: View[] = ["home", "history", "journal", "board", "friends", "settings"];
 
   // Loading state
   if (!authChecked) {
@@ -417,6 +418,8 @@ export default function StillPoint() {
       {view === "board" && (
         <PublicBoard currentUsername={user.username} />
       )}
+
+      {view === "friends" && <FriendsView />}
 
       {view === "settings" && (
         <SettingsView
