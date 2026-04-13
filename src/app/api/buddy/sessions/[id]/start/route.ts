@@ -3,6 +3,12 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { reconcileBuddySession } from "@/lib/buddySession";
+import {
+  BUDDY_POLICY_CODES,
+  buddyPolicyJson,
+  requireBuddyHost,
+  requireReadyCheckForStart,
+} from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -31,11 +37,22 @@ export async function POST(_request: Request, context: Params) {
       )
       .limit(1);
 
-    if (!p?.isHost || p.leftAt != null) {
-      return NextResponse.json({ error: "Only the host can start" }, { status: 403 });
-    }
+    const hostErr = requireBuddyHost(p);
+    if (hostErr) return hostErr;
 
     await reconcileBuddySession(sessionId);
+
+    const [session] = await db
+      .select()
+      .from(buddySessions)
+      .where(eq(buddySessions.id, sessionId))
+      .limit(1);
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    const phaseErr = requireReadyCheckForStart(session);
+    if (phaseErr) return phaseErr;
 
     const startedAt = new Date();
     const [updated] = await db
@@ -52,9 +69,10 @@ export async function POST(_request: Request, context: Params) {
       .returning();
 
     if (!updated) {
-      return NextResponse.json(
-        { error: "Everyone must be ready and at least one guest must join before starting" },
-        { status: 409 },
+      return buddyPolicyJson(
+        409,
+        "Everyone must be ready and at least one guest must join before starting",
+        BUDDY_POLICY_CODES.START_WRONG_PHASE,
       );
     }
 

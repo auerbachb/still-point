@@ -1,6 +1,6 @@
 /**
  * Shared buddy session domain logic (#117). Server is source of truth for timing and state.
- * #118: Extend route handlers and UI for per-user controls (pause, policy, host transfer).
+ * #118: Controls policy and enforcement — see `buddySessionControlsPolicy.ts`.
  * #119: Use participantCompletedAt + POST …/participant-complete for journaling hooks.
  */
 import { db } from "@/db";

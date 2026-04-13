@@ -1,5 +1,9 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+  ) {
     super(message);
   }
 }
@@ -11,7 +15,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new ApiError(res.status, data.error || "Request failed");
+    const code = typeof data.code === "string" ? data.code : undefined;
+    throw new ApiError(res.status, data.error || "Request failed", code);
   }
   return res.json();
 }

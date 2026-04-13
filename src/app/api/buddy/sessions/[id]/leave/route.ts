@@ -6,6 +6,7 @@ import {
   bumpBuddyRevision,
   reconcileBuddySession,
 } from "@/lib/buddySession";
+import { hostLeaveShouldAbandonSession } from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -50,12 +51,7 @@ export async function POST(_request: Request, context: Params) {
       .where(eq(buddySessions.id, sessionId))
       .limit(1);
 
-    if (
-      p.isHost &&
-      session &&
-      session.state !== "completed" &&
-      session.state !== "abandoned"
-    ) {
+    if (p.isHost && session && hostLeaveShouldAbandonSession(session)) {
       await db
         .update(buddySessions)
         .set({

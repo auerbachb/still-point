@@ -7,6 +7,7 @@ import {
   loadBuddySnapshotContext,
   reconcileBuddySession,
 } from "@/lib/buddySession";
+import { BUDDY_POLICY_CODES } from "@/lib/buddyPolicyCodes";
 import { isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
@@ -36,7 +37,10 @@ export async function GET(_request: Request, context: Params) {
       .limit(1);
 
     if (!membership || membership.leftAt != null) {
-      return NextResponse.json({ error: "Not in this session" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Not in this session", code: BUDDY_POLICY_CODES.NOT_IN_SESSION },
+        { status: 403 },
+      );
     }
 
     await db
