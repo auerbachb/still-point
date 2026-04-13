@@ -52,6 +52,36 @@ export type BoardEntry = {
   totalSessions: number;
 };
 
+export type FriendPublicUser = {
+  id: string;
+  username: string;
+};
+
+export type FriendRequestRow = {
+  id: string;
+  createdAt: string;
+  user: FriendPublicUser;
+};
+
+export type FriendRequestRecord = {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FriendRequestPatchResult = {
+  request: {
+    id: string;
+    status: string;
+    updatedAt: string;
+    fromUserId?: string;
+    toUserId?: string;
+  };
+};
+
 export const api = {
   signup: (data: { email: string; username: string; password: string }) =>
     request<{ user: User }>("/api/auth/signup", { method: "POST", body: JSON.stringify(data) }),
@@ -98,4 +128,32 @@ export const api = {
 
   updateSettings: (data: { isPublic?: boolean }) =>
     request<{ user: User }>("/api/settings", { method: "PATCH", body: JSON.stringify(data) }),
+
+  getFriends: () => request<{ friends: FriendPublicUser[] }>("/api/friends"),
+
+  searchFriends: (q: string) => {
+    const t = q.trim();
+    if (t.length < 2) {
+      return Promise.resolve({ users: [] as FriendPublicUser[] });
+    }
+    return request<{ users: FriendPublicUser[] }>(`/api/friends/search?q=${encodeURIComponent(t)}`);
+  },
+
+  getFriendRequests: () =>
+    request<{ incoming: FriendRequestRow[]; outgoing: FriendRequestRow[] }>("/api/friends/requests"),
+
+  sendFriendRequest: (toUserId: string) =>
+    request<{ request: FriendRequestRecord }>("/api/friends/requests", {
+      method: "POST",
+      body: JSON.stringify({ toUserId }),
+    }),
+
+  updateFriendRequest: (id: string, action: "accept" | "reject" | "cancel") =>
+    request<FriendRequestPatchResult>(`/api/friends/requests/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    }),
+
+  removeFriend: (friendUserId: string) =>
+    request<{ ok: boolean }>(`/api/friends/${friendUserId}`, { method: "DELETE" }),
 };
