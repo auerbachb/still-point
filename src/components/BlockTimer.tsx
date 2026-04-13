@@ -14,6 +14,20 @@ type BlockTimerProps = {
   mindStateLog: Array<{ time: number; state: string }>;
   onElapsedChange?: (elapsed: number) => void;
   soundPrefs?: SoundPrefs;
+  /**
+   * When set, elapsed time is driven by the parent (e.g. server-synced buddy session).
+   * Sounds and block fill still run from this value; local wall-clock interval is disabled.
+   */
+  controlledElapsed?: number;
+  /**
+   * Buddy / server-synced: same 50ms smooth updates as solo, using server timestamps from polls.
+   * When set, takes precedence over `controlledElapsed`.
+   */
+  syncClock?: {
+    startedAt: string;
+    serverNow: string;
+    durationSeconds: number;
+  };
 };
 
 type BlockDef = {
@@ -31,6 +45,8 @@ export function BlockTimer({
   mindStateLog,
   onElapsedChange,
   soundPrefs,
+  controlledElapsed,
+  syncClock,
 }: BlockTimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -42,7 +58,13 @@ export function BlockTimer({
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
   const lastCompletedBlockIndexRef = useRef(-1);
+  const controlledCompleteFiredRef = useRef(false);
+  const skewRef = useRef(0);
+  const syncClockRef = useRef(syncClock);
+  syncClockRef.current = syncClock;
   const isMobile = useIsMobile();
+  const isBuddySync = Boolean(syncClock?.startedAt && syncClock?.serverNow);
+  const isControlled = controlledElapsed !== undefined && !isBuddySync;
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
 
@@ -86,6 +108,13 @@ export function BlockTimer({
   const secondBlocks = blocks.filter(b => b.type === "second");
 
   useEffect(() => {
+    if (!syncClock?.startedAt || !syncClock?.serverNow) return;
+    skewRef.current = new Date(syncClock.serverNow).getTime() - Date.now();
+  }, [syncClock?.startedAt, syncClock?.serverNow]);
+
+  useEffect(() => {
+    if (isControlled || isBuddySync) return;
+
     // Reset or seed refs based on whether this is a fresh session or a resume
     const resumeElapsed = pausedElapsedRef.current;
     const isResume = resumeElapsed > 0 && resumeElapsed < totalSeconds;
@@ -154,7 +183,126 @@ export function BlockTimer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isActive, totalSeconds]);
+  }, [isActive, totalSeconds, isControlled, isBuddySync]);
+
+  useEffect(() => {
+    if (!isBuddySync || !isActive || !syncClock?.startedAt || !syncClock?.serverNow) {
+      return;
+    }
+
+    const duration = totalSeconds;
+    const startedMs = new Date(syncClock.startedAt).getTime();
+    skewRef.current = new Date(syncClock.serverNow).getTime() - Date.now();
+
+    const seed = Math.min(duration, Math.max(0, (Date.now() + skewRef.current - startedMs) / 1000));
+    lastTickSecRef.current = Math.floor(seed);
+    lastCompletedBlockIndexRef.current =
+      useMinuteBlocks && minuteBlockCount > 0
+        ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)
+        : -1;
+    controlledCompleteFiredRef.current = false;
+    setElapsed(seed);
+    pausedElapsedRef.current = seed;
+
+    const id = window.setInterval(() => {
+      const sc = syncClockRef.current;
+      if (!sc?.startedAt) return;
+      const startMs = new Date(sc.startedAt).getTime();
+      const newElapsed = Math.min(
+        duration,
+        Math.max(0, (Date.now() + skewRef.current - startMs) / 1000),
+      );
+
+      if (newElapsed >= duration) {
+        setElapsed(duration);
+        pausedElapsedRef.current = duration;
+        window.clearInterval(id);
+        if (!controlledCompleteFiredRef.current) {
+          controlledCompleteFiredRef.current = true;
+          if (soundPrefsRef.current?.completion) playCompletion();
+          onCompleteRef.current();
+        }
+        return;
+      }
+
+      setElapsed(newElapsed);
+      pausedElapsedRef.current = newElapsed;
+
+      const currentSec = Math.floor(newElapsed);
+      if (soundPrefsRef.current?.tick && currentSec > lastTickSecRef.current) {
+        lastTickSecRef.current = currentSec;
+        playTick();
+      }
+
+      if (useMinuteBlocks && minuteBlockCount > 0) {
+        const completedBlockIndex = Math.min(
+          minuteBlockCount - 1,
+          Math.floor(newElapsed / 60) - 1,
+        );
+        if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
+          lastCompletedBlockIndexRef.current = completedBlockIndex;
+          if (soundPrefsRef.current?.chime) {
+            const blockEnd = (completedBlockIndex + 1) * 60;
+            const chimeCount = Math.floor((duration - blockEnd) / 60);
+            if (chimeCount >= 1) {
+              playChime(chimeCount);
+            }
+          }
+        }
+      }
+    }, 50);
+
+    return () => window.clearInterval(id);
+  }, [isBuddySync, isActive, syncClock?.startedAt, totalSeconds, useMinuteBlocks, minuteBlockCount]);
+
+  useEffect(() => {
+    if (!isControlled) return;
+    const raw = controlledElapsed ?? 0;
+    const newElapsed = Math.min(totalSeconds, Math.max(0, raw));
+
+    if (newElapsed >= totalSeconds) {
+      setElapsed(totalSeconds);
+      pausedElapsedRef.current = totalSeconds;
+      if (!controlledCompleteFiredRef.current) {
+        controlledCompleteFiredRef.current = true;
+        if (soundPrefsRef.current?.completion) playCompletion();
+        onCompleteRef.current();
+      }
+      return;
+    }
+
+    setElapsed(newElapsed);
+    pausedElapsedRef.current = newElapsed;
+
+    const currentSec = Math.floor(newElapsed);
+    if (soundPrefsRef.current?.tick && currentSec > lastTickSecRef.current) {
+      lastTickSecRef.current = currentSec;
+      playTick();
+    }
+
+    if (useMinuteBlocks && minuteBlockCount > 0) {
+      const completedBlockIndex = Math.min(
+        minuteBlockCount - 1,
+        Math.floor(newElapsed / 60) - 1,
+      );
+      if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
+        lastCompletedBlockIndexRef.current = completedBlockIndex;
+        if (soundPrefsRef.current?.chime) {
+          const blockEnd = (completedBlockIndex + 1) * 60;
+          const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
+          if (chimeCount >= 1) {
+            playChime(chimeCount);
+          }
+        }
+      }
+    }
+  }, [
+    isControlled,
+    controlledElapsed,
+    totalSeconds,
+    useMinuteBlocks,
+    minuteBlockCount,
+  ]);
 
   useEffect(() => {
     onElapsedChange?.(elapsed);

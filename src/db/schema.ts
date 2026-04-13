@@ -113,3 +113,53 @@ export const friendshipsRelations = relations(friendships, ({ one }) => ({
   user1: one(users, { fields: [friendships.user1Id], references: [users.id] }),
   user2: one(users, { fields: [friendships.user2Id], references: [users.id] }),
 }));
+
+/** waiting | ready_check | active | completed | abandoned */
+export const buddySessions = pgTable("buddy_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  shareToken: varchar("share_token", { length: 48 }).unique().notNull(),
+  hostUserId: uuid("host_user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  state: varchar("state", { length: 20 }).notNull().default("waiting"),
+  durationSeconds: integer("duration_seconds").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  revision: integer("revision").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  stateCheck: check(
+    "buddy_sessions_state_allowed",
+    sql`${table.state} in ('waiting', 'ready_check', 'active', 'completed', 'abandoned')`,
+  ),
+  hostIdx: index("idx_buddy_sessions_host").on(table.hostUserId),
+}));
+
+export const buddySessionParticipants = pgTable("buddy_session_participants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "cascade" }).notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  isHost: boolean("is_host").notNull().default(false),
+  ready: boolean("ready").notNull().default(false),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  leftAt: timestamp("left_at", { withTimezone: true }),
+  /** #119: participant finished their sit; journaling attaches here. */
+  participantCompletedAt: timestamp("participant_completed_at", { withTimezone: true }),
+}, (table) => ({
+  sessionUserUnique: uniqueIndex("buddy_session_participants_session_user").on(
+    table.buddySessionId,
+    table.userId,
+  ),
+}));
+
+export const buddySessionsRelations = relations(buddySessions, ({ one, many }) => ({
+  host: one(users, { fields: [buddySessions.hostUserId], references: [users.id] }),
+  participants: many(buddySessionParticipants),
+}));
+
+export const buddySessionParticipantsRelations = relations(buddySessionParticipants, ({ one }) => ({
+  session: one(buddySessions, {
+    fields: [buddySessionParticipants.buddySessionId],
+    references: [buddySessions.id],
+  }),
+  user: one(users, { fields: [buddySessionParticipants.userId], references: [users.id] }),
+}));

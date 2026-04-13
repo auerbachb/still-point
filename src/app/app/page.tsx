@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
@@ -11,9 +11,21 @@ import { ThoughtJournal } from "@/components/ThoughtJournal";
 import { PublicBoard } from "@/components/PublicBoard";
 import { SettingsView } from "@/components/SettingsView";
 import { FriendsView } from "@/components/FriendsView";
+import { BuddySessionHub } from "@/components/BuddySessionHub";
+import { BuddySessionRoom } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { api } from "@/lib/api";
 
-type View = "home" | "session" | "complete" | "history" | "journal" | "board" | "friends" | "settings";
+type View =
+  | "home"
+  | "session"
+  | "buddy"
+  | "complete"
+  | "history"
+  | "journal"
+  | "board"
+  | "friends"
+  | "settings";
 
 type CompletionData = {
   sessionId: string | null;
@@ -39,6 +51,8 @@ export default function StillPoint() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authRetryKey, setAuthRetryKey] = useState(0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
+  const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
+  const buddyInviteInFlight = useRef(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -88,12 +102,40 @@ export default function StillPoint() {
     };
   }, [authRetryKey]);
 
+  useEffect(() => {
+    if (!user || !authChecked || buddyInviteInFlight.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("buddy")?.trim();
+    if (!raw) return;
+
+    buddyInviteInFlight.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { sessionId } = await api.joinBuddySession(raw);
+        if (cancelled) return;
+        setBuddySessionId(sessionId);
+        setView("buddy");
+        window.history.replaceState({}, "", "/app");
+      } catch {
+        buddyInviteInFlight.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, authChecked]);
+
   const handleLogin = (userData: User) => {
     setUser(userData);
     setView("home");
   };
 
   const handleLogout = () => {
+    buddyInviteInFlight.current = false;
+    setBuddySessionId(null);
     setUser(null);
     setView("home");
   };
@@ -101,6 +143,11 @@ export default function StillPoint() {
   const handleBegin = () => {
     setView("session");
   };
+
+  const handleBuddyExit = useCallback(() => {
+    setBuddySessionId(null);
+    setView("home");
+  }, []);
 
   const handleSessionComplete = useCallback(async (data: {
     dayNumber: number;
@@ -299,7 +346,10 @@ export default function StillPoint() {
     <div style={{
       minHeight: "100%",
       display: "grid",
-      gridTemplateRows: view === "session" ? "1fr" : "auto 1fr auto",
+      gridTemplateRows:
+        view === "session" || (view === "buddy" && buddySessionId)
+          ? "1fr"
+          : "auto 1fr auto",
       alignItems: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
@@ -307,7 +357,7 @@ export default function StillPoint() {
         : "var(--s4) var(--s4)",
     }}>
       {/* Nav */}
-      {view !== "session" && (
+      {view !== "session" && !(view === "buddy" && buddySessionId) && (
         <div style={isMobile ? {
           position: "fixed", bottom: 0, left: 0, right: 0,
           display: "flex", justifyContent: "space-around",
@@ -355,7 +405,7 @@ export default function StillPoint() {
       )}
 
       {/* Welcome header */}
-      {view !== "session" && (
+      {view !== "session" && !(view === "buddy" && buddySessionId) && (
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "12px", color: "var(--fg-3)",
@@ -371,7 +421,29 @@ export default function StillPoint() {
 
       {/* Views */}
       {view === "home" && (
-        <HomeView currentDay={user.currentDay} onBegin={handleBegin} />
+        <HomeView
+          currentDay={user.currentDay}
+          onBegin={handleBegin}
+          onBuddy={() => {
+            setBuddySessionId(null);
+            setView("buddy");
+          }}
+        />
+      )}
+
+      {view === "buddy" && !buddySessionId && (
+        <BuddySessionHub
+          onEnterSession={(id) => setBuddySessionId(id)}
+          onBack={handleBuddyExit}
+        />
+      )}
+
+      {view === "buddy" && buddySessionId && (
+        <BuddySessionRoom
+          sessionId={buddySessionId}
+          currentUserId={user.id}
+          onExit={handleBuddyExit}
+        />
       )}
 
       {view === "session" && (
