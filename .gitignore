@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Xcode / Swift — never commit local build products
+ios/build/
+ios/StillPointShared/build/

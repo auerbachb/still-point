@@ -149,7 +149,6 @@ export const buddySessionParticipants = pgTable("buddy_session_participants", {
     table.buddySessionId,
     table.userId,
   ),
-  sessionIdx: index("idx_buddy_participants_session").on(table.buddySessionId),
 }));
 
 export const buddySessionsRelations = relations(buddySessions, ({ one, many }) => ({

@@ -29,5 +29,3 @@ CREATE TABLE IF NOT EXISTS buddy_session_participants (
   participant_completed_at timestamptz,
   CONSTRAINT buddy_session_participants_session_user UNIQUE (buddy_session_id, user_id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_buddy_participants_session ON buddy_session_participants(buddy_session_id);

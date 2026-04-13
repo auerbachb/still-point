@@ -24,7 +24,7 @@ Both return the same markdown content. Use whichever method your tools support.
 
 The docs index lists every available page with its URL and a short description:
 
-```
+```text
 https://neon.com/docs/llms.txt
 ```
 
