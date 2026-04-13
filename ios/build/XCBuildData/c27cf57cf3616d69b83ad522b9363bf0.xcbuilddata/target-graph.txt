@@ -1,0 +1,6 @@
+Target dependency graph (3 targets)
+Target 'StillPoint' in project 'StillPoint'
+➜ Explicit dependency on target 'StillPointShared' in project 'StillPointShared'
+Target 'StillPointShared' in project 'StillPointShared'
+➜ Explicit dependency on target 'StillPointShared' in project 'StillPointShared'
+Target 'StillPointShared' in project 'StillPointShared' (no dependencies)

@@ -1,0 +1,229 @@
+{
+  "" : {
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPoint-primary.dia",
+    "emit-module-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPoint-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPoint-primary-emit-module.dia",
+    "pch" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPoint-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPoint-primary.swiftdeps"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Components/BlockGridView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BlockGridView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Components/MindStateBarView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MindStateBarView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Components/ThoughtCaptureView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtCaptureView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Navigation/MainTabView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/MainTabView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/StillPointApp.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/StillPointApp~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Theme/DesignTokens.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/DesignTokens~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/AppViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AppViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/AuthViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/BoardViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/BoardViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/HistoryViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/SessionViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/ViewModels/ThoughtJournalViewModel.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalViewModel~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/AuthView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/AuthView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/CompletionView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/CompletionView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/HistoryView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HistoryView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/HomeView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/HomeView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/PublicBoardView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/PublicBoardView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/RootView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/RootView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/SessionView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SessionView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/SettingsView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointApp/Views/ThoughtJournalView.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/ThoughtJournalView~partial.swiftmodule"
+  },
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/build/StillPoint.build/Debug-iphonesimulator/StillPoint.build/Objects-normal/x86_64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}
