@@ -1,0 +1,12 @@
+{
+  "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/Sources/StillPointShared/APIClient.swift" : {
+    "abi-baseline-json" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared.abi.json",
+    "const-values" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared-primary.swiftconstvalues",
+    "dependencies" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared-primary.d",
+    "diagnostics" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared-primary.dia",
+    "objc-header" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared-Swift.h",
+    "swiftdoc" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared.swiftdoc",
+    "swiftmodule" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared.swiftmodule",
+    "swiftsourceinfo" : "/Users/brettonauerbach/Documents/Develop/still-point/ios/StillPointShared/build/StillPointShared.build/Release-iphonesimulator/StillPointShared.build/Objects-normal/x86_64/StillPointShared.swiftsourceinfo"
+  }
+}

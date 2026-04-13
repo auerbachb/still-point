@@ -1,0 +1,4 @@
+module StillPointShared {
+header "StillPointShared-Swift.h"
+export *
+}
