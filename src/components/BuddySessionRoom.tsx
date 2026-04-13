@@ -3,12 +3,9 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
-
-function formatSeconds(total: number): string {
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
+import { BlockTimer } from "./BlockTimer";
+import { ThoughtCapture } from "./ThoughtCapture";
+import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 
 type BuddySessionRoomProps = {
   sessionId: string;
@@ -20,9 +17,18 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   const [snap, setSnap] = useState<BuddySnapshot | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const lastRevision = useRef(-1);
-  const [tick, setTick] = useState(0);
-  const snapRef = useRef<BuddySnapshot | null>(null);
-  snapRef.current = snap;
+  const [mindState, setMindState] = useState("clear");
+  const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
+  const [showThoughtInput, setShowThoughtInput] = useState(false);
+  const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>(
+    [],
+  );
+  const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
+  const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const elapsedRef = useRef(0);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerAnchorRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
     try {
@@ -49,23 +55,71 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   }, [poll]);
 
   useEffect(() => {
-    if (snap?.state !== "active") return;
-    const id = window.setInterval(() => setTick((t) => t + 1), 500);
-    return () => window.clearInterval(id);
-  }, [snap?.state]);
+    if (snap?.state !== "active" || !snap.startedAt) return;
+    const anchor = `${sessionId}:${snap.startedAt}`;
+    if (timerAnchorRef.current === anchor) return;
+    timerAnchorRef.current = anchor;
+    setMindState("clear");
+    setMindStateLog([]);
+    setShowThoughtInput(false);
+    setSessionThoughts([]);
+    setSessionThoughtCount(0);
+  }, [sessionId, snap?.state, snap?.startedAt]);
 
-  const remainingLive =
-    snap?.state === "active" && snap.startedAt
-      ? (() => {
-          void tick;
-          const s = snapRef.current;
-          if (!s?.startedAt) return 0;
-          const skew = new Date(s.serverNow).getTime() - Date.now();
-          const end =
-            new Date(s.startedAt).getTime() + s.durationSeconds * 1000;
-          return Math.max(0, Math.ceil((end - (Date.now() + skew)) / 1000));
-        })()
-      : snap?.remainingSeconds ?? null;
+  useEffect(() => {
+    const resetTimer = () => {
+      setControlsVisible(true);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => setControlsVisible(false), 1000);
+    };
+    resetTimer();
+    window.addEventListener("mousemove", resetTimer);
+    window.addEventListener("mousedown", resetTimer);
+    window.addEventListener("keydown", resetTimer);
+    window.addEventListener("touchstart", resetTimer, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", resetTimer);
+      window.removeEventListener("mousedown", resetTimer);
+      window.removeEventListener("keydown", resetTimer);
+      window.removeEventListener("touchstart", resetTimer);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
+  const handleElapsedChange = useCallback((elapsed: number) => {
+    elapsedRef.current = elapsed;
+  }, []);
+
+  const handleBuddyTimerComplete = useCallback(() => {
+    void poll();
+  }, [poll]);
+
+  const handleThinkingToggle = () => {
+    const now = elapsedRef.current;
+    if (mindState === "clear") {
+      setMindState("thinking");
+      setMindStateLog((prev) => [...prev, { time: now, state: "thinking" }]);
+      setSessionThoughtCount((prev) => prev + 1);
+      setShowThoughtInput(true);
+    } else {
+      setMindState("clear");
+      setMindStateLog((prev) => [...prev, { time: now, state: "clear" }]);
+      setShowThoughtInput(false);
+    }
+  };
+
+  const handleSaveThought = (text: string) => {
+    setSessionThoughts((prev) => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
+    setMindState("clear");
+    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
+    setShowThoughtInput(false);
+  };
+
+  const handleSkipThought = () => {
+    setMindState("clear");
+    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
+    setShowThoughtInput(false);
+  };
 
   const setReady = async (ready: boolean) => {
     try {
@@ -169,11 +223,13 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   const inLobby = snap.state === "waiting" || snap.state === "ready_check";
   const activeInRoom = snap.participants.filter((p) => p.leftAt == null);
 
+  const lobbyReady = snap.state === "ready_check";
+
   return (
     <div
       style={{
         width: "100%",
-        maxWidth: "440px",
+        maxWidth: "560px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
@@ -202,19 +258,31 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
 
       {inLobby && (
         <>
-          <p
+          <div
+            role="status"
             style={{
               textAlign: "center",
               margin: 0,
-              fontSize: "13px",
-              color: "var(--fg-2)",
+              padding: "22px 24px",
+              borderRadius: "16px",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "clamp(15px, 3.8vw, 18px)",
+              lineHeight: 1.45,
+              letterSpacing: "0.04em",
+              border: lobbyReady
+                ? "2px solid var(--accent-green)"
+                : "1px solid var(--border-2)",
+              background: lobbyReady
+                ? "var(--accent-green-bg-subtle)"
+                : "var(--surface-1)",
+              color: lobbyReady ? "var(--accent-green)" : "var(--fg-2)",
+              boxSizing: "border-box",
             }}
           >
-            {snap.state === "ready_check"
+            {lobbyReady
               ? "Everyone is ready — host can start."
               : "Waiting for everyone to join and mark ready."}
-          </p>
+          </div>
 
           <ul
             style={{
@@ -222,7 +290,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               margin: 0,
               padding: 0,
               display: "grid",
-              gap: "var(--s2)",
+              gap: "var(--s3)",
             }}
           >
             {activeInRoom.map((p) => (
@@ -232,19 +300,52 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "12px 14px",
+                  gap: "var(--s3)",
+                  padding: "22px 24px",
+                  minHeight: "72px",
                   border: "1px solid var(--border-2)",
-                  borderRadius: "8px",
+                  borderRadius: "16px",
                   background: "var(--surface-1)",
+                  boxSizing: "border-box",
                 }}
               >
-                <span style={{ color: "var(--fg)" }}>
+                <span
+                  style={{
+                    color: "var(--fg)",
+                    fontSize: "clamp(18px, 4.5vw, 22px)",
+                    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  }}
+                >
                   {p.username}
                   {p.isHost ? " · host" : ""}
                 </span>
-                <span style={{ fontSize: "12px", color: "var(--fg-3)" }}>
-                  {p.connected ? "● online" : "○ away"}
-                  {p.ready ? " · ready" : ""}
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    fontSize: "clamp(14px, 3.5vw, 17px)",
+                    color: "var(--fg-2)",
+                    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      borderRadius: "50%",
+                      background: p.connected ? "var(--accent-green)" : "var(--fg-4)",
+                      boxShadow: p.connected
+                        ? "0 0 0 3px var(--accent-green-border-subtle)"
+                        : "none",
+                    }}
+                  />
+                  <span>
+                    {p.connected ? "online" : "away"}
+                    {p.ready ? " · ready" : ""}
+                  </span>
                 </span>
               </li>
             ))}
@@ -255,16 +356,32 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "var(--s2)",
+                gap: "20px",
                 cursor: "pointer",
-                fontSize: "15px",
+                fontSize: "clamp(19px, 4.5vw, 24px)",
                 color: "var(--fg)",
+                padding: "20px 24px",
+                minHeight: "76px",
+                border: `2px solid ${me.ready ? "var(--accent-green)" : "var(--border-2)"}`,
+                borderRadius: "16px",
+                background: me.ready ? "var(--accent-green-bg-faint)" : "var(--surface-1)",
+                boxSizing: "border-box",
               }}
             >
               <input
                 type="checkbox"
                 checked={me.ready}
                 onChange={(e) => setReady(e.target.checked)}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  minWidth: "40px",
+                  minHeight: "40px",
+                  margin: 0,
+                  cursor: "pointer",
+                  accentColor: "var(--accent-green)",
+                  flexShrink: 0,
+                }}
               />
               I&apos;m ready
             </label>
@@ -296,37 +413,41 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
         </>
       )}
 
-      {snap.state === "active" && remainingLive != null && (
+      {snap.state === "active" && snap.startedAt && (
         <>
-          <div
-            style={{
-              textAlign: "center",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "min(64px, 14vw)",
-              fontWeight: 200,
-              color: "var(--fg)",
-              lineHeight: 1.1,
-              marginTop: "var(--s2)",
+          <BlockTimer
+            key={`${sessionId}-${snap.startedAt}`}
+            totalSeconds={snap.durationSeconds}
+            syncClock={{
+              startedAt: snap.startedAt,
+              serverNow: snap.serverNow,
+              durationSeconds: snap.durationSeconds,
             }}
-          >
-            {formatSeconds(remainingLive)}
-          </div>
+            isActive
+            mindState={mindState}
+            mindStateLog={mindStateLog}
+            onElapsedChange={handleElapsedChange}
+            soundPrefs={soundPrefs}
+            onComplete={handleBuddyTimerComplete}
+          />
+
           <p
             style={{
               textAlign: "center",
-              margin: 0,
-              fontSize: "12px",
+              margin: "-12px 0 0",
+              fontSize: "11px",
               color: "var(--fg-3)",
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              letterSpacing: "0.08em",
             }}
           >
-            {snap.durationSeconds}s sit · synced from server
+            {snap.durationSeconds}s sit · timer synced from server
           </p>
 
           <ul
             style={{
               listStyle: "none",
-              margin: 0,
+              margin: "var(--s3) 0 0",
               padding: 0,
               display: "grid",
               gap: "var(--s1)",
@@ -343,20 +464,154 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             ))}
           </ul>
 
+          <div
+            style={{
+              opacity: controlsVisible ? 1 : 0,
+              transition: "opacity 0.5s ease",
+              pointerEvents: controlsVisible ? "auto" : "none",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginTop: "24px",
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleThinkingToggle}
+                style={{
+                  background:
+                    mindState === "thinking"
+                      ? "var(--accent-amber-bg)"
+                      : "var(--accent-green-bg-subtle)",
+                  border: `1px solid ${
+                    mindState === "thinking"
+                      ? "var(--accent-amber-border)"
+                      : "var(--accent-green-border)"
+                  }`,
+                  color:
+                    mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "12px",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  padding: "12px 28px",
+                  borderRadius: "24px",
+                  cursor: "pointer",
+                  transition: "all 0.3s",
+                  minWidth: "160px",
+                }}
+              >
+                {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
+              </button>
+              {sessionThoughtCount > 0 && (
+                <div
+                  style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    color: "var(--accent-amber-border)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  💭 {sessionThoughtCount}
+                </div>
+              )}
+            </div>
+
+            {showThoughtInput && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                }}
+              >
+                <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "16px",
+                marginTop: "24px",
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "11px",
+                letterSpacing: "0.1em",
+                flexWrap: "wrap",
+              }}
+            >
+              {(
+                [
+                  ["tick", "tick"],
+                  ["chime", "chime"],
+                  ["completion", "end"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => {
+                    const next = { ...soundPrefs, [key]: !soundPrefs[key] };
+                    setSoundPrefs(next);
+                    saveSoundPrefs(next);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
+                    transition: "color 0.3s",
+                    padding: "4px 8px",
+                  }}
+                >
+                  {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <p
             style={{
               fontSize: "12px",
               color: "var(--fg-3)",
               textAlign: "center",
-              margin: 0,
+              margin: "var(--s4) 0 0",
             }}
           >
             {snap.isHost
               ? "If you leave, the session ends for everyone."
               : "If you leave, your timer view stops but others continue."}
           </p>
+          {sessionThoughts.length > 0 && (
+            <p
+              style={{
+                fontSize: "11px",
+                color: "var(--fg-4)",
+                textAlign: "center",
+                margin: "var(--s2) 0 0",
+                lineHeight: 1.45,
+              }}
+            >
+              {sessionThoughts.length} thought{sessionThoughts.length === 1 ? "" : "s"} captured on
+              this device (#119 will sync to your journal).
+            </p>
+          )}
 
-          <button type="button" onClick={leave} style={btnSecondary}>
+          <button type="button" onClick={leave} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
             Leave
           </button>
         </>
