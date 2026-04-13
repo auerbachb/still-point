@@ -12,7 +12,7 @@ import {
   check,
   primaryKey,
 } from "drizzle-orm/pg-core";
-import { relations, eq, sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -70,7 +70,7 @@ export const friendRequests = pgTable("friend_requests", {
     sql`${table.status} in ('pending', 'accepted', 'rejected', 'cancelled')`,
   ),
   pendingPairUnique: uniqueIndex("friend_requests_pending_from_to").on(table.fromUserId, table.toUserId).where(
-    eq(table.status, "pending"),
+    sql`${table.status} = 'pending'`,
   ),
   fromIdx: index("idx_friend_requests_from").on(table.fromUserId),
   toIdx: index("idx_friend_requests_to").on(table.toUserId),
