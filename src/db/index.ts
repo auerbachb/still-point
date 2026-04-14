@@ -18,7 +18,12 @@ function getPool(): Pool {
     throw new Error("POSTGRES_URL is not set");
   }
   if (!globalForDb.__drizzlePool) {
-    globalForDb.__drizzlePool = new Pool({ connectionString: url });
+    globalForDb.__drizzlePool = new Pool({
+      connectionString: url,
+      max: 5,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
   }
   return globalForDb.__drizzlePool;
 }
