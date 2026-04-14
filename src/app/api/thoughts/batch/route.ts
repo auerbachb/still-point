@@ -53,37 +53,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ thoughts: [] });
     }
 
-    const hasCompletionNote = normalized.some((t) => t.timeInSession === -1);
-    if (hasCompletionNote) {
-      await db
-        .delete(thoughts)
-        .where(
-          and(
-            eq(thoughts.sessionId, sessionId),
-            eq(thoughts.userId, auth.userId),
-            eq(thoughts.timeInSession, -1),
-          ),
-        );
-    }
+    const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1);
+    const rowsToInsert = [
+      ...normalized.filter((t) => t.timeInSession !== -1),
+      ...(completionNote ? [completionNote] : []),
+    ];
 
-    const inserted = await db
-      .insert(thoughts)
-      .values(
-        normalized.map((t) => ({
-          userId: auth.userId,
-          sessionId,
-          dayNumber,
-          timeInSession: t.timeInSession,
-          text: t.text,
-        })),
-      )
-      .returning({
-        id: thoughts.id,
-        sessionId: thoughts.sessionId,
-        dayNumber: thoughts.dayNumber,
-        timeInSession: thoughts.timeInSession,
-        text: thoughts.text,
-      });
+    const inserted = await db.transaction(async (tx) => {
+      if (completionNote) {
+        await tx
+          .delete(thoughts)
+          .where(
+            and(
+              eq(thoughts.sessionId, sessionId),
+              eq(thoughts.userId, auth.userId),
+              eq(thoughts.timeInSession, -1),
+            ),
+          );
+      }
+
+      if (rowsToInsert.length === 0) {
+        return [];
+      }
+
+      return tx
+        .insert(thoughts)
+        .values(
+          rowsToInsert.map((t) => ({
+            userId: auth.userId,
+            sessionId,
+            dayNumber,
+            timeInSession: t.timeInSession,
+            text: t.text,
+          })),
+        )
+        .returning({
+          id: thoughts.id,
+          sessionId: thoughts.sessionId,
+          dayNumber: thoughts.dayNumber,
+          timeInSession: thoughts.timeInSession,
+          text: thoughts.text,
+        });
+    });
 
     return NextResponse.json({ thoughts: inserted });
   } catch (error) {

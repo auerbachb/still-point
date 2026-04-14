@@ -17,11 +17,13 @@ function loadEnvFile(relPath: string): void {
       key = key.slice(7).trim();
     }
     let val = trimmed.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
+    const quote = val[0];
+    if (quote === '"' || quote === "'") {
+      const close = val.lastIndexOf(quote);
+      if (close <= 0) continue;
+      val = val.slice(1, close);
+    } else {
+      val = val.replace(/\s+#.*$/, "").trim();
     }
     if (process.env[key] === undefined) {
       process.env[key] = val;
