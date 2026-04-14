@@ -9,13 +9,14 @@ import {
   DailyAudio,
   DailyProvider,
   DailyVideo,
+  useCallObject,
   useDaily,
   useDailyError,
   useMeetingState,
   useParticipantIds,
 } from "@daily-co/daily-react";
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 export type BuddyVideoProps = {
   /** Full Daily room URL from the REST API (`createRoom`). */
@@ -54,7 +55,7 @@ const grid: CSSProperties = {
 };
 
 function ParticipantTiles() {
-  const ids = useParticipantIds({ filter: useCallback(() => true, []) });
+  const ids = useParticipantIds();
   return (
     <div style={grid}>
       {ids.map((sessionId) => (
@@ -206,8 +207,9 @@ function BuddyVideoInner({
 }
 
 export function BuddyVideo(props: BuddyVideoProps) {
+  const callObject = useCallObject({});
   return (
-    <DailyProvider>
+    <DailyProvider callObject={callObject}>
       <BuddyVideoInner {...props} />
     </DailyProvider>
   );

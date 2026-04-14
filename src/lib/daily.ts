@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Daily.co REST helpers for buddy video rooms (#105). Server-only usage: call from API routes
  * or server actions so `DAILY_API_KEY` never reaches the client. See `.env.example`.
@@ -120,10 +122,22 @@ export async function createRoom(options: CreateDailyRoomOptions = {}): Promise<
   };
 }
 
+export type DeleteDailyRoomOptions = {
+  /**
+   * When true (default), HTTP 404 is treated as success so teardown is idempotent
+   * if the room was already deleted.
+   */
+  ignoreMissing?: boolean;
+};
+
 /**
  * Deletes a Daily room by name. Uses `DAILY_API_KEY` from the environment only.
  */
-export async function deleteRoom(roomName: string): Promise<void> {
+export async function deleteRoom(
+  roomName: string,
+  options: DeleteDailyRoomOptions = {},
+): Promise<void> {
+  const { ignoreMissing = true } = options;
   const trimmed = roomName.trim();
   if (!trimmed) {
     throw new Error("deleteRoom: room name is required");
@@ -133,6 +147,9 @@ export async function deleteRoom(roomName: string): Promise<void> {
   const res = await dailyFetch(path, { method: "DELETE" });
 
   if (!res.ok) {
+    if (ignoreMissing && res.status === 404) {
+      return;
+    }
     const errBody = await parseDailyErrorBody(res);
     const message = errorMessageFromBody(errBody, `Daily delete room failed (${res.status})`);
     throw new DailyApiError(message, res.status, errBody);
