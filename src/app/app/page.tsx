@@ -14,7 +14,7 @@ import { FriendsView } from "@/components/FriendsView";
 import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 type View =
   | "home"
@@ -52,6 +52,7 @@ export default function StillPoint() {
   const [authRetryKey, setAuthRetryKey] = useState(0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
+  const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
   const isMobile = useIsMobile();
 
@@ -115,11 +116,18 @@ export default function StillPoint() {
       try {
         const { sessionId } = await api.joinBuddySession(raw);
         if (cancelled) return;
+        setBuddyInviteError(null);
         setBuddySessionId(sessionId);
         setView("buddy");
         window.history.replaceState({}, "", "/app");
-      } catch {
-        buddyInviteInFlight.current = false;
+      } catch (e) {
+        if (!cancelled) {
+          buddyInviteInFlight.current = false;
+          setBuddyInviteError(
+            e instanceof ApiError ? e.message : "Could not open that buddy invite.",
+          );
+          window.history.replaceState({}, "", "/app");
+        }
       }
     })();
 
@@ -146,6 +154,7 @@ export default function StillPoint() {
 
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
+    setBuddyInviteError(null);
     setView("home");
   }, []);
 
@@ -436,6 +445,48 @@ export default function StillPoint() {
         </div>
       )}
 
+      {buddyInviteError && view !== "session" && (
+        <div
+          role="alert"
+          style={{
+            maxWidth: "480px",
+            width: "100%",
+            margin: "0 auto var(--s3)",
+            padding: "12px 16px",
+            borderRadius: "10px",
+            border: "1px solid var(--border-2)",
+            background: "var(--surface-1)",
+            color: "var(--fg-2)",
+            fontSize: "14px",
+            lineHeight: 1.45,
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--s2)",
+            alignItems: "stretch",
+          }}
+        >
+          <span>{buddyInviteError}</span>
+          <button
+            type="button"
+            onClick={() => setBuddyInviteError(null)}
+            style={{
+              alignSelf: "flex-end",
+              border: "none",
+              background: "transparent",
+              color: "var(--fg-3)",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              textDecoration: "underline",
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Views */}
       {view === "home" && (
         <HomeView
@@ -443,6 +494,7 @@ export default function StillPoint() {
           onBegin={handleBegin}
           onBuddy={() => {
             setBuddySessionId(null);
+            setBuddyInviteError(null);
             setView("buddy");
           }}
         />

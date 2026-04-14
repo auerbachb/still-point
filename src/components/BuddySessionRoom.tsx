@@ -4,7 +4,9 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
 import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { BlockTimer } from "./BlockTimer";
+import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 
@@ -82,6 +84,7 @@ export function BuddySessionRoom({
   onExit,
   onPersonalRecordComplete,
 }: BuddySessionRoomProps) {
+  const isMobile = useIsMobile();
   const [snap, setSnap] = useState<BuddySnapshot | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [pollStopped, setPollStopped] = useState(false);
@@ -401,11 +404,16 @@ export function BuddySessionRoom({
 
   const lobbyReady = snap.state === "ready_check";
 
+  const shellMaxWidth =
+    snap.state === "active" && !isMobile
+      ? "min(1120px, 100%)"
+      : "560px";
+
   return (
     <div
       style={{
         width: "100%",
-        maxWidth: "560px",
+        maxWidth: shellMaxWidth,
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
@@ -631,231 +639,309 @@ export function BuddySessionRoom({
 
       {snap.state === "active" && snap.startedAt && (
         <>
-          <BlockTimer
-            key={`${sessionId}-${snap.startedAt}`}
-            totalSeconds={snap.durationSeconds}
-            syncClock={{
-              startedAt: snap.startedAt,
-              serverNow: snap.serverNow,
-              durationSeconds: snap.durationSeconds,
-            }}
-            isActive
-            mindState={mindState}
-            mindStateLog={mindStateLog}
-            onElapsedChange={handleElapsedChange}
-            soundPrefs={soundPrefs}
-            onComplete={handleBuddyTimerComplete}
-          />
-
-          <p
-            style={{
-              textAlign: "center",
-              margin: "-12px 0 0",
-              fontSize: "11px",
-              color: "var(--fg-3)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              letterSpacing: "0.08em",
-            }}
-          >
-            {snap.durationSeconds}s sit · timer synced from server
-          </p>
-
-          <ul
-            style={{
-              listStyle: "none",
-              margin: "var(--s3) 0 0",
-              padding: 0,
-              display: "grid",
-              gap: "var(--s1)",
-            }}
-          >
-            {activeInRoom.map((p) => (
-              <li
-                key={p.userId}
-                style={{ fontSize: "13px", color: "var(--fg-2)", textAlign: "center" }}
-              >
-                {p.username}
-                {p.connected ? "" : " (away)"}
-              </li>
-            ))}
-          </ul>
-
           <div
-            style={{
-              opacity: controlsVisible ? 1 : 0,
-              transition: "opacity 0.5s ease",
-              pointerEvents: controlsVisible ? "auto" : "none",
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
+            style={
+              isMobile
+                ? {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--s4)",
+                    width: "100%",
+                  }
+                : {
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, min(36vw, 380px))",
+                    gap: "var(--s4)",
+                    alignItems: "start",
+                    width: "100%",
+                  }
+            }
           >
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: "16px",
-                marginTop: "24px",
-                justifyContent: "center",
-                flexWrap: "wrap",
+                flexDirection: "column",
+                gap: "var(--s4)",
+                minWidth: 0,
+                order: isMobile ? 1 : undefined,
               }}
             >
-              <button
-                type="button"
-                onClick={handleThinkingToggle}
-                title="Mind-state and thoughts stay on this device; others are not notified."
+              <BlockTimer
+                key={`${sessionId}-${snap.startedAt}`}
+                totalSeconds={snap.durationSeconds}
+                syncClock={{
+                  startedAt: snap.startedAt,
+                  serverNow: snap.serverNow,
+                  durationSeconds: snap.durationSeconds,
+                }}
+                isActive
+                mindState={mindState}
+                mindStateLog={mindStateLog}
+                onElapsedChange={handleElapsedChange}
+                soundPrefs={soundPrefs}
+                onComplete={handleBuddyTimerComplete}
+              />
+
+              <p
                 style={{
-                  background:
-                    mindState === "thinking"
-                      ? "var(--accent-amber-bg)"
-                      : "var(--accent-green-bg-subtle)",
-                  border: `1px solid ${
-                    mindState === "thinking"
-                      ? "var(--accent-amber-border)"
-                      : "var(--accent-green-border)"
-                  }`,
-                  color:
-                    mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                  textAlign: "center",
+                  margin: "-12px 0 0",
+                  fontSize: "11px",
+                  color: "var(--fg-3)",
                   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                  fontSize: "12px",
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  padding: "12px 28px",
-                  borderRadius: "24px",
-                  cursor: "pointer",
-                  transition: "all 0.3s",
-                  minWidth: "160px",
+                  letterSpacing: "0.08em",
                 }}
               >
-                {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
-              </button>
-              {sessionThoughtCount > 0 && (
-                <div
-                  style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px",
-                    color: "var(--accent-amber-border)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  💭 {sessionThoughtCount}
-                </div>
-              )}
+                {snap.durationSeconds}s sit · timer synced from server
+              </p>
             </div>
 
-            {showThoughtInput && (
-              <div
-                style={{
-                  marginTop: "20px",
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                }}
-              >
-                <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
-              </div>
-            )}
+            <div
+              style={{
+                width: "100%",
+                order: isMobile ? 2 : undefined,
+                ...(isMobile
+                  ? {}
+                  : { position: "sticky", top: "var(--s4)", alignSelf: "start" }),
+              }}
+            >
+              {snap.dailyRoomUrl ? (
+                <BuddyVideo
+                  roomUrl={snap.dailyRoomUrl}
+                  displayName={me?.username ?? "Participant"}
+                />
+              ) : (
+                <p
+                  role="status"
+                  style={{
+                    margin: 0,
+                    padding: "var(--s4)",
+                    textAlign: "center",
+                    fontSize: "13px",
+                    color: "var(--fg-2)",
+                    lineHeight: 1.5,
+                    borderRadius: "12px",
+                    border: "1px solid var(--border-2)",
+                    background: "var(--surface-1)",
+                  }}
+                >
+                  Video is not available for this session (server did not return a room link).
+                </p>
+              )}
+            </div>
 
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
-                gap: "8px",
-                marginTop: "24px",
+                gap: "var(--s4)",
+                minWidth: 0,
+                order: isMobile ? 3 : undefined,
+                gridColumn: isMobile ? undefined : "1 / -1",
               }}
             >
-              <p
+              <ul
                 style={{
+                  listStyle: "none",
                   margin: 0,
-                  fontSize: "11px",
-                  color: "var(--fg-4)",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                  letterSpacing: "0.06em",
-                  textAlign: "center",
+                  padding: 0,
+                  display: "grid",
+                  gap: "var(--s1)",
                 }}
               >
-                Sounds are only on your device — they do not affect anyone else.
-              </p>
+                {activeInRoom.map((p) => (
+                  <li
+                    key={p.userId}
+                    style={{ fontSize: "13px", color: "var(--fg-2)", textAlign: "center" }}
+                  >
+                    {p.username}
+                    {p.connected ? "" : " (away)"}
+                  </li>
+                ))}
+              </ul>
+
               <div
                 style={{
+                  opacity: controlsVisible ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                  pointerEvents: controlsVisible ? "auto" : "none",
+                  width: "100%",
                   display: "flex",
-                  justifyContent: "center",
-                  gap: "16px",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                  fontSize: "11px",
-                  letterSpacing: "0.1em",
-                  flexWrap: "wrap",
+                  flexDirection: "column",
+                  alignItems: "center",
                 }}
               >
-                {(
-                  [
-                    ["tick", "tick"],
-                    ["chime", "chime"],
-                    ["completion", "end"],
-                  ] as const
-                ).map(([key, label]) => (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                    marginTop: "8px",
+                    justifyContent: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <button
                     type="button"
-                    key={key}
-                    aria-pressed={soundPrefs[key]}
-                    aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
-                    title="Only you hear this — does not change audio for others"
-                    onClick={() => {
-                      const next = { ...soundPrefs, [key]: !soundPrefs[key] };
-                      setSoundPrefs(next);
-                      saveSoundPrefs(next);
-                    }}
+                    onClick={handleThinkingToggle}
+                    title="Mind-state and thoughts stay on this device; others are not notified."
                     style={{
-                      background: "none",
-                      border: "none",
+                      background:
+                        mindState === "thinking"
+                          ? "var(--accent-amber-bg)"
+                          : "var(--accent-green-bg-subtle)",
+                      border: `1px solid ${
+                        mindState === "thinking"
+                          ? "var(--accent-amber-border)"
+                          : "var(--accent-green-border)"
+                      }`,
+                      color:
+                        mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "12px",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      padding: "12px 28px",
+                      borderRadius: "24px",
                       cursor: "pointer",
-                      color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
-                      transition: "color 0.3s",
-                      padding: "4px 8px",
+                      transition: "all 0.3s",
+                      minWidth: "160px",
                     }}
                   >
-                    {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
+                    {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
                   </button>
-                ))}
+                  {sessionThoughtCount > 0 && (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "11px",
+                        color: "var(--accent-amber-border)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      💭 {sessionThoughtCount}
+                    </div>
+                  )}
+                </div>
+
+                {showThoughtInput && (
+                  <div
+                    style={{
+                      marginTop: "20px",
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginTop: "24px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "11px",
+                      color: "var(--fg-4)",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      letterSpacing: "0.06em",
+                      textAlign: "center",
+                    }}
+                  >
+                    Sounds are only on your device — they do not affect anyone else.
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "16px",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "11px",
+                      letterSpacing: "0.1em",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {(
+                      [
+                        ["tick", "tick"],
+                        ["chime", "chime"],
+                        ["completion", "end"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        type="button"
+                        key={key}
+                        aria-pressed={soundPrefs[key]}
+                        aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
+                        title="Only you hear this — does not change audio for others"
+                        onClick={() => {
+                          const next = { ...soundPrefs, [key]: !soundPrefs[key] };
+                          setSoundPrefs(next);
+                          saveSoundPrefs(next);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
+                          transition: "color 0.3s",
+                          padding: "4px 8px",
+                        }}
+                      >
+                        {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--fg-3)",
+                  textAlign: "center",
+                  margin: 0,
+                  lineHeight: 1.45,
+                }}
+              >
+                {snap.isHost
+                  ? "If you leave, the shared session ends for everyone (only the host can do that)."
+                  : "If you leave, only your view stops — the shared timer keeps running for everyone else."}
+              </p>
+              {sessionThoughts.length > 0 && (
+                <p
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--fg-4)",
+                    textAlign: "center",
+                    margin: 0,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {sessionThoughts.length} thought{sessionThoughts.length === 1 ? "" : "s"} captured on
+                  this device — they are saved to your journal when the shared timer ends.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void leave()}
+                style={{ ...btnSecondary, marginTop: "var(--s1)" }}
+              >
+                Leave
+              </button>
             </div>
           </div>
-
-          <p
-            style={{
-              fontSize: "12px",
-              color: "var(--fg-3)",
-              textAlign: "center",
-              margin: "var(--s4) 0 0",
-              lineHeight: 1.45,
-            }}
-          >
-            {snap.isHost
-              ? "If you leave, the shared session ends for everyone (only the host can do that)."
-              : "If you leave, only your view stops — the shared timer keeps running for everyone else."}
-          </p>
-              {sessionThoughts.length > 0 && (
-            <p
-              style={{
-                fontSize: "11px",
-                color: "var(--fg-4)",
-                textAlign: "center",
-                margin: "var(--s2) 0 0",
-                lineHeight: 1.45,
-              }}
-            >
-              {sessionThoughts.length} thought{sessionThoughts.length === 1 ? "" : "s"} captured on
-              this device — they are saved to your journal when the shared timer ends.
-            </p>
-          )}
-
-          <button type="button" onClick={() => void leave()} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
-            Leave
-          </button>
         </>
       )}
     </div>

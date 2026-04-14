@@ -110,6 +110,8 @@ export type BuddySnapshot = {
   endsAt: string | null;
   elapsedSeconds: number | null;
   remainingSeconds: number | null;
+  /** Daily.co room URL while the shared sit is active; null if video is unavailable. */
+  dailyRoomUrl: string | null;
   hostUserId: string;
   isHost: boolean;
   participants: BuddyParticipantSnap[];
