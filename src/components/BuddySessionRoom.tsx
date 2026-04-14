@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
+import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
@@ -13,9 +14,34 @@ type BuddySessionRoomProps = {
   onExit: () => void;
 };
 
+function formatBuddyActionError(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) {
+    return buddyPolicyUserMessage(e.code) ?? e.message;
+  }
+  return e instanceof Error ? e.message : fallback;
+}
+
+function BuddyRoomErrorBanner({ message }: { message: string }) {
+  return (
+    <p
+      role="alert"
+      style={{
+        margin: "0 0 var(--s3)",
+        fontSize: "12px",
+        color: "var(--fg-2)",
+        textAlign: "center",
+        lineHeight: 1.45,
+      }}
+    >
+      {message}
+    </p>
+  );
+}
+
 export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySessionRoomProps) {
   const [snap, setSnap] = useState<BuddySnapshot | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [pollStopped, setPollStopped] = useState(false);
   const lastRevision = useRef(-1);
   const [mindState, setMindState] = useState("clear");
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
@@ -31,6 +57,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   const timerAnchorRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
+    if (pollStopped) return;
     try {
       const { snapshot } = await api.getBuddySnapshot(sessionId);
       if (snapshot.revision < lastRevision.current) return;
@@ -38,21 +65,27 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
       setSnap(snapshot);
       setPollError(null);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 403) {
-        setPollError(
-          "You are no longer in this session. You can leave or join again with the link.",
-        );
+      if (e instanceof ApiError && e.code === BUDDY_POLICY_CODES.NOT_IN_SESSION) {
+        setPollStopped(true);
+        setSnap(null);
+        setPollError(formatBuddyActionError(e, "Could not refresh session"));
         return;
       }
-      setPollError(e instanceof ApiError ? e.message : "Could not refresh session");
+      setPollError(formatBuddyActionError(e, "Could not refresh session"));
     }
+  }, [pollStopped, sessionId]);
+
+  useEffect(() => {
+    setPollStopped(false);
+    lastRevision.current = -1;
   }, [sessionId]);
 
   useEffect(() => {
-    poll();
-    const id = window.setInterval(poll, 1500);
+    if (pollStopped) return;
+    void poll();
+    const id = window.setInterval(() => void poll(), 1500);
     return () => window.clearInterval(id);
-  }, [poll]);
+  }, [poll, pollStopped]);
 
   useEffect(() => {
     if (snap?.state !== "active" || !snap.startedAt) return;
@@ -126,7 +159,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
       await api.setBuddyReady(sessionId, ready);
       await poll();
     } catch (e) {
-      setPollError(e instanceof ApiError ? e.message : "Could not update ready");
+      setPollError(formatBuddyActionError(e, "Could not update ready"));
     }
   };
 
@@ -135,7 +168,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
       await api.startBuddySession(sessionId);
       await poll();
     } catch (e) {
-      setPollError(e instanceof ApiError ? e.message : "Could not start");
+      setPollError(formatBuddyActionError(e, "Could not start"));
     }
   };
 
@@ -144,26 +177,31 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
       await api.cancelBuddySession(sessionId);
       await poll();
     } catch (e) {
-      setPollError(e instanceof ApiError ? e.message : "Could not cancel");
+      setPollError(formatBuddyActionError(e, "Could not cancel"));
     }
   };
 
-  const leave = async () => {
+  const leave = async (opts?: { ignoreLeaveApiErrors?: boolean }) => {
+    const ignoreLeaveApiErrors = opts?.ignoreLeaveApiErrors !== false;
     try {
       await api.leaveBuddySession(sessionId);
-    } catch {
-      /* still exit UI */
+      onExit();
+    } catch (err) {
+      if (ignoreLeaveApiErrors) {
+        onExit();
+        return;
+      }
+      throw err;
     }
-    onExit();
   };
 
   const completeAndExit = async () => {
     try {
       await api.buddyParticipantComplete(sessionId);
-    } catch {
-      /* #119 will tighten this */
+      await leave({ ignoreLeaveApiErrors: false });
+    } catch (e) {
+      setPollError(formatBuddyActionError(e, "Could not finish session step"));
     }
-    await leave();
   };
 
   if (!snap && !pollError) {
@@ -198,10 +236,11 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   if (snap.state === "abandoned") {
     return (
       <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+        {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
         <EndPanel
           title="Session ended"
           body="The host left or cancelled. You can return home or join again if you still have the link."
-          primary={{ label: "Return home", onClick: leave }}
+          primary={{ label: "Return home", onClick: () => void leave() }}
         />
       </div>
     );
@@ -210,10 +249,11 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   if (snap.state === "completed") {
     return (
       <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+        {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
         <EndPanel
           title="Time is complete"
           body="The shared timer has finished. Your personal journal step can be added in a future update."
-          primary={{ label: "Done", onClick: completeAndExit }}
+          primary={{ label: "Done", onClick: () => void completeAndExit() }}
         />
       </div>
     );
@@ -351,6 +391,21 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             ))}
           </ul>
 
+          {!snap.isHost && (
+            <p
+              role="note"
+              style={{
+                margin: 0,
+                fontSize: "12px",
+                color: "var(--fg-3)",
+                textAlign: "center",
+                lineHeight: 1.45,
+              }}
+            >
+              Only the host can start or cancel the shared session. Your ready toggle is just for you.
+            </p>
+          )}
+
           {me && (
             <label
               style={{
@@ -393,6 +448,11 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
                 type="button"
                 onClick={start}
                 disabled={snap.state !== "ready_check"}
+                title={
+                  snap.state !== "ready_check"
+                    ? "Everyone must join and mark ready before you can start the shared timer for all."
+                    : "Starts the same timer for everyone in the room."
+                }
                 style={{
                   ...btnPrimary,
                   opacity: snap.state !== "ready_check" ? 0.45 : 1,
@@ -401,13 +461,33 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               >
                 Start for everyone
               </button>
-              <button type="button" onClick={cancel} style={btnSecondary}>
+              {snap.state !== "ready_check" && (
+                <p
+                  role="note"
+                  style={{
+                    margin: 0,
+                    fontSize: "12px",
+                    color: "var(--fg-3)",
+                    textAlign: "center",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Start is a shared action for the host only. It unlocks when everyone has joined and
+                  marked ready.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={cancel}
+                style={btnSecondary}
+                title="Ends the invite for everyone. Only the host can cancel before the sit starts."
+              >
                 Cancel session
               </button>
             </div>
           )}
 
-          <button type="button" onClick={leave} style={btnGhost}>
+          <button type="button" onClick={() => void leave()} style={btnGhost}>
             Leave
           </button>
         </>
@@ -488,6 +568,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               <button
                 type="button"
                 onClick={handleThinkingToggle}
+                title="Mind-state and thoughts stay on this device; others are not notified."
                 style={{
                   background:
                     mindState === "thinking"
@@ -545,42 +626,66 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             <div
               style={{
                 display: "flex",
-                justifyContent: "center",
-                gap: "16px",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "8px",
                 marginTop: "24px",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px",
-                letterSpacing: "0.1em",
-                flexWrap: "wrap",
               }}
             >
-              {(
-                [
-                  ["tick", "tick"],
-                  ["chime", "chime"],
-                  ["completion", "end"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  type="button"
-                  key={key}
-                  onClick={() => {
-                    const next = { ...soundPrefs, [key]: !soundPrefs[key] };
-                    setSoundPrefs(next);
-                    saveSoundPrefs(next);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
-                    transition: "color 0.3s",
-                    padding: "4px 8px",
-                  }}
-                >
-                  {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
-                </button>
-              ))}
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "11px",
+                  color: "var(--fg-4)",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  letterSpacing: "0.06em",
+                  textAlign: "center",
+                }}
+              >
+                Sounds are only on your device — they do not affect anyone else.
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "16px",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "11px",
+                  letterSpacing: "0.1em",
+                  flexWrap: "wrap",
+                }}
+              >
+                {(
+                  [
+                    ["tick", "tick"],
+                    ["chime", "chime"],
+                    ["completion", "end"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    type="button"
+                    key={key}
+                    aria-pressed={soundPrefs[key]}
+                    aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
+                    title="Only you hear this — does not change audio for others"
+                    onClick={() => {
+                      const next = { ...soundPrefs, [key]: !soundPrefs[key] };
+                      setSoundPrefs(next);
+                      saveSoundPrefs(next);
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
+                      transition: "color 0.3s",
+                      padding: "4px 8px",
+                    }}
+                  >
+                    {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -590,11 +695,12 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               color: "var(--fg-3)",
               textAlign: "center",
               margin: "var(--s4) 0 0",
+              lineHeight: 1.45,
             }}
           >
             {snap.isHost
-              ? "If you leave, the session ends for everyone."
-              : "If you leave, your timer view stops but others continue."}
+              ? "If you leave, the shared session ends for everyone (only the host can do that)."
+              : "If you leave, only your view stops — the shared timer keeps running for everyone else."}
           </p>
           {sessionThoughts.length > 0 && (
             <p
@@ -611,7 +717,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             </p>
           )}
 
-          <button type="button" onClick={leave} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
+          <button type="button" onClick={() => void leave()} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
             Leave
           </button>
         </>

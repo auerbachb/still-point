@@ -3,6 +3,10 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { bumpBuddyRevision } from "@/lib/buddySession";
+import {
+  requireBuddyActiveParticipant,
+  requireParticipantCompletePhase,
+} from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -10,7 +14,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /**
  * #119: Marks this participant as finished with the shared sit (no journaling here).
- * #118: Per-user controls may gate when this may be called.
+ * #118: Per-user only; does not mutate shared timer — see `buddySessionControlsPolicy.ts`.
  */
 export async function POST(_request: Request, context: Params) {
   try {
@@ -33,12 +37,8 @@ export async function POST(_request: Request, context: Params) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    if (!allowsParticipantCompleteState(session.state)) {
-      return NextResponse.json(
-        { error: "Participant completion is only tracked during or after an active sit" },
-        { status: 409 },
-      );
-    }
+    const phaseErr = requireParticipantCompletePhase(session.state);
+    if (phaseErr) return phaseErr;
 
     const [p] = await db
       .select()
@@ -51,9 +51,8 @@ export async function POST(_request: Request, context: Params) {
       )
       .limit(1);
 
-    if (!p || p.leftAt != null) {
-      return NextResponse.json({ error: "Not in this session" }, { status: 403 });
-    }
+    const memberErr = requireBuddyActiveParticipant(p);
+    if (memberErr) return memberErr;
 
     if (p.participantCompletedAt != null) {
       return NextResponse.json({ ok: true, already: true });
@@ -84,6 +83,3 @@ export async function POST(_request: Request, context: Params) {
   }
 }
 
-function allowsParticipantCompleteState(state: string): boolean {
-  return state === "active" || state === "completed";
-}

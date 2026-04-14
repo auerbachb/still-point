@@ -6,6 +6,10 @@ import {
   bumpBuddyRevision,
   reconcileBuddySession,
 } from "@/lib/buddySession";
+import {
+  requireBuddyActiveParticipant,
+  requireLobbyForReady,
+} from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq } from "drizzle-orm";
@@ -39,12 +43,8 @@ export async function PATCH(request: NextRequest, context: Params) {
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-    if (session.state !== "waiting" && session.state !== "ready_check") {
-      return NextResponse.json(
-        { error: "Ready can only change before the session starts" },
-        { status: 409 },
-      );
-    }
+    const lobbyErr = requireLobbyForReady(session);
+    if (lobbyErr) return lobbyErr;
 
     const [p] = await db
       .select()
@@ -57,9 +57,8 @@ export async function PATCH(request: NextRequest, context: Params) {
       )
       .limit(1);
 
-    if (!p || p.leftAt != null) {
-      return NextResponse.json({ error: "Not in this session" }, { status: 403 });
-    }
+    const memberErr = requireBuddyActiveParticipant(p);
+    if (memberErr) return memberErr;
 
     await db
       .update(buddySessionParticipants)

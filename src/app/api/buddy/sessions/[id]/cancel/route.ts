@@ -3,6 +3,12 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { reconcileBuddySession } from "@/lib/buddySession";
+import {
+  BUDDY_POLICY_CODES,
+  buddyPolicyJson,
+  requireBuddyHost,
+  requireLobbyForCancel,
+} from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -31,9 +37,20 @@ export async function POST(_request: Request, context: Params) {
       )
       .limit(1);
 
-    if (!p?.isHost || p.leftAt != null) {
-      return NextResponse.json({ error: "Only the host can cancel" }, { status: 403 });
+    const hostErr = requireBuddyHost(p);
+    if (hostErr) return hostErr;
+
+    const [session] = await db
+      .select()
+      .from(buddySessions)
+      .where(eq(buddySessions.id, sessionId))
+      .limit(1);
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+
+    const phaseErr = requireLobbyForCancel(session);
+    if (phaseErr) return phaseErr;
 
     const [updated] = await db
       .update(buddySessions)
@@ -51,9 +68,10 @@ export async function POST(_request: Request, context: Params) {
       .returning();
 
     if (!updated) {
-      return NextResponse.json(
-        { error: "Session cannot be cancelled now" },
-        { status: 409 },
+      return buddyPolicyJson(
+        409,
+        "Session cannot be cancelled now",
+        BUDDY_POLICY_CODES.CANCEL_WRONG_PHASE,
       );
     }
 
