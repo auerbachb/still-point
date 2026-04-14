@@ -102,6 +102,8 @@ export function BuddySessionRoom({
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
+  const [dailyMeetingToken, setDailyMeetingToken] = useState<string | null>(null);
+  const [dailyTokenError, setDailyTokenError] = useState<string | null>(null);
   const autoFinalizeAttemptedRef = useRef(false);
   const snapRef = useRef(snap);
   const mindStateLogRef = useRef(mindStateLog);
@@ -137,7 +139,35 @@ export function BuddySessionRoom({
     lastRevision.current = -1;
     autoFinalizeAttemptedRef.current = false;
     setPersonalRecordError(null);
+    setDailyMeetingToken(null);
+    setDailyTokenError(null);
   }, [sessionId]);
+
+  useEffect(() => {
+    if (snap?.state !== "active" || !snap.dailyRoomUrl?.trim()) {
+      setDailyMeetingToken(null);
+      setDailyTokenError(null);
+      return;
+    }
+    let cancelled = false;
+    setDailyMeetingToken(null);
+    setDailyTokenError(null);
+    void api.getBuddyMeetingToken(sessionId).then(
+      (r) => {
+        if (!cancelled) setDailyMeetingToken(r.token);
+      },
+      (e) => {
+        if (!cancelled) {
+          setDailyTokenError(
+            e instanceof ApiError ? e.message : "Could not get video token",
+          );
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, snap?.state, snap?.dailyRoomUrl]);
 
   useEffect(() => {
     if (pollStopped) return;
@@ -706,10 +736,47 @@ export function BuddySessionRoom({
               }}
             >
               {snap.dailyRoomUrl ? (
-                <BuddyVideo
-                  roomUrl={snap.dailyRoomUrl}
-                  displayName={me?.username ?? "Participant"}
-                />
+                dailyTokenError ? (
+                  <p
+                    role="alert"
+                    style={{
+                      margin: 0,
+                      padding: "var(--s4)",
+                      textAlign: "center",
+                      fontSize: "13px",
+                      color: "var(--fg-2)",
+                      lineHeight: 1.5,
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-2)",
+                      background: "var(--surface-1)",
+                    }}
+                  >
+                    {dailyTokenError}
+                  </p>
+                ) : dailyMeetingToken ? (
+                  <BuddyVideo
+                    roomUrl={snap.dailyRoomUrl}
+                    meetingToken={dailyMeetingToken}
+                    displayName={me?.username ?? "Participant"}
+                  />
+                ) : (
+                  <p
+                    role="status"
+                    style={{
+                      margin: 0,
+                      padding: "var(--s4)",
+                      textAlign: "center",
+                      fontSize: "13px",
+                      color: "var(--fg-2)",
+                      lineHeight: 1.5,
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-2)",
+                      background: "var(--surface-1)",
+                    }}
+                  >
+                    Preparing video…
+                  </p>
+                )
               ) : (
                 <p
                   role="status"

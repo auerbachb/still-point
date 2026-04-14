@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Daily call-object embed for buddy sessions (#105). #106 can mount this when a `roomUrl` is
- * available (from server after `createRoom`), passing each participant's display name.
+ * Daily call-object embed for buddy sessions (#105). For private rooms (#106), pass
+ * `meetingToken` from `POST /api/buddy/sessions/:id/meeting-token` together with `roomUrl`.
  */
 
 import {
@@ -21,6 +21,8 @@ import { useEffect, useState } from "react";
 export type BuddyVideoProps = {
   /** Full Daily room URL from the REST API (`createRoom`). */
   roomUrl: string;
+  /** Required for private rooms: server minted via `POST …/meeting-token`. */
+  meetingToken?: string;
   /** Shown to other participants (Daily `userName`). */
   displayName: string;
   /** When true (default), joins on mount and leaves on unmount. */
@@ -83,6 +85,7 @@ function ParticipantTiles() {
 
 function BuddyVideoInner({
   roomUrl,
+  meetingToken,
   displayName,
   autoConnect = true,
   className,
@@ -107,7 +110,12 @@ function BuddyVideoInner({
     const run = async () => {
       if (!daily) return;
       try {
-        await daily.join({ url, userName: displayName });
+        const token = meetingToken?.trim();
+        await daily.join({
+          url,
+          userName: displayName,
+          ...(token ? { token } : {}),
+        });
       } catch (e) {
         if (!cancelled) {
           setJoinError(e instanceof Error ? e.message : "Could not join the video room");
@@ -123,7 +131,7 @@ function BuddyVideoInner({
         /* ignore teardown errors */
       });
     };
-  }, [autoConnect, roomUrl, displayName, daily]);
+  }, [autoConnect, roomUrl, meetingToken, displayName, daily]);
 
   if (!autoConnect) {
     return (

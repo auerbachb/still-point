@@ -206,6 +206,12 @@ export const api = {
   getBuddySnapshot: (sessionId: string) =>
     request<{ snapshot: BuddySnapshot }>(`/api/buddy/sessions/${sessionId}`),
 
+  /** Server-issued Daily token for joining a private room while the buddy sit is active. */
+  getBuddyMeetingToken: (sessionId: string) =>
+    request<{ token: string }>(`/api/buddy/sessions/${sessionId}/meeting-token`, {
+      method: "POST",
+    }),
+
   setBuddyReady: (sessionId: string, ready: boolean) =>
     request<{ ok: boolean }>(`/api/buddy/sessions/${sessionId}/ready`, {
       method: "PATCH",
