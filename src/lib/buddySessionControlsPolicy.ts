@@ -23,9 +23,11 @@
  *
  * ## #119 handoff
  *
- * `participant-complete` records per-user completion for journaling; it does not end the
- * shared timer or change session phase for other participants. Completion UI and journal
- * writes belong in #119.
+ * `participant-complete` records per-user completion metadata; it does not end the
+ * shared timer or change session phase for other participants.
+ *
+ * `record-personal-session` (#119) creates the user-owned `sessions` row after the shared
+ * sit is completed and handles journaling via existing `thoughts` APIs.
  */
 
 import { NextResponse } from "next/server";
@@ -113,6 +115,23 @@ export function requireParticipantCompletePhase(sessionState: string): NextRespo
       409,
       "Participant completion is only tracked during or after an active sit",
       BUDDY_POLICY_CODES.PARTICIPANT_COMPLETE_WRONG_PHASE,
+    );
+  }
+  return null;
+}
+
+/** Personal history row is only created after the shared timer has ended (server state). */
+export function requireBuddySessionCompletedForPersonalRecord(
+  session: BuddySessionRow | undefined,
+): NextResponse | null {
+  if (!session) {
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+  if (session.state !== "completed") {
+    return buddyPolicyJson(
+      409,
+      "The shared sit is not finished yet",
+      BUDDY_POLICY_CODES.RECORD_PERSONAL_WRONG_PHASE,
     );
   }
   return null;

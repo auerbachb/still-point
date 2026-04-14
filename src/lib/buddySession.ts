@@ -1,7 +1,7 @@
 /**
  * Shared buddy session domain logic (#117). Server is source of truth for timing and state.
  * #118: Controls policy and enforcement — see `buddySessionControlsPolicy.ts`.
- * #119: Use participantCompletedAt + POST …/participant-complete for journaling hooks.
+ * #119: POST …/record-personal-session creates each participant’s own `sessions` row; notes use `thoughts`.
  */
 import { db } from "@/db";
 import {

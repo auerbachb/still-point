@@ -9,6 +9,8 @@ export const BUDDY_POLICY_CODES = {
   START_WRONG_PHASE: "BUDDY_START_WRONG_PHASE",
   CANCEL_WRONG_PHASE: "BUDDY_CANCEL_WRONG_PHASE",
   PARTICIPANT_COMPLETE_WRONG_PHASE: "BUDDY_PARTICIPANT_COMPLETE_WRONG_PHASE",
+  /** Shared sit must be server-completed before recording a personal history row (#119). */
+  RECORD_PERSONAL_WRONG_PHASE: "BUDDY_RECORD_PERSONAL_WRONG_PHASE",
 } as const;
 
 export type BuddyPolicyCode = (typeof BUDDY_POLICY_CODES)[keyof typeof BUDDY_POLICY_CODES];
@@ -27,6 +29,8 @@ const USER_FACING: Record<BuddyPolicyCode, string> = {
   [BUDDY_POLICY_CODES.CANCEL_WRONG_PHASE]: "This session can no longer be cancelled from here.",
   [BUDDY_POLICY_CODES.PARTICIPANT_COMPLETE_WRONG_PHASE]:
     "That step is only available during or after the shared sit.",
+  [BUDDY_POLICY_CODES.RECORD_PERSONAL_WRONG_PHASE]:
+    "Your personal session is saved only after the shared timer has finished.",
 };
 
 export function buddyPolicyUserMessage(code: string | undefined): string | undefined {

@@ -8,11 +8,49 @@ import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 
+/** Payload for the shared `/app` completion screen after a buddy sit (#119). */
+export type BuddyPersonalRecordPayload = {
+  sessionId: string;
+  dayNumber: number;
+  duration: number;
+  clearPercent: number;
+  thoughtCount: number;
+  thoughts: Array<{ timeInSession: number; text: string }>;
+};
+
 type BuddySessionRoomProps = {
   sessionId: string;
   currentUserId: string;
   onExit: () => void;
+  /** When set, a finished shared timer saves a personal session row then opens the normal completion flow. */
+  onPersonalRecordComplete?: (data: BuddyPersonalRecordPayload) => void;
 };
+
+function getLocalIsoDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calcBuddyClearPercent(
+  mindStateLog: Array<{ time: number; state: string }>,
+  totalSeconds: number,
+): number {
+  if (mindStateLog.length === 0) return 100;
+  let clearTime = 0;
+  let lastTime = 0;
+  let lastState = "clear";
+  const endTime = totalSeconds;
+  const log = [...mindStateLog, { time: endTime, state: "clear" }];
+  for (const entry of log) {
+    if (lastState === "clear") clearTime += entry.time - lastTime;
+    lastTime = entry.time;
+    lastState = entry.state;
+  }
+  return Math.round((clearTime / endTime) * 100);
+}
 
 function formatBuddyActionError(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
@@ -38,7 +76,12 @@ function BuddyRoomErrorBanner({ message }: { message: string }) {
   );
 }
 
-export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySessionRoomProps) {
+export function BuddySessionRoom({
+  sessionId,
+  currentUserId,
+  onExit,
+  onPersonalRecordComplete,
+}: BuddySessionRoomProps) {
   const [snap, setSnap] = useState<BuddySnapshot | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [pollStopped, setPollStopped] = useState(false);
@@ -55,6 +98,17 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   const elapsedRef = useRef(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
+  const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
+  const autoFinalizeAttemptedRef = useRef(false);
+  const snapRef = useRef(snap);
+  const mindStateLogRef = useRef(mindStateLog);
+  const sessionThoughtsRef = useRef(sessionThoughts);
+  const sessionThoughtCountRef = useRef(sessionThoughtCount);
+
+  snapRef.current = snap;
+  mindStateLogRef.current = mindStateLog;
+  sessionThoughtsRef.current = sessionThoughts;
+  sessionThoughtCountRef.current = sessionThoughtCount;
 
   const poll = useCallback(async () => {
     if (pollStopped) return;
@@ -78,6 +132,8 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   useEffect(() => {
     setPollStopped(false);
     lastRevision.current = -1;
+    autoFinalizeAttemptedRef.current = false;
+    setPersonalRecordError(null);
   }, [sessionId]);
 
   useEffect(() => {
@@ -195,7 +251,50 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
     }
   };
 
-  const completeAndExit = async () => {
+  const finalizePersonalSession = useCallback(async () => {
+    if (!onPersonalRecordComplete) return;
+    const snapNow = snapRef.current;
+    if (!snapNow || snapNow.state !== "completed") return;
+
+    setPersonalRecordError(null);
+    try {
+      const durationSeconds = snapNow.durationSeconds;
+      const clearPercent = calcBuddyClearPercent(mindStateLogRef.current, durationSeconds);
+      const thoughtsSnapshot = sessionThoughtsRef.current;
+      const { session } = await api.recordBuddyPersonalSession(sessionId, {
+        clearPercent,
+        thoughtCount: sessionThoughtCountRef.current,
+        mindStateLog: mindStateLogRef.current,
+        actualTime: durationSeconds,
+        sessionDate: getLocalIsoDate(),
+        thoughts: thoughtsSnapshot,
+      });
+      try {
+        await api.leaveBuddySession(sessionId);
+      } catch (leaveErr) {
+        console.error("Buddy leave after personal record:", leaveErr);
+      }
+      onPersonalRecordComplete({
+        sessionId: session.id,
+        dayNumber: session.dayNumber,
+        duration: session.duration,
+        clearPercent: session.clearPercent,
+        thoughtCount: session.thoughtCount,
+        thoughts: thoughtsSnapshot,
+      });
+    } catch (e) {
+      setPersonalRecordError(formatBuddyActionError(e, "Could not save your session"));
+    }
+  }, [sessionId, onPersonalRecordComplete]);
+
+  useEffect(() => {
+    if (snap?.state !== "completed" || !onPersonalRecordComplete) return;
+    if (autoFinalizeAttemptedRef.current) return;
+    autoFinalizeAttemptedRef.current = true;
+    void finalizePersonalSession();
+  }, [snap?.state, sessionId, onPersonalRecordComplete, finalizePersonalSession]);
+
+  const completeAndExitLegacy = async () => {
     try {
       await api.buddyParticipantComplete(sessionId);
       await leave({ ignoreLeaveApiErrors: false });
@@ -247,14 +346,51 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   }
 
   if (snap.state === "completed") {
+    if (!onPersonalRecordComplete) {
+      return (
+        <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+          {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
+          <EndPanel
+            title="Time is complete"
+            body="The shared timer has finished. Sign in on the latest app to save this sit to your personal history."
+            primary={{ label: "Done", onClick: () => void completeAndExitLegacy() }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
         {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
-        <EndPanel
-          title="Time is complete"
-          body="The shared timer has finished. Your personal journal step can be added in a future update."
-          primary={{ label: "Done", onClick: () => void completeAndExit() }}
-        />
+        <div
+          style={{
+            textAlign: "center",
+            display: "grid",
+            gap: "var(--s3)",
+            padding: "var(--s4) 0",
+          }}
+        >
+          <h3 style={{ margin: 0, fontWeight: 400, fontSize: "20px", color: "var(--fg)" }}>
+            Time is complete
+          </h3>
+          {personalRecordError ? (
+            <>
+              <BuddyRoomErrorBanner message={personalRecordError} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
+                <button type="button" onClick={() => void finalizePersonalSession()} style={btnPrimary}>
+                  Try again
+                </button>
+                <button type="button" onClick={() => void leave()} style={btnSecondary}>
+                  Return home without saving
+                </button>
+              </div>
+            </>
+          ) : (
+            <p style={{ margin: 0, color: "var(--fg-2)", lineHeight: 1.5, fontSize: "14px" }}>
+              Saving your personal session…
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -702,7 +838,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               ? "If you leave, the shared session ends for everyone (only the host can do that)."
               : "If you leave, only your view stops — the shared timer keeps running for everyone else."}
           </p>
-          {sessionThoughts.length > 0 && (
+              {sessionThoughts.length > 0 && (
             <p
               style={{
                 fontSize: "11px",
@@ -713,7 +849,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
               }}
             >
               {sessionThoughts.length} thought{sessionThoughts.length === 1 ? "" : "s"} captured on
-              this device (#119 will sync to your journal).
+              this device — they are saved to your journal when the shared timer ends.
             </p>
           )}
 

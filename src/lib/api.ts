@@ -39,6 +39,8 @@ export type Session = {
   thoughtCount: number;
   mindStateLog: Array<{ time: number; state: string }> | null;
   sessionDate: string;
+  /** Present when this row was created from a completed buddy sit (#119). */
+  buddySessionId?: string | null;
 };
 
 export type Thought = {
@@ -228,5 +230,22 @@ export const api = {
     request<{ ok: boolean; already?: boolean; participantCompletedAt?: string }>(
       `/api/buddy/sessions/${sessionId}/participant-complete`,
       { method: "POST" },
+    ),
+
+  /** #119: Create this user’s personal `sessions` row after the shared timer has finished (idempotent). */
+  recordBuddyPersonalSession: (
+    sessionId: string,
+    body: {
+      clearPercent: number;
+      thoughtCount: number;
+      mindStateLog: Array<{ time: number; state: string }>;
+      actualTime: number;
+      sessionDate: string;
+      thoughts?: Array<{ timeInSession: number; text: string }>;
+    },
+  ) =>
+    request<{ session: Session; already?: boolean }>(
+      `/api/buddy/sessions/${sessionId}/record-personal-session`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 };
