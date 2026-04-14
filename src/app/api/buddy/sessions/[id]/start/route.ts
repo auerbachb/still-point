@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { reconcileBuddySession } from "@/lib/buddySession";
+import { BUDDY_START_WRONG_PHASE_MESSAGE } from "@/lib/buddyPolicyCodes";
 import {
   BUDDY_POLICY_CODES,
   buddyPolicyJson,
@@ -71,7 +72,7 @@ export async function POST(_request: Request, context: Params) {
     if (!updated) {
       return buddyPolicyJson(
         409,
-        "Everyone must be ready and at least one guest must join before starting",
+        BUDDY_START_WRONG_PHASE_MESSAGE,
         BUDDY_POLICY_CODES.START_WRONG_PHASE,
       );
     }

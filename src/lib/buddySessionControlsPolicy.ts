@@ -32,6 +32,7 @@ import { NextResponse } from "next/server";
 import type { BuddySessionRow, BuddyParticipantRow } from "@/lib/buddySession";
 import {
   BUDDY_POLICY_CODES,
+  BUDDY_START_WRONG_PHASE_MESSAGE,
   type BuddyPolicyCode,
 } from "@/lib/buddyPolicyCodes";
 
@@ -88,7 +89,7 @@ export function requireReadyCheckForStart(session: BuddySessionRow): NextRespons
   if (session.state !== "ready_check") {
     return buddyPolicyJson(
       409,
-      "Everyone must be ready and at least one guest must join before starting",
+      BUDDY_START_WRONG_PHASE_MESSAGE,
       BUDDY_POLICY_CODES.START_WRONG_PHASE,
     );
   }

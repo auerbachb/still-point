@@ -44,3 +44,6 @@ next-env.d.ts
 # Xcode / Swift — never commit local build products
 ios/build/
 ios/StillPointShared/build/
+
+# Nested agent worktrees (gitlinks); keep out of the app repo
+.claude/worktrees/

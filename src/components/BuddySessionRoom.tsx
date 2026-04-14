@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
-import { buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
+import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
@@ -21,9 +21,27 @@ function formatBuddyActionError(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
 
+function BuddyRoomErrorBanner({ message }: { message: string }) {
+  return (
+    <p
+      role="alert"
+      style={{
+        margin: "0 0 var(--s3)",
+        fontSize: "12px",
+        color: "var(--fg-2)",
+        textAlign: "center",
+        lineHeight: 1.45,
+      }}
+    >
+      {message}
+    </p>
+  );
+}
+
 export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySessionRoomProps) {
   const [snap, setSnap] = useState<BuddySnapshot | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [pollStopped, setPollStopped] = useState(false);
   const lastRevision = useRef(-1);
   const [mindState, setMindState] = useState("clear");
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
@@ -39,6 +57,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   const timerAnchorRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
+    if (pollStopped) return;
     try {
       const { snapshot } = await api.getBuddySnapshot(sessionId);
       if (snapshot.revision < lastRevision.current) return;
@@ -46,15 +65,27 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
       setSnap(snapshot);
       setPollError(null);
     } catch (e) {
+      if (e instanceof ApiError && e.code === BUDDY_POLICY_CODES.NOT_IN_SESSION) {
+        setPollStopped(true);
+        setSnap(null);
+        setPollError(formatBuddyActionError(e, "Could not refresh session"));
+        return;
+      }
       setPollError(formatBuddyActionError(e, "Could not refresh session"));
     }
+  }, [pollStopped, sessionId]);
+
+  useEffect(() => {
+    setPollStopped(false);
+    lastRevision.current = -1;
   }, [sessionId]);
 
   useEffect(() => {
-    poll();
-    const id = window.setInterval(poll, 1500);
+    if (pollStopped) return;
+    void poll();
+    const id = window.setInterval(() => void poll(), 1500);
     return () => window.clearInterval(id);
-  }, [poll]);
+  }, [poll, pollStopped]);
 
   useEffect(() => {
     if (snap?.state !== "active" || !snap.startedAt) return;
@@ -150,19 +181,24 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
     }
   };
 
-  const leave = async () => {
+  const leave = async (opts?: { ignoreLeaveApiErrors?: boolean }) => {
+    const ignoreLeaveApiErrors = opts?.ignoreLeaveApiErrors !== false;
     try {
       await api.leaveBuddySession(sessionId);
-    } catch {
-      /* still exit UI */
+      onExit();
+    } catch (err) {
+      if (ignoreLeaveApiErrors) {
+        onExit();
+        return;
+      }
+      throw err;
     }
-    onExit();
   };
 
   const completeAndExit = async () => {
     try {
       await api.buddyParticipantComplete(sessionId);
-      await leave();
+      await leave({ ignoreLeaveApiErrors: false });
     } catch (e) {
       setPollError(formatBuddyActionError(e, "Could not finish session step"));
     }
@@ -200,10 +236,11 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   if (snap.state === "abandoned") {
     return (
       <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+        {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
         <EndPanel
           title="Session ended"
           body="The host left or cancelled. You can return home or join again if you still have the link."
-          primary={{ label: "Return home", onClick: leave }}
+          primary={{ label: "Return home", onClick: () => void leave() }}
         />
       </div>
     );
@@ -212,10 +249,11 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
   if (snap.state === "completed") {
     return (
       <div style={{ maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+        {pollError ? <BuddyRoomErrorBanner message={pollError} /> : null}
         <EndPanel
           title="Time is complete"
           body="The shared timer has finished. Your personal journal step can be added in a future update."
-          primary={{ label: "Done", onClick: completeAndExit }}
+          primary={{ label: "Done", onClick: () => void completeAndExit() }}
         />
       </div>
     );
@@ -449,7 +487,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             </div>
           )}
 
-          <button type="button" onClick={leave} style={btnGhost}>
+          <button type="button" onClick={() => void leave()} style={btnGhost}>
             Leave
           </button>
         </>
@@ -679,7 +717,7 @@ export function BuddySessionRoom({ sessionId, currentUserId, onExit }: BuddySess
             </p>
           )}
 
-          <button type="button" onClick={leave} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
+          <button type="button" onClick={() => void leave()} style={{ ...btnSecondary, marginTop: "var(--s3)" }}>
             Leave
           </button>
         </>
