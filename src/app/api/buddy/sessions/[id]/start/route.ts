@@ -3,6 +3,12 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { reconcileBuddySession } from "@/lib/buddySession";
+import {
+  DailyApiError,
+  createRoom,
+  deleteRoom,
+  isDailyRoomNameConflict,
+} from "@/lib/daily";
 import { BUDDY_START_WRONG_PHASE_MESSAGE } from "@/lib/buddyPolicyCodes";
 import {
   BUDDY_POLICY_CODES,
@@ -55,12 +61,45 @@ export async function POST(_request: Request, context: Params) {
     const phaseErr = requireReadyCheckForStart(session);
     if (phaseErr) return phaseErr;
 
+    const roomName = `buddy-${sessionId}`;
+    let dailyRoom: { name: string; url: string };
+    try {
+      dailyRoom = await createRoom({ name: roomName, privacy: "private" });
+    } catch (e) {
+      if (e instanceof DailyApiError && isDailyRoomNameConflict(e)) {
+        await deleteRoom(roomName, { ignoreMissing: true });
+        try {
+          dailyRoom = await createRoom({ name: roomName, privacy: "private" });
+        } catch (e2) {
+          if (e2 instanceof DailyApiError) {
+            return NextResponse.json(
+              {
+                error:
+                  "Video room could not be created (name conflict after cleanup). Check Daily and try again.",
+              },
+              { status: 503 },
+            );
+          }
+          throw e2;
+        }
+      } else if (e instanceof DailyApiError) {
+        return NextResponse.json(
+          { error: "Video room could not be created. Check Daily configuration and try again." },
+          { status: 503 },
+        );
+      } else {
+        throw e;
+      }
+    }
+
     const startedAt = new Date();
     const [updated] = await db
       .update(buddySessions)
       .set({
         state: "active",
         startedAt,
+        dailyRoomName: dailyRoom.name,
+        dailyRoomUrl: dailyRoom.url,
         revision: sql`${buddySessions.revision} + 1`,
         updatedAt: startedAt,
       })
@@ -70,6 +109,11 @@ export async function POST(_request: Request, context: Params) {
       .returning();
 
     if (!updated) {
+      try {
+        await deleteRoom(dailyRoom.name, { ignoreMissing: true });
+      } catch (cleanupErr) {
+        console.error("Buddy start race: Daily room cleanup failed:", cleanupErr);
+      }
       return buddyPolicyJson(
         409,
         BUDDY_START_WRONG_PHASE_MESSAGE,

@@ -110,6 +110,8 @@ export type BuddySnapshot = {
   endsAt: string | null;
   elapsedSeconds: number | null;
   remainingSeconds: number | null;
+  /** Daily.co room URL while the shared sit is active; null if video is unavailable. */
+  dailyRoomUrl: string | null;
   hostUserId: string;
   isHost: boolean;
   participants: BuddyParticipantSnap[];
@@ -203,6 +205,12 @@ export const api = {
 
   getBuddySnapshot: (sessionId: string) =>
     request<{ snapshot: BuddySnapshot }>(`/api/buddy/sessions/${sessionId}`),
+
+  /** Server-issued Daily token for joining a private room while the buddy sit is active. */
+  getBuddyMeetingToken: (sessionId: string) =>
+    request<{ token: string }>(`/api/buddy/sessions/${sessionId}/meeting-token`, {
+      method: "POST",
+    }),
 
   setBuddyReady: (sessionId: string, ready: boolean) =>
     request<{ ok: boolean }>(`/api/buddy/sessions/${sessionId}/ready`, {

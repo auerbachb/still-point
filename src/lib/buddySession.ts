@@ -11,6 +11,7 @@ import {
   friendships,
 } from "@/db/schema";
 import { BASE_DURATION, INCREMENT } from "@/lib/constants";
+import { deleteRoom } from "@/lib/daily";
 import { orderedUserPair } from "@/lib/friends";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -54,6 +55,22 @@ export async function bumpBuddyRevision(sessionId: string): Promise<void> {
     .where(eq(buddySessions.id, sessionId));
 }
 
+/**
+ * Best-effort Daily room teardown. Uses `ignoreMissing: true` by default; for strict admin
+ * surfacing of 404, call `deleteRoom` from `daily.ts` with `{ ignoreMissing: false }` instead.
+ */
+export async function teardownBuddyDailyRoomByName(
+  roomName: string | null | undefined,
+): Promise<void> {
+  const trimmed = roomName?.trim();
+  if (!trimmed) return;
+  try {
+    await deleteRoom(trimmed, { ignoreMissing: true });
+  } catch (e) {
+    console.error("Buddy Daily room teardown:", e);
+  }
+}
+
 /** Recompute active→completed and waiting↔ready_check. Call after reads/mutations that affect state. */
 export async function reconcileBuddySession(sessionId: string): Promise<void> {
   const [session] = await db
@@ -69,10 +86,13 @@ export async function reconcileBuddySession(sessionId: string): Promise<void> {
     const endMs =
       session.startedAt.getTime() + session.durationSeconds * 1000;
     if (Date.now() >= endMs) {
+      await teardownBuddyDailyRoomByName(session.dailyRoomName);
       await db
         .update(buddySessions)
         .set({
           state: "completed",
+          dailyRoomName: null,
+          dailyRoomUrl: null,
           revision: sql`${buddySessions.revision} + 1`,
           updatedAt: new Date(),
         })
@@ -139,6 +159,11 @@ export function buildBuddySnapshot(
     endsAt = new Date(startMs + session.durationSeconds * 1000).toISOString();
   }
 
+  const dailyRoomUrl =
+    session.state === "active" && session.dailyRoomUrl?.trim()
+      ? session.dailyRoomUrl.trim()
+      : null;
+
   return {
     id: session.id,
     state: session.state as BuddySessionState,
@@ -149,6 +174,7 @@ export function buildBuddySnapshot(
     endsAt,
     elapsedSeconds,
     remainingSeconds,
+    dailyRoomUrl,
     hostUserId: session.hostUserId,
     isHost: session.hostUserId === viewerUserId,
     participants: participants.map((p) => ({

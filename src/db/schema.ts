@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   varchar,
+  text,
   boolean,
   integer,
   jsonb,
@@ -35,6 +36,10 @@ export const buddySessions = pgTable("buddy_sessions", {
   state: varchar("state", { length: 20 }).notNull().default("waiting"),
   durationSeconds: integer("duration_seconds").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }),
+  /** Daily.co room name (for DELETE); set when the shared sit starts (#106). */
+  dailyRoomName: varchar("daily_room_name", { length: 128 }),
+  /** Daily.co meeting URL for participants while `state === 'active'`. */
+  dailyRoomUrl: text("daily_room_url"),
   revision: integer("revision").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   bumpBuddyRevision,
   reconcileBuddySession,
+  teardownBuddyDailyRoomByName,
 } from "@/lib/buddySession";
 import { hostLeaveShouldAbandonSession } from "@/lib/buddySessionControlsPolicy";
 import { isUuid } from "@/lib/friends";
@@ -52,10 +53,13 @@ export async function POST(_request: Request, context: Params) {
       .limit(1);
 
     if (p.isHost && session && hostLeaveShouldAbandonSession(session)) {
+      await teardownBuddyDailyRoomByName(session.dailyRoomName);
       await db
         .update(buddySessions)
         .set({
           state: "abandoned",
+          dailyRoomName: null,
+          dailyRoomUrl: null,
           revision: sql`${buddySessions.revision} + 1`,
           updatedAt: now,
         })
