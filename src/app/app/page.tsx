@@ -12,7 +12,7 @@ import { PublicBoard } from "@/components/PublicBoard";
 import { SettingsView } from "@/components/SettingsView";
 import { FriendsView } from "@/components/FriendsView";
 import { BuddySessionHub } from "@/components/BuddySessionHub";
-import { BuddySessionRoom } from "@/components/BuddySessionRoom";
+import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { api } from "@/lib/api";
 
@@ -147,6 +147,23 @@ export default function StillPoint() {
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
     setView("home");
+  }, []);
+
+  const handleBuddyPersonalRecordComplete = useCallback((data: BuddyPersonalRecordPayload) => {
+    setBuddySessionId(null);
+    setCompletionData({
+      sessionId: data.sessionId,
+      dayNumber: data.dayNumber,
+      duration: data.duration,
+      clearPercent: data.clearPercent,
+      thoughtCount: data.thoughtCount,
+      thoughts: data.thoughts,
+    });
+    setView("complete");
+    void api
+      .me()
+      .then(({ user: u }) => setUser(u))
+      .catch(() => {});
   }, []);
 
   const handleSessionComplete = useCallback(async (data: {
@@ -443,6 +460,7 @@ export default function StillPoint() {
           sessionId={buddySessionId}
           currentUserId={user.id}
           onExit={handleBuddyExit}
+          onPersonalRecordComplete={handleBuddyPersonalRecordComplete}
         />
       )}
 
@@ -461,7 +479,13 @@ export default function StillPoint() {
           clearPercent={completionData.clearPercent}
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
-          onReturn={() => setView("home")}
+          onReturn={() => {
+            setView("home");
+            void api
+              .me()
+              .then(({ user: u }) => setUser(u))
+              .catch(() => {});
+          }}
           onSaveNote={completionData.sessionId ? async (text: string) => {
             const res = await fetch("/api/thoughts/batch", {
               method: "POST",

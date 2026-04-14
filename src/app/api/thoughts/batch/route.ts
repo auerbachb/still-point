@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { thoughts } from "@/db/schema";
+import { sessions, thoughts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { and, eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,21 +21,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ thoughts: [] });
     }
 
-    const values = thoughtItems.map((t: { timeInSession: number; text: string }) => ({
-      userId: auth.userId,
-      sessionId,
-      dayNumber,
-      timeInSession: t.timeInSession,
-      text: t.text,
-    }));
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.userId)))
+      .limit(1);
 
-    const inserted = await db.insert(thoughts).values(values).returning({
-      id: thoughts.id,
-      sessionId: thoughts.sessionId,
-      dayNumber: thoughts.dayNumber,
-      timeInSession: thoughts.timeInSession,
-      text: thoughts.text,
-    });
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (session.dayNumber !== dayNumber) {
+      return NextResponse.json({ error: "Day number mismatch" }, { status: 400 });
+    }
+
+    const normalized = thoughtItems
+      .map((t: { timeInSession: unknown; text: unknown }) => {
+        if (typeof t.timeInSession !== "number" || typeof t.text !== "string") {
+          return null;
+        }
+        const text = t.text.trim().slice(0, 1000);
+        if (!text) return null;
+        return {
+          timeInSession: t.timeInSession,
+          text,
+        };
+      })
+      .filter((t): t is { timeInSession: number; text: string } => t != null);
+
+    if (normalized.length === 0) {
+      return NextResponse.json({ thoughts: [] });
+    }
+
+    const hasCompletionNote = normalized.some((t) => t.timeInSession === -1);
+    if (hasCompletionNote) {
+      await db
+        .delete(thoughts)
+        .where(
+          and(
+            eq(thoughts.sessionId, sessionId),
+            eq(thoughts.userId, auth.userId),
+            eq(thoughts.timeInSession, -1),
+          ),
+        );
+    }
+
+    const inserted = await db
+      .insert(thoughts)
+      .values(
+        normalized.map((t) => ({
+          userId: auth.userId,
+          sessionId,
+          dayNumber,
+          timeInSession: t.timeInSession,
+          text: t.text,
+        })),
+      )
+      .returning({
+        id: thoughts.id,
+        sessionId: thoughts.sessionId,
+        dayNumber: thoughts.dayNumber,
+        timeInSession: thoughts.timeInSession,
+        text: thoughts.text,
+      });
 
     return NextResponse.json({ thoughts: inserted });
   } catch (error) {

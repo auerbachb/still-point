@@ -39,7 +39,12 @@ export async function GET(
       text: thoughts.text,
     })
       .from(thoughts)
-      .where(eq(thoughts.sessionId, session.id))
+      .where(
+        and(
+          eq(thoughts.sessionId, session.id),
+          eq(thoughts.userId, auth.userId),
+        ),
+      )
       .orderBy(asc(thoughts.timeInSession));
 
     return NextResponse.json({ session, thoughts: sessionThoughts });
