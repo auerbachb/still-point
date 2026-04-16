@@ -5,6 +5,11 @@ struct SettingsView: View {
     let appVM: AppViewModel
     @State private var isPublic: Bool = false
     @State private var isUpdating = false
+    @State private var showDeleteAccountDialog = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError = ""
+    @State private var showDeleteAccountError = false
 
     var body: some View {
         ScrollView {
@@ -108,6 +113,55 @@ struct SettingsView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
                 }
+                .disabled(isDeletingAccount)
+
+                Button {
+                    showDeleteAccountDialog = true
+                } label: {
+                    Group {
+                        if isDeletingAccount {
+                            ProgressView()
+                                .tint(SPColor.dangerMuted)
+                        } else {
+                            Text("Delete Account")
+                                .font(SPFont.mono(14, weight: .medium))
+                                .foregroundStyle(SPColor.dangerMuted)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SPSpacing.s2)
+                    .background(SPColor.surface1)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
+                }
+                .disabled(isDeletingAccount)
+                .confirmationDialog(
+                    "Delete your account?",
+                    isPresented: $showDeleteAccountDialog,
+                    titleVisibility: .visible
+                ) {
+                    Button("Continue", role: .destructive) {
+                        showDeleteAccountConfirm = true
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This permanently deletes your account and data.")
+                }
+                .alert("Final confirmation", isPresented: $showDeleteAccountConfirm) {
+                    Button("Delete Account", role: .destructive) {
+                        Task {
+                            await deleteAccount()
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This action cannot be undone.")
+                }
+                .alert("Could not delete account", isPresented: $showDeleteAccountError) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(deleteAccountError)
+                }
 
                 Spacer().frame(height: SPSpacing.s6)
             }
@@ -116,6 +170,23 @@ struct SettingsView: View {
         .stillPointBackground()
         .onAppear {
             isPublic = appVM.currentUser?.isPublic ?? false
+        }
+    }
+
+    private func deleteAccount() async {
+        guard !isDeletingAccount else { return }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await APIClient.shared.deleteAccount()
+            appVM.didLogout()
+        } catch let error as APIError {
+            deleteAccountError = error.message
+            showDeleteAccountError = true
+        } catch {
+            deleteAccountError = "Please try again."
+            showDeleteAccountError = true
         }
     }
 }

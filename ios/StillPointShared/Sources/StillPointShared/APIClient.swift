@@ -47,6 +47,11 @@ public actor APIClient {
         let _: [String: Bool] = try await post("/api/auth/logout", body: Optional<String>.none)
     }
 
+    public func deleteAccount() async throws {
+        try await delete("/api/account")
+        clearLocalSessionArtifacts()
+    }
+
     public func me() async throws -> UserDTO? {
         do {
             let response: UserResponse = try await get("/api/auth/me")
@@ -130,7 +135,21 @@ public actor APIClient {
         return try await execute(request)
     }
 
+    private func delete(_ path: String) async throws {
+        let url = baseURL.appendingPathComponent(path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        _ = try await executeRaw(request)
+    }
+
     private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, _) = try await executeRaw(request)
+        let decoder = JSONDecoder()
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func executeRaw(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError(status: 0, message: "Invalid response")
@@ -142,8 +161,21 @@ public actor APIClient {
                 message: errorBody?.error ?? "Request failed"
             )
         }
-        let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: data)
+        return (data, httpResponse)
+    }
+
+    private func clearLocalSessionArtifacts() {
+        let cookieStorage = session.configuration.httpCookieStorage ?? .shared
+        for cookie in cookieStorage.cookies ?? [] {
+            cookieStorage.deleteCookie(cookie)
+        }
+
+        let credentialStorage = URLCredentialStorage.shared
+        for (protectionSpace, credentialsByUser) in credentialStorage.allCredentials {
+            for credential in credentialsByUser.values {
+                credentialStorage.remove(credential, for: protectionSpace)
+            }
+        }
     }
 }
 
