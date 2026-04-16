@@ -127,6 +127,12 @@ export const api = {
   logout: () =>
     request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
+  deleteAccount: () =>
+    request<{ ok: boolean }>("/api/account", {
+      method: "DELETE",
+      credentials: "include",
+    }),
+
   me: () =>
     request<{ user: User }>("/api/auth/me"),
 
