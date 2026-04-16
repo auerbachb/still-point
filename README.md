@@ -61,7 +61,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |----------|-------------|---------------|
 | `POSTGRES_URL` | Runtime DB connection string used by the app (`src/db/index.ts`, `drizzle.config.ts`). In local dev, point at non-production Neon. | [Neon console](https://console.neon.tech) → project/branch → connection string |
 | `POSTGRES_URL_TEST` | **Not read by the app** — optional team alias for the non-production URL when documenting or mirroring Vercel Preview envs. | Same as non-prod `POSTGRES_URL` |
-| `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -hex 32` |
+| `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -base64 32` |
 | `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |
 | `BUDDY_REQUIRE_FRIENDSHIP` | Optional. When exactly `true`, buddy join paths enforce an existing friendship (`src/lib/buddySession.ts`). | Any string other than `true` leaves checks off |
 
@@ -101,6 +101,8 @@ What the script currently creates:
 Safety guard:
 - the script refuses to run unless `SEED_CONFIRM=still-point-nonprod`
 - it also refuses to run with `NODE_ENV=production`
+- it refuses unless `POSTGRES_URL` points at a Neon host (`*.neon.tech`)
+- all inserts run in a single database transaction (rollback on failure)
 
 ## Environment matrix (runbook)
 
