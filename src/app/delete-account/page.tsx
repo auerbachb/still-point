@@ -159,7 +159,7 @@ export default function DeleteAccountPage() {
       <div
         style={{
           width: "100%",
-          maxWidth: "min(520px, calc(100vw - 40px))",
+          maxWidth: "min(520px, calc(100vw - 24px))",
           display: "flex",
           flexDirection: "column",
           gap: "16px",

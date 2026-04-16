@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
+import { api } from "@/lib/api";
 
 type User = {
   id: string;
@@ -154,7 +155,16 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
           log out
         </button>
 
-        <DeleteAccountSection onDeleted={onLogout} />
+        <DeleteAccountSection
+          onDeleted={async () => {
+            try {
+              await api.logout();
+            } catch {
+              // Best effort; account deletion already invalidates auth server-side.
+            }
+            onLogout();
+          }}
+        />
       </div>
     </div>
   );
