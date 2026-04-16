@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
+    "build:turbo": "next build --turbopack",
+    "build:verify": "bash ./scripts/verify-build.sh",
     "start": "next start",
     "db:seed": "tsx scripts/seed.ts"
   },

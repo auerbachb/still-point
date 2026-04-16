@@ -55,6 +55,26 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Building
+
+Production builds use the standard Next.js build path (without `--turbopack`) for stability:
+
+```bash
+npm run build
+```
+
+To verify clean build repeatability locally (same check used by CI):
+
+```bash
+npm run build:verify -- 3
+```
+
+Turbopack builds are kept as an explicit opt-in while Next 15.5 build support remains beta:
+
+```bash
+npm run build:turbo
+```
+
 ## Environment variables
 
 | Variable | Description | How to get it |
