@@ -1,6 +1,6 @@
 # Still Point
 
-**The app is live at [still-point.vercel.app](https://still-point.vercel.app)**
+**The app is live at [still-point.me](https://still-point.me)**
 
 Practice focus by watching the clock without thinking for fixed blocks of time.
 
@@ -78,7 +78,7 @@ echo "value" | npx vercel env add NAME production  # add var
 npx vercel env rm NAME production          # remove var
 ```
 
-The app is live at [still-point.vercel.app](https://still-point.vercel.app).
+The app is live at [still-point.me](https://still-point.me).
 
 ### Neon (database)
 

@@ -60,7 +60,7 @@ Before your first TestFlight release, configure a tester group and handle encryp
 The same build uploaded to TestFlight can be submitted to the App Store:
 
 1. Go to [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → your app
-2. Fill in the required metadata (screenshots, description, privacy policy URL)
+2. Fill in the required metadata (screenshots, description). Set **Privacy Policy URL** to `https://still-point.me/privacy` in App Store Connect.
 3. Select the TestFlight build under the version
 4. Click "Add for Review"
 
