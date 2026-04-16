@@ -26,6 +26,7 @@ const seedUsers: SeedUser[] = [
 
 type AppDb = NeonDatabase<typeof schema>;
 
+/** Rejects non-Neon or malformed URLs so the seed script cannot target arbitrary hosts by mistake. */
 function assertNeonNonProdPostgresUrl(rawUrl: string) {
   let parsed: URL;
   try {
@@ -46,6 +47,7 @@ function assertNeonNonProdPostgresUrl(rawUrl: string) {
   }
 }
 
+/** Idempotent non-production seed: replaces fixture users by email, then inserts sessions, thoughts, and friendship. */
 async function main() {
   if (process.env.NODE_ENV === "production") {
     throw new Error("Refusing to run seed script with NODE_ENV=production.");
