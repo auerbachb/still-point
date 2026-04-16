@@ -1,6 +1,6 @@
 # Still Point
 
-**The app is live at [still-point.vercel.app](https://still-point.vercel.app)**
+**The app is live at [still-point.me](https://still-point.me)**
 
 Practice focus by watching the clock without thinking for fixed blocks of time.
 
@@ -169,7 +169,7 @@ echo "your_test_db_url" | npx vercel env add POSTGRES_URL_TEST preview
 
 Production should continue to use the production Neon URL for `POSTGRES_URL`.
 
-The app is live at [still-point.vercel.app](https://still-point.vercel.app).
+The app is live at [still-point.me](https://still-point.me).
 
 ### Neon (database)
 

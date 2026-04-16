@@ -12,9 +12,9 @@ public actor APIClient {
 
     private init() {
         #if DEBUG
-        self.baseURL = URL(string: "https://still-point.vercel.app")!
+        self.baseURL = URL(string: "https://still-point.me")!
         #else
-        self.baseURL = URL(string: "https://still-point.vercel.app")!
+        self.baseURL = URL(string: "https://still-point.me")!
         #endif
 
         let config = URLSessionConfiguration.default
