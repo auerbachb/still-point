@@ -5,6 +5,9 @@ on:
     tags:
       - 'ios-v*'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ios-testflight
   cancel-in-progress: false
@@ -26,8 +29,23 @@ jobs:
           echo "iPhoneOS SDK: ${SDK_VERSION}"
           [[ "${SDK_VERSION%%.*}" -ge 26 ]]
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen (retry on transient Homebrew failures)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
 
       - name: Generate Xcode project
         working-directory: ios
