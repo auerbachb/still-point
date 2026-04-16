@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 
 type User = {
   id: string;
@@ -152,6 +153,8 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
         >
           log out
         </button>
+
+        <DeleteAccountSection onDeleted={onLogout} />
       </div>
     </div>
   );
