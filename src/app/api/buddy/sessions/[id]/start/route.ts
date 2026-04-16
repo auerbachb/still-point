@@ -80,33 +80,72 @@ export async function POST(_request: Request, context: Params) {
               { status: 503 },
             );
           }
-          throw e2;
+          console.error("Buddy start Daily retry error:", e2);
+          return NextResponse.json(
+            { error: "Video room could not be created. Check Daily configuration and try again." },
+            { status: 503 },
+          );
         }
       } else if (e instanceof DailyApiError) {
         return NextResponse.json(
           { error: "Video room could not be created. Check Daily configuration and try again." },
           { status: 503 },
         );
+      } else if (e instanceof Error && e.message.includes("DAILY_API_KEY")) {
+        console.error("Buddy start: Daily API key missing on server");
+        return NextResponse.json(
+          {
+            error:
+              "Video is not configured on this server (DAILY_API_KEY). Add it in Vercel env and redeploy.",
+          },
+          { status: 503 },
+        );
       } else {
-        throw e;
+        console.error("Buddy start Daily unexpected error:", e);
+        return NextResponse.json(
+          { error: "Video room could not be created. Check Daily configuration and try again." },
+          { status: 503 },
+        );
       }
     }
 
     const startedAt = new Date();
-    const [updated] = await db
-      .update(buddySessions)
-      .set({
-        state: "active",
-        startedAt,
-        dailyRoomName: dailyRoom.name,
-        dailyRoomUrl: dailyRoom.url,
-        revision: sql`${buddySessions.revision} + 1`,
-        updatedAt: startedAt,
-      })
-      .where(
-        and(eq(buddySessions.id, sessionId), eq(buddySessions.state, "ready_check")),
-      )
-      .returning();
+    let updated: (typeof buddySessions.$inferSelect) | undefined;
+    try {
+      const rows = await db
+        .update(buddySessions)
+        .set({
+          state: "active",
+          startedAt,
+          dailyRoomName: dailyRoom.name,
+          dailyRoomUrl: dailyRoom.url,
+          revision: sql`${buddySessions.revision} + 1`,
+          updatedAt: startedAt,
+        })
+        .where(
+          and(eq(buddySessions.id, sessionId), eq(buddySessions.state, "ready_check")),
+        )
+        .returning();
+      updated = rows[0];
+    } catch (dbErr) {
+      console.error("Buddy start DB update error:", dbErr);
+      try {
+        await deleteRoom(dailyRoom.name, { ignoreMissing: true });
+      } catch (cleanupErr) {
+        console.error("Buddy start: Daily room cleanup after DB failure:", cleanupErr);
+      }
+      const msg = dbErr instanceof Error ? dbErr.message : "";
+      if (/daily_room|does not exist|42703/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              "Database is missing buddy video columns. Run `npx drizzle-kit push` against production (see drizzle/buddy_sessions_daily_room_incremental.sql).",
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json({ error: "Could not start the shared session. Try again." }, { status: 503 });
+    }
 
     if (!updated) {
       try {
