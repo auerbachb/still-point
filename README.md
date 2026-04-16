@@ -78,6 +78,30 @@ To keep production data isolated, use a dedicated non-production Neon project in
 
 This avoids writing test data into production and avoids cloning production data into development branches.
 
+## Seed data (non-production)
+
+Use the seeded fixtures script against non-production Neon only.
+
+1. Point local runtime and Drizzle CLI at non-production:
+   - `.env.local` `POSTGRES_URL=<nonprod dev branch URL>`
+   - optional alias: `.env.local` `POSTGRES_URL_TEST=<same URL>`
+2. Apply schema:
+   - `npx drizzle-kit push`
+3. Seed deterministic fixtures:
+   - `SEED_CONFIRM=still-point-nonprod npm run db:seed`
+4. Run locally:
+   - `npm run dev`
+
+What the script currently creates:
+- 3 users (`ava_seed`, `leo_seed`, `maya_seed`)
+- 3 sessions (2 completed, 1 incomplete)
+- 4 thoughts (including one end-of-session note)
+- 1 friendship edge (`ava_seed` ↔ `leo_seed`)
+
+Safety guard:
+- the script refuses to run unless `SEED_CONFIRM=still-point-nonprod`
+- it also refuses to run with `NODE_ENV=production`
+
 ## Environment matrix (runbook)
 
 Single place for **which Neon**, **which Vercel scopes**, and **third-party keys**. Values are never pasted into the repo — use placeholders such as `postgresql://…` and `daily_…` in tickets only when needed.
