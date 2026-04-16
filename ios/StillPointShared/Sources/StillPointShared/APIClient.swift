@@ -47,6 +47,10 @@ public actor APIClient {
         let _: [String: Bool] = try await post("/api/auth/logout", body: Optional<String>.none)
     }
 
+    public func deleteAccount() async throws {
+        let _: [String: Bool] = try await delete("/api/account")
+    }
+
     public func me() async throws -> UserDTO? {
         do {
             let response: UserResponse = try await get("/api/auth/me")
@@ -127,6 +131,14 @@ public actor APIClient {
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
+        return try await execute(request)
+    }
+
+    private func delete<T: Decodable>(_ path: String) async throws -> T {
+        let url = baseURL.appendingPathComponent(path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         return try await execute(request)
     }
 

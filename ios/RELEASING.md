@@ -64,6 +64,17 @@ The same build uploaded to TestFlight can be submitted to the App Store:
 3. Select the TestFlight build under the version
 4. Click "Add for Review"
 
+### App Review Notes (Account Deletion)
+
+Include this screen recording checklist in App Store review notes for Guideline 5.1.1(v):
+
+- Sign in with a test account in the iOS app.
+- Open `Settings`.
+- Tap `Delete Account`.
+- In the first prompt, tap `Continue`.
+- In the final confirmation alert, tap `Delete Account`.
+- Show the app returning to the signed-out/auth screen.
+
 ## Troubleshooting
 
 **Build fails with signing error:** Verify the certificate hasn't expired and the provisioning profile includes the correct bundle ID (`com.brettonauerbach.stillpoint`).
