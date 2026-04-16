@@ -135,14 +135,6 @@ public actor APIClient {
         return try await execute(request)
     }
 
-    private func delete<T: Decodable>(_ path: String) async throws -> T {
-        let url = baseURL.appendingPathComponent(path)
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        return try await execute(request)
-    }
-
     private func delete(_ path: String) async throws {
         let url = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: url)
