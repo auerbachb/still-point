@@ -24,6 +24,8 @@ targets:
     info:
       path: StillPointApp/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts:
           - Fonts/Newsreader-Variable.ttf
           - Fonts/Newsreader-Italic-Variable.ttf
@@ -45,7 +47,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 4
         DEVELOPMENT_TEAM: T5UU4BP6AV
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
