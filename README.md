@@ -183,6 +183,8 @@ npx drizzle-kit studio    # open Drizzle Studio GUI
 
 The Neon MCP connector is available in Claude Code for direct SQL access during development.
 
+**Operations:** production restore expectations (RPO/RTO) and a Neon console checklist live in [docs/operations/neon-disaster-recovery.md](docs/operations/neon-disaster-recovery.md).
+
 ### GitHub CLI
 
 Used for issue management and repo operations:
