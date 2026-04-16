@@ -41,7 +41,10 @@ npm install
 
 # Set up environment variables
 cp .env.example .env.local
-# Edit .env.local with your Neon connection string and a JWT secret
+# Edit .env.local:
+# - POSTGRES_URL_TEST = Neon non-production/test DB URL
+# - POSTGRES_URL = same value as POSTGRES_URL_TEST for local dev
+# - JWT_SECRET = a local secret
 
 # Push schema to database
 npx drizzle-kit push
@@ -56,8 +59,58 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Description | How to get it |
 |----------|-------------|---------------|
-| `POSTGRES_URL` | Neon database connection string | [Neon console](https://console.neon.tech) → project → connection string |
-| `JWT_SECRET` | Secret for signing auth tokens | `openssl rand -hex 32` |
+| `POSTGRES_URL` | Runtime DB connection string used by the app (`src/db/index.ts`, `drizzle.config.ts`). In local dev, point at non-production Neon. | [Neon console](https://console.neon.tech) → project/branch → connection string |
+| `POSTGRES_URL_TEST` | **Not read by the app** — optional team alias for the non-production URL when documenting or mirroring Vercel Preview envs. | Same as non-prod `POSTGRES_URL` |
+| `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -hex 32` |
+| `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |
+| `BUDDY_REQUIRE_FRIENDSHIP` | Optional. When exactly `true`, buddy join paths enforce an existing friendship (`src/lib/buddySession.ts`). | Any string other than `true` leaves checks off |
+
+Never commit credentials. Keep actual values only in local/Vercel environment settings. For a **Production / Preview / Local** map, see [Environment matrix (runbook)](#environment-matrix-runbook) below.
+
+## Database environment topology
+
+To keep production data isolated, use a dedicated non-production Neon project instead of branching directly from production.
+
+- `still-point-prod` project: production data only (used by Vercel Production)
+- `still-point-nonprod` project: development/test data only
+  - `dev` branch: local development
+  - `preview` branch (or `test`): Vercel Preview deployments + integration testing
+
+This avoids writing test data into production and avoids cloning production data into development branches.
+
+## Environment matrix (runbook)
+
+Single place for **which Neon**, **which Vercel scopes**, and **third-party keys**. Values are never pasted into the repo — use placeholders such as `postgresql://…` and `daily_…` in tickets only when needed.
+
+### Neon vs Vercel vs local
+
+| Environment | Purpose | Required for app runtime | Where it is configured | Notes |
+|---------------|---------|---------------------------|-------------------------|-------|
+| **Production** | Public app + prod data | `POSTGRES_URL`, `JWT_SECRET` | **Vercel** → Project → Settings → Environment Variables → **Production**. **Neon** → `still-point-prod` (or your prod project) connection string for `POSTGRES_URL`. | Buddy video also needs `DAILY_API_KEY` in Production if buddy sits use Daily in prod. |
+| **Preview** | PR / branch deploys, non-prod data | `POSTGRES_URL`, `JWT_SECRET` | **Vercel** → same project → variables scoped to **Preview**. **Neon** → non-production project/branch URL for `POSTGRES_URL` (see topology above). | Optionally set `POSTGRES_URL_TEST` to the same non-prod URL for humans/docs only. `DAILY_API_KEY` for buddy video on preview deploys. |
+| **Local** | Developer machine | `POSTGRES_URL`, `JWT_SECRET` | **Local** → `.env.local` (from [`.env.example`](./.env.example)); **Neon** → `dev` branch (or your non-prod default). **Drizzle CLI** reads `.env.local` / `.env` via [`drizzle.config.ts`](./drizzle.config.ts) for `POSTGRES_URL`. | `npm run dev` does not load secrets from Vercel; copy values locally only. |
+
+Third-party keys in use today:
+
+| Service | Variable | Used for |
+|---------|----------|----------|
+| Daily.co | `DAILY_API_KEY` | Create/delete rooms, issue meeting tokens for buddy video (`src/lib/daily.ts`, `src/app/api/buddy/sessions/[id]/start`, `…/meeting-token`). |
+
+### `vercel.json`
+
+[`vercel.json`](./vercel.json) defines `ignoreCommand`: when the git diff against the parent commit is **empty** for the repo (excluding `ios/` and `.claude/`), the command exits **0** and Vercel **skips** creating a new Preview deployment. If there **are** changes in those paths, the command exits **1** and the deployment **runs**. So “no preview” can simply mean “nothing relevant changed,” not necessarily a misconfiguration.
+
+### Common failure modes
+
+| Symptom | Likely cause | What to check |
+|---------|----------------|---------------|
+| `POSTGRES_URL is not set` at runtime | Missing or wrong Vercel scope | Production vs Preview vs Development scopes in Vercel; local `.env.local` present and loaded |
+| Preview writes / reads **production** data | `POSTGRES_URL` on Preview points at prod Neon | Vercel → Env → **Preview** `POSTGRES_URL` = non-prod branch only |
+| `JWT_SECRET not set` / 500 on auth | Secret missing in that environment | Same scope as the deployment (Preview PRs use Preview vars) |
+| Buddy start: “Video is not configured…” / `DAILY_API_KEY` in error text | Daily key missing for that deploy | Vercel env for the **same** environment as the deployment; redeploy after adding |
+| Meeting token 503, logs mention Daily | Invalid or revoked key, or Daily API outage | Rotate key in Daily dashboard; confirm no leading/truncate whitespace in Vercel |
+| Buddy join allowed without friendship when you expected otherwise | Flag off by default | Set `BUDDY_REQUIRE_FRIENDSHIP` to the literal string `true` in the target Vercel scope (and locally if testing) |
+| `drizzle-kit push` connects to wrong DB | CLI uses `POSTGRES_URL` from `.env.local` / `.env` only | Not from Vercel; align local file with intended Neon branch |
 
 ## Tooling
 
@@ -77,6 +130,18 @@ npx vercel env ls                          # list vars
 echo "value" | npx vercel env add NAME production  # add var
 npx vercel env rm NAME production          # remove var
 ```
+
+Preview deployments should point to non-production DB credentials:
+
+```bash
+# map preview runtime DB URL to Neon non-production branch/project
+echo "your_test_db_url" | npx vercel env add POSTGRES_URL preview
+
+# optional canonical alias in preview envs
+echo "your_test_db_url" | npx vercel env add POSTGRES_URL_TEST preview
+```
+
+Production should continue to use the production Neon URL for `POSTGRES_URL`.
 
 The app is live at [still-point.vercel.app](https://still-point.vercel.app).
 
