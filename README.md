@@ -199,6 +199,22 @@ gh pr create --title "..."       # create pull request
 
 Automated code review on pull requests via [CodeRabbit](https://coderabbit.ai). Reviews are posted as PR comments — no local setup needed.
 
+## Merge gates (current)
+
+As of this audit, GitHub branch protection and rulesets are not configured with required status checks on `main`. In practice, the team uses Vercel + PR review signals as the merge gate.
+
+What should be green before merge:
+
+- `Vercel` — preview deployment completed successfully
+- `Vercel Agent Review` — Vercel's automated review completed
+- `Vercel Preview Comments` — preview comment bot completed
+- `CodeRabbit` — review completed with no blocking findings
+
+Notes:
+
+- The GitHub Actions workflow `Build & Upload to TestFlight` is **release-only** (tag trigger `ios-v*`) and is not a pull-request merge gate.
+- For strict enforcement, add these check names under GitHub branch protection required checks for `main`.
+
 ## Project structure
 
 ```
