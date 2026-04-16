@@ -53,7 +53,9 @@ Before your first TestFlight release, configure a tester group and handle encryp
 
 - `MARKETING_VERSION` — the user-facing version (e.g., `1.0.0`, `1.1.0`)
 - `CURRENT_PROJECT_VERSION` — the build number, must increment with every upload (e.g., `1`, `2`, `3`)
-- Tag format: `ios-v{MARKETING_VERSION}` (e.g., `ios-v1.0.0`)
+- **Git tag** must match `ios-v*` to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml). The tag string does **not** have to equal `MARKETING_VERSION` — **only** `ios/project.yml` sets what Xcode uploads.
+- **First upload** for a marketing version: `git tag ios-v1.0.0 && git push origin ios-v1.0.0` (example).
+- **Another upload with the same `MARKETING_VERSION`:** Git tags cannot be reused. Use a **new** tag that still matches `ios-v*`, e.g. `git tag ios-v1.0.0-build4 && git push origin ios-v1.0.0-build4` after bumping `CURRENT_PROJECT_VERSION` in `project.yml`.
 
 ## Submitting to the App Store
 
