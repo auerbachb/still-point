@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import {
   buddySessionParticipants,
   buddySessions,
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest, context: Params) {
     const participantCompletedAt = p!.participantCompletedAt ?? now;
 
     try {
-      const row = await db.transaction(async (tx) => {
+      const row = await poolDb.transaction(async (tx) => {
         const [u] = await tx
           .select({ currentDay: users.currentDay })
           .from(users)

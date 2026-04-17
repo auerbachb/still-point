@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import { sessions, thoughts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { and, eq } from "drizzle-orm";
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
       ...(completionNote ? [completionNote] : []),
     ];
 
-    const inserted = await db.transaction(async (tx) => {
+    const inserted = await poolDb.transaction(async (tx) => {
       if (completionNote) {
         await tx
           .delete(thoughts)
