@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import { friendRequests, friendships } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
@@ -94,7 +95,7 @@ export async function PATCH(request: NextRequest, context: Params) {
     // accept — single transaction so friendship is not orphaned if insert fails
     const [u1, u2] = orderedUserPair(row.fromUserId, row.toUserId);
 
-    const updated = await db.transaction(async (tx) => {
+    const updated = await poolDb.transaction(async (tx) => {
       const [u] = await tx
         .update(friendRequests)
         .set({ status: "accepted", updatedAt: new Date() })

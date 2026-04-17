@@ -18,9 +18,6 @@ import { users } from "@/db/schema";
  * `buddy_session_id` cleared.
  */
 export async function deleteUserAccount(userId: string): Promise<boolean> {
-  const removed = await db.transaction(async (tx) => {
-    const rows = await tx.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
-    return rows.length > 0;
-  });
-  return removed;
+  const rows = await db.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
+  return rows.length > 0;
 }

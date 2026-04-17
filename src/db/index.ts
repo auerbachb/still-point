@@ -1,41 +1,36 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
-import ws from "ws";
+import { neon } from "@neondatabase/serverless";
+import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
-neonConfig.webSocketConstructor = ws;
+type AppDb = NeonHttpDatabase<typeof schema>;
 
-type AppDb = NeonDatabase<typeof schema>;
-
-const globalForDb = globalThis as typeof globalThis & {
-  __drizzlePool?: Pool;
-  __drizzleDb?: AppDb;
+const globalForHttp = globalThis as typeof globalThis & {
+  __neonSql?: ReturnType<typeof neon>;
+  __httpDb?: AppDb;
 };
 
-function getPool(): Pool {
+function getSql() {
   const url = process.env.POSTGRES_URL;
   if (!url) {
     throw new Error("POSTGRES_URL is not set");
   }
-  if (!globalForDb.__drizzlePool) {
-    globalForDb.__drizzlePool = new Pool({
-      connectionString: url,
-      max: 5,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
-    });
+  if (!globalForHttp.__neonSql) {
+    globalForHttp.__neonSql = neon(url);
   }
-  return globalForDb.__drizzlePool;
+  return globalForHttp.__neonSql;
 }
 
 function getDb(): AppDb {
-  if (!globalForDb.__drizzleDb) {
-    globalForDb.__drizzleDb = drizzle(getPool(), { schema });
+  if (!globalForHttp.__httpDb) {
+    globalForHttp.__httpDb = drizzle(getSql(), { schema });
   }
-  return globalForDb.__drizzleDb;
+  return globalForHttp.__httpDb;
 }
 
-/** Neon serverless Pool (WebSocket) so `db.transaction()` works — not `neon-http`. */
+/**
+ * Neon **HTTP** driver — avoids WebSocket pool hangs on Vercel / Next.js 15 serverless.
+ * For `transaction()`, import `poolDb` from `@/db/pool` instead.
+ */
 export const db = new Proxy({} as AppDb, {
   get(_, prop) {
     return (getDb() as unknown as Record<string | symbol, unknown>)[prop as string];

@@ -2,7 +2,7 @@ import { loadEnvConfig } from "@next/env";
 import bcrypt from "bcryptjs";
 import { inArray } from "drizzle-orm";
 import type { NeonDatabase } from "drizzle-orm/neon-serverless";
-import { db } from "../src/db";
+import { poolDb } from "../src/db/pool";
 import * as schema from "../src/db/schema";
 import { friendships, sessions, thoughts, users } from "../src/db/schema";
 
@@ -68,7 +68,7 @@ async function main() {
 
   const seedEmails = seedUsers.map((user) => user.email);
 
-  await db.transaction(async (tx: AppDb) => {
+  await poolDb.transaction(async (tx: AppDb) => {
     const existing = await tx
       .select({ id: users.id })
       .from(users)
