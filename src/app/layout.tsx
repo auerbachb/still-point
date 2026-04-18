@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "Still Point",
     description:
       "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
