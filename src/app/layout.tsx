@@ -19,7 +19,28 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://still-point.me"),
   title: "Still Point",
-  description: "Attention training",
+  description:
+    "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
+  openGraph: {
+    type: "website",
+    title: "Still Point",
+    description:
+      "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
+    images: [
+      {
+        url: "/og.png",
+        width: 724,
+        height: 724,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Still Point",
+    description:
+      "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
+    images: ["/og.png"],
+  },
 };
 
 export default function RootLayout({
