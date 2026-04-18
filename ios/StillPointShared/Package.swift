@@ -12,5 +12,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "StillPointShared"),
+        .testTarget(
+            name: "StillPointSharedTests",
+            dependencies: ["StillPointShared"]
+        ),
     ]
 )
