@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         isPublic: user.isPublic,
         currentDay: user.currentDay,
       },
+      token,
     });
   } catch (error) {
     console.error("Login error:", error);

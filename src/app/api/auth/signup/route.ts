@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         isPublic: newUser.isPublic,
         currentDay: newUser.currentDay,
       },
+      token,
     });
   } catch (error) {
     console.error("Signup error:", error);

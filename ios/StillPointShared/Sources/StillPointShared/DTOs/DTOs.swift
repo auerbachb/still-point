@@ -99,6 +99,7 @@ public struct BatchThoughtsRequest: Codable, Sendable {
 
 public struct UserResponse: Codable, Sendable {
     public let user: UserDTO
+    public let token: String?
 }
 
 public struct SessionResponse: Codable, Sendable {

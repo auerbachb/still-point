@@ -1,7 +1,7 @@
 import Foundation
 
 /// Network client for the Still Point web API.
-/// Uses cookie-based auth (sp_token) matching the web app.
+/// Uses cookie auth where available and bearer token auth for native reliability.
 public actor APIClient {
     public static let shared = APIClient()
 
@@ -33,6 +33,9 @@ public actor APIClient {
     public func signup(email: String, username: String, password: String) async throws -> UserDTO {
         let body: [String: String] = ["email": email, "username": username, "password": password]
         let response: UserResponse = try await post("/api/auth/signup", body: body)
+        if let token = response.token {
+            AuthTokenStore.save(token)
+        }
         return response.user
     }
 
@@ -40,11 +43,15 @@ public actor APIClient {
         // Web app sends username too but only uses email+password for login
         let body: [String: String] = ["email": email, "username": "", "password": password]
         let response: UserResponse = try await post("/api/auth/login", body: body)
+        if let token = response.token {
+            AuthTokenStore.save(token)
+        }
         return response.user
     }
 
     public func logout() async throws {
         let _: [String: Bool] = try await post("/api/auth/logout", body: Optional<String>.none)
+        AuthTokenStore.clear()
     }
 
     public func deleteAccount() async throws {
@@ -112,6 +119,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuthorizationHeader(to: &request)
         return try await execute(request)
     }
 
@@ -120,6 +128,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuthorizationHeader(to: &request)
         if let body {
             request.httpBody = try JSONEncoder().encode(body)
         }
@@ -131,6 +140,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuthorizationHeader(to: &request)
         request.httpBody = try JSONEncoder().encode(body)
         return try await execute(request)
     }
@@ -140,6 +150,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuthorizationHeader(to: &request)
         _ = try await executeRaw(request)
     }
 
@@ -165,6 +176,8 @@ public actor APIClient {
     }
 
     private func clearLocalSessionArtifacts() {
+        AuthTokenStore.clear()
+
         let cookieStorage = session.configuration.httpCookieStorage ?? .shared
         for cookie in cookieStorage.cookies ?? [] {
             cookieStorage.deleteCookie(cookie)
@@ -176,6 +189,11 @@ public actor APIClient {
                 credentialStorage.remove(credential, for: protectionSpace)
             }
         }
+    }
+
+    private func applyAuthorizationHeader(to request: inout URLRequest) {
+        guard let token = AuthTokenStore.load(), !token.isEmpty else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 }
 

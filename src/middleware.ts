@@ -29,7 +29,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes need valid JWT
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const tokenFromCookie = request.cookies.get(COOKIE_NAME)?.value;
+  const authorization = request.headers.get("authorization");
+  const tokenFromBearer = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : null;
+  const token = tokenFromCookie ?? tokenFromBearer;
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
