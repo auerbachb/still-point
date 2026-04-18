@@ -11,30 +11,6 @@ public final class AudioEngine: @unchecked Sendable {
     public func playTick() {}
     public func playChime(count: Int) {}
     public func playCompletion() {}
-
-    public struct SoundPrefs: Codable, Equatable {
-        public var tick: Bool
-        public var chime: Bool
-        public var completion: Bool
-
-        public static let defaults = SoundPrefs(tick: false, chime: true, completion: true)
-    }
-
-    private static let prefsKey = "stillpoint_sound_prefs"
-
-    public static func loadPrefs() -> SoundPrefs {
-        guard let data = UserDefaults.standard.data(forKey: prefsKey),
-              let prefs = try? JSONDecoder().decode(SoundPrefs.self, from: data) else {
-            return .defaults
-        }
-        return prefs
-    }
-
-    public static func savePrefs(_ prefs: SoundPrefs) {
-        if let data = try? JSONEncoder().encode(prefs) {
-            UserDefaults.standard.set(data, forKey: prefsKey)
-        }
-    }
 }
 
 #else
@@ -191,9 +167,13 @@ public final class AudioEngine: @unchecked Sendable {
             engine.stop()
         }
     }
+}
 
-    // MARK: - Sound Preferences
+#endif
 
+// MARK: - Sound Preferences (shared across platform implementations)
+
+extension AudioEngine {
     public struct SoundPrefs: Codable, Equatable {
         public var tick: Bool
         public var chime: Bool
@@ -218,5 +198,3 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 }
-
-#endif
