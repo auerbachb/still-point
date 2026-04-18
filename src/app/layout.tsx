@@ -23,9 +23,6 @@ export const metadata: Metadata = {
     "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
   openGraph: {
     type: "website",
-    title: "Still Point",
-    description:
-      "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
     images: [
       {
         url: "/og.png",
@@ -36,9 +33,6 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Still Point",
-    description:
-      "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
     images: ["/og.png"],
   },
 };
