@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
+    const includeToken = request.headers.get("x-still-point-client") === "ios";
     const body = await request.json();
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body?.password === "string" ? body.password : "";
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
         isPublic: user.isPublic,
         currentDay: user.currentDay,
       },
+      ...(includeToken ? { token } : {}),
     });
   } catch (error) {
     console.error("Login error:", error);

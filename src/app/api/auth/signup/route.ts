@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
+    const includeToken = request.headers.get("x-still-point-client") === "ios";
     const { email, username, password } = await request.json();
 
     if (!email || !username || !password) {
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
         isPublic: newUser.isPublic,
         currentDay: newUser.currentDay,
       },
+      ...(includeToken ? { token } : {}),
     });
   } catch (error) {
     console.error("Signup error:", error);

@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
 const COOKIE_NAME = "sp_token";
 
@@ -53,7 +54,11 @@ export async function clearAuthCookie() {
 
 export async function getCurrentUser(): Promise<{ userId: string; email: string } | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const tokenFromCookie = cookieStore.get(COOKIE_NAME)?.value;
+  const authorization = (await headers()).get("authorization");
+  const tokenFromBearer =
+    authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : null;
+  const token = tokenFromBearer ?? tokenFromCookie;
   if (!token) return null;
   return verifyToken(token);
 }
