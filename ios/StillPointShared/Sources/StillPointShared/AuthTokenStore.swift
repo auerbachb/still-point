@@ -5,7 +5,8 @@ enum AuthTokenStore {
     private static let account = "sp-auth-token"
     private static let service = "still-point.auth"
 
-    static func save(_ token: String) {
+    @discardableResult
+    static func save(_ token: String) -> Bool {
         let data = Data(token.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -16,6 +17,7 @@ enum AuthTokenStore {
         let deleteStatus = SecItemDelete(query as CFDictionary)
         if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
             logKeychainFailure(operation: "delete-before-save", status: deleteStatus)
+            return false
         }
 
         var attributes = query
@@ -25,7 +27,9 @@ enum AuthTokenStore {
         let addStatus = SecItemAdd(attributes as CFDictionary, nil)
         if addStatus != errSecSuccess {
             logKeychainFailure(operation: "save", status: addStatus)
+            return false
         }
+        return true
     }
 
     static func load() -> String? {
@@ -54,7 +58,8 @@ enum AuthTokenStore {
         return token
     }
 
-    static func clear() {
+    @discardableResult
+    static func clear() -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -63,7 +68,9 @@ enum AuthTokenStore {
         let status = SecItemDelete(query as CFDictionary)
         if status != errSecSuccess && status != errSecItemNotFound {
             logKeychainFailure(operation: "clear", status: status)
+            return false
         }
+        return true
     }
 
     private static func logKeychainFailure(operation: String, status: OSStatus) {
