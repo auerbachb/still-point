@@ -34,7 +34,7 @@ final class SessionViewModel {
     private var pausedElapsed: Double = 0
     private var timer: AnyCancellable?
     private var lastTickSec = 0
-    private var lastChimeMinutesLeft: Int
+    private var lastCompletedMinuteBlockIndex = -1
     private var controlHideTimer: AnyCancellable?
 
     var remaining: Double {
@@ -80,13 +80,28 @@ final class SessionViewModel {
         self.dayNumber = dayNumber
         self.totalSeconds = StillPoint.duration(forDay: dayNumber)
         self.soundPrefs = AudioEngine.loadPrefs()
-        // Initialize to ceil so the first tick doesn't immediately fire chimes
-        self.lastChimeMinutesLeft = Int(ceil(Double(self.totalSeconds) / 60.0))
         // Initial mind state log entry
         self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
     }
 
     func start() {
+        let resumeElapsed = pausedElapsed
+        let isResume = resumeElapsed > 0 && resumeElapsed < Double(totalSeconds)
+
+        if isResume {
+            lastTickSec = Int(floor(resumeElapsed))
+            lastCompletedMinuteBlockIndex = SessionLogic.completedMinuteBlockIndex(
+                elapsed: resumeElapsed,
+                totalSeconds: totalSeconds
+            )
+        } else {
+            // Fresh session start: clear any carried timer/chime state.
+            elapsed = 0
+            pausedElapsed = 0
+            lastTickSec = 0
+            lastCompletedMinuteBlockIndex = -1
+        }
+
         isActive = true
         isPaused = false
         startDate = Date().addingTimeInterval(-pausedElapsed)
@@ -241,7 +256,6 @@ final class SessionViewModel {
         pausedElapsed = newElapsed
 
         let currentSec = Int(newElapsed)
-        let remainingTime = Double(totalSeconds) - newElapsed
 
         // Tick sound — once per second
         if soundPrefs.tick && currentSec > lastTickSec {
@@ -249,13 +263,17 @@ final class SessionViewModel {
             AudioEngine.shared.playTick()
         }
 
-        // Minute chime — fire when remaining crosses a whole minute boundary downward
-        if soundPrefs.chime {
-            let wholeMinutesLeft = Int(floor(remainingTime / 60))
-            if wholeMinutesLeft >= 1 && wholeMinutesLeft < lastChimeMinutesLeft {
-                AudioEngine.shared.playChime(count: wholeMinutesLeft)
+        // Advance minute-block boundary progress independent of mute state.
+        let chimeUpdate = SessionLogic.nextMinuteChimeUpdate(
+            elapsed: newElapsed,
+            totalSeconds: totalSeconds,
+            lastCompletedBlockIndex: lastCompletedMinuteBlockIndex
+        )
+        if chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex {
+            lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
+            if soundPrefs.chime, let chimeCount = chimeUpdate.chimeCount {
+                AudioEngine.shared.playChime(count: chimeCount)
             }
-            lastChimeMinutesLeft = wholeMinutesLeft
         }
     }
 
