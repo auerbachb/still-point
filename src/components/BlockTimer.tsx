@@ -451,7 +451,7 @@ export function BlockTimer({
       {useMinuteBlocks ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
           <div style={{
-            display: "flex", flexWrap: "wrap", gap: "11px",
+            display: "flex", flexWrap: "wrap", gap: blockGap,
             justifyContent: "center", maxWidth: boxesAreaWidth,
           }}>
             {minuteBlocks.map(b => renderBlock(b))}
@@ -469,7 +469,7 @@ export function BlockTimer({
               final minute
             </div>
             <div style={{
-              display: "flex", flexWrap: "wrap", gap: "11px",
+              display: "flex", flexWrap: "wrap", gap: blockGap,
               justifyContent: "center", maxWidth: boxesAreaWidth,
             }}>
               {secondBlocks.map(b => renderBlock(b))}
@@ -478,7 +478,7 @@ export function BlockTimer({
         </div>
       ) : (
         <div style={{
-          display: "flex", flexWrap: "wrap", gap: "11px",
+          display: "flex", flexWrap: "wrap", gap: blockGap,
           justifyContent: "center", maxWidth: boxesAreaWidth,
         }}>
           {blocks.map(b => renderBlock(b))}
