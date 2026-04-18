@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
 import { playTick, playChime, playCompletion, type SoundPrefs } from "@/lib/audio";
+import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 type BlockTimerProps = {
@@ -65,6 +66,8 @@ export function BlockTimer({
   const isMobile = useIsMobile();
   const isBuddySync = Boolean(syncClock?.startedAt && syncClock?.serverNow);
   const isControlled = controlledElapsed !== undefined && !isBuddySync;
+  const [showTimer, setShowTimer] = useState(true);
+  const [hasLoadedDisplayPrefs, setHasLoadedDisplayPrefs] = useState(false);
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
 
@@ -111,6 +114,17 @@ export function BlockTimer({
     if (!syncClock?.startedAt || !syncClock?.serverNow) return;
     skewRef.current = new Date(syncClock.serverNow).getTime() - Date.now();
   }, [syncClock?.startedAt, syncClock?.serverNow]);
+
+  useEffect(() => {
+    const prefs = loadDisplayPrefs();
+    setShowTimer(prefs.showTimer);
+    setHasLoadedDisplayPrefs(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedDisplayPrefs) return;
+    saveDisplayPrefs({ showTimer });
+  }, [showTimer, hasLoadedDisplayPrefs]);
 
   useEffect(() => {
     if (isControlled || isBuddySync) return;
@@ -378,14 +392,58 @@ export function BlockTimer({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
-      <div style={{
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
-        fontSize: "min(120px, 18vw)", fontWeight: 200, letterSpacing: "0.05em",
-        color: elapsed >= totalSeconds ? "var(--accent-green)" : "var(--fg)",
-        textShadow: elapsed >= totalSeconds ? "0 0 40px var(--accent-green-glow)" : "none",
-        transition: "color 0.8s, text-shadow 0.8s",
-      }}>
-        {minutes}:{seconds.toString().padStart(2, "0")}
+      <div
+        style={{
+          width: "min(560px, calc(100vw - 24px))",
+          position: "relative",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div
+          aria-hidden={!showTimer}
+          style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
+            fontSize: "min(120px, 18vw)",
+            fontWeight: 200,
+            letterSpacing: "0.05em",
+            color: elapsed >= totalSeconds ? "var(--accent-green)" : "var(--fg)",
+            textShadow: elapsed >= totalSeconds ? "0 0 40px var(--accent-green-glow)" : "none",
+            transition: "color 0.8s, text-shadow 0.8s, opacity 0.25s ease",
+            opacity: showTimer ? 1 : 0,
+            minHeight: "1em",
+            userSelect: "none",
+          }}
+        >
+          {minutes}:{seconds.toString().padStart(2, "0")}
+        </div>
+        <button
+          type="button"
+          aria-pressed={showTimer}
+          aria-label={showTimer ? "Hide numerical timer" : "Show numerical timer"}
+          onClick={() => setShowTimer(prev => !prev)}
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            border: "1px solid var(--border-2)",
+            background: "var(--surface-1)",
+            color: "var(--fg-3)",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "11px",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            padding: "8px 12px",
+            transition: "opacity 0.2s, border-color 0.2s, color 0.2s",
+            opacity: showTimer ? 0.9 : 1,
+          }}
+        >
+          {showTimer ? "hide" : "show"}
+        </button>
       </div>
 
       {/* 60-second progress bar */}
