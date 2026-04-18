@@ -15,7 +15,7 @@ type CompletionScreenProps = {
 
 export function CompletionScreen({
   dayNumber,
-  duration,
+  duration: completedDuration,
   clearPercent,
   thoughtCount,
   thoughts,
@@ -26,7 +26,8 @@ export function CompletionScreen({
   const [noteSaved, setNoteSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const nextDuration = duration + INCREMENT;
+  // Progression is based on the user's completed day, not the just-finished sit length.
+  const nextDuration = BASE_DURATION + dayNumber * INCREMENT;
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
 
   return (
@@ -49,7 +50,7 @@ export function CompletionScreen({
           fontSize: "13px", color: "var(--accent-green-text)",
           marginTop: "var(--s2)", letterSpacing: "0.07em",
         }}>
-          {duration} seconds of sustained attention
+          {completedDuration} seconds of sustained attention
         </p>
 
         <div style={{
