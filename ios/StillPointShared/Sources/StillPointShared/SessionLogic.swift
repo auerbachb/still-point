@@ -47,7 +47,7 @@ public enum SessionLogic {
     ) -> Int? {
         guard blockIndex >= 0 else { return nil }
         let blockEnd = (blockIndex + 1) * 60
-        let chimeCount = Int(floor(Double(totalSeconds - blockEnd) / 60.0))
+        let chimeCount = (totalSeconds - blockEnd) / 60
         return chimeCount >= 1 ? chimeCount : nil
     }
 
