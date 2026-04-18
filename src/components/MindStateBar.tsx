@@ -5,12 +5,17 @@ type MindStateBarProps = {
   totalSeconds: number;
   mindStateLog: Array<{ time: number; state: string }>;
   currentState: string;
+  barWidth?: string;
 };
 
-export function MindStateBar({ elapsed, totalSeconds, mindStateLog, currentState }: MindStateBarProps) {
+export function MindStateBar({
+  elapsed,
+  totalSeconds,
+  mindStateLog,
+  currentState,
+  barWidth = "min(460px, calc(100vw - 40px))",
+}: MindStateBarProps) {
   if (elapsed <= 0) return null;
-
-  const barWidth = "min(460px, calc(100vw - 40px))";
   const segments: Array<{ start: number; end: number; state: string }> = [];
   let lastTime = 0;
   let lastState = "clear";
