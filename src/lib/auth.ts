@@ -58,7 +58,7 @@ export async function getCurrentUser(): Promise<{ userId: string; email: string 
   const authorization = (await headers()).get("authorization");
   const tokenFromBearer =
     authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : null;
-  const token = tokenFromCookie ?? tokenFromBearer;
+  const token = tokenFromBearer ?? tokenFromCookie;
   if (!token) return null;
   return verifyToken(token);
 }

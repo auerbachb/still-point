@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
   const tokenFromBearer = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length).trim()
     : null;
-  const token = tokenFromCookie ?? tokenFromBearer;
+  const token = tokenFromBearer ?? tokenFromCookie;
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

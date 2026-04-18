@@ -33,8 +33,10 @@ public actor APIClient {
     public func signup(email: String, username: String, password: String) async throws -> UserDTO {
         let body: [String: String] = ["email": email, "username": username, "password": password]
         let response: UserResponse = try await post("/api/auth/signup", body: body)
-        if let token = response.token {
+        if let token = response.token, !token.isEmpty {
             AuthTokenStore.save(token)
+        } else {
+            AuthTokenStore.clear()
         }
         return response.user
     }
@@ -43,15 +45,17 @@ public actor APIClient {
         // Web app sends username too but only uses email+password for login
         let body: [String: String] = ["email": email, "username": "", "password": password]
         let response: UserResponse = try await post("/api/auth/login", body: body)
-        if let token = response.token {
+        if let token = response.token, !token.isEmpty {
             AuthTokenStore.save(token)
+        } else {
+            AuthTokenStore.clear()
         }
         return response.user
     }
 
     public func logout() async throws {
+        defer { clearLocalSessionArtifacts() }
         let _: [String: Bool] = try await post("/api/auth/logout", body: Optional<String>.none)
-        AuthTokenStore.clear()
     }
 
     public func deleteAccount() async throws {
@@ -119,6 +123,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios", forHTTPHeaderField: "X-Still-Point-Client")
         applyAuthorizationHeader(to: &request)
         return try await execute(request)
     }
@@ -128,6 +133,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios", forHTTPHeaderField: "X-Still-Point-Client")
         applyAuthorizationHeader(to: &request)
         if let body {
             request.httpBody = try JSONEncoder().encode(body)
@@ -140,6 +146,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios", forHTTPHeaderField: "X-Still-Point-Client")
         applyAuthorizationHeader(to: &request)
         request.httpBody = try JSONEncoder().encode(body)
         return try await execute(request)
@@ -150,6 +157,7 @@ public actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios", forHTTPHeaderField: "X-Still-Point-Client")
         applyAuthorizationHeader(to: &request)
         _ = try await executeRaw(request)
     }

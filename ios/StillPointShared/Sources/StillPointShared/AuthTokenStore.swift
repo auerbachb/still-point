@@ -13,11 +13,19 @@ enum AuthTokenStore {
             kSecAttrAccount as String: account,
         ]
 
-        SecItemDelete(query as CFDictionary)
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+            logKeychainFailure(operation: "delete-before-save", status: deleteStatus)
+        }
 
         var attributes = query
         attributes[kSecValueData as String] = data
-        SecItemAdd(attributes as CFDictionary, nil)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            logKeychainFailure(operation: "save", status: addStatus)
+        }
     }
 
     static func load() -> String? {
@@ -31,6 +39,11 @@ enum AuthTokenStore {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status != errSecSuccess && status != errSecItemNotFound {
+            logKeychainFailure(operation: "load", status: status)
+            return nil
+        }
 
         guard status == errSecSuccess,
               let data = result as? Data,
@@ -47,6 +60,14 @@ enum AuthTokenStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            logKeychainFailure(operation: "clear", status: status)
+        }
+    }
+
+    private static func logKeychainFailure(operation: String, status: OSStatus) {
+        let message = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown Keychain error"
+        print("AuthTokenStore \(operation) failed (\(status)): \(message)")
     }
 }
