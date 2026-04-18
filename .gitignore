@@ -47,6 +47,7 @@ ios/StillPointShared/build/
 
 # Nested agent worktrees (gitlinks); keep out of the app repo
 .claude/worktrees/
+.worktrees/
 
 # Auth Keys
 *.p8
