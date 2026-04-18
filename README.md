@@ -141,6 +141,7 @@ Third-party keys in use today:
 | Service | Variable | Used for |
 |---------|----------|----------|
 | Daily.co | `DAILY_API_KEY` | Create/delete rooms, issue meeting tokens for buddy video (`src/lib/daily.ts`, `src/app/api/buddy/sessions/[id]/start`, `…/meeting-token`). |
+| YouTube (optional) | `STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID` | **Marketing only:** 11-character video id for the landing-page demo embed. Unset or empty → no embed (#166). |
 
 ### `vercel.json`
 
