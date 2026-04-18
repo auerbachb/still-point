@@ -66,8 +66,7 @@ export function BlockTimer({
   const isMobile = useIsMobile();
   const isBuddySync = Boolean(syncClock?.startedAt && syncClock?.serverNow);
   const isControlled = controlledElapsed !== undefined && !isBuddySync;
-  const [showTimer, setShowTimer] = useState(true);
-  const [hasLoadedDisplayPrefs, setHasLoadedDisplayPrefs] = useState(false);
+  const [showTimer, setShowTimer] = useState(() => loadDisplayPrefs().showTimer);
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
 
@@ -116,15 +115,8 @@ export function BlockTimer({
   }, [syncClock?.startedAt, syncClock?.serverNow]);
 
   useEffect(() => {
-    const prefs = loadDisplayPrefs();
-    setShowTimer(prefs.showTimer);
-    setHasLoadedDisplayPrefs(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedDisplayPrefs) return;
     saveDisplayPrefs({ showTimer });
-  }, [showTimer, hasLoadedDisplayPrefs]);
+  }, [showTimer]);
 
   useEffect(() => {
     if (isControlled || isBuddySync) return;
