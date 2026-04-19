@@ -5,6 +5,7 @@ import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { computeClearPercentFromLog, isMindStateTypingTarget } from "@/lib/mindStateSession";
 
 type SessionViewProps = {
   currentDay: number;
@@ -34,15 +35,28 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
   const [isActive, setIsActive] = useState(true);
   const [mindState, setMindState] = useState("clear");
+  const mindStateRef = useRef(mindState);
+  mindStateRef.current = mindState;
+
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
-  const [showThoughtInput, setShowThoughtInput] = useState(false);
+  const mindStateLogRef = useRef(mindStateLog);
+  useEffect(() => {
+    mindStateLogRef.current = mindStateLog;
+  }, [mindStateLog]);
+  const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>([]);
   const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
   const elapsedRef = useRef(0);
+  /** Drives re-renders while the timer runs so awareness % stays in sync with elapsed time. */
+  const [, setLiveElapsed] = useState(0);
   const wallStartRef = useRef<number>(Date.now());
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** True while pointer or space is actively holding the distraction control */
+  const holdActiveRef = useRef(false);
+  const spaceDownRef = useRef(false);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -64,96 +78,173 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     };
   }, []);
 
+  const finalizeActiveDistraction = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    if (mindStateRef.current !== "thinking") return;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog(prev => {
+      const next = [...prev, { time: atTime, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setShowPostDistractionCapture(offerThoughtCapture);
+  }, []);
+
+  const beginDistraction = useCallback(() => {
+    if (!isActive || mindStateRef.current !== "clear") return;
+    setShowPostDistractionCapture(false);
+    setMindState("thinking");
+    mindStateRef.current = "thinking";
+    setMindStateLog(prev => {
+      const next = [...prev, { time: elapsedRef.current, state: "thinking" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setSessionThoughtCount(prev => prev + 1);
+  }, [isActive]);
+
+  const endDistractionHold = useCallback(() => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    finalizeActiveDistraction(elapsedRef.current, true);
+  }, [finalizeActiveDistraction]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (!isActive || isMindStateTypingTarget(e.target)) return;
+      e.preventDefault();
+      spaceDownRef.current = true;
+      if (!holdActiveRef.current) {
+        holdActiveRef.current = true;
+        beginDistraction();
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (!spaceDownRef.current) return;
+      spaceDownRef.current = false;
+      e.preventDefault();
+      endDistractionHold();
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keyup", onKeyUp, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("keyup", onKeyUp, { capture: true });
+    };
+  }, [isActive, beginDistraction, endDistractionHold]);
+
   const calcClearPercent = useCallback(() => {
-    if (mindStateLog.length === 0) return 100;
-    let clearTime = 0;
-    let lastTime = 0;
-    let lastState = "clear";
     const endTime = elapsedRef.current || todayDuration;
-    const log = [...mindStateLog, { time: endTime, state: "clear" }];
-    for (const entry of log) {
-      if (lastState === "clear") clearTime += entry.time - lastTime;
-      lastTime = entry.time;
-      lastState = entry.state;
-    }
-    return Math.round((clearTime / endTime) * 100);
+    return computeClearPercentFromLog(mindStateLogRef.current, endTime);
   }, [mindStateLog, todayDuration]);
 
+  const snapshotForComplete = useCallback(() => {
+    const at = elapsedRef.current;
+    setShowPostDistractionCapture(false);
+    if (mindStateRef.current !== "thinking") {
+      return mindStateLogRef.current;
+    }
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    const next = [...mindStateLogRef.current, { time: at, state: "clear" }];
+    mindStateLogRef.current = next;
+    setMindStateLog(next);
+    return next;
+  }, []);
+
   const handleComplete = useCallback(() => {
+    const resolvedLog = snapshotForComplete();
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
+    const endT = elapsedRef.current || todayDuration;
     onComplete({
       dayNumber: currentDay,
       duration: todayDuration,
       completed: true,
       actualTime,
-      clearPercent: calcClearPercent(),
+      clearPercent: computeClearPercentFromLog(resolvedLog, endT),
       thoughtCount: sessionThoughtCount,
-      mindStateLog,
+      mindStateLog: resolvedLog,
       thoughts: sessionThoughts,
     });
-  }, [currentDay, todayDuration, sessionThoughtCount, mindStateLog, sessionThoughts, onComplete, calcClearPercent]);
+  }, [currentDay, todayDuration, sessionThoughtCount, sessionThoughts, onComplete, snapshotForComplete]);
 
-  const handleThinkingToggle = () => {
-    const now = elapsedRef.current;
-    if (mindState === "clear") {
-      setMindState("thinking");
-      setMindStateLog(prev => [...prev, { time: now, state: "thinking" }]);
-      setSessionThoughtCount(prev => prev + 1);
-      setShowThoughtInput(true);
-    } else {
-      setMindState("clear");
-      setMindStateLog(prev => [...prev, { time: now, state: "clear" }]);
-      setShowThoughtInput(false);
-    }
+  const handlePointerDistractionDown = () => {
+    if (!isActive || mindStateRef.current !== "clear") return;
+    holdActiveRef.current = true;
+    beginDistraction();
+  };
+
+  const handlePointerDistractionUp = () => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    finalizeActiveDistraction(elapsedRef.current, true);
   };
 
   const handleSaveThought = (text: string) => {
     setSessionThoughts(prev => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
-    setMindState("clear");
-    setMindStateLog(prev => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+    setShowPostDistractionCapture(false);
   };
 
-  const handleSkipThought = () => {
-    setMindState("clear");
-    setMindStateLog(prev => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+  const handleDismissPostCapture = () => {
+    setShowPostDistractionCapture(false);
   };
 
   const handleEndEarly = () => {
+    const resolvedLog = snapshotForComplete();
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
+    const endT = elapsedRef.current || todayDuration;
     onComplete({
       dayNumber: currentDay,
       duration: todayDuration,
       completed: false,
       actualTime,
-      clearPercent: calcClearPercent(),
+      clearPercent: computeClearPercentFromLog(resolvedLog, endT),
       thoughtCount: sessionThoughtCount,
-      mindStateLog,
+      mindStateLog: resolvedLog,
       thoughts: sessionThoughts,
     });
   };
 
   const handleAbandon = () => {
+    const resolvedLog = snapshotForComplete();
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
+    const endT = elapsedRef.current || todayDuration;
     onAbandon({
       dayNumber: currentDay,
       duration: todayDuration,
       completed: false,
       actualTime,
-      clearPercent: calcClearPercent(),
+      clearPercent: computeClearPercentFromLog(resolvedLog, endT),
       thoughtCount: sessionThoughtCount,
-      mindStateLog,
+      mindStateLog: resolvedLog,
       thoughts: sessionThoughts,
     });
   };
 
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
+    setLiveElapsed(elapsed);
   }, []);
+
+  const togglePause = () => {
+    if (isActive) {
+      if (holdActiveRef.current) {
+        holdActiveRef.current = false;
+        spaceDownRef.current = false;
+      }
+      finalizeActiveDistraction(elapsedRef.current, false);
+    }
+    setIsActive(a => !a);
+  };
+
+  const distractionPercent = 100 - calcClearPercent();
 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -167,53 +258,123 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         soundPrefs={soundPrefs}
       />
 
+      {/* Persistent aware / distracted indicator (visible even when controls fade) */}
+      {isActive && (
+        <div style={{ width: "100%", maxWidth: "min(420px, calc(100vw - 24px))", marginTop: "12px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--fg-3)",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                boxShadow: mindState === "thinking" ? "0 0 12px var(--accent-amber)" : "none",
+                flexShrink: 0,
+              }}
+            />
+            <span>{mindState === "thinking" ? "Distracted" : "Aware"}</span>
+            {sessionThoughtCount > 0 && (
+              <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                · {sessionThoughtCount} {sessionThoughtCount === 1 ? "segment" : "segments"}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+            <button
+              type="button"
+              disabled={!isActive}
+              aria-pressed={mindState === "thinking"}
+              aria-label="Hold while distracted. Release when you are aware again."
+              onMouseDown={e => { e.preventDefault(); handlePointerDistractionDown(); }}
+              onMouseUp={handlePointerDistractionUp}
+              onMouseLeave={() => {
+                if (holdActiveRef.current) handlePointerDistractionUp();
+              }}
+              onTouchStart={e => {
+                e.preventDefault();
+                handlePointerDistractionDown();
+              }}
+              onTouchEnd={handlePointerDistractionUp}
+              onTouchCancel={handlePointerDistractionUp}
+              style={{
+                background: mindState === "thinking"
+                  ? "var(--accent-amber-bg)"
+                  : "var(--accent-green-bg-subtle)",
+                border: `1px solid ${mindState === "thinking"
+                  ? "var(--accent-amber-border)"
+                  : "var(--accent-green-border)"}`,
+                color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase",
+                padding: "12px 28px", borderRadius: "24px",
+                cursor: isActive ? "pointer" : "default",
+                transition: "all 0.3s", minWidth: "200px",
+                opacity: isActive ? 1 : 0.45,
+              }}
+            >
+              {mindState === "thinking" ? "Release — aware again" : "Hold — distracted"}
+            </button>
+          </div>
+
+          <p style={{
+            margin: "10px 0 0",
+            textAlign: "center",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "10px",
+            color: "var(--fg-4)",
+            letterSpacing: "0.06em",
+          }}>
+            Spacebar (hold) does the same when you are not typing in a field.
+          </p>
+
+          <div style={{
+            marginTop: "14px",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "10px",
+            color: "var(--fg-4)",
+            letterSpacing: "0.08em",
+            textAlign: "center",
+          }}>
+            <span style={{ color: "var(--accent-green-dim)" }}>{calcClearPercent()}% awareness</span>
+            <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
+            <span style={{ color: "var(--accent-amber-border)" }}>{distractionPercent}% distraction</span>
+          </div>
+
+          {showPostDistractionCapture && (
+            <div
+              data-no-space-distraction
+              style={{ marginTop: "20px", width: "100%", display: "flex", justifyContent: "center" }}
+            >
+              <ThoughtCapture onSave={handleSaveThought} onCancel={handleDismissPostCapture} />
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{
         opacity: controlsVisible ? 1 : 0,
         transition: "opacity 0.5s ease",
         pointerEvents: controlsVisible ? "auto" : "none",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "32px", justifyContent: "center" }}>
-          <button
-            type="button"
-            onClick={handleThinkingToggle}
-            style={{
-              background: mindState === "thinking"
-                ? "var(--accent-amber-bg)"
-                : "var(--accent-green-bg-subtle)",
-              border: `1px solid ${mindState === "thinking"
-                ? "var(--accent-amber-border)"
-                : "var(--accent-green-border)"}`,
-              color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase",
-              padding: "12px 28px", borderRadius: "24px",
-              cursor: "pointer", transition: "all 0.3s", minWidth: "160px",
-            }}
-          >
-            {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
-          </button>
-          {sessionThoughtCount > 0 && (
-            <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-              fontSize: "11px", color: "var(--accent-amber-border)",
-              display: "flex", alignItems: "center", gap: "4px",
-            }}>
-              \uD83D\uDCAD {sessionThoughtCount}
-            </div>
-          )}
-        </div>
-
-        {showThoughtInput && (
-          <div style={{ marginTop: "20px", width: "100%", display: "flex", justifyContent: "center" }}>
-            <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
-          </div>
-        )}
-
-        {!showThoughtInput && (
+        {!showPostDistractionCapture && (
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px", flexWrap: "wrap" }}>
             <button
               type="button"
-              onClick={() => setIsActive(!isActive)}
+              onClick={togglePause}
               style={{
                 background: "none",
                 border: "1px solid var(--border-2)",

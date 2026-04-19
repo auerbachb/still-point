@@ -6,6 +6,8 @@ struct MindStateBarView: View {
     let elapsed: Double
     let totalSeconds: Int
     let mindStateLog: [MindStateEntry]
+    /// Current mind state so the in-progress tail matches live holds (log updates on release).
+    let currentMindState: String
 
     var body: some View {
         GeometryReader { geo in
@@ -31,9 +33,12 @@ struct MindStateBarView: View {
                     let segmentX = width * startFraction
                     let segmentWidth = max(0, width * (endFraction - startFraction))
 
+                    let isLastSegment = index + 1 == mindStateLog.count
+                    let segmentIsClear = isLastSegment ? (currentMindState == "clear") : entry.isClear
+
                     Rectangle()
-                        .fill(entry.isClear ? SPColor.green : SPColor.amber)
-                        .opacity(entry.isClear ? 0.5 : 0.6)
+                        .fill(segmentIsClear ? SPColor.green : SPColor.amber)
+                        .opacity(segmentIsClear ? 0.5 : 0.6)
                         .frame(width: segmentWidth)
                         .offset(x: segmentX)
                 }

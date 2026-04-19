@@ -64,7 +64,16 @@ export function CompletionScreen({
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
             }}>
-              clear mind
+              awareness
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-amber)" }}>{100 - clearPercent}%</div>
+            <div style={{
+              fontSize: "11px", color: "var(--fg-3)",
+              letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
+            }}>
+              distraction
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
@@ -73,7 +82,7 @@ export function CompletionScreen({
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
             }}>
-              interruptions
+              captured notes
             </div>
           </div>
         </div>

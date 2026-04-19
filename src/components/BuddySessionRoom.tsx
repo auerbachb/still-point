@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
 import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -9,6 +9,7 @@ import { BlockTimer } from "./BlockTimer";
 import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { computeClearPercentFromLog, isMindStateTypingTarget } from "@/lib/mindStateSession";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -34,24 +35,6 @@ function getLocalIsoDate(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function calcBuddyClearPercent(
-  mindStateLog: Array<{ time: number; state: string }>,
-  totalSeconds: number,
-): number {
-  if (mindStateLog.length === 0) return 100;
-  let clearTime = 0;
-  let lastTime = 0;
-  let lastState = "clear";
-  const endTime = totalSeconds;
-  const log = [...mindStateLog, { time: endTime, state: "clear" }];
-  for (const entry of log) {
-    if (lastState === "clear") clearTime += entry.time - lastTime;
-    lastTime = entry.time;
-    lastState = entry.state;
-  }
-  return Math.round((clearTime / endTime) * 100);
 }
 
 function formatBuddyActionError(e: unknown, fallback: string): string {
@@ -90,8 +73,10 @@ export function BuddySessionRoom({
   const [pollStopped, setPollStopped] = useState(false);
   const lastRevision = useRef(-1);
   const [mindState, setMindState] = useState("clear");
+  const mindStateRef = useRef(mindState);
+  mindStateRef.current = mindState;
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
-  const [showThoughtInput, setShowThoughtInput] = useState(false);
+  const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>(
     [],
   );
@@ -99,6 +84,9 @@ export function BuddySessionRoom({
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
+  const [displayElapsed, setDisplayElapsed] = useState(0);
+  const holdActiveRef = useRef(false);
+  const spaceDownRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
@@ -111,7 +99,6 @@ export function BuddySessionRoom({
   const sessionThoughtCountRef = useRef(sessionThoughtCount);
 
   snapRef.current = snap;
-  mindStateLogRef.current = mindStateLog;
   sessionThoughtsRef.current = sessionThoughts;
   sessionThoughtCountRef.current = sessionThoughtCount;
 
@@ -183,7 +170,9 @@ export function BuddySessionRoom({
     timerAnchorRef.current = anchor;
     setMindState("clear");
     setMindStateLog([]);
-    setShowThoughtInput(false);
+    setShowPostDistractionCapture(false);
+    holdActiveRef.current = false;
+    spaceDownRef.current = false;
     setSessionThoughts([]);
     setSessionThoughtCount(0);
   }, [sessionId, snap?.state, snap?.startedAt]);
@@ -210,38 +199,108 @@ export function BuddySessionRoom({
 
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
+    setDisplayElapsed(elapsed);
   }, []);
 
-  const handleBuddyTimerComplete = useCallback(() => {
-    void poll();
-  }, [poll]);
+  const buddyAwarenessPct = useMemo(() => {
+    if (!snap?.startedAt || snap.state !== "active") return 100;
+    const cap = Math.max(snap.durationSeconds, 1);
+    const endT = Math.min(cap, displayElapsed);
+    return computeClearPercentFromLog(mindStateLog, endT);
+  }, [snap?.startedAt, snap?.state, snap?.durationSeconds, displayElapsed, mindStateLog]);
 
-  const handleThinkingToggle = () => {
-    const now = elapsedRef.current;
-    if (mindState === "clear") {
-      setMindState("thinking");
-      setMindStateLog((prev) => [...prev, { time: now, state: "thinking" }]);
-      setSessionThoughtCount((prev) => prev + 1);
-      setShowThoughtInput(true);
-    } else {
-      setMindState("clear");
-      setMindStateLog((prev) => [...prev, { time: now, state: "clear" }]);
-      setShowThoughtInput(false);
-    }
-  };
+  useEffect(() => {
+    mindStateLogRef.current = mindStateLog;
+  }, [mindStateLog]);
+
+  const finalizeActiveBuddyDistraction = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    if (mindStateRef.current !== "thinking") return;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: atTime, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setShowPostDistractionCapture(offerThoughtCapture);
+  }, []);
+
+  const beginBuddyDistraction = useCallback(() => {
+    if (mindStateRef.current !== "clear") return;
+    setShowPostDistractionCapture(false);
+    setMindState("thinking");
+    mindStateRef.current = "thinking";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "thinking" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setSessionThoughtCount((c) => c + 1);
+  }, []);
+
+  const endBuddyDistractionHold = useCallback(() => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    finalizeActiveBuddyDistraction(elapsedRef.current, true);
+  }, [finalizeActiveBuddyDistraction]);
+
+  useEffect(() => {
+    if (snap?.state !== "active") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (isMindStateTypingTarget(e.target)) return;
+      e.preventDefault();
+      spaceDownRef.current = true;
+      if (!holdActiveRef.current) {
+        holdActiveRef.current = true;
+        beginBuddyDistraction();
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (!spaceDownRef.current) return;
+      spaceDownRef.current = false;
+      e.preventDefault();
+      endBuddyDistractionHold();
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keyup", onKeyUp, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("keyup", onKeyUp, { capture: true });
+    };
+  }, [snap?.state, beginBuddyDistraction, endBuddyDistractionHold]);
 
   const handleSaveThought = (text: string) => {
     setSessionThoughts((prev) => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
-    setMindState("clear");
-    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+    setShowPostDistractionCapture(false);
   };
 
-  const handleSkipThought = () => {
-    setMindState("clear");
-    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+  const handleDismissPostCapture = () => {
+    setShowPostDistractionCapture(false);
   };
+
+  const closeOpenBuddyDistraction = useCallback(() => {
+    if (mindStateRef.current !== "thinking") return;
+    const duration = snapRef.current?.durationSeconds;
+    const at =
+      duration && duration > 0 ? Math.min(duration, elapsedRef.current) : elapsedRef.current;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: at, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setShowPostDistractionCapture(false);
+    holdActiveRef.current = false;
+    spaceDownRef.current = false;
+  }, []);
+
+  const handleBuddyTimerComplete = useCallback(() => {
+    closeOpenBuddyDistraction();
+    void poll();
+  }, [poll, closeOpenBuddyDistraction]);
 
   const setReady = async (ready: boolean) => {
     try {
@@ -292,7 +351,7 @@ export function BuddySessionRoom({
     setPersonalRecordError(null);
     try {
       const durationSeconds = snapNow.durationSeconds;
-      const clearPercent = calcBuddyClearPercent(mindStateLogRef.current, durationSeconds);
+      const clearPercent = computeClearPercentFromLog(mindStateLogRef.current, durationSeconds);
       const thoughtsSnapshot = sessionThoughtsRef.current;
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
         clearPercent,
@@ -829,10 +888,9 @@ export function BuddySessionRoom({
 
               <div
                 style={{
-                  opacity: controlsVisible ? 1 : 0,
-                  transition: "opacity 0.5s ease",
-                  pointerEvents: controlsVisible ? "auto" : "none",
                   width: "100%",
+                  maxWidth: "min(420px, calc(100vw - 24px))",
+                  margin: "0 auto",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -842,16 +900,73 @@ export function BuddySessionRoom({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "16px",
+                    gap: "10px",
                     marginTop: "8px",
-                    justifyContent: "center",
-                    flexWrap: "wrap",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    color: "var(--fg-3)",
                   }}
                 >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      background: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                      boxShadow: mindState === "thinking" ? "0 0 12px var(--accent-amber)" : "none",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{mindState === "thinking" ? "Distracted" : "Aware"}</span>
+                  {sessionThoughtCount > 0 && (
+                    <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                      · {sessionThoughtCount} {sessionThoughtCount === 1 ? "segment" : "segments"}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "center", marginTop: "12px", width: "100%" }}>
                   <button
                     type="button"
-                    onClick={handleThinkingToggle}
+                    aria-pressed={mindState === "thinking"}
+                    aria-label="Hold while distracted. Release when you are aware again."
                     title="Mind-state and thoughts stay on this device; others are not notified."
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear") return;
+                      holdActiveRef.current = true;
+                      beginBuddyDistraction();
+                    }}
+                    onMouseUp={() => {
+                      if (!holdActiveRef.current) return;
+                      holdActiveRef.current = false;
+                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                    }}
+                    onMouseLeave={() => {
+                      if (holdActiveRef.current) {
+                        holdActiveRef.current = false;
+                        finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear") return;
+                      holdActiveRef.current = true;
+                      beginBuddyDistraction();
+                    }}
+                    onTouchEnd={() => {
+                      if (!holdActiveRef.current) return;
+                      holdActiveRef.current = false;
+                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                    }}
+                    onTouchCancel={() => {
+                      if (!holdActiveRef.current) return;
+                      holdActiveRef.current = false;
+                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                    }}
                     style={{
                       background:
                         mindState === "thinking"
@@ -872,40 +987,64 @@ export function BuddySessionRoom({
                       borderRadius: "24px",
                       cursor: "pointer",
                       transition: "all 0.3s",
-                      minWidth: "160px",
+                      minWidth: "200px",
                     }}
                   >
-                    {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
+                    {mindState === "thinking" ? "Release — aware again" : "Hold — distracted"}
                   </button>
-                  {sessionThoughtCount > 0 && (
-                    <div
-                      style={{
-                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                        fontSize: "11px",
-                        color: "var(--accent-amber-border)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      💭 {sessionThoughtCount}
-                    </div>
-                  )}
                 </div>
 
-                {showThoughtInput && (
+                <p
+                  style={{
+                    margin: "10px 0 0",
+                    textAlign: "center",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "10px",
+                    color: "var(--fg-4)",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  Spacebar (hold) when not typing — only on your device.
+                </p>
+
+                <div
+                  style={{
+                    marginTop: "12px",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "10px",
+                    color: "var(--fg-4)",
+                    letterSpacing: "0.08em",
+                    textAlign: "center",
+                  }}
+                >
+                  <span style={{ color: "var(--accent-green-dim)" }}>{buddyAwarenessPct}% awareness</span>
+                  <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
+                  <span style={{ color: "var(--accent-amber-border)" }}>
+                    {100 - buddyAwarenessPct}% distraction
+                  </span>
+                </div>
+
+                {showPostDistractionCapture && (
                   <div
-                    style={{
-                      marginTop: "20px",
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "center",
-                    }}
+                    data-no-space-distraction
+                    style={{ marginTop: "16px", width: "100%", display: "flex", justifyContent: "center" }}
                   >
-                    <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
+                    <ThoughtCapture onSave={handleSaveThought} onCancel={handleDismissPostCapture} />
                   </div>
                 )}
+              </div>
 
+              <div
+                style={{
+                  opacity: controlsVisible ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                  pointerEvents: controlsVisible ? "auto" : "none",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",

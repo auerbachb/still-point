@@ -24,8 +24,8 @@ final class SessionViewModel {
     var thoughtCount = 0
     var capturedThoughts: [CapturedThought] = []
 
-    // UI state
-    var showThoughtCapture = false
+    // UI state — optional thought prompt after a distraction segment ends
+    var showPostDistractionCapture = false
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
 
@@ -110,6 +110,7 @@ final class SessionViewModel {
     }
 
     func pause() {
+        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
         isPaused = true
         isActive = false
         pausedElapsed = elapsed
@@ -121,16 +122,19 @@ final class SessionViewModel {
         start()
     }
 
-    func toggleMindState() {
-        if mindState == "clear" {
-            mindState = "thinking"
-            thoughtCount += 1
-            showThoughtCapture = true
-        } else {
-            mindState = "clear"
-            showThoughtCapture = false
-        }
-        mindStateLog.append(MindStateEntry(time: elapsed, state: mindState))
+    /// Hold to mark a distraction segment (`thinking`); release returns to aware (`clear`).
+    func beginDistraction() {
+        guard isActive, mindState == "clear" else { return }
+        showPostDistractionCapture = false
+        mindState = "thinking"
+        thoughtCount += 1
+        mindStateLog.append(MindStateEntry(time: elapsed, state: "thinking"))
+        userInteracted()
+    }
+
+    func endDistraction() {
+        guard mindState == "thinking" else { return }
+        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: true)
         userInteracted()
     }
 
@@ -140,11 +144,11 @@ final class SessionViewModel {
             timeInSession: Int(elapsed),
             text: text
         ))
-        showThoughtCapture = false
+        showPostDistractionCapture = false
     }
 
-    func dismissThoughtCapture() {
-        showThoughtCapture = false
+    func dismissPostDistractionCapture() {
+        showPostDistractionCapture = false
     }
 
     func userInteracted() {
@@ -159,6 +163,7 @@ final class SessionViewModel {
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
+        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isComplete = true
@@ -167,6 +172,7 @@ final class SessionViewModel {
 
     /// Abandon session — discard all data, don't save
     func abandon() {
+        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isAbandoned = true
@@ -242,6 +248,7 @@ final class SessionViewModel {
         if newElapsed >= Double(totalSeconds) {
             elapsed = Double(totalSeconds)
             pausedElapsed = elapsed
+            finalizeActiveDistractionIfNeeded(at: Double(totalSeconds), offerThoughtCapture: false)
             timer?.cancel()
             isActive = false
             completedNaturally = true
@@ -275,6 +282,13 @@ final class SessionViewModel {
                 AudioEngine.shared.playChime(count: chimeCount)
             }
         }
+    }
+
+    private func finalizeActiveDistractionIfNeeded(at time: Double, offerThoughtCapture: Bool) {
+        guard mindState == "thinking" else { return }
+        mindState = "clear"
+        mindStateLog.append(MindStateEntry(time: time, state: "clear"))
+        showPostDistractionCapture = offerThoughtCapture
     }
 
     private func scheduleControlHide() {
