@@ -69,6 +69,7 @@ export function BlockTimer({
   const [showTimer, setShowTimer] = useState(() => loadDisplayPrefs().showTimer);
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
+  const blockGap = 11;
 
   // Build block definitions
   const useMinuteBlocks = totalSeconds > 120;
@@ -318,24 +319,6 @@ export function BlockTimer({
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.floor(remaining % 60);
 
-  // Status label
-  let statusLabel = "";
-  if (elapsed >= totalSeconds) {
-    statusLabel = "session complete";
-  } else if (useMinuteBlocks) {
-    const lastMinuteStart = minuteBlocks.length * 60;
-    if (elapsed < lastMinuteStart) {
-      const minIdx = Math.floor(elapsed / 60);
-      statusLabel = `minute ${minIdx + 1} of ${minuteBlocks.length}`;
-    } else {
-      const secIdx = Math.floor((elapsed - lastMinuteStart) / BLOCK_DURATION);
-      statusLabel = `final minute · block ${secIdx + 1} of ${secondBlocks.length}`;
-    }
-  } else {
-    const blockIdx = Math.floor(elapsed / BLOCK_DURATION);
-    statusLabel = `block ${blockIdx + 1} of ${blocks.length}`;
-  }
-
   const renderBlock = (block: BlockDef) => {
     const blockEnd = block.startTime + block.duration;
     const isFilled = elapsed >= blockEnd;
@@ -380,7 +363,7 @@ export function BlockTimer({
     );
   };
 
-  const rowMaxWidth = "min(505px, calc(100vw - 24px))";
+  const boxesAreaWidth = `min(${6 * blockSize + blockGap * 5}px, calc(100vw - 24px))`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
@@ -438,30 +421,38 @@ export function BlockTimer({
         </button>
       </div>
 
-      {/* 60-second progress bar */}
-      <div style={{ width: "min(460px, calc(100vw - 40px))", margin: "0 auto" }}>
-        <div style={{
-          height: "8px", borderRadius: "4px", overflow: "hidden",
-          background: "var(--surface-2)",
-        }}>
+      <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <MindStateBar
+          elapsed={elapsed}
+          totalSeconds={totalSeconds}
+          mindStateLog={mindStateLog}
+          currentState={mindState}
+          barWidth={boxesAreaWidth}
+        />
+        <div style={{ borderTop: "1px solid var(--border-1)", paddingTop: "14px" }}>
           <div style={{
-            width: `${elapsed >= totalSeconds ? 100 : ((elapsed % 60) / 60) * 100}%`,
-            height: "100%",
-            background: elapsed >= totalSeconds
-              ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
-              : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
-            opacity: 0.7,
-            transition: elapsed >= totalSeconds ? "width 0.3s" : "none",
-            borderRadius: "4px",
-          }} />
+            height: "8px", borderRadius: "4px", overflow: "hidden",
+            background: "var(--surface-2)",
+          }}>
+            <div style={{
+              width: `${elapsed >= totalSeconds ? 100 : ((elapsed % 60) / 60) * 100}%`,
+              height: "100%",
+              background: elapsed >= totalSeconds
+                ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
+                : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
+              opacity: 0.7,
+              transition: elapsed >= totalSeconds ? "width 0.3s" : "none",
+              borderRadius: "4px",
+            }} />
+          </div>
         </div>
       </div>
 
       {useMinuteBlocks ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
           <div style={{
-            display: "flex", flexWrap: "wrap", gap: "11px",
-            justifyContent: "center", maxWidth: rowMaxWidth,
+            display: "flex", flexWrap: "wrap", gap: blockGap,
+            justifyContent: "center", maxWidth: boxesAreaWidth,
           }}>
             {minuteBlocks.map(b => renderBlock(b))}
           </div>
@@ -478,8 +469,8 @@ export function BlockTimer({
               final minute
             </div>
             <div style={{
-              display: "flex", flexWrap: "wrap", gap: "11px",
-              justifyContent: "center", maxWidth: rowMaxWidth,
+              display: "flex", flexWrap: "wrap", gap: blockGap,
+              justifyContent: "center", maxWidth: boxesAreaWidth,
             }}>
               {secondBlocks.map(b => renderBlock(b))}
             </div>
@@ -487,27 +478,12 @@ export function BlockTimer({
         </div>
       ) : (
         <div style={{
-          display: "flex", flexWrap: "wrap", gap: "11px",
-          justifyContent: "center", maxWidth: rowMaxWidth,
+          display: "flex", flexWrap: "wrap", gap: blockGap,
+          justifyContent: "center", maxWidth: boxesAreaWidth,
         }}>
           {blocks.map(b => renderBlock(b))}
         </div>
       )}
-
-      <MindStateBar
-        elapsed={elapsed}
-        totalSeconds={totalSeconds}
-        mindStateLog={mindStateLog}
-        currentState={mindState}
-      />
-
-      <div style={{
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-        fontSize: "14px", color: "var(--fg-3)",
-        letterSpacing: "0.15em", textTransform: "uppercase",
-      }}>
-        {statusLabel}
-      </div>
     </div>
   );
 }
