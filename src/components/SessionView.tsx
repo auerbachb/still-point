@@ -139,7 +139,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
 
   const calcClearPercent = useCallback(() => {
     const endTime = elapsedRef.current || todayDuration;
-    return computeClearPercentFromLog(mindStateLogRef.current, endTime);
+    return computeClearPercentFromLog(mindStateLog, endTime);
   }, [mindStateLog, todayDuration]);
 
   const snapshotForComplete = useCallback(() => {
