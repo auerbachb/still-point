@@ -87,7 +87,7 @@ export function BuddySessionRoom({
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
   const [displayElapsed, setDisplayElapsed] = useState(0);
-  const holdKindRef = useRef<"none" | "pointerDistraction" | "spaceDistraction" | "commaHyperfocus">("none");
+  const holdKindRef = useRef<"none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus">("none");
   const spaceDownRef = useRef(false);
   const commaDownRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -924,7 +924,7 @@ export function BuddySessionRoom({
               <div
                 style={{
                   width: "100%",
-                  maxWidth: "min(420px, calc(100vw - 24px))",
+                  maxWidth: "min(420px, calc(100vw - 40px))",
                   margin: "0 auto",
                   display: "flex",
                   flexDirection: "column",
@@ -1003,18 +1003,18 @@ export function BuddySessionRoom({
                     onMouseDown={(e) => {
                       e.preventDefault();
                       if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-                      holdKindRef.current = "pointerDistraction";
+                      holdKindRef.current = "pointerHold";
                       beginBuddyDistraction();
                     }}
                     onMouseUp={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
                         return;
                       }
                       holdKindRef.current = "none";
                       finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onMouseLeave={() => {
-                      if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "thinking") {
+                      if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
                         holdKindRef.current = "none";
                         finalizeActiveBuddyHold(elapsedRef.current, true);
                       }
@@ -1022,18 +1022,18 @@ export function BuddySessionRoom({
                     onTouchStart={(e) => {
                       e.preventDefault();
                       if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-                      holdKindRef.current = "pointerDistraction";
+                      holdKindRef.current = "pointerHold";
                       beginBuddyDistraction();
                     }}
                     onTouchEnd={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
                         return;
                       }
                       holdKindRef.current = "none";
                       finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onTouchCancel={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
                         return;
                       }
                       holdKindRef.current = "none";
@@ -1090,18 +1090,18 @@ export function BuddySessionRoom({
                     onMouseDown={(e) => {
                       e.preventDefault();
                       if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-                      holdKindRef.current = "pointerDistraction";
+                      holdKindRef.current = "pointerHold";
                       beginBuddyHyperfocus();
                     }}
                     onMouseUp={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
                         return;
                       }
                       holdKindRef.current = "none";
                       finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onMouseLeave={() => {
-                      if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "hyperfocus") {
+                      if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
                         holdKindRef.current = "none";
                         finalizeActiveBuddyHold(elapsedRef.current, false);
                       }
@@ -1109,18 +1109,18 @@ export function BuddySessionRoom({
                     onTouchStart={(e) => {
                       e.preventDefault();
                       if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-                      holdKindRef.current = "pointerDistraction";
+                      holdKindRef.current = "pointerHold";
                       beginBuddyHyperfocus();
                     }}
                     onTouchEnd={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
                         return;
                       }
                       holdKindRef.current = "none";
                       finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onTouchCancel={() => {
-                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
                         return;
                       }
                       holdKindRef.current = "none";

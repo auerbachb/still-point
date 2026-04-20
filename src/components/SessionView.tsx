@@ -58,7 +58,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const holdKindRef = useRef<"none" | "pointerDistraction" | "spaceDistraction" | "commaHyperfocus">("none");
+  const holdKindRef = useRef<"none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus">("none");
   const spaceDownRef = useRef(false);
   const commaDownRef = useRef(false);
 
@@ -221,24 +221,24 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-    holdKindRef.current = "pointerDistraction";
+    holdKindRef.current = "pointerHold";
     beginDistraction();
   };
 
   const handlePointerDistractionUp = () => {
-    if (holdKindRef.current !== "pointerDistraction") return;
+    if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") return;
     holdKindRef.current = "none";
     finalizeActiveHold(elapsedRef.current, true);
   };
 
   const handlePointerHyperfocusDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-    holdKindRef.current = "pointerDistraction";
+    holdKindRef.current = "pointerHold";
     beginHyperfocus();
   };
 
   const handlePointerHyperfocusUp = () => {
-    if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") return;
+    if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") return;
     holdKindRef.current = "none";
     finalizeActiveHold(elapsedRef.current, false);
   };
@@ -341,7 +341,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       />
 
       {isActive && (
-        <div style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 24px))", marginTop: "12px" }}>
+        <div style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 40px))", marginTop: "12px" }}>
           <div
             style={{
               display: "flex",
@@ -410,7 +410,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               }}
               onMouseUp={handlePointerDistractionUp}
               onMouseLeave={() => {
-                if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "thinking") {
+                if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
                   handlePointerDistractionUp();
                 }
               }}
@@ -446,7 +446,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               }}
               onMouseUp={handlePointerHyperfocusUp}
               onMouseLeave={() => {
-                if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "hyperfocus") {
+                if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
                   handlePointerHyperfocusUp();
                 }
               }}
