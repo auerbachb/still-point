@@ -40,9 +40,6 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
 
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
   const mindStateLogRef = useRef(mindStateLog);
-  useEffect(() => {
-    mindStateLogRef.current = mindStateLog;
-  }, [mindStateLog]);
   const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>([]);
   const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
