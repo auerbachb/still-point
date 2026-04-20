@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
 import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog, isMindStateTypingTarget } from "@/lib/mindStateSession";
+
+type MindState = "clear" | "thinking" | "hyperfocus";
 
 type SessionViewProps = {
   currentDay: number;
@@ -31,29 +33,34 @@ type SessionViewProps = {
   }) => void;
 };
 
+const mono: CSSProperties = {
+  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+};
+
 export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewProps) {
   const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
   const [isActive, setIsActive] = useState(true);
-  const [mindState, setMindState] = useState("clear");
-  const mindStateRef = useRef(mindState);
+  const [mindState, setMindState] = useState<MindState>("clear");
+  const mindStateRef = useRef<MindState>(mindState);
   mindStateRef.current = mindState;
 
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
   const mindStateLogRef = useRef(mindStateLog);
   const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>([]);
-  const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
+  const sessionThoughtsRef = useRef(sessionThoughts);
+  sessionThoughtsRef.current = sessionThoughts;
+  const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const elapsedRef = useRef(0);
-  /** Drives re-renders while the timer runs so awareness % stays in sync with elapsed time. */
   const [, setLiveElapsed] = useState(0);
   const wallStartRef = useRef<number>(Date.now());
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** True while pointer or space is actively holding the distraction control */
-  const holdActiveRef = useRef(false);
+  const holdKindRef = useRef<"none" | "pointerDistraction" | "spaceDistraction" | "commaHyperfocus">("none");
   const spaceDownRef = useRef(false);
+  const commaDownRef = useRef(false);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -75,8 +82,9 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     };
   }, []);
 
-  const finalizeActiveDistraction = useCallback((atTime: number, offerThoughtCapture: boolean) => {
-    if (mindStateRef.current !== "thinking") return;
+  const finalizeActiveHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    const ms = mindStateRef.current;
+    if (ms !== "thinking" && ms !== "hyperfocus") return;
     setMindState("clear");
     mindStateRef.current = "clear";
     setMindStateLog(prev => {
@@ -84,12 +92,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       mindStateLogRef.current = next;
       return next;
     });
-    setShowPostDistractionCapture(offerThoughtCapture);
+    if (ms === "thinking") {
+      setShowPostDistractionCapture(offerThoughtCapture);
+    }
   }, []);
 
   const beginDistraction = useCallback(() => {
-    if (!isActive || mindStateRef.current !== "clear") return;
-    setShowPostDistractionCapture(false);
+    if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
     setMindState("thinking");
     mindStateRef.current = "thinking";
     setMindStateLog(prev => {
@@ -97,33 +106,68 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       mindStateLogRef.current = next;
       return next;
     });
-    setSessionThoughtCount(prev => prev + 1);
-  }, [isActive]);
+    setDistractionSegmentCount(c => c + 1);
+  }, [isActive, showPostDistractionCapture]);
 
-  const endDistractionHold = useCallback(() => {
-    if (!holdActiveRef.current) return;
-    holdActiveRef.current = false;
-    finalizeActiveDistraction(elapsedRef.current, true);
-  }, [finalizeActiveDistraction]);
+  const beginHyperfocus = useCallback(() => {
+    if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("hyperfocus");
+    mindStateRef.current = "hyperfocus";
+    setMindStateLog(prev => {
+      const next = [...prev, { time: elapsedRef.current, state: "hyperfocus" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+  }, [isActive, showPostDistractionCapture]);
+
+  const endHoldFromKeyboard = useCallback(() => {
+    finalizeActiveHold(elapsedRef.current, true);
+  }, [finalizeActiveHold]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat) return;
       if (!isActive || isMindStateTypingTarget(e.target)) return;
-      e.preventDefault();
-      spaceDownRef.current = true;
-      if (!holdActiveRef.current) {
-        holdActiveRef.current = true;
-        beginDistraction();
+
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        spaceDownRef.current = true;
+        if (holdKindRef.current === "none") {
+          holdKindRef.current = "spaceDistraction";
+          beginDistraction();
+        }
+        return;
+      }
+
+      if ((e.code === "Comma" || e.key === ",") && !e.repeat) {
+        e.preventDefault();
+        commaDownRef.current = true;
+        if (holdKindRef.current === "none") {
+          holdKindRef.current = "commaHyperfocus";
+          beginHyperfocus();
+        }
       }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
-      if (!spaceDownRef.current) return;
-      spaceDownRef.current = false;
-      e.preventDefault();
-      endDistractionHold();
+      if (e.code === "Space") {
+        if (!spaceDownRef.current) return;
+        spaceDownRef.current = false;
+        e.preventDefault();
+        if (holdKindRef.current === "spaceDistraction") {
+          holdKindRef.current = "none";
+          endHoldFromKeyboard();
+        }
+        return;
+      }
+      if (e.code === "Comma" || e.key === ",") {
+        if (!commaDownRef.current) return;
+        commaDownRef.current = false;
+        e.preventDefault();
+        if (holdKindRef.current === "commaHyperfocus") {
+          holdKindRef.current = "none";
+          endHoldFromKeyboard();
+        }
+      }
     };
 
     window.addEventListener("keydown", onKeyDown, { capture: true });
@@ -132,7 +176,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("keyup", onKeyUp, { capture: true });
     };
-  }, [isActive, beginDistraction, endDistractionHold]);
+  }, [isActive, beginDistraction, beginHyperfocus, endHoldFromKeyboard]);
 
   const calcClearPercent = useCallback(() => {
     const endTime = elapsedRef.current || todayDuration;
@@ -142,7 +186,10 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const snapshotForComplete = useCallback(() => {
     const at = elapsedRef.current;
     setShowPostDistractionCapture(false);
-    if (mindStateRef.current !== "thinking") {
+    holdKindRef.current = "none";
+    spaceDownRef.current = false;
+    commaDownRef.current = false;
+    if (mindStateRef.current === "clear") {
       return mindStateLogRef.current;
     }
     setMindState("clear");
@@ -152,6 +199,8 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     setMindStateLog(next);
     return next;
   }, []);
+
+  const payloadThoughtCount = () => sessionThoughtsRef.current.length;
 
   const handleComplete = useCallback(() => {
     const resolvedLog = snapshotForComplete();
@@ -164,22 +213,34 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       completed: true,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
-      thoughtCount: sessionThoughtCount,
+      thoughtCount: payloadThoughtCount(),
       mindStateLog: resolvedLog,
-      thoughts: sessionThoughts,
+      thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, todayDuration, sessionThoughtCount, sessionThoughts, onComplete, snapshotForComplete]);
+  }, [currentDay, todayDuration, onComplete, snapshotForComplete]);
 
   const handlePointerDistractionDown = () => {
-    if (!isActive || mindStateRef.current !== "clear") return;
-    holdActiveRef.current = true;
+    if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    holdKindRef.current = "pointerDistraction";
     beginDistraction();
   };
 
   const handlePointerDistractionUp = () => {
-    if (!holdActiveRef.current) return;
-    holdActiveRef.current = false;
-    finalizeActiveDistraction(elapsedRef.current, true);
+    if (holdKindRef.current !== "pointerDistraction") return;
+    holdKindRef.current = "none";
+    finalizeActiveHold(elapsedRef.current, true);
+  };
+
+  const handlePointerHyperfocusDown = () => {
+    if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    holdKindRef.current = "pointerDistraction";
+    beginHyperfocus();
+  };
+
+  const handlePointerHyperfocusUp = () => {
+    if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") return;
+    holdKindRef.current = "none";
+    finalizeActiveHold(elapsedRef.current, false);
   };
 
   const handleSaveThought = (text: string) => {
@@ -202,9 +263,9 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       completed: false,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
-      thoughtCount: sessionThoughtCount,
+      thoughtCount: payloadThoughtCount(),
       mindStateLog: resolvedLog,
-      thoughts: sessionThoughts,
+      thoughts: sessionThoughtsRef.current,
     });
   };
 
@@ -219,9 +280,9 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       completed: false,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
-      thoughtCount: sessionThoughtCount,
+      thoughtCount: payloadThoughtCount(),
       mindStateLog: resolvedLog,
-      thoughts: sessionThoughts,
+      thoughts: sessionThoughtsRef.current,
     });
   };
 
@@ -232,16 +293,40 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
 
   const togglePause = () => {
     if (isActive) {
-      if (holdActiveRef.current) {
-        holdActiveRef.current = false;
-        spaceDownRef.current = false;
-      }
-      finalizeActiveDistraction(elapsedRef.current, false);
+      holdKindRef.current = "none";
+      spaceDownRef.current = false;
+      commaDownRef.current = false;
+      finalizeActiveHold(elapsedRef.current, false);
     }
     setIsActive(a => !a);
   };
 
-  const distractionPercent = 100 - calcClearPercent();
+  const distractionPercent = Math.max(0, 100 - calcClearPercent());
+  const stateLabel =
+    mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
+  const capturedCount = sessionThoughts.length;
+
+  const holdButtonBase: CSSProperties = {
+    ...mono,
+    fontSize: "12px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    padding: "12px 16px",
+    borderRadius: "16px",
+    cursor: isActive ? "pointer" : "default",
+    transition: "all 0.25s",
+    flex: "1 1 140px",
+    minWidth: "min(160px, 42vw)",
+    maxWidth: "200px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "6px",
+    border: "1px solid var(--border-2)",
+    background: "var(--surface-1)",
+    color: "var(--fg-2)",
+    opacity: isActive ? 1 : 0.45,
+  };
 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -255,15 +340,14 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         soundPrefs={soundPrefs}
       />
 
-      {/* Persistent aware / distracted indicator (visible even when controls fade) */}
       {isActive && (
-        <div style={{ width: "100%", maxWidth: "min(420px, calc(100vw - 24px))", marginTop: "12px" }}>
+        <div style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 24px))", marginTop: "12px" }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: "10px",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              ...mono,
               fontSize: "11px",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
@@ -277,29 +361,58 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 width: "10px",
                 height: "10px",
                 borderRadius: "50%",
-                background: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-                boxShadow: mindState === "thinking" ? "0 0 12px var(--accent-amber)" : "none",
+                background:
+                  mindState === "thinking"
+                    ? "var(--accent-amber)"
+                    : mindState === "hyperfocus"
+                      ? "rgba(96, 165, 250, 0.95)"
+                      : "var(--accent-green)",
+                boxShadow:
+                  mindState === "thinking"
+                    ? "0 0 12px var(--accent-amber)"
+                    : mindState === "hyperfocus"
+                      ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                      : "none",
                 flexShrink: 0,
               }}
             />
-            <span>{mindState === "thinking" ? "Distracted" : "Aware"}</span>
-            {sessionThoughtCount > 0 && (
+            <span>{stateLabel}</span>
+            {distractionSegmentCount > 0 && (
               <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
-                · {sessionThoughtCount} {sessionThoughtCount === 1 ? "segment" : "segments"}
+                · {distractionSegmentCount} light {distractionSegmentCount === 1 ? "segment" : "segments"}
+              </span>
+            )}
+            {capturedCount > 0 && (
+              <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                · {capturedCount} captured {capturedCount === 1 ? "note" : "notes"}
               </span>
             )}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: "12px",
+              marginTop: "16px",
+              width: "100%",
+            }}
+          >
             <button
               type="button"
               disabled={!isActive}
               aria-pressed={mindState === "thinking"}
-              aria-label="Hold while distracted. Release when you are aware again."
-              onMouseDown={e => { e.preventDefault(); handlePointerDistractionDown(); }}
+              aria-label="Hold for light distraction, or hold Space. Release when aware again."
+              onMouseDown={e => {
+                e.preventDefault();
+                handlePointerDistractionDown();
+              }}
               onMouseUp={handlePointerDistractionUp}
               onMouseLeave={() => {
-                if (holdActiveRef.current) handlePointerDistractionUp();
+                if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "thinking") {
+                  handlePointerDistractionUp();
+                }
               }}
               onTouchStart={e => {
                 e.preventDefault();
@@ -308,44 +421,82 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               onTouchEnd={handlePointerDistractionUp}
               onTouchCancel={handlePointerDistractionUp}
               style={{
-                background: mindState === "thinking"
-                  ? "var(--accent-amber-bg)"
-                  : "var(--accent-green-bg-subtle)",
-                border: `1px solid ${mindState === "thinking"
-                  ? "var(--accent-amber-border)"
-                  : "var(--accent-green-border)"}`,
+                ...holdButtonBase,
+                borderColor:
+                  mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
+                background:
+                  mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
                 color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase",
-                padding: "12px 28px", borderRadius: "24px",
-                cursor: isActive ? "pointer" : "default",
-                transition: "all 0.3s", minWidth: "200px",
-                opacity: isActive ? 1 : 0.45,
               }}
             >
-              {mindState === "thinking" ? "Release — aware again" : "Hold — distracted"}
+              <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
+              <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
+                or hold Space
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={!isActive}
+              aria-pressed={mindState === "hyperfocus"}
+              aria-label="Hold for hyperfocus, or hold Comma. Release to return to aware."
+              onMouseDown={e => {
+                e.preventDefault();
+                handlePointerHyperfocusDown();
+              }}
+              onMouseUp={handlePointerHyperfocusUp}
+              onMouseLeave={() => {
+                if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "hyperfocus") {
+                  handlePointerHyperfocusUp();
+                }
+              }}
+              onTouchStart={e => {
+                e.preventDefault();
+                handlePointerHyperfocusDown();
+              }}
+              onTouchEnd={handlePointerHyperfocusUp}
+              onTouchCancel={handlePointerHyperfocusUp}
+              style={{
+                ...holdButtonBase,
+                borderColor:
+                  mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
+                background:
+                  mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+                color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+              }}
+            >
+              <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
+              <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
+                or hold ,
+              </span>
             </button>
           </div>
 
-          <p style={{
-            margin: "10px 0 0",
-            textAlign: "center",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "10px",
-            color: "var(--fg-4)",
-            letterSpacing: "0.06em",
-          }}>
-            Spacebar (hold) does the same when you are not typing in a field.
+          <p
+            style={{
+              margin: "12px 0 0",
+              textAlign: "center",
+              ...mono,
+              fontSize: "10px",
+              color: "var(--fg-4)",
+              letterSpacing: "0.05em",
+              lineHeight: 1.45,
+            }}
+          >
+            After a light distraction, you can jot a note (optional). If you need to stop and write because the thought
+            will not wait, use captured notes — that is tracked separately as a stronger pull.
           </p>
 
-          <div style={{
-            marginTop: "14px",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "10px",
-            color: "var(--fg-4)",
-            letterSpacing: "0.08em",
-            textAlign: "center",
-          }}>
+          <div
+            style={{
+              marginTop: "12px",
+              ...mono,
+              fontSize: "10px",
+              color: "var(--fg-4)",
+              letterSpacing: "0.08em",
+              textAlign: "center",
+            }}
+          >
             <span style={{ color: "var(--accent-green-dim)" }}>{calcClearPercent()}% awareness</span>
             <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
             <span style={{ color: "var(--accent-amber-border)" }}>{distractionPercent}% distraction</span>
@@ -362,11 +513,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
         </div>
       )}
 
-      <div style={{
-        opacity: controlsVisible ? 1 : 0,
-        transition: "opacity 0.5s ease",
-        pointerEvents: controlsVisible ? "auto" : "none",
-      }}>
+      <div
+        style={{
+          opacity: controlsVisible ? 1 : 0,
+          transition: "opacity 0.5s ease",
+          pointerEvents: controlsVisible ? "auto" : "none",
+        }}
+      >
         {!showPostDistractionCapture && (
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px", flexWrap: "wrap" }}>
             <button
@@ -376,9 +529,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 background: "none",
                 border: "1px solid var(--border-2)",
                 color: "var(--fg-3)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
-                padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
+                ...mono,
+                fontSize: "11px",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                padding: "10px 24px",
+                borderRadius: "20px",
+                cursor: "pointer",
               }}
             >
               {isActive ? "pause" : "resume"}
@@ -390,9 +547,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 background: "none",
                 border: "1px solid var(--accent-green-border)",
                 color: "var(--accent-green-dim)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
-                padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
+                ...mono,
+                fontSize: "11px",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                padding: "10px 24px",
+                borderRadius: "20px",
+                cursor: "pointer",
               }}
             >
               end early &amp; keep
@@ -404,9 +565,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 background: "none",
                 border: "1px solid var(--accent-danger-border)",
                 color: "var(--accent-danger-muted)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase",
-                padding: "10px 24px", borderRadius: "20px", cursor: "pointer",
+                ...mono,
+                fontSize: "11px",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                padding: "10px 24px",
+                borderRadius: "20px",
+                cursor: "pointer",
               }}
             >
               abandon
@@ -414,17 +579,24 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
           </div>
         )}
 
-        {/* Sound toggles */}
-        <div style={{
-          display: "flex", justifyContent: "center", gap: "16px", marginTop: "24px",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "11px", letterSpacing: "0.1em",
-        }}>
-          {([
-            ["tick", "tick"],
-            ["chime", "chime"],
-            ["completion", "end"],
-          ] as const).map(([key, label]) => (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "16px",
+            marginTop: "24px",
+            ...mono,
+            fontSize: "11px",
+            letterSpacing: "0.1em",
+          }}
+        >
+          {(
+            [
+              ["tick", "tick"],
+              ["chime", "chime"],
+              ["completion", "end"],
+            ] as const
+          ).map(([key, label]) => (
             <button
               type="button"
               key={key}
@@ -434,10 +606,10 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 saveSoundPrefs(next);
               }}
               style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: soundPrefs[key]
-                  ? "var(--fg-3)"
-                  : "var(--fg-4)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
                 transition: "color 0.3s",
                 padding: "4px 8px",
               }}

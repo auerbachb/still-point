@@ -1,4 +1,12 @@
-/** Targets where Space should not start a distraction hold (typing, thought capture, etc.). */
+/**
+ * Helpers for mind-state / distraction keyboard handling and clear-percent math.
+ * Used by solo `SessionView` and `BuddySessionRoom`.
+ */
+
+/**
+ * Returns true when the event target is a control where global shortcuts
+ * (Space, Comma) should not start a distraction/hyperfocus hold.
+ */
 export function isMindStateTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   const tag = el.tagName;
@@ -7,7 +15,17 @@ export function isMindStateTypingTarget(el: EventTarget | null): boolean {
   return Boolean(el.closest("[data-no-space-distraction]"));
 }
 
-/** Same formula as session completion: % of elapsed time in `"clear"` (aware) vs `"thinking"` (distraction). */
+/**
+ * Computes the percentage of `[0, endTime]` spent in `"clear"` (aware) vs other
+ * logged states, using the same replay rules as session completion.
+ *
+ * @param log Ordered transitions `{ time, state }` with `time` in session seconds.
+ * @param endTime Session elapsed seconds to treat as the interval end (exclusive of tail marker logic uses inclusive segments).
+ */
+function isAwareLikeState(state: string): boolean {
+  return state === "clear" || state === "hyperfocus";
+}
+
 export function computeClearPercentFromLog(
   log: Array<{ time: number; state: string }>,
   endTime: number,
@@ -18,7 +36,7 @@ export function computeClearPercentFromLog(
   let lastState = "clear";
   const full = [...log, { time: endTime, state: "clear" }];
   for (const entry of full) {
-    if (lastState === "clear") clearTime += entry.time - lastTime;
+    if (isAwareLikeState(lastState)) clearTime += entry.time - lastTime;
     lastTime = entry.time;
     lastState = entry.state;
   }

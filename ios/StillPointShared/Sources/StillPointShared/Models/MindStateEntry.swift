@@ -6,7 +6,7 @@ public struct MindStateEntry: Codable, Equatable, Sendable {
     /// Seconds elapsed when this state began
     public let time: Double
 
-    /// Either "clear" or "thinking"
+    /// "clear" (aware), "thinking" (distraction), or "hyperfocus" (deep absorption; counts toward awareness in clear %).
     public let state: String
 
     public init(time: Double, state: String) {
@@ -14,5 +14,5 @@ public struct MindStateEntry: Codable, Equatable, Sendable {
         self.state = state
     }
 
-    public var isClear: Bool { state == "clear" }
+    public var isClear: Bool { state == "clear" || state == "hyperfocus" }
 }

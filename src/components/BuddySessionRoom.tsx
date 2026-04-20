@@ -37,6 +37,8 @@ function getLocalIsoDate(): string {
   return `${year}-${month}-${day}`;
 }
 
+type BuddyMindState = "clear" | "thinking" | "hyperfocus";
+
 function formatBuddyActionError(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
     return buddyPolicyUserMessage(e.code) ?? e.message;
@@ -72,21 +74,22 @@ export function BuddySessionRoom({
   const [pollError, setPollError] = useState<string | null>(null);
   const [pollStopped, setPollStopped] = useState(false);
   const lastRevision = useRef(-1);
-  const [mindState, setMindState] = useState("clear");
-  const mindStateRef = useRef(mindState);
+  const [mindState, setMindState] = useState<BuddyMindState>("clear");
+  const mindStateRef = useRef<BuddyMindState>(mindState);
   mindStateRef.current = mindState;
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
   const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>(
     [],
   );
-  const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
+  const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
   const [displayElapsed, setDisplayElapsed] = useState(0);
-  const holdActiveRef = useRef(false);
+  const holdKindRef = useRef<"none" | "pointerDistraction" | "spaceDistraction" | "commaHyperfocus">("none");
   const spaceDownRef = useRef(false);
+  const commaDownRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
@@ -96,11 +99,8 @@ export function BuddySessionRoom({
   const snapRef = useRef(snap);
   const mindStateLogRef = useRef(mindStateLog);
   const sessionThoughtsRef = useRef(sessionThoughts);
-  const sessionThoughtCountRef = useRef(sessionThoughtCount);
-
   snapRef.current = snap;
   sessionThoughtsRef.current = sessionThoughts;
-  sessionThoughtCountRef.current = sessionThoughtCount;
 
   const poll = useCallback(async () => {
     if (pollStopped) return;
@@ -171,10 +171,11 @@ export function BuddySessionRoom({
     setMindState("clear");
     setMindStateLog([]);
     setShowPostDistractionCapture(false);
-    holdActiveRef.current = false;
+    holdKindRef.current = "none";
     spaceDownRef.current = false;
+    commaDownRef.current = false;
     setSessionThoughts([]);
-    setSessionThoughtCount(0);
+    setDistractionSegmentCount(0);
   }, [sessionId, snap?.state, snap?.startedAt]);
 
   useEffect(() => {
@@ -209,12 +210,9 @@ export function BuddySessionRoom({
     return computeClearPercentFromLog(mindStateLog, endT);
   }, [snap?.startedAt, snap?.state, snap?.durationSeconds, displayElapsed, mindStateLog]);
 
-  useEffect(() => {
-    mindStateLogRef.current = mindStateLog;
-  }, [mindStateLog]);
-
-  const finalizeActiveBuddyDistraction = useCallback((atTime: number, offerThoughtCapture: boolean) => {
-    if (mindStateRef.current !== "thinking") return;
+  const finalizeActiveBuddyHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    const ms = mindStateRef.current;
+    if (ms !== "thinking" && ms !== "hyperfocus") return;
     setMindState("clear");
     mindStateRef.current = "clear";
     setMindStateLog((prev) => {
@@ -222,12 +220,13 @@ export function BuddySessionRoom({
       mindStateLogRef.current = next;
       return next;
     });
-    setShowPostDistractionCapture(offerThoughtCapture);
+    if (ms === "thinking") {
+      setShowPostDistractionCapture(offerThoughtCapture);
+    }
   }, []);
 
   const beginBuddyDistraction = useCallback(() => {
-    if (mindStateRef.current !== "clear") return;
-    setShowPostDistractionCapture(false);
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
     setMindState("thinking");
     mindStateRef.current = "thinking";
     setMindStateLog((prev) => {
@@ -235,33 +234,68 @@ export function BuddySessionRoom({
       mindStateLogRef.current = next;
       return next;
     });
-    setSessionThoughtCount((c) => c + 1);
-  }, []);
+    setDistractionSegmentCount((c) => c + 1);
+  }, [showPostDistractionCapture]);
 
-  const endBuddyDistractionHold = useCallback(() => {
-    if (!holdActiveRef.current) return;
-    holdActiveRef.current = false;
-    finalizeActiveBuddyDistraction(elapsedRef.current, true);
-  }, [finalizeActiveBuddyDistraction]);
+  const beginBuddyHyperfocus = useCallback(() => {
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("hyperfocus");
+    mindStateRef.current = "hyperfocus";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "hyperfocus" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+  }, [showPostDistractionCapture]);
+
+  const endBuddyHoldFromKeyboard = useCallback(() => {
+    finalizeActiveBuddyHold(elapsedRef.current, true);
+  }, [finalizeActiveBuddyHold]);
 
   useEffect(() => {
     if (snap?.state !== "active") return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat) return;
       if (isMindStateTypingTarget(e.target)) return;
-      e.preventDefault();
-      spaceDownRef.current = true;
-      if (!holdActiveRef.current) {
-        holdActiveRef.current = true;
-        beginBuddyDistraction();
+
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        spaceDownRef.current = true;
+        if (holdKindRef.current === "none") {
+          holdKindRef.current = "spaceDistraction";
+          beginBuddyDistraction();
+        }
+        return;
+      }
+
+      if ((e.code === "Comma" || e.key === ",") && !e.repeat) {
+        e.preventDefault();
+        commaDownRef.current = true;
+        if (holdKindRef.current === "none") {
+          holdKindRef.current = "commaHyperfocus";
+          beginBuddyHyperfocus();
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
-      if (!spaceDownRef.current) return;
-      spaceDownRef.current = false;
-      e.preventDefault();
-      endBuddyDistractionHold();
+      if (e.code === "Space") {
+        if (!spaceDownRef.current) return;
+        spaceDownRef.current = false;
+        e.preventDefault();
+        if (holdKindRef.current === "spaceDistraction") {
+          holdKindRef.current = "none";
+          endBuddyHoldFromKeyboard();
+        }
+        return;
+      }
+      if (e.code === "Comma" || e.key === ",") {
+        if (!commaDownRef.current) return;
+        commaDownRef.current = false;
+        e.preventDefault();
+        if (holdKindRef.current === "commaHyperfocus") {
+          holdKindRef.current = "none";
+          endBuddyHoldFromKeyboard();
+        }
+      }
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     window.addEventListener("keyup", onKeyUp, { capture: true });
@@ -269,7 +303,7 @@ export function BuddySessionRoom({
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("keyup", onKeyUp, { capture: true });
     };
-  }, [snap?.state, beginBuddyDistraction, endBuddyDistractionHold]);
+  }, [snap?.state, beginBuddyDistraction, beginBuddyHyperfocus, endBuddyHoldFromKeyboard]);
 
   const handleSaveThought = (text: string) => {
     setSessionThoughts((prev) => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
@@ -280,8 +314,8 @@ export function BuddySessionRoom({
     setShowPostDistractionCapture(false);
   };
 
-  const closeOpenBuddyDistraction = useCallback(() => {
-    if (mindStateRef.current !== "thinking") return;
+  const closeOpenBuddyHold = useCallback(() => {
+    if (mindStateRef.current !== "thinking" && mindStateRef.current !== "hyperfocus") return;
     const duration = snapRef.current?.durationSeconds;
     const at =
       duration && duration > 0 ? Math.min(duration, elapsedRef.current) : elapsedRef.current;
@@ -293,14 +327,15 @@ export function BuddySessionRoom({
       return next;
     });
     setShowPostDistractionCapture(false);
-    holdActiveRef.current = false;
+    holdKindRef.current = "none";
     spaceDownRef.current = false;
+    commaDownRef.current = false;
   }, []);
 
   const handleBuddyTimerComplete = useCallback(() => {
-    closeOpenBuddyDistraction();
+    closeOpenBuddyHold();
     void poll();
-  }, [poll, closeOpenBuddyDistraction]);
+  }, [poll, closeOpenBuddyHold]);
 
   const setReady = async (ready: boolean) => {
     try {
@@ -355,7 +390,7 @@ export function BuddySessionRoom({
       const thoughtsSnapshot = sessionThoughtsRef.current;
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
         clearPercent,
-        thoughtCount: sessionThoughtCountRef.current,
+        thoughtCount: thoughtsSnapshot.length,
         mindStateLog: mindStateLogRef.current,
         actualTime: durationSeconds,
         sessionDate: getLocalIsoDate(),
@@ -915,57 +950,94 @@ export function BuddySessionRoom({
                       width: "10px",
                       height: "10px",
                       borderRadius: "50%",
-                      background: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-                      boxShadow: mindState === "thinking" ? "0 0 12px var(--accent-amber)" : "none",
+                      background:
+                        mindState === "thinking"
+                          ? "var(--accent-amber)"
+                          : mindState === "hyperfocus"
+                            ? "rgba(96, 165, 250, 0.95)"
+                            : "var(--accent-green)",
+                      boxShadow:
+                        mindState === "thinking"
+                          ? "0 0 12px var(--accent-amber)"
+                          : mindState === "hyperfocus"
+                            ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                            : "none",
                       flexShrink: 0,
                     }}
                   />
-                  <span>{mindState === "thinking" ? "Distracted" : "Aware"}</span>
-                  {sessionThoughtCount > 0 && (
+                  <span>
+                    {mindState === "thinking"
+                      ? "Distracted"
+                      : mindState === "hyperfocus"
+                        ? "Hyperfocus"
+                        : "Aware"}
+                  </span>
+                  {distractionSegmentCount > 0 && (
                     <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
-                      · {sessionThoughtCount} {sessionThoughtCount === 1 ? "segment" : "segments"}
+                      · {distractionSegmentCount} light{" "}
+                      {distractionSegmentCount === 1 ? "segment" : "segments"}
+                    </span>
+                  )}
+                  {sessionThoughts.length > 0 && (
+                    <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                      · {sessionThoughts.length} captured {sessionThoughts.length === 1 ? "note" : "notes"}
                     </span>
                   )}
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "center", marginTop: "12px", width: "100%" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    gap: "12px",
+                    marginTop: "12px",
+                    width: "100%",
+                  }}
+                >
                   <button
                     type="button"
                     aria-pressed={mindState === "thinking"}
-                    aria-label="Hold while distracted. Release when you are aware again."
+                    aria-label="Hold for light distraction, or hold Space. Only on your device."
                     title="Mind-state and thoughts stay on this device; others are not notified."
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      if (mindStateRef.current !== "clear") return;
-                      holdActiveRef.current = true;
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerDistraction";
                       beginBuddyDistraction();
                     }}
                     onMouseUp={() => {
-                      if (!holdActiveRef.current) return;
-                      holdActiveRef.current = false;
-                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onMouseLeave={() => {
-                      if (holdActiveRef.current) {
-                        holdActiveRef.current = false;
-                        finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                      if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "thinking") {
+                        holdKindRef.current = "none";
+                        finalizeActiveBuddyHold(elapsedRef.current, true);
                       }
                     }}
                     onTouchStart={(e) => {
                       e.preventDefault();
-                      if (mindStateRef.current !== "clear") return;
-                      holdActiveRef.current = true;
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerDistraction";
                       beginBuddyDistraction();
                     }}
                     onTouchEnd={() => {
-                      if (!holdActiveRef.current) return;
-                      holdActiveRef.current = false;
-                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onTouchCancel={() => {
-                      if (!holdActiveRef.current) return;
-                      holdActiveRef.current = false;
-                      finalizeActiveBuddyDistraction(elapsedRef.current, true);
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     style={{
                       background:
@@ -981,30 +1053,132 @@ export function BuddySessionRoom({
                         mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: "12px",
-                      letterSpacing: "0.15em",
+                      letterSpacing: "0.12em",
                       textTransform: "uppercase",
-                      padding: "12px 28px",
-                      borderRadius: "24px",
+                      padding: "12px 16px",
+                      borderRadius: "16px",
                       cursor: "pointer",
-                      transition: "all 0.3s",
-                      minWidth: "200px",
+                      transition: "all 0.25s",
+                      flex: "1 1 140px",
+                      minWidth: "min(160px, 42vw)",
+                      maxWidth: "200px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    {mindState === "thinking" ? "Release — aware again" : "Hold — distracted"}
+                    <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "9px",
+                        letterSpacing: "0.14em",
+                        opacity: 0.85,
+                        textTransform: "none",
+                      }}
+                    >
+                      or hold Space
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-pressed={mindState === "hyperfocus"}
+                    aria-label="Hold for hyperfocus, or hold Comma. Only on your device."
+                    title="Mind-state and thoughts stay on this device; others are not notified."
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerDistraction";
+                      beginBuddyHyperfocus();
+                    }}
+                    onMouseUp={() => {
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
+                    onMouseLeave={() => {
+                      if (holdKindRef.current === "pointerDistraction" && mindStateRef.current === "hyperfocus") {
+                        holdKindRef.current = "none";
+                        finalizeActiveBuddyHold(elapsedRef.current, false);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerDistraction";
+                      beginBuddyHyperfocus();
+                    }}
+                    onTouchEnd={() => {
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
+                    onTouchCancel={() => {
+                      if (holdKindRef.current !== "pointerDistraction" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
+                    style={{
+                      background:
+                        mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+                      border: `1px solid ${
+                        mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)"
+                      }`,
+                      color:
+                        mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "12px",
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      padding: "12px 16px",
+                      borderRadius: "16px",
+                      cursor: "pointer",
+                      transition: "all 0.25s",
+                      flex: "1 1 140px",
+                      minWidth: "min(160px, 42vw)",
+                      maxWidth: "200px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "9px",
+                        letterSpacing: "0.14em",
+                        opacity: 0.85,
+                        textTransform: "none",
+                      }}
+                    >
+                      or hold ,
+                    </span>
                   </button>
                 </div>
 
                 <p
                   style={{
-                    margin: "10px 0 0",
+                    margin: "12px 0 0",
                     textAlign: "center",
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "10px",
                     color: "var(--fg-4)",
-                    letterSpacing: "0.06em",
+                    letterSpacing: "0.05em",
+                    lineHeight: 1.45,
                   }}
                 >
-                  Spacebar (hold) when not typing — only on your device.
+                  Shortcuts when not typing — only on your device. After light distraction you can add an optional
+                  note; captured notes reflect a stronger pull.
                 </p>
 
                 <div
@@ -1020,7 +1194,7 @@ export function BuddySessionRoom({
                   <span style={{ color: "var(--accent-green-dim)" }}>{buddyAwarenessPct}% awareness</span>
                   <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
                   <span style={{ color: "var(--accent-amber-border)" }}>
-                    {100 - buddyAwarenessPct}% distraction
+                    {Math.max(0, 100 - buddyAwarenessPct)}% distraction
                   </span>
                 </div>
 

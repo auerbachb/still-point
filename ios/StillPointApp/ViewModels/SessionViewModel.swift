@@ -21,8 +21,11 @@ final class SessionViewModel {
     // Mind state
     var mindState: String = "clear"
     var mindStateLog: [MindStateEntry] = []
-    var thoughtCount = 0
+    /// Distraction segments started this sit (for in-session badge); API `thoughtCount` uses captured notes only.
+    var distractionSegmentCount = 0
     var capturedThoughts: [CapturedThought] = []
+
+    var thoughtCount: Int { capturedThoughts.count }
 
     // UI state — optional thought prompt after a distraction segment ends
     var showPostDistractionCapture = false
@@ -110,7 +113,7 @@ final class SessionViewModel {
     }
 
     func pause() {
-        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         isPaused = true
         isActive = false
         pausedElapsed = elapsed
@@ -124,17 +127,30 @@ final class SessionViewModel {
 
     /// Hold to mark a distraction segment (`thinking`); release returns to aware (`clear`).
     func beginDistraction() {
-        guard isActive, mindState == "clear" else { return }
-        showPostDistractionCapture = false
+        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
         mindState = "thinking"
-        thoughtCount += 1
+        distractionSegmentCount += 1
         mindStateLog.append(MindStateEntry(time: elapsed, state: "thinking"))
         userInteracted()
     }
 
     func endDistraction() {
         guard mindState == "thinking" else { return }
-        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: true)
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: true)
+        userInteracted()
+    }
+
+    /// Hold to mark hyperfocus; counts toward awareness in `clearPercent`. Release returns to `clear`.
+    func beginHyperfocus() {
+        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
+        mindState = "hyperfocus"
+        mindStateLog.append(MindStateEntry(time: elapsed, state: "hyperfocus"))
+        userInteracted()
+    }
+
+    func endHyperfocus() {
+        guard mindState == "hyperfocus" else { return }
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         userInteracted()
     }
 
@@ -163,7 +179,7 @@ final class SessionViewModel {
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
-        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isComplete = true
@@ -172,7 +188,7 @@ final class SessionViewModel {
 
     /// Abandon session — discard all data, don't save
     func abandon() {
-        finalizeActiveDistractionIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isAbandoned = true
@@ -248,7 +264,7 @@ final class SessionViewModel {
         if newElapsed >= Double(totalSeconds) {
             elapsed = Double(totalSeconds)
             pausedElapsed = elapsed
-            finalizeActiveDistractionIfNeeded(at: Double(totalSeconds), offerThoughtCapture: false)
+            finalizeActiveHoldIfNeeded(at: Double(totalSeconds), offerThoughtCapture: false)
             timer?.cancel()
             isActive = false
             completedNaturally = true
@@ -284,11 +300,12 @@ final class SessionViewModel {
         }
     }
 
-    private func finalizeActiveDistractionIfNeeded(at time: Double, offerThoughtCapture: Bool) {
-        guard mindState == "thinking" else { return }
+    private func finalizeActiveHoldIfNeeded(at time: Double, offerThoughtCapture: Bool) {
+        guard mindState == "thinking" || mindState == "hyperfocus" else { return }
+        let wasThinking = mindState == "thinking"
         mindState = "clear"
         mindStateLog.append(MindStateEntry(time: time, state: "clear"))
-        showPostDistractionCapture = offerThoughtCapture
+        showPostDistractionCapture = wasThinking && offerThoughtCapture
     }
 
     private func scheduleControlHide() {

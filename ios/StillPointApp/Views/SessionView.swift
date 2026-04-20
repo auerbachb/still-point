@@ -161,62 +161,116 @@ struct SessionView: View {
         VStack(spacing: SPSpacing.s2) {
             HStack(spacing: SPSpacing.s2) {
                 Circle()
-                    .fill(vm.mindState == "clear" ? SPColor.green : SPColor.amber)
+                    .fill(
+                        vm.mindState == "clear"
+                            ? SPColor.green
+                            : vm.mindState == "hyperfocus"
+                                ? Color(red: 0.38, green: 0.65, blue: 0.98)
+                                : SPColor.amber
+                    )
                     .frame(width: 10, height: 10)
-                    .shadow(color: vm.mindState == "clear" ? .clear : SPColor.amber.opacity(0.45), radius: vm.mindState == "clear" ? 0 : 6)
+                    .shadow(
+                        color: vm.mindState == "clear"
+                            ? .clear
+                            : vm.mindState == "hyperfocus"
+                                ? Color.blue.opacity(0.45)
+                                : SPColor.amber.opacity(0.45),
+                        radius: vm.mindState == "clear" ? 0 : 6
+                    )
 
-                Text(vm.mindState == "clear" ? "Aware" : "Distracted")
+                Text(vm.mindState == "thinking" ? "Distracted" : vm.mindState == "hyperfocus" ? "Hyperfocus" : "Aware")
                     .font(SPFont.mono(11, weight: .medium))
                     .foregroundStyle(Color(SPColor.fg3))
                     .tracking(1)
 
                 Spacer(minLength: 0)
 
-                if vm.thoughtCount > 0 {
-                    Text("\(vm.thoughtCount) notes")
+                if vm.distractionSegmentCount > 0 {
+                    Text("\(vm.distractionSegmentCount) light")
+                        .font(SPFont.mono(10, weight: .medium))
+                        .foregroundStyle(SPColor.amberText)
+                }
+
+                if !vm.capturedThoughts.isEmpty {
+                    Text("\(vm.capturedThoughts.count) captured")
                         .font(SPFont.mono(10, weight: .medium))
                         .foregroundStyle(SPColor.amberText)
                 }
             }
             .padding(.horizontal, SPSpacing.s3)
 
-            Text("Hold while distracted — release when you're back")
+            Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
                 .font(SPFont.mono(10))
                 .foregroundStyle(Color(SPColor.fg4))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, SPSpacing.s4)
 
-            Text("Hold to mark distraction")
-                .font(SPFont.serifItalic(17))
-                .foregroundStyle(Color(SPColor.fg))
-                .padding(.horizontal, SPSpacing.s4)
-                .padding(.vertical, SPSpacing.s2)
-                .frame(maxWidth: .infinity)
-                .background(
-                    vm.mindState == "clear"
-                        ? SPColor.greenBgFaint
-                        : SPColor.amberBgFaint
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        vm.mindState == "clear"
-                            ? SPColor.greenBorderSubtle
-                            : SPColor.amberBorderSubtle
+            HStack(spacing: SPSpacing.s2) {
+                Text("Hold — light distraction")
+                    .font(SPFont.serifItalic(15))
+                    .foregroundStyle(Color(SPColor.fg))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s3)
+                    .padding(.vertical, SPSpacing.s2)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        vm.mindState == "thinking"
+                            ? SPColor.amberBgFaint
+                            : SPColor.greenBgFaint
                     )
-                )
-                .opacity(vm.isActive ? 1 : 0.45)
-                .accessibilityLabel("Hold while distracted. Release when aware again.")
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if vm.isActive { vm.beginDistraction() }
-                        }
-                        .onEnded { _ in
-                            vm.endDistraction()
-                        }
-                )
-                .padding(.horizontal, SPSpacing.s4)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            vm.mindState == "thinking"
+                                ? SPColor.amberBorderSubtle
+                                : SPColor.greenBorderSubtle
+                        )
+                    )
+                    .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityLabel("Hold for light distraction. Release when aware again.")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if vm.isActive { vm.beginDistraction() }
+                            }
+                            .onEnded { _ in
+                                vm.endDistraction()
+                            }
+                    )
+
+                Text("Hold — hyperfocus")
+                    .font(SPFont.serifItalic(15))
+                    .foregroundStyle(Color(SPColor.fg))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s3)
+                    .padding(.vertical, SPSpacing.s2)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        vm.mindState == "hyperfocus"
+                            ? Color(red: 0.15, green: 0.22, blue: 0.38).opacity(0.55)
+                            : SPColor.surface2
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            vm.mindState == "hyperfocus"
+                                ? Color.blue.opacity(0.45)
+                                : SPColor.border2
+                        )
+                    )
+                    .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityLabel("Hold for hyperfocus. Release to return to aware.")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if vm.isActive { vm.beginHyperfocus() }
+                            }
+                            .onEnded { _ in
+                                vm.endHyperfocus()
+                            }
+                    )
+            }
+            .padding(.horizontal, SPSpacing.s2)
         }
         .padding(.vertical, SPSpacing.s3)
         .background(
