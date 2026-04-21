@@ -9,7 +9,8 @@ import { BlockTimer } from "./BlockTimer";
 import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
-import { computeClearPercentFromLog, isMindStateTypingTarget } from "@/lib/mindStateSession";
+import { computeClearPercentFromLog } from "@/lib/mindStateSession";
+import { useMindStateHold } from "@/lib/useMindStateHold";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -87,9 +88,6 @@ export function BuddySessionRoom({
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
   const [displayElapsed, setDisplayElapsed] = useState(0);
-  const holdKindRef = useRef<"none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus">("none");
-  const spaceDownRef = useRef(false);
-  const commaDownRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
@@ -101,6 +99,57 @@ export function BuddySessionRoom({
   const sessionThoughtsRef = useRef(sessionThoughts);
   snapRef.current = snap;
   sessionThoughtsRef.current = sessionThoughts;
+
+  const finalizeActiveBuddyHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    const ms = mindStateRef.current;
+    if (ms !== "thinking" && ms !== "hyperfocus") return;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: atTime, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    if (ms === "thinking") {
+      setShowPostDistractionCapture(offerThoughtCapture);
+    }
+  }, []);
+
+  const beginBuddyDistraction = useCallback(() => {
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("thinking");
+    mindStateRef.current = "thinking";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "thinking" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setDistractionSegmentCount((c) => c + 1);
+  }, [showPostDistractionCapture]);
+
+  const beginBuddyHyperfocus = useCallback(() => {
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("hyperfocus");
+    mindStateRef.current = "hyperfocus";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "hyperfocus" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+  }, [showPostDistractionCapture]);
+
+  const endBuddyHoldFromKeyboard = useCallback(() => {
+    finalizeActiveBuddyHold(elapsedRef.current, true);
+  }, [finalizeActiveBuddyHold]);
+
+  const buddyHoldActive = snap?.state === "active";
+
+  const { holdKindRef, resetHoldTracking } = useMindStateHold({
+    enabled: buddyHoldActive,
+    beginDistraction: beginBuddyDistraction,
+    beginHyperfocus: beginBuddyHyperfocus,
+    endHoldFromKeyboard: endBuddyHoldFromKeyboard,
+  });
 
   const poll = useCallback(async () => {
     if (pollStopped) return;
@@ -171,12 +220,10 @@ export function BuddySessionRoom({
     setMindState("clear");
     setMindStateLog([]);
     setShowPostDistractionCapture(false);
-    holdKindRef.current = "none";
-    spaceDownRef.current = false;
-    commaDownRef.current = false;
+    resetHoldTracking();
     setSessionThoughts([]);
     setDistractionSegmentCount(0);
-  }, [sessionId, snap?.state, snap?.startedAt]);
+  }, [sessionId, snap?.state, snap?.startedAt, resetHoldTracking]);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -210,101 +257,6 @@ export function BuddySessionRoom({
     return computeClearPercentFromLog(mindStateLog, endT);
   }, [snap?.startedAt, snap?.state, snap?.durationSeconds, displayElapsed, mindStateLog]);
 
-  const finalizeActiveBuddyHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
-    const ms = mindStateRef.current;
-    if (ms !== "thinking" && ms !== "hyperfocus") return;
-    setMindState("clear");
-    mindStateRef.current = "clear";
-    setMindStateLog((prev) => {
-      const next = [...prev, { time: atTime, state: "clear" }];
-      mindStateLogRef.current = next;
-      return next;
-    });
-    if (ms === "thinking") {
-      setShowPostDistractionCapture(offerThoughtCapture);
-    }
-  }, []);
-
-  const beginBuddyDistraction = useCallback(() => {
-    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-    setMindState("thinking");
-    mindStateRef.current = "thinking";
-    setMindStateLog((prev) => {
-      const next = [...prev, { time: elapsedRef.current, state: "thinking" }];
-      mindStateLogRef.current = next;
-      return next;
-    });
-    setDistractionSegmentCount((c) => c + 1);
-  }, [showPostDistractionCapture]);
-
-  const beginBuddyHyperfocus = useCallback(() => {
-    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
-    setMindState("hyperfocus");
-    mindStateRef.current = "hyperfocus";
-    setMindStateLog((prev) => {
-      const next = [...prev, { time: elapsedRef.current, state: "hyperfocus" }];
-      mindStateLogRef.current = next;
-      return next;
-    });
-  }, [showPostDistractionCapture]);
-
-  const endBuddyHoldFromKeyboard = useCallback(() => {
-    finalizeActiveBuddyHold(elapsedRef.current, true);
-  }, [finalizeActiveBuddyHold]);
-
-  useEffect(() => {
-    if (snap?.state !== "active") return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (isMindStateTypingTarget(e.target)) return;
-
-      if (e.code === "Space" && !e.repeat) {
-        e.preventDefault();
-        spaceDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "spaceDistraction";
-          beginBuddyDistraction();
-        }
-        return;
-      }
-
-      if ((e.code === "Comma" || e.key === ",") && !e.repeat) {
-        e.preventDefault();
-        commaDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "commaHyperfocus";
-          beginBuddyHyperfocus();
-        }
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        if (!spaceDownRef.current) return;
-        spaceDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "spaceDistraction") {
-          holdKindRef.current = "none";
-          endBuddyHoldFromKeyboard();
-        }
-        return;
-      }
-      if (e.code === "Comma" || e.key === ",") {
-        if (!commaDownRef.current) return;
-        commaDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "commaHyperfocus") {
-          holdKindRef.current = "none";
-          endBuddyHoldFromKeyboard();
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    window.addEventListener("keyup", onKeyUp, { capture: true });
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, { capture: true });
-      window.removeEventListener("keyup", onKeyUp, { capture: true });
-    };
-  }, [snap?.state, beginBuddyDistraction, beginBuddyHyperfocus, endBuddyHoldFromKeyboard]);
-
   const handleSaveThought = (text: string) => {
     setSessionThoughts((prev) => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
     setShowPostDistractionCapture(false);
@@ -327,10 +279,8 @@ export function BuddySessionRoom({
       return next;
     });
     setShowPostDistractionCapture(false);
-    holdKindRef.current = "none";
-    spaceDownRef.current = false;
-    commaDownRef.current = false;
-  }, []);
+    resetHoldTracking();
+  }, [resetHoldTracking]);
 
   const handleBuddyTimerComplete = useCallback(() => {
     closeOpenBuddyHold();

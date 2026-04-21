@@ -5,7 +5,8 @@ import { BASE_DURATION, INCREMENT } from "@/lib/constants";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
-import { computeClearPercentFromLog, isMindStateTypingTarget } from "@/lib/mindStateSession";
+import { computeClearPercentFromLog } from "@/lib/mindStateSession";
+import { useMindStateHold } from "@/lib/useMindStateHold";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -52,15 +53,13 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   sessionThoughtsRef.current = sessionThoughts;
   const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const elapsedRef = useRef(0);
+  // First tuple element intentionally unused: only `setLiveElapsed` is called from
+  // the timer callback to re-render awareness % while elapsed updates in a ref.
   const [, setLiveElapsed] = useState(0);
   const wallStartRef = useRef<number>(Date.now());
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const holdKindRef = useRef<"none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus">("none");
-  const spaceDownRef = useRef(false);
-  const commaDownRef = useRef(false);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -124,59 +123,12 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     finalizeActiveHold(elapsedRef.current, true);
   }, [finalizeActiveHold]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!isActive || isMindStateTypingTarget(e.target)) return;
-
-      if (e.code === "Space" && !e.repeat) {
-        e.preventDefault();
-        spaceDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "spaceDistraction";
-          beginDistraction();
-        }
-        return;
-      }
-
-      if ((e.code === "Comma" || e.key === ",") && !e.repeat) {
-        e.preventDefault();
-        commaDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "commaHyperfocus";
-          beginHyperfocus();
-        }
-      }
-    };
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        if (!spaceDownRef.current) return;
-        spaceDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "spaceDistraction") {
-          holdKindRef.current = "none";
-          endHoldFromKeyboard();
-        }
-        return;
-      }
-      if (e.code === "Comma" || e.key === ",") {
-        if (!commaDownRef.current) return;
-        commaDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "commaHyperfocus") {
-          holdKindRef.current = "none";
-          endHoldFromKeyboard();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    window.addEventListener("keyup", onKeyUp, { capture: true });
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, { capture: true });
-      window.removeEventListener("keyup", onKeyUp, { capture: true });
-    };
-  }, [isActive, beginDistraction, beginHyperfocus, endHoldFromKeyboard]);
+  const { holdKindRef, resetHoldTracking } = useMindStateHold({
+    enabled: isActive,
+    beginDistraction,
+    beginHyperfocus,
+    endHoldFromKeyboard,
+  });
 
   const calcClearPercent = useCallback(() => {
     const endTime = elapsedRef.current || todayDuration;
@@ -186,9 +138,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const snapshotForComplete = useCallback(() => {
     const at = elapsedRef.current;
     setShowPostDistractionCapture(false);
-    holdKindRef.current = "none";
-    spaceDownRef.current = false;
-    commaDownRef.current = false;
+    resetHoldTracking();
     if (mindStateRef.current === "clear") {
       return mindStateLogRef.current;
     }
@@ -198,7 +148,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     mindStateLogRef.current = next;
     setMindStateLog(next);
     return next;
-  }, []);
+  }, [resetHoldTracking]);
 
   const payloadThoughtCount = () => sessionThoughtsRef.current.length;
 
@@ -293,9 +243,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
 
   const togglePause = () => {
     if (isActive) {
-      holdKindRef.current = "none";
-      spaceDownRef.current = false;
-      commaDownRef.current = false;
+      resetHoldTracking();
       finalizeActiveHold(elapsedRef.current, false);
     }
     setIsActive(a => !a);
