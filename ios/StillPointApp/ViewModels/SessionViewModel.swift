@@ -21,11 +21,14 @@ final class SessionViewModel {
     // Mind state
     var mindState: String = "clear"
     var mindStateLog: [MindStateEntry] = []
-    var thoughtCount = 0
+    /// Distraction segments started this sit (for in-session badge); API `thoughtCount` uses captured notes only.
+    var distractionSegmentCount = 0
     var capturedThoughts: [CapturedThought] = []
 
-    // UI state
-    var showThoughtCapture = false
+    var thoughtCount: Int { capturedThoughts.count }
+
+    // UI state — optional thought prompt after a distraction segment ends
+    var showPostDistractionCapture = false
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
 
@@ -110,6 +113,7 @@ final class SessionViewModel {
     }
 
     func pause() {
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         isPaused = true
         isActive = false
         pausedElapsed = elapsed
@@ -121,16 +125,32 @@ final class SessionViewModel {
         start()
     }
 
-    func toggleMindState() {
-        if mindState == "clear" {
-            mindState = "thinking"
-            thoughtCount += 1
-            showThoughtCapture = true
-        } else {
-            mindState = "clear"
-            showThoughtCapture = false
-        }
-        mindStateLog.append(MindStateEntry(time: elapsed, state: mindState))
+    /// Hold to mark a distraction segment (`thinking`); release returns to aware (`clear`).
+    func beginDistraction() {
+        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
+        mindState = "thinking"
+        distractionSegmentCount += 1
+        mindStateLog.append(MindStateEntry(time: elapsed, state: "thinking"))
+        userInteracted()
+    }
+
+    func endDistraction() {
+        guard mindState == "thinking" else { return }
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: true)
+        userInteracted()
+    }
+
+    /// Hold to mark hyperfocus; counts toward awareness in `clearPercent`. Release returns to `clear`.
+    func beginHyperfocus() {
+        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
+        mindState = "hyperfocus"
+        mindStateLog.append(MindStateEntry(time: elapsed, state: "hyperfocus"))
+        userInteracted()
+    }
+
+    func endHyperfocus() {
+        guard mindState == "hyperfocus" else { return }
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         userInteracted()
     }
 
@@ -140,11 +160,11 @@ final class SessionViewModel {
             timeInSession: Int(elapsed),
             text: text
         ))
-        showThoughtCapture = false
+        showPostDistractionCapture = false
     }
 
-    func dismissThoughtCapture() {
-        showThoughtCapture = false
+    func dismissPostDistractionCapture() {
+        showPostDistractionCapture = false
     }
 
     func userInteracted() {
@@ -159,6 +179,7 @@ final class SessionViewModel {
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isComplete = true
@@ -167,6 +188,7 @@ final class SessionViewModel {
 
     /// Abandon session — discard all data, don't save
     func abandon() {
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         timer?.cancel()
         isActive = false
         isAbandoned = true
@@ -242,6 +264,7 @@ final class SessionViewModel {
         if newElapsed >= Double(totalSeconds) {
             elapsed = Double(totalSeconds)
             pausedElapsed = elapsed
+            finalizeActiveHoldIfNeeded(at: Double(totalSeconds), offerThoughtCapture: false)
             timer?.cancel()
             isActive = false
             completedNaturally = true
@@ -275,6 +298,14 @@ final class SessionViewModel {
                 AudioEngine.shared.playChime(count: chimeCount)
             }
         }
+    }
+
+    private func finalizeActiveHoldIfNeeded(at time: Double, offerThoughtCapture: Bool) {
+        guard mindState == "thinking" || mindState == "hyperfocus" else { return }
+        let wasThinking = mindState == "thinking"
+        mindState = "clear"
+        mindStateLog.append(MindStateEntry(time: time, state: "clear"))
+        showPostDistractionCapture = wasThinking && offerThoughtCapture
     }
 
     private func scheduleControlHide() {

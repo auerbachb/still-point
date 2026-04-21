@@ -38,18 +38,28 @@ struct CompletionView: View {
                 }
 
                 // Stats cards
-                HStack(spacing: SPSpacing.s3) {
-                    statCard(
-                        value: "\(clearPercent)%",
-                        label: "CLEAR MIND",
-                        color: SPColor.green,
-                        bgColor: SPColor.greenBgFaint,
-                        borderColor: SPColor.greenBorderSubtle
-                    )
+                VStack(spacing: SPSpacing.s3) {
+                    HStack(spacing: SPSpacing.s3) {
+                        statCard(
+                            value: "\(clearPercent)%",
+                            label: "AWARENESS",
+                            color: SPColor.green,
+                            bgColor: SPColor.greenBgFaint,
+                            borderColor: SPColor.greenBorderSubtle
+                        )
+
+                        statCard(
+                            value: "\(max(0, 100 - clearPercent))%",
+                            label: "DISTRACTION",
+                            color: SPColor.amber,
+                            bgColor: SPColor.amberBgFaint,
+                            borderColor: SPColor.amberBorderSubtle
+                        )
+                    }
 
                     statCard(
                         value: "\(thoughtCount)",
-                        label: "INTERRUPTIONS",
+                        label: "CAPTURED NOTES",
                         color: SPColor.amber,
                         bgColor: SPColor.amberBgFaint,
                         borderColor: SPColor.amberBorderSubtle

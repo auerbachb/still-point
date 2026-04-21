@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
 import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -9,6 +9,8 @@ import { BlockTimer } from "./BlockTimer";
 import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { computeClearPercentFromLog } from "@/lib/mindStateSession";
+import { useMindStateHold } from "@/lib/useMindStateHold";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -36,23 +38,7 @@ function getLocalIsoDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-function calcBuddyClearPercent(
-  mindStateLog: Array<{ time: number; state: string }>,
-  totalSeconds: number,
-): number {
-  if (mindStateLog.length === 0) return 100;
-  let clearTime = 0;
-  let lastTime = 0;
-  let lastState = "clear";
-  const endTime = totalSeconds;
-  const log = [...mindStateLog, { time: endTime, state: "clear" }];
-  for (const entry of log) {
-    if (lastState === "clear") clearTime += entry.time - lastTime;
-    lastTime = entry.time;
-    lastState = entry.state;
-  }
-  return Math.round((clearTime / endTime) * 100);
-}
+type BuddyMindState = "clear" | "thinking" | "hyperfocus";
 
 function formatBuddyActionError(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
@@ -89,16 +75,19 @@ export function BuddySessionRoom({
   const [pollError, setPollError] = useState<string | null>(null);
   const [pollStopped, setPollStopped] = useState(false);
   const lastRevision = useRef(-1);
-  const [mindState, setMindState] = useState("clear");
+  const [mindState, setMindState] = useState<BuddyMindState>("clear");
+  const mindStateRef = useRef<BuddyMindState>(mindState);
+  mindStateRef.current = mindState;
   const [mindStateLog, setMindStateLog] = useState<Array<{ time: number; state: string }>>([]);
-  const [showThoughtInput, setShowThoughtInput] = useState(false);
+  const [showPostDistractionCapture, setShowPostDistractionCapture] = useState(false);
   const [sessionThoughts, setSessionThoughts] = useState<Array<{ timeInSession: number; text: string }>>(
     [],
   );
-  const [sessionThoughtCount, setSessionThoughtCount] = useState(0);
+  const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
+  const [displayElapsed, setDisplayElapsed] = useState(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerAnchorRef = useRef<string | null>(null);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
@@ -108,12 +97,59 @@ export function BuddySessionRoom({
   const snapRef = useRef(snap);
   const mindStateLogRef = useRef(mindStateLog);
   const sessionThoughtsRef = useRef(sessionThoughts);
-  const sessionThoughtCountRef = useRef(sessionThoughtCount);
-
   snapRef.current = snap;
-  mindStateLogRef.current = mindStateLog;
   sessionThoughtsRef.current = sessionThoughts;
-  sessionThoughtCountRef.current = sessionThoughtCount;
+
+  const finalizeActiveBuddyHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+    const ms = mindStateRef.current;
+    if (ms !== "thinking" && ms !== "hyperfocus") return;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: atTime, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    if (ms === "thinking") {
+      setShowPostDistractionCapture(offerThoughtCapture);
+    }
+  }, []);
+
+  const beginBuddyDistraction = useCallback(() => {
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("thinking");
+    mindStateRef.current = "thinking";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "thinking" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setDistractionSegmentCount((c) => c + 1);
+  }, [showPostDistractionCapture]);
+
+  const beginBuddyHyperfocus = useCallback(() => {
+    if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+    setMindState("hyperfocus");
+    mindStateRef.current = "hyperfocus";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: elapsedRef.current, state: "hyperfocus" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+  }, [showPostDistractionCapture]);
+
+  const endBuddyHoldFromKeyboard = useCallback(() => {
+    finalizeActiveBuddyHold(elapsedRef.current, true);
+  }, [finalizeActiveBuddyHold]);
+
+  const buddyHoldActive = snap?.state === "active";
+
+  const { holdKindRef, resetHoldTracking } = useMindStateHold({
+    enabled: buddyHoldActive,
+    beginDistraction: beginBuddyDistraction,
+    beginHyperfocus: beginBuddyHyperfocus,
+    endHoldFromKeyboard: endBuddyHoldFromKeyboard,
+  });
 
   const poll = useCallback(async () => {
     if (pollStopped) return;
@@ -183,10 +219,11 @@ export function BuddySessionRoom({
     timerAnchorRef.current = anchor;
     setMindState("clear");
     setMindStateLog([]);
-    setShowThoughtInput(false);
+    setShowPostDistractionCapture(false);
+    resetHoldTracking();
     setSessionThoughts([]);
-    setSessionThoughtCount(0);
-  }, [sessionId, snap?.state, snap?.startedAt]);
+    setDistractionSegmentCount(0);
+  }, [sessionId, snap?.state, snap?.startedAt, resetHoldTracking]);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -210,38 +247,45 @@ export function BuddySessionRoom({
 
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
+    setDisplayElapsed(elapsed);
   }, []);
 
-  const handleBuddyTimerComplete = useCallback(() => {
-    void poll();
-  }, [poll]);
-
-  const handleThinkingToggle = () => {
-    const now = elapsedRef.current;
-    if (mindState === "clear") {
-      setMindState("thinking");
-      setMindStateLog((prev) => [...prev, { time: now, state: "thinking" }]);
-      setSessionThoughtCount((prev) => prev + 1);
-      setShowThoughtInput(true);
-    } else {
-      setMindState("clear");
-      setMindStateLog((prev) => [...prev, { time: now, state: "clear" }]);
-      setShowThoughtInput(false);
-    }
-  };
+  const buddyAwarenessPct = useMemo(() => {
+    if (!snap?.startedAt || snap.state !== "active") return 100;
+    const cap = Math.max(snap.durationSeconds, 1);
+    const endT = Math.min(cap, displayElapsed);
+    return computeClearPercentFromLog(mindStateLog, endT);
+  }, [snap?.startedAt, snap?.state, snap?.durationSeconds, displayElapsed, mindStateLog]);
 
   const handleSaveThought = (text: string) => {
     setSessionThoughts((prev) => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
-    setMindState("clear");
-    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+    setShowPostDistractionCapture(false);
   };
 
-  const handleSkipThought = () => {
-    setMindState("clear");
-    setMindStateLog((prev) => [...prev, { time: elapsedRef.current, state: "clear" }]);
-    setShowThoughtInput(false);
+  const handleDismissPostCapture = () => {
+    setShowPostDistractionCapture(false);
   };
+
+  const closeOpenBuddyHold = useCallback(() => {
+    if (mindStateRef.current !== "thinking" && mindStateRef.current !== "hyperfocus") return;
+    const duration = snapRef.current?.durationSeconds;
+    const at =
+      duration && duration > 0 ? Math.min(duration, elapsedRef.current) : elapsedRef.current;
+    setMindState("clear");
+    mindStateRef.current = "clear";
+    setMindStateLog((prev) => {
+      const next = [...prev, { time: at, state: "clear" }];
+      mindStateLogRef.current = next;
+      return next;
+    });
+    setShowPostDistractionCapture(false);
+    resetHoldTracking();
+  }, [resetHoldTracking]);
+
+  const handleBuddyTimerComplete = useCallback(() => {
+    closeOpenBuddyHold();
+    void poll();
+  }, [poll, closeOpenBuddyHold]);
 
   const setReady = async (ready: boolean) => {
     try {
@@ -292,11 +336,11 @@ export function BuddySessionRoom({
     setPersonalRecordError(null);
     try {
       const durationSeconds = snapNow.durationSeconds;
-      const clearPercent = calcBuddyClearPercent(mindStateLogRef.current, durationSeconds);
+      const clearPercent = computeClearPercentFromLog(mindStateLogRef.current, durationSeconds);
       const thoughtsSnapshot = sessionThoughtsRef.current;
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
         clearPercent,
-        thoughtCount: sessionThoughtCountRef.current,
+        thoughtCount: thoughtsSnapshot.length,
         mindStateLog: mindStateLogRef.current,
         actualTime: durationSeconds,
         sessionDate: getLocalIsoDate(),
@@ -829,10 +873,9 @@ export function BuddySessionRoom({
 
               <div
                 style={{
-                  opacity: controlsVisible ? 1 : 0,
-                  transition: "opacity 0.5s ease",
-                  pointerEvents: controlsVisible ? "auto" : "none",
                   width: "100%",
+                  maxWidth: "min(420px, calc(100vw - 40px))",
+                  margin: "0 auto",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -842,16 +885,110 @@ export function BuddySessionRoom({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "16px",
+                    gap: "10px",
                     marginTop: "8px",
-                    justifyContent: "center",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    color: "var(--fg-3)",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      background:
+                        mindState === "thinking"
+                          ? "var(--accent-amber)"
+                          : mindState === "hyperfocus"
+                            ? "rgba(96, 165, 250, 0.95)"
+                            : "var(--accent-green)",
+                      boxShadow:
+                        mindState === "thinking"
+                          ? "0 0 12px var(--accent-amber)"
+                          : mindState === "hyperfocus"
+                            ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                            : "none",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>
+                    {mindState === "thinking"
+                      ? "Distracted"
+                      : mindState === "hyperfocus"
+                        ? "Hyperfocus"
+                        : "Aware"}
+                  </span>
+                  {distractionSegmentCount > 0 && (
+                    <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                      · {distractionSegmentCount} light{" "}
+                      {distractionSegmentCount === 1 ? "segment" : "segments"}
+                    </span>
+                  )}
+                  {sessionThoughts.length > 0 && (
+                    <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+                      · {sessionThoughts.length} captured {sessionThoughts.length === 1 ? "note" : "notes"}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
                     flexWrap: "wrap",
+                    justifyContent: "center",
+                    gap: "12px",
+                    marginTop: "12px",
+                    width: "100%",
                   }}
                 >
                   <button
                     type="button"
-                    onClick={handleThinkingToggle}
+                    aria-pressed={mindState === "thinking"}
+                    aria-label="Hold for light distraction, or hold Space. Only on your device."
                     title="Mind-state and thoughts stay on this device; others are not notified."
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerHold";
+                      beginBuddyDistraction();
+                    }}
+                    onMouseUp={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                    }}
+                    onMouseLeave={() => {
+                      if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
+                        holdKindRef.current = "none";
+                        finalizeActiveBuddyHold(elapsedRef.current, true);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerHold";
+                      beginBuddyDistraction();
+                    }}
+                    onTouchEnd={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                    }}
+                    onTouchCancel={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                    }}
                     style={{
                       background:
                         mindState === "thinking"
@@ -866,46 +1003,172 @@ export function BuddySessionRoom({
                         mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: "12px",
-                      letterSpacing: "0.15em",
+                      letterSpacing: "0.12em",
                       textTransform: "uppercase",
-                      padding: "12px 28px",
-                      borderRadius: "24px",
+                      padding: "12px 16px",
+                      borderRadius: "16px",
                       cursor: "pointer",
-                      transition: "all 0.3s",
-                      minWidth: "160px",
+                      transition: "all 0.25s",
+                      flex: "1 1 140px",
+                      minWidth: "min(160px, 42vw)",
+                      maxWidth: "200px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    {mindState === "thinking" ? "\u25CB clear mind" : "\u2726 I'm thinking"}
-                  </button>
-                  {sessionThoughtCount > 0 && (
-                    <div
+                    <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
+                    <span
                       style={{
                         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                        fontSize: "11px",
-                        color: "var(--accent-amber-border)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
+                        fontSize: "9px",
+                        letterSpacing: "0.14em",
+                        opacity: 0.85,
+                        textTransform: "none",
                       }}
                     >
-                      💭 {sessionThoughtCount}
-                    </div>
-                  )}
-                </div>
+                      or hold Space
+                    </span>
+                  </button>
 
-                {showThoughtInput && (
-                  <div
+                  <button
+                    type="button"
+                    aria-pressed={mindState === "hyperfocus"}
+                    aria-label="Hold for hyperfocus, or hold Comma. Only on your device."
+                    title="Mind-state and thoughts stay on this device; others are not notified."
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerHold";
+                      beginBuddyHyperfocus();
+                    }}
+                    onMouseUp={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
+                    onMouseLeave={() => {
+                      if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
+                        holdKindRef.current = "none";
+                        finalizeActiveBuddyHold(elapsedRef.current, false);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      if (mindStateRef.current !== "clear" || showPostDistractionCapture) return;
+                      holdKindRef.current = "pointerHold";
+                      beginBuddyHyperfocus();
+                    }}
+                    onTouchEnd={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
+                    onTouchCancel={() => {
+                      if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
+                        return;
+                      }
+                      holdKindRef.current = "none";
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
+                    }}
                     style={{
-                      marginTop: "20px",
-                      width: "100%",
+                      background:
+                        mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+                      border: `1px solid ${
+                        mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)"
+                      }`,
+                      color:
+                        mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "12px",
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      padding: "12px 16px",
+                      borderRadius: "16px",
+                      cursor: "pointer",
+                      transition: "all 0.25s",
+                      flex: "1 1 140px",
+                      minWidth: "min(160px, 42vw)",
+                      maxWidth: "200px",
                       display: "flex",
-                      justifyContent: "center",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    <ThoughtCapture onSave={handleSaveThought} onCancel={handleSkipThought} />
+                    <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "9px",
+                        letterSpacing: "0.14em",
+                        opacity: 0.85,
+                        textTransform: "none",
+                      }}
+                    >
+                      or hold ,
+                    </span>
+                  </button>
+                </div>
+
+                <p
+                  style={{
+                    margin: "12px 0 0",
+                    textAlign: "center",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "10px",
+                    color: "var(--fg-4)",
+                    letterSpacing: "0.05em",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Shortcuts when not typing — only on your device. After light distraction you can add an optional
+                  note; captured notes reflect a stronger pull.
+                </p>
+
+                <div
+                  style={{
+                    marginTop: "12px",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "10px",
+                    color: "var(--fg-4)",
+                    letterSpacing: "0.08em",
+                    textAlign: "center",
+                  }}
+                >
+                  <span style={{ color: "var(--accent-green-dim)" }}>{buddyAwarenessPct}% awareness</span>
+                  <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
+                  <span style={{ color: "var(--accent-amber-border)" }}>
+                    {Math.max(0, 100 - buddyAwarenessPct)}% distraction
+                  </span>
+                </div>
+
+                {showPostDistractionCapture && (
+                  <div
+                    data-no-space-distraction
+                    style={{ marginTop: "16px", width: "100%", display: "flex", justifyContent: "center" }}
+                  >
+                    <ThoughtCapture onSave={handleSaveThought} onCancel={handleDismissPostCapture} />
                   </div>
                 )}
+              </div>
 
+              <div
+                style={{
+                  opacity: controlsVisible ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                  pointerEvents: controlsVisible ? "auto" : "none",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",

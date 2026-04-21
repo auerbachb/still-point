@@ -29,6 +29,7 @@ export function CompletionScreen({
   // Progression is based on the user's completed day, not the just-finished sit length.
   const nextDuration = BASE_DURATION + dayNumber * INCREMENT;
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
+  const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
 
   return (
     <div style={{
@@ -64,7 +65,16 @@ export function CompletionScreen({
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
             }}>
-              clear mind
+              awareness
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-amber)" }}>{distractionPercentDisplayed}%</div>
+            <div style={{
+              fontSize: "11px", color: "var(--fg-3)",
+              letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
+            }}>
+              distraction
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
@@ -73,7 +83,7 @@ export function CompletionScreen({
               fontSize: "11px", color: "var(--fg-3)",
               letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px",
             }}>
-              interruptions
+              captured notes
             </div>
           </div>
         </div>

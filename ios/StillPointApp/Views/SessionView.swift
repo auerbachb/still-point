@@ -2,9 +2,8 @@ import SwiftUI
 import StillPointShared
 
 struct SessionView: View {
-    /// Estimated height of the controls overlay:
-    /// mind state toggle (~44) + action buttons (~36) + sound toggles (~24) + VStack spacing (3×16=48) + padding (top 16 + bottom 12 = 28) ≈ 160pt
-    private static let controlPanelHeight: CGFloat = 160
+    /// Space reserved at the bottom for the distraction hold bar plus pause / end / sound controls.
+    private static let bottomOverlayReserve: CGFloat = 268
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -20,7 +19,7 @@ struct SessionView: View {
             SPColor.bg.ignoresSafeArea()
 
             GeometryReader { geo in
-                let contentHeight = geo.size.height - Self.controlPanelHeight
+                let contentHeight = geo.size.height - Self.bottomOverlayReserve
 
                 VStack(spacing: 0) {
                     // Main content — fits in viewport above controls
@@ -51,7 +50,8 @@ struct SessionView: View {
                         MindStateBarView(
                             elapsed: vm.elapsed,
                             totalSeconds: vm.totalSeconds,
-                            mindStateLog: vm.mindStateLog
+                            mindStateLog: vm.mindStateLog,
+                            currentMindState: vm.mindState
                         )
 
                         // Status label
@@ -65,9 +65,12 @@ struct SessionView: View {
                 }
             }
 
-            // Controls overlay (auto-hide)
+            // Bottom chrome: distraction hold (always during sit) + controls (auto-hide while running)
             VStack {
                 Spacer()
+                if sessionInProgress {
+                    persistentDistractionBar
+                }
                 if vm.controlsVisible || !vm.isActive {
                     controlPanel
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -75,8 +78,8 @@ struct SessionView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
-            // Thought capture overlay
-            if vm.showThoughtCapture {
+            // Thought capture after releasing a distraction hold
+            if vm.showPostDistractionCapture {
                 VStack {
                     Spacer()
                     ThoughtCaptureView(
@@ -84,11 +87,11 @@ struct SessionView: View {
                             vm.captureThought(text)
                         },
                         onDismiss: {
-                            vm.dismissThoughtCapture()
+                            vm.dismissPostDistractionCapture()
                         }
                     )
                     .padding(.horizontal, SPSpacing.s4)
-                    .padding(.bottom, Self.controlPanelHeight)
+                    .padding(.bottom, Self.bottomOverlayReserve + 24)
                 }
                 .transition(.opacity)
             }
@@ -149,50 +152,138 @@ struct SessionView: View {
         .padding(.horizontal, SPSpacing.s5)
     }
 
+    private var sessionInProgress: Bool {
+        !vm.isComplete && !vm.isAbandoned && (vm.isActive || vm.isPaused)
+    }
+
+    /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
+    private var persistentDistractionBar: some View {
+        VStack(spacing: SPSpacing.s2) {
+            HStack(spacing: SPSpacing.s2) {
+                Circle()
+                    .fill(
+                        vm.mindState == "clear"
+                            ? SPColor.green
+                            : vm.mindState == "hyperfocus"
+                                ? Color(red: 0.38, green: 0.65, blue: 0.98)
+                                : SPColor.amber
+                    )
+                    .frame(width: 10, height: 10)
+                    .shadow(
+                        color: vm.mindState == "clear"
+                            ? .clear
+                            : vm.mindState == "hyperfocus"
+                                ? Color.blue.opacity(0.45)
+                                : SPColor.amber.opacity(0.45),
+                        radius: vm.mindState == "clear" ? 0 : 6
+                    )
+
+                Text(vm.mindState == "thinking" ? "Distracted" : vm.mindState == "hyperfocus" ? "Hyperfocus" : "Aware")
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .tracking(1)
+
+                Spacer(minLength: 0)
+
+                if vm.distractionSegmentCount > 0 {
+                    Text("\(vm.distractionSegmentCount) light")
+                        .font(SPFont.mono(10, weight: .medium))
+                        .foregroundStyle(SPColor.amberText)
+                }
+
+                if !vm.capturedThoughts.isEmpty {
+                    Text("\(vm.capturedThoughts.count) captured")
+                        .font(SPFont.mono(10, weight: .medium))
+                        .foregroundStyle(SPColor.amberText)
+                }
+            }
+            .padding(.horizontal, SPSpacing.s3)
+
+            Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SPSpacing.s4)
+
+            HStack(spacing: SPSpacing.s2) {
+                Text("Hold — light distraction")
+                    .font(SPFont.serifItalic(15))
+                    .foregroundStyle(Color(SPColor.fg))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s3)
+                    .padding(.vertical, SPSpacing.s2)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        vm.mindState == "thinking"
+                            ? SPColor.amberBgFaint
+                            : SPColor.greenBgFaint
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            vm.mindState == "thinking"
+                                ? SPColor.amberBorderSubtle
+                                : SPColor.greenBorderSubtle
+                        )
+                    )
+                    .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityLabel("Hold for light distraction. Release when aware again.")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if vm.isActive { vm.beginDistraction() }
+                            }
+                            .onEnded { _ in
+                                vm.endDistraction()
+                            }
+                    )
+
+                Text("Hold — hyperfocus")
+                    .font(SPFont.serifItalic(15))
+                    .foregroundStyle(Color(SPColor.fg))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s3)
+                    .padding(.vertical, SPSpacing.s2)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        vm.mindState == "hyperfocus"
+                            ? Color(red: 0.15, green: 0.22, blue: 0.38).opacity(0.55)
+                            : SPColor.surface2
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            vm.mindState == "hyperfocus"
+                                ? Color.blue.opacity(0.45)
+                                : SPColor.border2
+                        )
+                    )
+                    .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityLabel("Hold for hyperfocus. Release to return to aware.")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if vm.isActive { vm.beginHyperfocus() }
+                            }
+                            .onEnded { _ in
+                                vm.endHyperfocus()
+                            }
+                    )
+            }
+            .padding(.horizontal, SPSpacing.s2)
+        }
+        .padding(.vertical, SPSpacing.s3)
+        .background(
+            SPColor.bg.opacity(0.92)
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
     // MARK: - Control Panel
 
     private var controlPanel: some View {
         VStack(spacing: SPSpacing.s3) {
-            // Mind state toggle
-            Button {
-                vm.toggleMindState()
-            } label: {
-                HStack(spacing: SPSpacing.s2) {
-                    Circle()
-                        .fill(vm.mindState == "clear" ? SPColor.green : SPColor.amber)
-                        .frame(width: 8, height: 8)
-
-                    Text(vm.mindState == "clear" ? "I'm thinking" : "Clear mind")
-                        .font(SPFont.serifItalic(17))
-                        .foregroundStyle(Color(SPColor.fg))
-
-                    if vm.thoughtCount > 0 {
-                        Text("\(vm.thoughtCount)")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .foregroundStyle(SPColor.amberText)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(SPColor.amberBgFaint)
-                            .clipShape(Capsule())
-                    }
-                }
-                .padding(.horizontal, SPSpacing.s4)
-                .padding(.vertical, SPSpacing.s2)
-                .background(
-                    vm.mindState == "clear"
-                        ? SPColor.greenBgFaint
-                        : SPColor.amberBgFaint
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        vm.mindState == "clear"
-                            ? SPColor.greenBorderSubtle
-                            : SPColor.amberBorderSubtle
-                    )
-                )
-            }
-
             // Action buttons
             HStack(spacing: SPSpacing.s3) {
                 // Pause / Resume
