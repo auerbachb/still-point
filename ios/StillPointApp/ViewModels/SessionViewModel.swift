@@ -237,7 +237,7 @@ final class SessionViewModel {
                     _ = try await APIClient.shared.batchThoughts(
                         BatchThoughtsRequest(
                             sessionId: session.id,
-                            dayNumber: dayNumber,
+                            dayNumber: session.dayNumber,
                             thoughts: allThoughts
                         )
                     )
