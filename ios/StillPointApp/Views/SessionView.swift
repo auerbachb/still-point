@@ -205,6 +205,12 @@ struct SessionView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, SPSpacing.s4)
 
+            Text("Light distraction holds only log segments. Use explicit capture paths to save notes.")
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SPSpacing.s4)
+
             HStack(spacing: SPSpacing.s2) {
                 Text("Hold — light distraction")
                     .font(SPFont.serifItalic(15))

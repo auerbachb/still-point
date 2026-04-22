@@ -139,7 +139,7 @@ export function BuddySessionRoom({
   }, [showPostDistractionCapture]);
 
   const endBuddyHoldFromKeyboard = useCallback(() => {
-    finalizeActiveBuddyHold(elapsedRef.current, true);
+    finalizeActiveBuddyHold(elapsedRef.current, false);
   }, [finalizeActiveBuddyHold]);
 
   const buddyHoldActive = snap?.state === "active";
@@ -961,12 +961,12 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onMouseLeave={() => {
                       if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
                         holdKindRef.current = "none";
-                        finalizeActiveBuddyHold(elapsedRef.current, true);
+                        finalizeActiveBuddyHold(elapsedRef.current, false);
                       }
                     }}
                     onTouchStart={(e) => {
@@ -980,14 +980,14 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onTouchCancel={() => {
                       if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current, true);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     style={{
                       background:
@@ -1127,8 +1127,8 @@ export function BuddySessionRoom({
                     lineHeight: 1.45,
                   }}
                 >
-                  Shortcuts when not typing — only on your device. After light distraction you can add an optional
-                  note; captured notes reflect a stronger pull.
+                  Shortcuts when not typing — only on your device. Light distraction holds only log segments;
+                  captured notes require an explicit capture path.
                 </p>
 
                 <div

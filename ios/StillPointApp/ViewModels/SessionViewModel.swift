@@ -136,7 +136,7 @@ final class SessionViewModel {
 
     func endDistraction() {
         guard mindState == "thinking" else { return }
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: true)
+        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
         userInteracted()
     }
 

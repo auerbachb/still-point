@@ -120,7 +120,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   }, [isActive, showPostDistractionCapture]);
 
   const endHoldFromKeyboard = useCallback(() => {
-    finalizeActiveHold(elapsedRef.current, true);
+    finalizeActiveHold(elapsedRef.current, false);
   }, [finalizeActiveHold]);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
@@ -178,7 +178,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const handlePointerDistractionUp = () => {
     if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") return;
     holdKindRef.current = "none";
-    finalizeActiveHold(elapsedRef.current, true);
+    finalizeActiveHold(elapsedRef.current, false);
   };
 
   const handlePointerHyperfocusDown = () => {
@@ -431,8 +431,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               lineHeight: 1.45,
             }}
           >
-            After a light distraction, you can jot a note (optional). If you need to stop and write because the thought
-            will not wait, use captured notes — that is tracked separately as a stronger pull.
+            Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
           </p>
 
           <div
