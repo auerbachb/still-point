@@ -278,17 +278,32 @@ public final class AudioEngine: @unchecked Sendable {
 
         let sourceNode = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
             let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            let buffer = ablPointer[0]
             let frames = Int(frameCount)
-            guard let data = buffer.mData?.assumingMemoryBound(to: Float.self) else {
+            guard !ablPointer.isEmpty else {
                 return noErr
             }
 
             for frame in 0..<frames {
+                let sample: Float
                 if Int(phase.value) + frame >= totalFrames {
-                    data[frame] = 0
+                    sample = 0
                 } else {
-                    data[frame] = generator(phase.value + Double(frame), renderSampleRate)
+                    sample = generator(phase.value + Double(frame), renderSampleRate)
+                }
+
+                for buffer in ablPointer {
+                    guard let channelData = buffer.mData?.assumingMemoryBound(to: Float.self) else {
+                        continue
+                    }
+                    let channels = Int(buffer.mNumberChannels)
+                    if channels <= 1 {
+                        channelData[frame] = sample
+                    } else {
+                        let frameOffset = frame * channels
+                        for channel in 0..<channels {
+                            channelData[frameOffset + channel] = sample
+                        }
+                    }
                 }
             }
 
