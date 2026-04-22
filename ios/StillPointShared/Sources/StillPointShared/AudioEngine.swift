@@ -8,6 +8,7 @@ public final class AudioEngine: @unchecked Sendable {
 
     private init() {}
 
+    public func warmUp() {}
     public func playTick() {}
     public func playChime(count: Int) {}
     public func playCompletion() {}
@@ -16,6 +17,7 @@ public final class AudioEngine: @unchecked Sendable {
 #else
 
 import AVFoundation
+import UIKit
 
 /// Synthesized audio matching the web app's Web Audio API sounds.
 /// All sounds are generated programmatically — no external files needed.
@@ -23,11 +25,23 @@ import AVFoundation
 public final class AudioEngine: @unchecked Sendable {
     public static let shared = AudioEngine()
 
-    private let sampleRate: Double = 44100
-    private let serialQueue = DispatchQueue(label: "com.stillpoint.audioengine")
+    private let defaultSampleRate: Double = 44100
+    private let serialQueue = DispatchQueue(
+        label: "com.stillpoint.audioengine",
+        qos: .userInteractive
+    )
+    private let engine = AVAudioEngine()
+    private let notificationCenter = NotificationCenter.default
+    private var observerTokens: [NSObjectProtocol] = []
+    private var wasRunningBeforeInterruption = false
+    private var pendingResumeAfterConfigurationChange = false
 
     private init() {
         configureAudioSession()
+        installLifecycleObservers()
+        serialQueue.async { [self] in
+            ensureEngineRunning()
+        }
     }
 
     private func configureAudioSession() {
@@ -40,6 +54,57 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
+    private func installLifecycleObservers() {
+        let interruptionToken = notificationCenter.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] notification in
+            self?.handleInterruption(notification)
+        }
+
+        let engineConfigChangeToken = notificationCenter.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleEngineConfigurationChange()
+        }
+
+        let backgroundToken = notificationCenter.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleDidEnterBackground()
+        }
+
+        let foregroundToken = notificationCenter.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleWillEnterForeground()
+        }
+
+        observerTokens = [
+            interruptionToken,
+            engineConfigChangeToken,
+            backgroundToken,
+            foregroundToken
+        ]
+    }
+
+    deinit {
+        observerTokens.forEach(notificationCenter.removeObserver)
+    }
+
+    public func warmUp() {
+        serialQueue.async { [self] in
+            ensureEngineRunning()
+        }
+    }
+
     // MARK: - Tick (800Hz sine, 60ms, gain 0.06 → 0.001)
 
     public func playTick() {
@@ -47,9 +112,9 @@ public final class AudioEngine: @unchecked Sendable {
     }
 
     private func _playTick() {
-        playSynthesized(duration: 0.06) { phase in
+        playSynthesized(duration: 0.06) { phase, sampleRate in
             let frequency = 800.0
-            let t = phase / self.sampleRate
+            let t = phase / sampleRate
             let totalDuration = 0.06
             let progress = min(t / totalDuration, 1.0)
             // Exponential ramp from 0.06 to 0.001
@@ -66,8 +131,8 @@ public final class AudioEngine: @unchecked Sendable {
 
     private func _playChime(count: Int) {
         let totalDuration = Double(count) * 0.4 + 0.1
-        playSynthesized(duration: totalDuration) { phase in
-            let t = phase / self.sampleRate
+        playSynthesized(duration: totalDuration) { phase, sampleRate in
+            let t = phase / sampleRate
             var sample: Float = 0
 
             for i in 0..<count {
@@ -98,8 +163,8 @@ public final class AudioEngine: @unchecked Sendable {
 
     private func _playCompletion() {
         let totalDuration = 2.5
-        playSynthesized(duration: totalDuration) { phase in
-            let t = phase / self.sampleRate
+        playSynthesized(duration: totalDuration) { phase, sampleRate in
+            let t = phase / sampleRate
             var sample: Float = 0
 
             for freq in [528.0, 660.0] {
@@ -125,11 +190,82 @@ public final class AudioEngine: @unchecked Sendable {
         var value: Double = 0
     }
 
-    private func playSynthesized(duration: Double, generator: @escaping (Double) -> Float) {
-        let engine = AVAudioEngine()
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+    private func ensureEngineRunning() {
+        guard !engine.isRunning else { return }
+        do {
+            try engine.start()
+        } catch {
+            print("AudioEngine: Failed to start engine: \(error)")
+        }
+    }
 
-        let totalFrames = Int(duration * sampleRate)
+    private func handleInterruption(_ notification: Notification) {
+        serialQueue.async { [weak self] in
+            guard let self,
+                  let info = notification.userInfo,
+                  let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+                return
+            }
+
+            switch type {
+            case .began:
+                self.wasRunningBeforeInterruption = self.engine.isRunning
+                if self.wasRunningBeforeInterruption {
+                    self.engine.pause()
+                }
+            case .ended:
+                let optionsValue = (info[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                let shouldResume = options.contains(.shouldResume)
+                self.pendingResumeAfterConfigurationChange = shouldResume && self.wasRunningBeforeInterruption
+                if self.pendingResumeAfterConfigurationChange {
+                    self.resumeAfterInterruptionIfNeeded()
+                }
+                self.wasRunningBeforeInterruption = false
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func handleEngineConfigurationChange() {
+        serialQueue.async { [weak self] in
+            guard let self, self.pendingResumeAfterConfigurationChange else { return }
+            self.resumeAfterInterruptionIfNeeded()
+        }
+    }
+
+    private func resumeAfterInterruptionIfNeeded() {
+        configureAudioSession()
+        ensureEngineRunning()
+        if engine.isRunning {
+            pendingResumeAfterConfigurationChange = false
+        }
+    }
+
+    private func handleDidEnterBackground() {
+        serialQueue.async { [weak self] in
+            guard let self, self.engine.isRunning else { return }
+            self.engine.pause()
+        }
+    }
+
+    private func handleWillEnterForeground() {
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            self.configureAudioSession()
+            self.ensureEngineRunning()
+        }
+    }
+
+    private func playSynthesized(
+        duration: Double,
+        generator: @escaping (_ phase: Double, _ sampleRate: Double) -> Float
+    ) {
+        let renderFormat = engine.mainMixerNode.outputFormat(forBus: 0)
+        let renderSampleRate = renderFormat.sampleRate > 0 ? renderFormat.sampleRate : defaultSampleRate
+        let totalFrames = Int(duration * renderSampleRate)
         let phase = PhaseBox()
 
         let sourceNode = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
@@ -144,7 +280,7 @@ public final class AudioEngine: @unchecked Sendable {
                 if Int(phase.value) + frame >= totalFrames {
                     data[frame] = 0
                 } else {
-                    data[frame] = generator(phase.value + Double(frame))
+                    data[frame] = generator(phase.value + Double(frame), renderSampleRate)
                 }
             }
 
@@ -153,18 +289,14 @@ public final class AudioEngine: @unchecked Sendable {
         }
 
         engine.attach(sourceNode)
-        engine.connect(sourceNode, to: engine.mainMixerNode, format: format)
+        engine.connect(sourceNode, to: engine.mainMixerNode, format: renderFormat)
+        ensureEngineRunning()
 
-        do {
-            try engine.start()
-        } catch {
-            print("AudioEngine: Failed to start engine: \(error)")
-            return
-        }
-
-        // Stop after duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1) {
-            engine.stop()
+        // Detach this sound node after playback while keeping the warm engine alive.
+        serialQueue.asyncAfter(deadline: .now() + duration + 0.1) { [weak self] in
+            guard let self else { return }
+            self.engine.disconnectNodeOutput(sourceNode)
+            self.engine.detach(sourceNode)
         }
     }
 }

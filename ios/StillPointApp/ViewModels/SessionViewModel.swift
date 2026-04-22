@@ -108,6 +108,7 @@ final class SessionViewModel {
         isActive = true
         isPaused = false
         startDate = Date().addingTimeInterval(-pausedElapsed)
+        AudioEngine.shared.warmUp()
         startTimer()
         scheduleControlHide()
     }
@@ -122,6 +123,7 @@ final class SessionViewModel {
     }
 
     func resume() {
+        guard isPaused else { return }
         start()
     }
 
