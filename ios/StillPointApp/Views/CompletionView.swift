@@ -273,7 +273,7 @@ struct CompletionView: View {
         case 400, 404:
             return "Unable to save note - please try again"
         case 0:
-            return "No internet connection"
+            return "Unable to save note - please try again"
         default:
             return "Failed to save note"
         }
