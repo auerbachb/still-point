@@ -108,7 +108,9 @@ final class SessionViewModel {
         isActive = true
         isPaused = false
         startDate = Date().addingTimeInterval(-pausedElapsed)
-        AudioEngine.shared.warmUp()
+        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion {
+            AudioEngine.shared.warmUp()
+        }
         startTimer()
         scheduleControlHide()
     }
