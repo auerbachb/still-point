@@ -113,7 +113,7 @@ final class SessionViewModel {
     }
 
     func pause() {
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed)
         isPaused = true
         isActive = false
         pausedElapsed = elapsed
@@ -136,7 +136,7 @@ final class SessionViewModel {
 
     func endDistraction() {
         guard mindState == "thinking" else { return }
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed)
         userInteracted()
     }
 
@@ -150,7 +150,14 @@ final class SessionViewModel {
 
     func endHyperfocus() {
         guard mindState == "hyperfocus" else { return }
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed)
+        userInteracted()
+    }
+
+    func openThoughtCapture() {
+        guard isActive else { return }
+        finalizeActiveHoldIfNeeded(at: elapsed)
+        showPostDistractionCapture = true
         userInteracted()
     }
 
@@ -179,7 +186,7 @@ final class SessionViewModel {
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed)
         timer?.cancel()
         isActive = false
         isComplete = true
@@ -188,7 +195,7 @@ final class SessionViewModel {
 
     /// Abandon session — discard all data, don't save
     func abandon() {
-        finalizeActiveHoldIfNeeded(at: elapsed, offerThoughtCapture: false)
+        finalizeActiveHoldIfNeeded(at: elapsed)
         timer?.cancel()
         isActive = false
         isAbandoned = true
@@ -264,7 +271,7 @@ final class SessionViewModel {
         if newElapsed >= Double(totalSeconds) {
             elapsed = Double(totalSeconds)
             pausedElapsed = elapsed
-            finalizeActiveHoldIfNeeded(at: Double(totalSeconds), offerThoughtCapture: false)
+            finalizeActiveHoldIfNeeded(at: Double(totalSeconds))
             timer?.cancel()
             isActive = false
             completedNaturally = true
@@ -300,12 +307,10 @@ final class SessionViewModel {
         }
     }
 
-    private func finalizeActiveHoldIfNeeded(at time: Double, offerThoughtCapture: Bool) {
+    private func finalizeActiveHoldIfNeeded(at time: Double) {
         guard mindState == "thinking" || mindState == "hyperfocus" else { return }
-        let wasThinking = mindState == "thinking"
         mindState = "clear"
         mindStateLog.append(MindStateEntry(time: time, state: "clear"))
-        showPostDistractionCapture = wasThinking && offerThoughtCapture
     }
 
     private func scheduleControlHide() {

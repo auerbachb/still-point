@@ -324,6 +324,19 @@ struct SessionView: View {
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
 
+                Button {
+                    vm.openThoughtCapture()
+                } label: {
+                    Text("Capture")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(SPColor.amberText)
+                        .padding(.horizontal, SPSpacing.s3)
+                        .padding(.vertical, SPSpacing.s1)
+                        .background(SPColor.amberBgFaint)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                }
+
                 // Abandon
                 Button {
                     vm.abandon()
