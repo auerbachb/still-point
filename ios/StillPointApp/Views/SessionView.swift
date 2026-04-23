@@ -2,8 +2,10 @@ import SwiftUI
 import StillPointShared
 
 struct SessionView: View {
-    /// Space reserved at the bottom for the distraction hold bar plus pause / end / sound controls.
-    private static let bottomOverlayReserve: CGFloat = 268
+    /// Space reserved when both distraction hold bar and controls are visible.
+    private static let bottomOverlayReserveWithControls: CGFloat = 268
+    /// Smaller reserve while controls are hidden to keep timer content readable.
+    private static let bottomOverlayReserveDistractionOnly: CGFloat = 176
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -19,7 +21,7 @@ struct SessionView: View {
             SPColor.bg.ignoresSafeArea()
 
             GeometryReader { geo in
-                let contentHeight = geo.size.height - Self.bottomOverlayReserve
+                let contentHeight = geo.size.height - bottomOverlayReserve
 
                 VStack(spacing: 0) {
                     // Main content — fits in viewport above controls
@@ -91,7 +93,7 @@ struct SessionView: View {
                         }
                     )
                     .padding(.horizontal, SPSpacing.s4)
-                    .padding(.bottom, Self.bottomOverlayReserve + 24)
+                    .padding(.bottom, bottomOverlayReserve + SPSpacing.s2)
                 }
                 .transition(.opacity)
             }
@@ -154,6 +156,13 @@ struct SessionView: View {
 
     private var sessionInProgress: Bool {
         !vm.isComplete && !vm.isAbandoned && (vm.isActive || vm.isPaused)
+    }
+
+    private var bottomOverlayReserve: CGFloat {
+        if vm.controlsVisible || !vm.isActive {
+            return Self.bottomOverlayReserveWithControls
+        }
+        return Self.bottomOverlayReserveDistractionOnly
     }
 
     /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
