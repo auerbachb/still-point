@@ -155,7 +155,7 @@ final class SessionViewModel {
     }
 
     func openThoughtCapture() {
-        guard isActive else { return }
+        guard (isActive || isPaused), !isComplete, !isAbandoned else { return }
         finalizeActiveHoldIfNeeded(at: elapsed)
         showPostDistractionCapture = true
         userInteracted()
