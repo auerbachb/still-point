@@ -93,7 +93,7 @@ struct SessionView: View {
                         }
                     )
                     .padding(.horizontal, SPSpacing.s4)
-                    .padding(.bottom, bottomOverlayReserve + SPSpacing.s2)
+                    .padding(.bottom, thoughtCaptureBottomPadding)
                 }
                 .transition(.opacity)
             }
@@ -163,6 +163,14 @@ struct SessionView: View {
             return Self.bottomOverlayReserveWithControls
         }
         return Self.bottomOverlayReserveDistractionOnly
+    }
+
+    private var thoughtCaptureBottomPadding: CGFloat {
+        // Keep capture card stable while typing even if controls auto-hide.
+        if vm.showPostDistractionCapture {
+            return Self.bottomOverlayReserveWithControls + SPSpacing.s2
+        }
+        return bottomOverlayReserve + SPSpacing.s2
     }
 
     /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
@@ -345,6 +353,8 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
                 }
+                .disabled(!vm.isActive)
+                .opacity(vm.isActive ? 1 : 0.45)
 
                 // Abandon
                 Button {
