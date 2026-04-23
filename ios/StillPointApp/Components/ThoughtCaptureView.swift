@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Inline thought capture card that appears when the user taps "I'm thinking"
 struct ThoughtCaptureView: View {
+    private static let minTapTarget: CGFloat = 44
+
     let onCapture: (String) -> Void
     let onDismiss: () -> Void
 
@@ -24,6 +26,8 @@ struct ThoughtCaptureView: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg4))
+                        .frame(width: Self.minTapTarget, height: Self.minTapTarget)
+                        .contentShape(Rectangle())
                 }
             }
 
@@ -49,15 +53,17 @@ struct ThoughtCaptureView: View {
                     Text(trimmedText.isEmpty ? "skip" : "save")
                         .font(SPFont.mono(12, weight: .medium))
                         .foregroundStyle(trimmedText.isEmpty ? Color(SPColor.fg4) : SPColor.amber)
+                        .frame(minWidth: Self.minTapTarget, minHeight: Self.minTapTarget)
+                        .contentShape(Rectangle())
                 }
             }
         }
         .padding(SPSpacing.s3)
-        .background(SPColor.amberBgFaint)
+        .background(SPColor.amberBg)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(SPColor.amberBorderSubtle)
+                .stroke(SPColor.amberBorder)
         )
         .onAppear { isFocused = true }
     }
