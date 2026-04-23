@@ -2,6 +2,8 @@ import Link from "next/link";
 import { HomepageDemoVideo } from "@/components/HomepageDemoVideo";
 
 export default function LandingPage() {
+  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL;
+
   return (
     <main
       style={{
@@ -104,6 +106,25 @@ export default function LandingPage() {
           >
             Open App
           </Link>
+          {appStoreUrl ? (
+            <a
+              href={appStoreUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Download on the App Store"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                transition: "opacity 0.2s ease",
+              }}
+            >
+              <img
+                src="/app-store-badge.svg"
+                alt="Download on the App Store"
+                style={{ height: "40px", width: "auto", display: "block" }}
+              />
+            </a>
+          ) : null}
         </div>
       </section>
     </main>
