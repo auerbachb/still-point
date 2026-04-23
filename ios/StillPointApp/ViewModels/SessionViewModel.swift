@@ -108,6 +108,9 @@ final class SessionViewModel {
         isActive = true
         isPaused = false
         startDate = Date().addingTimeInterval(-pausedElapsed)
+        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion {
+            AudioEngine.shared.warmUp()
+        }
         startTimer()
         scheduleControlHide()
     }
@@ -122,6 +125,7 @@ final class SessionViewModel {
     }
 
     func resume() {
+        guard isPaused else { return }
         start()
     }
 
@@ -237,7 +241,7 @@ final class SessionViewModel {
                     _ = try await APIClient.shared.batchThoughts(
                         BatchThoughtsRequest(
                             sessionId: session.id,
-                            dayNumber: dayNumber,
+                            dayNumber: session.dayNumber,
                             thoughts: allThoughts
                         )
                     )

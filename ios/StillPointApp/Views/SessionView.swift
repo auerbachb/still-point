@@ -402,7 +402,7 @@ struct SessionView: View {
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,
-                dayNumber: vm.dayNumber,
+                dayNumber: session.dayNumber,
                 duration: vm.totalSeconds
             )
         }

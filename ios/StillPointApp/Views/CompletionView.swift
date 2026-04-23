@@ -150,9 +150,20 @@ struct CompletionView: View {
                     }
 
                     if let saveError {
-                        Text(saveError)
-                            .font(SPFont.mono(11))
-                            .foregroundStyle(SPColor.dangerMuted)
+                        VStack(alignment: .leading, spacing: SPSpacing.s1) {
+                            Text(saveError)
+                                .font(SPFont.mono(11))
+                                .foregroundStyle(SPColor.dangerMuted)
+
+                            Button {
+                                saveEndNote()
+                            } label: {
+                                Text("Retry save")
+                                    .font(SPFont.mono(11, weight: .medium))
+                                    .foregroundStyle(SPColor.dangerMuted)
+                            }
+                            .disabled(isSaving)
+                        }
                     }
                 }
 
@@ -238,11 +249,33 @@ struct CompletionView: View {
                 _ = try await APIClient.shared.batchThoughts(request)
                 isSaving = false
                 noteSaved = true
+            } catch let error as APIError {
+                print("Failed to save end note: \(error)")
+                isSaving = false
+                saveError = saveErrorMessage(for: error.status)
             } catch {
                 print("Failed to save end note: \(error)")
                 isSaving = false
-                saveError = "Failed to save note"
+                if let urlError = error as? URLError,
+                   urlError.code == .notConnectedToInternet {
+                    saveError = "No internet connection"
+                } else {
+                    saveError = "Failed to save note"
+                }
             }
+        }
+    }
+
+    private func saveErrorMessage(for status: Int) -> String {
+        switch status {
+        case 401:
+            return "Please log in again"
+        case 400, 404:
+            return "Unable to save note - please try again"
+        case 0:
+            return "Unable to save note - please try again"
+        default:
+            return "Failed to save note"
         }
     }
 }
