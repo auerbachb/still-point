@@ -81,7 +81,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     };
   }, []);
 
-  const finalizeActiveHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
+  const finalizeActiveHold = useCallback((atTime: number) => {
     const ms = mindStateRef.current;
     if (ms !== "thinking" && ms !== "hyperfocus") return;
     setMindState("clear");
@@ -91,9 +91,6 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       mindStateLogRef.current = next;
       return next;
     });
-    if (ms === "thinking") {
-      setShowPostDistractionCapture(offerThoughtCapture);
-    }
   }, []);
 
   const beginDistraction = useCallback(() => {
@@ -120,7 +117,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   }, [isActive, showPostDistractionCapture]);
 
   const endHoldFromKeyboard = useCallback(() => {
-    finalizeActiveHold(elapsedRef.current, true);
+    finalizeActiveHold(elapsedRef.current);
   }, [finalizeActiveHold]);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
@@ -178,7 +175,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const handlePointerDistractionUp = () => {
     if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") return;
     holdKindRef.current = "none";
-    finalizeActiveHold(elapsedRef.current, true);
+    finalizeActiveHold(elapsedRef.current);
   };
 
   const handlePointerHyperfocusDown = () => {
@@ -190,7 +187,12 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const handlePointerHyperfocusUp = () => {
     if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") return;
     holdKindRef.current = "none";
-    finalizeActiveHold(elapsedRef.current, false);
+    finalizeActiveHold(elapsedRef.current);
+  };
+
+  const handleOpenThoughtCapture = () => {
+    finalizeActiveHold(elapsedRef.current);
+    setShowPostDistractionCapture(true);
   };
 
   const handleSaveThought = (text: string) => {
@@ -244,7 +246,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const togglePause = () => {
     if (isActive) {
       resetHoldTracking();
-      finalizeActiveHold(elapsedRef.current, false);
+      finalizeActiveHold(elapsedRef.current);
     }
     setIsActive(a => !a);
   };
@@ -431,8 +433,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               lineHeight: 1.45,
             }}
           >
-            After a light distraction, you can jot a note (optional). If you need to stop and write because the thought
-            will not wait, use captured notes — that is tracked separately as a stronger pull.
+            Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
           </p>
 
           <div
@@ -487,6 +488,24 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
               }}
             >
               {isActive ? "pause" : "resume"}
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenThoughtCapture}
+              style={{
+                background: "none",
+                border: "1px solid var(--accent-amber-border)",
+                color: "var(--accent-amber-border)",
+                ...mono,
+                fontSize: "11px",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                padding: "10px 24px",
+                borderRadius: "20px",
+                cursor: "pointer",
+              }}
+            >
+              capture note
             </button>
             <button
               type="button"
