@@ -14,13 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { sessionId, dayNumber, thoughts: thoughtItems } = await request.json();
 
-    if (
-      typeof sessionId !== "string" ||
-      sessionId.length === 0 ||
-      typeof dayNumber !== "number" ||
-      !Number.isFinite(dayNumber) ||
-      !Array.isArray(thoughtItems)
-    ) {
+    if (!sessionId || !dayNumber || !Array.isArray(thoughtItems)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 

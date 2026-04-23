@@ -205,12 +205,6 @@ struct SessionView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, SPSpacing.s4)
 
-            Text("Light distraction holds only log segments. Use explicit capture paths to save notes.")
-                .font(SPFont.mono(10))
-                .foregroundStyle(Color(SPColor.fg4))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, SPSpacing.s4)
-
             HStack(spacing: SPSpacing.s2) {
                 Text("Hold — light distraction")
                     .font(SPFont.serifItalic(15))
@@ -324,19 +318,6 @@ struct SessionView: View {
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
 
-                Button {
-                    vm.openThoughtCapture()
-                } label: {
-                    Text("Capture")
-                        .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(SPColor.amberText)
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.amberBgFaint)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
-                }
-
                 // Abandon
                 Button {
                     vm.abandon()
@@ -402,7 +383,7 @@ struct SessionView: View {
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,
-                dayNumber: session.dayNumber,
+                dayNumber: vm.dayNumber,
                 duration: vm.totalSeconds
             )
         }

@@ -100,7 +100,7 @@ export function BuddySessionRoom({
   snapRef.current = snap;
   sessionThoughtsRef.current = sessionThoughts;
 
-  const finalizeActiveBuddyHold = useCallback((atTime: number) => {
+  const finalizeActiveBuddyHold = useCallback((atTime: number, offerThoughtCapture: boolean) => {
     const ms = mindStateRef.current;
     if (ms !== "thinking" && ms !== "hyperfocus") return;
     setMindState("clear");
@@ -110,6 +110,9 @@ export function BuddySessionRoom({
       mindStateLogRef.current = next;
       return next;
     });
+    if (ms === "thinking") {
+      setShowPostDistractionCapture(offerThoughtCapture);
+    }
   }, []);
 
   const beginBuddyDistraction = useCallback(() => {
@@ -136,7 +139,7 @@ export function BuddySessionRoom({
   }, [showPostDistractionCapture]);
 
   const endBuddyHoldFromKeyboard = useCallback(() => {
-    finalizeActiveBuddyHold(elapsedRef.current);
+    finalizeActiveBuddyHold(elapsedRef.current, true);
   }, [finalizeActiveBuddyHold]);
 
   const buddyHoldActive = snap?.state === "active";
@@ -261,11 +264,6 @@ export function BuddySessionRoom({
 
   const handleDismissPostCapture = () => {
     setShowPostDistractionCapture(false);
-  };
-
-  const openThoughtCapture = () => {
-    finalizeActiveBuddyHold(elapsedRef.current);
-    setShowPostDistractionCapture(true);
   };
 
   const closeOpenBuddyHold = useCallback(() => {
@@ -963,12 +961,12 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onMouseLeave={() => {
                       if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
                         holdKindRef.current = "none";
-                        finalizeActiveBuddyHold(elapsedRef.current);
+                        finalizeActiveBuddyHold(elapsedRef.current, true);
                       }
                     }}
                     onTouchStart={(e) => {
@@ -982,14 +980,14 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     onTouchCancel={() => {
                       if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "thinking") {
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, true);
                     }}
                     style={{
                       background:
@@ -1050,12 +1048,12 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onMouseLeave={() => {
                       if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
                         holdKindRef.current = "none";
-                        finalizeActiveBuddyHold(elapsedRef.current);
+                        finalizeActiveBuddyHold(elapsedRef.current, false);
                       }
                     }}
                     onTouchStart={(e) => {
@@ -1069,14 +1067,14 @@ export function BuddySessionRoom({
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     onTouchCancel={() => {
                       if (holdKindRef.current !== "pointerHold" || mindStateRef.current !== "hyperfocus") {
                         return;
                       }
                       holdKindRef.current = "none";
-                      finalizeActiveBuddyHold(elapsedRef.current);
+                      finalizeActiveBuddyHold(elapsedRef.current, false);
                     }}
                     style={{
                       background:
@@ -1129,8 +1127,8 @@ export function BuddySessionRoom({
                     lineHeight: 1.45,
                   }}
                 >
-                  Shortcuts when not typing — only on your device. Light distraction holds only log segments;
-                  captured notes require an explicit capture path.
+                  Shortcuts when not typing — only on your device. After light distraction you can add an optional
+                  note; captured notes reflect a stronger pull.
                 </p>
 
                 <div
@@ -1180,24 +1178,6 @@ export function BuddySessionRoom({
                     marginTop: "24px",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={openThoughtCapture}
-                    style={{
-                      border: "1px solid var(--accent-amber-border)",
-                      background: "none",
-                      color: "var(--accent-amber-border)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "11px",
-                      letterSpacing: "0.15em",
-                      textTransform: "uppercase",
-                      padding: "10px 24px",
-                      borderRadius: "20px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    capture note
-                  </button>
                   <p
                     style={{
                       margin: 0,
