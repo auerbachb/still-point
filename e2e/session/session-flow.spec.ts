@@ -48,7 +48,6 @@ test.describe("mobile session flow", () => {
     const pauseButton = page.getByRole("button", { name: "pause" });
     await expect(pauseButton).toBeVisible();
     await simulatePullToRefreshGesture(page);
-    await page.dispatchEvent("body", "touchstart");
 
     await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
     await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
@@ -66,7 +65,6 @@ test.describe("mobile session flow", () => {
     await tap(beginButton);
 
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
-    await page.dispatchEvent("body", "touchstart");
     await expectVisibleInViewport(page, endEarlyButton, "landscape end early button");
     await tapWithControlReveal(page, endEarlyButton);
     await expect(page.getByRole("button", { name: "Return" })).toBeVisible();

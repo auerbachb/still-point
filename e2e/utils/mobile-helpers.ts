@@ -2,6 +2,8 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export const MOBILE_SAFE_AREA_TOLERANCE_PX = 6;
 export const MIN_TAP_TARGET_PX = 44;
+const CONTROL_REVEAL_TAP_RETRIES = 3;
+const CONTROL_REVEAL_RETRY_DELAY_MS = 120;
 
 async function getRequiredBox(target: Locator, label: string) {
   await target.scrollIntoViewIfNeeded();
@@ -19,14 +21,14 @@ export async function tap(target: Locator) {
 
 export async function tapWithControlReveal(page: Page, target: Locator) {
   let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < CONTROL_REVEAL_TAP_RETRIES; attempt += 1) {
     await page.dispatchEvent("body", "touchstart");
     try {
       await tap(target);
       return;
     } catch (error) {
       lastError = error;
-      await page.waitForTimeout(120);
+      await page.waitForTimeout(CONTROL_REVEAL_RETRY_DELAY_MS);
     }
   }
   throw lastError;
