@@ -8,6 +8,14 @@ public struct UserDTO: Codable, Sendable {
     public let username: String
     public let isPublic: Bool
     public let currentDay: Int
+
+    public init(id: String, email: String, username: String, isPublic: Bool, currentDay: Int) {
+        self.id = id
+        self.email = email
+        self.username = username
+        self.isPublic = isPublic
+        self.currentDay = currentDay
+    }
 }
 
 public struct SessionDTO: Codable, Sendable {
@@ -21,6 +29,30 @@ public struct SessionDTO: Codable, Sendable {
     public let mindStateLog: [MindStateEntry]?
     public let sessionDate: String
     public let buddySessionId: String?
+
+    public init(
+        id: String,
+        dayNumber: Int,
+        duration: Int,
+        completed: Bool,
+        actualTime: Int?,
+        clearPercent: Int,
+        thoughtCount: Int,
+        mindStateLog: [MindStateEntry]?,
+        sessionDate: String,
+        buddySessionId: String?
+    ) {
+        self.id = id
+        self.dayNumber = dayNumber
+        self.duration = duration
+        self.completed = completed
+        self.actualTime = actualTime
+        self.clearPercent = clearPercent
+        self.thoughtCount = thoughtCount
+        self.mindStateLog = mindStateLog
+        self.sessionDate = sessionDate
+        self.buddySessionId = buddySessionId
+    }
 }
 
 public struct ThoughtDTO: Codable, Sendable {
@@ -29,6 +61,14 @@ public struct ThoughtDTO: Codable, Sendable {
     public let dayNumber: Int
     public let timeInSession: Int
     public let text: String
+
+    public init(id: String, sessionId: String, dayNumber: Int, timeInSession: Int, text: String) {
+        self.id = id
+        self.sessionId = sessionId
+        self.dayNumber = dayNumber
+        self.timeInSession = timeInSession
+        self.text = text
+    }
 }
 
 public struct BoardEntryDTO: Codable, Sendable {
@@ -44,6 +84,13 @@ public struct StatsDTO: Codable, Sendable {
     public let avgClearPercent: Int
     public let avgThoughtsPerSession: Double
     public let avgThoughtsPerMinute: Double
+
+    public init(streak: Int, avgClearPercent: Int, avgThoughtsPerSession: Double, avgThoughtsPerMinute: Double) {
+        self.streak = streak
+        self.avgClearPercent = avgClearPercent
+        self.avgThoughtsPerSession = avgThoughtsPerSession
+        self.avgThoughtsPerMinute = avgThoughtsPerMinute
+    }
 }
 
 // MARK: - API Request Types

@@ -56,6 +56,8 @@ struct HomeView: View {
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(SPColor.border2))
                     }
+                    .accessibilityIdentifier("home.beginButton")
+                    .accessibilityLabel("Start session")
 
                     Button {
                         withAnimation {

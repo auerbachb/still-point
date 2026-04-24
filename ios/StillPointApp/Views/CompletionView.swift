@@ -30,11 +30,13 @@ struct CompletionView: View {
                     Text("Day \(dayNumber) Complete")
                         .font(SPFont.serifItalic(32, weight: .light))
                         .foregroundStyle(Color(SPColor.fg))
+                        .accessibilityIdentifier("completion.dayTitle")
 
                     Text("\(duration) seconds of sustained attention")
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg3))
                         .tracking(1)
+                        .accessibilityIdentifier("completion.durationLabel")
                 }
 
                 // Stats cards
@@ -192,6 +194,7 @@ struct CompletionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border2))
                 }
+                .accessibilityIdentifier("completion.returnButton")
 
                 Spacer().frame(height: SPSpacing.s4)
             }
