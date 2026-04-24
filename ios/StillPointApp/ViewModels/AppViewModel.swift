@@ -168,14 +168,8 @@ final class AppViewModel {
             currentView = .buddySession(sessionId: sessionId)
         } catch let error as APIError {
             buddyInviteError = error.message
-            if case .auth = currentView {} else {
-                currentView = .buddyHub
-            }
         } catch {
             buddyInviteError = "Could not open buddy invite."
-            if case .auth = currentView {} else {
-                currentView = .buddyHub
-            }
         }
     }
 

@@ -6,19 +6,8 @@ struct BuddyVideoWebView: UIViewRepresentable {
     let roomURL: String
     let meetingToken: String
 
-    final class Coordinator: NSObject, WKUIDelegate {
+    final class Coordinator: NSObject {
         var lastRequestedURL: URL?
-
-        @available(iOS 15.0, *)
-        func webView(
-            _ webView: WKWebView,
-            requestMediaCapturePermissionFor origin: WKSecurityOrigin,
-            initiatedByFrame frame: WKFrameInfo,
-            type: WKMediaCaptureType,
-            decisionHandler: @escaping (WKPermissionDecision) -> Void
-        ) {
-            decisionHandler(.grant)
-        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -34,7 +23,6 @@ struct BuddyVideoWebView: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false
-        webView.uiDelegate = context.coordinator
         return webView
     }
 

@@ -69,6 +69,9 @@ struct BuddySessionHubView: View {
                 errorMessage = newError
             }
         }
+        .onDisappear {
+            appVM.buddyInviteError = nil
+        }
     }
 
     private var createOrJoinSection: some View {
