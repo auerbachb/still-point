@@ -6,6 +6,16 @@ MAX_RETRIES="${2:-1}"
 ATTEMPT=1
 UI_TESTS_DIR="${IOS_UI_TESTS_DIR:-ios/StillPointUITests}"
 SECRETS_REQUIRED="${E2E_SECRETS_REQUIRED:-true}"
+STATUS_FILE="artifacts/e2e/ios/${LANE}.status"
+FINAL_STATUS="failed"
+
+mkdir -p "artifacts/e2e/ios"
+
+write_status_file() {
+  printf '%s\n' "${FINAL_STATUS}" > "${STATUS_FILE}"
+}
+
+trap write_status_file EXIT
 
 if ! [[ "${MAX_RETRIES}" =~ ^[0-9]+$ ]] || [[ "${MAX_RETRIES}" -lt 1 ]]; then
   echo "MAX_RETRIES must be a positive integer (>= 1). Got: '${MAX_RETRIES}'."
@@ -17,11 +27,9 @@ if [[ "${E2E_ENV:-}" == "prod" || "${E2E_BASE_URL:-}" =~ still-point\.me ]]; the
   exit 1
 fi
 
-mkdir -p "artifacts/e2e/ios"
-
 if [[ ! -d "${UI_TESTS_DIR}" ]]; then
   echo "iOS E2E suite not present (${UI_TESTS_DIR}); skipping ${LANE} lane."
-  echo "skipped" > "artifacts/e2e/ios/${LANE}.status"
+  FINAL_STATUS="skipped"
   exit 0
 fi
 
@@ -79,11 +87,13 @@ while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
   echo "Running iOS ${LANE} lane attempt ${ATTEMPT}/${MAX_RETRIES}"
   if run_lane "${LANE}"; then
     echo "iOS ${LANE} lane passed."
+    FINAL_STATUS="passed"
     exit 0
   fi
 
   if [[ "$ATTEMPT" -ge "$MAX_RETRIES" ]]; then
     echo "iOS ${LANE} lane failed after ${MAX_RETRIES} attempt(s)."
+    FINAL_STATUS="failed"
     exit 1
   fi
 
