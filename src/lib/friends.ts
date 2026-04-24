@@ -13,5 +13,13 @@ function normalizeUuidForComparison(value: string): string {
 export function orderedUserPair(userA: string, userB: string): [string, string] {
   const normalizedA = normalizeUuidForComparison(userA);
   const normalizedB = normalizeUuidForComparison(userB);
-  return normalizedA < normalizedB ? [userA, userB] : [userB, userA];
+  if (normalizedA < normalizedB) {
+    return [userA, userB];
+  }
+
+  if (normalizedA > normalizedB) {
+    return [userB, userA];
+  }
+
+  return userA < userB ? [userA, userB] : [userB, userA];
 }
