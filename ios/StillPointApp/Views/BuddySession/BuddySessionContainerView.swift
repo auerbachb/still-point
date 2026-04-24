@@ -35,16 +35,6 @@ struct BuddySessionContainerView: View {
                         snapshot: snapshot,
                         onLeave: {
                             appVM.leaveBuddySession()
-                        },
-                        onComplete: { session in
-                            appVM.completeSession(
-                                sessionId: session.id,
-                                clearPercent: session.clearPercent,
-                                thoughtCount: session.thoughtCount,
-                                thoughts: vm.capturedThoughts,
-                                dayNumber: session.dayNumber,
-                                duration: session.duration
-                            )
                         }
                     )
                 case "completed":
