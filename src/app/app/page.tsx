@@ -412,6 +412,7 @@ export default function StillPoint() {
                 padding: isMobile ? "12px 14px" : "8px",
                 minWidth: isMobile ? "44px" : undefined,
                 minHeight: isMobile ? "44px" : undefined,
+                lineHeight: 1.2,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 transition: "color 0.3s",
                 position: "relative",

@@ -220,6 +220,7 @@ export function CompletionScreen({
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           fontSize: "14px", fontStyle: "italic",
           padding: "12px 36px", borderRadius: "30px",
+          minHeight: "44px",
           cursor: "pointer", marginTop: "8px",
         }}
       >

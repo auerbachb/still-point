@@ -8,7 +8,10 @@
     "build:turbo": "next build --turbopack",
     "build:verify": "bash ./scripts/verify-build.sh",
     "start": "next start",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install --with-deps chromium webkit"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.89.1",
@@ -25,6 +28,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
