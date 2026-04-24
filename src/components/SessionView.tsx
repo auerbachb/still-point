@@ -483,6 +483,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 padding: "14px 24px",
+                minHeight: "44px",
                 borderRadius: "20px",
                 cursor: "pointer",
               }}
@@ -501,6 +502,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 padding: "14px 24px",
+                minHeight: "44px",
                 borderRadius: "20px",
                 cursor: "pointer",
               }}
@@ -519,6 +521,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 padding: "14px 24px",
+                minHeight: "44px",
                 borderRadius: "20px",
                 cursor: "pointer",
               }}
@@ -537,6 +540,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 padding: "14px 24px",
+                minHeight: "44px",
                 borderRadius: "20px",
                 cursor: "pointer",
               }}

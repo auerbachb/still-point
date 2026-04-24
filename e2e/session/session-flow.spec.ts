@@ -50,6 +50,7 @@ test.describe("mobile session flow", () => {
     await page.dispatchEvent("body", "touchstart");
 
     await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
+    await page.dispatchEvent("body", "touchstart");
     await tap(page.getByRole("button", { name: /end early/i }));
     await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
   });
@@ -67,6 +68,7 @@ test.describe("mobile session flow", () => {
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
     await page.dispatchEvent("body", "touchstart");
     await expectVisibleInViewport(page, endEarlyButton, "landscape end early button");
+    await page.dispatchEvent("body", "touchstart");
     await tap(endEarlyButton);
     await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
   });

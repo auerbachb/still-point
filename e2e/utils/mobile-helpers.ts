@@ -14,11 +14,7 @@ async function getRequiredBox(target: Locator, label: string) {
 export async function tap(target: Locator) {
   await target.scrollIntoViewIfNeeded();
   await expect(target).toBeVisible();
-  try {
-    await target.tap();
-  } catch {
-    await target.tap({ force: true });
-  }
+  await target.tap();
 }
 
 export async function expectMinimumTapTarget(target: Locator, label: string, minSize = MIN_TAP_TARGET_PX) {
@@ -74,6 +70,12 @@ export async function expectNoVerticalOverlap(
 export async function simulatePullToRefreshGesture(page: Page) {
   const viewport = page.viewportSize();
   if (!viewport) return;
+  // Keep naming aligned with intent: trigger touch lifecycle events plus overscroll-like movement.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("touchstart"));
+    window.dispatchEvent(new Event("touchmove"));
+    window.dispatchEvent(new Event("touchend"));
+  });
   const centerX = Math.floor(viewport.width / 2);
   await page.mouse.move(centerX, 30);
   await page.mouse.down();

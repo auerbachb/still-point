@@ -179,7 +179,13 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
 
     if (pathname === "/api/thoughts" && method === "GET") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      return json(route, 200, { thoughts: state.thoughts });
+      const thoughts = [...state.thoughts].sort((a, b) => {
+        if (a.dayNumber !== b.dayNumber) {
+          return b.dayNumber - a.dayNumber;
+        }
+        return a.timeInSession - b.timeInSession;
+      });
+      return json(route, 200, { thoughts });
     }
 
     if (pathname === "/api/thoughts/batch" && method === "POST") {
