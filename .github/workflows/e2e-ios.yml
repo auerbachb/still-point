@@ -1,0 +1,78 @@
+name: E2E iOS
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - "docs/testing/e2e-policy.md"
+      - ".github/workflows/e2e-ios.yml"
+      - "scripts/e2e/**"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+jobs:
+  ios-e2e:
+    name: ios-e2e-${{ matrix.lane }}
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [smoke, critical]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Run iOS ${{ matrix.lane }} lane
+        env:
+          E2E_ENV: ci
+          E2E_BASE_URL: "http://127.0.0.1:3000"
+          E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
+          E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
+          E2E_SECRETS_REQUIRED: "false"
+        run: npm run e2e:ios:${{ matrix.lane }}
+
+      - name: Record iOS perf metric (report-only)
+        if: always()
+        env:
+          # Baseline placeholder when no harness-provided metric is wired yet.
+          IOS_E2E_APP_BOOT_SECONDS: ${{ vars.IOS_E2E_APP_BOOT_SECONDS || '4.2' }}
+        run: npm run e2e:ios:perf
+
+      - name: Upload iOS E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ios-${{ matrix.lane }}-artifacts
+          path: artifacts/e2e/ios/**
+          if-no-files-found: warn
+          retention-days: 14

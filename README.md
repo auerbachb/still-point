@@ -220,6 +220,13 @@ gh pr create --title "..."       # create pull request
 
 Automated code review on pull requests via [CodeRabbit](https://coderabbit.ai). Reviews are posted as PR comments — no local setup needed.
 
+## E2E policy and runbooks
+
+Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env guardrails, artifact policy, flake triage rubric, tags/lanes, visual+perf scope, merge gates, and reproducibility) are documented in:
+
+- [docs/testing/e2e-policy.md](docs/testing/e2e-policy.md)
+- [ios/E2E_RUNBOOK.md](ios/E2E_RUNBOOK.md)
+
 ## Merge gates (current)
 
 As of this audit, GitHub branch protection and rulesets are not configured with required status checks on `main`. In practice, the team uses Vercel + PR review signals as the merge gate.
