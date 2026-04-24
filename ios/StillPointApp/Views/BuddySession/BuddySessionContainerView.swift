@@ -158,7 +158,8 @@ struct BuddySessionContainerView: View {
         guard !didExitWithoutSaving else { return }
         guard let saved = await vm.savePersonalSession() else { return }
         guard let snapshotAfterSave = vm.snapshot, snapshotAfterSave.state == "completed" else { return }
-        guard snapshotAfterSave.id == snapshotBeforeSave.id, saved.id == snapshotAfterSave.id else { return }
+        guard snapshotAfterSave.id == snapshotBeforeSave.id else { return }
+        guard saved.buddySessionId == nil || saved.buddySessionId == snapshotAfterSave.id else { return }
         guard !vm.isSavingCompletion, !didExitWithoutSaving else { return }
         guard appVM.currentView == .buddySession(sessionId: sessionId) else { return }
         appVM.completeSession(

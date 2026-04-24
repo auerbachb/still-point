@@ -152,15 +152,6 @@ final class BuddySessionViewModel {
         }
     }
 
-    func participantCompleteAndLeave() async {
-        do {
-            try await APIClient.shared.buddyParticipantComplete(sessionId: sessionId)
-        } catch {
-            // best effort for backwards compatibility
-        }
-        _ = await leaveSession()
-    }
-
     func beginDistraction() {
         guard isActive, mindState == "clear" else { return }
         mindState = "thinking"
