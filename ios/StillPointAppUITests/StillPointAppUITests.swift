@@ -126,7 +126,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
-        let message = app.staticTexts["auth.launchStatusMessage"]
+        let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("internet")
                         || message.label.localizedCaseInsensitiveContains("connection"))
@@ -142,7 +142,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
-        let message = app.staticTexts["auth.launchStatusMessage"]
+        let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("expired")
                         || message.label.localizedCaseInsensitiveContains("log in"))

@@ -42,7 +42,7 @@ struct AuthView: View {
                             .font(SPFont.mono(12))
                             .foregroundStyle(SPColor.dangerMuted)
                             .multilineTextAlignment(.center)
-                            .accessibilityIdentifier("auth.launchStatusMessage")
+                            .accessibilityIdentifier("authView.launchAuthStatusMessage")
                     }
 
                     styledField("Email", text: $vm.email)
