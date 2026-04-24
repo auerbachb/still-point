@@ -20,13 +20,33 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.brettonauerbach.stillpoint</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>stillpoint</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Still Point needs camera access for partner video sessions.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Still Point needs microphone access for partner video sessions.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/Newsreader-Variable.ttf</string>
 		<string>Fonts/Newsreader-Italic-Variable.ttf</string>
 		<string>Fonts/JetBrainsMono-Variable.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>voip</string>
+		<string>audio</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

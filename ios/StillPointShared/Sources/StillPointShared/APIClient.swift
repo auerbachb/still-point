@@ -120,6 +120,80 @@ public actor APIClient {
         return response.user
     }
 
+    // MARK: - Buddy Sessions
+
+    public func createBuddySession() async throws -> BuddySessionCreatedDTO {
+        let response: CreateBuddySessionResponse = try await post("/api/buddy/sessions", body: Optional<String>.none)
+        return response.session
+    }
+
+    public func joinBuddySession(token: String) async throws -> String {
+        let response: JoinBuddySessionResponse = try await post(
+            "/api/buddy/sessions/join",
+            body: JoinBuddySessionRequest(token: token)
+        )
+        return response.sessionId
+    }
+
+    public func getBuddySnapshot(sessionId: String) async throws -> BuddySnapshotDTO {
+        let response: BuddySnapshotResponse = try await get("/api/buddy/sessions/\(sessionId)")
+        return response.snapshot
+    }
+
+    public func getBuddyMeetingToken(sessionId: String) async throws -> String {
+        let response: BuddyMeetingTokenResponse = try await post(
+            "/api/buddy/sessions/\(sessionId)/meeting-token",
+            body: Optional<String>.none
+        )
+        return response.token
+    }
+
+    public func setBuddyReady(sessionId: String, ready: Bool) async throws {
+        _ = try await patch(
+            "/api/buddy/sessions/\(sessionId)/ready",
+            body: SetBuddyReadyRequest(ready: ready)
+        ) as BuddyBooleanResponse
+    }
+
+    public func startBuddySession(sessionId: String) async throws {
+        _ = try await post(
+            "/api/buddy/sessions/\(sessionId)/start",
+            body: Optional<String>.none
+        ) as StartBuddySessionResponse
+    }
+
+    public func leaveBuddySession(sessionId: String) async throws {
+        _ = try await post(
+            "/api/buddy/sessions/\(sessionId)/leave",
+            body: Optional<String>.none
+        ) as BuddyBooleanResponse
+    }
+
+    public func cancelBuddySession(sessionId: String) async throws {
+        _ = try await post(
+            "/api/buddy/sessions/\(sessionId)/cancel",
+            body: Optional<String>.none
+        ) as BuddyBooleanResponse
+    }
+
+    public func buddyParticipantComplete(sessionId: String) async throws {
+        _ = try await post(
+            "/api/buddy/sessions/\(sessionId)/participant-complete",
+            body: Optional<String>.none
+        ) as BuddyBooleanResponse
+    }
+
+    public func recordBuddyPersonalSession(
+        sessionId: String,
+        request: RecordBuddyPersonalSessionRequest
+    ) async throws -> SessionDTO {
+        let response: RecordBuddyPersonalSessionResponse = try await post(
+            "/api/buddy/sessions/\(sessionId)/record-personal-session",
+            body: request
+        )
+        return response.session
+    }
+
     // MARK: - HTTP Helpers
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
@@ -161,7 +235,8 @@ public actor APIClient {
             let errorBody = try? JSONDecoder().decode(ErrorResponse.self, from: data)
             throw APIError(
                 status: httpResponse.statusCode,
-                message: errorBody?.error ?? "Request failed"
+                message: errorBody?.error ?? "Request failed",
+                code: errorBody?.code
             )
         }
         return (data, httpResponse)
@@ -204,10 +279,18 @@ public actor APIClient {
 public struct APIError: Error, LocalizedError {
     public let status: Int
     public let message: String
+    public let code: String?
+
+    public init(status: Int, message: String, code: String? = nil) {
+        self.status = status
+        self.message = message
+        self.code = code
+    }
 
     public var errorDescription: String? { message }
 }
 
 private struct ErrorResponse: Codable {
     let error: String
+    let code: String?
 }

@@ -29,6 +29,14 @@ struct RootView: View {
                     SessionView(appVM: appVM)
                         .transition(.opacity)
 
+                case .buddyHub:
+                    BuddySessionHubView(appVM: appVM)
+                        .transition(.opacity)
+
+                case .buddySession(let sessionId):
+                    BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
+                        .transition(.opacity)
+
                 case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):
                     CompletionView(
                         appVM: appVM,
@@ -50,6 +58,9 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .task {
             await appVM.checkAuth()
+        }
+        .onOpenURL { url in
+            appVM.handleIncomingURL(url)
         }
     }
 }
