@@ -113,6 +113,8 @@ final class StillPointAppUITests: XCTestCase {
         emailField.typeText("ios.fixture@stillpoint.test")
         passwordField.tap()
         passwordField.typeText("stillpoint-pass")
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "Keyboard should be visible for overlap reachability check")
         XCTAssertTrue(submitButton.isHittable, "Submit should remain reachable with keyboard visible")
     }
 
