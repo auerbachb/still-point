@@ -22,6 +22,10 @@ function parseDurationToSeconds(rawValue) {
     return Number.parseFloat(secondsMatch[1]);
   }
 
+  const numericLiteralPattern = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+  if (!numericLiteralPattern.test(value)) {
+    return null;
+  }
   const numeric = Number.parseFloat(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
@@ -31,8 +35,12 @@ async function main() {
 
   const uiBootSeconds =
     parseDurationToSeconds(process.env.IOS_E2E_APP_BOOT_SECONDS) ??
-    parseDurationToSeconds(process.env.IOS_E2E_APP_BOOT_TIME) ??
-    0;
+    parseDurationToSeconds(process.env.IOS_E2E_APP_BOOT_TIME);
+  if (uiBootSeconds === null) {
+    throw new Error(
+      "Missing iOS perf metric. Set IOS_E2E_APP_BOOT_SECONDS (preferred) or IOS_E2E_APP_BOOT_TIME.",
+    );
+  }
   const thresholdSeconds =
     parseDurationToSeconds(process.env.IOS_E2E_BOOT_THRESHOLD_SECONDS) ??
     parseDurationToSeconds(process.env.IOS_E2E_BOOT_THRESHOLD) ??

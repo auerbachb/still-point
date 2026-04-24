@@ -111,6 +111,8 @@ Workflow uploads:
 
 - `artifacts/e2e/ios/**`
 
+If a repository does not yet include `ios/StillPointUITests`, iOS lanes may skip while still uploading status/perf artifacts.
+
 ## 7) Flake triage rubric
 
 Use this rubric for any flaky failure:

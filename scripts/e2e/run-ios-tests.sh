@@ -20,7 +20,7 @@ if [[ ! -d "${UI_TESTS_DIR}" ]]; then
   exit 0
 fi
 
-if [[ "${SECRETS_REQUIRED}" == "true" && ("${E2E_TEST_USER_EMAIL:-}" == "" || "${E2E_TEST_USER_PASSWORD:-}" == "") ]]; then
+if [[ "${SECRETS_REQUIRED}" == "true" ]] && [[ -z "${E2E_TEST_USER_EMAIL:-}" || -z "${E2E_TEST_USER_PASSWORD:-}" ]]; then
   echo "Missing E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
   exit 1
 fi
@@ -33,7 +33,7 @@ fi
 TEST_PLAN="${IOS_TEST_PLAN:-StillPointE2E}"
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16,OS=latest}"
 TEST_SCHEME="${IOS_TEST_SCHEME:-StillPoint}"
-WORKSPACE_PATH="${IOS_TEST_WORKSPACE:-ios/StillPoint.xcodeproj}"
+PROJECT_PATH="${IOS_TEST_PROJECT:-ios/StillPoint.xcodeproj}"
 
 resolve_test_target() {
   case "$1" in
@@ -58,7 +58,7 @@ run_lane() {
 
   set +e
   xcodebuild test \
-    -project "${WORKSPACE_PATH}" \
+    -project "${PROJECT_PATH}" \
     -scheme "${TEST_SCHEME}" \
     -testPlan "${TEST_PLAN}" \
     -destination "${TEST_DESTINATION}" \

@@ -12,7 +12,7 @@ Set the following values through CI secrets (or your shell for local dry-runs):
 - `E2E_TEST_USER_PASSWORD=<ci-secret>`
 - `IOS_TEST_SCHEME=StillPoint`
 - `IOS_TEST_PLAN=StillPointE2E` (if present)
-- `IOS_TEST_DESTINATION=platform=iOS Simulator,name=iPhone 16,OS=latest`
+- `IOS_TEST_DESTINATION=platform=iOS Simulator,name=<available-simulator>,OS=latest` (example: `name=iPhone 16 Pro`; adjust to a simulator available in your local/CI environment)
 
 ## One-command lanes
 

@@ -4,7 +4,7 @@ import path from "node:path";
 const ROOT = process.cwd();
 const TARGET_DIRS = ["e2e", "scripts", ".github/workflows"];
 const ALLOWED_SLEEP_PATTERNS = [
-  /sleep\s+\$\(\(attempt \* 10\)\)/, // bounded infra retry backoff in iOS build workflow
+  /sleep\s+\$\(\(attempt \* \d+\)\)/, // bounded infra retry backoff in workflows
 ];
 
 function shouldInspect(filePath) {

@@ -5,7 +5,10 @@ const blockedHosts = [
   "www.still-point.me",
 ];
 
-const blockedPatterns = [/\.vercel\.app$/i];
+const blockedPatterns = [];
+if (process.env.E2E_ALLOW_VERCEL_PREVIEW !== "true") {
+  blockedPatterns.push(/\.vercel\.app$/i);
+}
 
 function parseHost(rawUrl) {
   if (!rawUrl) {
@@ -14,6 +17,7 @@ function parseHost(rawUrl) {
   try {
     return new URL(rawUrl).hostname.toLowerCase();
   } catch {
+    console.warn(`E2E environment guard warning: could not parse URL '${rawUrl}'.`);
     return null;
   }
 }

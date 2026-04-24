@@ -5,17 +5,25 @@ import process from "node:process";
 const outputDir = path.resolve("artifacts/e2e/perf");
 const metricName = "firstResponseMs";
 const metricValue = Number(process.env.E2E_WEB_FIRST_RESPONSE_MS ?? "0");
+const thresholdMs = Number(process.env.E2E_WEB_FIRST_RESPONSE_THRESHOLD_MS ?? "1200");
+const thresholdEnforced = process.env.E2E_WEB_PERF_ENFORCE === "true";
 
 if (!Number.isFinite(metricValue) || metricValue <= 0) {
   throw new Error("E2E_WEB_FIRST_RESPONSE_MS must be set to a positive number.");
+}
+
+if (thresholdEnforced && (!Number.isFinite(thresholdMs) || thresholdMs <= 0)) {
+  throw new Error(
+    "E2E_WEB_FIRST_RESPONSE_THRESHOLD_MS must be a positive number when E2E_WEB_PERF_ENFORCE=true.",
+  );
 }
 
 const payload = {
   platform: "web",
   metricName,
   metricValue,
-  thresholdMs: Number(process.env.E2E_WEB_FIRST_RESPONSE_THRESHOLD_MS ?? "1200"),
-  thresholdEnforced: process.env.E2E_WEB_PERF_ENFORCE === "true",
+  thresholdMs,
+  thresholdEnforced,
   recordedAt: new Date().toISOString(),
 };
 
