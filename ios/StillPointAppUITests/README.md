@@ -6,6 +6,7 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 
 - **Model:** `iPhone 15 Pro` (notch + Dynamic Island + home indicator)
 - **OS:** iOS 17.0+
+- **Cold-start auth bound (documented):** auth check should complete within **5,000 ms** on this simulator class.
 
 ## Test coverage map (Issue #193)
 
@@ -65,3 +66,11 @@ Planned lane: `ios-ui-smoke`
 
 - **Cross-reference #155/#156:** reuse shared simulator boot, xcodegen generation, and cache priming steps from those issues so iOS lanes do not duplicate setup work unnecessarily.
 - Keep auth/session fixture bootstrapping in app-side launch environment (this folder) rather than cloning separate backend setup in each lane.
+
+## VoiceOver smoke steps (manual fallback)
+
+1. Enable VoiceOver in the simulator (`Settings -> Accessibility -> VoiceOver`).
+2. Launch the app with UI-test fixture mode (`SP_UI_TEST_MODE=1`) and log in as the fixture user.
+3. Focus the Home primary CTA and confirm it is announced as **"Start session"**.
+4. Activate Start session, then focus the timer element and confirm it announces **"Time remaining mm:ss"**.
+5. Use swipe/right navigation to move to the primary session controls and confirm the path remains navigable through start -> completion -> return.
