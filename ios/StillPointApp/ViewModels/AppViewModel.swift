@@ -111,11 +111,17 @@ final class AppViewModel {
 
     func leaveBuddySession() {
         currentView = .home
+        Task { await consumePendingBuddyInviteIfNeeded() }
     }
 
     func handleIncomingURL(_ url: URL) {
         guard let token = extractBuddyToken(from: url) else { return }
         if currentUser == nil {
+            pendingBuddyInviteToken = token
+            return
+        }
+        if isInSession {
+            // Queue invite while preserving in-progress local session state.
             pendingBuddyInviteToken = token
             return
         }
@@ -146,6 +152,7 @@ final class AppViewModel {
             currentUser = user
         }
         currentView = .home
+        await consumePendingBuddyInviteIfNeeded()
     }
 
     private func consumePendingBuddyInviteIfNeeded() async {
