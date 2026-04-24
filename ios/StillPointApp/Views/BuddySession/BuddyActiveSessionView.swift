@@ -64,7 +64,7 @@ struct BuddyActiveSessionView: View {
                 .foregroundStyle(Color(SPColor.fg))
                 .monospacedDigit()
 
-            Text("Stay present together with one shared timer.")
+            Text("Shared timer")
                 .font(SPFont.mono(11))
                 .foregroundStyle(Color(SPColor.fg4))
                 .tracking(1)
