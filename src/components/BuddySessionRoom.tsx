@@ -39,6 +39,7 @@ function getLocalIsoDate(): string {
 }
 
 type BuddyMindState = "clear" | "thinking" | "hyperfocus";
+type FinalizeAttemptResult = "started" | "already-saving" | "not-ready";
 
 function formatBuddyActionError(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
@@ -173,6 +174,13 @@ export function BuddySessionRoom({
   }, [pollStopped, sessionId]);
 
   useEffect(() => {
+    setSnap(null);
+    snapRef.current = null;
+    setMindStateLog([]);
+    mindStateLogRef.current = [];
+    setSessionThoughts([]);
+    sessionThoughtsRef.current = [];
+    timerAnchorRef.current = null;
     setPollStopped(false);
     lastRevision.current = -1;
     serverFinalizeTriggeredRef.current = false;
@@ -349,12 +357,12 @@ export function BuddySessionRoom({
     }
   };
 
-  const finalizePersonalSession = useCallback(async () => {
-    if (!onPersonalRecordComplete) return;
-    if (saveInFlightRef.current) return;
+  const finalizePersonalSession = useCallback(async (): Promise<FinalizeAttemptResult> => {
+    if (!onPersonalRecordComplete) return "not-ready";
+    if (saveInFlightRef.current) return "already-saving";
     const snapNow = snapRef.current;
-    if (!snapNow) return;
-    if (snapNow.state !== "completed" && !localTimerCompletedRef.current) return;
+    if (!snapNow) return "not-ready";
+    if (snapNow.state !== "completed" && !localTimerCompletedRef.current) return "not-ready";
 
     saveInFlightRef.current = true;
     setIsSavingPersonalRecord(true);
@@ -393,27 +401,37 @@ export function BuddySessionRoom({
       saveInFlightRef.current = false;
       setIsSavingPersonalRecord(false);
     }
+    return "started";
   }, [sessionId, onPersonalRecordComplete]);
 
   useEffect(() => {
     if (snap?.state !== "completed" || !onPersonalRecordComplete) return;
     if (serverFinalizeTriggeredRef.current) return;
-    serverFinalizeTriggeredRef.current = true;
-    void finalizePersonalSession();
+    void finalizePersonalSession().then((result) => {
+      if (result !== "not-ready") {
+        serverFinalizeTriggeredRef.current = true;
+      }
+    });
   }, [snap?.state, sessionId, onPersonalRecordComplete, finalizePersonalSession]);
 
   useEffect(() => {
     if (!localTimerCompleted || !onPersonalRecordComplete) return;
     if (localTimerFinalizeTriggeredRef.current) return;
-    localTimerFinalizeTriggeredRef.current = true;
-    void finalizePersonalSession();
+    void finalizePersonalSession().then((result) => {
+      if (result !== "not-ready") {
+        localTimerFinalizeTriggeredRef.current = true;
+      }
+    });
   }, [localTimerCompleted, onPersonalRecordComplete, finalizePersonalSession]);
 
   useEffect(() => {
     if (!pollStopped || !localTimerCompleted || !onPersonalRecordComplete) return;
     if (pollStoppedFinalizeTriggeredRef.current) return;
-    pollStoppedFinalizeTriggeredRef.current = true;
-    void finalizePersonalSession();
+    void finalizePersonalSession().then((result) => {
+      if (result !== "not-ready") {
+        pollStoppedFinalizeTriggeredRef.current = true;
+      }
+    });
   }, [pollStopped, localTimerCompleted, onPersonalRecordComplete, finalizePersonalSession]);
 
   const completeAndExitLegacy = async () => {
