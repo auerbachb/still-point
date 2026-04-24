@@ -77,7 +77,9 @@ final class AppViewModel {
                 currentUser = user
                 currentView = .home
                 authStatusMessage = nil
+                lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 await consumePendingBuddyInviteIfNeeded()
+                return
             } else {
                 currentView = .auth
                 authStatusMessage = nil

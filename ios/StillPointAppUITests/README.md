@@ -19,7 +19,7 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - Keyboard overlap reachability (`testKeyboardOverlapKeepsSubmitReachable`)
 - VoiceOver smoke labels for timer + primary button (`testVoiceOverLabelsForTimerAndPrimaryButton`)
 - Airplane-mode style launch failure message (`testLaunchOfflineShowsUserVisibleMessage`)
-- Token expiry re-auth path (`testTokenExpiryRoutesBackToAuthWithMessage`)
+- Token expiry re-auth path (`testTokenExpiryRoutesToReauthMessage`)
 - Failed sessions API displays visible error (no silent hang) (`testSessionsFailureShowsVisibleRetryMessage`)
 
 Cold-start acceptance guard used by tests: **auth check must complete within 5,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`).

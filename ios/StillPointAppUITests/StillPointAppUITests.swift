@@ -13,13 +13,13 @@ final class StillPointAppUITests: XCTestCase {
             seedAuthenticated: false,
             resetStore: true,
             sessionSeconds: 6,
-            timerMultiplier: 3
+            timerMultiplier: 3.0
         )
         app.launch()
 
         let authRoot = app.otherElements["root.currentView.auth"]
         XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
-        assertColdStartBound(app: app, maxMs: 5_000)
+        assertColdStartBound(root: authRoot, maxMs: 5_000)
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -68,12 +68,12 @@ final class StillPointAppUITests: XCTestCase {
             seedAuthenticated: true,
             resetStore: false,
             sessionSeconds: 6,
-            timerMultiplier: 3
+            timerMultiplier: 3.0
         )
         relaunch.launch()
 
         XCTAssertTrue(relaunch.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        assertColdStartBound(app: relaunch, maxMs: 5_000)
+        assertColdStartBound(root: relaunch.otherElements["root.currentView.home"], maxMs: 5_000)
 
         openTab(named: "PROGRESS", in: relaunch)
         XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
@@ -150,7 +150,7 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testRotationDecisionSessionRemainsUsableInLandscape() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
@@ -179,7 +179,7 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testVoiceOverLabelsForTimerAndPrimaryButton() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
@@ -212,7 +212,7 @@ final class StillPointAppUITests: XCTestCase {
         seedAuthenticated: Bool,
         resetStore: Bool,
         sessionSeconds: Int = 10,
-        timerMultiplier: Int = 1,
+        timerMultiplier: Double = 1.0,
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
         forceSessionsFailure: Bool = false
@@ -241,15 +241,18 @@ final class StillPointAppUITests: XCTestCase {
         start.press(forDuration: duration, thenDragTo: end)
     }
 
-    private func assertColdStartBound(app: XCUIApplication, maxMs: Int) {
-        let roots = app.otherElements.matching(NSPredicate(format: "identifier BEGINSWITH %@", "root.currentView."))
-        let root = roots.firstMatch
-        let value = (root.value as? String) ?? ""
-        guard let ms = parseMetricMs(from: value) else {
-            XCTFail("Missing cold-start metric in root accessibility value: \(value)")
-            return
+    private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
+        let deadline = Date().addingTimeInterval(5)
+        var observedValue = ""
+        while Date() < deadline {
+            observedValue = (root.value as? String) ?? ""
+            if let ms = parseMetricMs(from: observedValue) {
+                XCTAssertLessThanOrEqual(ms, maxMs, "Cold start auth check exceeded documented bound")
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
-        XCTAssertLessThanOrEqual(ms, maxMs, "Cold start auth check exceeded documented bound")
+        XCTFail("Missing cold-start metric in root accessibility value: \(observedValue)")
     }
 
     private func parseMetricMs(from value: String) -> Int? {

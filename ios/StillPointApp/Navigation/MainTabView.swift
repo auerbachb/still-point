@@ -15,9 +15,9 @@ struct MainTabView: View {
             HistoryView(appVM: appVM)
                 .tabItem {
                     Label("PROGRESS", systemImage: "chart.bar")
+                        .accessibilityIdentifier("tab.progress")
                 }
                 .tag(1)
-                .accessibilityIdentifier("tab.progress")
 
             ThoughtJournalView()
                 .tabItem {
@@ -34,9 +34,9 @@ struct MainTabView: View {
             SettingsView(appVM: appVM)
                 .tabItem {
                     Label("SETTINGS", systemImage: "gearshape")
+                        .accessibilityIdentifier("tab.settings")
                 }
                 .tag(4)
-                .accessibilityIdentifier("tab.settings")
         }
         .tint(SPColor.green)
         .onAppear {
