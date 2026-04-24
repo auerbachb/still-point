@@ -169,18 +169,24 @@ public enum SessionLogic {
         let minuteBlocks = blocks.filter { $0.type == .minute }
         let secondBlocks = blocks.filter { $0.type == .second }
         let useMinuteBlocks = usesMinuteBlocks(totalSeconds: totalSeconds)
+        let totalMinuteCount = minuteBlocks.count + (secondBlocks.isEmpty ? 0 : 1)
 
-        if elapsed >= Double(totalSeconds) {
-            return "session complete"
-        } else if useMinuteBlocks {
+        if useMinuteBlocks {
+            if elapsed >= Double(totalSeconds) {
+                return "minute \(totalMinuteCount) of \(totalMinuteCount)"
+            }
+
             let lastMinuteStart = minuteBlocks.count * 60
             if elapsed < Double(lastMinuteStart) {
                 let minIdx = Int(elapsed) / 60
-                return "minute \(minIdx + 1) of \(minuteBlocks.count)"
+                return "minute \(minIdx + 1) of \(totalMinuteCount)"
             } else {
-                let secIdx = (Int(elapsed) - lastMinuteStart) / StillPoint.blockDuration
-                return "final minute · block \(secIdx + 1) of \(secondBlocks.count)"
+                // Intentionally hold on the last fully completed minute during final 10s blocks.
+                // The label rolls to the final minute only when the session reaches completion.
+                return "minute \(minuteBlocks.count) of \(totalMinuteCount)"
             }
+        } else if elapsed >= Double(totalSeconds) {
+            return "session complete"
         } else {
             let blockIdx = Int(elapsed) / StillPoint.blockDuration
             return "block \(blockIdx + 1) of \(blocks.count)"
