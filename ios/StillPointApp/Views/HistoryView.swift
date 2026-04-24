@@ -20,6 +20,7 @@ struct HistoryView: View {
                 Text("Progress")
                     .font(SPFont.serifItalic(28, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
+                    .accessibilityIdentifier("history.title")
 
                 if vm.isLoading {
                     ProgressView()
@@ -31,6 +32,7 @@ struct HistoryView: View {
                             .font(SPFont.serif(15))
                             .foregroundStyle(SPColor.dangerMuted)
                             .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("history.errorMessage")
                         Button("Retry") {
                             Task { await vm.load() }
                         }
@@ -180,6 +182,7 @@ struct HistoryView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .accessibilityIdentifier("history.session.day.\(dayNumber)")
 
             // Expanded thoughts
             if isExpanded, let thoughts = vm.dayThoughts[dayNumber] {

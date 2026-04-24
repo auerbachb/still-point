@@ -4,6 +4,7 @@ import StillPointShared
 struct AuthView: View {
     let appVM: AppViewModel
     @State private var vm = AuthViewModel()
+    let launchAuthStatusMessage: String?
 
     var body: some View {
         ScrollView {
@@ -36,15 +37,25 @@ struct AuthView: View {
 
                 // Form
                 VStack(spacing: SPSpacing.s3) {
+                    if let launchAuthStatusMessage {
+                        Text(launchAuthStatusMessage)
+                            .font(SPFont.mono(12))
+                            .foregroundStyle(SPColor.dangerMuted)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("authView.launchAuthStatusMessage")
+                    }
+
                     styledField("Email", text: $vm.email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
+                        .accessibilityIdentifier("auth.emailField")
 
                     if vm.isSignUp {
                         styledField("Username", text: $vm.username)
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("auth.usernameField")
                     }
 
                     SecureField("Password", text: $vm.password)
@@ -59,6 +70,7 @@ struct AuthView: View {
                                 .stroke(SPColor.border2)
                         )
                         .foregroundStyle(Color(SPColor.fg))
+                        .accessibilityIdentifier("auth.passwordField")
 
                     if let error = vm.error {
                         Text(error)
@@ -82,6 +94,7 @@ struct AuthView: View {
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(SPColor.border2))
                     }
+                    .accessibilityIdentifier("auth.submitButton")
                     .disabled(!vm.isValid || vm.isSubmitting)
                     .opacity(vm.isValid ? 1 : 0.5)
                 }
