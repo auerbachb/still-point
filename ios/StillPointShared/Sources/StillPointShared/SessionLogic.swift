@@ -181,6 +181,8 @@ public enum SessionLogic {
                 let minIdx = Int(elapsed) / 60
                 return "minute \(minIdx + 1) of \(totalMinuteCount)"
             } else {
+                // Intentionally hold on the last fully completed minute during final 10s blocks.
+                // The label rolls to the final minute only when the session reaches completion.
                 return "minute \(minuteBlocks.count) of \(totalMinuteCount)"
             }
         } else if elapsed >= Double(totalSeconds) {
