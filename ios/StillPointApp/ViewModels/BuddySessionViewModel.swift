@@ -287,6 +287,10 @@ final class BuddySessionViewModel {
         }
         let requestKey = "\(snapshot.id):\(snapshot.revision):\(dailyRoomURL)"
         if latestMeetingTokenRequestKey == requestKey, meetingToken != nil { return }
+        if latestMeetingTokenRequestKey != requestKey {
+            meetingToken = nil
+            meetingTokenError = nil
+        }
         latestMeetingTokenRequestKey = requestKey
 
         Task { [weak self] in

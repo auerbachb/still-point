@@ -9,6 +9,7 @@ struct BuddyActiveSessionView: View {
     @State private var now = Date()
     @State private var showThoughtCapture = false
     @State private var showExitConfirm = false
+    @State private var didRequestCompletionRefresh = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -31,10 +32,15 @@ struct BuddyActiveSessionView: View {
         .stillPointBackground()
         .onReceive(timer) { value in
             now = value
-            if vm.currentRemainingSeconds(at: value) == 0 {
+            let remaining = vm.currentRemainingSeconds(at: value)
+            if remaining == 0 {
+                guard !didRequestCompletionRefresh else { return }
+                didRequestCompletionRefresh = true
                 Task {
                     await vm.refreshSnapshot()
                 }
+            } else {
+                didRequestCompletionRefresh = false
             }
         }
         .alert("Leave shared session?", isPresented: $showExitConfirm) {

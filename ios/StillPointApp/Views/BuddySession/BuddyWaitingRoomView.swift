@@ -6,7 +6,6 @@ struct BuddyWaitingRoomView: View {
     let onExit: () -> Void
 
     @State private var isUpdatingReady = false
-    @State private var myReady = false
 
     var body: some View {
         ScrollView {
@@ -44,9 +43,7 @@ struct BuddyWaitingRoomView: View {
                                 isUpdatingReady = true
                                 let success = await vm.setReady(newValue)
                                 await MainActor.run {
-                                    if !success {
-                                        myReady = previousValue
-                                    }
+                                    _ = previousValue // intentionally no optimistic local override
                                     isUpdatingReady = false
                                 }
                             }

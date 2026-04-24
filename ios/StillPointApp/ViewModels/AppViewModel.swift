@@ -38,6 +38,7 @@ struct CapturedThought: Identifiable {
 }
 
 @Observable
+@MainActor
 final class AppViewModel {
     var currentView: AppView = .auth
     var currentUser: UserDTO?
