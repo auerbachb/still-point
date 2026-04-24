@@ -7,6 +7,21 @@ import {
   tap,
 } from "../utils/mobile-helpers";
 
+async function tapWithControlReveal(page: Parameters<typeof test>[0]["page"], target: Parameters<typeof tap>[0]) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.dispatchEvent("body", "touchstart");
+    try {
+      await tap(target);
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(120);
+    }
+  }
+  throw lastError;
+}
+
 test.describe("mobile session flow", () => {
   test("touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
     await ensureLoggedIn();
@@ -50,8 +65,7 @@ test.describe("mobile session flow", () => {
     await page.dispatchEvent("body", "touchstart");
 
     await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
-    await page.dispatchEvent("body", "touchstart");
-    await tap(page.getByRole("button", { name: /end early/i }));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
     await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
   });
 
@@ -68,8 +82,7 @@ test.describe("mobile session flow", () => {
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
     await page.dispatchEvent("body", "touchstart");
     await expectVisibleInViewport(page, endEarlyButton, "landscape end early button");
-    await page.dispatchEvent("body", "touchstart");
-    await tap(endEarlyButton);
+    await tapWithControlReveal(page, endEarlyButton);
     await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
   });
 });

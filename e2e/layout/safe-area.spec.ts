@@ -1,3 +1,4 @@
+import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth.fixture";
 import {
   MOBILE_SAFE_AREA_TOLERANCE_PX,
@@ -6,6 +7,21 @@ import {
   expectVisibleInViewport,
   tap,
 } from "../utils/mobile-helpers";
+
+async function tapWithControlReveal(page: Page, target: Locator) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.dispatchEvent("body", "touchstart");
+    try {
+      await tap(target);
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(120);
+    }
+  }
+  throw lastError;
+}
 
 test.describe("mobile safe-area and bottom bar behavior", () => {
   test("home and nav controls stay visible above iOS-like bottom safe area", async ({ page, ensureLoggedIn }) => {
@@ -44,7 +60,7 @@ test.describe("mobile safe-area and bottom bar behavior", () => {
   test("no overlap between sticky mobile nav and completion return control", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await tap(page.getByRole("button", { name: "Begin" }));
-    await tap(page.getByRole("button", { name: /end early/i }));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
 
     const returnButton = page.getByRole("button", { name: "Return" });
     const homeNav = page.getByRole("button", { name: /^home$/i });
