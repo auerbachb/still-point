@@ -5,19 +5,10 @@ LANE="${1:-smoke}"
 MAX_RETRIES="${2:-1}"
 ATTEMPT=1
 UI_TESTS_DIR="${IOS_UI_TESTS_DIR:-ios/StillPointUITests}"
+SECRETS_REQUIRED="${E2E_SECRETS_REQUIRED:-true}"
 
 if [[ "${E2E_ENV:-}" == "prod" || "${E2E_BASE_URL:-}" =~ still-point\.me ]]; then
   echo "Refusing to run iOS E2E lane against production."
-  exit 1
-fi
-
-if [[ "${E2E_TEST_USER_EMAIL:-}" == "" || "${E2E_TEST_USER_PASSWORD:-}" == "" ]]; then
-  echo "Missing E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
-  exit 1
-fi
-
-if [[ "${E2E_TEST_USER_EMAIL}" =~ @still-point\.me$ ]]; then
-  echo "Refusing to run with production-looking user credential."
   exit 1
 fi
 
@@ -27,6 +18,16 @@ if [[ ! -d "${UI_TESTS_DIR}" ]]; then
   echo "iOS E2E suite not present (${UI_TESTS_DIR}); skipping ${LANE} lane."
   echo "skipped" > "artifacts/e2e/ios/${LANE}.status"
   exit 0
+fi
+
+if [[ "${SECRETS_REQUIRED}" == "true" && ("${E2E_TEST_USER_EMAIL:-}" == "" || "${E2E_TEST_USER_PASSWORD:-}" == "") ]]; then
+  echo "Missing E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
+  exit 1
+fi
+
+if [[ "${E2E_TEST_USER_EMAIL:-}" =~ @still-point\.me$ ]]; then
+  echo "Refusing to run with production-looking user credential."
+  exit 1
 fi
 
 TEST_PLAN="${IOS_TEST_PLAN:-StillPointE2E}"

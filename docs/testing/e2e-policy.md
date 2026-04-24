@@ -67,7 +67,8 @@ Role/locator contract source of truth remains [#152](https://github.com/auerbach
 Checks:
 
 - `npm run e2e:policy:secrets`
-- `scripts/e2e/run-ios-tests.sh` rejects production-looking user emails.
+- `scripts/e2e/run-ios-tests.sh` rejects production-looking user emails when credentials are provided.
+- For credentialed flows, CI jobs should provide `E2E_TEST_USER_EMAIL` and `E2E_TEST_USER_PASSWORD` via secrets.
 
 ## 5) Environment guardrails
 

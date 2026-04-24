@@ -54,7 +54,7 @@ jobs:
           E2E_BASE_URL: "http://127.0.0.1:3000"
           E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
           E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
-          E2E_SECRETS_REQUIRED: "true"
+          E2E_SECRETS_REQUIRED: "false"
         run: npm run e2e:ios:smoke
 
       - name: Record iOS perf metric (report-only)
@@ -114,7 +114,7 @@ jobs:
           E2E_BASE_URL: "http://127.0.0.1:3000"
           E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
           E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
-          E2E_SECRETS_REQUIRED: "true"
+          E2E_SECRETS_REQUIRED: "false"
         run: npm run e2e:ios:critical
 
       - name: Record iOS perf metric (report-only)

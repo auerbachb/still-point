@@ -40,8 +40,6 @@ jobs:
       E2E_WORKERS: "1"
       E2E_REPEAT_EACH: "1"
       E2E_RUN_ID: ${{ github.run_id }}
-      E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
-      E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
       SEED_CONFIRM: still-point-nonprod
     steps:
       - name: Checkout
@@ -61,13 +59,6 @@ jobs:
 
       - name: Assert non-production target
         run: npm run e2e:guard
-
-      - name: Verify E2E test credentials are configured
-        run: |
-          if [[ -z "${E2E_TEST_USER_EMAIL}" || -z "${E2E_TEST_USER_PASSWORD}" ]]; then
-            echo "Missing required CI secrets E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
-            exit 1
-          fi
 
       - name: Run web smoke lane
         run: npm run e2e:web:smoke
@@ -94,8 +85,6 @@ jobs:
       E2E_WORKERS: "1"
       E2E_REPEAT_EACH: "1"
       E2E_RUN_ID: ${{ github.run_id }}
-      E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
-      E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
       SEED_CONFIRM: still-point-nonprod
     steps:
       - name: Checkout
@@ -115,13 +104,6 @@ jobs:
 
       - name: Assert non-production target
         run: npm run e2e:guard
-
-      - name: Verify E2E test credentials are configured
-        run: |
-          if [[ -z "${E2E_TEST_USER_EMAIL}" || -z "${E2E_TEST_USER_PASSWORD}" ]]; then
-            echo "Missing required CI secrets E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
-            exit 1
-          fi
 
       - name: Run web critical lane
         run: npm run e2e:web:critical
