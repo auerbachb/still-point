@@ -193,12 +193,8 @@ enum BuddyInviteTokenParser {
             return token
         }
 
-        if let range = trimmed.range(of: "buddy=") {
-            let rest = String(trimmed[range.upperBound...])
-            if let amp = rest.firstIndex(of: "&") {
-                return String(rest[..<amp]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let buddy = tokenFromBuddyQueryFragment(in: trimmed) {
+            return buddy
         }
 
         return allowRawFallback ? trimmed : nil
@@ -240,5 +236,26 @@ enum BuddyInviteTokenParser {
         let host = (components.host ?? "").lowercased()
         let path = components.path.lowercased()
         return host == "buddy" || path == "/buddy" || path.hasPrefix("/buddy/") || path.contains("/invite/buddy")
+    }
+
+    private static func tokenFromBuddyQueryFragment(in raw: String) -> String? {
+        if raw.hasPrefix("buddy=") {
+            return valueAfterParameterPrefix("buddy=", in: raw)
+        }
+        if let range = raw.range(of: "?buddy=") {
+            return valueAfterParameterPrefix("?buddy=", in: String(raw[range.lowerBound...]))
+        }
+        if let range = raw.range(of: "&buddy=") {
+            return valueAfterParameterPrefix("&buddy=", in: String(raw[range.lowerBound...]))
+        }
+        return nil
+    }
+
+    private static func valueAfterParameterPrefix(_ prefix: String, in raw: String) -> String? {
+        guard let range = raw.range(of: prefix) else { return nil }
+        let rest = raw[range.upperBound...]
+        let value = rest.split(separator: "&", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

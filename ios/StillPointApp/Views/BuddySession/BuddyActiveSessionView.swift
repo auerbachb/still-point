@@ -64,7 +64,7 @@ struct BuddyActiveSessionView: View {
                 .foregroundStyle(Color(SPColor.fg))
                 .monospacedDigit()
 
-            Text("\(snapshot.durationSeconds)s shared timer synced from server")
+            Text("Shared timer synchronized with your buddy")
                 .font(SPFont.mono(11))
                 .foregroundStyle(Color(SPColor.fg4))
                 .tracking(1)

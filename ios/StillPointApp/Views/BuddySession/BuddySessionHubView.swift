@@ -59,6 +59,16 @@ struct BuddySessionHubView: View {
             .padding(.bottom, SPSpacing.s5)
         }
         .stillPointBackground()
+        .onAppear {
+            if let inviteError = appVM.buddyInviteError {
+                errorMessage = inviteError
+            }
+        }
+        .onChange(of: appVM.buddyInviteError) { _, newError in
+            if let newError {
+                errorMessage = newError
+            }
+        }
     }
 
     private var createOrJoinSection: some View {
