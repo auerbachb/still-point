@@ -50,7 +50,9 @@ final class StillPointAppUITests: XCTestCase {
         let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
         XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
         XCTAssertEqual(lightHold.value as? String, "inactive")
-        pressAndHold(element: lightHold, duration: 1.0)
+        pressAndHold(element: lightHold, duration: 1.0) {
+            XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
+        }
         XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
 
         XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
@@ -75,7 +77,7 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(relaunch.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
         assertColdStartBound(root: relaunch.otherElements["root.currentView.home"], maxMs: 5_000)
 
-        openTab(named: "PROGRESS", in: relaunch)
+        openTab(identifier: "tab.progress", in: relaunch)
         XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
         let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
         XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
@@ -87,10 +89,10 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        openTab(named: "PROGRESS", in: app)
+        openTab(identifier: "tab.progress", in: app)
         XCTAssertTrue(app.staticTexts["history.title"].waitForExistence(timeout: 6))
 
-        openTab(named: "SETTINGS", in: app)
+        openTab(identifier: "tab.settings", in: app)
         XCTAssertTrue(app.staticTexts["settings.title"].waitForExistence(timeout: 6))
         XCTAssertTrue(app.buttons["settings.logoutButton"].exists)
     }
@@ -202,7 +204,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        openTab(named: "PROGRESS", in: app)
+        openTab(identifier: "tab.progress", in: app)
 
         let errorLabel = app.staticTexts["history.errorMessage"]
         XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
@@ -231,16 +233,26 @@ final class StillPointAppUITests: XCTestCase {
         return app
     }
 
-    private func openTab(named tabTitle: String, in app: XCUIApplication) {
-        let tabButton = app.tabBars.buttons[tabTitle]
+    private func openTab(identifier: String, in app: XCUIApplication) {
+        let tabButton = app.tabBars.buttons[identifier]
         XCTAssertTrue(tabButton.waitForExistence(timeout: 5))
         tabButton.tap()
     }
 
-    private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
+    private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = start.withOffset(CGVector(dx: 0, dy: 0))
-        start.press(forDuration: duration, thenDragTo: end)
+        let holdFinished = expectation(description: "Hold gesture finished")
+        DispatchQueue.global(qos: .userInitiated).async {
+            start.press(forDuration: duration, thenDragTo: end)
+            holdFinished.fulfill()
+        }
+
+        let holdBecameActive = NSPredicate(format: "value == %@", "active")
+        let activeExpectation = expectation(for: holdBecameActive, evaluatedWith: element)
+        wait(for: [activeExpectation], timeout: duration)
+        onHold()
+        wait(for: [holdFinished], timeout: duration + 2)
     }
 
     private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
