@@ -17,6 +17,21 @@ export async function tap(target: Locator) {
   await target.tap();
 }
 
+export async function tapWithControlReveal(page: Page, target: Locator) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.dispatchEvent("body", "touchstart");
+    try {
+      await tap(target);
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(120);
+    }
+  }
+  throw lastError;
+}
+
 export async function expectMinimumTapTarget(target: Locator, label: string, minSize = MIN_TAP_TARGET_PX) {
   const box = await getRequiredBox(target, label);
   expect(box.width, `${label} width should meet ${minSize}px minimum`).toBeGreaterThanOrEqual(minSize);

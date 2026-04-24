@@ -4,23 +4,9 @@ import {
   expectNoHorizontalOverflow,
   expectNoVerticalOverlap,
   expectVisibleInViewport,
+  tapWithControlReveal,
   tap,
 } from "../utils/mobile-helpers";
-
-async function tapWithControlReveal(page: Parameters<typeof test>[0]["page"], target: Parameters<typeof tap>[0]) {
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.dispatchEvent("body", "touchstart");
-    try {
-      await tap(target);
-      return;
-    } catch (error) {
-      lastError = error;
-      await page.waitForTimeout(120);
-    }
-  }
-  throw lastError;
-}
 
 test.describe("mobile overflow and scrolling", () => {
   test("auth and home screens avoid horizontal overflow", async ({ page, ensureLoggedIn }) => {
