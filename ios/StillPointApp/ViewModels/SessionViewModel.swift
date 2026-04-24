@@ -109,7 +109,7 @@ final class SessionViewModel {
 
         isActive = true
         isPaused = false
-        startDate = Date().addingTimeInterval(-pausedElapsed)
+        startDate = Date().addingTimeInterval(-(pausedElapsed / uiTestTimerMultiplier))
         if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion {
             AudioEngine.shared.warmUp()
         }
@@ -353,8 +353,4 @@ final class SessionViewModel {
         return parsed
     }
 
-    static var isUITestTimerActive: Bool {
-        let env = ProcessInfo.processInfo.environment
-        return env["SP_UI_TEST_SESSION_SECONDS"] != nil || env["SP_UI_TEST_TIMER_MULTIPLIER"] != nil
-    }
 }
