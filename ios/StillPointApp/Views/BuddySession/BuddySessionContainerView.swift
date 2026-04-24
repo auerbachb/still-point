@@ -88,7 +88,7 @@ struct BuddySessionContainerView: View {
                     .font(SPFont.serifItalic(17, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
                 } else {
-                    Text("Saving your personal session...")
+                    Text("Preparing to save your personal session...")
                         .font(SPFont.mono(12))
                         .foregroundStyle(Color(SPColor.fg3))
                 }

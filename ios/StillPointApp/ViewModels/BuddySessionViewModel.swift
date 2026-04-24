@@ -306,23 +306,17 @@ final class BuddySessionViewModel {
             guard let self else { return }
             do {
                 let token = try await APIClient.shared.getBuddyMeetingToken(sessionId: sessionId)
-                await MainActor.run {
-                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
-                    self.meetingToken = token
-                    self.meetingTokenError = nil
-                }
+                guard self.latestMeetingTokenRequestKey == requestKey else { return }
+                self.meetingToken = token
+                self.meetingTokenError = nil
             } catch let error as APIError {
-                await MainActor.run {
-                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
-                    self.meetingToken = nil
-                    self.meetingTokenError = error.message
-                }
+                guard self.latestMeetingTokenRequestKey == requestKey else { return }
+                self.meetingToken = nil
+                self.meetingTokenError = error.message
             } catch {
-                await MainActor.run {
-                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
-                    self.meetingToken = nil
-                    self.meetingTokenError = "Could not get video token."
-                }
+                guard self.latestMeetingTokenRequestKey == requestKey else { return }
+                self.meetingToken = nil
+                self.meetingTokenError = "Could not get video token."
             }
         }
     }
