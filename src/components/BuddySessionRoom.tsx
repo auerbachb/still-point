@@ -93,7 +93,13 @@ export function BuddySessionRoom({
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
   const [dailyMeetingToken, setDailyMeetingToken] = useState<string | null>(null);
   const [dailyTokenError, setDailyTokenError] = useState<string | null>(null);
-  const autoFinalizeAttemptedRef = useRef(false);
+  const serverFinalizeTriggeredRef = useRef(false);
+  const localTimerFinalizeTriggeredRef = useRef(false);
+  const pollStoppedFinalizeTriggeredRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const [isSavingPersonalRecord, setIsSavingPersonalRecord] = useState(false);
+  const [localTimerCompleted, setLocalTimerCompleted] = useState(false);
+  const localTimerCompletedRef = useRef(false);
   const snapRef = useRef(snap);
   const mindStateLogRef = useRef(mindStateLog);
   const sessionThoughtsRef = useRef(sessionThoughts);
@@ -159,7 +165,6 @@ export function BuddySessionRoom({
     } catch (e) {
       if (e instanceof ApiError && e.code === BUDDY_POLICY_CODES.NOT_IN_SESSION) {
         setPollStopped(true);
-        setSnap(null);
         setPollError(formatBuddyActionError(e, "Could not refresh session"));
         return;
       }
@@ -170,7 +175,13 @@ export function BuddySessionRoom({
   useEffect(() => {
     setPollStopped(false);
     lastRevision.current = -1;
-    autoFinalizeAttemptedRef.current = false;
+    serverFinalizeTriggeredRef.current = false;
+    localTimerFinalizeTriggeredRef.current = false;
+    pollStoppedFinalizeTriggeredRef.current = false;
+    saveInFlightRef.current = false;
+    setIsSavingPersonalRecord(false);
+    setLocalTimerCompleted(false);
+    localTimerCompletedRef.current = false;
     setPersonalRecordError(null);
     setDailyMeetingToken(null);
     setDailyTokenError(null);
@@ -220,6 +231,12 @@ export function BuddySessionRoom({
     resetHoldTracking();
     setSessionThoughts([]);
     setDistractionSegmentCount(0);
+    setLocalTimerCompleted(false);
+    localTimerCompletedRef.current = false;
+    setPersonalRecordError(null);
+    serverFinalizeTriggeredRef.current = false;
+    localTimerFinalizeTriggeredRef.current = false;
+    pollStoppedFinalizeTriggeredRef.current = false;
   }, [sessionId, snap?.state, snap?.startedAt, resetHoldTracking]);
 
   useEffect(() => {
@@ -285,6 +302,8 @@ export function BuddySessionRoom({
   }, [resetHoldTracking]);
 
   const handleBuddyTimerComplete = useCallback(() => {
+    setLocalTimerCompleted(true);
+    localTimerCompletedRef.current = true;
     closeOpenBuddyHold();
     void poll();
   }, [poll, closeOpenBuddyHold]);
@@ -332,12 +351,19 @@ export function BuddySessionRoom({
 
   const finalizePersonalSession = useCallback(async () => {
     if (!onPersonalRecordComplete) return;
+    if (saveInFlightRef.current) return;
     const snapNow = snapRef.current;
-    if (!snapNow || snapNow.state !== "completed") return;
+    if (!snapNow) return;
+    if (snapNow.state !== "completed" && !localTimerCompletedRef.current) return;
 
+    saveInFlightRef.current = true;
+    setIsSavingPersonalRecord(true);
     setPersonalRecordError(null);
     try {
-      const durationSeconds = snapNow.durationSeconds;
+      const durationSeconds = Math.max(
+        1,
+        snapNow.durationSeconds || Math.round(elapsedRef.current),
+      );
       const clearPercent = computeClearPercentFromLog(mindStateLogRef.current, durationSeconds);
       const thoughtsSnapshot = sessionThoughtsRef.current;
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
@@ -363,15 +389,32 @@ export function BuddySessionRoom({
       });
     } catch (e) {
       setPersonalRecordError(formatBuddyActionError(e, "Could not save your session"));
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSavingPersonalRecord(false);
     }
   }, [sessionId, onPersonalRecordComplete]);
 
   useEffect(() => {
     if (snap?.state !== "completed" || !onPersonalRecordComplete) return;
-    if (autoFinalizeAttemptedRef.current) return;
-    autoFinalizeAttemptedRef.current = true;
+    if (serverFinalizeTriggeredRef.current) return;
+    serverFinalizeTriggeredRef.current = true;
     void finalizePersonalSession();
   }, [snap?.state, sessionId, onPersonalRecordComplete, finalizePersonalSession]);
+
+  useEffect(() => {
+    if (!localTimerCompleted || !onPersonalRecordComplete) return;
+    if (localTimerFinalizeTriggeredRef.current) return;
+    localTimerFinalizeTriggeredRef.current = true;
+    void finalizePersonalSession();
+  }, [localTimerCompleted, onPersonalRecordComplete, finalizePersonalSession]);
+
+  useEffect(() => {
+    if (!pollStopped || !localTimerCompleted || !onPersonalRecordComplete) return;
+    if (pollStoppedFinalizeTriggeredRef.current) return;
+    pollStoppedFinalizeTriggeredRef.current = true;
+    void finalizePersonalSession();
+  }, [pollStopped, localTimerCompleted, onPersonalRecordComplete, finalizePersonalSession]);
 
   const completeAndExitLegacy = async () => {
     try {
@@ -456,8 +499,17 @@ export function BuddySessionRoom({
             <>
               <BuddyRoomErrorBanner message={personalRecordError} />
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
-                <button type="button" onClick={() => void finalizePersonalSession()} style={btnPrimary}>
-                  Try again
+                <button
+                  type="button"
+                  onClick={() => void finalizePersonalSession()}
+                  disabled={isSavingPersonalRecord}
+                  style={{
+                    ...btnPrimary,
+                    opacity: isSavingPersonalRecord ? 0.65 : 1,
+                    cursor: isSavingPersonalRecord ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isSavingPersonalRecord ? "Trying again..." : "Try again"}
                 </button>
                 <button type="button" onClick={() => void leave()} style={btnSecondary}>
                   Return home without saving
@@ -466,7 +518,9 @@ export function BuddySessionRoom({
             </>
           ) : (
             <p style={{ margin: 0, color: "var(--fg-2)", lineHeight: 1.5, fontSize: "14px" }}>
-              Saving your personal session…
+              {isSavingPersonalRecord
+                ? "Saving your personal session..."
+                : "Finalizing your personal session..."}
             </p>
           )}
         </div>
