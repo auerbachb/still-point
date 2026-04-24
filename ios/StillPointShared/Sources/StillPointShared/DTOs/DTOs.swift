@@ -20,6 +20,7 @@ public struct SessionDTO: Codable, Sendable {
     public let thoughtCount: Int
     public let mindStateLog: [MindStateEntry]?
     public let sessionDate: String
+    public let buddySessionId: String?
 }
 
 public struct ThoughtDTO: Codable, Sendable {
@@ -95,6 +96,59 @@ public struct BatchThoughtsRequest: Codable, Sendable {
     }
 }
 
+// MARK: - Buddy Session API Types
+
+public struct BuddySessionCreatedDTO: Codable, Sendable {
+    public let id: String
+    public let shareToken: String
+    public let sharePath: String
+    public let durationSeconds: Int
+}
+
+public struct BuddyParticipantDTO: Codable, Sendable {
+    public let userId: String
+    public let username: String
+    public let isHost: Bool
+    public let ready: Bool
+    public let joinedAt: String
+    public let leftAt: String?
+    public let connected: Bool
+    public let participantCompletedAt: String?
+}
+
+public struct BuddySnapshotDTO: Codable, Sendable {
+    public let id: String
+    public let state: String
+    public let revision: Int
+    public let durationSeconds: Int
+    public let startedAt: String?
+    public let serverNow: String
+    public let endsAt: String?
+    public let elapsedSeconds: Int?
+    public let remainingSeconds: Int?
+    public let dailyRoomUrl: String?
+    public let hostUserId: String
+    public let isHost: Bool
+    public let participants: [BuddyParticipantDTO]
+}
+
+public struct SetBuddyReadyRequest: Codable, Sendable {
+    public let ready: Bool
+}
+
+public struct JoinBuddySessionRequest: Codable, Sendable {
+    public let token: String
+}
+
+public struct RecordBuddyPersonalSessionRequest: Codable, Sendable {
+    public let clearPercent: Int
+    public let thoughtCount: Int
+    public let mindStateLog: [MindStateEntry]
+    public let actualTime: Int
+    public let sessionDate: String
+    public let thoughts: [BatchThoughtsRequest.ThoughtInput]?
+}
+
 // MARK: - API Wrappers (match JSON response shapes)
 
 public struct UserResponse: Codable, Sendable {
@@ -122,4 +176,34 @@ public struct ThoughtsResponse: Codable, Sendable {
 
 public struct BoardResponse: Codable, Sendable {
     public let board: [BoardEntryDTO]
+}
+
+public struct CreateBuddySessionResponse: Codable, Sendable {
+    public let session: BuddySessionCreatedDTO
+}
+
+public struct JoinBuddySessionResponse: Codable, Sendable {
+    public let sessionId: String
+}
+
+public struct BuddySnapshotResponse: Codable, Sendable {
+    public let snapshot: BuddySnapshotDTO
+}
+
+public struct BuddyMeetingTokenResponse: Codable, Sendable {
+    public let token: String
+}
+
+public struct BuddyBooleanResponse: Codable, Sendable {
+    public let ok: Bool
+}
+
+public struct StartBuddySessionResponse: Codable, Sendable {
+    public let ok: Bool
+    public let startedAt: String?
+}
+
+public struct RecordBuddyPersonalSessionResponse: Codable, Sendable {
+    public let session: SessionDTO
+    public let already: Bool?
 }

@@ -41,19 +41,44 @@ struct HomeView: View {
                 Spacer().frame(height: SPSpacing.s4)
 
                 // Begin button
-                Button {
-                    withAnimation {
-                        appVM.beginSession()
+                VStack(spacing: SPSpacing.s2) {
+                    Button {
+                        withAnimation {
+                            appVM.beginSession()
+                        }
+                    } label: {
+                        Text("Begin")
+                            .font(SPFont.serifItalic(22, weight: .light))
+                            .foregroundStyle(Color(SPColor.fg))
+                            .padding(.horizontal, 48)
+                            .padding(.vertical, SPSpacing.s3)
+                            .background(SPColor.surface2)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.border2))
                     }
-                } label: {
-                    Text("Begin")
-                        .font(SPFont.serifItalic(22, weight: .light))
-                        .foregroundStyle(Color(SPColor.fg))
-                        .padding(.horizontal, 48)
-                        .padding(.vertical, SPSpacing.s3)
-                        .background(SPColor.surface2)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border2))
+
+                    Button {
+                        withAnimation {
+                            appVM.beginBuddySession()
+                        }
+                    } label: {
+                        Text("Meditate with a friend")
+                            .font(SPFont.serifItalic(18, weight: .light))
+                            .foregroundStyle(Color(SPColor.fg2))
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, SPSpacing.s2)
+                            .background(SPColor.surface1)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.border1))
+                    }
+                }
+
+                if let inviteError = appVM.buddyInviteError {
+                    Text(inviteError)
+                        .font(SPFont.mono(12))
+                        .foregroundStyle(Color(SPColor.fg2))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, SPSpacing.s4)
                 }
 
                 Spacer().frame(height: SPSpacing.s6)
