@@ -5,7 +5,13 @@ export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
 
-/** Canonical undirected pair: user1Id < user2Id lexicographically. */
+function normalizeUuidForComparison(value: string): string {
+  return value.replace(/-/g, "").toLowerCase();
+}
+
+/** Canonical undirected pair using PostgreSQL UUID ordering semantics. */
 export function orderedUserPair(userA: string, userB: string): [string, string] {
-  return userA < userB ? [userA, userB] : [userB, userA];
+  const normalizedA = normalizeUuidForComparison(userA);
+  const normalizedB = normalizeUuidForComparison(userB);
+  return normalizedA < normalizedB ? [userA, userB] : [userB, userA];
 }
