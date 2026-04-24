@@ -17,10 +17,12 @@ enum AppView: Equatable {
     static func == (lhs: AppView, rhs: AppView) -> Bool {
         switch (lhs, rhs) {
         case (.auth, .auth), (.home, .home), (.session, .session),
-             (.buddyHub, .buddyHub), (.buddySession, .buddySession),
+             (.buddyHub, .buddyHub),
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
+        case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
+            return lhsSessionId == rhsSessionId
         case (.completion, .completion):
             return true
         default:

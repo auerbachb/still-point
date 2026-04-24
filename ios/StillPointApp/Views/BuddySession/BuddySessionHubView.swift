@@ -204,10 +204,23 @@ struct BuddySessionHubView: View {
         guard !trimmed.isEmpty else { return "" }
 
         if let url = URL(string: trimmed),
-           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-           let buddy = components.queryItems?.first(where: { $0.name == "buddy" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !buddy.isEmpty {
-            return buddy
+           let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            if let buddy = components.queryItems?.first(where: { $0.name == "buddy" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !buddy.isEmpty {
+                return buddy
+            }
+            if let token = components.queryItems?.first(where: { $0.name == "token" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !token.isEmpty {
+                return token
+            }
+            let scheme = (url.scheme ?? "").lowercased()
+            let host = (url.host ?? "").lowercased()
+            if scheme == "stillpoint" && host == "buddy" {
+                let token = url.path
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !token.isEmpty { return token }
+            }
         }
 
         if let range = trimmed.range(of: "buddy=") {

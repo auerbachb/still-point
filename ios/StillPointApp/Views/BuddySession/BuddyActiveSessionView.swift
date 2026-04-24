@@ -5,7 +5,6 @@ struct BuddyActiveSessionView: View {
     @Bindable var vm: BuddySessionViewModel
     let snapshot: BuddySnapshotDTO
     let onLeave: () -> Void
-    let onComplete: (SessionDTO) -> Void
 
     @State private var now = Date()
     @State private var showThoughtCapture = false
@@ -49,11 +48,6 @@ struct BuddyActiveSessionView: View {
             }
         } message: {
             Text(snapshot.isHost ? "Leaving as host ends the shared session for everyone." : "You will leave this shared sit for your device.")
-        }
-        .task(id: snapshot.state) {
-            if snapshot.state == "completed" {
-                await handleCompletionSave()
-            }
         }
     }
 
@@ -263,15 +257,4 @@ struct BuddyActiveSessionView: View {
         .padding(.horizontal, SPSpacing.s4)
     }
 
-    private func handleCompletionSave() async {
-        guard !vm.isSavingCompletion else { return }
-        if let session = await vm.savePersonalSession() {
-            onComplete(session)
-            return
-        }
-        if vm.completionSaveError == nil {
-            await vm.participantCompleteAndLeave()
-            onLeave()
-        }
-    }
 }

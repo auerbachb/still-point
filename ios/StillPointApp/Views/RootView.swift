@@ -35,6 +35,7 @@ struct RootView: View {
 
                 case .buddySession(let sessionId):
                     BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
+                        .id(sessionId)
                         .transition(.opacity)
 
                 case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):

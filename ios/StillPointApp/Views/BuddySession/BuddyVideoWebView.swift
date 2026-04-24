@@ -21,10 +21,8 @@ struct BuddyVideoWebView: UIViewRepresentable {
     func updateUIView(_ webView: WKWebView, context: Context) {
         guard var components = URLComponents(string: roomURL) else { return }
         var query = components.queryItems ?? []
-        let hasToken = query.contains { $0.name == "t" }
-        if !hasToken {
-            query.append(URLQueryItem(name: "t", value: meetingToken))
-        }
+        query.removeAll { $0.name == "t" }
+        query.append(URLQueryItem(name: "t", value: meetingToken))
         components.queryItems = query
         guard let finalURL = components.url else { return }
         if webView.url != finalURL {

@@ -6,6 +6,7 @@ struct BuddySessionContainerView: View {
     let sessionId: String
 
     @State private var vm: BuddySessionViewModel
+    @State private var didExitWithoutSaving = false
 
     init(appVM: AppViewModel, sessionId: String) {
         self.appVM = appVM
@@ -104,13 +105,18 @@ struct BuddySessionContainerView: View {
             }
 
             Button("Return home without saving") {
+                guard !vm.isSavingCompletion else { return }
                 Task {
-                    _ = await vm.leaveSession()
-                    appVM.leaveBuddySession()
+                    let didLeave = await vm.leaveSession()
+                    if didLeave {
+                        didExitWithoutSaving = true
+                        appVM.leaveBuddySession()
+                    }
                 }
             }
             .font(SPFont.mono(12, weight: .medium))
             .foregroundStyle(Color(SPColor.fg3))
+            .disabled(vm.isSavingCompletion)
         }
         .padding(.horizontal, SPSpacing.s4)
         .padding(.top, SPSpacing.s6)
@@ -159,7 +165,9 @@ struct BuddySessionContainerView: View {
 
     private func saveCompletionIfPossible() async {
         guard vm.snapshot?.state == "completed", !vm.isSavingCompletion else { return }
+        guard !didExitWithoutSaving else { return }
         guard let saved = await vm.savePersonalSession() else { return }
+        guard !didExitWithoutSaving else { return }
         appVM.completeSession(
             sessionId: saved.id,
             clearPercent: saved.clearPercent,

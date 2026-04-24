@@ -28,7 +28,8 @@ final class BuddySessionViewModel {
     private var pollTask: Task<Void, Never>?
     private var activeAnchor: ActiveAnchor?
     private var lastActiveKey: String?
-    private var lastMeetingTokenFetchKey: String?
+    private var latestMeetingTokenRequestKey: String?
+    private var refreshRequestCounter = 0
     private let isoFormatter = ISO8601DateFormatter()
 
     init(sessionId: String, currentUserId: String) {
@@ -46,7 +47,12 @@ final class BuddySessionViewModel {
             guard let self else { return }
             await self.refreshSnapshot()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: 1_500_000_000)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
                 await self.refreshSnapshot()
             }
         }
@@ -58,30 +64,39 @@ final class BuddySessionViewModel {
     }
 
     func refreshSnapshot() async {
+        refreshRequestCounter += 1
+        let requestID = refreshRequestCounter
         do {
             let snapshot = try await APIClient.shared.getBuddySnapshot(sessionId: sessionId)
+            guard requestID == refreshRequestCounter else { return }
             self.snapshot = snapshot
             pollError = nil
             isLoading = false
             handleSnapshotUpdate(snapshot)
         } catch let error as APIError {
+            guard requestID == refreshRequestCounter else { return }
             pollError = error.message
             isLoading = false
         } catch {
+            guard requestID == refreshRequestCounter else { return }
             pollError = "Could not refresh session."
             isLoading = false
         }
     }
 
-    func setReady(_ ready: Bool) async {
+    @discardableResult
+    func setReady(_ ready: Bool) async -> Bool {
         do {
             try await APIClient.shared.setBuddyReady(sessionId: sessionId, ready: ready)
             actionError = nil
             await refreshSnapshot()
+            return true
         } catch let error as APIError {
             actionError = error.message
+            return false
         } catch {
             actionError = "Could not update ready state."
+            return false
         }
     }
 
@@ -223,10 +238,6 @@ final class BuddySessionViewModel {
         }
     }
 
-    var isLobby: Bool {
-        snapshot?.state == "waiting" || snapshot?.state == "ready_check"
-    }
-
     var isActive: Bool {
         snapshot?.state == "active"
     }
@@ -262,7 +273,7 @@ final class BuddySessionViewModel {
         }
 
         activeAnchor = nil
-        lastMeetingTokenFetchKey = nil
+        latestMeetingTokenRequestKey = nil
         meetingToken = nil
         meetingTokenError = nil
     }
@@ -271,28 +282,31 @@ final class BuddySessionViewModel {
         guard let dailyRoomURL = snapshot.dailyRoomUrl, !dailyRoomURL.isEmpty else {
             meetingToken = nil
             meetingTokenError = nil
-            lastMeetingTokenFetchKey = nil
+            latestMeetingTokenRequestKey = nil
             return
         }
-        let key = "\(snapshot.id):\(snapshot.revision):\(dailyRoomURL)"
-        guard key != lastMeetingTokenFetchKey else { return }
-        lastMeetingTokenFetchKey = key
+        let requestKey = "\(snapshot.id):\(snapshot.revision):\(dailyRoomURL)"
+        if latestMeetingTokenRequestKey == requestKey, meetingToken != nil { return }
+        latestMeetingTokenRequestKey = requestKey
 
         Task { [weak self] in
             guard let self else { return }
             do {
                 let token = try await APIClient.shared.getBuddyMeetingToken(sessionId: sessionId)
                 await MainActor.run {
+                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
                     self.meetingToken = token
                     self.meetingTokenError = nil
                 }
             } catch let error as APIError {
                 await MainActor.run {
+                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
                     self.meetingToken = nil
                     self.meetingTokenError = error.message
                 }
             } catch {
                 await MainActor.run {
+                    guard self.latestMeetingTokenRequestKey == requestKey else { return }
                     self.meetingToken = nil
                     self.meetingTokenError = "Could not get video token."
                 }
@@ -313,9 +327,6 @@ final class BuddySessionViewModel {
 
         var log = mindStateLog.sorted { $0.time < $1.time }
         if let first = log.first, first.time > 0 {
-            log.insert(MindStateEntry(time: 0, state: "clear"), at: 0)
-        }
-        if log.first?.time != 0 {
             log.insert(MindStateEntry(time: 0, state: "clear"), at: 0)
         }
         if log.last?.state != "clear" {

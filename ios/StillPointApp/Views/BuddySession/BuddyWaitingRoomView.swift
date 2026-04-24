@@ -37,13 +37,16 @@ struct BuddyWaitingRoomView: View {
 
                 if let me = meParticipant {
                     Toggle(isOn: Binding(
-                        get: { me.ready || myReady },
+                        get: { me.ready },
                         set: { newValue in
-                            myReady = newValue
+                            let previousValue = me.ready
                             Task {
                                 isUpdatingReady = true
-                                await vm.setReady(newValue)
+                                let success = await vm.setReady(newValue)
                                 await MainActor.run {
+                                    if !success {
+                                        myReady = previousValue
+                                    }
                                     isUpdatingReady = false
                                 }
                             }
@@ -57,11 +60,11 @@ struct BuddyWaitingRoomView: View {
                     .tint(SPColor.green)
                     .padding(.horizontal, SPSpacing.s4)
                     .padding(.vertical, SPSpacing.s3)
-                    .background((me.ready || myReady) ? SPColor.greenBgFaint : SPColor.surface1)
+                    .background(me.ready ? SPColor.greenBgFaint : SPColor.surface1)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke((me.ready || myReady) ? SPColor.greenBorder : SPColor.border2)
+                            .stroke(me.ready ? SPColor.greenBorder : SPColor.border2)
                     )
                     .padding(.horizontal, SPSpacing.s4)
                     .disabled(isUpdatingReady)
@@ -91,8 +94,9 @@ struct BuddyWaitingRoomView: View {
 
                         Button {
                             Task {
-                                await vm.cancelSession()
-                                onExit()
+                                if await vm.cancelSession() {
+                                    onExit()
+                                }
                             }
                         } label: {
                             Text("Cancel session")
@@ -116,8 +120,9 @@ struct BuddyWaitingRoomView: View {
 
                 Button {
                     Task {
-                        _ = await vm.leaveSession()
-                        onExit()
+                        if await vm.leaveSession() {
+                            onExit()
+                        }
                     }
                 } label: {
                     Text("Leave")
@@ -134,16 +139,6 @@ struct BuddyWaitingRoomView: View {
             .padding(.horizontal, SPSpacing.s3)
         }
         .stillPointBackground()
-        .onAppear {
-            if let me = meParticipant {
-                myReady = me.ready
-            }
-        }
-        .onChange(of: meParticipant?.ready) { _, newValue in
-            if let newValue {
-                myReady = newValue
-            }
-        }
     }
 
     private var snapshot: BuddySnapshotDTO? { vm.snapshot }
