@@ -46,10 +46,23 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint
-        MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: "1.0.3"
+        CURRENT_PROJECT_VERSION: 6
         DEVELOPMENT_TEAM: T5UU4BP6AV
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  StillPointAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - StillPointAppUITests
+    dependencies:
+      - target: StillPoint
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint.uitests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES

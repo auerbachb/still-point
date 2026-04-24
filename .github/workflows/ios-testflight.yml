@@ -21,6 +21,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate release-readiness artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -f ios/PARITY_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing ios/PARITY_CHECKLIST.md"
+            exit 1
+          fi
+
+          if ! test -f ios/QA_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing ios/QA_CHECKLIST.md"
+            exit 1
+          fi
+
+          if ! grep -qE '^- \[[xX]\] Feature parity checklist between iOS and web is completed\.$' ios/PARITY_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing PARITY_CHECKLIST entry: Feature parity checklist between iOS and web is completed"
+            exit 1
+          fi
+
+          if ! grep -qE '^- \[[xX]\] All critical parity gaps are fixed or explicitly deferred with owner/date\.$' ios/PARITY_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing PARITY_CHECKLIST entry: All critical parity gaps are fixed or explicitly deferred with owner/date"
+            exit 1
+          fi
+
+          if ! grep -qE '^- \[[xX]\] Regression/QA pass for release candidate is completed\.$' ios/QA_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing QA_CHECKLIST entry: Regression/QA pass for release candidate is completed"
+            exit 1
+          fi
+
+          if ! grep -qE '^- \[[xX]\] App Store metadata/versioning/release notes are finalized\.$' ios/QA_CHECKLIST.md; then
+            echo "::error file=.github/workflows/ios-testflight.yml::Missing QA_CHECKLIST entry: App Store metadata/versioning/release notes are finalized"
+            exit 1
+          fi
+
       - name: Verify Xcode and iOS SDK versions
         shell: bash
         run: |

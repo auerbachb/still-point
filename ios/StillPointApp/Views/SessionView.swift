@@ -34,6 +34,8 @@ struct SessionView: View {
                             )
                             .monospacedDigit()
                             .contentTransition(.numericText())
+                            .accessibilityIdentifier("session.timerLabel")
+                            .accessibilityLabel("Time remaining \(vm.timeString)")
 
                         // 60-second progress bar
                         progressBar
@@ -250,7 +252,9 @@ struct SessionView: View {
                         )
                     )
                     .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityValue(vm.mindState == "thinking" ? "active" : "inactive")
                     .accessibilityLabel("Hold for light distraction. Release when aware again.")
+                    .accessibilityIdentifier("session.lightDistractionHoldButton")
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in
@@ -282,7 +286,9 @@ struct SessionView: View {
                         )
                     )
                     .opacity(vm.isActive ? 1 : 0.45)
+                    .accessibilityValue(vm.mindState == "hyperfocus" ? "active" : "inactive")
                     .accessibilityLabel("Hold for hyperfocus. Release to return to aware.")
+                    .accessibilityIdentifier("session.hyperfocusHoldButton")
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in
@@ -326,6 +332,7 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
+                .accessibilityIdentifier("session.pauseResumeButton")
 
                 // End Early — sets isComplete, onChange handles save + navigation
                 Button {
@@ -340,6 +347,7 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
+                .accessibilityIdentifier("session.endEarlyButton")
 
                 Button {
                     vm.openThoughtCapture()
@@ -353,6 +361,7 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
                 }
+                .accessibilityIdentifier("session.captureButton")
                 .disabled(!vm.isActive)
                 .opacity(vm.isActive ? 1 : 0.45)
 
@@ -370,6 +379,7 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
                 }
+                .accessibilityIdentifier("session.abandonButton")
             }
 
             // Sound toggles

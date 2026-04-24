@@ -11,7 +11,17 @@
     "db:seed": "tsx scripts/seed.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install --with-deps chromium webkit"
+    "test:e2e:install": "playwright install --with-deps chromium webkit",
+    "e2e:guard": "node scripts/e2e/assert-non-prod.mjs",
+    "e2e:policy:no-sleep": "node scripts/e2e/check-no-naked-sleep.mjs",
+    "e2e:policy:secrets": "node scripts/e2e/check-test-secrets.mjs",
+    "e2e:policy": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:policy:no-sleep && npm run e2e:policy:secrets && E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard",
+    "e2e:web:smoke": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard && node scripts/e2e/run-playwright-lane.mjs smoke @smoke 1",
+    "e2e:web:critical": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard && node scripts/e2e/run-playwright-lane.mjs critical @critical 2",
+    "e2e:web:perf": "node scripts/e2e/report-web-perf.mjs",
+    "e2e:ios:smoke": "bash scripts/e2e/run-ios-tests.sh smoke 1",
+    "e2e:ios:critical": "bash scripts/e2e/run-ios-tests.sh critical 1",
+    "e2e:ios:perf": "node scripts/e2e/report-ios-perf.mjs"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.89.1",

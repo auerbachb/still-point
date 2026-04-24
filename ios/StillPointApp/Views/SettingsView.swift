@@ -18,6 +18,7 @@ struct SettingsView: View {
                     .font(SPFont.serifItalic(28, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
                     .padding(.top, SPSpacing.s4)
+                    .accessibilityIdentifier("settings.title")
 
                 // Account info
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -113,6 +114,7 @@ struct SettingsView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
                 }
+                .accessibilityIdentifier("settings.logoutButton")
                 .disabled(isDeletingAccount)
 
                 Button {

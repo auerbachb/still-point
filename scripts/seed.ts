@@ -18,11 +18,34 @@ type SeedUser = {
   isPublic: boolean;
 };
 
-const seedUsers: SeedUser[] = [
+const baseSeedUsers: SeedUser[] = [
   { email: "ava+seed@stillpoint.local", username: "ava_seed", currentDay: 8, isPublic: true },
   { email: "leo+seed@stillpoint.local", username: "leo_seed", currentDay: 5, isPublic: true },
   { email: "maya+seed@stillpoint.local", username: "maya_seed", currentDay: 3, isPublic: false },
 ];
+
+function withRunSuffix(value: string, suffix: string) {
+  if (!suffix) {
+    return value;
+  }
+  return `${value}_${suffix}`;
+}
+
+function withUniqueEmail(baseEmail: string, suffix: string) {
+  if (!suffix) {
+    return baseEmail;
+  }
+  const [localPart, domain = "stillpoint.local"] = baseEmail.split("@");
+  return `${localPart}+${suffix}@${domain}`;
+}
+
+function buildSeedUsers(runId: string): SeedUser[] {
+  return baseSeedUsers.map((user) => ({
+    ...user,
+    email: withUniqueEmail(user.email, runId),
+    username: withRunSuffix(user.username, runId),
+  }));
+}
 
 type AppDb = NeonDatabase<typeof schema>;
 
@@ -66,6 +89,8 @@ async function main() {
 
   assertNeonNonProdPostgresUrl(postgresUrl);
 
+  const runId = (process.env.E2E_RUN_ID ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  const seedUsers = buildSeedUsers(runId);
   const seedEmails = seedUsers.map((user) => user.email);
 
   await poolDb.transaction(async (tx: AppDb) => {
@@ -97,9 +122,9 @@ async function main() {
     const usersByEmail = new Map(seededUsers.map((user) => [user.email, user]));
     const today = new Date().toISOString().slice(0, 10);
 
-    const ava = usersByEmail.get("ava+seed@stillpoint.local");
-    const leo = usersByEmail.get("leo+seed@stillpoint.local");
-    const maya = usersByEmail.get("maya+seed@stillpoint.local");
+    const ava = usersByEmail.get(seedUsers[0]?.email ?? "");
+    const leo = usersByEmail.get(seedUsers[1]?.email ?? "");
+    const maya = usersByEmail.get(seedUsers[2]?.email ?? "");
     if (!ava || !leo || !maya) {
       throw new Error("Failed to fetch seeded users after insert.");
     }
@@ -197,7 +222,9 @@ async function main() {
 
     // Keep output non-sensitive so this can be pasted into issue/PR comments.
     console.log(
-      `Seed complete: users=${seededUsers.length}, sessions=${sessionRows.length}, thoughts=4, friendship=1`,
+      `Seed complete: users=${seededUsers.length}, sessions=${sessionRows.length}, thoughts=4, friendship=1, runId=${
+        runId || "default"
+      }`,
     );
   });
 }
