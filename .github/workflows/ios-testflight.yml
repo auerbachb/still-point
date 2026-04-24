@@ -21,36 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Xcode and iOS SDK versions
-        shell: bash
-        run: |
-          xcodebuild -version
-          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
-          echo "iPhoneOS SDK: ${SDK_VERSION}"
-          [[ "${SDK_VERSION%%.*}" -ge 26 ]]
-
-      - name: Install XcodeGen (retry on transient Homebrew failures)
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            if brew install xcodegen; then
-              exit 0
-            fi
-
-            if [[ "$attempt" -lt 3 ]]; then
-              sleep $((attempt * 10))
-            fi
-          done
-
-          echo "Failed to install xcodegen after 3 attempts."
-          exit 1
-
-      - name: Generate Xcode project
-        working-directory: ios
-        run: xcodegen generate
-
       - name: Validate release-readiness artifacts
         shell: bash
         run: |
@@ -84,6 +54,36 @@ jobs:
             echo "::error file=.github/workflows/ios-testflight.yml::Missing QA_CHECKLIST entry: App Store metadata/versioning/release notes are finalized"
             exit 1
           fi
+
+      - name: Verify Xcode and iOS SDK versions
+        shell: bash
+        run: |
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iPhoneOS SDK: ${SDK_VERSION}"
+          [[ "${SDK_VERSION%%.*}" -ge 26 ]]
+
+      - name: Install XcodeGen (retry on transient Homebrew failures)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
 
       - name: Install Apple certificate and provisioning profile
         env:
