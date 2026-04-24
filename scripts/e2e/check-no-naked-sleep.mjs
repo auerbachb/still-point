@@ -17,10 +17,15 @@ function isAllowed(line) {
 
 function hasNakedSleep(line, filePath) {
   const unixPath = filePath.split(path.sep).join("/");
-  const isSwiftTestFile = /\/Tests\/.*Tests\.swift$/i.test(unixPath);
+  const isSwiftTestFile =
+    unixPath.endsWith(".swift") &&
+    /(?:^|\/)(?:[^/]*Tests|[^/]*UITests)(?:\/|$)/i.test(unixPath);
   const swiftSleepPattern = isSwiftTestFile ? /\bThread\.sleep\b|\bTask\.sleep\b/ : null;
+  const shellSleepPattern =
+    /\bsleep\s*(?:\(|\$\(\(|\$[A-Za-z_][A-Za-z0-9_]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\d+(?:\.\d+)?\b)/;
   return (
-    /\bwaitForTimeout\(|\bsleep\(|\bsleep\s+\d+/.test(line) ||
+    /\bwaitForTimeout\(/.test(line) ||
+    shellSleepPattern.test(line) ||
     (swiftSleepPattern ? swiftSleepPattern.test(line) : false)
   );
 }
@@ -48,8 +53,12 @@ async function gatherFiles() {
     const full = path.join(ROOT, dir);
     try {
       await walk(full, files);
-    } catch {
-      // optional directory
+    } catch (error) {
+      // Optional directory may be absent in some repositories.
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        continue;
+      }
+      throw error;
     }
   }
   return files;

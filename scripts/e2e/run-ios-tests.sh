@@ -7,6 +7,11 @@ ATTEMPT=1
 UI_TESTS_DIR="${IOS_UI_TESTS_DIR:-ios/StillPointUITests}"
 SECRETS_REQUIRED="${E2E_SECRETS_REQUIRED:-true}"
 
+if ! [[ "${MAX_RETRIES}" =~ ^[0-9]+$ ]] || [[ "${MAX_RETRIES}" -lt 1 ]]; then
+  echo "MAX_RETRIES must be a positive integer (>= 1). Got: '${MAX_RETRIES}'."
+  exit 1
+fi
+
 if [[ "${E2E_ENV:-}" == "prod" || "${E2E_BASE_URL:-}" =~ still-point\.me ]]; then
   echo "Refusing to run iOS E2E lane against production."
   exit 1
