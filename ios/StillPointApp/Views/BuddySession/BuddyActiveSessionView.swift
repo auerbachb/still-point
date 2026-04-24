@@ -133,11 +133,6 @@ struct BuddyActiveSessionView: View {
                         .foregroundStyle(Color(SPColor.fg4))
                 }
 
-                Text(roomURL)
-                    .font(SPFont.mono(10))
-                    .foregroundStyle(Color(SPColor.fg4))
-                    .lineLimit(2)
-                    .textSelection(.enabled)
             } else {
                 Text("Video is unavailable for this session.")
                     .font(SPFont.serif(14, weight: .light))

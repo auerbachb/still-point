@@ -30,7 +30,16 @@ final class BuddySessionViewModel {
     private var lastActiveKey: String?
     private var latestMeetingTokenRequestKey: String?
     private var refreshRequestCounter = 0
-    private let isoFormatter = ISO8601DateFormatter()
+    private let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private let isoFormatterFallback: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 
     init(sessionId: String, currentUserId: String) {
         self.sessionId = sessionId
@@ -349,7 +358,10 @@ final class BuddySessionViewModel {
 
     private func parseISO(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return isoFormatter.date(from: raw)
+        if let date = isoFormatter.date(from: raw) {
+            return date
+        }
+        return isoFormatterFallback.date(from: raw)
     }
 }
 

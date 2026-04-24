@@ -200,38 +200,7 @@ struct BuddySessionHubView: View {
     }
 
     private func extractBuddyToken(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-
-        if let url = URL(string: trimmed),
-           let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            if let buddy = components.queryItems?.first(where: { $0.name == "buddy" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !buddy.isEmpty {
-                return buddy
-            }
-            if let token = components.queryItems?.first(where: { $0.name == "token" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !token.isEmpty {
-                return token
-            }
-            let scheme = (url.scheme ?? "").lowercased()
-            let host = (url.host ?? "").lowercased()
-            if scheme == "stillpoint" && host == "buddy" {
-                let token = url.path
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !token.isEmpty { return token }
-            }
-        }
-
-        if let range = trimmed.range(of: "buddy=") {
-            let rest = String(trimmed[range.upperBound...])
-            if let amp = rest.firstIndex(of: "&") {
-                return String(rest[..<amp]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return rest.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return trimmed
+        BuddyInviteTokenParser.token(from: raw, allowRawFallback: true) ?? ""
     }
 
     private func fullLink(for sharePath: String) -> String {

@@ -173,11 +173,37 @@ final class AppViewModel {
     }
 
     private func extractBuddyToken(from url: URL) -> String? {
+        BuddyInviteTokenParser.token(from: url)
+    }
+}
+
+enum BuddyInviteTokenParser {
+    static func token(from raw: String, allowRawFallback: Bool) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let url = URL(string: trimmed), let token = token(from: url) {
+            return token
+        }
+
+        if let range = trimmed.range(of: "buddy=") {
+            let rest = String(trimmed[range.upperBound...])
+            if let amp = rest.firstIndex(of: "&") {
+                return String(rest[..<amp]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return allowRawFallback ? trimmed : nil
+    }
+
+    static func token(from url: URL) -> String? {
         if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            if let buddy = components.queryItems?.first(where: { $0.name == "buddy" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines), !buddy.isEmpty {
+            if let buddy = queryValue(named: "buddy", in: components) {
                 return buddy
             }
-            if let token = components.queryItems?.first(where: { $0.name == "token" })?.value?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+
+            if isBuddyRoute(components), let token = queryValue(named: "token", in: components) {
                 return token
             }
         }
@@ -185,10 +211,27 @@ final class AppViewModel {
         let scheme = (url.scheme ?? "").lowercased()
         let host = (url.host ?? "").lowercased()
         if scheme == "stillpoint" && host == "buddy" {
-            let token = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).trimmingCharacters(in: .whitespacesAndNewlines)
+            let token = url.path
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             return token.isEmpty ? nil : token
         }
 
         return nil
+    }
+
+    private static func queryValue(named name: String, in components: URLComponents) -> String? {
+        guard let value = components.queryItems?.first(where: { $0.name == name })?.value?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private static func isBuddyRoute(_ components: URLComponents) -> Bool {
+        let host = (components.host ?? "").lowercased()
+        let path = components.path.lowercased()
+        return host == "buddy" || path == "/buddy" || path.hasPrefix("/buddy/") || path.contains("/invite/buddy")
     }
 }
