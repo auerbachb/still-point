@@ -6,6 +6,14 @@ struct BuddyVideoWebView: UIViewRepresentable {
     let roomURL: String
     let meetingToken: String
 
+    final class Coordinator {
+        var lastRequestedURL: URL?
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -25,7 +33,8 @@ struct BuddyVideoWebView: UIViewRepresentable {
         query.append(URLQueryItem(name: "t", value: meetingToken))
         components.queryItems = query
         guard let finalURL = components.url else { return }
-        if webView.url != finalURL {
+        if context.coordinator.lastRequestedURL != finalURL {
+            context.coordinator.lastRequestedURL = finalURL
             webView.load(URLRequest(url: finalURL))
         }
     }

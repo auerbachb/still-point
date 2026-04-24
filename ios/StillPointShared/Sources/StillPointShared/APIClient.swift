@@ -176,13 +176,6 @@ public actor APIClient {
         ) as BuddyBooleanResponse
     }
 
-    public func buddyParticipantComplete(sessionId: String) async throws {
-        _ = try await post(
-            "/api/buddy/sessions/\(sessionId)/participant-complete",
-            body: Optional<String>.none
-        ) as BuddyBooleanResponse
-    }
-
     public func recordBuddyPersonalSession(
         sessionId: String,
         request: RecordBuddyPersonalSessionRequest
