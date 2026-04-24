@@ -19,8 +19,9 @@ test.describe("mobile session flow", () => {
     const lightDistraction = page.getByRole("button", { name: /light distraction/i });
     await expectMinimumTapTarget(lightDistraction, "light distraction hold button");
     await lightDistraction.dispatchEvent("touchstart");
-    await page.waitForTimeout(200);
+    await expect(lightDistraction).toContainText("Release");
     await lightDistraction.dispatchEvent("touchend");
+    await expect(lightDistraction).toContainText("Hold");
 
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
     await page.dispatchEvent("body", "touchstart");

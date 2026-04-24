@@ -28,10 +28,10 @@ export async function tapWithControlReveal(page: Page, target: Locator) {
       return;
     } catch (error) {
       lastError = error;
-      await page.waitForTimeout(CONTROL_REVEAL_RETRY_DELAY_MS);
+      await target.waitFor({ state: "visible", timeout: CONTROL_REVEAL_RETRY_DELAY_MS });
     }
   }
-  throw lastError;
+  throw lastError ?? new Error("Failed to tap target after revealing controls.");
 }
 
 export async function expectMinimumTapTarget(target: Locator, label: string, minSize = MIN_TAP_TARGET_PX) {
