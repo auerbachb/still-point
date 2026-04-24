@@ -17,6 +17,7 @@ struct MainTabView: View {
                     Label("PROGRESS", systemImage: "chart.bar")
                 }
                 .tag(1)
+                .accessibilityIdentifier("tab.progress")
 
             ThoughtJournalView()
                 .tabItem {
@@ -35,6 +36,7 @@ struct MainTabView: View {
                     Label("SETTINGS", systemImage: "gearshape")
                 }
                 .tag(4)
+                .accessibilityIdentifier("tab.settings")
         }
         .tint(SPColor.green)
         .onAppear {

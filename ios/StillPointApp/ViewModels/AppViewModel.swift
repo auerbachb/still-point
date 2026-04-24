@@ -43,6 +43,8 @@ final class AppViewModel {
     var currentView: AppView = .auth
     var currentUser: UserDTO?
     var isLoading = true
+    var authStatusMessage: String?
+    var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
     private var pendingBuddyInviteToken: String?
 
@@ -66,6 +68,7 @@ final class AppViewModel {
     }
 
     func checkAuth() async {
+        let startedAt = Date()
         isLoading = true
         defer { isLoading = false }
 
@@ -73,18 +76,29 @@ final class AppViewModel {
             if let user = try await APIClient.shared.me() {
                 currentUser = user
                 currentView = .home
+                authStatusMessage = nil
                 await consumePendingBuddyInviteIfNeeded()
             } else {
                 currentView = .auth
+                authStatusMessage = nil
             }
+        } catch let apiError as APIError where apiError.status == 401 && apiError.code == "TOKEN_EXPIRED" {
+            currentView = .auth
+            authStatusMessage = apiError.message
+        } catch let apiError as APIError {
+            currentView = .auth
+            authStatusMessage = apiError.message
         } catch {
             currentView = .auth
+            authStatusMessage = "Connection failed. Please try again."
         }
+        lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
     }
 
     func didLogin(user: UserDTO) {
         currentUser = user
         currentView = .home
+        authStatusMessage = nil
         Task { await consumePendingBuddyInviteIfNeeded() }
     }
 
@@ -92,6 +106,7 @@ final class AppViewModel {
         currentUser = nil
         pendingBuddyInviteToken = nil
         buddyInviteError = nil
+        authStatusMessage = nil
         currentView = .auth
     }
 

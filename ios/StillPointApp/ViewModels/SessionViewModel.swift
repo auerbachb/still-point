@@ -39,6 +39,7 @@ final class SessionViewModel {
     private var lastTickSec = 0
     private var lastCompletedMinuteBlockIndex = -1
     private var controlHideTimer: AnyCancellable?
+    private let uiTestTimerMultiplier: Double
 
     var remaining: Double {
         max(0, Double(totalSeconds) - elapsed)
@@ -81,8 +82,9 @@ final class SessionViewModel {
 
     init(dayNumber: Int) {
         self.dayNumber = dayNumber
-        self.totalSeconds = StillPoint.duration(forDay: dayNumber)
+        self.totalSeconds = Self.resolveTotalSeconds(for: dayNumber)
         self.soundPrefs = AudioEngine.loadPrefs()
+        self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
         // Initial mind state log entry
         self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
     }
@@ -270,7 +272,7 @@ final class SessionViewModel {
     private func tick() {
         guard let startDate, isActive else { return }
 
-        let newElapsed = Date().timeIntervalSince(startDate)
+        let newElapsed = Date().timeIntervalSince(startDate) * uiTestTimerMultiplier
 
         if newElapsed >= Double(totalSeconds) {
             elapsed = Double(totalSeconds)
@@ -328,5 +330,31 @@ final class SessionViewModel {
                     self.controlsVisible = false
                 }
             }
+    }
+
+    private static func resolveTotalSeconds(for dayNumber: Int) -> Int {
+        let env = ProcessInfo.processInfo.environment
+        guard let override = env["SP_UI_TEST_SESSION_SECONDS"],
+              let overrideSeconds = Int(override),
+              overrideSeconds > 0 else {
+            return StillPoint.duration(forDay: dayNumber)
+        }
+        return overrideSeconds
+    }
+
+    private static func resolveUITestTimerMultiplier() -> Double {
+        let env = ProcessInfo.processInfo.environment
+        guard let multiplier = env["SP_UI_TEST_TIMER_MULTIPLIER"],
+              let parsed = Double(multiplier),
+              parsed.isFinite,
+              parsed > 0 else {
+            return 1.0
+        }
+        return parsed
+    }
+
+    static var isUITestTimerActive: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["SP_UI_TEST_SESSION_SECONDS"] != nil || env["SP_UI_TEST_TIMER_MULTIPLIER"] != nil
     }
 }

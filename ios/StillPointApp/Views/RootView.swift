@@ -18,11 +18,20 @@ struct RootView: View {
                         .font(SPFont.brandSubtitle)
                         .foregroundStyle(Color(SPColor.fg3))
                         .tracking(4)
+                    if let authStatusMessage = appVM.authStatusMessage {
+                        Text(authStatusMessage)
+                            .font(SPFont.mono(12))
+                            .foregroundStyle(SPColor.dangerMuted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, SPSpacing.s4)
+                            .padding(.top, SPSpacing.s3)
+                            .accessibilityIdentifier("root.authStatusMessage")
+                    }
                 }
             } else {
                 switch appVM.currentView {
                 case .auth:
-                    AuthView(appVM: appVM)
+                    AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
                         .transition(.opacity)
 
                 case .session:
@@ -57,11 +66,43 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
+        .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
+        .accessibilityValue(coldStartMetricAccessibilityValue)
         .task {
             await appVM.checkAuth()
         }
         .onOpenURL { url in
             appVM.handleIncomingURL(url)
         }
+    }
+
+    private var viewAccessibilitySlug: String {
+        switch appVM.currentView {
+        case .auth:
+            return "auth"
+        case .home:
+            return "home"
+        case .session:
+            return "session"
+        case .buddyHub:
+            return "buddyHub"
+        case .buddySession:
+            return "buddySession"
+        case .completion:
+            return "completion"
+        case .history:
+            return "history"
+        case .journal:
+            return "journal"
+        case .board:
+            return "board"
+        case .settings:
+            return "settings"
+        }
+    }
+
+    private var coldStartMetricAccessibilityValue: String {
+        guard let ms = appVM.lastColdStartAuthCheckMs else { return "coldStartAuthCheckMs=unknown" }
+        return "coldStartAuthCheckMs=\(ms)"
     }
 }
