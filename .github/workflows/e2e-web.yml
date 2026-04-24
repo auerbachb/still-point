@@ -1,0 +1,147 @@
+name: E2E Web
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-policy:
+    name: e2e-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E policy checks
+        env:
+          E2E_BASE_URL: http://127.0.0.1:3000
+        run: npm run e2e:policy
+
+  web-e2e-smoke:
+    name: web-e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-policy
+    env:
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_WORKERS: "1"
+      E2E_REPEAT_EACH: "1"
+      E2E_RUN_ID: ${{ github.run_id }}
+      E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
+      E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
+      SEED_CONFIRM: still-point-nonprod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Assert non-production target
+        run: npm run e2e:guard
+
+      - name: Verify E2E test credentials are configured
+        run: |
+          if [[ -z "${E2E_TEST_USER_EMAIL}" || -z "${E2E_TEST_USER_PASSWORD}" ]]; then
+            echo "Missing required CI secrets E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
+            exit 1
+          fi
+
+      - name: Run web smoke lane
+        run: npm run e2e:web:smoke
+
+      - name: Upload web smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-smoke-artifacts
+          path: |
+            artifacts/e2e/web/**
+            playwright-report/**
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  web-e2e-critical:
+    name: web-e2e-critical
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: e2e-policy
+    env:
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_WORKERS: "1"
+      E2E_REPEAT_EACH: "1"
+      E2E_RUN_ID: ${{ github.run_id }}
+      E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
+      E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
+      SEED_CONFIRM: still-point-nonprod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Assert non-production target
+        run: npm run e2e:guard
+
+      - name: Verify E2E test credentials are configured
+        run: |
+          if [[ -z "${E2E_TEST_USER_EMAIL}" || -z "${E2E_TEST_USER_PASSWORD}" ]]; then
+            echo "Missing required CI secrets E2E_TEST_USER_EMAIL / E2E_TEST_USER_PASSWORD."
+            exit 1
+          fi
+
+      - name: Run web critical lane
+        run: npm run e2e:web:critical
+
+      - name: Record web performance metric (report-only by default)
+        env:
+          E2E_WEB_FIRST_RESPONSE_MS: "800"
+          E2E_WEB_FIRST_RESPONSE_THRESHOLD_MS: "1200"
+          E2E_WEB_PERF_ENFORCE: "false"
+        run: npm run e2e:web:perf
+
+      - name: Upload web critical artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-critical-artifacts
+          path: |
+            artifacts/e2e/web/**
+            artifacts/e2e/perf/**
+            playwright-report/**
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 14

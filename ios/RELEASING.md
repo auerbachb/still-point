@@ -84,3 +84,10 @@ Include this screen recording checklist in App Store review notes for Guideline 
 **Upload fails with authentication error:** Regenerate the App Store Connect API key and update the GitHub secrets.
 
 **Build number conflict:** `CURRENT_PROJECT_VERSION` must be unique per upload. Increment it even for re-uploads of the same marketing version.
+
+## iOS E2E test policy and runbook
+
+Issue #194 cross-cutting E2E policy applies to iOS and links child issues #191/#192/#193:
+
+- Policy: [`docs/testing/e2e-policy.md`](../docs/testing/e2e-policy.md)
+- iOS local runbook: [`ios/E2E_RUNBOOK.md`](./E2E_RUNBOOK.md)
