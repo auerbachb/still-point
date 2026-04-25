@@ -50,6 +50,10 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
     if (e.key === "Enter") handleSubmit();
   };
 
+  const resetHref = email.trim()
+    ? `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`
+    : "/reset-password";
+
   const inputStyle: React.CSSProperties = {
     background: "var(--overlay-bg)",
     border: "1px solid var(--border-1)",
@@ -199,7 +203,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         </button>
         {mode === "login" && (
           <a
-            href="/reset-password"
+            href={resetHref}
             style={{
               alignSelf: "center",
               color: "var(--fg-3)",

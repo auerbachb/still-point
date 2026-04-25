@@ -34,7 +34,8 @@ const buttonStyle: React.CSSProperties = {
 function ResetPasswordForm() {
   const params = useSearchParams();
   const token = useMemo(() => params.get("token")?.trim() ?? "", [params]);
-  const [email, setEmail] = useState("");
+  const initialEmail = useMemo(() => params.get("email")?.trim().toLowerCase() ?? "", [params]);
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
