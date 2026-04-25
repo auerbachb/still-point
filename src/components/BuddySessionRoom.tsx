@@ -1261,9 +1261,6 @@ export function BuddySessionRoom({
 
               <div
                 style={{
-                  opacity: controlsVisible ? 1 : 0,
-                  transition: "opacity 0.5s ease",
-                  pointerEvents: controlsVisible ? "auto" : "none",
                   width: "100%",
                   display: "flex",
                   flexDirection: "column",
@@ -1279,24 +1276,32 @@ export function BuddySessionRoom({
                     marginTop: "24px",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={openThoughtCapture}
+                  <div
                     style={{
-                      border: "1px solid var(--accent-amber-border)",
-                      background: "none",
-                      color: "var(--accent-amber-border)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "11px",
-                      letterSpacing: "0.15em",
-                      textTransform: "uppercase",
-                      padding: "10px 24px",
-                      borderRadius: "20px",
-                      cursor: "pointer",
+                      opacity: controlsVisible ? 1 : 0,
+                      transition: "opacity 0.5s ease",
+                      pointerEvents: controlsVisible ? "auto" : "none",
                     }}
                   >
-                    capture note
-                  </button>
+                    <button
+                      type="button"
+                      onClick={openThoughtCapture}
+                      style={{
+                        border: "1px solid var(--accent-amber-border)",
+                        background: "none",
+                        color: "var(--accent-amber-border)",
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "11px",
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        padding: "10px 24px",
+                        borderRadius: "20px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      capture note
+                    </button>
+                  </div>
                   <p
                     style={{
                       margin: 0,
