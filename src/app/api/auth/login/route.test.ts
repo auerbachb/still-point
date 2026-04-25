@@ -65,6 +65,8 @@ describe("POST /api/auth/login", () => {
     expect(response.status).toBe(401);
     expect(wasAccountDeleted).toHaveBeenCalledWith("missing@example.com");
     expect(verifyPassword).toHaveBeenCalledWith("password123", expect.stringMatching(/^\$2b\$12\$/));
+    expect(createToken).not.toHaveBeenCalled();
+    expect(setAuthCookie).not.toHaveBeenCalled();
   });
 
   test("returns a deleted-account message when the deletion log matches", async () => {
@@ -83,6 +85,8 @@ describe("POST /api/auth/login", () => {
     });
     expect(response.status).toBe(410);
     expect(wasAccountDeleted).toHaveBeenCalledWith("deleted@example.com");
+    expect(createToken).not.toHaveBeenCalled();
+    expect(setAuthCookie).not.toHaveBeenCalled();
   });
 
   test("does not expose account existence when a password is wrong", async () => {
@@ -101,5 +105,7 @@ describe("POST /api/auth/login", () => {
     expect(response.status).toBe(401);
     expect(wasAccountDeleted).toHaveBeenCalledWith("user@example.com");
     expect(verifyPassword).toHaveBeenCalledWith("bad-password", "hash");
+    expect(createToken).not.toHaveBeenCalled();
+    expect(setAuthCookie).not.toHaveBeenCalled();
   });
 });

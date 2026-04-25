@@ -67,10 +67,14 @@ describe("account deletion tracking", () => {
     const { wasAccountDeleted, getAccountDeletionEmailHash } = await import("./accountDeletion");
 
     await expect(wasAccountDeleted(" Deleted@Example.com ")).resolves.toBe(true);
+    expect(selectFrom).toHaveBeenCalledWith(
+      expect.objectContaining({ emailHash: "emailHash" }),
+    );
     expect(selectWhere).toHaveBeenCalledWith({
       left: "emailHash",
       right: getAccountDeletionEmailHash("Deleted@Example.com"),
     });
+    expect(selectLimit).toHaveBeenCalledWith(1);
   });
 
   test("records a deletion log before deleting the user", async () => {
@@ -85,7 +89,10 @@ describe("account deletion tracking", () => {
       emailHash: getAccountDeletionEmailHash("Deleted@Example.com"),
     });
     expect(txDelete).toHaveBeenCalled();
-    expect(txDeleteWhere).toHaveBeenCalled();
+    expect(txDeleteWhere).toHaveBeenCalledWith({
+      left: "userId",
+      right: "user-1",
+    });
     expect(txInsertValues.mock.invocationCallOrder[0]).toBeLessThan(
       txDeleteWhere.mock.invocationCallOrder[0],
     );
