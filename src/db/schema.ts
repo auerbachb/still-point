@@ -38,6 +38,21 @@ export const accountDeletionLog = pgTable("account_deletion_log", {
   userIdx: index("idx_account_deletion_log_user").on(table.userId),
 }));
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).unique().notNull(),
+  requestIpHash: varchar("request_ip_hash", { length: 64 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_password_reset_tokens_user").on(table.userId),
+  tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_unique").on(table.tokenHash),
+  activeUserIdx: index("idx_password_reset_tokens_active_user").on(table.userId, table.expiresAt)
+    .where(sql`${table.usedAt} is null`),
+}));
+
 /** waiting | ready_check | active | completed | abandoned */
 export const buddySessions = pgTable("buddy_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -152,6 +167,11 @@ export const friendships = pgTable("friendships", {
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   thoughts: many(thoughts),
+  passwordResetTokens: many(passwordResetTokens),
+}));
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
 }));
 
 export const buddySessionsRelations = relations(buddySessions, ({ one, many }) => ({

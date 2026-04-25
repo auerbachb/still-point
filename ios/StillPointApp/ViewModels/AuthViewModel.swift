@@ -8,7 +8,9 @@ final class AuthViewModel {
     var username = ""
     var password = ""
     var error: String?
+    var resetMessage: String?
     var isSubmitting = false
+    var isRequestingPasswordReset = false
 
     var isValid: Bool {
         let emailValid = email.contains("@") && email.contains(".")
@@ -25,6 +27,7 @@ final class AuthViewModel {
         guard isValid, !isSubmitting else { return nil }
         isSubmitting = true
         error = nil
+        resetMessage = nil
         defer { isSubmitting = false }
 
         do {
@@ -45,6 +48,28 @@ final class AuthViewModel {
         } catch {
             self.error = "Connection failed. Please try again."
             return nil
+        }
+    }
+
+    func requestPasswordReset() async {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedEmail.contains("@") && trimmedEmail.contains(".") && !isRequestingPasswordReset else {
+            error = "Enter your email first."
+            return
+        }
+
+        isRequestingPasswordReset = true
+        error = nil
+        resetMessage = nil
+        defer { isRequestingPasswordReset = false }
+
+        do {
+            try await APIClient.shared.requestPasswordReset(email: trimmedEmail)
+            resetMessage = "If an account exists for that email, a reset link will arrive shortly."
+        } catch let apiError as APIError {
+            error = apiError.message
+        } catch {
+            error = "Connection failed. Please try again."
         }
     }
 }

@@ -8,6 +8,30 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     @MainActor
+    func testPasswordResetEntryIsDiscoverable() throws {
+        let app = makeApp(seedAuthenticated: false, resetStore: true)
+        app.launch()
+
+        let authRoot = app.otherElements["root.currentView.auth"]
+        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
+
+        let emailField = app.textFields["auth.emailField"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
+        emailField.tap()
+        emailField.typeText("ios.fixture@stillpoint.test")
+
+        let forgotPasswordButton = app.buttons["auth.forgotPasswordButton"]
+        XCTAssertTrue(forgotPasswordButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(forgotPasswordButton.isHittable)
+        forgotPasswordButton.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["auth.passwordResetMessage"].waitForExistence(timeout: 5),
+            "Password reset request confirmation should be visible"
+        )
+    }
+
+    @MainActor
     func testLaunchLoginCompleteSessionAndHistoryPersistence() throws {
         let app = makeApp(
             seedAuthenticated: false,

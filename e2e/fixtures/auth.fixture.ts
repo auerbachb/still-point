@@ -39,6 +39,7 @@ type MockApiState = {
   authenticated: boolean;
   user: UserRecord;
   credentials: AuthedContext;
+  resetToken: string | null;
   sessions: SessionRecord[];
   thoughts: ThoughtRecord[];
   ids: { session: number; thought: number };
@@ -152,6 +153,30 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       return json(route, 200, { ok: true });
     }
 
+    if (pathname === "/api/auth/password-reset/request" && method === "POST") {
+      const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
+      const email = String(body.email ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        return json(route, 400, { error: "A valid email is required" });
+      }
+      if (email === state.credentials.email) {
+        state.resetToken = `reset-${Date.now()}`;
+      }
+      return json(route, 200, {
+        message: "If an account exists for that email, a reset link will arrive shortly.",
+      });
+    }
+
+    if (pathname === "/api/auth/password-reset/confirm" && method === "POST") {
+      const body = (request.postDataJSON() ?? {}) as { token?: string; password?: string } | undefined;
+      if (!state.resetToken || body?.token !== state.resetToken || String(body?.password ?? "").length < 8) {
+        return json(route, 400, { error: "Reset link is invalid or expired" });
+      }
+      state.credentials = { ...state.credentials, password: String(body.password) };
+      state.resetToken = null;
+      return json(route, 200, { ok: true });
+    }
+
     if (pathname === "/api/sessions" && method === "GET") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
       const sessions = [...state.sessions].sort((a, b) => b.dayNumber - a.dayNumber);
@@ -223,6 +248,7 @@ export const test = base.extend<AuthFixture>({
         isPublic: false,
         currentDay: 1,
       },
+      resetToken: null,
       sessions: [],
       thoughts: [],
       ids: { session: 1, thought: 1 },

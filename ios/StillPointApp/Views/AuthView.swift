@@ -97,6 +97,28 @@ struct AuthView: View {
                     .accessibilityIdentifier("auth.submitButton")
                     .disabled(!vm.isValid || vm.isSubmitting)
                     .opacity(vm.isValid ? 1 : 0.5)
+
+                    if let resetMessage = vm.resetMessage {
+                        Text(resetMessage)
+                            .font(SPFont.mono(12))
+                            .foregroundStyle(SPColor.greenText)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("auth.passwordResetMessage")
+                    }
+
+                    if !vm.isSignUp {
+                        Button {
+                            Task { await vm.requestPasswordReset() }
+                        } label: {
+                            Text(vm.isRequestingPasswordReset ? "Sending..." : "Forgot password?")
+                                .font(SPFont.mono(12))
+                                .foregroundStyle(Color(SPColor.fg3))
+                                .underline()
+                        }
+                        .accessibilityIdentifier("auth.forgotPasswordButton")
+                        .disabled(vm.isRequestingPasswordReset)
+                        .padding(.top, SPSpacing.s1)
+                    }
                 }
                 .padding(.horizontal, SPSpacing.s4)
             }
