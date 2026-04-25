@@ -81,7 +81,9 @@ test.describe("mobile auth and shell", () => {
     await page.getByPlaceholder("password").fill("password123");
     await tap(page.getByRole("button", { name: "Enter" }));
 
-    await expect(page.getByText(deletedMessage)).toBeVisible();
+    const errorMessage = page.getByText(deletedMessage);
+    await expect(errorMessage).toBeVisible();
+    await expectVisibleInViewport(page, errorMessage, "deleted account login error");
     await expectNoHorizontalOverflow(page);
   });
 

@@ -154,6 +154,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
             fontSize: "11px", color: "var(--accent-danger)",
             textAlign: "center",
+            lineHeight: 1.5,
+            overflowWrap: "break-word",
+            width: "100%",
           }}>
             {error}
           </div>
