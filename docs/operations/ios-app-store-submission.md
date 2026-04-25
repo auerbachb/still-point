@@ -87,4 +87,4 @@ Account deletion path for Guideline 5.1.1(v):
 - Submit / archive checklist (historical): #37
 - CI workflow: `.github/workflows/ios-testflight.yml`
 - Release / tag / build docs: `ios/RELEASING.md`
-- App Store Connect example submission URL: <https://appstoreconnect.apple.com/apps/6761392660/distribution/reviewsubmissions/details/bf5f6c23-dffa-4942-aac1-2afd22ffa8f9>
+- App Store Connect submission URL pattern: `https://appstoreconnect.apple.com/apps/<app-id>/distribution/reviewsubmissions/details/<submission-id>`
