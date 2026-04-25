@@ -150,11 +150,21 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onBlur={e => e.currentTarget.style.borderColor = "var(--border-1)"}
         />
         {error && (
-          <div style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-            fontSize: "11px", color: "var(--accent-danger)",
-            textAlign: "center",
-          }}>
+          <div
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px", color: "var(--accent-danger)",
+              textAlign: "center",
+              lineHeight: 1.5,
+              overflowWrap: "break-word",
+              width: "100%",
+              maxWidth: "28ch",
+              margin: "0 auto",
+            }}
+          >
             {error}
           </div>
         )}

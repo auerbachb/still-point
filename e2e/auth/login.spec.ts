@@ -1,4 +1,5 @@
 import { test, expect } from "../fixtures/auth.fixture";
+import { DELETED_ACCOUNT_MESSAGE } from "../../src/lib/authErrors";
 import {
   expectMinimumTapTarget,
   expectNoHorizontalOverflow,
@@ -64,6 +65,26 @@ test.describe("mobile auth and shell", () => {
     await expect(page.getByPlaceholder("email")).toBeVisible();
     await expect(page.getByPlaceholder("password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  });
+
+  test("login shows deleted account errors from the API", async ({ page }) => {
+    await page.route("**/api/auth/login", async (route) => {
+      await route.fulfill({
+        status: 410,
+        contentType: "application/json",
+        body: JSON.stringify({ error: DELETED_ACCOUNT_MESSAGE }),
+      });
+    });
+
+    await page.goto("/app");
+    await page.getByPlaceholder("email").fill("deleted@example.com");
+    await page.getByPlaceholder("password").fill("password123");
+    await tap(page.getByRole("button", { name: "Enter" }));
+
+    const errorMessage = page.getByText(DELETED_ACCOUNT_MESSAGE);
+    await expect(errorMessage).toBeVisible();
+    await expectVisibleInViewport(page, errorMessage, "deleted account login error");
+    await expectNoHorizontalOverflow(page);
   });
 
   test("network failure on auth check shows retry contract", async ({ page }) => {

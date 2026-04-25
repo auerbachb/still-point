@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
+import { wasAccountDeleted } from "@/lib/accountDeletion";
+import { DELETED_ACCOUNT_MESSAGE } from "@/lib/authErrors";
 import { eq } from "drizzle-orm";
+
+const DUMMY_PASSWORD_HASH = "$2b$12$Y9nc0LdvLO3K5rJBlkE0qOAEOlfYYvCj5ra9LaWHKE9PCUvfdlUnq";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +19,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
     }
 
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const [userRows, deleted] = await Promise.all([
+      db.select().from(users).where(eq(users.email, email)).limit(1),
+      wasAccountDeleted(email),
+    ]);
+    const [user] = userRows;
     if (!user) {
+      if (deleted) {
+        return NextResponse.json({ error: DELETED_ACCOUNT_MESSAGE }, { status: 410 });
+      }
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
