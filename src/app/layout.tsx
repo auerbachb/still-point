@@ -21,18 +21,26 @@ export const metadata: Metadata = {
   title: "Still Point",
   description:
     "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+  },
   openGraph: {
     type: "website",
     images: [
       {
         url: "/og.png",
-        width: 724,
-        height: 724,
+        width: 1200,
+        height: 630,
+        alt: "Still Point logo mark on a calm dark background",
       },
     ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     images: ["/og.png"],
   },
 };
