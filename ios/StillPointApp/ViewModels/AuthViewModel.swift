@@ -53,7 +53,8 @@ final class AuthViewModel {
 
     func requestPasswordReset() async {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedEmail.contains("@") && trimmedEmail.contains(".") && !isRequestingPasswordReset else {
+        guard !isRequestingPasswordReset else { return }
+        guard trimmedEmail.contains("@") && trimmedEmail.contains(".") else {
             error = "Enter your email first."
             return
         }

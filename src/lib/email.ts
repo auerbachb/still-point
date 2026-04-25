@@ -1,5 +1,7 @@
 import "server-only";
 
+import { PASSWORD_RESET_TTL_MINUTES } from "@/lib/passwordReset";
+
 type SendEmailParams = {
   to: string;
   subject: string;
@@ -44,10 +46,14 @@ export async function sendPasswordResetEmail({ to, token }: { to: string; token:
   resetUrl.searchParams.set("token", token);
   const link = resetUrl.toString();
 
-  return sendEmail({
+  const result = await sendEmail({
     to,
     subject: "Reset your Still Point password",
-    text: `Use this link to reset your Still Point password. It expires in 30 minutes:\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
-    html: `<p>Use this link to reset your Still Point password. It expires in 30 minutes:</p><p><a href="${link}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+    text: `Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
+    html: `<p>Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:</p><p><a href="${link}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
   });
+  if (!result.delivered && process.env.NODE_ENV !== "production") {
+    console.info(`Password reset link for local development: ${link}`);
+  }
+  return result;
 }

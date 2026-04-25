@@ -14,8 +14,6 @@ import {
 } from "@/lib/passwordReset";
 import { and, eq, gt, isNull } from "drizzle-orm";
 
-const RATE_LIMITED_STATUS = 202;
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -27,13 +25,7 @@ export async function POST(request: NextRequest) {
 
     const hashedIp = requestIpHash(request);
     if (isPasswordResetRateLimited(email, hashedIp)) {
-      return NextResponse.json(
-        {
-          message: PASSWORD_RESET_REQUEST_MESSAGE,
-          throttled: true,
-        },
-        { status: RATE_LIMITED_STATUS },
-      );
+      return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
     }
     recordPasswordResetAttempt(email, hashedIp);
 
@@ -64,13 +56,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (activeToken) {
-      return NextResponse.json(
-        {
-          message: PASSWORD_RESET_REQUEST_MESSAGE,
-          throttled: true,
-        },
-        { status: RATE_LIMITED_STATUS },
-      );
+      return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
     }
 
     const token = await createPasswordResetToken({ userId: user.id, email: user.email });

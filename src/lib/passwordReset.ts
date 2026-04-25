@@ -4,8 +4,8 @@ import { createHash, randomBytes } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { NextRequest } from "next/server";
-import { db } from "@/db";
 import { passwordResetTokens } from "@/db/schema";
+import type { PoolDb } from "@/db/pool";
 
 const TOKEN_BYTES = 32;
 export const PASSWORD_RESET_TTL_MINUTES = 60;
@@ -63,37 +63,45 @@ export async function createPasswordResetToken({
     .sign(getSecret());
 }
 
-export async function confirmPasswordResetToken(token: string) {
+export async function getPasswordResetPayload(token: string) {
   try {
     const { payload } = await jwtVerify(token, getSecret(), {
       issuer: RESET_JWT_ISSUER,
       audience: RESET_JWT_AUDIENCE,
     });
     if (typeof payload.sub !== "string" || typeof payload.nonce !== "string") {
-      return { ok: false as const };
+      return null;
     }
-
-    const [resetToken] = await db
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(
-        and(
-          eq(passwordResetTokens.userId, payload.sub),
-          eq(passwordResetTokens.tokenHash, hashResetToken(token)),
-          isNull(passwordResetTokens.usedAt),
-          gt(passwordResetTokens.expiresAt, new Date()),
-        ),
-      )
-      .returning({ userId: passwordResetTokens.userId });
-
-    if (!resetToken) {
-      return { ok: false as const };
-    }
-
-    return { ok: true as const, userId: resetToken.userId };
+    return { userId: payload.sub, tokenHash: hashResetToken(token) };
   } catch {
+    return null;
+  }
+}
+
+export async function consumePasswordResetToken(tx: PoolDb, token: string) {
+  const payload = await getPasswordResetPayload(token);
+  if (!payload) {
     return { ok: false as const };
   }
+
+  const [resetToken] = await tx
+    .update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(
+      and(
+        eq(passwordResetTokens.userId, payload.userId),
+        eq(passwordResetTokens.tokenHash, payload.tokenHash),
+        isNull(passwordResetTokens.usedAt),
+        gt(passwordResetTokens.expiresAt, new Date()),
+      ),
+    )
+    .returning({ userId: passwordResetTokens.userId });
+
+  if (!resetToken) {
+    return { ok: false as const };
+  }
+
+  return { ok: true as const, userId: resetToken.userId };
 }
 
 type ResetAttempt = {
