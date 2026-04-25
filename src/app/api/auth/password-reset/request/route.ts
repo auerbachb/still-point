@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         return null;
       }
 
-      const resetToken = await createPasswordResetToken({ userId: user.id, email: user.email });
+      const resetToken = await createPasswordResetToken({ userId: user.id });
       await tx.insert(passwordResetTokens).values({
         userId: user.id,
         tokenHash: hashResetToken(resetToken),

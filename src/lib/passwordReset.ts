@@ -47,13 +47,11 @@ export function requestIpHash(request: NextRequest) {
 
 export async function createPasswordResetToken({
   userId,
-  email,
 }: {
   userId: string;
-  email: string;
 }) {
   const nonce = randomBytes(TOKEN_BYTES).toString("base64url");
-  return new SignJWT({ nonce, email })
+  return new SignJWT({ nonce })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuer(RESET_JWT_ISSUER)
@@ -116,6 +114,7 @@ type ResetAttempt = {
  */
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
+const RATE_LIMIT_MAX_KEYS = 1_000;
 const globalForPasswordReset = globalThis as typeof globalThis & {
   __passwordResetAttempts?: Map<string, ResetAttempt>;
 };
@@ -131,18 +130,36 @@ function rateLimitKey(email: string, ipHash: string | null) {
   return `${email}:${ipHash ?? "unknown"}`;
 }
 
+function pruneExpiredAttempts(now: number, store = attemptsStore()) {
+  for (const [key, attempt] of store) {
+    if (attempt.resetAt <= now) {
+      store.delete(key);
+    }
+  }
+}
+
 export function isPasswordResetRateLimited(email: string, ipHash: string | null) {
   const now = Date.now();
-  const attempt = attemptsStore().get(rateLimitKey(email, ipHash));
+  const store = attemptsStore();
+  pruneExpiredAttempts(now, store);
+  const attempt = store.get(rateLimitKey(email, ipHash));
   return Boolean(attempt && attempt.resetAt > now && attempt.count >= RATE_LIMIT_MAX_ATTEMPTS);
 }
 
 export function recordPasswordResetAttempt(email: string, ipHash: string | null) {
   const now = Date.now();
+  const store = attemptsStore();
+  pruneExpiredAttempts(now, store);
+  if (store.size >= RATE_LIMIT_MAX_KEYS) {
+    const oldestKey = store.keys().next().value as string | undefined;
+    if (oldestKey) {
+      store.delete(oldestKey);
+    }
+  }
   const key = rateLimitKey(email, ipHash);
-  const attempt = attemptsStore().get(key);
+  const attempt = store.get(key);
   if (!attempt || attempt.resetAt <= now) {
-    attemptsStore().set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    store.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return;
   }
   attempt.count += 1;
