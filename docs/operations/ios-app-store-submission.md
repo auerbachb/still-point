@@ -39,7 +39,7 @@ In App Store Connect, open the app and go to **Distribution** / **App Store** fo
 | # | Check | Owner | Evidence / action |
 |---|-------|-------|-------------------|
 | 13 | [ ] **Notes for reviewer:** short and factual, including how to sign in and the exact account deletion path. Mention **Guideline 5.1.1(v)** if responding to that rejection thread. | Product / App Store + Engineering | Use the account deletion path from `ios/RELEASING.md`; verify the binary follows the same path. |
-| 14 | [ ] **Attachment:** screen recording from a physical iPhone showing sign in -> **Settings** -> **Delete account** -> confirm -> signed out. | Product / App Store | Attach the recording to App Review Information and confirm it matches the submitted binary. |
+| 14 | [ ] **Attachment:** screen recording from a physical iPhone showing sign-in -> **Settings** -> **Delete account** -> confirm -> signed out. | Product / App Store | Attach the recording to App Review Information and confirm it matches the submitted binary. |
 | 15 | [ ] **Demo credentials:** provide private review-field credentials if the app cannot be exercised without an existing account, or document a reliable signup path. | Product / App Store | Private review fields are populated or signup instructions are clear. |
 
 ## Phase D - Submit
