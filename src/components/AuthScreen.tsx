@@ -157,6 +157,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             lineHeight: 1.5,
             overflowWrap: "break-word",
             width: "100%",
+            maxWidth: "28ch",
+            margin: "0 auto",
           }}>
             {error}
           </div>
