@@ -36,17 +36,17 @@ Before your first TestFlight release, configure a tester group and handle encryp
 2. Update the version in `ios/project.yml`:
    ```yaml
    MARKETING_VERSION: "1.0.3"
-   CURRENT_PROJECT_VERSION: 6
+   CURRENT_PROJECT_VERSION: 7
    ```
 3. Commit release artifacts + version bump:
    ```bash
    git add ios/project.yml ios/PARITY_CHECKLIST.md ios/QA_CHECKLIST.md ios/RELEASING.md
-   git commit -m "Finalize iOS 1.0.3 (build 6) release readiness"
+   git commit -m "Finalize iOS 1.0.3 (build 7) release readiness"
    ```
 4. Tag and push:
    ```bash
-   git tag ios-v1.0.3
-   git push origin ios-v1.0.3
+   git tag ios-v1.0.3-build7
+   git push origin ios-v1.0.3-build7
    ```
 5. The GitHub Actions workflow builds and uploads to TestFlight automatically.
 6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
