@@ -15,6 +15,7 @@ import {
   requireBuddyActiveParticipant,
   requireBuddySessionCompletedForPersonalRecord,
 } from "@/lib/buddySessionControlsPolicy";
+import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
 import { and, eq, sql } from "drizzle-orm";
 
 type Params = { params: Promise<{ id: string }> };
@@ -36,23 +37,6 @@ function parseMindStateLog(raw: unknown): Array<{ time: number; state: string }>
     const s = (item as { state?: unknown }).state;
     if (typeof t !== "number" || typeof s !== "string") continue;
     out.push({ time: t, state: s });
-  }
-  return out;
-}
-
-function parseThoughts(
-  raw: unknown,
-): Array<{ timeInSession: number; text: string }> {
-  if (!Array.isArray(raw)) return [];
-  const out: Array<{ timeInSession: number; text: string }> = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const timeInSession = (item as { timeInSession?: unknown }).timeInSession;
-    const text = (item as { text?: unknown }).text;
-    if (typeof timeInSession !== "number" || typeof text !== "string") continue;
-    const trimmed = text.trim().slice(0, 1000);
-    if (!trimmed) continue;
-    out.push({ timeInSession, text: trimmed });
   }
   return out;
 }
@@ -139,7 +123,17 @@ export async function POST(request: NextRequest, context: Params) {
         : 0;
 
     const mindStateLog = parseMindStateLog(body.mindStateLog);
-    const thoughtItems = parseThoughts(body.thoughts);
+    const normalizedThoughts = normalizeThoughtInputs(body.thoughts);
+    if (hasRejectedSubmittedThoughts(normalizedThoughts)) {
+      console.warn("Buddy personal session rejected invalid thoughts payload", {
+        buddySessionId: sessionId,
+        userId: auth.userId,
+        submittedCount: normalizedThoughts.submittedCount,
+        invalidCount: normalizedThoughts.invalidCount,
+      });
+      return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
+    }
+    const thoughtItems = normalizedThoughts.thoughts;
 
     const duration = buddyRow!.durationSeconds;
     let actualTime = duration;
@@ -208,15 +202,21 @@ export async function POST(request: NextRequest, context: Params) {
           .where(eq(buddySessions.id, sessionId));
 
         if (thoughtItems.length > 0) {
-          await tx.insert(thoughts).values(
-            thoughtItems.map((t) => ({
-              userId: auth.userId,
-              sessionId: created.id,
-              dayNumber,
-              timeInSession: t.timeInSession,
-              text: t.text,
-            })),
-          );
+          const insertedThoughts = await tx
+            .insert(thoughts)
+            .values(
+              thoughtItems.map((t) => ({
+                userId: auth.userId,
+                sessionId: created.id,
+                dayNumber,
+                timeInSession: t.timeInSession,
+                text: t.text,
+              })),
+            )
+            .returning({ id: thoughts.id });
+          if (insertedThoughts.length !== thoughtItems.length) {
+            throw new Error("THOUGHT_INSERT_MISMATCH");
+          }
         }
 
         return created;
