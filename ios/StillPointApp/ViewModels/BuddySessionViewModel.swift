@@ -46,6 +46,7 @@ final class BuddySessionViewModel {
         self.currentUserId = currentUserId
     }
 
+    @MainActor
     deinit {
         pollTask?.cancel()
     }
