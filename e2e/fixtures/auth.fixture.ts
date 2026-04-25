@@ -169,7 +169,10 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
 
     if (pathname === "/api/auth/password-reset/confirm" && method === "POST") {
       const body = (request.postDataJSON() ?? {}) as { token?: string; password?: string } | undefined;
-      if (!state.resetToken || body?.token !== state.resetToken || String(body?.password ?? "").length < 8) {
+      if (!body?.token || String(body?.password ?? "").length < 8) {
+        return json(route, 400, { error: "Valid token and password of at least 8 characters required" });
+      }
+      if (!state.resetToken || body.token !== state.resetToken) {
         return json(route, 400, { error: "Reset link is invalid or expired" });
       }
       state.credentials = { ...state.credentials, password: String(body.password) };

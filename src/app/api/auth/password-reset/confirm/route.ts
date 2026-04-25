@@ -7,7 +7,13 @@ import { getPasswordResetPayload } from "@/lib/passwordReset";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Valid token and password of at least 8 characters required" },
+        { status: 400 },
+      );
+    }
     const token = typeof body?.token === "string" ? body.token.trim() : "";
     const password = typeof body?.password === "string" ? body.password : "";
 

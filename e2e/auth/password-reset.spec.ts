@@ -40,15 +40,15 @@ test.describe("password reset", () => {
     await page.goto("/app");
     await page.getByPlaceholder("email").fill(mockApiState.credentials.email);
     await page.getByRole("link", { name: "Forgot password?" }).click();
-    await expect(page).toHaveURL(/\/reset-password\?/);
-    await expect(page.getByPlaceholder("email")).toHaveValue(mockApiState.credentials.email);
+    await expect(page).toHaveURL(/\/reset-password$/);
+    await page.getByLabel("Email").fill(mockApiState.credentials.email);
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByText(/reset link will arrive shortly/i)).toBeVisible();
     expect(resetRequestedFor).toBe(mockApiState.credentials.email);
 
     await page.goto("/reset-password?token=valid-reset-token");
-    await page.getByPlaceholder("new password", { exact: true }).fill("new-password-123");
-    await page.getByPlaceholder("confirm new password").fill("new-password-123");
+    await page.getByLabel("New password", { exact: true }).fill("new-password-123");
+    await page.getByLabel("Confirm new password").fill("new-password-123");
     await page.getByRole("button", { name: "Set new password" }).click();
     await expect(page.getByText(/password has been updated/i)).toBeVisible();
     expect(submittedNewPassword).toBe("new-password-123");
@@ -75,11 +75,11 @@ test.describe("password reset", () => {
     });
 
     await page.goto("/reset-password");
-    await page.getByPlaceholder("email").fill("unknown@stillpoint.test");
+    await page.getByLabel("Email").fill("unknown@stillpoint.test");
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByText(resetMessage)).toBeVisible();
 
-    await page.getByPlaceholder("email").fill("known@stillpoint.test");
+    await page.getByLabel("Email").fill("known@stillpoint.test");
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByText(resetMessage)).toBeVisible();
     expect(requestedEmails).toEqual(["unknown@stillpoint.test", "known@stillpoint.test"]);

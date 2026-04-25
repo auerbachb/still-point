@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import { passwordResetTokens, users } from "@/db/schema";
 import { sendPasswordResetEmail } from "@/lib/email";
 import {
@@ -12,7 +13,7 @@ import {
   recordPasswordResetAttempt,
   requestIpHash,
 } from "@/lib/passwordReset";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,31 +43,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
     }
 
-    const recentCutoff = new Date(Date.now() - 1000 * 60 * 5);
-    const [activeToken] = await db
-      .select({ id: passwordResetTokens.id })
-      .from(passwordResetTokens)
-      .where(
-        and(
-          eq(passwordResetTokens.userId, user.id),
-          isNull(passwordResetTokens.usedAt),
-          gt(passwordResetTokens.createdAt, recentCutoff),
-        ),
-      )
-      .limit(1);
+    const token = await poolDb.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`password-reset:${user.id}`}))`);
 
-    if (activeToken) {
-      return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
-    }
+      const recentCutoff = new Date(Date.now() - 1000 * 60 * 5);
+      const [activeToken] = await tx
+        .select({ id: passwordResetTokens.id })
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.userId, user.id),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.createdAt, recentCutoff),
+          ),
+        )
+        .limit(1);
 
-    const token = await createPasswordResetToken({ userId: user.id, email: user.email });
-    await db.insert(passwordResetTokens).values({
-      userId: user.id,
-      tokenHash: hashResetToken(token),
-      requestIpHash: hashedIp,
-      expiresAt: passwordResetExpiresAt(),
+      if (activeToken) {
+        return null;
+      }
+
+      const resetToken = await createPasswordResetToken({ userId: user.id, email: user.email });
+      await tx.insert(passwordResetTokens).values({
+        userId: user.id,
+        tokenHash: hashResetToken(resetToken),
+        requestIpHash: hashedIp,
+        expiresAt: passwordResetExpiresAt(),
+      });
+      return resetToken;
     });
-    await sendPasswordResetEmail({ to: user.email, token });
+    if (token) {
+      try {
+        await sendPasswordResetEmail({ to: user.email, token });
+      } catch (error) {
+        console.error("Password reset email delivery error:", error);
+      }
+    }
 
     return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
   } catch (error) {

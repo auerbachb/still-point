@@ -12,13 +12,25 @@ CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_user_id_users_id_fk"
-FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'password_reset_tokens_user_id_users_id_fk'
+  ) THEN
+    ALTER TABLE "password_reset_tokens"
+      ADD CONSTRAINT "password_reset_tokens_user_id_users_id_fk"
+      FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END
+$$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "password_reset_tokens_token_hash_unique"
 ON "password_reset_tokens" USING btree ("token_hash");
 CREATE INDEX IF NOT EXISTS "idx_password_reset_tokens_user"
 ON "password_reset_tokens" USING btree ("user_id");
-CREATE INDEX IF NOT EXISTS "idx_password_reset_tokens_active_user"
-ON "password_reset_tokens" USING btree ("user_id", "expires_at")
+DROP INDEX IF EXISTS "idx_password_reset_tokens_active_user";
+CREATE UNIQUE INDEX IF NOT EXISTS "password_reset_tokens_active_user_unique"
+ON "password_reset_tokens" USING btree ("user_id")
 WHERE "used_at" IS NULL;

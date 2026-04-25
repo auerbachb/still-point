@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -33,9 +33,8 @@ const buttonStyle: React.CSSProperties = {
 
 function ResetPasswordForm() {
   const params = useSearchParams();
-  const token = useMemo(() => params.get("token")?.trim() ?? "", [params]);
-  const initialEmail = useMemo(() => params.get("email")?.trim().toLowerCase() ?? "", [params]);
-  const [email, setEmail] = useState(initialEmail);
+  const token = params.get("token")?.trim() ?? "";
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
@@ -155,10 +154,22 @@ function ResetPasswordForm() {
         </p>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (status !== "submitting") {
+            void (token ? submit() : requestReset());
+          }
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+      >
         {token ? (
           <>
+            <label htmlFor="new-password" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+              New password
+            </label>
             <input
+              id="new-password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -166,7 +177,11 @@ function ResetPasswordForm() {
               autoComplete="new-password"
               style={inputStyle}
             />
+            <label htmlFor="confirm-new-password" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+              Confirm new password
+            </label>
             <input
+              id="confirm-new-password"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
@@ -176,14 +191,20 @@ function ResetPasswordForm() {
             />
           </>
         ) : (
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="email"
-            autoComplete="email"
-            style={inputStyle}
-          />
+          <>
+            <label htmlFor="reset-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+              Email
+            </label>
+            <input
+              id="reset-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="email"
+              autoComplete="email"
+              style={inputStyle}
+            />
+          </>
         )}
         {message ? (
           <div
@@ -199,8 +220,7 @@ function ResetPasswordForm() {
           </div>
         ) : null}
         <button
-          type="button"
-          onClick={token ? submit : requestReset}
+          type="submit"
           disabled={status === "submitting"}
           style={{
             ...buttonStyle,
@@ -210,7 +230,7 @@ function ResetPasswordForm() {
         >
           {status === "submitting" ? "..." : token ? "Set new password" : "Send reset link"}
         </button>
-      </div>
+      </form>
 
       <Link
         href="/app"

@@ -7,20 +7,26 @@ type SendEmailParams = {
   subject: string;
   text: string;
   html?: string;
+  devLogMessage?: string;
 };
 
 const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://still-point.me";
 
-export async function sendEmail({ to, subject, text, html }: SendEmailParams) {
+export async function sendEmail({ to, subject, text, html, devLogMessage }: SendEmailParams) {
   if (!fromAddress || !resendApiKey) {
-    console.info("Email delivery skipped; EMAIL_FROM and RESEND_API_KEY are not both configured.");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Email delivery is not configured");
+    }
+    console.info(devLogMessage ?? "Email delivery skipped; EMAIL_FROM and RESEND_API_KEY are not both configured.");
     return { delivered: false };
   }
 
+  const timeoutSignal = AbortSignal.timeout(10_000);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: timeoutSignal,
     headers: {
       Authorization: `Bearer ${resendApiKey}`,
       "Content-Type": "application/json",
@@ -51,9 +57,7 @@ export async function sendPasswordResetEmail({ to, token }: { to: string; token:
     subject: "Reset your Still Point password",
     text: `Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
     html: `<p>Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:</p><p><a href="${link}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+    devLogMessage: `Password reset link for local development: ${link}`,
   });
-  if (!result.delivered && process.env.NODE_ENV !== "production") {
-    console.info(`Password reset link for local development: ${link}`);
-  }
   return result;
 }
