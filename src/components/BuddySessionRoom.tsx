@@ -8,7 +8,7 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { BlockTimer } from "./BlockTimer";
 import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
-import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 
@@ -86,6 +86,10 @@ export function BuddySessionRoom({
   );
   const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
+  const soundPrefsRef = useRef(soundPrefs);
+  soundPrefsRef.current = soundPrefs;
+  const audioUnlockRequestRef = useRef(0);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
   const [displayElapsed, setDisplayElapsed] = useState(0);
@@ -174,6 +178,7 @@ export function BuddySessionRoom({
   }, [pollStopped, sessionId]);
 
   useEffect(() => {
+    audioUnlockRequestRef.current += 1;
     setSnap(null);
     snapRef.current = null;
     setMindStateLog([]);
@@ -190,6 +195,7 @@ export function BuddySessionRoom({
     setIsSavingPersonalRecord(false);
     setLocalTimerCompleted(false);
     localTimerCompletedRef.current = false;
+    setAudioBlocked(false);
     setPersonalRecordError(null);
     setDailyMeetingToken(null);
     setDailyTokenError(null);
@@ -270,6 +276,48 @@ export function BuddySessionRoom({
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
     setDisplayElapsed(elapsed);
+  }, []);
+
+  const handleSoundPlaybackBlocked = useCallback(() => {
+    setAudioBlocked(true);
+  }, []);
+
+  const handleSoundPrefToggle = useCallback((key: keyof SoundPrefs) => {
+    const current = soundPrefsRef.current;
+    const next = { ...current, [key]: !current[key] };
+    const hasEnabledSound = Object.values(next).some(Boolean);
+    soundPrefsRef.current = next;
+    setSoundPrefs(next);
+    saveSoundPrefs(next);
+
+    const requestId = ++audioUnlockRequestRef.current;
+    if (!hasEnabledSound) {
+      setAudioBlocked(false);
+      return;
+    }
+
+    if (!next[key]) {
+      return;
+    }
+
+    void unlockAudioContext().then((unlockResult) => {
+      if (requestId !== audioUnlockRequestRef.current) return;
+      const stillHasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
+      setAudioBlocked(stillHasEnabledSound && unlockResult === "blocked");
+    });
+  }, []);
+
+  const handleEnableLocalAudio = useCallback(async () => {
+    const requestId = ++audioUnlockRequestRef.current;
+    const unlockResult = await unlockAudioContext();
+    if (requestId === audioUnlockRequestRef.current) {
+      const hasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
+      if (hasEnabledSound) {
+        setAudioBlocked(unlockResult === "blocked");
+      } else {
+        setAudioBlocked(false);
+      }
+    }
   }, []);
 
   const buddyAwarenessPct = useMemo(() => {
@@ -826,6 +874,7 @@ export function BuddySessionRoom({
                 mindState={mindState}
                 mindStateLog={mindStateLog}
                 onElapsedChange={handleElapsedChange}
+                onSoundPlaybackBlocked={handleSoundPlaybackBlocked}
                 soundPrefs={soundPrefs}
                 onComplete={handleBuddyTimerComplete}
               />
@@ -840,7 +889,7 @@ export function BuddySessionRoom({
                   letterSpacing: "0.08em",
                 }}
               >
-                {snap.durationSeconds}s sit · timer synced from server
+                {snap.durationSeconds}s sit · shared timer synced from server · sounds stay local
               </p>
             </div>
 
@@ -1234,9 +1283,6 @@ export function BuddySessionRoom({
 
               <div
                 style={{
-                  opacity: controlsVisible ? 1 : 0,
-                  transition: "opacity 0.5s ease",
-                  pointerEvents: controlsVisible ? "auto" : "none",
                   width: "100%",
                   display: "flex",
                   flexDirection: "column",
@@ -1252,24 +1298,35 @@ export function BuddySessionRoom({
                     marginTop: "24px",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={openThoughtCapture}
+                  <div
+                    aria-hidden={!controlsVisible}
                     style={{
-                      border: "1px solid var(--accent-amber-border)",
-                      background: "none",
-                      color: "var(--accent-amber-border)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                      fontSize: "11px",
-                      letterSpacing: "0.15em",
-                      textTransform: "uppercase",
-                      padding: "10px 24px",
-                      borderRadius: "20px",
-                      cursor: "pointer",
+                      opacity: controlsVisible ? 1 : 0,
+                      transition: "opacity 0.5s ease",
+                      pointerEvents: controlsVisible ? "auto" : "none",
                     }}
                   >
-                    capture note
-                  </button>
+                    <button
+                      type="button"
+                      onClick={openThoughtCapture}
+                      disabled={!controlsVisible}
+                      tabIndex={controlsVisible ? 0 : -1}
+                      style={{
+                        border: "1px solid var(--accent-amber-border)",
+                        background: "none",
+                        color: "var(--accent-amber-border)",
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontSize: "11px",
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        padding: "10px 24px",
+                        borderRadius: "20px",
+                        cursor: controlsVisible ? "pointer" : "default",
+                      }}
+                    >
+                      capture note
+                    </button>
+                  </div>
                   <p
                     style={{
                       margin: 0,
@@ -1280,8 +1337,33 @@ export function BuddySessionRoom({
                       textAlign: "center",
                     }}
                   >
-                    Sounds are only on your device — they do not affect anyone else.
+                    The timer is shared. Tick, chime, and end sounds are local to this device.
                   </p>
+                  {audioBlocked && (
+                    <p
+                      role="alert"
+                      style={{
+                        margin: 0,
+                        maxWidth: "340px",
+                        fontSize: "11px",
+                        color: "var(--accent-amber)",
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        letterSpacing: "0.04em",
+                        textAlign: "center",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Browser audio is paused.
+                      <button
+                        type="button"
+                        onClick={() => void handleEnableLocalAudio()}
+                        style={inlineLinkButton}
+                      >
+                        Enable local audio
+                      </button>
+                      on this device.
+                    </p>
+                  )}
                   <div
                     style={{
                       display: "flex",
@@ -1306,11 +1388,7 @@ export function BuddySessionRoom({
                         aria-pressed={soundPrefs[key]}
                         aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
                         title="Only you hear this — does not change audio for others"
-                        onClick={() => {
-                          const next = { ...soundPrefs, [key]: !soundPrefs[key] };
-                          setSoundPrefs(next);
-                          saveSoundPrefs(next);
-                        }}
+                        onClick={() => void handleSoundPrefToggle(key)}
                         style={{
                           background: "none",
                           border: "none",
@@ -1420,6 +1498,16 @@ const btnSecondary: CSSProperties = {
   fontSize: "11px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
+};
+
+const inlineLinkButton: CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "var(--accent-amber)",
+  cursor: "pointer",
+  font: "inherit",
+  padding: 0,
+  textDecoration: "underline",
 };
 
 const btnGhost: CSSProperties = {
