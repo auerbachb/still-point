@@ -66,6 +66,25 @@ test.describe("mobile auth and shell", () => {
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
   });
 
+  test("login shows deleted account errors from the API", async ({ page }) => {
+    const deletedMessage = "This account has been deleted. Create a new account to continue.";
+    await page.route("**/api/auth/login", async (route) => {
+      await route.fulfill({
+        status: 410,
+        contentType: "application/json",
+        body: JSON.stringify({ error: deletedMessage }),
+      });
+    });
+
+    await page.goto("/app");
+    await page.getByPlaceholder("email").fill("deleted@example.com");
+    await page.getByPlaceholder("password").fill("password123");
+    await tap(page.getByRole("button", { name: "Enter" }));
+
+    await expect(page.getByText(deletedMessage)).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
   test("network failure on auth check shows retry contract", async ({ page }) => {
     await page.route("**/api/auth/me", async (route) => {
       await route.abort("failed");

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
+import { wasAccountDeleted } from "@/lib/accountDeletion";
 import { eq } from "drizzle-orm";
+
+const DELETED_ACCOUNT_MESSAGE = "This account has been deleted. Create a new account to continue.";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +20,9 @@ export async function POST(request: NextRequest) {
 
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (!user) {
+      if (await wasAccountDeleted(email)) {
+        return NextResponse.json({ error: DELETED_ACCOUNT_MESSAGE }, { status: 410 });
+      }
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 

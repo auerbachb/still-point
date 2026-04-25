@@ -1,0 +1,99 @@
+import { createHash } from "crypto";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+
+const selectLimit = vi.fn();
+const selectWhere = vi.fn(() => ({ limit: selectLimit }));
+const selectFrom = vi.fn(() => ({ where: selectWhere }));
+const dbSelect = vi.fn(() => ({ from: selectFrom }));
+const txSelectLimit = vi.fn();
+const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
+const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
+const txSelect = vi.fn(() => ({ from: txSelectFrom }));
+const txInsertValues = vi.fn();
+const txInsert = vi.fn(() => ({ values: txInsertValues }));
+const txDeleteWhere = vi.fn();
+const txDelete = vi.fn(() => ({ where: txDeleteWhere }));
+const tx = {
+  select: txSelect,
+  insert: txInsert,
+  delete: txDelete,
+};
+const transaction = vi.fn(async (callback) => callback(tx));
+
+vi.mock("@/db", () => ({
+  db: {
+    select: dbSelect,
+  },
+}));
+
+vi.mock("@/db/pool", () => ({
+  poolDb: {
+    transaction,
+  },
+}));
+
+vi.mock("@/db/schema", () => ({
+  accountDeletionLog: {
+    id: "deletionLogId",
+    userId: "deletionLogUserId",
+    emailHash: "emailHash",
+  },
+  users: {
+    id: "userId",
+    email: "email",
+  },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn((left, right) => ({ left, right })),
+}));
+
+describe("account deletion tracking", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectLimit.mockResolvedValue([]);
+    txSelectLimit.mockResolvedValue([]);
+  });
+
+  test("hashes normalized emails for deletion lookups", async () => {
+    const { getAccountDeletionEmailHash } = await import("./accountDeletion");
+    const expected = createHash("sha256").update("deleted@example.com").digest("hex");
+
+    expect(getAccountDeletionEmailHash(" Deleted@Example.com ")).toBe(expected);
+  });
+
+  test("finds deletion log entries by normalized email hash", async () => {
+    selectLimit.mockResolvedValue([{ id: "entry-1" }]);
+    const { wasAccountDeleted, getAccountDeletionEmailHash } = await import("./accountDeletion");
+
+    await expect(wasAccountDeleted(" Deleted@Example.com ")).resolves.toBe(true);
+    expect(selectWhere).toHaveBeenCalledWith({
+      left: "emailHash",
+      right: getAccountDeletionEmailHash("Deleted@Example.com"),
+    });
+  });
+
+  test("records a deletion log before deleting the user", async () => {
+    txSelectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
+    const { deleteUserAccount, getAccountDeletionEmailHash } = await import("./accountDeletion");
+
+    await expect(deleteUserAccount("user-1")).resolves.toBe(true);
+
+    expect(txInsert).toHaveBeenCalled();
+    expect(txInsertValues).toHaveBeenCalledWith({
+      userId: "user-1",
+      emailHash: getAccountDeletionEmailHash("Deleted@Example.com"),
+    });
+    expect(txDelete).toHaveBeenCalled();
+    expect(txDeleteWhere).toHaveBeenCalled();
+  });
+
+  test("does not log deletion when the user is already gone", async () => {
+    const { deleteUserAccount } = await import("./accountDeletion");
+
+    await expect(deleteUserAccount("missing-user")).resolves.toBe(false);
+
+    expect(txInsert).not.toHaveBeenCalled();
+    expect(txDelete).not.toHaveBeenCalled();
+  });
+});

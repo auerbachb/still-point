@@ -28,6 +28,16 @@ export const users = pgTable("users", {
   publicIdx: index("idx_users_public").on(table.isPublic),
 }));
 
+export const accountDeletionLog = pgTable("account_deletion_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  emailHash: varchar("email_hash", { length: 64 }).notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  emailHashIdx: index("idx_account_deletion_log_email_hash").on(table.emailHash),
+  userIdx: index("idx_account_deletion_log_user").on(table.userId),
+}));
+
 /** waiting | ready_check | active | completed | abandoned */
 export const buddySessions = pgTable("buddy_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
