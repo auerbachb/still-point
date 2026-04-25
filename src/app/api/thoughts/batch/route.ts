@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
     }
     const normalized = normalizedResult.thoughts;
+    const completionNoteCount = normalized.filter((t) => t.timeInSession === -1).length;
+    if (completionNoteCount > 1) {
+      console.warn("Batch thoughts rejected duplicate completion notes", {
+        sessionId,
+        userId: auth.userId,
+        completionNoteCount,
+      });
+      return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
+    }
 
     const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1);
     const rowsToInsert = [

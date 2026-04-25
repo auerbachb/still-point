@@ -123,6 +123,14 @@ export async function POST(request: NextRequest, context: Params) {
         : 0;
 
     const mindStateLog = parseMindStateLog(body.mindStateLog);
+    if (body.thoughts != null && !Array.isArray(body.thoughts)) {
+      console.warn("Buddy personal session rejected invalid thoughts payload", {
+        buddySessionId: sessionId,
+        userId: auth.userId,
+        submittedType: typeof body.thoughts,
+      });
+      return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
+    }
     const normalizedThoughts = normalizeThoughtInputs(body.thoughts);
     if (hasRejectedSubmittedThoughts(normalizedThoughts)) {
       console.warn("Buddy personal session rejected invalid thoughts payload", {

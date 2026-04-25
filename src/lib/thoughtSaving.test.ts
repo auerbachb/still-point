@@ -6,6 +6,20 @@ import {
 } from "./thoughtSaving";
 
 describe("normalizeThoughtInputs", () => {
+  it("flags mixed valid and invalid submitted payloads", () => {
+    const result = normalizeThoughtInputs([
+      { timeInSession: 12, text: "kept if normalized alone" },
+      { timeInSession: "13", text: "invalid" },
+    ]);
+
+    assert.equal(result.submittedCount, 2);
+    assert.equal(result.invalidCount, 1);
+    assert.deepEqual(result.thoughts, [
+      { timeInSession: 12, text: "kept if normalized alone" },
+    ]);
+    assert.equal(hasRejectedSubmittedThoughts(result), true);
+  });
+
   it("accepts web completion note payloads", () => {
     const result = normalizeThoughtInputs([{ timeInSession: -1, text: "  final note  " }]);
 
