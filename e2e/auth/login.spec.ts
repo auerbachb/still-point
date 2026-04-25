@@ -1,4 +1,5 @@
 import { test, expect } from "../fixtures/auth.fixture";
+import { DELETED_ACCOUNT_MESSAGE } from "../../src/lib/authErrors";
 import {
   expectMinimumTapTarget,
   expectNoHorizontalOverflow,
@@ -67,12 +68,11 @@ test.describe("mobile auth and shell", () => {
   });
 
   test("login shows deleted account errors from the API", async ({ page }) => {
-    const deletedMessage = "This account has been deleted. Create a new account to continue.";
     await page.route("**/api/auth/login", async (route) => {
       await route.fulfill({
         status: 410,
         contentType: "application/json",
-        body: JSON.stringify({ error: deletedMessage }),
+        body: JSON.stringify({ error: DELETED_ACCOUNT_MESSAGE }),
       });
     });
 
@@ -81,7 +81,7 @@ test.describe("mobile auth and shell", () => {
     await page.getByPlaceholder("password").fill("password123");
     await tap(page.getByRole("button", { name: "Enter" }));
 
-    const errorMessage = page.getByText(deletedMessage);
+    const errorMessage = page.getByText(DELETED_ACCOUNT_MESSAGE);
     await expect(errorMessage).toBeVisible();
     await expectVisibleInViewport(page, errorMessage, "deleted account login error");
     await expectNoHorizontalOverflow(page);

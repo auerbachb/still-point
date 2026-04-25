@@ -9,6 +9,7 @@ const verifyPassword = vi.fn();
 const createToken = vi.fn();
 const setAuthCookie = vi.fn();
 const wasAccountDeleted = vi.fn();
+const DELETED_ACCOUNT_MESSAGE = "This account has been deleted. Create a new account to continue.";
 
 vi.mock("@/db", () => ({
   db: {
@@ -31,6 +32,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/accountDeletion", () => ({
   wasAccountDeleted,
+}));
+
+vi.mock("@/lib/authErrors", () => ({
+  DELETED_ACCOUNT_MESSAGE,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -59,6 +64,7 @@ describe("POST /api/auth/login", () => {
     await expect(response.json()).resolves.toEqual({ error: "Invalid credentials" });
     expect(response.status).toBe(401);
     expect(wasAccountDeleted).toHaveBeenCalledWith("missing@example.com");
+    expect(verifyPassword).toHaveBeenCalledWith("password123", expect.stringMatching(/^\$2b\$12\$/));
   });
 
   test("returns a deleted-account message when the deletion log matches", async () => {
@@ -73,7 +79,7 @@ describe("POST /api/auth/login", () => {
     );
 
     await expect(response.json()).resolves.toEqual({
-      error: "This account has been deleted. Create a new account to continue.",
+      error: DELETED_ACCOUNT_MESSAGE,
     });
     expect(response.status).toBe(410);
     expect(wasAccountDeleted).toHaveBeenCalledWith("deleted@example.com");
@@ -93,6 +99,7 @@ describe("POST /api/auth/login", () => {
 
     await expect(response.json()).resolves.toEqual({ error: "Invalid credentials" });
     expect(response.status).toBe(401);
-    expect(wasAccountDeleted).not.toHaveBeenCalled();
+    expect(wasAccountDeleted).toHaveBeenCalledWith("user@example.com");
+    expect(verifyPassword).toHaveBeenCalledWith("bad-password", "hash");
   });
 });

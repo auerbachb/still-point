@@ -86,6 +86,9 @@ describe("account deletion tracking", () => {
     });
     expect(txDelete).toHaveBeenCalled();
     expect(txDeleteWhere).toHaveBeenCalled();
+    expect(txInsertValues.mock.invocationCallOrder[0]).toBeLessThan(
+      txDeleteWhere.mock.invocationCallOrder[0],
+    );
   });
 
   test("does not log deletion when the user is already gone", async () => {
