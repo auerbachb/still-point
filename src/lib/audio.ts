@@ -3,20 +3,56 @@
 
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
+export type AudioUnlockResult = "unlocked" | "blocked" | "unavailable";
+
+type WindowWithWebAudio = Window & {
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+};
+
+function getAudioContextConstructor(): typeof AudioContext | undefined {
+  if (typeof window === "undefined") return undefined;
+  const webAudioWindow = window as WindowWithWebAudio;
+  return webAudioWindow.AudioContext ?? webAudioWindow.webkitAudioContext;
+}
+
+function getAudioContext(): AudioContext | null {
+  const AudioContextCtor = getAudioContextConstructor();
+  if (!AudioContextCtor) return null;
   if (!audioCtx) {
-    audioCtx = new AudioContext();
-  }
-  // Resume if suspended (browsers require user gesture)
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume();
+    audioCtx = new AudioContextCtor();
   }
   return audioCtx;
 }
 
-/** Short, soft tick — like a clock */
-export function playTick() {
+function readAudioContextState(ctx: AudioContext): AudioContextState {
+  return ctx.state;
+}
+
+export async function unlockAudioContext(): Promise<AudioUnlockResult> {
   const ctx = getAudioContext();
+  if (!ctx) return "unavailable";
+  if (ctx.state === "running") return "unlocked";
+  try {
+    await ctx.resume();
+  } catch {
+    return "blocked";
+  }
+  return readAudioContextState(ctx) === "running" ? "unlocked" : "blocked";
+}
+
+function getPlayableAudioContext(): AudioContext | null {
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+  if (ctx.state === "running") return ctx;
+  void ctx.resume().catch(() => undefined);
+  return null;
+}
+
+/** Short, soft tick — like a clock */
+export function playTick(): boolean {
+  const ctx = getPlayableAudioContext();
+  if (!ctx) return false;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
@@ -29,11 +65,13 @@ export function playTick() {
   gain.connect(ctx.destination);
   osc.start(ctx.currentTime);
   osc.stop(ctx.currentTime + 0.06);
+  return true;
 }
 
 /** Bell chime — repeated `count` times for minute announcements */
-export function playChime(count: number) {
-  const ctx = getAudioContext();
+export function playChime(count: number): boolean {
+  const ctx = getPlayableAudioContext();
+  if (!ctx) return false;
 
   for (let i = 0; i < count; i++) {
     const startTime = ctx.currentTime + i * 0.4;
@@ -53,11 +91,13 @@ export function playChime(count: number) {
     osc.start(startTime);
     osc.stop(startTime + 0.5);
   }
+  return true;
 }
 
 /** Completion sound — a warm, resonant tone */
-export function playCompletion() {
-  const ctx = getAudioContext();
+export function playCompletion(): boolean {
+  const ctx = getPlayableAudioContext();
+  if (!ctx) return false;
 
   // Layer two harmonics for a richer sound
   const freqs = [528, 660];
@@ -77,6 +117,7 @@ export function playCompletion() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 2.5);
   }
+  return true;
 }
 
 // --- Sound preferences (localStorage) ---

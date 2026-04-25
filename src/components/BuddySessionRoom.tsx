@@ -8,7 +8,7 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { BlockTimer } from "./BlockTimer";
 import { BuddyVideo } from "./BuddyVideo";
 import { ThoughtCapture } from "./ThoughtCapture";
-import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 
@@ -86,6 +86,7 @@ export function BuddySessionRoom({
   );
   const [distractionSegmentCount, setDistractionSegmentCount] = useState(0);
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const elapsedRef = useRef(0);
   const [displayElapsed, setDisplayElapsed] = useState(0);
@@ -190,6 +191,7 @@ export function BuddySessionRoom({
     setIsSavingPersonalRecord(false);
     setLocalTimerCompleted(false);
     localTimerCompletedRef.current = false;
+    setAudioBlocked(false);
     setPersonalRecordError(null);
     setDailyMeetingToken(null);
     setDailyTokenError(null);
@@ -270,6 +272,30 @@ export function BuddySessionRoom({
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
     setDisplayElapsed(elapsed);
+  }, []);
+
+  const handleSoundPlaybackBlocked = useCallback(() => {
+    setAudioBlocked(true);
+  }, []);
+
+  const handleSoundPrefToggle = useCallback(
+    async (key: keyof SoundPrefs) => {
+      const next = { ...soundPrefs, [key]: !soundPrefs[key] };
+      if (next[key]) {
+        const unlockResult = await unlockAudioContext();
+        setAudioBlocked(unlockResult === "blocked");
+      } else {
+        setAudioBlocked(false);
+      }
+      setSoundPrefs(next);
+      saveSoundPrefs(next);
+    },
+    [soundPrefs],
+  );
+
+  const handleEnableLocalAudio = useCallback(async () => {
+    const unlockResult = await unlockAudioContext();
+    setAudioBlocked(unlockResult === "blocked");
   }, []);
 
   const buddyAwarenessPct = useMemo(() => {
@@ -826,6 +852,7 @@ export function BuddySessionRoom({
                 mindState={mindState}
                 mindStateLog={mindStateLog}
                 onElapsedChange={handleElapsedChange}
+                onSoundPlaybackBlocked={handleSoundPlaybackBlocked}
                 soundPrefs={soundPrefs}
                 onComplete={handleBuddyTimerComplete}
               />
@@ -840,7 +867,7 @@ export function BuddySessionRoom({
                   letterSpacing: "0.08em",
                 }}
               >
-                {snap.durationSeconds}s sit · timer synced from server
+                {snap.durationSeconds}s sit · shared timer synced from server · sounds stay local
               </p>
             </div>
 
@@ -1280,8 +1307,33 @@ export function BuddySessionRoom({
                       textAlign: "center",
                     }}
                   >
-                    Sounds are only on your device — they do not affect anyone else.
+                    The timer is shared. Tick, chime, and end sounds are local to this device.
                   </p>
+                  {audioBlocked && (
+                    <p
+                      role="alert"
+                      style={{
+                        margin: 0,
+                        maxWidth: "340px",
+                        fontSize: "11px",
+                        color: "var(--accent-amber)",
+                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        letterSpacing: "0.04em",
+                        textAlign: "center",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Browser audio is paused.
+                      <button
+                        type="button"
+                        onClick={() => void handleEnableLocalAudio()}
+                        style={inlineLinkButton}
+                      >
+                        Enable local audio
+                      </button>
+                      on this device.
+                    </p>
+                  )}
                   <div
                     style={{
                       display: "flex",
@@ -1306,11 +1358,7 @@ export function BuddySessionRoom({
                         aria-pressed={soundPrefs[key]}
                         aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
                         title="Only you hear this — does not change audio for others"
-                        onClick={() => {
-                          const next = { ...soundPrefs, [key]: !soundPrefs[key] };
-                          setSoundPrefs(next);
-                          saveSoundPrefs(next);
-                        }}
+                        onClick={() => void handleSoundPrefToggle(key)}
                         style={{
                           background: "none",
                           border: "none",
@@ -1420,6 +1468,16 @@ const btnSecondary: CSSProperties = {
   fontSize: "11px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
+};
+
+const inlineLinkButton: CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "var(--accent-amber)",
+  cursor: "pointer",
+  font: "inherit",
+  padding: 0,
+  textDecoration: "underline",
 };
 
 const btnGhost: CSSProperties = {
