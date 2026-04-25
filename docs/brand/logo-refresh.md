@@ -32,8 +32,11 @@ Start image generation with Concepts A and B. Concept A is the strongest likely 
 
 ## Follow-up tasks after draft images
 
-- Review generated drafts at iOS icon, favicon, and Open Graph sizes.
+- Review generated drafts against explicit size targets:
+  - Favicon: pass at 16x16 and 32x32 when the mark is legible, contrast meets WCAG AA minimum 4.5:1, and there is no distortion or clipping.
+  - iOS app icon: pass at 180x180 and 1024x1024 when the mark is centered, has safe margin, contrast meets WCAG AA minimum 4.5:1, and there is no distortion or clipping.
+  - Open Graph: pass at 1200x630 when the composition uses the correct aspect ratio, remains readable in preview cards, contrast meets WCAG AA minimum 4.5:1, and there is no distortion or clipping.
 - Select one final direction and document the rationale.
-- Export final assets for `ios/StillPointApp/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`, `src/app/favicon.ico`, Next web icon surfaces, and social metadata.
+- Export final assets as complete deliverable sets: full `ios/StillPointApp/Resources/Assets.xcassets/AppIcon.appiconset` payload with all required PNG sizes plus `Contents.json`, `src/app/favicon.ico`, Next web icon surfaces, and social metadata assets.
 - Integrate the selected assets into the repo.
 - Update App Store screenshots, listing artwork, and any marketing lockups after the final mark is approved.
