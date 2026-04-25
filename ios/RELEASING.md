@@ -99,6 +99,45 @@ The same build uploaded to TestFlight can be submitted to the App Store:
    - Version + build number
    - Release owner initials
 
+## App Store review follow-up
+
+Use the operational GitHub issue as the audit log for App Store review status.
+For iOS 1.0, that tracker is [issue #103](https://github.com/auerbachb/still-point/issues/103).
+
+Check App Store Connect daily until Apple reaches a final decision or the
+submission is intentionally withdrawn. Add at most one dated log entry per day
+unless the review status changes that same day.
+
+Daily log template:
+
+```markdown
+### YYYY-MM-DD
+
+- **Status:** Waiting for Review | In Review | Rejected | Approved | Ready for Sale | Withdrawn
+- **ASC build:** 1.0.0 (4)
+- **Submission URL:** https://appstoreconnect.apple.com/apps/.../distribution/reviewsubmissions/details/...
+- **Next action:** ...
+```
+
+If Apple rejects the submission:
+
+- Paste the reviewer notes verbatim in the dated log entry.
+- Link only the engineering issue(s) that will carry implementation work.
+- Keep the tracking issue open through fix and resubmit cycles.
+
+If you resubmit:
+
+- Log the new App Store Connect build string, e.g. `1.0.0 (5)`.
+- Log the updated submission URL if App Store Connect changes it.
+- Include the complete resubmit package:
+  - App Review notes describing the account deletion flow from the iOS app.
+  - Device screen recording showing sign in, `Settings`, `Delete Account`,
+    `Continue`, final `Delete Account`, and return to the signed-out screen.
+
+Close the tracking issue only after Apple approves the app or the submission is
+permanently withdrawn. For approval, record the final build, final outcome, and
+whether the release shipped, is phased, or is intentionally held.
+
 ### App review notes (account deletion)
 
 Include this walkthrough in App Review notes for Guideline 5.1.1(v):
