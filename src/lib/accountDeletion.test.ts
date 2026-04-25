@@ -1,14 +1,18 @@
 import { createHash } from "crypto";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const selectLimit = vi.fn();
-const selectWhere = vi.fn(() => ({ limit: selectLimit }));
-const selectFrom = vi.fn(() => ({ where: selectWhere }));
-const dbSelect = vi.fn(() => ({ from: selectFrom }));
-const txSelectLimit = vi.fn();
-const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
-const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
-const txSelect = vi.fn(() => ({ from: txSelectFrom }));
+function makeSelectChain() {
+  const limit = vi.fn();
+  const where = vi.fn(() => ({ limit }));
+  const from = vi.fn(() => ({ where }));
+  const select = vi.fn(() => ({ from }));
+  return { select, from, where, limit };
+}
+
+const dbSelectChain = makeSelectChain();
+const txSelectChain = makeSelectChain();
+const { select: dbSelect, from: selectFrom, where: selectWhere, limit: selectLimit } = dbSelectChain;
+const { select: txSelect, limit: txSelectLimit } = txSelectChain;
 const txInsertValues = vi.fn();
 const txInsert = vi.fn(() => ({ values: txInsertValues }));
 const txDeleteWhere = vi.fn();
@@ -96,6 +100,18 @@ describe("account deletion tracking", () => {
     expect(txInsertValues.mock.invocationCallOrder[0]).toBeLessThan(
       txDeleteWhere.mock.invocationCallOrder[0],
     );
+  });
+
+  test("propagates deletion log write failures without deleting the user", async () => {
+    const writeError = new Error("boom");
+    txSelectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
+    txInsertValues.mockRejectedValueOnce(writeError);
+    const { deleteUserAccount } = await import("./accountDeletion");
+
+    await expect(deleteUserAccount("user-1")).rejects.toThrow(writeError);
+
+    expect(txInsertValues).toHaveBeenCalled();
+    expect(txDelete).not.toHaveBeenCalled();
   });
 
   test("does not log deletion when the user is already gone", async () => {
