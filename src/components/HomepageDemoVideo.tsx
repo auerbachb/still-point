@@ -18,6 +18,7 @@ export function HomepageDemoVideo() {
       aria-labelledby="homepage-demo-heading"
       style={{
         width: "100%",
+        minWidth: 0,
         marginTop: "var(--s3)",
         display: "grid",
         gap: "var(--s3)",
@@ -69,7 +70,9 @@ export function HomepageDemoVideo() {
       <div
         style={{
           width: "100%",
-          maxWidth: "min(100%, 720px)",
+          minWidth: 0,
+          maxWidth: "720px",
+          boxSizing: "border-box",
           borderRadius: "12px",
           overflow: "hidden",
           border: "1px solid var(--border-2)",
