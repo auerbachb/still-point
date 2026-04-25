@@ -14,6 +14,14 @@ const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://still-point.me";
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export async function sendEmail({ to, subject, text, html, devLogMessage }: SendEmailParams) {
   if (!fromAddress || !resendApiKey) {
     if (process.env.NODE_ENV === "production") {
@@ -51,12 +59,13 @@ export async function sendPasswordResetEmail({ to, token }: { to: string; token:
   const resetUrl = new URL("/reset-password", appUrl);
   resetUrl.searchParams.set("token", token);
   const link = resetUrl.toString();
+  const escapedLink = escapeHtml(link);
 
   const result = await sendEmail({
     to,
     subject: "Reset your Still Point password",
     text: `Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
-    html: `<p>Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:</p><p><a href="${link}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+    html: `<p>Use this link to reset your Still Point password. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes:</p><p><a href="${escapedLink}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
     devLogMessage: `Password reset link for local development: ${link}`,
   });
   return result;

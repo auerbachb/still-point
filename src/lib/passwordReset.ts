@@ -109,6 +109,11 @@ type ResetAttempt = {
   resetAt: number;
 };
 
+/**
+ * Lightweight per-process throttle for reset requests. This is intentionally
+ * paired with README guidance to keep platform/WAF throttling enabled in
+ * production, since serverless instances do not share globalThis state.
+ */
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 const globalForPasswordReset = globalThis as typeof globalThis & {

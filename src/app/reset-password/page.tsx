@@ -66,6 +66,7 @@ function ResetPasswordForm() {
       }
 
       setStatus("success");
+      setEmail("");
       setMessage(data.message || "If an account exists for that email, a reset link will arrive shortly.");
     } catch {
       setStatus("error");
