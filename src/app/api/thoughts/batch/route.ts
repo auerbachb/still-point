@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { sessions, thoughts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
 import { and, eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
@@ -42,22 +43,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Day number mismatch" }, { status: 400 });
     }
 
-    const normalized = thoughtItems
-      .map((t: { timeInSession: unknown; text: unknown }) => {
-        if (typeof t.timeInSession !== "number" || typeof t.text !== "string") {
-          return null;
-        }
-        const text = t.text.trim().slice(0, 1000);
-        if (!text) return null;
-        return {
-          timeInSession: t.timeInSession,
-          text,
-        };
-      })
-      .filter((t): t is { timeInSession: number; text: string } => t != null);
-
-    if (normalized.length === 0) {
-      return NextResponse.json({ thoughts: [] });
+    const normalizedResult = normalizeThoughtInputs(thoughtItems);
+    if (hasRejectedSubmittedThoughts(normalizedResult)) {
+      console.warn("Batch thoughts rejected invalid payload", {
+        sessionId,
+        userId: auth.userId,
+        submittedCount: normalizedResult.submittedCount,
+        invalidCount: normalizedResult.invalidCount,
+      });
+      return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
+    }
+    const normalized = normalizedResult.thoughts;
+    const completionNoteCount = normalized.filter((t) => t.timeInSession === -1).length;
+    if (completionNoteCount > 1) {
+      console.warn("Batch thoughts rejected duplicate completion notes", {
+        sessionId,
+        userId: auth.userId,
+        completionNoteCount,
+      });
+      return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
     }
 
     const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1);
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
         return [];
       }
 
-      return tx
+      const insertedThoughts = await tx
         .insert(thoughts)
         .values(
           rowsToInsert.map((t) => ({
@@ -101,6 +105,10 @@ export async function POST(request: NextRequest) {
           timeInSession: thoughts.timeInSession,
           text: thoughts.text,
         });
+      if (insertedThoughts.length !== rowsToInsert.length) {
+        throw new Error("THOUGHT_INSERT_MISMATCH");
+      }
+      return insertedThoughts;
     });
 
     return NextResponse.json({ thoughts: inserted });
