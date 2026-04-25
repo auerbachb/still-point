@@ -19,7 +19,16 @@ test.describe("password reset", () => {
 
     await page.route("**/api/auth/password-reset/confirm", async (route) => {
       const body = (route.request().postDataJSON() ?? {}) as { token?: string; password?: string };
-      if (body.token !== "valid-reset-token" || !body.password || body.password.length < 8) {
+      if (!body.token || !body.password || body.password.length < 8) {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Valid token and password of at least 8 characters required" }),
+        });
+        return;
+      }
+
+      if (body.token !== "valid-reset-token") {
         await route.fulfill({
           status: 400,
           contentType: "application/json",
