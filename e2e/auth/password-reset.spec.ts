@@ -41,7 +41,9 @@ test.describe("password reset", () => {
     await page.getByPlaceholder("email").fill(mockApiState.credentials.email);
     await page.getByRole("link", { name: "Forgot password?" }).click();
     await expect(page).toHaveURL(/\/reset-password$/);
-    await page.getByLabel("Email").fill(mockApiState.credentials.email);
+    await page.getByLabel("Email").click();
+    await page.keyboard.type(mockApiState.credentials.email);
+    await expect(page.getByLabel("Email")).toHaveValue(mockApiState.credentials.email);
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByText(/reset link will arrive shortly/i)).toBeVisible();
     expect(resetRequestedFor).toBe(mockApiState.credentials.email);
@@ -75,12 +77,27 @@ test.describe("password reset", () => {
     });
 
     await page.goto("/reset-password");
-    await page.getByLabel("Email").fill("unknown@stillpoint.test");
-    await page.getByRole("button", { name: "Send reset link" }).click();
+    await page.getByLabel("Email").click();
+    await page.keyboard.type("unknown@stillpoint.test");
+    await expect(page.getByLabel("Email")).toHaveValue("unknown@stillpoint.test");
+    await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().includes("/api/auth/password-reset/request") && response.status() === 200,
+      ),
+      page.getByRole("button", { name: "Send reset link" }).click(),
+    ]);
     await expect(page.getByText(resetMessage)).toBeVisible();
 
-    await page.getByLabel("Email").fill("known@stillpoint.test");
-    await page.getByRole("button", { name: "Send reset link" }).click();
+    await page.getByLabel("Email").click();
+    await page.getByLabel("Email").press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await page.keyboard.type("known@stillpoint.test");
+    await expect(page.getByLabel("Email")).toHaveValue("known@stillpoint.test");
+    await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().includes("/api/auth/password-reset/request") && response.status() === 200,
+      ),
+      page.getByRole("button", { name: "Send reset link" }).click(),
+    ]);
     await expect(page.getByText(resetMessage)).toBeVisible();
     expect(requestedEmails).toEqual(["unknown@stillpoint.test", "known@stillpoint.test"]);
   });

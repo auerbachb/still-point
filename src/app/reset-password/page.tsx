@@ -199,7 +199,13 @@ function ResetPasswordForm() {
               id="reset-email"
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (status !== "submitting") {
+                  setStatus("idle");
+                  setMessage("");
+                }
+              }}
               placeholder="email"
               autoComplete="email"
               style={inputStyle}
