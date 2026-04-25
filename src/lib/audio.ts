@@ -45,7 +45,6 @@ function getPlayableAudioContext(): AudioContext | null {
   const ctx = getAudioContext();
   if (!ctx) return null;
   if (ctx.state === "running") return ctx;
-  void ctx.resume().catch(() => undefined);
   return null;
 }
 

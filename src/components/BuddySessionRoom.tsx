@@ -178,6 +178,7 @@ export function BuddySessionRoom({
   }, [pollStopped, sessionId]);
 
   useEffect(() => {
+    audioUnlockRequestRef.current += 1;
     setSnap(null);
     snapRef.current = null;
     setMindStateLog([]);
@@ -1298,6 +1299,7 @@ export function BuddySessionRoom({
                   }}
                 >
                   <div
+                    aria-hidden={!controlsVisible}
                     style={{
                       opacity: controlsVisible ? 1 : 0,
                       transition: "opacity 0.5s ease",
@@ -1307,6 +1309,8 @@ export function BuddySessionRoom({
                     <button
                       type="button"
                       onClick={openThoughtCapture}
+                      disabled={!controlsVisible}
+                      tabIndex={controlsVisible ? 0 : -1}
                       style={{
                         border: "1px solid var(--accent-amber-border)",
                         background: "none",
@@ -1317,7 +1321,7 @@ export function BuddySessionRoom({
                         textTransform: "uppercase",
                         padding: "10px 24px",
                         borderRadius: "20px",
-                        cursor: "pointer",
+                        cursor: controlsVisible ? "pointer" : "default",
                       }}
                     >
                       capture note
