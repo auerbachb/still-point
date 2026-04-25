@@ -52,6 +52,10 @@ Before your first TestFlight release, configure a tester group and handle encryp
 6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
 7. Record the processed build number and processing timestamp in `ios/QA_CHECKLIST.md`.
 
+## App Store submission handoff
+
+After the intended TestFlight build is processed and valid, use the delegate-ready [iOS App Store submission runbook](../docs/operations/ios-app-store-submission.md) to complete App Store Connect setup, reviewer notes, submission, rejection handling, approval, and release tracking.
+
 ## Version numbering
 
 - `MARKETING_VERSION` - user-facing version (e.g., `1.0.0`, `1.0.3`).
