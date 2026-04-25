@@ -6,6 +6,15 @@ import {
 } from "./thoughtSaving";
 
 describe("normalizeThoughtInputs", () => {
+  it("accepts empty payload arrays without rejecting them", () => {
+    const result = normalizeThoughtInputs([]);
+
+    assert.equal(result.submittedCount, 0);
+    assert.equal(result.invalidCount, 0);
+    assert.deepEqual(result.thoughts, []);
+    assert.equal(hasRejectedSubmittedThoughts(result), false);
+  });
+
   it("flags mixed valid and invalid submitted payloads", () => {
     const result = normalizeThoughtInputs([
       { timeInSession: 12, text: "kept if normalized alone" },
@@ -40,6 +49,30 @@ describe("normalizeThoughtInputs", () => {
     assert.deepEqual(result.thoughts, [
       { timeInSession: 12, text: "one" },
       { timeInSession: 58, text: "two" },
+    ]);
+    assert.equal(hasRejectedSubmittedThoughts(result), false);
+  });
+
+  it("flags text that is empty after trimming", () => {
+    const result = normalizeThoughtInputs([{ timeInSession: 1, text: "   " }]);
+
+    assert.equal(result.submittedCount, 1);
+    assert.equal(result.invalidCount, 1);
+    assert.deepEqual(result.thoughts, []);
+    assert.equal(hasRejectedSubmittedThoughts(result), true);
+  });
+
+  it("accepts zero and negative in-session timestamps", () => {
+    const result = normalizeThoughtInputs([
+      { timeInSession: 0, text: "start" },
+      { timeInSession: -2, text: "before completion sentinel" },
+    ]);
+
+    assert.equal(result.submittedCount, 2);
+    assert.equal(result.invalidCount, 0);
+    assert.deepEqual(result.thoughts, [
+      { timeInSession: 0, text: "start" },
+      { timeInSession: -2, text: "before completion sentinel" },
     ]);
     assert.equal(hasRejectedSubmittedThoughts(result), false);
   });
