@@ -10,6 +10,24 @@ Use this runbook after an iOS build has been uploaded to TestFlight and before c
 
 Record submission status, reviewer notes, build strings, and final outcome in ops tracker #103. Use `ios/RELEASING.md` for tag format, build bumps, and CI upload details.
 
+## Automation scope
+
+The current pipeline already automates build/archive/upload to TestFlight through GitHub Actions. App Store Connect also has API coverage for many post-upload tasks, so future tooling can automate or prefill parts of this runbook instead of requiring every step to be pasted into the website.
+
+Can be automated:
+
+- Create or locate the target App Store version.
+- Attach the processed TestFlight build to that version.
+- Read and update metadata, release notes, privacy policy URL, and review contact fields where App Store Connect API support exists.
+- Upload screenshots, app previews, and App Review attachments such as the account-deletion recording.
+- Submit the completed version for review and poll review/status transitions.
+
+Must stay human-owned:
+
+- Apple Developer and App Store Connect Agreements, Tax, and Banking must be clear for the account.
+- Screenshots, reviewer notes, demo credentials, age rating, export compliance, and release timing need a human owner unless a dedicated automation issue explicitly supplies approved source files and copy.
+- Rejections need human triage before engineering issues are created, even if status polling and reviewer-note capture are automated.
+
 ## Phase A - Preconditions before submission
 
 | # | Check | Owner | Evidence / action |

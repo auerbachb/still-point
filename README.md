@@ -192,6 +192,15 @@ Production should continue to use the production Neon URL for `POSTGRES_URL`.
 
 The app is live at [still-point.me](https://still-point.me).
 
+## Release operations
+
+All iOS release and App Store submission work must reference:
+
+- [iOS release / TestFlight runbook](ios/RELEASING.md)
+- [iOS App Store submission and delegation runbook](docs/operations/ios-app-store-submission.md)
+
+Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. The TestFlight upload path is automated through GitHub Actions; the App Store submission runbook identifies which App Store Connect steps are automatable through Apple's API and which still require an Account Holder/Admin or human release decision.
+
 ### Neon (database)
 
 Serverless Postgres hosted on [Neon](https://neon.tech). The connection uses `@neondatabase/serverless` with HTTP queries (no persistent connections).
