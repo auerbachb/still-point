@@ -203,6 +203,10 @@ public struct UserResponse: Codable, Sendable {
     public let token: String?
 }
 
+public struct PasswordResetRequestResponse: Codable, Sendable {
+    public let message: String
+}
+
 public struct SessionResponse: Codable, Sendable {
     public let session: SessionDTO
 }

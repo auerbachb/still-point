@@ -197,6 +197,23 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         >
           {loading ? "..." : mode === "login" ? "Enter" : "Begin the journey"}
         </button>
+        {mode === "login" && (
+          <a
+            href="/reset-password"
+            style={{
+              alignSelf: "center",
+              color: "var(--fg-3)",
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textDecoration: "underline",
+              textUnderlineOffset: "3px",
+              textTransform: "uppercase",
+            }}
+          >
+            Forgot password?
+          </a>
+        )}
       </div>
     </div>
   );

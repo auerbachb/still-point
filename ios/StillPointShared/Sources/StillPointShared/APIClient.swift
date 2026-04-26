@@ -83,6 +83,15 @@ public actor APIClient {
         return response.user
     }
 
+    public func requestPasswordReset(email: String) async throws -> String {
+        if let message = try uiTestRequestPasswordReset(email: email) {
+            return message
+        }
+        let body: [String: String] = ["email": email]
+        let response: PasswordResetRequestResponse = try await post("/api/auth/password-reset/request", body: body)
+        return response.message
+    }
+
     public func logout() async throws {
         if uiTestLogout() {
             return
@@ -387,6 +396,14 @@ public actor APIClient {
         uiTestStore = store
         persistUITestStore()
         return store.user
+    }
+
+    private func uiTestRequestPasswordReset(email: String) throws -> String? {
+        guard uiTestConfig != nil else { return nil }
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw APIError(status: 400, message: "Email required")
+        }
+        return "If an account exists for that email, a reset link will arrive shortly."
     }
 
     private func uiTestLogout() -> Bool {
