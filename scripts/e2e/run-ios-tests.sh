@@ -47,7 +47,7 @@ if [[ "${E2E_TEST_USER_EMAIL:-}" =~ @still-point\.me$ ]]; then
   exit 1
 fi
 
-TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16,OS=latest}"
+TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=latest}"
 TEST_SCHEME="${IOS_TEST_SCHEME:-StillPoint}"
 PROJECT_PATH="${IOS_TEST_PROJECT:-ios/StillPoint.xcodeproj}"
 TEST_CONFIGURATION="${IOS_TEST_CONFIGURATION:-}"

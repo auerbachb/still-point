@@ -52,7 +52,7 @@ The CI pre-flight gate runs the same suite in Release config on simulator, but a
 real-device pass before tagging is the final guard against optimization/codegen
 bugs that only surface on hardware (e.g. the build 8 Begin-tap crash).
 
-- [ ] Build a Release archive locally and install via Xcode → Window → Devices and Simulators → drag `.ipa`.
+- [ ] Install the just-uploaded TestFlight build on a physical device via the TestFlight app (so QA exercises the exact archive that will ship). Alternative if TestFlight processing is delayed: in Xcode, **Product → Archive**, then **Distribute App → Custom → Ad Hoc** to export an `.ipa`, then drag the `.ipa` onto your device in **Window → Devices and Simulators**. A bare `.xcarchive` is not directly installable.
 - [ ] Sign in with a known account.
 - [ ] Tap **Begin** and verify the timer screen loads without crash.
 - [ ] Let the session run to completion (or End Early) and verify CompletionView appears.
