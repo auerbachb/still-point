@@ -34,7 +34,6 @@ public final class AudioEngine: @unchecked Sendable {
     private let notificationCenter = NotificationCenter.default
     private var observerTokens: [NSObjectProtocol] = []
     private var wasRunningBeforeInterruption = false
-    private var wasRunningBeforeBackground = false
 
     private init() {
         configureAudioSession()
@@ -237,11 +236,8 @@ public final class AudioEngine: @unchecked Sendable {
 
     private func handleDidEnterBackground() {
         serialQueue.async { [weak self] in
-            guard let self else { return }
-            self.wasRunningBeforeBackground = self.engine.isRunning
-            if self.wasRunningBeforeBackground {
-                self.engine.pause()
-            }
+            guard let self, self.engine.isRunning else { return }
+            self.engine.pause()
         }
     }
 
@@ -250,9 +246,7 @@ public final class AudioEngine: @unchecked Sendable {
         // and resumeAfterInterruptionIfNeeded() comments. The next playSynthesized
         // call will start the engine safely. Issue #262.
         serialQueue.async { [weak self] in
-            guard let self else { return }
-            self.configureAudioSession()
-            self.wasRunningBeforeBackground = false
+            self?.configureAudioSession()
         }
     }
 
