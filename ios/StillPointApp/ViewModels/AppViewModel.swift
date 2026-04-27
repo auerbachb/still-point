@@ -70,7 +70,13 @@ final class AppViewModel {
     func checkAuth() async {
         let startedAt = Date()
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            // Diagnostic for issue #266 / PR #261 — log the post-checkAuth view
+            // state so we can correlate with APIClient.init's [E2E-DIAG] line
+            // when iOS UI tests fail on the auth-screen waitForExistence.
+            print("[E2E-DIAG] checkAuth.done currentView=\(viewSlug(currentView)) currentUser=\(currentUser?.email ?? "nil") elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))")
+        }
 
         do {
             if let user = try await APIClient.shared.me() {
@@ -95,6 +101,21 @@ final class AppViewModel {
             authStatusMessage = "Connection failed. Please try again."
         }
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+    }
+
+    private func viewSlug(_ view: AppView) -> String {
+        switch view {
+        case .auth: return "auth"
+        case .home: return "home"
+        case .session: return "session"
+        case .buddyHub: return "buddyHub"
+        case .buddySession: return "buddySession"
+        case .completion: return "completion"
+        case .history: return "history"
+        case .journal: return "journal"
+        case .board: return "board"
+        case .settings: return "settings"
+        }
     }
 
     func didLogin(user: UserDTO) {

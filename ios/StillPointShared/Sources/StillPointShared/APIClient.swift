@@ -39,6 +39,9 @@ public actor APIClient {
                 defaults.removeObject(forKey: uiTestStoreDefaultsKey)
                 AudioEngine.resetPersistedPrefs()
                 Self.clearPersistedSessionArtifacts(session: session)
+                // Flush the in-memory cache to cfprefsd so the immediately
+                // following read sees the cleared state. Issue #266 follow-up.
+                defaults.synchronize()
             }
 
             if let persistedData = defaults.data(forKey: uiTestStoreDefaultsKey),
@@ -48,6 +51,15 @@ public actor APIClient {
                 self.uiTestStore = UITestStore.makeDefault(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
                 persistUITestStore()
             }
+
+            // Diagnostic for issue #266 / PR #261 — log what the app actually
+            // observed at init so we can see in xcresult logs whether the env
+            // vars + reset-store contract are doing what we expect on macos-26
+            // CI runners. Cheap, noise-only in test builds since UITestConfig
+            // is nil in production.
+            print("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(parsedUITestConfig.seedAuthenticated) resetStore=\(parsedUITestConfig.resetStore) forceOffline=\(parsedUITestConfig.forceLaunchOffline) forceTokenExpired=\(parsedUITestConfig.forceTokenExpired) finalIsAuthenticated=\(uiTestStore?.isAuthenticated ?? false)")
+        } else {
+            print("[E2E-DIAG] APIClient.init uiTestMode=NO")
         }
     }
 
