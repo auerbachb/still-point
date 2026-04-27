@@ -1,6 +1,6 @@
 # iOS Release Candidate QA Checklist (Issue #210)
 
-Release candidate: 1.0.3 (9)
+Release candidate: 1.0.3 (10)
 Last updated: 2026-04-27
 QA owner: iOS QA DRI
 
@@ -31,12 +31,12 @@ QA owner: iOS QA DRI
 
 ## 3) Release metadata + submission readiness
 
-- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 9`.
+- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 10`.
 - [x] App Store release notes finalized for this build (see `ios/RELEASING.md`).
 - [x] App Store metadata checklist finalized (privacy policy URL, support URL, account deletion review notes).
 - [ ] Build submitted to App Store review in App Store Connect.
   - Owner: iOS release DRI
-  - Target date: 2026-04-29 (after TestFlight build 9 smoke test passes)
+  - Target date: 2026-04-29 (after TestFlight smoke test for this build passes)
   - Completion evidence: attach App Store Connect submission timestamp and build number in PR comment.
 
 ## Release gate decision (Issue #210)
