@@ -13,7 +13,7 @@ public enum StillPoint {
     /// Calculate session duration for a given day number.
     ///
     /// Clamps `day` to `>= 1` so production code never traps on bad upstream data
-    /// (e.g. a server returning `0`). A debug-only `assertionFailure` still surfaces
+    /// (e.g. a server returning `0`). A debug-only `assert` still surfaces
     /// the upstream bug during development.
     public static func duration(forDay day: Int) -> Int {
         assert(day >= 1, "Day must be >= 1, got \(day)")
