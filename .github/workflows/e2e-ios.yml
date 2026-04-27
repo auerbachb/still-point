@@ -76,3 +76,12 @@ jobs:
           path: artifacts/e2e/ios/**
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload simulator diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ios-${{ matrix.lane }}-diagreports
+          path: ~/Library/Logs/DiagnosticReports/**
+          if-no-files-found: ignore
+          retention-days: 14

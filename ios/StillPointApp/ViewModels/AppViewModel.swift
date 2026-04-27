@@ -70,7 +70,16 @@ final class AppViewModel {
     func checkAuth() async {
         let startedAt = Date()
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            // Diagnostic for issue #266 / PR #261, gated on UI-test mode so we
+            // don't leak PII (the user's email) in production logs. Only the
+            // UI-test fixture sets SP_UI_TEST_MODE=1, so this print is silent
+            // for real users.
+            if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
+                print("[E2E-DIAG] checkAuth.done currentView=\(viewSlug(currentView)) currentUser=\(currentUser?.email ?? "nil") elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))")
+            }
+        }
 
         do {
             if let user = try await APIClient.shared.me() {
@@ -95,6 +104,21 @@ final class AppViewModel {
             authStatusMessage = "Connection failed. Please try again."
         }
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+    }
+
+    private func viewSlug(_ view: AppView) -> String {
+        switch view {
+        case .auth: return "auth"
+        case .home: return "home"
+        case .session: return "session"
+        case .buddyHub: return "buddyHub"
+        case .buddySession: return "buddySession"
+        case .completion: return "completion"
+        case .history: return "history"
+        case .journal: return "journal"
+        case .board: return "board"
+        case .settings: return "settings"
+        }
     }
 
     func didLogin(user: UserDTO) {

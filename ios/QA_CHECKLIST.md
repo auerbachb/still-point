@@ -44,3 +44,19 @@ QA owner: iOS QA DRI
 - [x] Regression/QA pass for release candidate is completed.
 - [x] App Store metadata/versioning/release notes are finalized.
 - [ ] Updated iOS build is submitted to App Store by end of week.
+
+## Pre-tag manual smoke (Issue #253)
+
+Run these on a Release-signed device install **before** pushing the `ios-v*` tag.
+The CI pre-flight gate runs the same suite in Release config on simulator, but a
+real-device pass before tagging is the final guard against optimization/codegen
+bugs that only surface on hardware (e.g. the build 8 Begin-tap crash).
+
+- [ ] Install the just-uploaded TestFlight build on a physical device via the TestFlight app (so QA exercises the exact archive that will ship). Alternative if TestFlight processing is delayed: in Xcode, **Product → Archive**, then **Distribute App → Custom → Ad Hoc** to export an `.ipa`, then drag the `.ipa` onto your device in **Window → Devices and Simulators**. A bare `.xcarchive` is not directly installable.
+- [ ] Sign in with a known account.
+- [ ] Tap **Begin** and verify the timer screen loads without crash.
+- [ ] Let the session run to completion (or End Early) and verify CompletionView appears.
+- [ ] Type a session note, tap **Save note**, and verify the green "Saved" indicator.
+- [ ] Tap **Return** and verify Home reflects the new day count.
+- [ ] Pull crash logs from device after the run (Settings → Privacy & Security → Analytics & Improvements → Analytics Data) and verify no `StillPointApp-*.ips` from this session.
+- [ ] Record the device model + iOS version in the release PR before pushing the tag.
