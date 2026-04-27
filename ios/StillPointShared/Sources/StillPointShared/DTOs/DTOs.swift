@@ -194,6 +194,22 @@ public struct RecordBuddyPersonalSessionRequest: Codable, Sendable {
     public let actualTime: Int
     public let sessionDate: String
     public let thoughts: [BatchThoughtsRequest.ThoughtInput]?
+
+    public init(
+        clearPercent: Int,
+        thoughtCount: Int,
+        mindStateLog: [MindStateEntry],
+        actualTime: Int,
+        sessionDate: String,
+        thoughts: [BatchThoughtsRequest.ThoughtInput]?
+    ) {
+        self.clearPercent = clearPercent
+        self.thoughtCount = thoughtCount
+        self.mindStateLog = mindStateLog
+        self.actualTime = actualTime
+        self.sessionDate = sessionDate
+        self.thoughts = thoughts
+    }
 }
 
 // MARK: - API Wrappers (match JSON response shapes)

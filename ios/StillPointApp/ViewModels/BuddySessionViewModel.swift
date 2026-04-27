@@ -46,6 +46,7 @@ final class BuddySessionViewModel {
         self.currentUserId = currentUserId
     }
 
+    @MainActor
     deinit {
         pollTask?.cancel()
     }
@@ -53,8 +54,7 @@ final class BuddySessionViewModel {
     func startPolling() {
         guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
-            guard let self else { return }
-            await self.refreshSnapshot()
+            await self?.refreshSnapshot()
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(nanoseconds: 1_500_000_000)
@@ -62,6 +62,7 @@ final class BuddySessionViewModel {
                     return
                 }
                 guard !Task.isCancelled else { return }
+                guard let self else { return }
                 await self.refreshSnapshot()
             }
         }
