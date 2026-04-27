@@ -40,9 +40,12 @@ public final class AudioEngine: @unchecked Sendable {
     private init() {
         configureAudioSession()
         installLifecycleObservers()
-        serialQueue.async { [self] in
-            ensureEngineRunning()
-        }
+        // Do NOT call ensureEngineRunning() here. On iOS 26, AVAudioEngine.start()
+        // raises an Objective-C NSException (caught by std::terminate -> abort,
+        // not catchable by Swift try/catch) when invoked on a "bare" engine that
+        // has no source node connected to mainMixerNode. The engine is started
+        // safely inside playSynthesized() once a source node is attached + connected.
+        // See issue #262 for the crash log.
     }
 
     private func configureAudioSession() {
@@ -101,8 +104,11 @@ public final class AudioEngine: @unchecked Sendable {
     }
 
     public func warmUp() {
-        serialQueue.async { [self] in
-            ensureEngineRunning()
+        // Reactivates the audio session (covers post-background / post-interruption
+        // cases); does NOT start the engine — that happens lazily inside
+        // playSynthesized() after a source node is attached. See issue #262.
+        serialQueue.async { [weak self] in
+            self?.configureAudioSession()
         }
     }
 
@@ -238,11 +244,14 @@ public final class AudioEngine: @unchecked Sendable {
     }
 
     private func resumeAfterInterruptionIfNeeded() {
+        // Reconfigure the session and clear the resume flag. We deliberately do
+        // NOT call engine.start() here — by the time we resume, the previously
+        // playing source node has already been detached (see playSynthesized's
+        // asyncAfter cleanup), so starting the engine bare would crash on iOS 26.
+        // The next playSynthesized() call will start the engine safely after
+        // attaching a fresh source node. See issue #262.
         configureAudioSession()
-        ensureEngineRunning()
-        if engine.isRunning {
-            pendingResumeAfterConfigurationChange = false
-        }
+        pendingResumeAfterConfigurationChange = false
     }
 
     private func handleDidEnterBackground() {
@@ -256,14 +265,14 @@ public final class AudioEngine: @unchecked Sendable {
     }
 
     private func handleWillEnterForeground() {
+        // Reactivate the audio session; do NOT call engine.start() — see init()
+        // and resumeAfterInterruptionIfNeeded() comments. The next playSynthesized
+        // call will start the engine safely. Issue #262.
         serialQueue.async { [weak self] in
             guard let self else { return }
             self.configureAudioSession()
-            let shouldRestart = self.wasRunningBeforeBackground || self.pendingResumeAfterConfigurationChange
-            if shouldRestart {
-                self.ensureEngineRunning()
-            }
             self.wasRunningBeforeBackground = false
+            self.pendingResumeAfterConfigurationChange = false
         }
     }
 

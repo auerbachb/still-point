@@ -121,11 +121,13 @@ struct CompletionView: View {
                         .onChange(of: endNote) {
                             if noteSaved { noteSaved = false }
                         }
+                        .accessibilityIdentifier("completion.endNoteEditor")
 
                     if noteSaved {
                         Text("Saved")
                             .font(SPFont.mono(11, weight: .medium))
                             .foregroundStyle(SPColor.green)
+                            .accessibilityIdentifier("completion.savedIndicator")
                     } else {
                         Button {
                             saveEndNote()
@@ -149,6 +151,7 @@ struct CompletionView: View {
                             )
                         }
                         .disabled(isSaveDisabled)
+                        .accessibilityIdentifier("completion.saveNoteButton")
                     }
 
                     if let saveError {
