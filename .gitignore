@@ -53,5 +53,8 @@ ios/StillPointShared/.build/
 .claude/worktrees/
 .worktrees/
 
+# Local agent runtime artifacts
+.claude/scheduled_tasks.lock
+
 # Auth Keys
 *.p8
