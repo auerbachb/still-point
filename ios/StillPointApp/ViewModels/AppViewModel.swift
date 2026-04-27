@@ -49,9 +49,7 @@ final class AppViewModel {
     private var pendingBuddyInviteToken: String?
 
     var currentDay: Int {
-        // Server may transiently return 0/negative; clamp to keep `StillPoint.duration(forDay:)`
-        // out of its defensive trap and avoid crashing the session UI.
-        max(currentUser?.currentDay ?? 1, 1)
+        StillPoint.clampedCurrentDay(for: currentUser)
     }
 
     var todayDuration: Int {

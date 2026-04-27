@@ -25,4 +25,13 @@ public enum StillPoint {
     public static func blockCount(forDuration duration: Int) -> Int {
         Int(ceil(Double(duration) / Double(blockDuration)))
     }
+
+    /// Resolve the effective `currentDay` for the UI, clamped to `>= 1`.
+    ///
+    /// The server can transiently return `0` or a negative `currentDay`; both
+    /// would otherwise propagate into `duration(forDay:)` and crash callers.
+    /// `nil` (no signed-in user) defaults to day 1.
+    public static func clampedCurrentDay(for user: UserDTO?) -> Int {
+        max(user?.currentDay ?? 1, 1)
+    }
 }

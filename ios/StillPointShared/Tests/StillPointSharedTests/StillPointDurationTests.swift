@@ -21,9 +21,38 @@ final class StillPointDurationTests: XCTestCase {
         XCTAssertEqual(StillPoint.blockCount(forDuration: 65), 7)
     }
 
-    // Note: invalid days (`< 1`) are tested implicitly — the production code path
-    // clamps via `max(day, 1)` so a `day == 0` input cannot crash a Release build.
-    // We can't unit-test that branch directly because the companion `assert` traps
-    // in Debug (the test runner's configuration), which is the desired dev-time
-    // behavior. Coverage of `AppViewModel.currentDay`'s clamp lives in the app.
+    // Note: invalid days (`< 1`) are tested via `clampedCurrentDay(for:)` below.
+    // Calling `duration(forDay:)` with `< 1` traps the debug `assert` in the
+    // test runner (intended dev behavior); production builds survive via the
+    // `max(day, 1)` clamp.
+
+    // MARK: - clampedCurrentDay edge cases
+
+    func testClampedCurrentDayWithNilUserReturnsOne() {
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: nil), 1)
+    }
+
+    func testClampedCurrentDayWithZeroReturnsOne() {
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: makeUser(currentDay: 0)), 1)
+    }
+
+    func testClampedCurrentDayWithNegativeReturnsOne() {
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: makeUser(currentDay: -5)), 1)
+    }
+
+    func testClampedCurrentDayWithValidPositiveReturnsValue() {
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: makeUser(currentDay: 1)), 1)
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: makeUser(currentDay: 7)), 7)
+        XCTAssertEqual(StillPoint.clampedCurrentDay(for: makeUser(currentDay: 365)), 365)
+    }
+
+    private func makeUser(currentDay: Int) -> UserDTO {
+        UserDTO(
+            id: "u1",
+            email: "test@example.com",
+            username: "tester",
+            isPublic: false,
+            currentDay: currentDay
+        )
+    }
 }
