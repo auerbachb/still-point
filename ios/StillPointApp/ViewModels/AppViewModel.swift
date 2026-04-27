@@ -72,10 +72,13 @@ final class AppViewModel {
         isLoading = true
         defer {
             isLoading = false
-            // Diagnostic for issue #266 / PR #261 — log the post-checkAuth view
-            // state so we can correlate with APIClient.init's [E2E-DIAG] line
-            // when iOS UI tests fail on the auth-screen waitForExistence.
-            print("[E2E-DIAG] checkAuth.done currentView=\(viewSlug(currentView)) currentUser=\(currentUser?.email ?? "nil") elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))")
+            // Diagnostic for issue #266 / PR #261, gated on UI-test mode so we
+            // don't leak PII (the user's email) in production logs. Only the
+            // UI-test fixture sets SP_UI_TEST_MODE=1, so this print is silent
+            // for real users.
+            if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
+                print("[E2E-DIAG] checkAuth.done currentView=\(viewSlug(currentView)) currentUser=\(currentUser?.email ?? "nil") elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))")
+            }
         }
 
         do {
