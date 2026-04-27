@@ -49,7 +49,7 @@ final class AppViewModel {
     private var pendingBuddyInviteToken: String?
 
     var currentDay: Int {
-        currentUser?.currentDay ?? 1
+        StillPoint.clampedCurrentDay(for: currentUser)
     }
 
     var todayDuration: Int {
