@@ -326,19 +326,7 @@ public actor APIClient {
     }
 
     private func clearLocalSessionArtifacts() {
-        _ = AuthTokenStore.clear()
-
-        let cookieStorage = session.configuration.httpCookieStorage ?? .shared
-        for cookie in cookieStorage.cookies ?? [] {
-            cookieStorage.deleteCookie(cookie)
-        }
-
-        let credentialStorage = URLCredentialStorage.shared
-        for (protectionSpace, credentialsByUser) in credentialStorage.allCredentials {
-            for credential in credentialsByUser.values {
-                credentialStorage.remove(credential, for: protectionSpace)
-            }
-        }
+        Self.clearPersistedSessionArtifacts(session: session)
     }
 
     private func applyAuthorizationHeader(to request: inout URLRequest) {
