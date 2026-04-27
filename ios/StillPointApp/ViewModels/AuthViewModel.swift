@@ -70,7 +70,7 @@ final class AuthViewModel {
         } catch let apiError as APIError {
             error = apiError.message
         } catch {
-            error = "Connection failed. Please try again."
+            self.error = "Connection failed. Please try again."
         }
     }
 }
