@@ -46,6 +46,7 @@ final class AuthViewModel {
             error = apiError.message
             return nil
         } catch {
+            print("Auth submit failed: \(error.localizedDescription)")
             self.error = "Connection failed. Please try again."
             return nil
         }
@@ -70,7 +71,8 @@ final class AuthViewModel {
         } catch let apiError as APIError {
             error = apiError.message
         } catch {
-            error = "Connection failed. Please try again."
+            print("Password reset request failed: \(error.localizedDescription)")
+            self.error = "Connection failed. Please try again."
         }
     }
 }

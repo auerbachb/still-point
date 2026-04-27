@@ -36,17 +36,17 @@ Before your first TestFlight release, configure a tester group and handle encryp
 2. Update the version in `ios/project.yml`:
    ```yaml
    MARKETING_VERSION: "1.0.3"
-   CURRENT_PROJECT_VERSION: 7
+   CURRENT_PROJECT_VERSION: 8
    ```
 3. Commit release artifacts + version bump:
    ```bash
    git add ios/project.yml ios/PARITY_CHECKLIST.md ios/QA_CHECKLIST.md ios/RELEASING.md
-   git commit -m "Finalize iOS 1.0.3 (build 7) release readiness"
+   git commit -m "Finalize iOS 1.0.3 (build 8) release readiness"
    ```
 4. Tag and push:
    ```bash
-   git tag ios-v1.0.3-build7
-   git push origin ios-v1.0.3-build7
+   git tag ios-v1.0.3-build8
+   git push origin ios-v1.0.3-build8
    ```
 5. The GitHub Actions workflow builds and uploads to TestFlight automatically.
 6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
@@ -62,7 +62,7 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 - `CURRENT_PROJECT_VERSION` - build number; increment every upload (`1`, `2`, `3`, ...).
 - **Git tag** must match `ios-v*` to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
 - Tag value does not have to equal `MARKETING_VERSION`; uploaded app version is controlled by `ios/project.yml`.
-- Re-uploads for same marketing version require a new tag and incremented build number, e.g. `ios-v1.0.3-build7`.
+- Re-uploads for same marketing version require a new tag and incremented build number, e.g. `ios-v<marketing-version>-build<next-build>`.
 
 ## App Store metadata and release notes checklist
 

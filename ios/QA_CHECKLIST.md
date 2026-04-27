@@ -1,6 +1,6 @@
 # iOS Release Candidate QA Checklist (Issue #210)
 
-Release candidate: 1.0.3 (7)
+Release candidate: 1.0.3 (8)
 Last updated: 2026-04-25
 QA owner: iOS QA DRI
 
@@ -31,7 +31,7 @@ QA owner: iOS QA DRI
 
 ## 3) Release metadata + submission readiness
 
-- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 7`.
+- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 8`.
 - [x] App Store release notes finalized for this build (see `ios/RELEASING.md`).
 - [x] App Store metadata checklist finalized (privacy policy URL, support URL, account deletion review notes).
 - [ ] Build submitted to App Store review in App Store Connect.
