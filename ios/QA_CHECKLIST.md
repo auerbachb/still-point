@@ -36,7 +36,7 @@ QA owner: iOS QA DRI
 - [x] App Store metadata checklist finalized (privacy policy URL, support URL, account deletion review notes).
 - [ ] Build submitted to App Store review in App Store Connect.
   - Owner: iOS release DRI
-  - Target date: 2026-04-29 (after TestFlight build 9 smoke test passes)
+  - Target date: 2026-04-29 (after TestFlight smoke test for this build passes)
   - Completion evidence: attach App Store Connect submission timestamp and build number in PR comment.
 
 ## Release gate decision (Issue #210)
