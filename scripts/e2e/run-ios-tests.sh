@@ -47,7 +47,47 @@ if [[ "${E2E_TEST_USER_EMAIL:-}" =~ @still-point\.me$ ]]; then
   exit 1
 fi
 
-TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=latest}"
+resolve_test_destination() {
+  # Honor explicit caller override first.
+  if [[ -n "${IOS_TEST_DESTINATION:-}" ]]; then
+    echo "${IOS_TEST_DESTINATION}"
+    return
+  fi
+
+  # Pick the first iPhone simulator that's actually installed on this host.
+  # Prevents the "iPhone 16 doesn't exist on macos-26 runners" / "iPhone 17 will
+  # eventually disappear too" infra-failure mode CodeAnt flagged. We grep simctl
+  # output with a trailing " (" so "iPhone 17" doesn't accidentally match
+  # "iPhone 17 Pro".
+  local simctl_output
+  simctl_output="$(xcrun simctl list devices available 2>/dev/null || true)"
+  local preferred=(
+    "iPhone 17 Pro"
+    "iPhone 17"
+    "iPhone 17 Pro Max"
+    "iPhone 17e"
+    "iPhone 16e"
+    "iPhone 16 Pro"
+    "iPhone 16"
+    "iPhone 15 Pro"
+    "iPhone 15"
+    "iPhone Air"
+  )
+  local name
+  for name in "${preferred[@]}"; do
+    if grep -F "    ${name} (" <<<"${simctl_output}" >/dev/null 2>&1; then
+      echo "platform=iOS Simulator,name=${name},OS=latest"
+      return
+    fi
+  done
+
+  # Last-resort fallback: keep the prior hardcoded default so we fail with a
+  # clear xcodebuild error instead of an empty destination.
+  echo "platform=iOS Simulator,name=iPhone 17,OS=latest"
+}
+
+TEST_DESTINATION="$(resolve_test_destination)"
+echo "Using iOS test destination: ${TEST_DESTINATION}"
 TEST_SCHEME="${IOS_TEST_SCHEME:-StillPoint}"
 PROJECT_PATH="${IOS_TEST_PROJECT:-ios/StillPoint.xcodeproj}"
 TEST_CONFIGURATION="${IOS_TEST_CONFIGURATION:-}"
