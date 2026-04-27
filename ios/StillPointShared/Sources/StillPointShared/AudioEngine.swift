@@ -35,7 +35,6 @@ public final class AudioEngine: @unchecked Sendable {
     private var observerTokens: [NSObjectProtocol] = []
     private var wasRunningBeforeInterruption = false
     private var wasRunningBeforeBackground = false
-    private var pendingResumeAfterConfigurationChange = false
 
     private init() {
         configureAudioSession()
@@ -67,14 +66,6 @@ public final class AudioEngine: @unchecked Sendable {
             self?.handleInterruption(notification)
         }
 
-        let engineConfigChangeToken = notificationCenter.addObserver(
-            forName: .AVAudioEngineConfigurationChange,
-            object: engine,
-            queue: nil
-        ) { [weak self] _ in
-            self?.handleEngineConfigurationChange()
-        }
-
         let backgroundToken = notificationCenter.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
@@ -93,7 +84,6 @@ public final class AudioEngine: @unchecked Sendable {
 
         observerTokens = [
             interruptionToken,
-            engineConfigChangeToken,
             backgroundToken,
             foregroundToken
         ]
@@ -225,8 +215,7 @@ public final class AudioEngine: @unchecked Sendable {
                 let optionsValue = (info[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                 let shouldResume = options.contains(.shouldResume)
-                self.pendingResumeAfterConfigurationChange = shouldResume && self.wasRunningBeforeInterruption
-                if self.pendingResumeAfterConfigurationChange {
+                if shouldResume && self.wasRunningBeforeInterruption {
                     self.resumeAfterInterruptionIfNeeded()
                 }
                 self.wasRunningBeforeInterruption = false
@@ -236,22 +225,14 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    private func handleEngineConfigurationChange() {
-        serialQueue.async { [weak self] in
-            guard let self, self.pendingResumeAfterConfigurationChange else { return }
-            self.resumeAfterInterruptionIfNeeded()
-        }
-    }
-
     private func resumeAfterInterruptionIfNeeded() {
-        // Reconfigure the session and clear the resume flag. We deliberately do
-        // NOT call engine.start() here — by the time we resume, the previously
-        // playing source node has already been detached (see playSynthesized's
-        // asyncAfter cleanup), so starting the engine bare would crash on iOS 26.
-        // The next playSynthesized() call will start the engine safely after
-        // attaching a fresh source node. See issue #262.
+        // Reconfigure the session only. We deliberately do NOT call engine.start()
+        // here — by the time we resume, the previously playing source node has
+        // already been detached (see playSynthesized's asyncAfter cleanup), so
+        // starting the engine bare would crash on iOS 26. The next playSynthesized
+        // call will start the engine safely after attaching a fresh source node.
+        // See issue #262.
         configureAudioSession()
-        pendingResumeAfterConfigurationChange = false
     }
 
     private func handleDidEnterBackground() {
@@ -272,7 +253,6 @@ public final class AudioEngine: @unchecked Sendable {
             guard let self else { return }
             self.configureAudioSession()
             self.wasRunningBeforeBackground = false
-            self.pendingResumeAfterConfigurationChange = false
         }
     }
 
