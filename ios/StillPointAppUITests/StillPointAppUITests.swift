@@ -1,7 +1,10 @@
 import XCTest
 
 final class StillPointAppUITests: XCTestCase {
-    private let launchTimeout: TimeInterval = 15
+    // 30s is generous for cold simulator boots on macos-26 CI runners — the
+    // previous 15s tripped intermittently on the first launch in a test run.
+    // Issue #266.
+    private let launchTimeout: TimeInterval = 30
 
     override func setUpWithError() throws {
         continueAfterFailure = false

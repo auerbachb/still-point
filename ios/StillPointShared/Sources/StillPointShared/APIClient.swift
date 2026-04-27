@@ -31,7 +31,14 @@ public actor APIClient {
         if let parsedUITestConfig {
             let defaults = UserDefaults.standard
             if parsedUITestConfig.resetStore {
+                // Wipe ALL persisted state, not just the UI-test store. State that
+                // bled across tests previously: Keychain auth tokens, cookies, URL
+                // credentials, AudioEngine sound prefs. Issue #266 surfaced this
+                // when the runner script started actually running tests after the
+                // silent-skip fix from issue #253.
                 defaults.removeObject(forKey: uiTestStoreDefaultsKey)
+                AudioEngine.resetPersistedPrefs()
+                Self.clearPersistedSessionArtifacts(session: session)
             }
 
             if let persistedData = defaults.data(forKey: uiTestStoreDefaultsKey),
@@ -40,6 +47,24 @@ public actor APIClient {
             } else {
                 self.uiTestStore = UITestStore.makeDefault(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
                 persistUITestStore()
+            }
+        }
+    }
+
+    /// Static analog of `clearLocalSessionArtifacts()` for use during init,
+    /// when the actor's instance methods are not yet available.
+    private static func clearPersistedSessionArtifacts(session: URLSession) {
+        _ = AuthTokenStore.clear()
+
+        let cookieStorage = session.configuration.httpCookieStorage ?? .shared
+        for cookie in cookieStorage.cookies ?? [] {
+            cookieStorage.deleteCookie(cookie)
+        }
+
+        let credentialStorage = URLCredentialStorage.shared
+        for (protectionSpace, credentialsByUser) in credentialStorage.allCredentials {
+            for credential in credentialsByUser.values {
+                credentialStorage.remove(credential, for: protectionSpace)
             }
         }
     }
