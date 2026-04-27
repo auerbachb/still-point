@@ -335,4 +335,10 @@ extension AudioEngine {
             UserDefaults.standard.set(data, forKey: prefsKey)
         }
     }
+
+    /// Wipes the persisted sound-prefs entry. Used by UI-test reset paths so a
+    /// previous test cannot leak its toggle state into a subsequent test run.
+    public static func resetPersistedPrefs() {
+        UserDefaults.standard.removeObject(forKey: prefsKey)
+    }
 }
