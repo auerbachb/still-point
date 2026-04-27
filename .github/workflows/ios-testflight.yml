@@ -13,7 +13,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  pre-flight-tests:
+    name: Release-config UI smoke gate
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Run iOS smoke lane in Release configuration
+        # iOS UI tests run fully in-app via SP_UI_TEST_MODE=1 (set in
+        # StillPointAppUITests.makeApp); no real backend is reached, so
+        # we deliberately omit E2E_BASE_URL and credentials here.
+        env:
+          E2E_ENV: ci
+          E2E_SECRETS_REQUIRED: "false"
+          IOS_TEST_CONFIGURATION: "Release"
+        run: npm run e2e:ios:smoke
+
+      - name: Upload simulator diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-testflight-preflight-diagreports
+          path: ~/Library/Logs/DiagnosticReports/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload xcresult bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-testflight-preflight-xcresult
+          path: artifacts/e2e/ios/**
+          if-no-files-found: warn
+          retention-days: 14
+
   build-and-upload:
+    needs: pre-flight-tests
     runs-on: macos-26
     timeout-minutes: 30
 

@@ -44,3 +44,19 @@ QA owner: iOS QA DRI
 - [x] Regression/QA pass for release candidate is completed.
 - [x] App Store metadata/versioning/release notes are finalized.
 - [ ] Updated iOS build is submitted to App Store by end of week.
+
+## Pre-tag manual smoke (Issue #253)
+
+Run these on a Release-signed device install **before** pushing the `ios-v*` tag.
+The CI pre-flight gate runs the same suite in Release config on simulator, but a
+real-device pass before tagging is the final guard against optimization/codegen
+bugs that only surface on hardware (e.g. the build 8 Begin-tap crash).
+
+- [ ] Build a Release archive locally and install via Xcode → Window → Devices and Simulators → drag `.ipa`.
+- [ ] Sign in with a known account.
+- [ ] Tap **Begin** and verify the timer screen loads without crash.
+- [ ] Let the session run to completion (or End Early) and verify CompletionView appears.
+- [ ] Type a session note, tap **Save note**, and verify the green "Saved" indicator.
+- [ ] Tap **Return** and verify Home reflects the new day count.
+- [ ] Pull crash logs from device after the run (Settings → Privacy & Security → Analytics & Improvements → Analytics Data) and verify no `StillPointApp-*.ips` from this session.
+- [ ] Record the device model + iOS version in the release PR before pushing the tag.

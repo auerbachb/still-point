@@ -4,7 +4,7 @@ set -euo pipefail
 LANE="${1:-smoke}"
 MAX_RETRIES="${2:-1}"
 ATTEMPT=1
-UI_TESTS_DIR="${IOS_UI_TESTS_DIR:-ios/StillPointUITests}"
+UI_TESTS_DIR="${IOS_UI_TESTS_DIR:-ios/StillPointAppUITests}"
 SECRETS_REQUIRED="${E2E_SECRETS_REQUIRED:-true}"
 STATUS_FILE="artifacts/e2e/ios/${LANE}.status"
 FINAL_STATUS="failed"
@@ -28,9 +28,13 @@ if [[ "${E2E_ENV:-}" == "prod" || "${E2E_BASE_URL:-}" =~ still-point\.me ]]; the
 fi
 
 if [[ ! -d "${UI_TESTS_DIR}" ]]; then
-  echo "iOS E2E suite not present (${UI_TESTS_DIR}); skipping ${LANE} lane."
-  FINAL_STATUS="skipped"
-  exit 0
+  # Hard-fail: a missing test directory was previously silently treated as "skipped"
+  # which let broken-on-Release builds (e.g. build 8 / issue #250) ship with green
+  # CI. The contract is that the suite must be present and runnable.
+  echo "::error::iOS E2E suite not present at expected path '${UI_TESTS_DIR}'."
+  echo "::error::Set IOS_UI_TESTS_DIR to override, or restore the test bundle."
+  FINAL_STATUS="failed"
+  exit 1
 fi
 
 if [[ "${SECRETS_REQUIRED}" == "true" ]] && [[ -z "${E2E_TEST_USER_EMAIL:-}" || -z "${E2E_TEST_USER_PASSWORD:-}" ]]; then
@@ -43,21 +47,25 @@ if [[ "${E2E_TEST_USER_EMAIL:-}" =~ @still-point\.me$ ]]; then
   exit 1
 fi
 
-TEST_PLAN="${IOS_TEST_PLAN:-StillPointE2E}"
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16,OS=latest}"
 TEST_SCHEME="${IOS_TEST_SCHEME:-StillPoint}"
 PROJECT_PATH="${IOS_TEST_PROJECT:-ios/StillPoint.xcodeproj}"
+TEST_CONFIGURATION="${IOS_TEST_CONFIGURATION:-}"
 
 resolve_test_target() {
+  # The test target and class are both named StillPointAppUITests.
+  # Smoke runs the full Begin -> Session -> Complete -> History golden path
+  # (the test that would have caught issue #250 if the runner had actually
+  # been executing tests). Critical runs the full UI test class.
   case "$1" in
     smoke)
-      echo "StillPointUITests/SmokeTests"
+      echo "StillPointAppUITests/StillPointAppUITests/testLaunchLoginCompleteSessionAndHistoryPersistence"
       ;;
     critical)
-      echo "StillPointUITests/CriticalPathTests"
+      echo "StillPointAppUITests/StillPointAppUITests"
       ;;
     *)
-      echo "StillPointUITests/${1}"
+      echo "StillPointAppUITests/${1}"
       ;;
   esac
 }
@@ -69,14 +77,20 @@ run_lane() {
   test_target="$(resolve_test_target "${lane_tag}")"
   result_bundle="artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.xcresult"
 
+  local -a xcodebuild_args=(
+    test
+    -project "${PROJECT_PATH}"
+    -scheme "${TEST_SCHEME}"
+    -destination "${TEST_DESTINATION}"
+    -resultBundlePath "${result_bundle}"
+    -only-testing:"${test_target}"
+  )
+  if [[ -n "${TEST_CONFIGURATION}" ]]; then
+    xcodebuild_args+=(-configuration "${TEST_CONFIGURATION}")
+  fi
+
   set +e
-  xcodebuild test \
-    -project "${PROJECT_PATH}" \
-    -scheme "${TEST_SCHEME}" \
-    -testPlan "${TEST_PLAN}" \
-    -destination "${TEST_DESTINATION}" \
-    -resultBundlePath "${result_bundle}" \
-    -only-testing:"${test_target}" \
+  xcodebuild "${xcodebuild_args[@]}" \
     | tee "artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.log"
   local status=$?
   set -e
