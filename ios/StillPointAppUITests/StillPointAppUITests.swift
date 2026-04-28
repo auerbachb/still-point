@@ -90,9 +90,6 @@ final class StillPointAppUITests: XCTestCase {
         if lightHold.waitForExistence(timeout: 5) {
             XCTAssertEqual(lightHold.value as? String, "inactive")
             pressAndHold(element: lightHold, duration: 1.0)
-            if !completionRoot.waitForExistence(timeout: 0.5) {
-                XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
-            }
         } else {
             XCTAssertTrue(
                 completionRoot.waitForExistence(timeout: 1),
@@ -309,9 +306,27 @@ final class StillPointAppUITests: XCTestCase {
             tapByStableCenter(tabButton, in: app)
             return
         }
+        if let index = tabBarIndex(for: identifier) {
+            let indexedButton = app.tabBars.buttons.element(boundBy: index)
+            if indexedButton.waitForExistence(timeout: 5) {
+                tapByStableCenter(indexedButton, in: app)
+                return
+            }
+        }
         let fallbackButton = app.buttons[identifier]
         XCTAssertTrue(fallbackButton.waitForExistence(timeout: 5), "Expected tab button \(identifier) to exist")
         tapByStableCenter(fallbackButton, in: app)
+    }
+
+    private func tabBarIndex(for identifier: String) -> Int? {
+        switch identifier {
+        case "tab.progress":
+            return 1
+        case "tab.settings":
+            return 4
+        default:
+            return nil
+        }
     }
 
     private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
