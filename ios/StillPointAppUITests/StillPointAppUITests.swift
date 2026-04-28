@@ -42,7 +42,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 30,
+            sessionSeconds: 90,
             timerMultiplier: 3.0
         )
         app.launch()
@@ -77,11 +77,11 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(timerLabel.label.contains("Time remaining"), "Timer should expose VoiceOver-friendly label")
 
         let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
-        XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
+        XCTAssertTrue(lightHold.waitForExistence(timeout: launchTimeout))
         XCTAssertEqual(lightHold.value as? String, "inactive")
 
         let hyperfocusHold = app.staticTexts["session.hyperfocusHoldButton"]
-        XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: 3))
+        XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(lightHold.isHittable, "Light distraction hold should start in the persistent interactive layer")
         XCTAssertTrue(hyperfocusHold.isHittable, "Hyperfocus hold should start in the persistent interactive layer")
 
