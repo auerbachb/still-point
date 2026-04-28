@@ -16,6 +16,8 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
     }
 
     func requestAuthorizationAndRegister() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error {
                 print("Push notification authorization failed: \(error.localizedDescription)")
@@ -37,7 +39,7 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         let environment = apnsEnvironment()
         Task {
             do {
-                try await APIClient.shared.registerDeviceToken(
+                _ = try await APIClient.shared.registerDeviceToken(
                     DeviceTokenRegistrationRequest(token: token, apnsEnvironment: environment)
                 )
                 DeviceTokenStore.save(token: token, apnsEnvironment: environment)
