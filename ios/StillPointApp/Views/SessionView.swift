@@ -224,13 +224,15 @@ struct SessionView: View {
             }
             .padding(.horizontal, SPSpacing.s3)
 
+            if appVM.appBlockingManager.hasSelection {
                 Text("Complete the timer to open your selected app gate. Ending early keeps those apps held.")
                     .font(SPFont.mono(10))
                     .foregroundStyle(Color(SPColor.fg4))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, SPSpacing.s4)
+            }
 
-                Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
+            Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
                 .font(SPFont.mono(10))
                 .foregroundStyle(Color(SPColor.fg4))
                 .multilineTextAlignment(.center)

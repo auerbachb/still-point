@@ -15,11 +15,13 @@ final class AppBlockingManager {
     private let defaults: UserDefaults
     private let unlockUntilKey = "appBlocking.unlockUntil.v1"
     private let uiTestSelectionEnabled: Bool
+    private var unlockTimer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.unlockUntil = defaults.object(forKey: unlockUntilKey) as? Date
         self.uiTestSelectionEnabled = ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
+        scheduleUnlockExpiryTimer()
     }
 
     var isAuthorizationApproved: Bool { uiTestSelectionEnabled }
@@ -47,6 +49,9 @@ final class AppBlockingManager {
     func persistSelectionAndRefreshShielding() {}
     func prepareForSession() {
         didUnlockFromLastCompletedSession = false
+        unlockUntil = nil
+        defaults.removeObject(forKey: unlockUntilKey)
+        scheduleUnlockExpiryTimer()
     }
 
     func unlockAfterCompletedSession() {
@@ -55,19 +60,40 @@ final class AppBlockingManager {
         unlockUntil = Date().addingTimeInterval(Self.unlockWindow)
         didUnlockFromLastCompletedSession = true
         defaults.set(unlockUntil, forKey: unlockUntilKey)
+        scheduleUnlockExpiryTimer()
     }
 
     func lockNow() {
         didUnlockFromLastCompletedSession = false
         unlockUntil = nil
         defaults.removeObject(forKey: unlockUntilKey)
+        scheduleUnlockExpiryTimer()
     }
 
     func refreshShielding() {
+        guard hasSelection else {
+            unlockUntil = nil
+            didUnlockFromLastCompletedSession = false
+            defaults.removeObject(forKey: unlockUntilKey)
+            scheduleUnlockExpiryTimer()
+            return
+        }
+
         if let unlockUntil, unlockUntil <= Date() {
             self.unlockUntil = nil
             didUnlockFromLastCompletedSession = false
             defaults.removeObject(forKey: unlockUntilKey)
+        }
+        scheduleUnlockExpiryTimer()
+    }
+
+    private func scheduleUnlockExpiryTimer() {
+        unlockTimer?.invalidate()
+        guard let unlockUntil, unlockUntil > Date() else { return }
+        unlockTimer = Timer.scheduledTimer(withTimeInterval: unlockUntil.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshShielding()
+            }
         }
     }
 
@@ -102,6 +128,7 @@ final class AppBlockingManager {
     private let unlockUntilKey = "appBlocking.unlockUntil.v1"
     private let uiTestMode: Bool
     private let uiTestSelectionEnabled: Bool
+    private var unlockTimer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         let environment = ProcessInfo.processInfo.environment
@@ -173,6 +200,10 @@ final class AppBlockingManager {
 
     func prepareForSession() {
         didUnlockFromLastCompletedSession = false
+        unlockUntil = nil
+        defaults.removeObject(forKey: unlockUntilKey)
+        scheduleUnlockExpiryTimer()
+        refreshShielding()
     }
 
     func unlockAfterCompletedSession() {
@@ -183,12 +214,14 @@ final class AppBlockingManager {
         defaults.set(unlockUntil, forKey: unlockUntilKey)
         lastErrorMessage = nil
         clearShielding()
+        scheduleUnlockExpiryTimer()
     }
 
     func lockNow() {
         didUnlockFromLastCompletedSession = false
         unlockUntil = nil
         defaults.removeObject(forKey: unlockUntilKey)
+        scheduleUnlockExpiryTimer()
         refreshShielding()
     }
 
@@ -204,10 +237,16 @@ final class AppBlockingManager {
         }
 
         if !hasSelection {
+            unlockUntil = nil
             didUnlockFromLastCompletedSession = false
+            defaults.removeObject(forKey: unlockUntilKey)
+            scheduleUnlockExpiryTimer()
+            clearShielding()
+            return
         }
 
-        guard hasSelection, !isUnlocked else {
+        guard !isUnlocked else {
+            scheduleUnlockExpiryTimer()
             clearShielding()
             return
         }
@@ -218,6 +257,7 @@ final class AppBlockingManager {
         }
 
         applyShielding()
+        scheduleUnlockExpiryTimer()
     }
 
     private var realSelectedItemCount: Int {
@@ -251,6 +291,16 @@ final class AppBlockingManager {
     private func clearShielding() {
         guard !uiTestMode else { return }
         store?.clearAllSettings()
+    }
+
+    private func scheduleUnlockExpiryTimer() {
+        unlockTimer?.invalidate()
+        guard let unlockUntil, unlockUntil > Date() else { return }
+        unlockTimer = Timer.scheduledTimer(withTimeInterval: unlockUntil.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshShielding()
+            }
+        }
     }
 
     private func saveSelection() {

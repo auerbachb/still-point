@@ -301,8 +301,7 @@ final class StillPointAppUITests: XCTestCase {
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
         forceSessionsFailure: Bool = false,
-        appBlockingSelected: Bool = false,
-        completeAppGateOnBegin: Bool = false
+        appBlockingSelected: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -315,7 +314,6 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
         app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = appBlockingSelected ? "1" : "0"
-        app.launchEnvironment["SP_UI_TEST_COMPLETE_APP_GATE_ON_BEGIN"] = completeAppGateOnBegin ? "1" : "0"
         return app
     }
 
