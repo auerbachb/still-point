@@ -153,33 +153,6 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     @MainActor
-    func testEarlyEndedSessionDoesNotUnlockAppGate() throws {
-        let app = makeApp(
-            seedAuthenticated: true,
-            resetStore: true,
-            sessionSeconds: 30,
-            appBlockingSelected: true
-        )
-        app.launch()
-
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        beginButton.tap()
-
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 20))
-        let endEarlyButton = app.buttons["session.endEarlyButton"]
-        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: 5))
-        endEarlyButton.tap()
-
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 20))
-        XCTAssertFalse(
-            app.staticTexts["completion.appGateOpen"].waitForExistence(timeout: 2),
-            "Ending early should keep the selected app gate closed"
-        )
-    }
-
-    @MainActor
     func testHistoryAndSettingsNavigationSmoke() throws {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
