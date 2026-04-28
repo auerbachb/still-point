@@ -67,13 +67,12 @@ final class StillPointAppUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
         let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
-        if lightHold.waitForExistence(timeout: 3) {
-            XCTAssertEqual(lightHold.value as? String, "inactive")
-            pressAndHold(element: lightHold, duration: 1.0) {
-                XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
-            }
-            XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
+        XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
+        XCTAssertEqual(lightHold.value as? String, "inactive")
+        pressAndHold(element: lightHold, duration: 1.0) {
+            XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
         }
+        XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
 
         XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
@@ -289,10 +288,17 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     private func waitForAuthScreen(in app: XCUIApplication) -> Bool {
-        if app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout) {
-            return true
+        let authRoot = app.otherElements["root.currentView.auth"]
+        let emailField = app.textFields["auth.emailField"]
+        let deadline = Date().addingTimeInterval(launchTimeout)
+
+        while Date() < deadline {
+            if authRoot.exists || emailField.exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
-        return app.textFields["auth.emailField"].waitForExistence(timeout: 5)
+        return false
     }
 
     private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
