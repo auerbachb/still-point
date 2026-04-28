@@ -17,6 +17,7 @@ struct CompletionView: View {
     @State private var noteSaved = false
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var uiTestAutoSaveTask: Task<Void, Never>?
 
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
@@ -207,8 +208,9 @@ struct CompletionView: View {
             .padding(.horizontal, SPSpacing.s4)
         }
         .stillPointBackground()
-        .onChange(of: endNote) { _, _ in
+        .onChange(of: endNote) { _, newValue in
             saveError = nil
+            scheduleUITestAutoSaveIfNeeded(for: newValue)
         }
     }
 
@@ -278,9 +280,26 @@ struct CompletionView: View {
         }
     }
 
+    private func scheduleUITestAutoSaveIfNeeded(for note: String) {
+        guard isUITestMode, !note.isEmpty, !sessionId.isEmpty, !noteSaved else { return }
+        uiTestAutoSaveTask?.cancel()
+        uiTestAutoSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled,
+                  endNote == note,
+                  !isSaving,
+                  !noteSaved else { return }
+            saveEndNote()
+        }
+    }
+
     private func logUITestDiagnostic(_ message: String) {
-        guard truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"]) else { return }
+        guard isUITestMode else { return }
         Self.diagLog.notice("[E2E-DIAG] \(message, privacy: .public)")
+    }
+
+    private var isUITestMode: Bool {
+        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"])
     }
 
     private func truthy(_ value: String?) -> Bool {

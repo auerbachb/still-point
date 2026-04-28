@@ -113,7 +113,10 @@ final class StillPointAppUITests: XCTestCase {
         endNoteEditor.typeText("e2e end note")
 
         dismissKeyboardIfPresent(in: app)
-        saveEndNoteWithKeyboardShortcut()
+        XCTAssertTrue(
+            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 8),
+            "Typing an end note should auto-save in UI test mode"
+        )
 
         let returnButton = app.buttons["completion.returnButton"]
         tapByStableCenter(returnButton, in: app)
@@ -384,10 +387,6 @@ final class StillPointAppUITests: XCTestCase {
             app.swipeDown()
         }
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-    }
-
-    private func saveEndNoteWithKeyboardShortcut() {
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
     }
 
     @discardableResult
