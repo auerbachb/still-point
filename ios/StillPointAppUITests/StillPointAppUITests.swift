@@ -62,6 +62,7 @@ final class StillPointAppUITests: XCTestCase {
         tapWhenHittable(submitButton, timeout: 5)
 
         XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: 8))
+        dismissKeyboardIfPresent(in: app)
         let beginButton = app.buttons["home.beginButton"]
         tapWhenHittable(beginButton, timeout: 5)
 
@@ -252,6 +253,16 @@ final class StillPointAppUITests: XCTestCase {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         _ = XCTWaiter.wait(for: [expectation], timeout: timeout)
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func dismissKeyboardIfPresent(in app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else { return }
+        let returnButton = app.keyboards.buttons["Return"]
+        if returnButton.exists {
+            returnButton.tap()
+            return
+        }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
     }
 
     private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
