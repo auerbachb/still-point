@@ -1,13 +1,17 @@
 import XCTest
 
 final class StillPointAppUITests: XCTestCase {
-    // 30s is generous for cold simulator boots on macos-26 CI runners — the
-    // previous 15s tripped intermittently on the first launch in a test run.
-    // Issue #266.
-    private let launchTimeout: TimeInterval = 30
+    // macos-26 runners can spend 30s+ setting up the automation session before
+    // the first root view is queryable.
+    private let launchTimeout: TimeInterval = 60
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    override func tearDownWithError() throws {
+        XCUIApplication().terminate()
+        try super.tearDownWithError()
     }
 
     @MainActor
