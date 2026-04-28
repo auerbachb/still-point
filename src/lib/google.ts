@@ -83,6 +83,10 @@ type GoogleCalendarEventResponse = {
   htmlLink?: string;
 };
 
+function isGoogleCalendarEventConflict(error: unknown): error is GoogleCalendarApiError {
+  return error instanceof GoogleCalendarApiError && error.status === 409;
+}
+
 function requireGoogleClientConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -369,14 +373,14 @@ async function insertCalendarEvent(
   const start = session.scheduledStartAt;
   const end = new Date(start.getTime() + session.durationSeconds * 1000);
   const eventId = googleCalendarEventId(session.id, userId);
-  return googleJsonFetch<GoogleCalendarEventResponse>(
-    `${GOOGLE_CALENDAR_EVENTS_URL}/${encodeURIComponent(eventId)}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+  try {
+    return await googleJsonFetch<GoogleCalendarEventResponse>(GOOGLE_CALENDAR_EVENTS_URL, {
+      method: "POST",
+      headers,
       body: JSON.stringify({
         id: eventId,
         summary: "Still Point buddy session",
@@ -391,8 +395,14 @@ async function insertCalendarEvent(
           },
         },
       }),
-    },
-  );
+    });
+  } catch (error) {
+    if (!isGoogleCalendarEventConflict(error)) throw error;
+    return googleJsonFetch<GoogleCalendarEventResponse>(
+      `${GOOGLE_CALENDAR_EVENTS_URL}/${encodeURIComponent(eventId)}`,
+      { headers },
+    );
+  }
 }
 
 export async function syncBuddySessionCalendarForUser(
