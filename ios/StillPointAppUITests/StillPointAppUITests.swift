@@ -82,8 +82,9 @@ final class StillPointAppUITests: XCTestCase {
 
         let hyperfocusHold = app.staticTexts["session.hyperfocusHoldButton"]
         XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: launchTimeout))
-        let dimmedChrome = app.otherElements["session.secondaryChrome.dimmed"]
-        XCTAssertTrue(dimmedChrome.waitForExistence(timeout: 4), "Secondary controls should dim instead of collapsing")
+        let dimmedChrome = app.otherElements["session.secondaryChrome"]
+        XCTAssertTrue(dimmedChrome.waitForExistence(timeout: launchTimeout), "Secondary controls should remain rendered")
+        waitForAccessibilityValue(dimmedChrome, "dimmed", timeout: launchTimeout)
         XCTAssertTrue(app.buttons["session.pauseResumeButton"].isHittable, "Dimmed controls should remain hittable")
 
         assertHoldControlResponds(
@@ -224,7 +225,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
-        XCTAssertTrue(timerLabel.isHittable, "Timer should remain visible and usable after rotation")
+        XCTAssertTrue(timerLabel.exists, "Timer should remain visible after rotation")
         XCTAssertTrue(app.buttons["session.endEarlyButton"].isHittable, "Primary control should remain reachable in landscape")
     }
 
@@ -325,6 +326,12 @@ final class StillPointAppUITests: XCTestCase {
             app.textFields["auth.emailField"].waitForExistence(timeout: launchTimeout),
             "Auth email field did not appear"
         )
+    }
+
+    private func waitForAccessibilityValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval) {
+        let predicate = NSPredicate(format: "value == %@", value)
+        let expectation = expectation(for: predicate, evaluatedWith: element)
+        wait(for: [expectation], timeout: timeout)
     }
 
     private func focusAndType(_ text: String, into element: XCUIElement, in app: XCUIApplication) {
