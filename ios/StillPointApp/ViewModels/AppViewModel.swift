@@ -131,7 +131,6 @@ final class AppViewModel {
     }
 
     func didLogout() {
-        Task { await PushNotificationCoordinator.shared.unregisterCurrentDeviceToken() }
         currentUser = nil
         pendingBuddyInviteToken = nil
         buddyInviteError = nil

@@ -62,19 +62,15 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         [.banner, .sound, .badge]
     }
 
-    func unregisterCurrentDeviceToken() async {
+    func unregisterCurrentDeviceToken() async throws {
         guard let storedToken = DeviceTokenStore.load() else { return }
-        do {
-            try await APIClient.shared.unregisterDeviceToken(
-                DeviceTokenRegistrationRequest(
-                    token: storedToken.token,
-                    apnsEnvironment: storedToken.apnsEnvironment
-                )
+        try await APIClient.shared.unregisterDeviceToken(
+            DeviceTokenRegistrationRequest(
+                token: storedToken.token,
+                apnsEnvironment: storedToken.apnsEnvironment
             )
-            DeviceTokenStore.clear()
-        } catch {
-            print("Device token unregister failed: \(error.localizedDescription)")
-        }
+        )
+        DeviceTokenStore.clear()
     }
 
     func clearStoredDeviceToken() {
@@ -83,18 +79,11 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
 
     private func apnsEnvironment() -> String {
         guard let profilePath = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
-              let profile = try? String(contentsOfFile: profilePath, encoding: .isoLatin1),
-              let plistStart = profile.range(of: "<plist"),
-              let plistEnd = profile.range(of: "</plist>") else {
+              let profile = try? String(contentsOfFile: profilePath, encoding: .isoLatin1) else {
             return "production"
         }
 
-        let plistString = String(profile[plistStart.lowerBound..<plistEnd.upperBound])
-        guard let plistData = plistString.data(using: .utf8),
-              let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
-              let entitlements = plist["Entitlements"] as? [String: Any],
-              let environment = entitlements["aps-environment"] as? String,
-              environment == "development" || environment == "production" else {
+        guard let environment = ApnsEnvironmentParser.parse(fromProfileString: profile) else {
             assertionFailure("Unable to read APNs environment from embedded provisioning profile")
             return "production"
         }
