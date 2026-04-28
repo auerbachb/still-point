@@ -311,12 +311,14 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
 
         let sessionRoot = app.otherElements["root.currentView.session"]
-        let deadline = Date().addingTimeInterval(20)
+        let homeRoot = app.otherElements["root.currentView.home"]
+        let deadline = Date().addingTimeInterval(launchTimeout)
         repeat {
-            beginButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             if sessionRoot.waitForExistence(timeout: 2) {
                 return
             }
+            XCTAssertTrue(homeRoot.waitForExistence(timeout: 5))
+            beginButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         } while Date() < deadline
 
