@@ -64,10 +64,14 @@ struct RootView: View {
                         .transition(.opacity)
                 }
             }
+
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
+                .accessibilityValue(coldStartMetricAccessibilityValue)
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
-        .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
-        .accessibilityValue(coldStartMetricAccessibilityValue)
         .task {
             await appVM.checkAuth()
         }
