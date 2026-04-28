@@ -105,6 +105,7 @@ final class StillPointAppUITests: XCTestCase {
         // E2E gate from issue #253 must catch.
         let endNoteEditor = app.textViews["completion.endNoteEditor"]
         XCTAssertTrue(endNoteEditor.waitForExistence(timeout: 5), "End-of-session note editor should be present")
+        scrollToElement(endNoteEditor, in: app)
         endNoteEditor.tap()
         endNoteEditor.typeText("e2e end note")
         app.swipeUp()
@@ -307,6 +308,14 @@ final class StillPointAppUITests: XCTestCase {
         XCTFail("Expected \(destination.identifier) after tapping \(element.identifier)")
     }
 
+    private func scrollToElement(_ element: XCUIElement, in app: XCUIApplication) {
+        let deadline = Date().addingTimeInterval(5)
+        while !element.isHittable && Date() < deadline {
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+    }
+
     private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: duration)
@@ -339,6 +348,17 @@ final class StillPointAppUITests: XCTestCase {
         } while Date() < deadline
 
         XCTFail("Session screen did not appear after tapping Begin")
+    }
+
+    private func scrollToElement(_ element: XCUIElement, in app: XCUIApplication, timeout: TimeInterval = 8) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists && element.isHittable {
+                return
+            }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
     }
 
     private func waitForAccessibilityValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval) {
