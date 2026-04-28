@@ -322,7 +322,10 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     private func assertColdStartBoundIfAvailable(root: XCUIElement, maxMs: Int) {
-        guard root.exists else { return }
+        guard root.waitForExistence(timeout: 1) else {
+            XCTFail("Auth root did not appear; cold-start metric could not be asserted")
+            return
+        }
         assertColdStartBound(root: root, maxMs: maxMs)
     }
 
