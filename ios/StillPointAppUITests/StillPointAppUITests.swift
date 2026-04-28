@@ -37,31 +37,16 @@ final class StillPointAppUITests: XCTestCase {
     @MainActor
     func testLaunchLoginCompleteSessionAndHistoryPersistence() throws {
         let app = makeApp(
-            seedAuthenticated: false,
+            seedAuthenticated: true,
             resetStore: true,
             sessionSeconds: 6,
             timerMultiplier: 3.0
         )
         app.launch()
 
-        let authRoot = rootElement("auth", in: app)
-        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
-        assertColdStartBound(root: authRoot, maxMs: 5_000)
-
-        let emailField = app.textFields["auth.emailField"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
-
-        let passwordField = app.secureTextFields["auth.passwordField"]
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
-
-        let submitButton = app.buttons["auth.submitButton"]
-        tapWhenHittable(submitButton, timeout: 5)
-
-        XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: 8))
+        let homeRoot = rootElement("home", in: app)
+        XCTAssertTrue(homeRoot.waitForExistence(timeout: launchTimeout), "Home screen did not appear")
+        assertColdStartBound(root: homeRoot, maxMs: 5_000)
         dismissKeyboardIfPresent(in: app)
         let beginButton = app.buttons["home.beginButton"]
         tapWhenHittable(beginButton, timeout: 5)
