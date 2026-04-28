@@ -7,9 +7,7 @@ import path from "node:path";
 import process from "node:process";
 
 const root = process.cwd();
-const args = parseArgs(process.argv.slice(2));
-const outputDir = path.resolve(root, args.outputDir ?? "artifacts/ios-app-store-dry-run");
-const requireLive = Boolean(args.requireLive);
+const DEFAULT_OUTPUT_DIR = "artifacts/ios-app-store-dry-run";
 
 const requiredWorkflowSecrets = [
   "BUILD_CERTIFICATE_BASE64",
@@ -82,6 +80,7 @@ function parseArgs(argv) {
     else if (arg === "--output-dir") parsed.outputDir = argv[++i];
     else if (arg === "--intended-tag") parsed.intendedTag = argv[++i];
     else if (arg === "--release-owner") parsed.releaseOwner = argv[++i];
+    else if (arg === "--tracking-issue") parsed.trackingIssue = argv[++i];
     else if (arg === "--submission-url") parsed.submissionUrl = argv[++i];
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -253,7 +252,7 @@ async function queryAsc(project) {
   };
 }
 
-function classifyIssueChecklist({ project, asc }) {
+function classifyIssueChecklist({ project, asc, trackingIssue }) {
   const byId = new Map(checks.map((check) => [check.id, check]));
   return issueChecklist.map(([id, text]) => {
     const direct = byId.get(id);
@@ -268,7 +267,13 @@ function classifyIssueChecklist({ project, asc }) {
       ],
       B3: ["pass", "This script is the dry-run tooling approach and records ASC endpoints for build/version validation."],
       B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
-      B5: [asc.live && asc.intendedBuild?.processingState === "VALID" ? "pass" : "warning", asc.live ? "ASC build query completed; see summary for intended build state." : asc.reason],
+      B5: !asc.live
+        ? ["warning", asc.reason]
+        : !asc.intendedBuild
+          ? ["fail", "Intended TestFlight build was not found in App Store Connect."]
+          : asc.intendedBuild.processingState === "VALID"
+            ? ["pass", "ASC build query completed and the intended build is VALID."]
+            : ["fail", `Intended TestFlight build is ${asc.intendedBuild.processingState}.`],
       C1: [apiReady, "ASC appStoreVersions endpoint can locate the target version; creation is reserved for explicit execution tooling."],
       C2: [apiReady, "ASC version/build relationships can be verified; attaching the build remains gated on human approval."],
       C3: [apiReady, "ASC metadata endpoints can verify/update supported fields once approved source copy is supplied."],
@@ -278,7 +283,7 @@ function classifyIssueChecklist({ project, asc }) {
       C9: ["pass", "Human gates are listed in the report."],
       D2: ["warning", "Programmatic submission is intentionally blocked in dry-run mode until human gates are approved."],
       D3: ["pass", "Fallback paths are listed in the report."],
-      E1: ["warning", "Updating GitHub issue #103 is a release-owner action for the live submission attempt."],
+      E1: ["warning", `Updating GitHub issue ${trackingIssue} is a release-owner action for the live submission attempt.`],
       E3: [apiReady, "ASC review status can be polled via API after a submission exists."],
       E4: ["warning", "Reviewer-note triage is human-owned even when API polling captures status."],
       E5: ["pass", "Resubmission path is documented in ios/RELEASING.md and this report."],
@@ -346,6 +351,9 @@ ${report.logs.map((entry) => `- ${entry}`).join("\n")}
 }
 
 async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const outputDir = path.resolve(root, args.outputDir ?? DEFAULT_OUTPUT_DIR);
+  const requireLive = Boolean(args.requireLive);
   fs.mkdirSync(outputDir, { recursive: true });
   log("Reading canonical iOS release docs and workflow.");
 
@@ -444,7 +452,9 @@ async function main() {
     releaseOwner: args.releaseOwner ?? "UNSET_RELEASE_OWNER",
     submissionUrl: args.submissionUrl ?? "UNSET_SUBMISSION_URL",
   });
-  pass("E2", "Daily status log template is present in ios/RELEASING.md.");
+  releasing.includes("Daily log template")
+    ? pass("E2", "Daily log template is present in ios/RELEASING.md.")
+    : fail("E2", "Daily log template is missing from ios/RELEASING.md.");
   pass("F1", "Automation logs are saved with the dry-run report.", { output: path.join(outputDir, "automation.log") });
   pass("F2", "Human-owned decisions are saved with the dry-run report.", { output: path.join(outputDir, "summary.json") });
   pass("DOD1", "Canonical runbooks are referenced before submission work starts.");
@@ -471,6 +481,8 @@ async function main() {
     fail("ASC_BUILD_MISSING", "Intended TestFlight build was not found in App Store Connect.", { version: project.marketingVersion, build: project.buildNumber });
   }
 
+  const trackingIssue = args.trackingIssue ?? "the tracking issue";
+
   const humanGates = [
     { owner: "Account Holder/Admin", decision: "Confirm Apple Agreements, Tax, and Banking have no Action required items.", reason: "Not exposed by public ASC API." },
     { owner: "Product/App Store", decision: "Approve screenshots, app previews, age rating, reviewer notes, demo credentials, and release timing.", reason: "Compliance/copy/assets require human accountability." },
@@ -481,8 +493,8 @@ async function main() {
   const fallbackPaths = [
     { when: "ASC credentials or APPSTORE_APP_ID are unavailable", action: "Use App Store Connect website to verify TestFlight build status, version page, attached build, metadata, screenshots, review notes, and demo credentials; paste evidence into the generated report." },
     { when: "API field is unsupported or returns a blocker", action: "Record the exact API error, open App Store Connect -> app -> Distribution/App Store -> target version, fix only that field, then rerun this dry run." },
-    { when: "Submission is rejected", action: "Copy reviewer notes verbatim to #103, create/link implementation issues, bump CURRENT_PROJECT_VERSION, upload a replacement ios-v* build, attach it, and resubmit." },
-    { when: "Submission is approved", action: "Record final build and outcome in #103, choose held/manual/automatic/phased release, and close tracking only when complete." },
+    { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, bump CURRENT_PROJECT_VERSION, upload a replacement ios-v* build, attach it, and resubmit.` },
+    { when: "Submission is approved", action: `Record final build and outcome in ${trackingIssue}, choose held/manual/automatic/phased release, and close tracking only when complete.` },
   ];
 
   const report = {
@@ -528,7 +540,7 @@ async function main() {
     demoCredentialsOrSignupPath: "requires release-owner approval before live submission",
     unresolvedHumanGates: humanGates,
   };
-  report.issue242Checklist = classifyIssueChecklist({ project, asc });
+  report.issue242Checklist = classifyIssueChecklist({ project, asc, trackingIssue });
 
   if (report.issue242Checklist.length !== 38) {
     fail("ISSUE_242_COUNT", "Issue #242 checklist coverage must contain exactly 38 items.", { count: report.issue242Checklist.length });
@@ -550,5 +562,22 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
+  try {
+    const fallbackDir = path.resolve(root, DEFAULT_OUTPUT_DIR);
+    fs.mkdirSync(fallbackDir, { recursive: true });
+    const stamp = new Date().toISOString();
+    const message = error?.message ?? String(error);
+    fs.writeFileSync(
+      path.join(fallbackDir, "summary.json"),
+      `${JSON.stringify({ generatedAt: stamp, fatalError: message }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(fallbackDir, "summary.md"),
+      `# iOS App Store dry-run fatal failure\n\nGenerated: ${stamp}\n\nError: ${message}\n`,
+    );
+    fs.writeFileSync(path.join(fallbackDir, "automation.log"), `${stamp} fatal: ${message}\n`);
+  } catch (writeError) {
+    console.error("Failed to write fatal report:", writeError);
+  }
   process.exitCode = 1;
 });
