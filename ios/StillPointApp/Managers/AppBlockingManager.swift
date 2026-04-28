@@ -15,17 +15,23 @@ final class AppBlockingManager {
     private(set) var didUnlockFromLastCompletedSession = false
 
     private let defaults: UserDefaults
-    private let store = ManagedSettingsStore()
+    private let store: ManagedSettingsStore?
     private let selectionKey = "appBlocking.selection.v1"
     private let unlockUntilKey = "appBlocking.unlockUntil.v1"
+    private let uiTestMode: Bool
     private let uiTestSelectionEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
+        let environment = ProcessInfo.processInfo.environment
+        let uiTestMode = environment["SP_UI_TEST_MODE"] == "1"
+        let uiTestSelectionEnabled = environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
         self.defaults = defaults
         self.selection = Self.loadSelection(defaults: defaults, key: selectionKey)
         self.unlockUntil = defaults.object(forKey: unlockUntilKey) as? Date
-        self.authorizationStatus = AuthorizationCenter.shared.authorizationStatus
-        self.uiTestSelectionEnabled = ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
+        self.authorizationStatus = uiTestMode ? .notDetermined : AuthorizationCenter.shared.authorizationStatus
+        self.uiTestMode = uiTestMode
+        self.uiTestSelectionEnabled = uiTestSelectionEnabled
+        self.store = uiTestMode ? nil : ManagedSettingsStore()
         refreshShielding()
     }
 
@@ -99,7 +105,9 @@ final class AppBlockingManager {
     }
 
     func refreshShielding() {
-        authorizationStatus = AuthorizationCenter.shared.authorizationStatus
+        if !uiTestMode {
+            authorizationStatus = AuthorizationCenter.shared.authorizationStatus
+        }
 
         if let unlockUntil, unlockUntil <= Date() {
             self.unlockUntil = nil
@@ -131,12 +139,16 @@ final class AppBlockingManager {
     }
 
     private func applyShielding() {
-        guard !uiTestSelectionEnabled else {
+        guard !uiTestMode else {
             isApplyingShield = false
             return
         }
         isApplyingShield = true
         defer { isApplyingShield = false }
+        guard let store else {
+            isApplyingShield = false
+            return
+        }
         store.shield.applications = selection.applicationTokens.isEmpty
             ? nil
             : selection.applicationTokens
@@ -149,12 +161,12 @@ final class AppBlockingManager {
     }
 
     private func clearShielding() {
-        guard !uiTestSelectionEnabled else { return }
-        store.clearAllSettings()
+        guard !uiTestMode else { return }
+        store?.clearAllSettings()
     }
 
     private func saveSelection() {
-        guard !uiTestSelectionEnabled else { return }
+        guard !uiTestMode else { return }
         do {
             let encoded = try JSONEncoder().encode(selection)
             defaults.set(encoded, forKey: selectionKey)

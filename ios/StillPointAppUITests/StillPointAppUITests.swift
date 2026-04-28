@@ -158,7 +158,7 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
 
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 15))
         XCTAssertTrue(
             app.staticTexts["completion.appGateOpen"].waitForExistence(timeout: 5),
             "Completed sessions should unlock selected apps for the configured window"

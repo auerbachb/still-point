@@ -150,11 +150,13 @@ final class AppViewModel {
     }
 
     func beginSession() {
+        appBlockingManager.prepareForSession()
         currentView = .session
     }
 
     func beginBuddySession() {
         buddyInviteError = nil
+        appBlockingManager.prepareForSession()
         currentView = .buddyHub
     }
 
