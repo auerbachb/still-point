@@ -248,13 +248,6 @@ final class StillPointAppUITests: XCTestCase {
 
     private func tapWhenHittable(_ element: XCUIElement, timeout: TimeInterval) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout))
-        let hittable = NSPredicate(format: "hittable == true")
-        let expectation = XCTNSPredicateExpectation(predicate: hittable, object: element)
-        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
-        if result == .completed {
-            element.tap()
-            return
-        }
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
