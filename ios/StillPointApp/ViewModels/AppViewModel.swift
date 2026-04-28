@@ -51,7 +51,15 @@ final class AppViewModel {
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
-    lazy var appBlockingManager = AppBlockingManager()
+    private var appBlockingManagerStorage: AppBlockingManager?
+    var appBlockingManager: AppBlockingManager {
+        if let appBlockingManagerStorage {
+            return appBlockingManagerStorage
+        }
+        let manager = AppBlockingManager()
+        appBlockingManagerStorage = manager
+        return manager
+    }
     private var pendingBuddyInviteToken: String?
 
     var currentDay: Int {
