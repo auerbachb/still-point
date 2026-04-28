@@ -61,7 +61,7 @@ struct HomeView: View {
 
                     Button {
                         withAnimation {
-                            appVM.beginQuickSession()
+                            appVM.beginSession(type: .quick)
                         }
                     } label: {
                         Text("Quick minute · \(StillPoint.quickDuration)s")
