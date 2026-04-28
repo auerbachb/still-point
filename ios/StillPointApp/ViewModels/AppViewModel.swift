@@ -161,6 +161,22 @@ final class AppViewModel {
         currentView = .session
     }
 
+    func completeUITestAppGateSessionIfNeeded() -> Bool {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1" else {
+            return false
+        }
+        completeSession(
+            sessionId: "ui-test-app-gate",
+            clearPercent: 100,
+            thoughtCount: 0,
+            thoughts: [],
+            dayNumber: currentDay,
+            duration: 1,
+            unlockAppGate: true
+        )
+        return true
+    }
+
     func beginBuddySession() {
         buddyInviteError = nil
         currentView = .buddyHub

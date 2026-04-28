@@ -144,7 +144,8 @@ final class StillPointAppUITests: XCTestCase {
             resetStore: true,
             sessionSeconds: 1,
             timerMultiplier: 30.0,
-            appBlockingSelected: true
+            appBlockingSelected: true,
+            completeAppGateOnBegin: true
         )
         app.launch()
 
