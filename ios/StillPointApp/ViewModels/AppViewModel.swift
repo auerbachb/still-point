@@ -190,11 +190,10 @@ final class AppViewModel {
     }
 
     func returnHome() async {
-        // Refresh user data to get updated currentDay BEFORE navigating
+        currentView = .home
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }
-        currentView = .home
         await consumePendingBuddyInviteIfNeeded()
     }
 
