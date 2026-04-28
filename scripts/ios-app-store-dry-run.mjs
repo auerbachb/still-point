@@ -201,6 +201,9 @@ function ascGet(pathname, jwt) {
         });
       },
     );
+    request.setTimeout(15000, () => {
+      request.destroy(new Error(`ASC request timed out: ${pathname}`));
+    });
     request.on("error", reject);
     request.end();
   });
@@ -216,7 +219,7 @@ async function queryAsc(project) {
     };
   }
 
-  const buildQuery = `/v1/builds?filter[app]=${encodeURIComponent(appId)}&filter[version]=${encodeURIComponent(project.marketingVersion)}&include=preReleaseVersion,buildBetaDetail&sort=-uploadedDate&limit=10`;
+  const buildQuery = `/v1/builds?filter[app]=${encodeURIComponent(appId)}&filter[preReleaseVersion.version]=${encodeURIComponent(project.marketingVersion)}&include=preReleaseVersion,buildBetaDetail&sort=-uploadedDate&limit=10`;
   const versionQuery = `/v1/appStoreVersions?filter[app]=${encodeURIComponent(appId)}&filter[platform]=IOS&filter[versionString]=${encodeURIComponent(project.marketingVersion)}&include=build&limit=5`;
   const [builds, versions] = await Promise.all([ascGet(buildQuery, jwt), ascGet(versionQuery, jwt)]);
   const intendedBuild = builds.data?.find((build) => build.attributes?.version === String(project.buildNumber));
@@ -425,9 +428,12 @@ async function main() {
     };
   }
 
-  project.usesNonExemptEncryption === false
-    ? pass("C4", "Project declares ITSAppUsesNonExemptEncryption=false; privacy policy URL remains https://still-point.me/privacy.", { privacyPolicyUrl: "https://still-point.me/privacy" })
-    : fail("C4", "Project encryption declaration is missing or non-exempt encryption is enabled.");
+  const privacyPolicyUrl = "https://still-point.me/privacy";
+  const privacyUrlInCanonicalDocs =
+    submissionRunbook.includes(privacyPolicyUrl) || releasing.includes(privacyPolicyUrl);
+  privacyUrlInCanonicalDocs
+    ? pass("C4", `Canonical docs reference the required privacy policy URL ${privacyPolicyUrl}.`, { privacyPolicyUrl })
+    : fail("C4", `Required privacy policy URL ${privacyPolicyUrl} is missing from canonical release docs.`, { privacyPolicyUrl });
 
   submissionRunbook.includes("Guideline 5.1.1(v)") && releasing.includes("Delete Account")
     ? pass("C7", "Reviewer notes template and account-deletion path are present in canonical docs.")

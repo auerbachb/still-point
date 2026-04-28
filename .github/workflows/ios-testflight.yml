@@ -126,6 +126,7 @@ jobs:
         run: npm run ios:app-store:dry-run -- --release-owner "GitHub Actions preflight"
 
       - name: Upload App Store submission dry-run evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-store-dry-run
