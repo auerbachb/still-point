@@ -66,6 +66,7 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
         .accessibilityValue(coldStartMetricAccessibilityValue)
         .task {
