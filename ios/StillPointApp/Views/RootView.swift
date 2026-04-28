@@ -54,6 +54,18 @@ struct RootView: View {
             // Brand-lockup overlay during cold-start auth check. Sits on top
             // of the current-view branch and dismisses when checkAuth flips
             // isLoading to false.
+            //
+            // CRITICAL: `.allowsHitTesting(false)` lets taps fall through to
+            // the AuthView/MainTabView layer underneath. Without it, the
+            // full-screen `SPColor.bg` participates in hit testing and
+            // XCUITest sees "Computed hit point {-1, -1}" on
+            // `auth.emailField`, even though the field exists in the
+            // accessibility tree (issue #276 round 4 — round 3 fixed
+            // existence; this fixes hittability).
+            //
+            // `.accessibilityHidden(true)` is orthogonal — it removes the
+            // overlay from VoiceOver / XCUITest's tree but does NOT disable
+            // hit testing. Both are needed.
             if appVM.isLoading {
                 ZStack {
                     SPColor.bg.ignoresSafeArea()
@@ -76,6 +88,7 @@ struct RootView: View {
                         }
                     }
                 }
+                .allowsHitTesting(false)
                 .accessibilityHidden(true)
                 .transition(.opacity)
             }
