@@ -158,13 +158,11 @@ final class AppViewModel {
     }
 
     func beginSession() {
-        appBlockingManager.prepareForSession()
         currentView = .session
     }
 
     func beginBuddySession() {
         buddyInviteError = nil
-        appBlockingManager.prepareForSession()
         currentView = .buddyHub
     }
 
@@ -203,6 +201,8 @@ final class AppViewModel {
     ) {
         if unlockAppGate {
             appBlockingManager.unlockAfterCompletedSession()
+        } else {
+            appBlockingManager.prepareForSession()
         }
         currentView = .completion(
             sessionId: sessionId,
