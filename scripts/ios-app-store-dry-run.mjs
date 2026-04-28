@@ -72,16 +72,24 @@ function log(message) {
   console.log(message);
 }
 
+function takeValue(argv, i, flag) {
+  const value = argv[i + 1];
+  if (value === undefined || value.startsWith("--")) {
+    throw new Error(`Missing value for ${flag}`);
+  }
+  return value;
+}
+
 function parseArgs(argv) {
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--require-live") parsed.requireLive = true;
-    else if (arg === "--output-dir") parsed.outputDir = argv[++i];
-    else if (arg === "--intended-tag") parsed.intendedTag = argv[++i];
-    else if (arg === "--release-owner") parsed.releaseOwner = argv[++i];
-    else if (arg === "--tracking-issue") parsed.trackingIssue = argv[++i];
-    else if (arg === "--submission-url") parsed.submissionUrl = argv[++i];
+    else if (arg === "--output-dir") { parsed.outputDir = takeValue(argv, i, arg); i += 1; }
+    else if (arg === "--intended-tag") { parsed.intendedTag = takeValue(argv, i, arg); i += 1; }
+    else if (arg === "--release-owner") { parsed.releaseOwner = takeValue(argv, i, arg); i += 1; }
+    else if (arg === "--tracking-issue") { parsed.trackingIssue = takeValue(argv, i, arg); i += 1; }
+    else if (arg === "--submission-url") { parsed.submissionUrl = takeValue(argv, i, arg); i += 1; }
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return parsed;
@@ -252,13 +260,14 @@ async function queryAsc(project) {
   };
 }
 
-function classifyIssueChecklist({ project, asc, trackingIssue }) {
+function classifyIssueChecklist({ project, asc, trackingIssue, requireLive }) {
   const byId = new Map(checks.map((check) => [check.id, check]));
+  const offlineStatus = requireLive ? "fail" : "warning";
   return issueChecklist.map(([id, text]) => {
     const direct = byId.get(id);
     if (direct) return { id, text, status: direct.status, evidence: direct.evidence, message: direct.message };
 
-    const apiReady = asc.live ? "pass" : "warning";
+    const apiReady = asc.live ? "pass" : offlineStatus;
     const mapping = {
       B1: [apiReady, asc.live ? "ASC API credentials generated a valid query token." : asc.reason],
       B2: [
@@ -268,7 +277,7 @@ function classifyIssueChecklist({ project, asc, trackingIssue }) {
       B3: ["pass", "This script is the dry-run tooling approach and records ASC endpoints for build/version validation."],
       B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
       B5: !asc.live
-        ? ["warning", asc.reason]
+        ? [offlineStatus, asc.reason]
         : !asc.intendedBuild
           ? ["fail", "Intended TestFlight build was not found in App Store Connect."]
           : asc.intendedBuild.processingState === "VALID"
@@ -534,13 +543,15 @@ async function main() {
       ? asc.intendedBuild?.version ?? "intended build not attached or not found"
       : "requires live App Store Connect query",
     metadataCompleteness:
-      "Canonical docs and local release-readiness checks are verified; live ASC metadata fields require API credentials or website evidence.",
+      checks.find((c) => c.id === "C4")?.status === "pass" && checks.find((c) => c.id === "C7")?.status === "pass"
+        ? "Canonical docs and local release-readiness checks are verified; live ASC metadata fields require API credentials or website evidence."
+        : "Canonical metadata/reviewer-notes prerequisites are incomplete; see checklist failures above.",
     screenshotStatus: "requires approved screenshot/app-preview source assets before API upload or website verification",
-    reviewNotes: "canonical template present in docs/operations/ios-app-store-submission.md",
+    reviewNotes: checks.find((c) => c.id === "C7")?.message ?? "Reviewer notes template status unavailable.",
     demoCredentialsOrSignupPath: "requires release-owner approval before live submission",
     unresolvedHumanGates: humanGates,
   };
-  report.issue242Checklist = classifyIssueChecklist({ project, asc, trackingIssue });
+  report.issue242Checklist = classifyIssueChecklist({ project, asc, trackingIssue, requireLive });
 
   if (report.issue242Checklist.length !== 38) {
     fail("ISSUE_242_COUNT", "Issue #242 checklist coverage must contain exactly 38 items.", { count: report.issue242Checklist.length });
