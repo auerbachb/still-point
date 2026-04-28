@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { calculateSessionStats, resolveSessionType, shouldAdvanceDay } from "@/lib/constants";
+import { calculateSessionStats, parseOptionalSessionType, shouldAdvanceDay } from "@/lib/constants";
 import { eq, desc, and, sql } from "drizzle-orm";
 
 export async function GET() {
@@ -38,10 +38,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
     const completed = body.completed ?? true;
-    const sessionType = resolveSessionType(body.sessionType);
+    const sessionType = parseOptionalSessionType(body.sessionType);
 
     if (!dayNumber || !duration || clearPercent === undefined || !sessionDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (typeof completed !== "boolean") {
+      return NextResponse.json({ error: "Invalid completed value" }, { status: 400 });
+    }
+    if (!sessionType) {
+      return NextResponse.json({ error: "Invalid session type" }, { status: 400 });
     }
 
     const [session] = await db.insert(sessions).values({

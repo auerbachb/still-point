@@ -34,4 +34,52 @@ describe("session progression rules", () => {
       avgThoughtsPerMinute: 1,
     });
   });
+
+  test("excludes invalid session types from progression stats", () => {
+    const sessions: SessionStatsInput[] = [
+      { sessionType: "Quick", dayNumber: 2, duration: 60, completed: true, clearPercent: 10, thoughtCount: 20 },
+      { sessionType: "standard", dayNumber: 1, duration: 60, completed: true, clearPercent: 80, thoughtCount: 2 },
+    ];
+
+    expect(calculateSessionStats(sessions)).toEqual({
+      streak: 1,
+      avgClearPercent: 80,
+      avgThoughtsPerSession: 2,
+      avgThoughtsPerMinute: 2,
+    });
+  });
+
+  test("uses the latest same-day attempt when calculating streak", () => {
+    const sessions: SessionStatsInput[] = [
+      {
+        sessionType: "standard",
+        dayNumber: 2,
+        duration: 70,
+        completed: false,
+        clearPercent: 10,
+        thoughtCount: 0,
+        createdAt: new Date("2026-04-28T10:00:00Z"),
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 2,
+        duration: 70,
+        completed: true,
+        clearPercent: 100,
+        thoughtCount: 0,
+        createdAt: new Date("2026-04-28T10:05:00Z"),
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 1,
+        duration: 60,
+        completed: true,
+        clearPercent: 80,
+        thoughtCount: 2,
+        createdAt: new Date("2026-04-27T10:00:00Z"),
+      },
+    ];
+
+    expect(calculateSessionStats(sessions).streak).toBe(2);
+  });
 });
