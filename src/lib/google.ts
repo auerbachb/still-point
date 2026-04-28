@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import {
   buddySessionCalendarEvents,
   buddySessions,
@@ -413,59 +414,65 @@ export async function syncBuddySessionCalendarForUser(
     return { status: "skipped", userId, reason: "not_scheduled" };
   }
   try {
-    const [existingEvent] = await db
-      .select({
-        googleEventId: buddySessionCalendarEvents.googleEventId,
-        htmlLink: buddySessionCalendarEvents.htmlLink,
-      })
-      .from(buddySessionCalendarEvents)
-      .where(
-        and(
-          eq(buddySessionCalendarEvents.buddySessionId, session.id),
-          eq(buddySessionCalendarEvents.userId, userId),
-          eq(buddySessionCalendarEvents.status, "created"),
-        ),
-      )
-      .limit(1);
-    if (existingEvent?.googleEventId) {
-      return {
-        status: "created",
-        userId,
-        eventId: existingEvent.googleEventId,
-        htmlLink: existingEvent.htmlLink ?? null,
-      };
-    }
-    const accessToken = await getValidAccessToken(userId);
-    if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
-    const event = await insertCalendarEvent(userId, session, accessToken);
-    if (!event.id) {
-      throw new GoogleCalendarApiError("Google Calendar event response was incomplete", 200, event);
-    }
-    await db
-      .insert(buddySessionCalendarEvents)
-      .values({
-        buddySessionId: session.id,
-        userId,
-        googleEventId: event.id,
-        htmlLink: event.htmlLink ?? null,
-        status: "created",
-        error: null,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [
-          buddySessionCalendarEvents.buddySessionId,
-          buddySessionCalendarEvents.userId,
-        ],
-        set: {
+    return await poolDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`buddy-calendar:${session.id}:${userId}`}))`,
+      );
+
+      const [existingEvent] = await tx
+        .select({
+          googleEventId: buddySessionCalendarEvents.googleEventId,
+          htmlLink: buddySessionCalendarEvents.htmlLink,
+        })
+        .from(buddySessionCalendarEvents)
+        .where(
+          and(
+            eq(buddySessionCalendarEvents.buddySessionId, session.id),
+            eq(buddySessionCalendarEvents.userId, userId),
+            eq(buddySessionCalendarEvents.status, "created"),
+          ),
+        )
+        .limit(1);
+      if (existingEvent?.googleEventId) {
+        return {
+          status: "created",
+          userId,
+          eventId: existingEvent.googleEventId,
+          htmlLink: existingEvent.htmlLink ?? null,
+        };
+      }
+      const accessToken = await getValidAccessToken(userId);
+      if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
+      const event = await insertCalendarEvent(userId, session, accessToken);
+      if (!event.id) {
+        throw new GoogleCalendarApiError("Google Calendar event response was incomplete", 200, event);
+      }
+      await tx
+        .insert(buddySessionCalendarEvents)
+        .values({
+          buddySessionId: session.id,
+          userId,
           googleEventId: event.id,
           htmlLink: event.htmlLink ?? null,
           status: "created",
           error: null,
           updatedAt: new Date(),
-        },
-      });
-    return { status: "created", userId, eventId: event.id, htmlLink: event.htmlLink ?? null };
+        })
+        .onConflictDoUpdate({
+          target: [
+            buddySessionCalendarEvents.buddySessionId,
+            buddySessionCalendarEvents.userId,
+          ],
+          set: {
+            googleEventId: event.id,
+            htmlLink: event.htmlLink ?? null,
+            status: "created",
+            error: null,
+            updatedAt: new Date(),
+          },
+        });
+      return { status: "created", userId, eventId: event.id, htmlLink: event.htmlLink ?? null };
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create Google Calendar event";
     await db
