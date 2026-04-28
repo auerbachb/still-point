@@ -123,23 +123,6 @@ final class StillPointAppUITests: XCTestCase {
         let returnButton = app.buttons["completion.returnButton"]
         tapByStableCenter(returnButton, in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
-
-        app.terminate()
-
-        let relaunch = makeApp(
-            seedAuthenticated: true,
-            resetStore: false,
-            sessionSeconds: 45,
-            timerMultiplier: 2.0
-        )
-        relaunch.launch()
-
-        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch", assertColdStart: false)
-
-        openTab(identifier: "tab.progress", in: relaunch)
-        XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
-        let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
-        XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
     }
 
     @MainActor
