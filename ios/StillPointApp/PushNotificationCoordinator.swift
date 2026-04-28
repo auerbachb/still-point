@@ -3,7 +3,6 @@ import StillPointShared
 import UIKit
 import UserNotifications
 
-@MainActor
 final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationCoordinator()
 
