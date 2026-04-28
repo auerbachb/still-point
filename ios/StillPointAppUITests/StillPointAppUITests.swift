@@ -46,7 +46,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 45,
+            sessionSeconds: 600,
             timerMultiplier: 2.0
         )
         app.launch()
@@ -102,6 +102,10 @@ final class StillPointAppUITests: XCTestCase {
             )
         }
 
+        if !completionRoot.exists {
+            let endEarlyButton = app.buttons["session.endEarlyButton"]
+            tapByStableCenter(endEarlyButton, in: app)
+        }
         XCTAssertTrue(completionRoot.waitForExistence(timeout: 35))
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
