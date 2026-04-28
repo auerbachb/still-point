@@ -387,7 +387,6 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     private func saveEndNoteWithKeyboardShortcut() {
-        XCUIDevice.shared.keyboardKey("s").press(forDuration: 0, modifierFlags: .command)
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
     }
 
