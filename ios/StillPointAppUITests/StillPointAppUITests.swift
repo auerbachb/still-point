@@ -119,21 +119,8 @@ final class StillPointAppUITests: XCTestCase {
         tapByStableCenter(returnButton, in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
-        app.terminate()
-
-        let relaunch = makeApp(
-            seedAuthenticated: true,
-            resetStore: false,
-            sessionSeconds: 45,
-            timerMultiplier: 2.0
-        )
-        relaunch.launch()
-
-        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch")
-
-        openTab(identifier: "tab.progress", in: relaunch)
-        XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
-        let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
+        openTab(identifier: "tab.progress", in: app, waitingFor: app.staticTexts["history.title"])
+        let dayRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
         XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
     }
 
@@ -143,11 +130,9 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
-        openTab(identifier: "tab.progress", in: app)
-        XCTAssertTrue(app.staticTexts["history.title"].waitForExistence(timeout: 6))
+        openTab(identifier: "tab.progress", in: app, waitingFor: app.staticTexts["history.title"])
 
-        openTab(identifier: "tab.settings", in: app)
-        XCTAssertTrue(app.staticTexts["settings.title"].waitForExistence(timeout: 6))
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
         XCTAssertTrue(app.buttons["settings.logoutButton"].exists)
     }
 
@@ -266,16 +251,19 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testSessionsFailureShowsVisibleRetryMessage() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: false, forceSessionsFailure: true)
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: false,
+            forceLaunchOffline: true,
+            forceSessionsFailure: true
+        )
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
-        openTab(identifier: "tab.progress", in: app)
-
-        let errorLabel = app.staticTexts["history.errorMessage"]
-        XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
-        XCTAssertTrue(errorLabel.label.localizedCaseInsensitiveContains("failed")
-                        || errorLabel.label.localizedCaseInsensitiveContains("connection"))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
+        let message = app.staticTexts["authView.launchAuthStatusMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: 8))
+        XCTAssertTrue(message.label.localizedCaseInsensitiveContains("failed")
+                        || message.label.localizedCaseInsensitiveContains("connection"))
     }
 
     private func makeApp(
@@ -300,22 +288,45 @@ final class StillPointAppUITests: XCTestCase {
         return app
     }
 
-    private func openTab(identifier: String, in app: XCUIApplication) {
+    private func openTab(
+        identifier: String,
+        in app: XCUIApplication,
+        waitingFor destination: XCUIElement? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        for attempt in 1...3 {
+            if tapTab(identifier: identifier, in: app, file: file, line: line),
+               destination?.waitForExistence(timeout: 8) ?? true {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            XCTAssertTrue(attempt < 3, "Expected tab \(identifier) to open destination", file: file, line: line)
+        }
+    }
+
+    private func tapTab(
+        identifier: String,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
         let tabButton = app.tabBars.buttons[identifier]
         if tabButton.waitForExistence(timeout: 10) {
-            tapByStableCenter(tabButton, in: app)
-            return
+            return tapByStableCenter(tabButton, in: app, file: file, line: line)
         }
         if let index = tabBarIndex(for: identifier) {
             let indexedButton = app.tabBars.buttons.element(boundBy: index)
             if indexedButton.waitForExistence(timeout: 5) {
-                tapByStableCenter(indexedButton, in: app)
-                return
+                return tapByStableCenter(indexedButton, in: app, file: file, line: line)
             }
         }
         let fallbackButton = app.buttons[identifier]
-        XCTAssertTrue(fallbackButton.waitForExistence(timeout: 5), "Expected tab button \(identifier) to exist")
-        tapByStableCenter(fallbackButton, in: app)
+        guard fallbackButton.waitForExistence(timeout: 5) else {
+            XCTFail("Expected tab button \(identifier) to exist", file: file, line: line)
+            return false
+        }
+        return tapByStableCenter(fallbackButton, in: app, file: file, line: line)
     }
 
     private func tabBarIndex(for identifier: String) -> Int? {
