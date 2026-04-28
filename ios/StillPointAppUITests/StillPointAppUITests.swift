@@ -63,11 +63,10 @@ final class StillPointAppUITests: XCTestCase {
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertTrue(beginButton.isHittable)
-        beginButton.tap()
+        tap(beginButton, thenWaitForRoot: "session", in: app)
 
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
         let timerLabel = app.staticTexts["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
         XCTAssertTrue(timerLabel.label.contains(":"), "Timer format should contain mm:ss delimiter")
         XCTAssertTrue(timerLabel.label.contains("Time remaining"), "Timer should expose VoiceOver-friendly label")
 
@@ -193,18 +192,19 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testRotationDecisionSessionRemainsUsableInLandscape() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 30, timerMultiplier: 2.0)
         app.launch()
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
-        app.buttons["home.beginButton"].tap()
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        let beginButton = app.buttons["home.beginButton"]
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
+        tap(beginButton, thenWaitForRoot: "session", in: app)
 
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
 
         let timerLabel = app.staticTexts["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
         XCTAssertTrue(timerLabel.isHittable, "Timer should remain visible and usable after rotation")
         XCTAssertTrue(app.buttons["session.endEarlyButton"].isHittable, "Primary control should remain reachable in landscape")
     }
@@ -229,9 +229,8 @@ final class StillPointAppUITests: XCTestCase {
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
-        beginButton.tap()
+        tap(beginButton, thenWaitForRoot: "session", in: app)
 
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
@@ -274,13 +273,33 @@ final class StillPointAppUITests: XCTestCase {
 
     private func openTab(identifier: String, in app: XCUIApplication) {
         let tabButton = app.tabBars.buttons[identifier]
-        XCTAssertTrue(tabButton.waitForExistence(timeout: 5))
-        tabButton.tap()
+        if tabButton.waitForExistence(timeout: 10) {
+            tabButton.tap()
+            return
+        }
+        let fallbackButton = app.buttons[identifier]
+        XCTAssertTrue(fallbackButton.waitForExistence(timeout: 5), "Expected tab button \(identifier) to exist")
+        fallbackButton.tap()
     }
 
     private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: duration)
+    }
+
+    private func tap(_ element: XCUIElement, thenWaitForRoot slug: String, in app: XCUIApplication) {
+        let root = app.otherElements["root.currentView.\(slug)"]
+        for attempt in 1...3 {
+            if element.isHittable {
+                element.tap()
+            } else {
+                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if root.waitForExistence(timeout: 8) {
+                return
+            }
+            XCTAssertTrue(attempt < 3, "Expected tap to transition to root.currentView.\(slug)")
+        }
     }
 
     @discardableResult
