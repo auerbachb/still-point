@@ -66,6 +66,12 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
+        // Force the ZStack to surface as a queryable `otherElements` match
+        // regardless of which branch is rendered. Without this, the ZStack
+        // only contains two static Text views during the loading state and
+        // SwiftUI coalesces it away — the UI test then waits 30s for an
+        // accessibility node that never appears (issue #276).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
         .accessibilityValue(coldStartMetricAccessibilityValue)
         .task {

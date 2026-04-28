@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import StillPointShared
+import os
 
 enum AppView: Equatable {
     case auth
@@ -40,6 +41,10 @@ struct CapturedThought: Identifiable {
 @Observable
 @MainActor
 final class AppViewModel {
+    /// Diagnostic logger for `[E2E-DIAG]` lines. os_log is used (not `print`)
+    /// so the lines reach the xcresult bundle in CI. Issue #276.
+    private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
+
     var currentView: AppView = .auth
     var currentUser: UserDTO?
     var isLoading = true
@@ -72,12 +77,14 @@ final class AppViewModel {
         isLoading = true
         defer {
             isLoading = false
-            // Diagnostic for issue #266 / PR #261, gated on UI-test mode so we
-            // don't leak PII (the user's email) in production logs. Only the
-            // UI-test fixture sets SP_UI_TEST_MODE=1, so this print is silent
-            // for real users.
+            // Diagnostic for issue #266 / #276. Gated on UI-test mode so we
+            // don't leak PII in production logs. Switched to os_log
+            // (Logger.notice) because `print()` from the app process is not
+            // captured by Xcode UI test xcresult bundles — that's why the
+            // prior diagnostic from PR #261 never showed up in CI.
             if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
-                print("[E2E-DIAG] checkAuth.done currentView=\(viewSlug(currentView)) currentUser=\(currentUser?.email ?? "nil") elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))")
+                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                Self.diagLog.notice("[E2E-DIAG] checkAuth.done currentView=\(self.viewSlug(self.currentView), privacy: .public) currentUser=\(self.currentUser?.email ?? "nil", privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)")
             }
         }
 
