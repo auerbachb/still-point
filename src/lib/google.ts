@@ -8,7 +8,7 @@ import {
   googleOAuthTokens,
   users,
 } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -266,7 +266,9 @@ export async function exchangeGoogleCodeForTokens(
   });
   const now = new Date();
   const expiresAt = new Date(now.getTime() + token.expires_in * 1000);
-  const existing = await getGoogleOAuthToken(userId);
+  const encryptedRefreshToken = token.refresh_token
+    ? encryptToken(token.refresh_token)
+    : null;
   await db
     .insert(googleOAuthTokens)
     .values({
@@ -274,9 +276,7 @@ export async function exchangeGoogleCodeForTokens(
       googleSub: typeof userInfo.sub === "string" ? userInfo.sub : null,
       googleEmail: typeof userInfo.email === "string" ? userInfo.email : null,
       accessTokenEncrypted: encryptToken(token.access_token),
-      refreshTokenEncrypted: token.refresh_token
-        ? encryptToken(token.refresh_token)
-        : existing?.refreshTokenEncrypted ?? null,
+      refreshTokenEncrypted: encryptedRefreshToken,
       scope: token.scope ?? GOOGLE_SCOPES.join(" "),
       tokenType: token.token_type ?? "Bearer",
       expiryDate: expiresAt,
@@ -288,9 +288,9 @@ export async function exchangeGoogleCodeForTokens(
         googleSub: typeof userInfo.sub === "string" ? userInfo.sub : null,
         googleEmail: typeof userInfo.email === "string" ? userInfo.email : null,
         accessTokenEncrypted: encryptToken(token.access_token),
-        refreshTokenEncrypted: token.refresh_token
-          ? encryptToken(token.refresh_token)
-          : existing?.refreshTokenEncrypted ?? null,
+        refreshTokenEncrypted: encryptedRefreshToken === null
+          ? sql`coalesce(excluded.refresh_token_encrypted, ${googleOAuthTokens.refreshTokenEncrypted})`
+          : encryptedRefreshToken,
         scope: token.scope ?? GOOGLE_SCOPES.join(" "),
         tokenType: token.token_type ?? "Bearer",
         expiryDate: expiresAt,
@@ -359,7 +359,7 @@ function eventDescription(shareToken: string): string {
 }
 
 function googleCalendarEventId(sessionId: string, userId: string): string {
-  return `sp_${crypto.createHash("sha256").update(`${sessionId}:${userId}`).digest("hex")}`;
+  return `sp${crypto.createHash("sha256").update(`${sessionId}:${userId}`).digest("hex")}`;
 }
 
 async function insertCalendarEvent(
@@ -413,8 +413,6 @@ export async function syncBuddySessionCalendarForUser(
     return { status: "skipped", userId, reason: "not_scheduled" };
   }
   try {
-    const accessToken = await getValidAccessToken(userId);
-    if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
     const [existingEvent] = await db
       .select({
         googleEventId: buddySessionCalendarEvents.googleEventId,
@@ -437,6 +435,8 @@ export async function syncBuddySessionCalendarForUser(
         htmlLink: existingEvent.htmlLink ?? null,
       };
     }
+    const accessToken = await getValidAccessToken(userId);
+    if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
     const event = await insertCalendarEvent(userId, session, accessToken);
     if (!event.id) {
       throw new GoogleCalendarApiError("Google Calendar event response was incomplete", 200, event);
