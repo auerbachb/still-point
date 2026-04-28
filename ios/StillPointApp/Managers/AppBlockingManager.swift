@@ -49,10 +49,6 @@ final class AppBlockingManager {
         return unlockUntil > Date()
     }
 
-    var didUnlockFromLastCompletedSession: Bool {
-        lastCompletedSessionUnlockUntil.map { $0 > Date() } ?? false
-    }
-
     var statusText: String {
         guard hasSelection else {
             return "Choose the apps you want Still Point to hold during practice."
