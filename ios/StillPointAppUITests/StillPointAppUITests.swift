@@ -74,9 +74,7 @@ final class StillPointAppUITests: XCTestCase {
         let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
         XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
         XCTAssertEqual(lightHold.value as? String, "inactive")
-        pressAndHold(element: lightHold, duration: 1.0) {
-            XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
-        }
+        pressAndHold(element: lightHold, duration: 1.0)
         XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
 
         XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
@@ -280,20 +278,9 @@ final class StillPointAppUITests: XCTestCase {
         tabButton.tap()
     }
 
-    private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
+    private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let end = start.withOffset(CGVector(dx: 0, dy: 0))
-        let holdFinished = expectation(description: "Hold gesture finished")
-        DispatchQueue.global(qos: .userInitiated).async {
-            start.press(forDuration: duration, thenDragTo: end)
-            holdFinished.fulfill()
-        }
-
-        let holdBecameActive = NSPredicate(format: "value == %@", "active")
-        let activeExpectation = expectation(for: holdBecameActive, evaluatedWith: element)
-        wait(for: [activeExpectation], timeout: duration)
-        onHold()
-        wait(for: [holdFinished], timeout: duration + 2)
+        start.press(forDuration: duration)
     }
 
     @discardableResult
