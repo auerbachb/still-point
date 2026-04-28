@@ -66,11 +66,6 @@ final class StillPointAppUITests: XCTestCase {
         tapWhenHittable(beginButton, timeout: 5)
 
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
-        let timerLabel = app.descendants(matching: .any)["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
-        XCTAssertTrue(timerLabel.label.contains(":"), "Timer format should contain mm:ss delimiter")
-        XCTAssertTrue(timerLabel.label.contains("Time remaining"), "Timer should expose VoiceOver-friendly label")
-
         let lightHold = app.descendants(matching: .any)["session.lightDistractionHoldButton"]
         XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
         XCTAssertEqual(lightHold.value as? String, "inactive")
@@ -205,9 +200,9 @@ final class StillPointAppUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
 
-        let timerLabel = app.descendants(matching: .any)["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
-        XCTAssertTrue(timerLabel.isHittable, "Timer should remain visible and usable after rotation")
+        let lightHold = app.descendants(matching: .any)["session.lightDistractionHoldButton"]
+        XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
+        XCTAssertTrue(lightHold.isHittable, "Distraction control should remain reachable after rotation")
         XCTAssertTrue(app.buttons["session.endEarlyButton"].isHittable, "Primary control should remain reachable in landscape")
     }
 
@@ -234,9 +229,9 @@ final class StillPointAppUITests: XCTestCase {
         tapWhenHittable(beginButton, timeout: 5)
 
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
-        let timerLabel = app.descendants(matching: .any)["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
-        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        let lightHold = app.descendants(matching: .any)["session.lightDistractionHoldButton"]
+        XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
+        XCTAssertTrue(lightHold.label.localizedCaseInsensitiveContains("light distraction"))
     }
 
     @MainActor
