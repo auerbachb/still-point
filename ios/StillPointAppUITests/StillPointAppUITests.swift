@@ -70,7 +70,16 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        tap(beginButton, thenWaitForRoot: "session", in: app)
+        beginButton.tap()
+        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
+        app.terminate()
+        app.launch()
+        waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session")
+        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
+        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
+        app.terminate()
+        app.launch()
+        waitForRoot("session", in: app, failureMessage: "Session screen did not appear")
 
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
@@ -291,6 +300,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = forceLaunchOffline ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
         return app
     }
 
