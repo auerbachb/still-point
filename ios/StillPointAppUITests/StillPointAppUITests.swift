@@ -91,7 +91,7 @@ final class StillPointAppUITests: XCTestCase {
         let saveNoteButton = app.buttons["completion.saveNoteButton"]
         XCTAssertTrue(saveNoteButton.waitForExistence(timeout: 3))
         XCTAssertTrue(saveNoteButton.isHittable)
-        saveNoteButton.tap()
+        saveNoteButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         XCTAssertTrue(
             app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 5),
@@ -100,7 +100,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let returnButton = app.buttons["completion.returnButton"]
         XCTAssertTrue(returnButton.waitForExistence(timeout: 5))
-        returnButton.tap()
+        returnButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
         app.terminate()
