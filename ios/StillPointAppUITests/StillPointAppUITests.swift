@@ -269,7 +269,7 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testSessionsFailureShowsVisibleRetryMessage() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, forceSessionsFailure: true)
+        let app = makeApp(seedAuthenticated: true, resetStore: false, forceSessionsFailure: true)
         app.launch()
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
