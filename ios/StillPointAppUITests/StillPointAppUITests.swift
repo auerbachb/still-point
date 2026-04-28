@@ -92,6 +92,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let returnButton = app.buttons["completion.returnButton"]
         XCTAssertTrue(returnButton.waitForExistence(timeout: 5))
+        scrollToElement(returnButton, in: app)
         returnButton.tap()
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
