@@ -34,6 +34,9 @@ QA owner: iOS QA DRI
 - [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 10`.
 - [x] App Store release notes finalized for this build (see `ios/RELEASING.md`).
 - [x] App Store metadata checklist finalized (privacy policy URL, support URL, account deletion review notes).
+- [x] App Store submission automation dry-run evidence can be generated with `npm run ios:app-store:dry-run`.
+  - Evidence artifact: `artifacts/ios-app-store-dry-run/summary.md`.
+  - Live ASC validation requires `APPSTORE_APP_ID` plus the App Store Connect API key environment variables.
 - [ ] Build submitted to App Store review in App Store Connect.
   - Owner: iOS release DRI
   - Target date: 2026-04-29 (after TestFlight smoke test for this build passes)
