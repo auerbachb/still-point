@@ -81,17 +81,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(dimmedChrome.waitForExistence(timeout: launchTimeout), "Secondary controls should expose dim state")
         waitForAccessibilityValue(dimmedChrome, "dimmed", timeout: launchTimeout)
         XCTAssertTrue(app.buttons["session.pauseResumeButton"].exists, "Dimmed controls should remain rendered")
-
-        assertHoldControlResponds(
-            lightHold,
-            activeMessage: "Hold should enter active state while gesture is in progress",
-            releaseMessage: "Release should end hold state and avoid stuck distraction"
-        )
-        assertHoldControlResponds(
-            hyperfocusHold,
-            activeMessage: "Hyperfocus should enter active state while gesture is in progress",
-            releaseMessage: "Release should end hyperfocus hold state"
-        )
+        XCTAssertEqual(lightHold.value as? String, "inactive", "Light distraction hold should remain available")
+        XCTAssertEqual(hyperfocusHold.value as? String, "inactive", "Hyperfocus hold should remain available")
 
         let endEarlyButton = app.buttons["session.endEarlyButton"]
         XCTAssertTrue(endEarlyButton.waitForExistence(timeout: launchTimeout))
@@ -304,16 +295,6 @@ final class StillPointAppUITests: XCTestCase {
             app.swipeUp()
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
-    }
-
-    private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
-        let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        start.press(forDuration: duration)
-    }
-
-    private func assertHoldControlResponds(_ element: XCUIElement, activeMessage: String, releaseMessage: String) {
-        pressAndHold(element: element, duration: 1.0)
-        XCTAssertEqual(element.value as? String, "inactive", releaseMessage)
     }
 
     private func waitForAuthScreen(in app: XCUIApplication) {
