@@ -93,6 +93,9 @@ final class StillPointAppUITests: XCTestCase {
             releaseMessage: "Release should end hyperfocus hold state"
         )
 
+        let endEarlyButton = app.buttons["session.endEarlyButton"]
+        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: launchTimeout))
+        endEarlyButton.tap()
         XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
@@ -104,6 +107,7 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(endNoteEditor.waitForExistence(timeout: 5), "End-of-session note editor should be present")
         endNoteEditor.tap()
         endNoteEditor.typeText("e2e end note")
+        app.swipeUp()
 
         let saveNoteButton = app.buttons["completion.saveNoteButton"]
         XCTAssertTrue(saveNoteButton.waitForExistence(timeout: 3))
