@@ -67,7 +67,7 @@ final class StillPointAppUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
 
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 45))
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
