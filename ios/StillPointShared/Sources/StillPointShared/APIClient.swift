@@ -41,13 +41,15 @@ public actor APIClient {
                 // bled across tests previously: Keychain auth tokens, cookies, URL
                 // credentials, AudioEngine sound prefs. Issue #266 surfaced this
                 // when the runner script started actually running tests after the
-                // silent-skip fix from issue #253. Issue #276 added the SwiftData
-                // wipe — the previous reset path missed Application Support, so
-                // SwiftData's `default.store*` files persisted across tests.
+                // silent-skip fix from issue #253.
+                // Note: the SwiftData store is wiped earlier in
+                // `StillPointApp.init()`, before `.modelContainer(...)` opens
+                // its SQLite files (issue #276 — APIClient.init runs lazily
+                // from RootView's .task, which is too late to delete an
+                // already-open store).
                 defaults.removeObject(forKey: uiTestStoreDefaultsKey)
                 AudioEngine.resetPersistedPrefs()
                 Self.clearPersistedSessionArtifacts(session: session)
-                Self.clearSwiftDataPersistentStore()
                 // Flush the in-memory cache to cfprefsd so the immediately
                 // following read sees the cleared state. Issue #266 follow-up.
                 defaults.synchronize()
@@ -70,24 +72,6 @@ public actor APIClient {
             Self.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(parsedUITestConfig.seedAuthenticated, privacy: .public) resetStore=\(parsedUITestConfig.resetStore, privacy: .public) forceOffline=\(parsedUITestConfig.forceLaunchOffline, privacy: .public) forceTokenExpired=\(parsedUITestConfig.forceTokenExpired, privacy: .public) finalIsAuthenticated=\(resolvedStore.isAuthenticated, privacy: .public)")
         } else {
             Self.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=NO")
-        }
-    }
-
-    /// Wipe the SwiftData persistent store files from Application Support.
-    /// Called only when `SP_UI_TEST_RESET_STORE=1`. The model container at
-    /// `StillPointApp.swift` uses the default location, which writes
-    /// `default.store{,-shm,-wal}` into `~/Library/Application Support/`.
-    /// Removing those files between tests prevents stale `User`/`Session`/
-    /// `Thought` rows from bleeding across UI-test methods (issue #276).
-    private static func clearSwiftDataPersistentStore() {
-        let fm = FileManager.default
-        guard let appSupport = try? fm.url(for: .applicationSupportDirectory,
-                                           in: .userDomainMask,
-                                           appropriateFor: nil,
-                                           create: false) else { return }
-        for suffix in ["", "-shm", "-wal"] {
-            let url = appSupport.appendingPathComponent("default.store\(suffix)")
-            try? fm.removeItem(at: url)
         }
     }
 
