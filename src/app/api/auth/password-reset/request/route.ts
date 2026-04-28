@@ -64,15 +64,10 @@ export async function POST(request: NextRequest) {
       }
 
       const [previousToken] = await tx
-        .select({ id: passwordResetTokens.id })
-        .from(passwordResetTokens)
-        .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)))
-        .limit(1);
-
-      await tx
         .update(passwordResetTokens)
         .set({ usedAt: new Date() })
-        .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+        .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)))
+        .returning({ id: passwordResetTokens.id });
 
       const resetToken = await createPasswordResetToken({ userId: user.id });
       const [newToken] = await tx
