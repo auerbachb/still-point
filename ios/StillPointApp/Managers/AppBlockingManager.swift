@@ -87,6 +87,10 @@ final class AppBlockingManager {
         refreshShielding()
     }
 
+    func prepareForSession() {
+        didUnlockFromLastCompletedSession = false
+    }
+
     func unlockAfterCompletedSession() {
         didUnlockFromLastCompletedSession = false
         guard hasSelection else { return }
