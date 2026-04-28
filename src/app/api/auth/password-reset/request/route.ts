@@ -63,6 +63,11 @@ export async function POST(request: NextRequest) {
         return null;
       }
 
+      await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+
       const resetToken = await createPasswordResetToken({ userId: user.id });
       await tx.insert(passwordResetTokens).values({
         userId: user.id,
