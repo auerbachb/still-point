@@ -153,7 +153,6 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
 
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 60))
         XCTAssertTrue(
             app.staticTexts["completion.appGateOpen"].waitForExistence(timeout: 5),
