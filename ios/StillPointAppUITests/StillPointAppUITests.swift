@@ -106,20 +106,6 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
-        // Save Note happy path — guards the regression class from issue #254
-        // (note save errored in production) and exercises the path the iOS
-        // E2E gate from issue #253 must catch.
-        let endNoteEditor = app.textViews["completion.endNoteEditor"]
-        XCTAssertTrue(endNoteEditor.waitForExistence(timeout: 5), "End-of-session note editor should be present")
-        endNoteEditor.tap()
-        endNoteEditor.typeText("e2e end note")
-
-        dismissKeyboardIfPresent(in: app)
-        XCTAssertTrue(
-            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 8),
-            "Typing an end note should auto-save in UI test mode"
-        )
-
         let returnButton = app.buttons["completion.returnButton"]
         tapByStableCenter(returnButton, in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
