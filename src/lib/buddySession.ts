@@ -169,6 +169,7 @@ export function buildBuddySnapshot(
     state: session.state as BuddySessionState,
     revision: session.revision,
     durationSeconds: session.durationSeconds,
+    scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
     startedAt: session.startedAt?.toISOString() ?? null,
     serverNow: serverNow.toISOString(),
     endsAt,

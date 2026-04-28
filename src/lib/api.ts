@@ -106,6 +106,7 @@ export type BuddySnapshot = {
   state: string;
   revision: number;
   durationSeconds: number;
+  scheduledStartAt: string | null;
   startedAt: string | null;
   serverNow: string;
   endsAt: string | null;
@@ -117,6 +118,11 @@ export type BuddySnapshot = {
   isHost: boolean;
   participants: BuddyParticipantSnap[];
 };
+
+export type CalendarSyncResult =
+  | { status: "created"; userId: string; eventId: string; htmlLink: string | null }
+  | { status: "skipped"; userId: string; reason: string }
+  | { status: "failed"; userId: string; error: string };
 
 export const api = {
   signup: (data: { email: string; username: string; password: string }) =>
@@ -200,13 +206,30 @@ export const api = {
   removeFriend: (friendUserId: string) =>
     request<{ ok: boolean }>(`/api/friends/${friendUserId}`, { method: "DELETE" }),
 
-  createBuddySession: () =>
+  getGoogleCalendarStatus: () =>
+    request<{ google: { connected: boolean; email: string | null } }>("/api/auth/google/status"),
+
+  createBuddySession: (data?: { scheduledStartAt?: string | null }) =>
     request<{
-      session: { id: string; shareToken: string; sharePath: string; durationSeconds: number };
-    }>("/api/buddy/sessions", { method: "POST" }),
+      session: {
+        id: string;
+        shareToken: string;
+        sharePath: string;
+        durationSeconds: number;
+        scheduledStartAt: string | null;
+        calendarSync: CalendarSyncResult[];
+      };
+    }>("/api/buddy/sessions", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    }),
 
   joinBuddySession: (token: string) =>
-    request<{ sessionId: string }>("/api/buddy/sessions/join", {
+    request<{
+      sessionId: string;
+      scheduledStartAt?: string | null;
+      calendarSync?: CalendarSyncResult[];
+    }>("/api/buddy/sessions/join", {
       method: "POST",
       body: JSON.stringify({ token }),
     }),

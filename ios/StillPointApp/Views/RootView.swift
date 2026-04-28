@@ -1,5 +1,6 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct RootView: View {
     @State private var appVM = AppViewModel()
@@ -7,68 +8,93 @@ struct RootView: View {
     var body: some View {
         ZStack {
             SPColor.bg.ignoresSafeArea()
+                .allowsHitTesting(false)
 
-            if appVM.isLoading {
-                // Loading state — brand lockup
-                VStack(spacing: SPSpacing.s2) {
-                    Text("Still Point")
-                        .font(SPFont.brandTitle)
-                        .foregroundStyle(Color(SPColor.fg))
-                    Text("ATTENTION TRAINING")
-                        .font(SPFont.brandSubtitle)
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .tracking(4)
-                    if let authStatusMessage = appVM.authStatusMessage {
-                        Text(authStatusMessage)
-                            .font(SPFont.mono(12))
-                            .foregroundStyle(SPColor.dangerMuted)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, SPSpacing.s4)
-                            .padding(.top, SPSpacing.s3)
-                            .accessibilityIdentifier("root.authStatusMessage")
-                    }
-                }
-            } else {
-                switch appVM.currentView {
-                case .auth:
-                    AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
-                        .transition(.opacity)
-
-                case .session(let sessionType):
-                    SessionView(appVM: appVM, sessionType: sessionType)
-                        .transition(.opacity)
-
-                case .buddyHub:
-                    BuddySessionHubView(appVM: appVM)
-                        .transition(.opacity)
-
-                case .buddySession(let sessionId):
-                    BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
-                        .id(sessionId)
-                        .transition(.opacity)
-
-                case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration):
-                    CompletionView(
-                        appVM: appVM,
-                        sessionId: sessionId,
-                        clearPercent: clearPercent,
-                        thoughtCount: thoughtCount,
-                        thoughts: thoughts,
-                        dayNumber: dayNumber,
-                        sessionType: sessionType,
-                        duration: duration
-                    )
+            // Always render the current-view branch so the accessibility
+            // tree (and the `root.currentView.*` identifier on the ZStack
+            // below) is consistent from t=0. Issue #276.
+            switch appVM.currentView {
+            case .auth:
+                AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
                     .transition(.opacity)
 
-                default:
-                    MainTabView(appVM: appVM)
-                        .transition(.opacity)
+            case .session(let sessionType):
+                SessionView(appVM: appVM, sessionType: sessionType)
+                    .transition(.opacity)
+
+            case .buddyHub:
+                BuddySessionHubView(appVM: appVM)
+                    .transition(.opacity)
+
+            case .buddySession(let sessionId):
+                BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
+                    .id(sessionId)
+                    .transition(.opacity)
+
+            case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration):
+                CompletionView(
+                    appVM: appVM,
+                    sessionId: sessionId,
+                    clearPercent: clearPercent,
+                    thoughtCount: thoughtCount,
+                    thoughts: thoughts,
+                    dayNumber: dayNumber,
+                    sessionType: sessionType,
+                    duration: duration
+                )
+                .transition(.opacity)
+
+            default:
+                MainTabView(appVM: appVM)
+                    .transition(.opacity)
+            }
+
+            // Brand-lockup overlay during cold-start auth check. Sits on top
+            // of the current-view branch and dismisses when checkAuth flips
+            // isLoading to false.
+            if appVM.isLoading {
+                ZStack {
+                    SPColor.bg.ignoresSafeArea()
+                    VStack(spacing: SPSpacing.s2) {
+                        Text("Still Point")
+                            .font(SPFont.brandTitle)
+                            .foregroundStyle(Color(SPColor.fg))
+                        Text("ATTENTION TRAINING")
+                            .font(SPFont.brandSubtitle)
+                            .foregroundStyle(Color(SPColor.fg3))
+                            .tracking(4)
+                        if let authStatusMessage = appVM.authStatusMessage {
+                            Text(authStatusMessage)
+                                .font(SPFont.mono(12))
+                                .foregroundStyle(SPColor.dangerMuted)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, SPSpacing.s4)
+                                .padding(.top, SPSpacing.s3)
+                                .accessibilityIdentifier("root.authStatusMessage")
+                        }
+                    }
                 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .transition(.opacity)
+            }
+        }
+        // Explicit accessibility marker for UI tests. Putting the identifier
+        // on the ZStack itself proved unreliable on iOS 26, while a full-screen
+        // SwiftUI accessibility overlay could still confuse XCUITest hit-point
+        // resolution. This tiny UIKit marker is queryable but never interactive.
+        .overlay(alignment: .topLeading) {
+            if isUITestMode {
+                AccessibilityMarkerView(
+                    identifier: "root.currentView.\(viewAccessibilitySlug)",
+                    value: coldStartMetricAccessibilityValue
+                )
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
-        .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
-        .accessibilityValue(coldStartMetricAccessibilityValue)
+        .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
         .task {
             await appVM.checkAuth()
         }
@@ -105,5 +131,33 @@ struct RootView: View {
     private var coldStartMetricAccessibilityValue: String {
         guard let ms = appVM.lastColdStartAuthCheckMs else { return "coldStartAuthCheckMs=unknown" }
         return "coldStartAuthCheckMs=\(ms)"
+    }
+
+    private var isUITestMode: Bool {
+        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"])
+    }
+
+    private func truthy(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
+    }
+}
+
+private struct AccessibilityMarkerView: UIViewRepresentable {
+    let identifier: String
+    let value: String
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = true
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        view.accessibilityIdentifier = identifier
+        view.accessibilityValue = value
+        view.accessibilityLabel = identifier
     }
 }

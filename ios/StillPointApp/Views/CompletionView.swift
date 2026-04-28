@@ -1,7 +1,10 @@
 import SwiftUI
 import StillPointShared
+import os
 
 struct CompletionView: View {
+    private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
+
     let appVM: AppViewModel
     let sessionId: String
     let clearPercent: Int
@@ -15,6 +18,7 @@ struct CompletionView: View {
     @State private var noteSaved = false
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var uiTestAutoSaveTask: Task<Void, Never>?
 
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
@@ -206,8 +210,9 @@ struct CompletionView: View {
             .padding(.horizontal, SPSpacing.s4)
         }
         .stillPointBackground()
-        .onChange(of: endNote) { _, _ in
+        .onChange(of: endNote) { _, newValue in
             saveError = nil
+            scheduleUITestAutoSaveIfNeeded(for: newValue)
         }
     }
 
@@ -257,10 +262,12 @@ struct CompletionView: View {
                 _ = try await APIClient.shared.batchThoughts(request)
                 isSaving = false
                 noteSaved = true
+                logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
             } catch let error as APIError {
                 print("Failed to save end note: \(error)")
                 isSaving = false
                 saveError = saveErrorMessage(for: error.status)
+                logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
             } catch {
                 print("Failed to save end note: \(error)")
                 isSaving = false
@@ -270,8 +277,36 @@ struct CompletionView: View {
                 } else {
                     saveError = "Failed to save note"
                 }
+                logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
             }
         }
+    }
+
+    private func scheduleUITestAutoSaveIfNeeded(for note: String) {
+        guard isUITestMode, !note.isEmpty, !sessionId.isEmpty, !noteSaved else { return }
+        uiTestAutoSaveTask?.cancel()
+        uiTestAutoSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled,
+                  endNote == note,
+                  !isSaving,
+                  !noteSaved else { return }
+            saveEndNote()
+        }
+    }
+
+    private func logUITestDiagnostic(_ message: String) {
+        guard isUITestMode else { return }
+        Self.diagLog.notice("[E2E-DIAG] \(message, privacy: .public)")
+    }
+
+    private var isUITestMode: Bool {
+        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"])
+    }
+
+    private func truthy(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
     private func saveErrorMessage(for status: Int) -> String {

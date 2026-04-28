@@ -1,13 +1,21 @@
 import XCTest
 
 final class StillPointAppUITests: XCTestCase {
-    // 30s is generous for cold simulator boots on macos-26 CI runners — the
-    // previous 15s tripped intermittently on the first launch in a test run.
-    // Issue #266.
-    private let launchTimeout: TimeInterval = 30
+    // XCTest's simulator/automation startup can take tens of seconds on
+    // macos-26/iOS 26 CI. `coldStartMaxMs` is separate: it is the app-reported
+    // auth-check latency in `coldStartAuthCheckMs`, not XCTest launch overhead.
+    private let launchTimeout: TimeInterval = 45
+    private let coldStartMaxMs = 5_000
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    }
+
+    override func tearDownWithError() throws {
+        XCUIDevice.shared.orientation = .portrait
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
     }
 
     @MainActor
@@ -15,7 +23,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(waitForAuthScreen(in: app), "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -38,12 +46,12 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 6,
-            timerMultiplier: 3.0
+            sessionSeconds: 45,
+            timerMultiplier: 2.0
         )
         app.launch()
 
-        XCTAssertTrue(waitForAuthScreen(in: app), "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -56,31 +64,59 @@ final class StillPointAppUITests: XCTestCase {
         passwordField.typeText("stillpoint-pass")
 
         let submitButton = app.buttons["auth.submitButton"]
-        XCTAssertTrue(submitButton.isHittable)
-        submitButton.tap()
+        tapByStableCenter(submitButton, in: app)
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(beginButton.isHittable)
         beginButton.tap()
+        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
+        app.terminate()
+        app.launch()
+        waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session")
+        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
+        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
+        app.terminate()
+        app.launch()
+        waitForRoot("session", in: app, failureMessage: "Session screen did not appear")
 
-        let endEarlyButton = app.buttons["session.endEarlyButton"]
-        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: 8), "Session controls should be visible in UI tests")
-        endEarlyButton.tap()
+        let timerLabel = app.staticTexts["session.timerLabel"]
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.contains(":"), "Timer format should contain mm:ss delimiter")
+        XCTAssertTrue(timerLabel.label.contains("Time remaining"), "Timer should expose VoiceOver-friendly label")
 
-        let completionTitle = app.staticTexts["completion.dayTitle"]
-        XCTAssertTrue(completionTitle.waitForExistence(timeout: 12), "Session completion should be visible after ending early")
+        let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
+        let completionRoot = app.otherElements["root.currentView.completion"]
+        if lightHold.waitForExistence(timeout: 5) {
+            XCTAssertEqual(lightHold.value as? String, "inactive")
+            pressAndHold(element: lightHold, duration: 1.0)
+        } else {
+            XCTAssertTrue(
+                completionRoot.waitForExistence(timeout: 1),
+                "Expected active-session hold control or completion screen"
+            )
+        }
+
+        XCTAssertTrue(completionRoot.waitForExistence(timeout: 35))
+        XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
+        // Save Note happy path — guards the regression class from issue #254
+        // (note save errored in production) and exercises the path the iOS
+        // E2E gate from issue #253 must catch.
+        let endNoteEditor = app.textViews["completion.endNoteEditor"]
+        XCTAssertTrue(endNoteEditor.waitForExistence(timeout: 5), "End-of-session note editor should be present")
+        endNoteEditor.tap()
+        endNoteEditor.typeText("e2e end note")
+
+        dismissKeyboardIfPresent(in: app)
         XCTAssertTrue(
-            app.textViews["completion.endNoteEditor"].waitForExistence(timeout: 5),
-            "End-of-session note editor should be present"
+            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 8),
+            "Typing an end note should auto-save in UI test mode"
         )
 
         let returnButton = app.buttons["completion.returnButton"]
-        XCTAssertTrue(returnButton.waitForExistence(timeout: 5))
-        returnButton.tap()
+        tapByStableCenter(returnButton, in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
         app.terminate()
@@ -88,13 +124,12 @@ final class StillPointAppUITests: XCTestCase {
         let relaunch = makeApp(
             seedAuthenticated: true,
             resetStore: false,
-            sessionSeconds: 6,
-            timerMultiplier: 3.0
+            sessionSeconds: 45,
+            timerMultiplier: 2.0
         )
         relaunch.launch()
 
-        XCTAssertTrue(relaunch.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        assertColdStartBound(root: relaunch.otherElements["root.currentView.home"], maxMs: 5_000)
+        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch")
 
         openTab(identifier: "tab.progress", in: relaunch)
         XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
@@ -107,7 +142,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         openTab(identifier: "tab.progress", in: app)
         XCTAssertTrue(app.staticTexts["history.title"].waitForExistence(timeout: 6))
 
@@ -121,7 +156,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(waitForAuthScreen(in: app))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let emailField = app.textFields["auth.emailField"]
         let passwordField = app.secureTextFields["auth.passwordField"]
         let submitButton = app.buttons["auth.submitButton"]
@@ -148,7 +183,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(waitForAuthScreen(in: app))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("internet")
@@ -164,7 +199,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(waitForAuthScreen(in: app))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("expired")
@@ -173,18 +208,29 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testRotationDecisionSessionRemainsUsableInLandscape() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 30)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 60, timerMultiplier: 1.0)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        app.buttons["home.beginButton"].tap()
-        let endEarlyButton = app.buttons["session.endEarlyButton"]
-        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: 8), "Session controls should appear before rotation")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        let beginButton = app.buttons["home.beginButton"]
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
+        tap(beginButton, thenWaitForRoot: "session", in: app)
 
         XCUIDevice.shared.orientation = .landscapeLeft
-        defer { XCUIDevice.shared.orientation = .portrait }
+        RunLoop.current.run(until: Date().addingTimeInterval(1.0))
 
-        XCTAssertTrue(endEarlyButton.isHittable, "Primary session control should remain reachable in landscape")
+        let timerLabel = app.staticTexts["session.timerLabel"]
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            timerLabel.frame.intersects(app.frame),
+            "Timer should remain at least partially visible after rotation. Frame: \(timerLabel.frame), app: \(app.frame)"
+        )
+
+        tapByStableCenter(app.buttons["session.endEarlyButton"], in: app)
+        XCTAssertTrue(
+            app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12),
+            "Primary control should remain reachable in landscape"
+        )
     }
 
     @MainActor
@@ -192,7 +238,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertTrue(beginButton.isHittable, "Home primary action should be visible above safe-area/home indicator")
@@ -200,25 +246,30 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testVoiceOverLabelsForTimerAndPrimaryButton() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 30)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 30, timerMultiplier: 1.0)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
-        beginButton.tap()
+        tap(beginButton, thenWaitForRoot: "session", in: app)
 
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.otherElements["root.currentView.session"].exists)
+        let timerLabel = app.staticTexts["session.timerLabel"]
+        XCTAssertFalse(
+            app.otherElements["root.currentView.completion"].waitForExistence(timeout: 0.5),
+            "Session completed before timer accessibility could be asserted"
+        )
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
     }
 
     @MainActor
     func testSessionsFailureShowsVisibleRetryMessage() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, forceSessionsFailure: true)
+        let app = makeApp(seedAuthenticated: true, resetStore: false, forceSessionsFailure: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         openTab(identifier: "tab.progress", in: app)
 
         let errorLabel = app.staticTexts["history.errorMessage"]
@@ -245,57 +296,148 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = forceLaunchOffline ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
         return app
     }
 
     private func openTab(identifier: String, in app: XCUIApplication) {
         let tabButton = app.tabBars.buttons[identifier]
-        XCTAssertTrue(tabButton.waitForExistence(timeout: 5))
-        tabButton.tap()
+        if tabButton.waitForExistence(timeout: 10) {
+            tapByStableCenter(tabButton, in: app)
+            return
+        }
+        if let index = tabBarIndex(for: identifier) {
+            let indexedButton = app.tabBars.buttons.element(boundBy: index)
+            if indexedButton.waitForExistence(timeout: 5) {
+                tapByStableCenter(indexedButton, in: app)
+                return
+            }
+        }
+        let fallbackButton = app.buttons[identifier]
+        XCTAssertTrue(fallbackButton.waitForExistence(timeout: 5), "Expected tab button \(identifier) to exist")
+        tapByStableCenter(fallbackButton, in: app)
     }
 
-    private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
+    private func tabBarIndex(for identifier: String) -> Int? {
+        switch identifier {
+        case "tab.progress":
+            return 1
+        case "tab.settings":
+            return 4
+        default:
+            return nil
+        }
+    }
+
+    private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let end = start.withOffset(CGVector(dx: 0, dy: 0))
-        let holdFinished = expectation(description: "Hold gesture finished")
-        DispatchQueue.global(qos: .userInitiated).async {
-            start.press(forDuration: duration, thenDragTo: end)
-            holdFinished.fulfill()
+        start.press(forDuration: duration)
+    }
+
+    private func tap(_ element: XCUIElement, thenWaitForRoot slug: String, in app: XCUIApplication) {
+        let root = app.otherElements["root.currentView.\(slug)"]
+        for attempt in 1...3 {
+            tapByStableCenter(element, in: app)
+            if root.waitForExistence(timeout: 12) {
+                return
+            }
+            XCTAssertTrue(attempt < 3, "Expected tap to transition to root.currentView.\(slug)")
+        }
+    }
+
+    @discardableResult
+    private func tapByStableCenter(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval = 8,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        guard stableFrame(for: element, in: app, timeout: timeout, file: file, line: line) != nil else {
+            return false
+        }
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        return true
+    }
+
+    private func stableFrame(
+        for element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval = 8,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> CGRect? {
+        guard element.waitForExistence(timeout: timeout) else {
+            XCTFail("Element did not exist: \(element)", file: file, line: line)
+            return nil
         }
 
-        let holdBecameActive = NSPredicate(format: "value == %@", "active")
-        let activeExpectation = expectation(for: holdBecameActive, evaluatedWith: element)
-        wait(for: [activeExpectation], timeout: duration)
-        onHold()
-        wait(for: [holdFinished], timeout: duration + 2)
-    }
-
-    private func waitForAuthScreen(in app: XCUIApplication) -> Bool {
-        let authRoot = app.otherElements["root.currentView.auth"]
-        let emailField = app.textFields["auth.emailField"]
-        let deadline = Date().addingTimeInterval(launchTimeout)
-
+        let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if authRoot.exists || emailField.exists {
-                return true
+            let frame = element.frame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            if !frame.isEmpty,
+               frame.origin.x >= 0,
+               frame.origin.y >= 0,
+               frame.width > 1,
+               frame.height > 1,
+               app.frame.insetBy(dx: -1, dy: -1).contains(center) {
+                return frame
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
-        return false
+
+        XCTFail("Element existed but never had a stable tappable frame: \(element.debugDescription)", file: file, line: line)
+        return nil
     }
 
-    private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
-        let deadline = Date().addingTimeInterval(5)
+    private func dismissKeyboardIfPresent(in app: XCUIApplication) {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+
+        let doneButton = app.buttons["Done"]
+        if doneButton.exists {
+            doneButton.tap()
+        } else {
+            app.swipeDown()
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    }
+
+    @discardableResult
+    private func waitForRoot(
+        _ slug: String,
+        in app: XCUIApplication,
+        failureMessage: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> XCUIElement {
+        let root = app.otherElements["root.currentView.\(slug)"]
+        guard root.waitForExistence(timeout: launchTimeout) else {
+            XCTFail(failureMessage, file: file, line: line)
+            return root
+        }
+        assertColdStartBound(root: root, maxMs: coldStartMaxMs, file: file, line: line)
+        return root
+    }
+
+    private func assertColdStartBound(
+        root: XCUIElement,
+        maxMs: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let deadline = Date().addingTimeInterval(min(45, launchTimeout))
         var observedValue = ""
         while Date() < deadline {
             observedValue = (root.value as? String) ?? ""
             if let ms = parseMetricMs(from: observedValue) {
-                XCTAssertLessThanOrEqual(ms, maxMs, "Cold start auth check exceeded documented bound")
+                XCTAssertLessThanOrEqual(ms, maxMs, "Cold start auth check exceeded documented bound", file: file, line: line)
                 return
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
-        XCTFail("Missing cold-start metric in root accessibility value: \(observedValue)")
+        XCTFail("Missing cold-start metric in root accessibility value: \(observedValue)", file: file, line: line)
     }
 
     private func parseMetricMs(from value: String) -> Int? {

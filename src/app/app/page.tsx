@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { User } from "@/lib/api";
+import type { CalendarSyncResult, User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
@@ -46,6 +46,14 @@ function getLocalIsoDate(): string {
   return `${year}-${month}-${day}`;
 }
 
+function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
+  const item = sync?.[0];
+  if (!item) return null;
+  if (item.status === "created") return "Added this scheduled sit to your Google Calendar.";
+  if (item.status === "skipped") return "Google Calendar is not connected on this account.";
+  return "Could not add this sit to Google Calendar, but you joined successfully.";
+}
+
 export default function StillPoint() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<View>("home");
@@ -56,6 +64,7 @@ export default function StillPoint() {
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
+  const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
   const isMobile = useIsMobile();
 
@@ -117,9 +126,10 @@ export default function StillPoint() {
 
     (async () => {
       try {
-        const { sessionId } = await api.joinBuddySession(raw);
+        const { sessionId, calendarSync } = await api.joinBuddySession(raw);
         if (cancelled) return;
         setBuddyInviteError(null);
+        setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync));
         setBuddySessionId(sessionId);
         setView("buddy");
         window.history.replaceState({}, "", "/app");
@@ -147,6 +157,7 @@ export default function StillPoint() {
   const handleLogout = () => {
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
+    setBuddyCalendarMessage(null);
     setUser(null);
     setView("home");
   };
@@ -158,12 +169,14 @@ export default function StillPoint() {
 
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
+    setBuddyCalendarMessage(null);
     setBuddyInviteError(null);
     setView("home");
   }, []);
 
   const handleBuddyPersonalRecordComplete = useCallback((data: BuddyPersonalRecordPayload) => {
     setBuddySessionId(null);
+    setBuddyCalendarMessage(null);
     setCompletionData({
       sessionId: data.sessionId,
       dayNumber: data.dayNumber,
@@ -506,6 +519,7 @@ export default function StillPoint() {
           onQuickBegin={() => handleBegin("quick")}
           onBuddy={() => {
             setBuddySessionId(null);
+            setBuddyCalendarMessage(null);
             setBuddyInviteError(null);
             setView("buddy");
           }}
@@ -514,7 +528,10 @@ export default function StillPoint() {
 
       {view === "buddy" && !buddySessionId && (
         <BuddySessionHub
-          onEnterSession={(id) => setBuddySessionId(id)}
+          onEnterSession={(id, calendarSync) => {
+            setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync ?? undefined));
+            setBuddySessionId(id);
+          }}
           onBack={handleBuddyExit}
         />
       )}
@@ -523,6 +540,7 @@ export default function StillPoint() {
         <BuddySessionRoom
           sessionId={buddySessionId}
           currentUserId={user.id}
+          calendarMessage={buddyCalendarMessage}
           onExit={handleBuddyExit}
           onPersonalRecordComplete={handleBuddyPersonalRecordComplete}
         />

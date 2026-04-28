@@ -20,10 +20,6 @@ export function isSessionType(value: unknown): value is SessionType {
   return typeof value === "string" && SESSION_TYPES.includes(value as SessionType);
 }
 
-export function resolveSessionType(value: unknown): SessionType {
-  return value === undefined || value === null ? "standard" : isSessionType(value) ? value : "standard";
-}
-
 export function parseOptionalSessionType(value: unknown): SessionType | null {
   if (value === undefined || value === null) {
     return "standard";

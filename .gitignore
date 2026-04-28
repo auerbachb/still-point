@@ -15,6 +15,7 @@
 /playwright-report/
 /test-results/
 /artifacts/e2e/
+/artifacts/ios-app-store-dry-run/
 
 # next.js
 /.next/

@@ -7,8 +7,32 @@ import {
   bumpBuddyRevision,
   reconcileBuddySession,
 } from "@/lib/buddySession";
+import {
+  GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
+  syncBuddySessionCalendarForUser,
+} from "@/lib/google";
 import { and, eq } from "drizzle-orm";
 import { readJsonObject } from "@/lib/readJsonObject";
+import type { CalendarSyncResult } from "@/lib/google";
+
+async function syncCalendarBestEffort(
+  session: typeof buddySessions.$inferSelect,
+  userId: string,
+): Promise<CalendarSyncResult[]> {
+  if (!session.scheduledStartAt) return [];
+  try {
+    return [await syncBuddySessionCalendarForUser(session, userId)];
+  } catch (error) {
+    console.error("Buddy join Google Calendar sync error:", error);
+    return [
+      {
+        status: "failed" as const,
+        userId,
+        error: GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
+      },
+    ];
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,7 +103,12 @@ export async function POST(request: NextRequest) {
         .where(eq(buddySessionParticipants.id, existing.id));
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      return NextResponse.json({ sessionId: session.id });
+      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
+      return NextResponse.json({
+        sessionId: session.id,
+        scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
+        calendarSync,
+      });
     }
 
     if (session.state === "waiting" || session.state === "ready_check") {
@@ -104,7 +133,12 @@ export async function POST(request: NextRequest) {
       }
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      return NextResponse.json({ sessionId: session.id });
+      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
+      return NextResponse.json({
+        sessionId: session.id,
+        scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
+        calendarSync,
+      });
     }
 
     return NextResponse.json({ error: "Cannot join this session" }, { status: 409 });

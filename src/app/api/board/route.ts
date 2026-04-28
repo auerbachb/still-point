@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, sessions } from "@/db/schema";
+import { calculateSessionStats } from "@/lib/constants";
 import { eq, desc, and } from "drizzle-orm";
 
 export async function GET() {
@@ -20,36 +21,25 @@ export async function GET() {
     const board = await Promise.all(publicUsers.map(async (user) => {
       const userSessions = await db.select({
         dayNumber: sessions.dayNumber,
+        sessionType: sessions.sessionType,
+        duration: sessions.duration,
         completed: sessions.completed,
         clearPercent: sessions.clearPercent,
+        thoughtCount: sessions.thoughtCount,
         sessionDate: sessions.sessionDate,
       })
         .from(sessions)
         .where(and(eq(sessions.userId, user.id), eq(sessions.sessionType, "standard")))
         .orderBy(desc(sessions.dayNumber));
 
-      const completedSessions = userSessions.filter(s => s.completed);
-      const totalSessions = completedSessions.length;
-
-      // Streak: consecutive completed sessions from the latest
-      let streak = 0;
-      for (const s of userSessions) {
-        if (s.completed) {
-          streak++;
-        } else {
-          break;
-        }
-      }
-
-      const avgClear = totalSessions > 0
-        ? Math.round(completedSessions.reduce((sum, s) => sum + s.clearPercent, 0) / totalSessions)
-        : 0;
+      const stats = calculateSessionStats(userSessions);
+      const totalSessions = userSessions.filter(s => s.completed).length;
 
       return {
         username: user.username,
         currentDay: user.currentDay,
-        streak,
-        avgClear,
+        streak: stats.streak,
+        avgClear: stats.avgClearPercent,
         totalSessions,
       };
     }));

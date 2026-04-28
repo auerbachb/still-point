@@ -10,6 +10,7 @@ struct SessionView: View {
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard) {
         self.appVM = appVM
@@ -75,7 +76,7 @@ struct SessionView: View {
                 if sessionInProgress {
                     persistentDistractionBar
                 }
-                if vm.controlsVisible || !vm.isActive {
+                if controlsShouldBeVisible {
                     controlPanel
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -162,10 +163,14 @@ struct SessionView: View {
     }
 
     private var bottomOverlayReserve: CGFloat {
-        if vm.controlsVisible || !vm.isActive {
+        if controlsShouldBeVisible {
             return Self.bottomOverlayReserveWithControls
         }
         return Self.bottomOverlayReserveDistractionOnly
+    }
+
+    private var controlsShouldBeVisible: Bool {
+        vm.controlsVisible || !vm.isActive || verticalSizeClass == .compact
     }
 
     private var thoughtCaptureBottomPadding: CGFloat {
