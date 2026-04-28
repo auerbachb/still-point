@@ -313,6 +313,13 @@ final class StillPointAppUITests: XCTestCase {
         wait(for: [holdFinished], timeout: duration + 2)
     }
 
+    private func assertHoldControlResponds(_ element: XCUIElement, activeMessage: String, releaseMessage: String) {
+        pressAndHold(element: element, duration: 1.0) {
+            XCTAssertEqual(element.value as? String, "active", activeMessage)
+        }
+        XCTAssertEqual(element.value as? String, "inactive", releaseMessage)
+    }
+
     private func waitForAuthScreen(in app: XCUIApplication) {
         XCTAssertTrue(
             app.textFields["auth.emailField"].waitForExistence(timeout: launchTimeout),
