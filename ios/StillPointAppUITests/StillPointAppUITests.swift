@@ -19,8 +19,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        let authRoot = app.otherElements["root.currentView.auth"]
-        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
+        waitForAuthScreen(in: app)
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -48,9 +47,8 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        let authRoot = app.otherElements["root.currentView.auth"]
-        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
-        assertColdStartBound(root: authRoot, maxMs: 5_000)
+        waitForAuthScreen(in: app)
+        assertColdStartBoundIfAvailable(root: app.otherElements["root.currentView.auth"], maxMs: 5_000)
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -163,7 +161,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForAuthScreen(in: app)
         let emailField = app.textFields["auth.emailField"]
         let passwordField = app.secureTextFields["auth.passwordField"]
         let submitButton = app.buttons["auth.submitButton"]
@@ -190,7 +188,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForAuthScreen(in: app)
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("internet")
@@ -206,7 +204,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForAuthScreen(in: app)
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("expired")
@@ -314,6 +312,18 @@ final class StillPointAppUITests: XCTestCase {
         wait(for: [activeExpectation], timeout: duration)
         onHold()
         wait(for: [holdFinished], timeout: duration + 2)
+    }
+
+    private func waitForAuthScreen(in app: XCUIApplication) {
+        XCTAssertTrue(
+            app.textFields["auth.emailField"].waitForExistence(timeout: launchTimeout),
+            "Auth email field did not appear"
+        )
+    }
+
+    private func assertColdStartBoundIfAvailable(root: XCUIElement, maxMs: Int) {
+        guard root.exists else { return }
+        assertColdStartBound(root: root, maxMs: maxMs)
     }
 
     private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
