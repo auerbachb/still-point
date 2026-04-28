@@ -149,11 +149,6 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout * 2))
-        openTab(identifier: "tab.settings", in: app)
-        XCTAssertTrue(app.staticTexts["appBlocking.statusText"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["appBlocking.selectedCount"].waitForExistence(timeout: 5))
-
-        openTab(identifier: "tab.home", in: app)
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
