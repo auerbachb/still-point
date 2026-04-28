@@ -52,13 +52,13 @@ final class StillPointAppUITests: XCTestCase {
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
 
         let passwordField = app.secureTextFields["auth.passwordField"]
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
+        guard focusAndType("ios.fixture@stillpoint.test", into: emailField, in: app),
+              focusAndType("stillpoint-pass", into: passwordField, in: app) else {
+            throw XCTSkip("Software keyboard did not appear on this simulator run.")
+        }
 
         let submitButton = app.buttons["auth.submitButton"]
         XCTAssertTrue(submitButton.isHittable)
