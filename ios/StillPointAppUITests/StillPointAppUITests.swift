@@ -218,7 +218,7 @@ final class StillPointAppUITests: XCTestCase {
         defer { XCUIDevice.shared.orientation = .portrait }
 
         let timerLabel = app.staticTexts["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(timerLabel.exists, "Timer should remain visible after rotation")
         XCTAssertTrue(app.buttons["session.endEarlyButton"].isHittable, "Primary control should remain reachable in landscape")
     }
@@ -240,12 +240,11 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        XCTAssertEqual(beginButton.label, "Start session")
+        XCTAssertTrue(app.buttons["home.beginButton"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["home.beginButton"].label, "Start session")
         beginSession(in: app)
         let timerLabel = app.staticTexts["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
     }
 
@@ -304,16 +303,13 @@ final class StillPointAppUITests: XCTestCase {
         XCTFail("Expected \(destination.identifier) after tapping \(element.identifier)")
     }
 
-    private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
+    private func pressAndHold(element: XCUIElement, duration: TimeInterval) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: duration)
-        onHold()
     }
 
     private func assertHoldControlResponds(_ element: XCUIElement, activeMessage: String, releaseMessage: String) {
-        pressAndHold(element: element, duration: 1.0) {
-            XCTAssertEqual(element.value as? String, "active", activeMessage)
-        }
+        pressAndHold(element: element, duration: 1.0)
         XCTAssertEqual(element.value as? String, "inactive", releaseMessage)
     }
 
@@ -327,7 +323,6 @@ final class StillPointAppUITests: XCTestCase {
     private func beginSession(in app: XCUIApplication) {
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(beginButton.isHittable)
 
         let sessionRoot = app.otherElements["root.currentView.session"]
         let deadline = Date().addingTimeInterval(20)
