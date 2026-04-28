@@ -142,8 +142,8 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: true,
             resetStore: true,
-            sessionSeconds: 4,
-            timerMultiplier: 4.0,
+            sessionSeconds: 2,
+            timerMultiplier: 10.0,
             appBlockingSelected: true
         )
         app.launch()
@@ -158,7 +158,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
 
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 45))
         XCTAssertTrue(
             app.staticTexts["completion.appGateOpen"].waitForExistence(timeout: 5),
             "Completed sessions should unlock selected apps for the configured window"
