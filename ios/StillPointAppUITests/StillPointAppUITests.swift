@@ -290,8 +290,18 @@ final class StillPointAppUITests: XCTestCase {
 
     private func openTab(identifier: String, in app: XCUIApplication) {
         let tabButton = app.tabBars.buttons[identifier]
-        XCTAssertTrue(tabButton.waitForExistence(timeout: 5))
-        tabButton.tap()
+        XCTAssertTrue(tabButton.waitForExistence(timeout: launchTimeout))
+
+        let destination: XCUIElement
+        switch identifier {
+        case "tab.progress":
+            destination = app.staticTexts["history.title"]
+        case "tab.settings":
+            destination = app.staticTexts["settings.title"]
+        default:
+            destination = app.otherElements[identifier]
+        }
+        tap(tabButton, untilExists: destination, timeout: launchTimeout)
     }
 
     private func tap(_ element: XCUIElement, untilExists destination: XCUIElement, timeout: TimeInterval) {
