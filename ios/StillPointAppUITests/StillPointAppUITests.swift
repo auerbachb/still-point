@@ -350,6 +350,12 @@ final class StillPointAppUITests: XCTestCase {
         }
     }
 
+    private func waitForAccessibilityValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval) {
+        let predicate = NSPredicate(format: "value == %@", value)
+        let expectation = expectation(for: predicate, evaluatedWith: element)
+        wait(for: [expectation], timeout: timeout)
+    }
+
     @discardableResult
     private func tapByStableCenter(
         _ element: XCUIElement,
