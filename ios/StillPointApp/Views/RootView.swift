@@ -100,12 +100,14 @@ struct RootView: View {
         // SwiftUI accessibility overlay could still confuse XCUITest hit-point
         // resolution. This tiny UIKit marker is queryable but never interactive.
         .overlay(alignment: .topLeading) {
-            AccessibilityMarkerView(
-                identifier: "root.currentView.\(viewAccessibilitySlug)",
-                value: coldStartMetricAccessibilityValue
-            )
-            .frame(width: 1, height: 1)
-            .allowsHitTesting(false)
+            if isUITestMode {
+                AccessibilityMarkerView(
+                    identifier: "root.currentView.\(viewAccessibilitySlug)",
+                    value: coldStartMetricAccessibilityValue
+                )
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+            }
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
@@ -145,6 +147,15 @@ struct RootView: View {
     private var coldStartMetricAccessibilityValue: String {
         guard let ms = appVM.lastColdStartAuthCheckMs else { return "coldStartAuthCheckMs=unknown" }
         return "coldStartAuthCheckMs=\(ms)"
+    }
+
+    private var isUITestMode: Bool {
+        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"])
+    }
+
+    private func truthy(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
 }

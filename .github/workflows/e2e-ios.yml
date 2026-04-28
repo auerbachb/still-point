@@ -66,7 +66,7 @@ jobs:
         run: |
           mkdir -p artifacts/e2e/ios
           log show --last 30m \
-            --predicate 'subsystem == "com.brettonauerbach.stillpoint" OR eventMessage CONTAINS "[E2E-DIAG]"' \
+            --predicate '(subsystem == "com.brettonauerbach.stillpoint" AND category == "e2e-diag") OR eventMessage CONTAINS "[E2E-DIAG]"' \
             --style compact > "artifacts/e2e/ios/${{ matrix.lane }}-e2e-diag.log" || true
 
       - name: Record iOS perf metric (report-only)

@@ -41,10 +41,23 @@ struct StillPointApp: App {
             return
         }
         let fm = FileManager.default
-        guard let appSupport = try? fm.url(for: .applicationSupportDirectory,
-                                           in: .userDomainMask,
-                                           appropriateFor: nil,
-                                           create: false) else { return }
+        let appSupport: URL
+        do {
+            appSupport = try fm.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: false
+            )
+        } catch {
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain,
+               nsError.code == NSFileNoSuchFileError {
+                return
+            }
+            diagLog.error("[E2E-DIAG] failed to locate Application Support for SwiftData reset error=\(error.localizedDescription, privacy: .public)")
+            return
+        }
         for suffix in ["", "-shm", "-wal"] {
             let url = appSupport.appendingPathComponent("default.store\(suffix)")
             do {
