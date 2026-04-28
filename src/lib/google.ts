@@ -22,6 +22,7 @@ const GOOGLE_SCOPES = [
 ];
 const GOOGLE_STATE_COOKIE = "sp_google_oauth_state";
 const TOKEN_REFRESH_SKEW_MS = 60_000;
+const GOOGLE_HTTP_TIMEOUT_MS = 10_000;
 
 export class GoogleCalendarUnavailableError extends Error {
   constructor(message: string) {
@@ -223,7 +224,10 @@ function googleErrorMessage(body: unknown, fallback: string): string {
 }
 
 async function googleJsonFetch<T>(url: string, init: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(GOOGLE_HTTP_TIMEOUT_MS),
+  });
   if (!res.ok) {
     const body = await parseGoogleError(res);
     throw new GoogleCalendarApiError(googleErrorMessage(body, `Google API failed (${res.status})`), res.status, body);
@@ -350,6 +354,10 @@ function eventDescription(shareToken: string): string {
   ].filter(Boolean).join("\n\n");
 }
 
+function googleCalendarEventId(sessionId: string, userId: string): string {
+  return `sp_${crypto.createHash("sha256").update(`${sessionId}:${userId}`).digest("hex")}`;
+}
+
 async function insertCalendarEvent(
   userId: string,
   session: typeof buddySessions.$inferSelect,
@@ -360,26 +368,31 @@ async function insertCalendarEvent(
   }
   const start = session.scheduledStartAt;
   const end = new Date(start.getTime() + session.durationSeconds * 1000);
-  return googleJsonFetch<GoogleCalendarEventResponse>(GOOGLE_CALENDAR_EVENTS_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      summary: "Still Point buddy session",
-      description: eventDescription(session.shareToken),
-      start: { dateTime: start.toISOString() },
-      end: { dateTime: end.toISOString() },
-      reminders: { useDefault: true },
-      extendedProperties: {
-        private: {
-          stillPointBuddySessionId: session.id,
-          stillPointUserId: userId,
-        },
+  const eventId = googleCalendarEventId(session.id, userId);
+  return googleJsonFetch<GoogleCalendarEventResponse>(
+    `${GOOGLE_CALENDAR_EVENTS_URL}/${encodeURIComponent(eventId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        id: eventId,
+        summary: "Still Point buddy session",
+        description: eventDescription(session.shareToken),
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+        reminders: { useDefault: true },
+        extendedProperties: {
+          private: {
+            stillPointBuddySessionId: session.id,
+            stillPointUserId: userId,
+          },
+        },
+      }),
+    },
+  );
 }
 
 export async function syncBuddySessionCalendarForUser(
@@ -471,11 +484,11 @@ export async function syncBuddySessionCalendarForUser(
 
 export async function loadGoogleCalendarStatus(userId: string) {
   const token = await getGoogleOAuthToken(userId);
-  return token
-    ? {
-        connected: true,
-        email: token.googleEmail,
-      }
-    : { connected: false, email: null };
+  if (!token) return { connected: false, email: null };
+  const hasUsableAccessToken = token.expiryDate.getTime() > Date.now() + TOKEN_REFRESH_SKEW_MS;
+  return {
+    connected: hasUsableAccessToken || Boolean(token.refreshTokenEncrypted),
+    email: token.googleEmail,
+  };
 }
 
