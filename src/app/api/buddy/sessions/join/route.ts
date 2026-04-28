@@ -7,7 +7,10 @@ import {
   bumpBuddyRevision,
   reconcileBuddySession,
 } from "@/lib/buddySession";
-import { syncBuddySessionCalendarForUser } from "@/lib/google";
+import {
+  GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
+  syncBuddySessionCalendarForUser,
+} from "@/lib/google";
 import { and, eq } from "drizzle-orm";
 import { readJsonObject } from "@/lib/readJsonObject";
 import type { CalendarSyncResult } from "@/lib/google";
@@ -25,10 +28,7 @@ async function syncCalendarBestEffort(
       {
         status: "failed" as const,
         userId,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not sync Google Calendar",
+        error: GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
       },
     ];
   }

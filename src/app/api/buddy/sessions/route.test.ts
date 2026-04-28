@@ -36,6 +36,7 @@ vi.mock("@/lib/buddySession", () => ({
 }));
 
 vi.mock("@/lib/google", () => ({
+  GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE: "Could not sync Google Calendar",
   syncBuddySessionCalendarForUser,
 }));
 
@@ -159,7 +160,7 @@ describe("POST /api/buddy/sessions", () => {
       {
         status: "failed",
         userId: "user-1",
-        error: "calendar unavailable",
+        error: "Could not sync Google Calendar",
       },
     ]);
   });

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { buddySessions, buddySessionParticipants, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { buddyDurationForDay } from "@/lib/buddySession";
-import { syncBuddySessionCalendarForUser } from "@/lib/google";
+import { GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE, syncBuddySessionCalendarForUser } from "@/lib/google";
 import { eq } from "drizzle-orm";
 
 async function readOptionalScheduledStartAt(request: NextRequest): Promise<Date | null | NextResponse> {
@@ -88,10 +88,7 @@ export async function POST(request: NextRequest) {
           {
             status: "failed",
             userId: auth.userId,
-            error:
-              syncError instanceof Error
-                ? syncError.message
-                : "Could not sync Google Calendar",
+            error: GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
           },
         ];
       }

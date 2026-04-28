@@ -60,6 +60,8 @@ export type CalendarSyncResult =
   | { status: "skipped"; userId: string; reason: "not_connected" | "not_scheduled" }
   | { status: "failed"; userId: string; error: string };
 
+export const GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE = "Could not sync Google Calendar";
+
 export type GoogleCalendarStatus = {
   connected: boolean;
   email: string | null;
@@ -463,7 +465,7 @@ export async function syncBuddySessionCalendarForUser(
           updatedAt: new Date(),
         },
       });
-    return { status: "failed", userId, error: message };
+    return { status: "failed", userId, error: GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE };
   }
 }
 
