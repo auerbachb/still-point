@@ -20,6 +20,10 @@ final class ApnsEnvironmentParserTests: XCTestCase {
         XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: "not a provisioning profile"))
     }
 
+    func testRejectsClosingPlistBeforeOpeningPlist() {
+        XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: "</plist> before <plist version=\"1.0\">"))
+    }
+
     func testRejectsUnexpectedEnvironment() {
         XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "staging")))
     }

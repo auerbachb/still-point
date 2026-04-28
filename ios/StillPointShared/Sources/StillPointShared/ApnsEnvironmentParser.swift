@@ -3,7 +3,7 @@ import Foundation
 public enum ApnsEnvironmentParser {
     public static func parse(fromProfileString profile: String) -> String? {
         guard let plistStart = profile.range(of: "<plist"),
-              let plistEnd = profile.range(of: "</plist>") else {
+              let plistEnd = profile.range(of: "</plist>", range: plistStart.lowerBound..<profile.endIndex) else {
             return nil
         }
 

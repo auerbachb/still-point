@@ -177,7 +177,7 @@ public actor APIClient {
         }
         var urlRequest = makeRequest(method: "DELETE", path: "/api/device-token")
         urlRequest.httpBody = try JSONEncoder().encode(request)
-        _ = try await execute(urlRequest) as DeviceTokenDeleteResponse
+        _ = try await executeRaw(urlRequest)
     }
 
     // MARK: - Sessions
