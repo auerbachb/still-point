@@ -82,8 +82,8 @@ final class StillPointAppUITests: XCTestCase {
 
         let hyperfocusHold = app.staticTexts["session.hyperfocusHoldButton"]
         XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: launchTimeout))
-        let dimmedChrome = app.otherElements["session.secondaryChrome"]
-        XCTAssertTrue(dimmedChrome.waitForExistence(timeout: launchTimeout), "Secondary controls should remain rendered")
+        let dimmedChrome = app.otherElements["session.secondaryChromeMarker"]
+        XCTAssertTrue(dimmedChrome.waitForExistence(timeout: launchTimeout), "Secondary controls should expose dim state")
         waitForAccessibilityValue(dimmedChrome, "dimmed", timeout: launchTimeout)
         XCTAssertTrue(app.buttons["session.pauseResumeButton"].isHittable, "Dimmed controls should remain hittable")
 

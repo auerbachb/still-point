@@ -76,7 +76,11 @@ struct SessionView: View {
                 controlPanel
                     .opacity(secondaryChromeDimmed ? 0.32 : 1)
                     .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
-                    .accessibilityIdentifier("session.secondaryChrome")
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("session.secondaryChromeMarker")
+                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
             }
             .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
