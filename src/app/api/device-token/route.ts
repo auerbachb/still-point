@@ -39,13 +39,14 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const tokenHash = hashDeviceToken(token.toLowerCase());
+    const normalizedToken = token.trim().toLowerCase();
+    const tokenHash = hashDeviceToken(normalizedToken);
     const [registered] = await db
       .insert(deviceTokens)
       .values({
         userId: auth.userId,
         platform,
-        token: token.toLowerCase(),
+        token: normalizedToken,
         tokenHash,
         apnsEnvironment,
         enabled: true,
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
         target: [deviceTokens.tokenHash, deviceTokens.apnsEnvironment],
         set: {
           userId: auth.userId,
-          token: token.toLowerCase(),
+          token: normalizedToken,
           enabled: true,
           lastRegisteredAt: now,
           updatedAt: now,
@@ -102,7 +103,7 @@ export async function DELETE(request: NextRequest) {
       .where(
         and(
           eq(deviceTokens.userId, auth.userId),
-          eq(deviceTokens.tokenHash, hashDeviceToken(token.toLowerCase())),
+          eq(deviceTokens.tokenHash, hashDeviceToken(token)),
           eq(deviceTokens.apnsEnvironment, apnsEnvironment),
         ),
       )

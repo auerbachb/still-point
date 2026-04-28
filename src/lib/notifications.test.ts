@@ -100,4 +100,29 @@ describe("sendFriendRequestNotification", () => {
 
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
+
+  test("limits APNs sends to bounded batches", async () => {
+    for (let i = 0; i < 7; i += 1) {
+      tokenRows.push({ id: `dt-${i}`, token: `${i}`.repeat(64), apnsEnvironment: "development" });
+    }
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    sendApnsNotification.mockImplementation(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      inFlight -= 1;
+      return { ok: true, status: 200 };
+    });
+
+    const { sendPushNotificationToUser } = await import("./notifications");
+    await sendPushNotificationToUser({
+      recipientUserId: "recipient-id",
+      payload: { aps: { alert: { title: "Title", body: "Body" } } },
+    });
+
+    expect(sendApnsNotification).toHaveBeenCalledTimes(7);
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+  });
 });

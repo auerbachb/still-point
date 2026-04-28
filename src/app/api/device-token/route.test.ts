@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
 const hashDeviceToken = vi.fn((token: string) => `hash:${token}`);
-const isValidDeviceToken = vi.fn((token: string) => /^[0-9a-fA-F]{64,200}$/.test(token));
+const isValidDeviceToken = vi.fn((token: string) => /^[0-9a-fA-F]{64,200}$/.test(token.trim()));
 const returning = vi.fn();
 const onConflictDoUpdate = vi.fn(() => ({ returning }));
 const insertValues = vi.fn(() => ({ onConflictDoUpdate }));
@@ -69,7 +69,7 @@ describe("/api/device-token", () => {
     const response = await POST(
       new Request("http://test.local/api/device-token", {
         method: "POST",
-        body: JSON.stringify({ token, platform: "ios", apnsEnvironment: "development" }),
+        body: JSON.stringify({ token: ` ${token.toUpperCase()} `, platform: "ios", apnsEnvironment: "development" }),
       }) as NextRequest,
     );
 
@@ -104,6 +104,23 @@ describe("/api/device-token", () => {
     await expect(response.json()).resolves.toEqual({ error: "token must be a valid APNs device token" });
     expect(response.status).toBe(400);
     expect(dbInsert).not.toHaveBeenCalled();
+  });
+
+  test("normalizes APNs tokens before storing them", async () => {
+    const { POST } = await import("./route");
+
+    await POST(
+      new Request("http://test.local/api/device-token", {
+        method: "POST",
+        body: JSON.stringify({ token: `  ${token.toUpperCase()}  `, apnsEnvironment: "production" }),
+      }) as NextRequest,
+    );
+
+    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ token }));
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      set: expect.objectContaining({ token }),
+    }));
+    expect(hashDeviceToken).toHaveBeenCalledWith(token);
   });
 
   test("disables a registered token for the authenticated user", async () => {

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { friendRequests, friendships, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
@@ -127,12 +127,16 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, auth.userId))
         .limit(1);
 
-      void sendFriendRequestNotification({
-        requestId: created.id,
-        recipientUserId: created.toUserId,
-        senderUsername: sender?.username ?? "Someone",
-      }).catch((error: unknown) => {
-        console.error("Friend request notification error:", error);
+      after(async () => {
+        try {
+          await sendFriendRequestNotification({
+            requestId: created.id,
+            recipientUserId: created.toUserId,
+            senderUsername: sender?.username ?? "Someone",
+          });
+        } catch (error) {
+          console.error("Friend request notification error:", error);
+        }
       });
 
       return NextResponse.json({ request: created }, { status: 201 });
