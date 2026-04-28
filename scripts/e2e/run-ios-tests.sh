@@ -125,6 +125,14 @@ run_lane() {
     -resultBundlePath "${result_bundle}"
     -only-testing:"${test_target}"
   )
+  if [[ "${lane_tag}" == "critical" ]]; then
+    # The golden session path is covered by the smoke lane. Keep critical focused
+    # on the remaining UI tests so the same long simulator flow is not duplicated.
+    xcodebuild_args+=(
+      -skip-testing:"StillPointAppUITests/StillPointAppUITests/testLaunchLoginCompleteSessionAndHistoryPersistence"
+      -skip-testing:"StillPointAppUITests/StillPointAppUITests/testRotationDecisionSessionRemainsUsableInLandscape"
+    )
+  fi
   if [[ -n "${TEST_CONFIGURATION}" ]]; then
     xcodebuild_args+=(-configuration "${TEST_CONFIGURATION}")
   fi
