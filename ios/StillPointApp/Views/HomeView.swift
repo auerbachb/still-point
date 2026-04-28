@@ -95,6 +95,8 @@ struct HomeView: View {
             .safeAreaPadding(.bottom, SPSpacing.s4)
         }
         .stillPointBackground()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("root.currentView.home")
     }
 
     private var faqSection: some View {
