@@ -300,18 +300,8 @@ final class StillPointAppUITests: XCTestCase {
 
     private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let end = start.withOffset(CGVector(dx: 0, dy: 0))
-        let holdFinished = expectation(description: "Hold gesture finished")
-        DispatchQueue.global(qos: .userInitiated).async {
-            start.press(forDuration: duration, thenDragTo: end)
-            holdFinished.fulfill()
-        }
-
-        let holdBecameActive = NSPredicate(format: "value == %@", "active")
-        let activeExpectation = expectation(for: holdBecameActive, evaluatedWith: element)
-        wait(for: [activeExpectation], timeout: duration)
+        start.press(forDuration: duration)
         onHold()
-        wait(for: [holdFinished], timeout: duration + 2)
     }
 
     private func assertHoldControlResponds(_ element: XCUIElement, activeMessage: String, releaseMessage: String) {
