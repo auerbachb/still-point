@@ -612,13 +612,13 @@ public actor APIClient {
                 break
             }
         }
-        let totalClear = standardSessions.reduce(0) { $0 + $1.clearPercent }
+        let totalClear = completedSessions.reduce(0) { $0 + $1.clearPercent }
         let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
         let totalMinutes = standardSessions.reduce(0.0) { partial, session in
             let duration = Double(max(session.actualTime ?? session.duration, 1))
             return partial + (duration / 60.0)
         }
-        let avgClearPercent = totalClear / standardSessions.count
+        let avgClearPercent = completedSessions.isEmpty ? 0 : totalClear / completedSessions.count
         let avgThoughtsPerSession = Double(totalThoughts) / Double(standardSessions.count)
         let avgThoughtsPerMinute = totalMinutes > 0 ? Double(totalThoughts) / totalMinutes : 0
         return StatsDTO(
