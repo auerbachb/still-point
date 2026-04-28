@@ -86,8 +86,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let endEarlyButton = app.buttons["session.endEarlyButton"]
         XCTAssertTrue(endEarlyButton.waitForExistence(timeout: launchTimeout))
-        endEarlyButton.tap()
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 12))
+        tap(endEarlyButton, untilExists: app.otherElements["root.currentView.completion"], timeout: launchTimeout)
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
