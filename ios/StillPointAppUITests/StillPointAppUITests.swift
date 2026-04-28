@@ -42,7 +42,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 90,
+            sessionSeconds: 600,
             timerMultiplier: 3.0
         )
         app.launch()
@@ -212,7 +212,7 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testRotationDecisionSessionRemainsUsableInLandscape() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 300, timerMultiplier: 2.0)
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
@@ -240,7 +240,7 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testVoiceOverLabelsForTimerAndPrimaryButton() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 300, timerMultiplier: 2.0)
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
