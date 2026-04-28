@@ -116,7 +116,7 @@ export const buddySessionCalendarEvents = pgTable("buddy_session_calendar_events
   id: uuid("id").primaryKey().defaultRandom(),
   buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "cascade" }).notNull(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  googleEventId: varchar("google_event_id", { length: 255 }),
+  googleEventId: text("google_event_id"),
   htmlLink: text("html_link"),
   status: varchar("status", { length: 20 }).notNull().default("created"),
   error: text("error"),

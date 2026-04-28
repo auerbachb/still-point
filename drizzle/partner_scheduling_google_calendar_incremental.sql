@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS "buddy_session_calendar_events" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "buddy_session_id" uuid NOT NULL REFERENCES "buddy_sessions"("id") ON DELETE CASCADE,
   "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "google_event_id" varchar(255),
+  "google_event_id" text,
   "html_link" text,
   "status" varchar(20) NOT NULL DEFAULT 'created',
   "error" text,

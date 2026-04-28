@@ -8,7 +8,7 @@ import {
   googleOAuthTokens,
   users,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -390,6 +390,28 @@ export async function syncBuddySessionCalendarForUser(
   try {
     const accessToken = await getValidAccessToken(userId);
     if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
+    const [existingEvent] = await db
+      .select({
+        googleEventId: buddySessionCalendarEvents.googleEventId,
+        htmlLink: buddySessionCalendarEvents.htmlLink,
+      })
+      .from(buddySessionCalendarEvents)
+      .where(
+        and(
+          eq(buddySessionCalendarEvents.buddySessionId, session.id),
+          eq(buddySessionCalendarEvents.userId, userId),
+          eq(buddySessionCalendarEvents.status, "created"),
+        ),
+      )
+      .limit(1);
+    if (existingEvent?.googleEventId) {
+      return {
+        status: "created",
+        userId,
+        eventId: existingEvent.googleEventId,
+        htmlLink: existingEvent.htmlLink ?? null,
+      };
+    }
     const event = await insertCalendarEvent(userId, session, accessToken);
     if (!event.id) {
       throw new GoogleCalendarApiError("Google Calendar event response was incomplete", 200, event);
