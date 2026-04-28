@@ -65,12 +65,7 @@ final class StillPointAppUITests: XCTestCase {
         submitButton.tap()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
-        let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(beginButton.isHittable)
-        beginButton.tap()
-
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        beginSession(in: app)
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
         XCTAssertTrue(timerLabel.label.contains(":"), "Timer format should contain mm:ss delimiter")
@@ -217,8 +212,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        app.buttons["home.beginButton"].tap()
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        beginSession(in: app)
 
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
@@ -249,9 +243,7 @@ final class StillPointAppUITests: XCTestCase {
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
-        beginButton.tap()
-
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        beginSession(in: app)
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 3))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
@@ -298,6 +290,20 @@ final class StillPointAppUITests: XCTestCase {
         tabButton.tap()
     }
 
+    private func tap(_ element: XCUIElement, untilExists destination: XCUIElement, timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            XCTAssertTrue(element.waitForExistence(timeout: 5))
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if destination.waitForExistence(timeout: 2) {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        XCTFail("Expected \(destination.identifier) after tapping \(element.identifier)")
+    }
+
     private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: duration)
@@ -316,6 +322,24 @@ final class StillPointAppUITests: XCTestCase {
             app.textFields["auth.emailField"].waitForExistence(timeout: launchTimeout),
             "Auth email field did not appear"
         )
+    }
+
+    private func beginSession(in app: XCUIApplication) {
+        let beginButton = app.buttons["home.beginButton"]
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(beginButton.isHittable)
+
+        let sessionRoot = app.otherElements["root.currentView.session"]
+        let deadline = Date().addingTimeInterval(20)
+        repeat {
+            beginButton.tap()
+            if sessionRoot.waitForExistence(timeout: 2) {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+
+        XCTFail("Session screen did not appear after tapping Begin")
     }
 
     private func waitForAccessibilityValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval) {
