@@ -101,12 +101,8 @@ struct SettingsView: View {
                 // Logout
                 Button {
                     Task {
-                        do {
-                            try await PushNotificationCoordinator.shared.unregisterCurrentDeviceToken()
-                            try await APIClient.shared.logout()
-                        } catch {
-                            try? await APIClient.shared.logout()
-                        }
+                        try? await PushNotificationCoordinator.shared.unregisterCurrentDeviceToken()
+                        try? await APIClient.shared.logout()
                         appVM.didLogout()
                     }
                 } label: {
