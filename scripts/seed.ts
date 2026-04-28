@@ -135,6 +135,7 @@ async function main() {
         {
           userId: ava.id,
           dayNumber: ava.day,
+          sessionType: "standard",
           duration: 120,
           completed: true,
           actualTime: 120,
@@ -150,6 +151,7 @@ async function main() {
         {
           userId: leo.id,
           dayNumber: leo.day,
+          sessionType: "standard",
           duration: 90,
           completed: true,
           actualTime: 90,
@@ -165,6 +167,7 @@ async function main() {
         {
           userId: maya.id,
           dayNumber: maya.day,
+          sessionType: "standard",
           duration: 70,
           completed: false,
           actualTime: 42,

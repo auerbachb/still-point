@@ -42,6 +42,21 @@ test.describe("mobile session flow", () => {
     expect(mockApiState.sessions[0]?.completed, "end early keeps a non-complete session").toBe(false);
   });
 
+  test("quick minute saves without advancing the current day", async ({ page, ensureLoggedIn, mockApiState }) => {
+    await ensureLoggedIn();
+
+    await tap(page.getByRole("button", { name: /Quick minute/i }));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+
+    await expect(page.getByRole("heading", { name: "Quick Minute Complete" })).toBeVisible();
+    await expect(page.getByText(/day 1 unchanged/i)).toBeVisible();
+    await tap(page.getByRole("button", { name: "Return" }));
+
+    await expect(page.getByText(/day\s+·\s+60s\s+·\s+6 blocks/i)).toBeVisible();
+    expect(mockApiState.user.currentDay, "quick minute should not advance current day").toBe(1);
+    expect(mockApiState.sessions[0]?.sessionType, "quick minute should be persisted as quick").toBe("quick");
+  });
+
   test("pull-to-refresh style overscroll does not break active session", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await tap(page.getByRole("button", { name: "Begin" }));

@@ -8,6 +8,7 @@ struct CompletionView: View {
     let thoughtCount: Int
     let thoughts: [CapturedThought]
     let dayNumber: Int
+    let sessionType: SessionType
     let duration: Int
 
     @State private var endNote = ""
@@ -19,6 +20,7 @@ struct CompletionView: View {
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
     private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
+    private var isQuickSession: Bool { sessionType == .quick }
 
     var body: some View {
         ScrollView {
@@ -27,7 +29,7 @@ struct CompletionView: View {
 
                 // Header
                 VStack(spacing: SPSpacing.s2) {
-                    Text("Day \(dayNumber) Complete")
+                    Text(isQuickSession ? "Quick Minute Complete" : "Day \(dayNumber) Complete")
                         .font(SPFont.serifItalic(32, weight: .light))
                         .foregroundStyle(Color(SPColor.fg))
                         .accessibilityIdentifier("completion.dayTitle")
@@ -172,14 +174,14 @@ struct CompletionView: View {
                     }
                 }
 
-                // Tomorrow preview
+                // Progression preview
                 VStack(spacing: SPSpacing.s1) {
-                    Text("TOMORROW")
+                    Text(isQuickSession ? "DAY \(dayNumber) UNCHANGED" : "TOMORROW")
                         .font(SPFont.mono(11, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg4))
                         .tracking(2)
 
-                    Text("\(nextDuration)s · \(nextBlocks) blocks")
+                    Text(isQuickSession ? "return when you're ready" : "\(nextDuration)s · \(nextBlocks) blocks")
                         .font(SPFont.mono(14, weight: .light))
                         .foregroundStyle(Color(SPColor.fg3))
                 }

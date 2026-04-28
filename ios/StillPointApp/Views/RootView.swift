@@ -34,8 +34,8 @@ struct RootView: View {
                     AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
                         .transition(.opacity)
 
-                case .session:
-                    SessionView(appVM: appVM)
+                case .session(let sessionType):
+                    SessionView(appVM: appVM, sessionType: sessionType)
                         .transition(.opacity)
 
                 case .buddyHub:
@@ -47,7 +47,7 @@ struct RootView: View {
                         .id(sessionId)
                         .transition(.opacity)
 
-                case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):
+                case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration):
                     CompletionView(
                         appVM: appVM,
                         sessionId: sessionId,
@@ -55,6 +55,7 @@ struct RootView: View {
                         thoughtCount: thoughtCount,
                         thoughts: thoughts,
                         dayNumber: dayNumber,
+                        sessionType: sessionType,
                         duration: duration
                     )
                     .transition(.opacity)

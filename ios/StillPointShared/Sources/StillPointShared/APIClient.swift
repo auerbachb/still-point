@@ -479,6 +479,7 @@ public actor APIClient {
         let session = SessionDTO(
             id: "ui-session-\(nextOrdinal)",
             dayNumber: data.dayNumber,
+            sessionType: data.sessionType,
             duration: data.duration,
             completed: data.completed,
             actualTime: data.actualTime,
@@ -491,7 +492,7 @@ public actor APIClient {
         store.nextSessionOrdinal += 1
         store.sessions.append(session)
 
-        if data.completed {
+        if data.completed && data.sessionType == .standard {
             store.user = UserDTO(
                 id: store.user.id,
                 email: store.user.email,

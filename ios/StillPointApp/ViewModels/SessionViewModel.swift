@@ -6,6 +6,7 @@ import StillPointShared
 final class SessionViewModel {
     // Session config
     let dayNumber: Int
+    let sessionType: SessionType
     let totalSeconds: Int
 
     // Timer state
@@ -80,9 +81,10 @@ final class SessionViewModel {
         "\(minutes):\(String(format: "%02d", seconds))"
     }
 
-    init(dayNumber: Int) {
+    init(dayNumber: Int, sessionType: SessionType = .standard) {
         self.dayNumber = dayNumber
-        self.totalSeconds = Self.resolveTotalSeconds(for: dayNumber)
+        self.sessionType = sessionType
+        self.totalSeconds = Self.resolveTotalSeconds(for: dayNumber, sessionType: sessionType)
         self.soundPrefs = AudioEngine.loadPrefs()
         self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
         // Initial mind state log entry
@@ -218,6 +220,7 @@ final class SessionViewModel {
 
         let request = CreateSessionRequest(
             dayNumber: dayNumber,
+            sessionType: sessionType,
             duration: totalSeconds,
             completed: completed,
             actualTime: Int(elapsed),
@@ -332,12 +335,12 @@ final class SessionViewModel {
             }
     }
 
-    private static func resolveTotalSeconds(for dayNumber: Int) -> Int {
+    private static func resolveTotalSeconds(for dayNumber: Int, sessionType: SessionType) -> Int {
         let env = ProcessInfo.processInfo.environment
         guard let override = env["SP_UI_TEST_SESSION_SECONDS"],
               let overrideSeconds = Int(override),
               overrideSeconds > 0 else {
-            return StillPoint.duration(forDay: dayNumber)
+            return StillPoint.duration(for: sessionType, day: dayNumber)
         }
         return overrideSeconds
     }

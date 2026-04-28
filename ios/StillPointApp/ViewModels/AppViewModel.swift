@@ -5,10 +5,18 @@ import StillPointShared
 enum AppView: Equatable {
     case auth
     case home
-    case session
+    case session(type: SessionType)
     case buddyHub
     case buddySession(sessionId: String)
-    case completion(sessionId: String, clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought], dayNumber: Int, duration: Int)
+    case completion(
+        sessionId: String,
+        clearPercent: Int,
+        thoughtCount: Int,
+        thoughts: [CapturedThought],
+        dayNumber: Int,
+        sessionType: SessionType,
+        duration: Int
+    )
     case history
     case journal
     case board
@@ -16,11 +24,13 @@ enum AppView: Equatable {
 
     static func == (lhs: AppView, rhs: AppView) -> Bool {
         switch (lhs, rhs) {
-        case (.auth, .auth), (.home, .home), (.session, .session),
+        case (.auth, .auth), (.home, .home),
              (.buddyHub, .buddyHub),
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
+        case let (.session(lhsType), .session(rhsType)):
+            return lhsType == rhsType
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
             return lhsSessionId == rhsSessionId
         case (.completion, .completion):
@@ -136,8 +146,8 @@ final class AppViewModel {
         currentView = .auth
     }
 
-    func beginSession() {
-        currentView = .session
+    func beginSession(type: SessionType = .standard) {
+        currentView = .session(type: type)
     }
 
     func beginBuddySession() {
@@ -175,6 +185,7 @@ final class AppViewModel {
         thoughtCount: Int,
         thoughts: [CapturedThought],
         dayNumber: Int,
+        sessionType: SessionType = .standard,
         duration: Int
     ) {
         currentView = .completion(
@@ -183,6 +194,7 @@ final class AppViewModel {
             thoughtCount: thoughtCount,
             thoughts: thoughts,
             dayNumber: dayNumber,
+            sessionType: sessionType,
             duration: duration
         )
     }

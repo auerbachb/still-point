@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { calculateSessionStats, resolveSessionType, shouldAdvanceDay } from "@/lib/constants";
 import { eq, desc, and, sql } from "drizzle-orm";
 
 export async function GET() {
@@ -15,45 +16,11 @@ export async function GET() {
       .from(sessions)
       .where(eq(sessions.userId, auth.userId))
       .orderBy(desc(sessions.dayNumber));
-
-    // Compute stats
-    const completedSessions = userSessions.filter(s => s.completed);
-    const totalSessions = userSessions.length;
-
-    // Streak: count consecutive completed sessions backward from latest day
-    let streak = 0;
-    const sortedByDay = [...userSessions].sort((a, b) => b.dayNumber - a.dayNumber);
-    for (const s of sortedByDay) {
-      if (s.completed) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-
-    const avgClearPercent = completedSessions.length > 0
-      ? Math.round(completedSessions.reduce((sum, s) => sum + s.clearPercent, 0) / completedSessions.length)
-      : 0;
-
-    const avgThoughtsPerSession = totalSessions > 0
-      ? parseFloat((userSessions.reduce((sum, s) => sum + s.thoughtCount, 0) / totalSessions).toFixed(1))
-      : 0;
-
-    const avgThoughtsPerMinute = totalSessions > 0
-      ? parseFloat((userSessions.reduce((sum, s) => {
-          const minutes = s.duration / 60;
-          return sum + (minutes > 0 ? s.thoughtCount / minutes : 0);
-        }, 0) / totalSessions).toFixed(1))
-      : 0;
+    const stats = calculateSessionStats(userSessions);
 
     return NextResponse.json({
       sessions: userSessions,
-      stats: {
-        streak,
-        avgClearPercent,
-        avgThoughtsPerSession,
-        avgThoughtsPerMinute,
-      },
+      stats,
     });
   } catch (error) {
     console.error("Get sessions error:", error);
@@ -69,7 +36,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { dayNumber, duration, completed, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
+    const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
+    const completed = body.completed ?? true;
+    const sessionType = resolveSessionType(body.sessionType);
 
     if (!dayNumber || !duration || clearPercent === undefined || !sessionDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -78,8 +47,9 @@ export async function POST(request: NextRequest) {
     const [session] = await db.insert(sessions).values({
       userId: auth.userId,
       dayNumber,
+      sessionType,
       duration,
-      completed: completed ?? true,
+      completed,
       actualTime: actualTime ?? duration,
       clearPercent,
       thoughtCount: thoughtCount ?? 0,
@@ -87,8 +57,8 @@ export async function POST(request: NextRequest) {
       sessionDate,
     }).returning();
 
-    // Increment currentDay if session was completed
-    if (completed) {
+    // Quick sessions are extra practice and do not advance the daily progression.
+    if (shouldAdvanceDay(sessionType, completed)) {
       await db.update(users)
         .set({
           currentDay: sql`${users.currentDay} + 1`,

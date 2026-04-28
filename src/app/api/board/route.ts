@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, sessions } from "@/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function GET() {
         sessionDate: sessions.sessionDate,
       })
         .from(sessions)
-        .where(eq(sessions.userId, user.id))
+        .where(and(eq(sessions.userId, user.id), eq(sessions.sessionType, "standard")))
         .orderBy(desc(sessions.dayNumber));
 
       const completedSessions = userSessions.filter(s => s.completed);

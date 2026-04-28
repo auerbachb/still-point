@@ -100,6 +100,7 @@ export const sessions = pgTable("sessions", {
   /** #119: provenance when this row was created from a completed buddy sit (personal copy per user). */
   buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "set null" }),
   dayNumber: integer("day_number").notNull(),
+  sessionType: varchar("session_type", { length: 20 }).notNull().default("standard"),
   duration: integer("duration").notNull(),
   completed: boolean("completed").notNull(),
   actualTime: integer("actual_time"),
@@ -111,6 +112,10 @@ export const sessions = pgTable("sessions", {
 }, (table) => ({
   userIdx: index("idx_sessions_user").on(table.userId, table.dayNumber),
   buddyIdx: index("idx_sessions_buddy_session").on(table.buddySessionId),
+  sessionTypeCheck: check(
+    "sessions_session_type_allowed",
+    sql`${table.sessionType} in ('standard', 'quick')`,
+  ),
   /** At most one personal session row per user per shared buddy sit. */
   userBuddyUnique: uniqueIndex("sessions_user_buddy_session_unique").on(
     table.userId,

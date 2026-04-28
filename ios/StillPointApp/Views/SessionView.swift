@@ -11,9 +11,9 @@ struct SessionView: View {
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
 
-    init(appVM: AppViewModel) {
+    init(appVM: AppViewModel, sessionType: SessionType = .standard) {
         self.appVM = appVM
-        self._vm = State(initialValue: SessionViewModel(dayNumber: appVM.currentDay))
+        self._vm = State(initialValue: SessionViewModel(dayNumber: appVM.currentDay, sessionType: sessionType))
     }
 
     var body: some View {
@@ -120,6 +120,7 @@ struct SessionView: View {
                     thoughtCount: vm.thoughtCount,
                     thoughts: vm.capturedThoughts,
                     dayNumber: vm.dayNumber,
+                    sessionType: vm.sessionType,
                     duration: vm.totalSeconds
                 )
             }
@@ -432,6 +433,7 @@ struct SessionView: View {
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,
                 dayNumber: session.dayNumber,
+                sessionType: session.sessionType,
                 duration: vm.totalSeconds
             )
         }

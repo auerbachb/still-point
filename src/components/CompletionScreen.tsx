@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { BASE_DURATION, INCREMENT, BLOCK_DURATION } from "@/lib/constants";
+import { BLOCK_DURATION, durationForDay, type SessionType } from "@/lib/constants";
 
 type CompletionScreenProps = {
   dayNumber: number;
+  sessionType?: SessionType;
   duration: number;
   clearPercent: number;
   thoughtCount: number;
@@ -15,6 +16,7 @@ type CompletionScreenProps = {
 
 export function CompletionScreen({
   dayNumber,
+  sessionType = "standard",
   duration: completedDuration,
   clearPercent,
   thoughtCount,
@@ -26,8 +28,8 @@ export function CompletionScreen({
   const [noteSaved, setNoteSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  // Progression is based on the user's completed day, not the just-finished sit length.
-  const nextDuration = BASE_DURATION + dayNumber * INCREMENT;
+  const isQuick = sessionType === "quick";
+  const nextDuration = durationForDay(dayNumber + 1);
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
   const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
 
@@ -44,7 +46,7 @@ export function CompletionScreen({
           fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
           color: "var(--fg)",
         }}>
-          Day {dayNumber} Complete
+          {isQuick ? "Quick Minute Complete" : `Day ${dayNumber} Complete`}
         </h2>
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
@@ -118,7 +120,11 @@ export function CompletionScreen({
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "11px", color: "var(--fg-3)", marginTop: "16px",
         }}>
-          tomorrow: {nextDuration}s &middot; {nextBlocks} blocks
+          {isQuick ? (
+            <>day {dayNumber} unchanged &middot; return when you&rsquo;re ready</>
+          ) : (
+            <>tomorrow: {nextDuration}s &middot; {nextBlocks} blocks</>
+          )}
         </p>
       </div>
 

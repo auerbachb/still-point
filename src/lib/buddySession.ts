@@ -10,7 +10,7 @@ import {
   users,
   friendships,
 } from "@/db/schema";
-import { BASE_DURATION, INCREMENT } from "@/lib/constants";
+import { durationForDay } from "@/lib/constants";
 import { deleteRoom } from "@/lib/daily";
 import { orderedUserPair } from "@/lib/friends";
 import { and, eq, sql } from "drizzle-orm";
@@ -23,7 +23,7 @@ export type BuddySessionState =
   | "abandoned";
 
 export function buddyDurationForDay(currentDay: number): number {
-  return BASE_DURATION + (currentDay - 1) * INCREMENT;
+  return durationForDay(currentDay);
 }
 
 export async function assertBuddyFriendshipIfRequired(
