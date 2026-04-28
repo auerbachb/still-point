@@ -91,7 +91,7 @@ final class AppViewModel {
         do {
             if let user = try await APIClient.shared.me() {
                 currentUser = user
-                currentView = .home
+                currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session : .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 await consumePendingBuddyInviteIfNeeded()
@@ -126,6 +126,11 @@ final class AppViewModel {
         case .board: return "board"
         case .settings: return "settings"
         }
+    }
+
+    private static func truthy(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
     func didLogin(user: UserDTO) {
