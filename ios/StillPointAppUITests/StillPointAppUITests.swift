@@ -38,7 +38,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 6,
+            sessionSeconds: 30,
             timerMultiplier: 3.0
         )
         app.launch()
@@ -111,7 +111,7 @@ final class StillPointAppUITests: XCTestCase {
         let relaunch = makeApp(
             seedAuthenticated: true,
             resetStore: false,
-            sessionSeconds: 6,
+            sessionSeconds: 30,
             timerMultiplier: 3.0
         )
         relaunch.launch()
