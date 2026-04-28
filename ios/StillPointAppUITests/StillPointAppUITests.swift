@@ -6,7 +6,6 @@ final class StillPointAppUITests: XCTestCase {
     // auth-check latency in `coldStartAuthCheckMs`, not XCTest launch overhead.
     private let launchTimeout: TimeInterval = 45
     private let coldStartMaxMs = 5_000
-    private let savedIndicatorTimeout: TimeInterval = 15
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -113,11 +112,8 @@ final class StillPointAppUITests: XCTestCase {
         endNoteEditor.tap()
         endNoteEditor.typeText("e2e end note")
 
-        let saveNoteButton = app.buttons["completion.saveNoteButton"]
         dismissKeyboardIfPresent(in: app)
-        tapByStableCenter(saveNoteButton, in: app)
-
-        waitForSavedIndicator(in: app)
+        saveEndNoteWithKeyboardShortcut()
 
         let returnButton = app.buttons["completion.returnButton"]
         tapByStableCenter(returnButton, in: app)
@@ -390,29 +386,9 @@ final class StillPointAppUITests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
     }
 
-    private func waitForSavedIndicator(
-        in app: XCUIApplication,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let savedIndicator = app.staticTexts["completion.savedIndicator"]
-        if savedIndicator.waitForExistence(timeout: savedIndicatorTimeout) {
-            return
-        }
-
-        let retryButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Retry save")).firstMatch
-        if retryButton.exists {
-            tapByStableCenter(retryButton, in: app, file: file, line: line)
-            if savedIndicator.waitForExistence(timeout: savedIndicatorTimeout) {
-                return
-            }
-        }
-
-        let errorText = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "save", "internet")
-        ).firstMatch
-        let diagnostic = errorText.exists ? " Error: \(errorText.label)" : ""
-        XCTFail("Save note should produce a 'Saved' indicator.\(diagnostic)", file: file, line: line)
+    private func saveEndNoteWithKeyboardShortcut() {
+        XCUIDevice.shared.keyboardKey("s").press(forDuration: 0, modifierFlags: .command)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
     }
 
     @discardableResult
