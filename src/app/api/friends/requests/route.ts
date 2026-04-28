@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { friendRequests, friendships, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
+import { sendFriendRequestNotification } from "@/lib/notifications";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, or } from "drizzle-orm";
 
@@ -119,6 +120,20 @@ export async function POST(request: NextRequest) {
           createdAt: friendRequests.createdAt,
           updatedAt: friendRequests.updatedAt,
         });
+
+      const [sender] = await db
+        .select({ username: users.username })
+        .from(users)
+        .where(eq(users.id, auth.userId))
+        .limit(1);
+
+      await sendFriendRequestNotification({
+        requestId: created.id,
+        recipientUserId: created.toUserId,
+        senderUsername: sender?.username ?? "Someone",
+      }).catch((error: unknown) => {
+        console.error("Friend request notification error:", error);
+      });
 
       return NextResponse.json({ request: created }, { status: 201 });
     } catch (e: unknown) {

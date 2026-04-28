@@ -183,6 +183,18 @@ public struct SetBuddyReadyRequest: Codable, Sendable {
     public let ready: Bool
 }
 
+public struct DeviceTokenRegistrationRequest: Codable, Sendable {
+    public let token: String
+    public let platform: String
+    public let apnsEnvironment: String
+
+    public init(token: String, platform: String = "ios", apnsEnvironment: String) {
+        self.token = token
+        self.platform = platform
+        self.apnsEnvironment = apnsEnvironment
+    }
+}
+
 public struct JoinBuddySessionRequest: Codable, Sendable {
     public let token: String
 }
@@ -263,6 +275,21 @@ public struct BuddyMeetingTokenResponse: Codable, Sendable {
 
 public struct BuddyBooleanResponse: Codable, Sendable {
     public let ok: Bool
+}
+
+public struct DeviceTokenResponse: Codable, Sendable {
+    public struct RegisteredDeviceToken: Codable, Sendable {
+        public let id: String
+        public let platform: String
+        public let apnsEnvironment: String
+    }
+
+    public let deviceToken: RegisteredDeviceToken
+}
+
+public struct DeviceTokenDeleteResponse: Codable, Sendable {
+    public let ok: Bool
+    public let removed: Bool
 }
 
 public struct StartBuddySessionResponse: Codable, Sendable {

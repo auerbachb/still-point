@@ -87,6 +87,7 @@ final class AppViewModel {
                 currentView = .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
                 await consumePendingBuddyInviteIfNeeded()
                 return
             } else {
@@ -125,6 +126,7 @@ final class AppViewModel {
         currentUser = user
         currentView = .home
         authStatusMessage = nil
+        PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
         Task { await consumePendingBuddyInviteIfNeeded() }
     }
 

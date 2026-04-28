@@ -87,6 +87,10 @@ npm run build:turbo
 | `RESEND_API_KEY` | Server-only Resend API key for password reset email delivery. Never expose to the client. | Resend dashboard → API Keys |
 | `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |
 | `BUDDY_REQUIRE_FRIENDSHIP` | Optional. When exactly `true`, buddy join paths enforce an existing friendship (`src/lib/buddySession.ts`). | Any string other than `true` leaves checks off |
+| `APNS_BUNDLE_ID` | iOS app bundle identifier used as the APNs topic. | App target bundle id, currently `com.brettonauerbach.stillpoint` |
+| `APNS_TEAM_ID` | Apple Developer Team ID for APNs token auth. | Apple Developer account |
+| `APNS_KEY_ID` | APNs Auth Key ID. | Apple Developer → Certificates, Identifiers & Profiles → Keys |
+| `APNS_PRIVATE_KEY` | Server-only APNs `.p8` private key. Use escaped newlines if the host requires single-line values. | Apple Developer downloaded `.p8`; never commit it |
 
 Never commit credentials. Keep actual values only in local/Vercel environment settings. For a **Production / Preview / Local** map, see [Environment matrix (runbook)](#environment-matrix-runbook) below.
 
@@ -152,6 +156,7 @@ Third-party keys in use today:
 | Resend (optional) | `EMAIL_FROM`, `RESEND_API_KEY` | Send password reset links (`src/lib/email.ts`). If unset, links are logged server-side for development only. |
 | Daily.co | `DAILY_API_KEY` | Create/delete rooms, issue meeting tokens for buddy video (`src/lib/daily.ts`, `src/app/api/buddy/sessions/[id]/start`, `…/meeting-token`). |
 | YouTube (optional) | `STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID` | **Marketing only:** 11-character video id for the landing-page demo embed. Unset or empty → no embed (#166). |
+| Apple Push Notification service | `APNS_BUNDLE_ID`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY` | iOS push notifications (`src/lib/apns.ts`). |
 
 ### `vercel.json`
 
@@ -306,6 +311,7 @@ src/
 | **users** | Accounts with progressive day counter | email, username, currentDay, isPublic |
 | **sessions** | One per completed or abandoned sitting | dayNumber, duration, clearPercent, thoughtCount, mindStateLog, sessionDate |
 | **thoughts** | Captured during sessions or as end-of-session notes | sessionId, dayNumber, timeInSession, text |
+| **device_tokens** | iOS APNs registration targets | userId, platform, tokenHash, apnsEnvironment, enabled |
 
 Thoughts with `timeInSession >= 0` were captured mid-session. Thoughts with `timeInSession = -1` are end-of-session journal notes.
 
