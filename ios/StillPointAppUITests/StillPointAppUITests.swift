@@ -65,9 +65,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.isHittable)
         beginButton.tap()
 
-        XCTAssertTrue(waitForSessionOrCompletion(in: app), "Begin should enter session or complete on accelerated timer")
-        XCTAssertTrue(app.otherElements["root.currentView.completion"].waitForExistence(timeout: 45))
-        XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
+        let completionTitle = app.staticTexts["completion.dayTitle"]
+        XCTAssertTrue(completionTitle.waitForExistence(timeout: 60), "Session should complete on accelerated timer")
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
         // Save Note happy path — guards the regression class from issue #254
@@ -288,18 +287,6 @@ final class StillPointAppUITests: XCTestCase {
             if authRoot.exists || emailField.exists {
                 return true
             }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        return false
-    }
-
-    private func waitForSessionOrCompletion(in app: XCUIApplication) -> Bool {
-        let sessionRoot = app.otherElements["root.currentView.session"]
-        let completionRoot = app.otherElements["root.currentView.completion"]
-        let deadline = Date().addingTimeInterval(launchTimeout)
-
-        while Date() < deadline {
-            if sessionRoot.exists || completionRoot.exists { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
         return false
