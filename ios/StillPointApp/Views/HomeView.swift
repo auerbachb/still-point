@@ -96,7 +96,7 @@ struct HomeView: View {
         }
         .stillPointBackground()
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("root.currentView.home")
+        .accessibilityIdentifier("home.screen")
     }
 
     private var faqSection: some View {

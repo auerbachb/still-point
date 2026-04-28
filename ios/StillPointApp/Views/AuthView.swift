@@ -126,7 +126,7 @@ struct AuthView: View {
         }
         .stillPointBackground()
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("root.currentView.auth")
+        .accessibilityIdentifier("auth.view")
     }
 
     private func toggleButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

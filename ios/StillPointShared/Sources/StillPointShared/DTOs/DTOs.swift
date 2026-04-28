@@ -287,11 +287,6 @@ public struct DeviceTokenResponse: Codable, Sendable {
     public let deviceToken: RegisteredDeviceToken
 }
 
-public struct DeviceTokenDeleteResponse: Codable, Sendable {
-    public let ok: Bool
-    public let removed: Bool
-}
-
 public struct StartBuddySessionResponse: Codable, Sendable {
     public let ok: Bool
     public let startedAt: String?

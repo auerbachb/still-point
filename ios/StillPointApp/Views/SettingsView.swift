@@ -101,6 +101,7 @@ struct SettingsView: View {
                 // Logout
                 Button {
                     Task {
+                        await PushNotificationCoordinator.shared.unregisterCurrentDeviceToken()
                         try? await APIClient.shared.logout()
                         appVM.didLogout()
                     }
@@ -181,6 +182,7 @@ struct SettingsView: View {
         defer { isDeletingAccount = false }
 
         do {
+            await PushNotificationCoordinator.shared.unregisterCurrentDeviceToken()
             try await APIClient.shared.deleteAccount()
             appVM.didLogout()
         } catch let error as APIError {

@@ -82,10 +82,23 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
     }
 
     private func apnsEnvironment() -> String {
-        #if DEBUG
-        return "development"
-        #else
-        return "production"
-        #endif
+        guard let profilePath = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
+              let profile = try? String(contentsOfFile: profilePath, encoding: .isoLatin1),
+              let plistStart = profile.range(of: "<plist"),
+              let plistEnd = profile.range(of: "</plist>") else {
+            return "production"
+        }
+
+        let plistString = String(profile[plistStart.lowerBound..<plistEnd.upperBound])
+        guard let plistData = plistString.data(using: .utf8),
+              let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any],
+              let environment = entitlements["aps-environment"] as? String,
+              environment == "development" || environment == "production" else {
+            assertionFailure("Unable to read APNs environment from embedded provisioning profile")
+            return "production"
+        }
+
+        return environment
     }
 }

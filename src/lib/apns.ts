@@ -6,6 +6,7 @@ import { SignJWT, importPKCS8 } from "jose";
 const APNS_DEVELOPMENT_HOST = "https://api.sandbox.push.apple.com";
 const APNS_PRODUCTION_HOST = "https://api.push.apple.com";
 const JWT_TTL_MS = 45 * 60 * 1000;
+const APNS_REQUEST_TIMEOUT_MS = 10_000;
 
 export type ApnsEnvironment = "development" | "production";
 
@@ -93,8 +94,20 @@ export async function sendApnsNotification(
     let responseBody = "";
     let status = 0;
     let apnsId: string | undefined;
+    let settled = false;
 
-    client.on("error", reject);
+    const finish = (result?: ApnsSendResult, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      client.destroy();
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(result!);
+    };
+
+    client.once("error", (error) => finish(undefined, error));
 
     const request = client.request({
       ":method": "POST",
@@ -116,11 +129,14 @@ export async function sendApnsNotification(
     request.on("data", (chunk) => {
       responseBody += chunk;
     });
-    request.on("error", reject);
+    request.setTimeout(APNS_REQUEST_TIMEOUT_MS, () => {
+      request.close(http2.constants.NGHTTP2_CANCEL);
+      finish({ ok: false, status: 0, reason: "APNs request timeout" });
+    });
+    request.once("error", (error) => finish(undefined, error));
     request.on("end", () => {
-      client.close();
       if (status >= 200 && status < 300) {
-        resolve({ ok: true, status, apnsId });
+        finish({ ok: true, status, apnsId });
         return;
       }
 
@@ -132,16 +148,20 @@ export async function sendApnsNotification(
         reason = responseBody || undefined;
       }
 
-      resolve({ ok: false, status, reason, apnsId });
+      finish({ ok: false, status, reason, apnsId });
     });
     request.end(body);
   });
 }
 
+function normalizeDeviceToken(token: string): string {
+  return token.trim().toLowerCase();
+}
+
 export function hashDeviceToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  return crypto.createHash("sha256").update(normalizeDeviceToken(token)).digest("hex");
 }
 
 export function isValidDeviceToken(token: string): boolean {
-  return /^[0-9a-fA-F]{64,200}$/.test(token);
+  return /^[0-9a-f]{64,200}$/.test(normalizeDeviceToken(token));
 }

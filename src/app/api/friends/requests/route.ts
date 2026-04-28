@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, auth.userId))
         .limit(1);
 
-      await sendFriendRequestNotification({
+      void sendFriendRequestNotification({
         requestId: created.id,
         recipientUserId: created.toUserId,
         senderUsername: sender?.username ?? "Someone",

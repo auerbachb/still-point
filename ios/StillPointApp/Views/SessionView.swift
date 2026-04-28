@@ -111,7 +111,6 @@ struct SessionView: View {
                 handleCompletion()
             }
         }
-        .accessibilityIdentifier("root.currentView.session")
         .accessibilityElement(children: .contain)
         .alert("Session could not be saved", isPresented: $showSaveError) {
             Button("Retry") { handleCompletion() }

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
 const hashDeviceToken = vi.fn((token: string) => `hash:${token}`);
-const isValidDeviceToken = vi.fn((token: string) => /^[0-9a-fA-F]{64,400}$/.test(token));
+const isValidDeviceToken = vi.fn((token: string) => /^[0-9a-fA-F]{64,200}$/.test(token));
 const returning = vi.fn();
 const onConflictDoUpdate = vi.fn(() => ({ returning }));
 const insertValues = vi.fn(() => ({ onConflictDoUpdate }));
