@@ -29,8 +29,12 @@ struct StillPointApp: App {
     /// `.modelContainer(...)` opens any SQLite files.
     private static func resetSwiftDataIfRequested() {
         let env = ProcessInfo.processInfo.environment
-        guard env["SP_UI_TEST_MODE"] == "1",
-              ["1", "true", "yes", "on"].contains((env["SP_UI_TEST_RESET_STORE"] ?? "").lowercased()) else {
+        let truthy: (String?) -> Bool = { value in
+            guard let value else { return false }
+            return ["1", "true", "yes", "on"].contains(value.lowercased())
+        }
+        guard truthy(env["SP_UI_TEST_MODE"]),
+              truthy(env["SP_UI_TEST_RESET_STORE"]) else {
             return
         }
         let fm = FileManager.default

@@ -80,10 +80,17 @@ struct RootView: View {
                 .transition(.opacity)
             }
         }
+        // Explicit accessibility marker for UI tests. Putting the
+        // identifier on the ZStack itself proved unreliable on iOS 26 —
+        // SwiftUI containers without an `.accessibilityElement` promotion
+        // are not surfaced consistently as `XCUIElementType.other` matches
+        // for `app.otherElements[...]`. A separate Color.clear overlay
+        // marked as an explicit accessibility element gives the test a
+        // dedicated, full-screen .other node that does not depend on
+        // child-coalescing heuristics. Issue #276.
+        .overlay(accessibilityMarker.allowsHitTesting(false))
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
-        .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
-        .accessibilityValue(coldStartMetricAccessibilityValue)
         .task {
             await appVM.checkAuth()
         }
@@ -120,5 +127,18 @@ struct RootView: View {
     private var coldStartMetricAccessibilityValue: String {
         guard let ms = appVM.lastColdStartAuthCheckMs else { return "coldStartAuthCheckMs=unknown" }
         return "coldStartAuthCheckMs=\(ms)"
+    }
+
+    /// Always-visible, full-screen, invisible accessibility marker that
+    /// carries the `root.currentView.<slug>` identifier used by the UI
+    /// tests. Color.clear with `.accessibilityElement()` reliably surfaces
+    /// as an `XCUIElementType.other` node, unlike a bare ZStack with
+    /// `.accessibilityIdentifier`. Issue #276.
+    private var accessibilityMarker: some View {
+        Color.clear
+            .ignoresSafeArea()
+            .accessibilityElement()
+            .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
+            .accessibilityValue(coldStartMetricAccessibilityValue)
     }
 }
