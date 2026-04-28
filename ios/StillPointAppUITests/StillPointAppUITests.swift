@@ -170,10 +170,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
         XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
 
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
+        focusAndType("ios.fixture@stillpoint.test", into: emailField, in: app)
+        focusAndType("stillpoint-pass", into: passwordField, in: app)
         let keyboard = app.keyboards.firstMatch
         XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "Keyboard should be visible for overlap reachability check")
         XCTAssertTrue(submitButton.isHittable, "Submit should remain reachable with keyboard visible")
@@ -319,6 +317,21 @@ final class StillPointAppUITests: XCTestCase {
             app.textFields["auth.emailField"].waitForExistence(timeout: launchTimeout),
             "Auth email field did not appear"
         )
+    }
+
+    private func focusAndType(_ text: String, into element: XCUIElement, in app: XCUIApplication) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5))
+        let deadline = Date().addingTimeInterval(5)
+        repeat {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if app.keyboards.firstMatch.waitForExistence(timeout: 1) {
+                app.typeText(text)
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        XCTFail("Keyboard did not appear for \(element.identifier)")
     }
 
     private func assertColdStartBoundIfAvailable(root: XCUIElement, maxMs: Int) {
