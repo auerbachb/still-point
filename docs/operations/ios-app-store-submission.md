@@ -10,6 +10,22 @@ Use this runbook after an iOS build has been uploaded to TestFlight and before c
 
 Record submission status, reviewer notes, build strings, and final outcome in ops tracker #103. Use `ios/RELEASING.md` for tag format, build bumps, and CI upload details.
 
+## AI-assisted dry run
+
+Before a live submission, generate the issue #242 evidence package:
+
+```bash
+npm run ios:app-store:dry-run
+```
+
+The command reads `README.md`, `ios/RELEASING.md`, this runbook, `.github/workflows/ios-testflight.yml`, `ios/PARITY_CHECKLIST.md`, `ios/QA_CHECKLIST.md`, and `ios/project.yml`. It writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log` with:
+
+- the intended `ios-v*` tag, marketing version, build number, bundle ID, workflow trigger, and release artifact placeholders;
+- a 38-item issue #242 checklist map across phases A-F, App Store Connect API readiness, submission execution, review follow-up, proof, and definition-of-done items;
+- App Store Connect API fallback paths and explicit human-owned gates.
+
+Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to let the dry run query App Store Connect builds and version records. Add `-- --require-live` when a real submission must fail fast if live API validation cannot run. The script does not submit for review; submission remains blocked until the generated human gates are approved.
+
 ## Automation scope
 
 The current pipeline already automates build/archive/upload to TestFlight through GitHub Actions. App Store Connect also has API coverage for many post-upload tasks, so future tooling can automate or prefill parts of this runbook instead of requiring every step to be pasted into the website.

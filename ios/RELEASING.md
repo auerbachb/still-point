@@ -51,6 +51,16 @@ Before your first TestFlight release, configure a tester group and handle encryp
 5. The GitHub Actions workflow builds and uploads to TestFlight automatically.
 6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
 7. Record the processed build number and processing timestamp in `ios/QA_CHECKLIST.md`.
+8. Before App Store submission, run the automation dry run and save its artifact:
+   ```bash
+   npm run ios:app-store:dry-run
+   ```
+   The report in `artifacts/ios-app-store-dry-run/` confirms source-of-truth
+   docs, release-readiness checklists, workflow secret references, version/build
+   values, App Store Connect API readiness, human-owned gates, and fallback
+   paths. For live App Store Connect build/version validation, provide
+   `APPSTORE_APP_ID` plus the App Store Connect API key environment variables
+   and rerun with `-- --require-live`.
 
 ## App Store submission handoff
 

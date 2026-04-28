@@ -211,6 +211,14 @@ All iOS release and App Store submission work must reference:
 
 Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. The TestFlight upload path is automated through GitHub Actions; the App Store submission runbook identifies which App Store Connect steps are automatable through Apple's API and which still require an Account Holder/Admin or human release decision.
 
+Before the next live App Store submission, run the AI-assisted dry run and save its generated evidence:
+
+```bash
+npm run ios:app-store:dry-run
+```
+
+The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks the TestFlight workflow's required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
+
 ### Neon (database)
 
 Serverless Postgres hosted on [Neon](https://neon.tech). The connection uses `@neondatabase/serverless` with HTTP queries (no persistent connections).
