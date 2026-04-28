@@ -1,4 +1,86 @@
 import Foundation
+
+#if targetEnvironment(simulator)
+
+@Observable
+@MainActor
+final class AppBlockingManager {
+    static let unlockWindow: TimeInterval = 2 * 60 * 60
+
+    var unlockUntil: Date?
+    var lastErrorMessage: String?
+    var isApplyingShield = false
+    private(set) var didUnlockFromLastCompletedSession = false
+
+    private let defaults: UserDefaults
+    private let unlockUntilKey = "appBlocking.unlockUntil.v1"
+    private let uiTestSelectionEnabled: Bool
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.unlockUntil = defaults.object(forKey: unlockUntilKey) as? Date
+        self.uiTestSelectionEnabled = ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
+    }
+
+    var isAuthorizationApproved: Bool { uiTestSelectionEnabled }
+    var hasSelection: Bool { uiTestSelectionEnabled }
+    var selectedItemCount: Int { uiTestSelectionEnabled ? 1 : 0 }
+
+    var isUnlocked: Bool {
+        guard let unlockUntil else { return false }
+        return unlockUntil > Date()
+    }
+
+    var statusText: String {
+        guard hasSelection else {
+            return "Choose the apps you want Still Point to hold during practice."
+        }
+        if isUnlocked, let unlockUntil {
+            return "Unlocked until \(Self.timeFormatter.string(from: unlockUntil))."
+        }
+        return "Selected apps stay blocked until you complete a session."
+    }
+
+    var unlockWindowText: String { "2 hours" }
+
+    func requestAuthorizationIfNeeded() async {}
+    func persistSelectionAndRefreshShielding() {}
+    func prepareForSession() {
+        didUnlockFromLastCompletedSession = false
+    }
+
+    func unlockAfterCompletedSession() {
+        didUnlockFromLastCompletedSession = false
+        guard hasSelection else { return }
+        unlockUntil = Date().addingTimeInterval(Self.unlockWindow)
+        didUnlockFromLastCompletedSession = true
+        defaults.set(unlockUntil, forKey: unlockUntilKey)
+    }
+
+    func lockNow() {
+        didUnlockFromLastCompletedSession = false
+        unlockUntil = nil
+        defaults.removeObject(forKey: unlockUntilKey)
+    }
+
+    func refreshShielding() {
+        if let unlockUntil, unlockUntil <= Date() {
+            self.unlockUntil = nil
+            didUnlockFromLastCompletedSession = false
+            defaults.removeObject(forKey: unlockUntilKey)
+        }
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter
+    }()
+}
+
+#else
+
 import FamilyControls
 import ManagedSettings
 
@@ -197,3 +279,5 @@ final class AppBlockingManager {
         return formatter
     }()
 }
+
+#endif

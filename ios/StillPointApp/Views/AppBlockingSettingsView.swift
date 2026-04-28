@@ -1,5 +1,7 @@
 import SwiftUI
+#if !targetEnvironment(simulator)
 import FamilyControls
+#endif
 
 struct AppBlockingSettingsView: View {
     @Bindable var manager: AppBlockingManager
@@ -86,7 +88,9 @@ struct AppBlockingSettingsView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(manager.hasSelection && !manager.isUnlocked ? SPColor.amberBorderSubtle : SPColor.border1)
         )
+        #if !targetEnvironment(simulator)
         .familyActivityPicker(isPresented: $showPicker, selection: $manager.selection)
+        #endif
         .onChange(of: showPicker) { _, isPresented in
             if !isPresented {
                 manager.persistSelectionAndRefreshShielding()
