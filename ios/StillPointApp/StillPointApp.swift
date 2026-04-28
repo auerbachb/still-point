@@ -4,7 +4,7 @@ import StillPointShared
 
 @main
 struct StillPointApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @UIApplicationDelegateAdaptor(PushNotificationCoordinator.self) private var pushNotificationCoordinator
 
     var body: some Scene {
         WindowGroup {

@@ -23,22 +23,26 @@ export async function sendPushNotificationToUser(params: {
     .where(and(eq(deviceTokens.userId, params.recipientUserId), eq(deviceTokens.enabled, true)));
 
   await Promise.all(tokens.map(async (row) => {
-    const result = await sendApnsNotification(row.token, toApnsEnvironment(row.apnsEnvironment), params.payload);
-    const now = new Date();
-    if (result.ok) {
-      await db.update(deviceTokens).set({ lastUsedAt: now, updatedAt: now }).where(eq(deviceTokens.id, row.id));
-      return;
-    }
+    try {
+      const result = await sendApnsNotification(row.token, toApnsEnvironment(row.apnsEnvironment), params.payload);
+      const now = new Date();
+      if (result.ok) {
+        await db.update(deviceTokens).set({ lastUsedAt: now, updatedAt: now }).where(eq(deviceTokens.id, row.id));
+        return;
+      }
 
-    if (result.reason && invalidTokenReasons.has(result.reason)) {
-      await db.update(deviceTokens).set({ enabled: false, updatedAt: now }).where(eq(deviceTokens.id, row.id));
+      if (result.reason && invalidTokenReasons.has(result.reason)) {
+        await db.update(deviceTokens).set({ enabled: false, updatedAt: now }).where(eq(deviceTokens.id, row.id));
+      }
+      console.warn("APNs notification failed", {
+        tokenId: row.id,
+        status: result.status,
+        reason: result.reason,
+        apnsId: result.apnsId,
+      });
+    } catch (error) {
+      console.error("APNs notification error", { tokenId: row.id, error });
     }
-    console.warn("APNs notification failed", {
-      tokenId: row.id,
-      status: result.status,
-      reason: result.reason,
-      apnsId: result.apnsId,
-    });
   }));
 }
 
