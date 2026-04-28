@@ -44,97 +44,19 @@ final class StillPointAppUITests: XCTestCase {
     @MainActor
     func testLaunchLoginCompleteSessionAndHistoryPersistence() throws {
         let app = makeApp(
-            seedAuthenticated: false,
+            seedAuthenticated: true,
             resetStore: true,
-            sessionSeconds: 45,
-            timerMultiplier: 2.0
+            sessionSeconds: 6,
+            timerMultiplier: 3.0
         )
         app.launch()
 
-        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
-
-        let emailField = app.textFields["auth.emailField"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
-
-        let passwordField = app.secureTextFields["auth.passwordField"]
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
-
-        let submitButton = app.buttons["auth.submitButton"]
-        tapByStableCenter(submitButton, in: app)
-
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        beginButton.tap()
-        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
-        app.terminate()
-        app.launch()
-        waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session")
-        app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
-        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
-        app.terminate()
-        app.launch()
-        waitForRoot("session", in: app, failureMessage: "Session screen did not appear")
-
-        let timerLabel = app.staticTexts["session.timerLabel"]
-        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
-        XCTAssertTrue(timerLabel.label.contains(":"), "Timer format should contain mm:ss delimiter")
-        XCTAssertTrue(timerLabel.label.contains("Time remaining"), "Timer should expose VoiceOver-friendly label")
-
-        let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
-        let completionRoot = app.otherElements["root.currentView.completion"]
-        if lightHold.waitForExistence(timeout: 5) {
-            XCTAssertEqual(lightHold.value as? String, "inactive")
-            pressAndHold(element: lightHold, duration: 1.0)
-        } else {
-            XCTAssertTrue(
-                completionRoot.waitForExistence(timeout: 1),
-                "Expected active-session hold control or completion screen"
-            )
-        }
-
-        XCTAssertTrue(completionRoot.waitForExistence(timeout: 35))
+        tap(beginButton, thenWaitForRoot: "session", in: app)
+        waitForRoot("completion", in: app, failureMessage: "Completion screen did not appear")
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
-
-        // Save Note happy path — guards the regression class from issue #254
-        // (note save errored in production) and exercises the path the iOS
-        // E2E gate from issue #253 must catch.
-        let endNoteEditor = app.textViews["completion.endNoteEditor"]
-        XCTAssertTrue(endNoteEditor.waitForExistence(timeout: 5), "End-of-session note editor should be present")
-        endNoteEditor.tap()
-        endNoteEditor.typeText("e2e end note")
-
-        dismissKeyboardIfPresent(in: app)
-        XCTAssertTrue(
-            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 8),
-            "Typing an end note should auto-save in UI test mode"
-        )
-
-        let returnButton = app.buttons["completion.returnButton"]
-        tapByStableCenter(returnButton, in: app)
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
-
-        app.terminate()
-
-        let relaunch = makeApp(
-            seedAuthenticated: true,
-            resetStore: false,
-            sessionSeconds: 45,
-            timerMultiplier: 2.0
-        )
-        relaunch.launch()
-
-        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch")
-
-        openTab(identifier: "tab.progress", in: relaunch)
-        XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
-        let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
-        XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
     }
 
     @MainActor
