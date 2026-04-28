@@ -7,6 +7,7 @@ import {
   bumpBuddyRevision,
   reconcileBuddySession,
 } from "@/lib/buddySession";
+import { syncBuddySessionCalendarForUser } from "@/lib/google";
 import { and, eq } from "drizzle-orm";
 import { readJsonObject } from "@/lib/readJsonObject";
 
@@ -79,7 +80,14 @@ export async function POST(request: NextRequest) {
         .where(eq(buddySessionParticipants.id, existing.id));
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      return NextResponse.json({ sessionId: session.id });
+      const calendarSync = session.scheduledStartAt
+        ? [await syncBuddySessionCalendarForUser(session, auth.userId)]
+        : [];
+      return NextResponse.json({
+        sessionId: session.id,
+        scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
+        calendarSync,
+      });
     }
 
     if (session.state === "waiting" || session.state === "ready_check") {
@@ -104,7 +112,14 @@ export async function POST(request: NextRequest) {
       }
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      return NextResponse.json({ sessionId: session.id });
+      const calendarSync = session.scheduledStartAt
+        ? [await syncBuddySessionCalendarForUser(session, auth.userId)]
+        : [];
+      return NextResponse.json({
+        sessionId: session.id,
+        scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
+        calendarSync,
+      });
     }
 
     return NextResponse.json({ error: "Cannot join this session" }, { status: 409 });

@@ -65,6 +65,13 @@ function BuddyRoomErrorBanner({ message }: { message: string }) {
   );
 }
 
+function formatScheduledStart(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export function BuddySessionRoom({
   sessionId,
   currentUserId,
@@ -635,6 +642,22 @@ export function BuddySessionRoom({
       >
         Shared session
       </h2>
+
+      {snap.scheduledStartAt && inLobby && (
+        <p
+          role="note"
+          style={{
+            margin: 0,
+            fontSize: "13px",
+            color: "var(--fg-2)",
+            textAlign: "center",
+            lineHeight: 1.45,
+          }}
+        >
+          Scheduled for {formatScheduledStart(snap.scheduledStartAt)}. Joining confirms the shared
+          time; connected Google Calendars add it automatically.
+        </p>
+      )}
 
       {inLobby && (
         <>

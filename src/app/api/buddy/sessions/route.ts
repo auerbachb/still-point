@@ -1,17 +1,47 @@
 import { randomBytes } from "crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { buddyDurationForDay } from "@/lib/buddySession";
+import { syncBuddySessionCalendarForUser } from "@/lib/google";
 import { eq } from "drizzle-orm";
 
-export async function POST() {
+async function readOptionalScheduledStartAt(request: NextRequest): Promise<Date | null | NextResponse> {
+  const text = await request.text();
+  if (!text.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const raw = (parsed as Record<string, unknown>).scheduledStartAt;
+  if (raw == null || raw === "") return null;
+  if (typeof raw !== "string") {
+    return NextResponse.json({ error: "scheduledStartAt must be an ISO timestamp" }, { status: 400 });
+  }
+  const scheduledStartAt = new Date(raw);
+  if (Number.isNaN(scheduledStartAt.getTime())) {
+    return NextResponse.json({ error: "scheduledStartAt must be a valid timestamp" }, { status: 400 });
+  }
+  if (scheduledStartAt.getTime() <= Date.now()) {
+    return NextResponse.json({ error: "scheduledStartAt must be in the future" }, { status: 400 });
+  }
+  return scheduledStartAt;
+}
+
+export async function POST(request: NextRequest) {
   try {
     const auth = await getCurrentUser();
     if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const scheduledStartAt = await readOptionalScheduledStartAt(request);
+    if (scheduledStartAt instanceof NextResponse) return scheduledStartAt;
 
     const [host] = await db
       .select({ currentDay: users.currentDay })
@@ -31,6 +61,7 @@ export async function POST() {
         shareToken,
         hostUserId: auth.userId,
         durationSeconds,
+        scheduledStartAt,
         state: "waiting",
       })
       .returning();
@@ -47,6 +78,24 @@ export async function POST() {
     });
 
     const sharePath = `/app?buddy=${encodeURIComponent(shareToken)}`;
+    let calendarSync: Awaited<ReturnType<typeof syncBuddySessionCalendarForUser>>[] = [];
+    if (session.scheduledStartAt) {
+      try {
+        calendarSync = [await syncBuddySessionCalendarForUser(session, auth.userId)];
+      } catch (syncError) {
+        console.error("Buddy create Google Calendar sync error:", syncError);
+        calendarSync = [
+          {
+            status: "failed",
+            userId: auth.userId,
+            error:
+              syncError instanceof Error
+                ? syncError.message
+                : "Could not sync Google Calendar",
+          },
+        ];
+      }
+    }
 
     return NextResponse.json({
       session: {
@@ -54,6 +103,8 @@ export async function POST() {
         shareToken: session.shareToken,
         sharePath,
         durationSeconds: session.durationSeconds,
+        scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
+        calendarSync,
       },
     });
   } catch (error) {

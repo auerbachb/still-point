@@ -60,6 +60,13 @@ export async function POST(_request: Request, context: Params) {
 
     const phaseErr = requireReadyCheckForStart(session);
     if (phaseErr) return phaseErr;
+    if (session.scheduledStartAt && session.scheduledStartAt.getTime() > Date.now()) {
+      return buddyPolicyJson(
+        409,
+        "This session is scheduled for later.",
+        BUDDY_POLICY_CODES.START_WRONG_PHASE,
+      );
+    }
 
     const roomName = `buddy-${sessionId}`;
     let dailyRoom: { name: string; url: string };

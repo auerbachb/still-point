@@ -60,6 +60,7 @@ export const buddySessions = pgTable("buddy_sessions", {
   hostUserId: uuid("host_user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   state: varchar("state", { length: 20 }).notNull().default("waiting"),
   durationSeconds: integer("duration_seconds").notNull(),
+  scheduledStartAt: timestamp("scheduled_start_at", { withTimezone: true }),
   startedAt: timestamp("started_at", { withTimezone: true }),
   /** Daily.co room name (for DELETE); set when the shared sit starts (#106). */
   dailyRoomName: varchar("daily_room_name", { length: 128 }),
@@ -91,6 +92,46 @@ export const buddySessionParticipants = pgTable("buddy_session_participants", {
   sessionUserUnique: uniqueIndex("buddy_session_participants_session_user").on(
     table.buddySessionId,
     table.userId,
+  ),
+}));
+
+/** Google Calendar OAuth connection per app user (#204). Tokens are encrypted server-side. */
+export const googleOAuthTokens = pgTable("google_oauth_tokens", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  googleSub: varchar("google_sub", { length: 255 }),
+  googleEmail: varchar("google_email", { length: 255 }),
+  accessTokenEncrypted: text("access_token_encrypted").notNull(),
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  scope: text("scope").notNull(),
+  tokenType: varchar("token_type", { length: 32 }).notNull().default("Bearer"),
+  expiryDate: timestamp("expiry_date", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  emailIdx: index("idx_google_oauth_tokens_email").on(table.googleEmail),
+}));
+
+/** Per-user Google Calendar event sync state for scheduled buddy sessions (#204). */
+export const buddySessionCalendarEvents = pgTable("buddy_session_calendar_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "cascade" }).notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  googleEventId: varchar("google_event_id", { length: 255 }),
+  htmlLink: text("html_link"),
+  status: varchar("status", { length: 20 }).notNull().default("created"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  sessionUserUnique: uniqueIndex("buddy_session_calendar_events_session_user").on(
+    table.buddySessionId,
+    table.userId,
+  ),
+  sessionIdx: index("idx_buddy_session_calendar_events_session").on(table.buddySessionId),
+  userIdx: index("idx_buddy_session_calendar_events_user").on(table.userId),
+  statusCheck: check(
+    "buddy_session_calendar_events_status_allowed",
+    sql`${table.status} in ('created', 'failed', 'deleted')`,
   ),
 }));
 
@@ -164,10 +205,15 @@ export const friendships = pgTable("friendships", {
   user2Idx: index("idx_friendships_user2").on(table.user2Id),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(sessions),
   thoughts: many(thoughts),
   passwordResetTokens: many(passwordResetTokens),
+  googleOAuthToken: one(googleOAuthTokens, {
+    fields: [users.id],
+    references: [googleOAuthTokens.userId],
+  }),
+  buddyCalendarEvents: many(buddySessionCalendarEvents),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
@@ -178,6 +224,7 @@ export const buddySessionsRelations = relations(buddySessions, ({ one, many }) =
   host: one(users, { fields: [buddySessions.hostUserId], references: [users.id] }),
   participants: many(buddySessionParticipants),
   personalSessions: many(sessions),
+  calendarEvents: many(buddySessionCalendarEvents),
 }));
 
 export const buddySessionParticipantsRelations = relations(buddySessionParticipants, ({ one }) => ({
@@ -187,6 +234,21 @@ export const buddySessionParticipantsRelations = relations(buddySessionParticipa
   }),
   user: one(users, { fields: [buddySessionParticipants.userId], references: [users.id] }),
 }));
+
+export const googleOAuthTokensRelations = relations(googleOAuthTokens, ({ one }) => ({
+  user: one(users, { fields: [googleOAuthTokens.userId], references: [users.id] }),
+}));
+
+export const buddySessionCalendarEventsRelations = relations(
+  buddySessionCalendarEvents,
+  ({ one }) => ({
+    session: one(buddySessions, {
+      fields: [buddySessionCalendarEvents.buddySessionId],
+      references: [buddySessions.id],
+    }),
+    user: one(users, { fields: [buddySessionCalendarEvents.userId], references: [users.id] }),
+  }),
+);
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),

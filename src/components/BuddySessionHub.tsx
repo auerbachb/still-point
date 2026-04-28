@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 
 function extractBuddyToken(input: string): string {
@@ -26,20 +26,80 @@ type BuddySessionHubProps = {
   onBack: () => void;
 };
 
+type CalendarSync = NonNullable<Awaited<ReturnType<typeof api.joinBuddySession>>["calendarSync"]>;
+
 export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps) {
   const [joinToken, setJoinToken] = useState("");
   const [createdPath, setCreatedPath] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const [scheduledLocal, setScheduledLocal] = useState("");
+  const [createdScheduledStartAt, setCreatedScheduledStartAt] = useState<string | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<{
+    connected: boolean;
+    email: string | null;
+  } | null>(null);
+  const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    void api.getGoogleCalendarStatus().then(
+      ({ google }) => {
+        if (!cancelled) setGoogleStatus(google);
+      },
+      () => {
+        if (!cancelled) setGoogleStatus({ connected: false, email: null });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function localDateTimeToIso(value: string): { ok: true; value: string | null } | { ok: false } {
+    if (!value.trim()) return { ok: true, value: null };
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      setError("Pick a valid date and time");
+      return { ok: false };
+    }
+    if (date.getTime() <= Date.now()) {
+      setError("Pick a future time for a scheduled session");
+      return { ok: false };
+    }
+    return { ok: true, value: date.toISOString() };
+  }
+
+  function formatScheduled(value: string | null): string | null {
+    if (!value) return null;
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  }
+
+  function calendarSyncMessage(sync: CalendarSync) {
+    if (sync.length === 0) return null;
+    const item = sync[0];
+    if (!item) return null;
+    if (item.status === "created") return "Added to your Google Calendar.";
+    if (item.status === "skipped") return "Google Calendar is not connected on this account.";
+    return "Could not add to Google Calendar, but the invite was created.";
+  }
+
   async function handleCreate() {
     setError(null);
+    setCalendarMessage(null);
+    const scheduledStartAt = localDateTimeToIso(scheduledLocal);
+    if (!scheduledStartAt.ok) return;
     setBusy(true);
     try {
-      const { session } = await api.createBuddySession();
+      const { session } = await api.createBuddySession({ scheduledStartAt: scheduledStartAt.value });
       setCreatedPath(session.sharePath);
       setCreatedId(session.id);
+      setCreatedScheduledStartAt(session.scheduledStartAt);
+      setCalendarMessage(calendarSyncMessage(session.calendarSync));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not create session");
     } finally {
@@ -49,6 +109,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
 
   async function handleJoin() {
     setError(null);
+    setCalendarMessage(null);
     const t = extractBuddyToken(joinToken);
     if (!t) {
       setError("Paste a join link or token");
@@ -56,7 +117,8 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     }
     setBusy(true);
     try {
-      const { sessionId } = await api.joinBuddySession(t);
+      const { sessionId, calendarSync } = await api.joinBuddySession(t);
+      if (calendarSync) setCalendarMessage(calendarSyncMessage(calendarSync));
       onEnterSession(sessionId);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not join");
@@ -103,8 +165,47 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
           margin: 0,
         }}
       >
-        Create a room, share the link, mark ready when you are set, then the host starts one shared timer for everyone.
+        Create a room now, or schedule a shared sit and let each connected Google Calendar add the agreed time.
       </p>
+
+      <div
+        style={{
+          width: "100%",
+          border: "1px solid var(--border-2)",
+          borderRadius: "12px",
+          padding: "14px",
+          background: "var(--surface-1)",
+          boxSizing: "border-box",
+          display: "grid",
+          gap: "var(--s2)",
+        }}
+      >
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--fg-2)", lineHeight: 1.45 }}>
+          Google Calendar:{" "}
+          {googleStatus?.connected
+            ? `connected${googleStatus.email ? ` as ${googleStatus.email}` : ""}`
+            : "not connected"}
+        </p>
+        {!googleStatus?.connected && (
+          <a
+            href="/api/auth/google"
+            style={{
+              color: "var(--fg)",
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Connect Google Calendar
+          </a>
+        )}
+        {calendarMessage && (
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--fg-3)", lineHeight: 1.45 }}>
+            {calendarMessage}
+          </p>
+        )}
+      </div>
 
       {error && (
         <p
@@ -126,6 +227,36 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
 
       {!createdPath ? (
         <>
+          <label
+            htmlFor="buddy-scheduled-start"
+            style={{
+              width: "100%",
+              display: "grid",
+              gap: "var(--s2)",
+              color: "var(--fg-2)",
+              fontSize: "13px",
+            }}
+          >
+            Schedule for later (optional)
+            <input
+              id="buddy-scheduled-start"
+              type="datetime-local"
+              value={scheduledLocal}
+              onChange={(e) => setScheduledLocal(e.target.value)}
+              disabled={busy}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "var(--surface-1)",
+                border: "1px solid var(--border-2)",
+                color: "var(--fg)",
+                borderRadius: "8px",
+                padding: "10px 12px",
+                fontSize: "13px",
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              }}
+            />
+          </label>
           <button
             type="button"
             disabled={busy}
@@ -143,7 +274,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               width: "100%",
             }}
           >
-            Start shared session
+            {scheduledLocal ? "Create scheduled invite" : "Start shared session"}
           </button>
 
           <div
@@ -214,6 +345,11 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
           <p style={{ margin: 0, fontSize: "14px", color: "var(--fg-2)" }}>
             Share this link with your friend (they must be signed in):
           </p>
+          {createdScheduledStartAt && (
+            <p style={{ margin: 0, fontSize: "14px", color: "var(--fg-2)", lineHeight: 1.45 }}>
+              Scheduled for {formatScheduled(createdScheduledStartAt)}. They accept by joining; Google Calendar sync runs for each connected account.
+            </p>
+          )}
           <code
             style={{
               display: "block",
