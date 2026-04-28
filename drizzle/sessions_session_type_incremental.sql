@@ -7,6 +7,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'sessions_session_type_allowed'
+      AND conrelid = 'sessions'::regclass
   ) THEN
     ALTER TABLE "sessions"
     ADD CONSTRAINT "sessions_session_type_allowed"

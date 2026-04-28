@@ -49,7 +49,7 @@ describe("session progression rules", () => {
     });
   });
 
-  test("uses the latest same-day attempt when calculating streak", () => {
+  test("counts a day in the streak when any same-day standard attempt completed", () => {
     const sessions: SessionStatsInput[] = [
       {
         sessionType: "standard",
@@ -81,5 +81,15 @@ describe("session progression rules", () => {
     ];
 
     expect(calculateSessionStats(sessions).streak).toBe(2);
+  });
+
+  test("stops the streak at the first day without a completed standard attempt", () => {
+    const sessions: SessionStatsInput[] = [
+      { sessionType: "standard", dayNumber: 3, duration: 80, completed: false, clearPercent: 20, thoughtCount: 0 },
+      { sessionType: "standard", dayNumber: 2, duration: 70, completed: true, clearPercent: 100, thoughtCount: 0 },
+      { sessionType: "standard", dayNumber: 1, duration: 60, completed: true, clearPercent: 80, thoughtCount: 2 },
+    ];
+
+    expect(calculateSessionStats(sessions).streak).toBe(0);
   });
 });

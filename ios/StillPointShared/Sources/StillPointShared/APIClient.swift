@@ -593,20 +593,21 @@ public actor APIClient {
     }
 
     private static func makeUITestStats(for sessions: [SessionDTO]) -> StatsDTO {
-        guard !sessions.isEmpty else {
+        let standardSessions = sessions.filter { $0.sessionType == .standard }
+        guard !standardSessions.isEmpty else {
             return StatsDTO(streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0)
         }
 
-        let completedSessions = sessions.filter(\.completed)
+        let completedSessions = standardSessions.filter(\.completed)
         let streak = completedSessions.count
-        let totalClear = sessions.reduce(0) { $0 + $1.clearPercent }
-        let totalThoughts = sessions.reduce(0) { $0 + $1.thoughtCount }
-        let totalMinutes = sessions.reduce(0.0) { partial, session in
+        let totalClear = standardSessions.reduce(0) { $0 + $1.clearPercent }
+        let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
+        let totalMinutes = standardSessions.reduce(0.0) { partial, session in
             let duration = Double(max(session.actualTime ?? session.duration, 1))
             return partial + (duration / 60.0)
         }
-        let avgClearPercent = totalClear / sessions.count
-        let avgThoughtsPerSession = Double(totalThoughts) / Double(sessions.count)
+        let avgClearPercent = totalClear / standardSessions.count
+        let avgThoughtsPerSession = Double(totalThoughts) / Double(standardSessions.count)
         let avgThoughtsPerMinute = totalMinutes > 0 ? Double(totalThoughts) / totalMinutes : 0
         return StatsDTO(
             streak: streak,

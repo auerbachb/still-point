@@ -56,21 +56,16 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
   const totalSessions = standardSessions.length;
 
   let streak = 0;
-  const seenDays = new Set<number>();
-  const sortedByDay = [...standardSessions].sort((a, b) => {
-    if (a.dayNumber !== b.dayNumber) {
-      return b.dayNumber - a.dayNumber;
-    }
-    const aTime = sessionSortTime(a);
-    const bTime = sessionSortTime(b);
-    return bTime - aTime;
-  });
-  for (const session of sortedByDay) {
-    if (seenDays.has(session.dayNumber)) {
-      continue;
-    }
-    seenDays.add(session.dayNumber);
-    if (session.completed) {
+  const completedByDay = new Map<number, boolean>();
+  for (const session of standardSessions) {
+    completedByDay.set(
+      session.dayNumber,
+      (completedByDay.get(session.dayNumber) ?? false) || session.completed,
+    );
+  }
+  const sortedDays = [...completedByDay.keys()].sort((a, b) => b - a);
+  for (const day of sortedDays) {
+    if (completedByDay.get(day)) {
       streak++;
     } else {
       break;
@@ -98,13 +93,4 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
     avgThoughtsPerSession,
     avgThoughtsPerMinute,
   };
-}
-
-function sessionSortTime(session: SessionStatsInput): number {
-  const raw = session.createdAt ?? session.sessionDate;
-  if (!raw) {
-    return 0;
-  }
-  const time = raw instanceof Date ? raw.getTime() : Date.parse(raw);
-  return Number.isFinite(time) ? time : 0;
 }
