@@ -10,6 +10,29 @@ import {
 import { syncBuddySessionCalendarForUser } from "@/lib/google";
 import { and, eq } from "drizzle-orm";
 import { readJsonObject } from "@/lib/readJsonObject";
+import type { CalendarSyncResult } from "@/lib/google";
+
+async function syncCalendarBestEffort(
+  session: typeof buddySessions.$inferSelect,
+  userId: string,
+): Promise<CalendarSyncResult[]> {
+  if (!session.scheduledStartAt) return [];
+  try {
+    return [await syncBuddySessionCalendarForUser(session, userId)];
+  } catch (error) {
+    console.error("Buddy join Google Calendar sync error:", error);
+    return [
+      {
+        status: "failed" as const,
+        userId,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not sync Google Calendar",
+      },
+    ];
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,9 +103,7 @@ export async function POST(request: NextRequest) {
         .where(eq(buddySessionParticipants.id, existing.id));
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      const calendarSync = session.scheduledStartAt
-        ? [await syncBuddySessionCalendarForUser(session, auth.userId)]
-        : [];
+      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
       return NextResponse.json({
         sessionId: session.id,
         scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,
@@ -112,9 +133,7 @@ export async function POST(request: NextRequest) {
       }
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      const calendarSync = session.scheduledStartAt
-        ? [await syncBuddySessionCalendarForUser(session, auth.userId)]
-        : [];
+      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
       return NextResponse.json({
         sessionId: session.id,
         scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,

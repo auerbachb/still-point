@@ -4,12 +4,11 @@ import crypto from "crypto";
 import { db } from "@/db";
 import {
   buddySessionCalendarEvents,
-  buddySessionParticipants,
   buddySessions,
   googleOAuthTokens,
   users,
 } from "@/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -335,7 +334,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   if (token.expiryDate.getTime() > Date.now() + TOKEN_REFRESH_SKEW_MS) {
     return decryptToken(token.accessTokenEncrypted);
   }
-  if (!token.refreshTokenEncrypted) return decryptToken(token.accessTokenEncrypted);
+  if (!token.refreshTokenEncrypted) return null;
   return refreshAccessToken(userId, token.refreshTokenEncrypted);
 }
 
@@ -444,26 +443,6 @@ export async function syncBuddySessionCalendarForUser(
       });
     return { status: "failed", userId, error: message };
   }
-}
-
-export async function syncBuddySessionCalendars(
-  session: typeof buddySessions.$inferSelect,
-): Promise<CalendarSyncResult[]> {
-  if (!session.scheduledStartAt) return [];
-  const participants = await db
-    .select({ userId: buddySessionParticipants.userId })
-    .from(buddySessionParticipants)
-    .where(
-      and(
-        eq(buddySessionParticipants.buddySessionId, session.id),
-        isNull(buddySessionParticipants.leftAt),
-      ),
-    );
-  return Promise.all(
-    participants.map((participant) =>
-      syncBuddySessionCalendarForUser(session, participant.userId),
-    ),
-  );
 }
 
 export async function loadGoogleCalendarStatus(userId: string) {

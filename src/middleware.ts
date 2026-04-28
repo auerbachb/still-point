@@ -3,13 +3,16 @@ import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "sp_token";
 
-const publicPaths = [
+const publicExactPaths = [
   "/api/auth/signup",
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/google/callback",
-  "/api/auth/password-reset",
+];
+
+const publicPrefixPaths = [
   "/api/board",
+  "/api/auth/password-reset",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -21,7 +24,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // Allow public routes
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
+  if (
+    publicExactPaths.includes(pathname) ||
+    publicPrefixPaths.some((p) => pathname.startsWith(p))
+  ) {
     return NextResponse.next();
   }
 

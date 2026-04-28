@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
@@ -43,6 +43,13 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((left, right) => ({ left, right })),
 }));
 
+function buddyCreateRequest(body?: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://test.local/api/buddy/sessions", {
+    method: "POST",
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
 describe("POST /api/buddy/sessions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,12 +73,9 @@ describe("POST /api/buddy/sessions", () => {
   test("rejects a scheduled start in the past", async () => {
     const { POST } = await import("./route");
 
-    const response = await POST(
-      new Request("http://test.local/api/buddy/sessions", {
-        method: "POST",
-        body: JSON.stringify({ scheduledStartAt: "2000-01-01T00:00:00.000Z" }),
-      }) as NextRequest,
-    );
+    const response = await POST(buddyCreateRequest({
+      scheduledStartAt: "2000-01-01T00:00:00.000Z",
+    }));
 
     await expect(response.json()).resolves.toEqual({
       error: "scheduledStartAt must be in the future",
@@ -92,12 +96,7 @@ describe("POST /api/buddy/sessions", () => {
     ]);
     const { POST } = await import("./route");
 
-    const response = await POST(
-      new Request("http://test.local/api/buddy/sessions", {
-        method: "POST",
-        body: JSON.stringify({ scheduledStartAt: future }),
-      }) as NextRequest,
-    );
+    const response = await POST(buddyCreateRequest({ scheduledStartAt: future }));
 
     const body = await response.json();
     expect(response.status).toBe(200);
@@ -113,5 +112,55 @@ describe("POST /api/buddy/sessions", () => {
     );
     expect(body.session.scheduledStartAt).toBe(future);
     expect(body.session.calendarSync).toHaveLength(1);
+  });
+
+  test("creates an immediate session without calendar sync", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(buddyCreateRequest());
+
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scheduledStartAt: null,
+        state: "waiting",
+      }),
+    );
+    expect(syncBuddySessionCalendarForUser).not.toHaveBeenCalled();
+    expect(body.session.scheduledStartAt).toBeNull();
+    expect(body.session.calendarSync).toEqual([]);
+  });
+
+  test("keeps scheduled session creation successful when calendar sync throws", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    insertReturning.mockResolvedValue([
+      {
+        id: "session-1",
+        shareToken: "share-token",
+        durationSeconds: 600,
+        scheduledStartAt: new Date(future),
+      },
+    ]);
+    syncBuddySessionCalendarForUser.mockRejectedValue(new Error("calendar unavailable"));
+    const { POST } = await import("./route");
+
+    const response = await POST(buddyCreateRequest({ scheduledStartAt: future }));
+
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scheduledStartAt: expect.any(Date),
+        state: "waiting",
+      }),
+    );
+    expect(body.session.calendarSync).toEqual([
+      {
+        status: "failed",
+        userId: "user-1",
+        error: "calendar unavailable",
+      },
+    ]);
   });
 });

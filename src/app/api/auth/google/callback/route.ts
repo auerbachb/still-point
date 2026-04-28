@@ -7,9 +7,9 @@ import {
 } from "@/lib/google";
 
 export async function GET(request: NextRequest) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/+$/, "") ?? request.nextUrl.origin;
   try {
     const auth = await getCurrentUser();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/+$/, "") ?? request.nextUrl.origin;
     const doneUrl = new URL("/app", appUrl);
 
     if (!auth) {
@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Google OAuth callback error:", error);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/+$/, "") ?? request.nextUrl.origin;
     const failedUrl = new URL("/app", appUrl);
     failedUrl.searchParams.set("googleCalendar", "failed");
     return NextResponse.redirect(failedUrl);

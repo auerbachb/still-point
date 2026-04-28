@@ -25,6 +25,7 @@ export type BuddyPersonalRecordPayload = {
 type BuddySessionRoomProps = {
   sessionId: string;
   currentUserId: string;
+  calendarMessage?: string | null;
   onExit: () => void;
   /** When set, a finished shared timer saves a personal session row then opens the normal completion flow. */
   onPersonalRecordComplete?: (data: BuddyPersonalRecordPayload) => void;
@@ -75,6 +76,7 @@ function formatScheduledStart(value: string): string {
 export function BuddySessionRoom({
   sessionId,
   currentUserId,
+  calendarMessage,
   onExit,
   onPersonalRecordComplete,
 }: BuddySessionRoomProps) {
@@ -656,6 +658,21 @@ export function BuddySessionRoom({
         >
           Scheduled for {formatScheduledStart(snap.scheduledStartAt)}. Joining confirms the shared
           time; connected Google Calendars add it automatically.
+        </p>
+      )}
+
+      {calendarMessage && inLobby && (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            fontSize: "12px",
+            color: "var(--fg-3)",
+            textAlign: "center",
+            lineHeight: 1.45,
+          }}
+        >
+          {calendarMessage}
         </p>
       )}
 

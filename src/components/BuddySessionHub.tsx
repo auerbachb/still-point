@@ -22,7 +22,7 @@ function extractBuddyToken(input: string): string {
 }
 
 type BuddySessionHubProps = {
-  onEnterSession: (sessionId: string) => void;
+  onEnterSession: (sessionId: string, calendarSync?: CalendarSync | null) => void;
   onBack: () => void;
 };
 
@@ -38,6 +38,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     connected: boolean;
     email: string | null;
   } | null>(null);
+  const [googleStatusLoading, setGoogleStatusLoading] = useState(true);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +47,16 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     let cancelled = false;
     void api.getGoogleCalendarStatus().then(
       ({ google }) => {
-        if (!cancelled) setGoogleStatus(google);
+        if (!cancelled) {
+          setGoogleStatus(google);
+          setGoogleStatusLoading(false);
+        }
       },
       () => {
-        if (!cancelled) setGoogleStatus({ connected: false, email: null });
+        if (!cancelled) {
+          setGoogleStatus({ connected: false, email: null });
+          setGoogleStatusLoading(false);
+        }
       },
     );
     return () => {
@@ -57,16 +64,14 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     };
   }, []);
 
-  function localDateTimeToIso(value: string): { ok: true; value: string | null } | { ok: false } {
+  function localDateTimeToIso(value: string): { ok: true; value: string | null } | { ok: false; error: string } {
     if (!value.trim()) return { ok: true, value: null };
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
-      setError("Pick a valid date and time");
-      return { ok: false };
+      return { ok: false, error: "Pick a valid date and time" };
     }
     if (date.getTime() <= Date.now()) {
-      setError("Pick a future time for a scheduled session");
-      return { ok: false };
+      return { ok: false, error: "Pick a future time for a scheduled session" };
     }
     return { ok: true, value: date.toISOString() };
   }
@@ -92,7 +97,10 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     setError(null);
     setCalendarMessage(null);
     const scheduledStartAt = localDateTimeToIso(scheduledLocal);
-    if (!scheduledStartAt.ok) return;
+    if (!scheduledStartAt.ok) {
+      setError(scheduledStartAt.error);
+      return;
+    }
     setBusy(true);
     try {
       const { session } = await api.createBuddySession({ scheduledStartAt: scheduledStartAt.value });
@@ -118,8 +126,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
     setBusy(true);
     try {
       const { sessionId, calendarSync } = await api.joinBuddySession(t);
-      if (calendarSync) setCalendarMessage(calendarSyncMessage(calendarSync));
-      onEnterSession(sessionId);
+      onEnterSession(sessionId, calendarSync ?? null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not join");
     } finally {
@@ -182,11 +189,13 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
       >
         <p style={{ margin: 0, fontSize: "13px", color: "var(--fg-2)", lineHeight: 1.45 }}>
           Google Calendar:{" "}
-          {googleStatus?.connected
+          {googleStatusLoading
+            ? "checking..."
+            : googleStatus?.connected
             ? `connected${googleStatus.email ? ` as ${googleStatus.email}` : ""}`
             : "not connected"}
         </p>
-        {!googleStatus?.connected && (
+        {!googleStatusLoading && !googleStatus?.connected && (
           <a
             href="/api/auth/google"
             style={{
