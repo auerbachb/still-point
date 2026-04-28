@@ -340,7 +340,7 @@ final class StillPointAppUITests: XCTestCase {
         let sessionRoot = app.otherElements["root.currentView.session"]
         let deadline = Date().addingTimeInterval(20)
         repeat {
-            beginButton.tap()
+            beginButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             if sessionRoot.waitForExistence(timeout: 2) {
                 return
             }
