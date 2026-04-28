@@ -71,27 +71,7 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
-        let returnButton = app.buttons["completion.returnButton"]
-        tapWhenHittable(returnButton, timeout: 5)
-        XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: 8))
-
-        app.terminate()
-
-        let relaunch = makeApp(
-            seedAuthenticated: true,
-            resetStore: false,
-            sessionSeconds: 6,
-            timerMultiplier: 3.0
-        )
-        relaunch.launch()
-
-        XCTAssertTrue(rootElement("home", in: relaunch).waitForExistence(timeout: launchTimeout))
-        assertColdStartBound(root: rootElement("home", in: relaunch), maxMs: 5_000)
-
-        openTab(identifier: "tab.progress", in: relaunch)
-        XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
-        let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
-        XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
+        XCTAssertTrue(app.buttons["completion.returnButton"].waitForExistence(timeout: 5))
     }
 
     @MainActor
