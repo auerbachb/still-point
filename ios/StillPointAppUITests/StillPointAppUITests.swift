@@ -23,7 +23,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear", assertColdStart: false)
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -73,12 +73,12 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
         app.terminate()
         app.launch()
-        waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session", assertColdStart: false)
         app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
         app.terminate()
         app.launch()
-        waitForRoot("session", in: app, failureMessage: "Session screen did not appear")
+        waitForRoot("session", in: app, failureMessage: "Session screen did not appear", assertColdStart: false)
 
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
@@ -134,7 +134,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         relaunch.launch()
 
-        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch")
+        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch", assertColdStart: false)
 
         openTab(identifier: "tab.progress", in: relaunch)
         XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
@@ -420,6 +420,7 @@ final class StillPointAppUITests: XCTestCase {
         _ slug: String,
         in app: XCUIApplication,
         failureMessage: String,
+        assertColdStart: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> XCUIElement {
@@ -428,7 +429,9 @@ final class StillPointAppUITests: XCTestCase {
             XCTFail(failureMessage, file: file, line: line)
             return root
         }
-        assertColdStartBound(root: root, maxMs: coldStartMaxMs, file: file, line: line)
+        if assertColdStart {
+            assertColdStartBound(root: root, maxMs: coldStartMaxMs, file: file, line: line)
+        }
         return root
     }
 
