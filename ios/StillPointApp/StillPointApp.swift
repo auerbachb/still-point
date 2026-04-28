@@ -1,9 +1,12 @@
 import SwiftUI
 import SwiftData
 import StillPointShared
+import os
 
 @main
 struct StillPointApp: App {
+    private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
+
     init() {
         // Wipe SwiftData persistent files BEFORE `.modelContainer(...)` below
         // opens the SQLite database. Doing this from `APIClient.init` was too
@@ -44,7 +47,13 @@ struct StillPointApp: App {
                                            create: false) else { return }
         for suffix in ["", "-shm", "-wal"] {
             let url = appSupport.appendingPathComponent("default.store\(suffix)")
-            try? fm.removeItem(at: url)
+            do {
+                try fm.removeItem(at: url)
+            } catch CocoaError.fileNoSuchFile {
+                continue
+            } catch {
+                diagLog.error("[E2E-DIAG] failed to remove SwiftData file path=\(url.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 }

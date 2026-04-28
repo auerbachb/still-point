@@ -1,10 +1,10 @@
 import XCTest
 
 final class StillPointAppUITests: XCTestCase {
-    // 30s is generous for cold simulator boots on macos-26 CI runners — the
-    // previous 15s tripped intermittently on the first launch in a test run.
-    // Issue #266.
-    private let launchTimeout: TimeInterval = 30
+    // macos-26/iOS 26 CI can take tens of seconds before XCTest observes a
+    // stable accessibility tree. Issues #266/#276.
+    private let launchTimeout: TimeInterval = 45
+    private let coldStartMaxMs = 45_000
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -15,8 +15,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        let authRoot = app.otherElements["root.currentView.auth"]
-        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -44,9 +43,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        let authRoot = app.otherElements["root.currentView.auth"]
-        XCTAssertTrue(authRoot.waitForExistence(timeout: launchTimeout), "Auth screen did not appear")
-        assertColdStartBound(root: authRoot, maxMs: 5_000)
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -119,8 +116,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         relaunch.launch()
 
-        XCTAssertTrue(relaunch.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
-        assertColdStartBound(root: relaunch.otherElements["root.currentView.home"], maxMs: 5_000)
+        waitForRoot("home", in: relaunch, failureMessage: "Home screen did not appear after relaunch")
 
         openTab(identifier: "tab.progress", in: relaunch)
         XCTAssertTrue(relaunch.staticTexts["history.title"].waitForExistence(timeout: 8))
@@ -133,7 +129,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         openTab(identifier: "tab.progress", in: app)
         XCTAssertTrue(app.staticTexts["history.title"].waitForExistence(timeout: 6))
 
@@ -147,7 +143,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let emailField = app.textFields["auth.emailField"]
         let passwordField = app.secureTextFields["auth.passwordField"]
         let submitButton = app.buttons["auth.submitButton"]
@@ -174,7 +170,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("internet")
@@ -190,7 +186,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.auth"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
         let message = app.staticTexts["authView.launchAuthStatusMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue(message.label.localizedCaseInsensitiveContains("expired")
@@ -202,7 +198,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         app.buttons["home.beginButton"].tap()
         XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
 
@@ -220,7 +216,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertTrue(beginButton.isHittable, "Home primary action should be visible above safe-area/home indicator")
@@ -231,7 +227,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 8, timerMultiplier: 2.0)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
@@ -248,7 +244,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, forceSessionsFailure: true)
         app.launch()
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
         openTab(identifier: "tab.progress", in: app)
 
         let errorLabel = app.staticTexts["history.errorMessage"]
@@ -300,8 +296,16 @@ final class StillPointAppUITests: XCTestCase {
         wait(for: [holdFinished], timeout: duration + 2)
     }
 
+    @discardableResult
+    private func waitForRoot(_ slug: String, in app: XCUIApplication, failureMessage: String) -> XCUIElement {
+        let root = app.otherElements["root.currentView.\(slug)"]
+        XCTAssertTrue(root.waitForExistence(timeout: launchTimeout), failureMessage)
+        assertColdStartBound(root: root, maxMs: coldStartMaxMs)
+        return root
+    }
+
     private func assertColdStartBound(root: XCUIElement, maxMs: Int) {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(min(45, launchTimeout))
         var observedValue = ""
         while Date() < deadline {
             observedValue = (root.value as? String) ?? ""

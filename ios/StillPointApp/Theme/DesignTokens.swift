@@ -129,7 +129,7 @@ public enum SPFont {
 extension View {
     /// Apply the Still Point dark background
     func stillPointBackground() -> some View {
-        self.background(SPColor.bg.ignoresSafeArea())
+        self.background(SPColor.bg.ignoresSafeArea().allowsHitTesting(false))
     }
 
     /// Fade-in animation matching web app's fadeIn keyframe

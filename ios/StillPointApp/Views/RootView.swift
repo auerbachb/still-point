@@ -1,5 +1,6 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct RootView: View {
     @State private var appVM = AppViewModel()
@@ -7,6 +8,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             SPColor.bg.ignoresSafeArea()
+                .allowsHitTesting(false)
 
             // Always render the current-view branch so the accessibility
             // tree (and the `root.currentView.*` identifier on the ZStack
@@ -93,15 +95,18 @@ struct RootView: View {
                 .transition(.opacity)
             }
         }
-        // Explicit accessibility marker for UI tests. Putting the
-        // identifier on the ZStack itself proved unreliable on iOS 26 —
-        // SwiftUI containers without an `.accessibilityElement` promotion
-        // are not surfaced consistently as `XCUIElementType.other` matches
-        // for `app.otherElements[...]`. A separate Color.clear overlay
-        // marked as an explicit accessibility element gives the test a
-        // dedicated, full-screen .other node that does not depend on
-        // child-coalescing heuristics. Issue #276.
-        .overlay(accessibilityMarker.allowsHitTesting(false))
+        // Explicit accessibility marker for UI tests. Putting the identifier
+        // on the ZStack itself proved unreliable on iOS 26, while a full-screen
+        // SwiftUI accessibility overlay could still confuse XCUITest hit-point
+        // resolution. This tiny UIKit marker is queryable but never interactive.
+        .overlay(alignment: .topLeading) {
+            AccessibilityMarkerView(
+                identifier: "root.currentView.\(viewAccessibilitySlug)",
+                value: coldStartMetricAccessibilityValue
+            )
+            .frame(width: 1, height: 1)
+            .allowsHitTesting(false)
+        }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
         .task {
@@ -142,16 +147,23 @@ struct RootView: View {
         return "coldStartAuthCheckMs=\(ms)"
     }
 
-    /// Always-visible, full-screen, invisible accessibility marker that
-    /// carries the `root.currentView.<slug>` identifier used by the UI
-    /// tests. Color.clear with `.accessibilityElement()` reliably surfaces
-    /// as an `XCUIElementType.other` node, unlike a bare ZStack with
-    /// `.accessibilityIdentifier`. Issue #276.
-    private var accessibilityMarker: some View {
-        Color.clear
-            .ignoresSafeArea()
-            .accessibilityElement()
-            .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
-            .accessibilityValue(coldStartMetricAccessibilityValue)
+}
+
+private struct AccessibilityMarkerView: UIViewRepresentable {
+    let identifier: String
+    let value: String
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = true
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        view.accessibilityIdentifier = identifier
+        view.accessibilityValue = value
+        view.accessibilityLabel = identifier
     }
 }
