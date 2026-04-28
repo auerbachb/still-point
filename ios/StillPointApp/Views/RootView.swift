@@ -109,11 +109,6 @@ struct RootView: View {
                 .allowsHitTesting(false)
             }
 
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityElement(children: .ignore)
-                .accessibilityIdentifier("root.currentView.\(viewAccessibilitySlug)")
-                .accessibilityValue(coldStartMetricAccessibilityValue)
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
