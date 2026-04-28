@@ -599,7 +599,19 @@ public actor APIClient {
         }
 
         let completedSessions = standardSessions.filter(\.completed)
-        let streak = completedSessions.count
+        var completedByDay: [Int: Bool] = [:]
+        for session in standardSessions {
+            completedByDay[session.dayNumber] = (completedByDay[session.dayNumber] ?? false) || session.completed
+        }
+        let maxDay = completedByDay.keys.max() ?? 0
+        var streak = 0
+        for day in stride(from: maxDay, through: 1, by: -1) {
+            if completedByDay[day] == true {
+                streak += 1
+            } else {
+                break
+            }
+        }
         let totalClear = standardSessions.reduce(0) { $0 + $1.clearPercent }
         let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
         let totalMinutes = standardSessions.reduce(0.0) { partial, session in

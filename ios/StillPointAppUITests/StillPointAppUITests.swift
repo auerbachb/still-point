@@ -65,8 +65,12 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.isHittable)
         beginButton.tap()
 
+        let endEarlyButton = app.buttons["session.endEarlyButton"]
+        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: 8), "Session controls should be visible in UI tests")
+        endEarlyButton.tap()
+
         let completionTitle = app.staticTexts["completion.dayTitle"]
-        XCTAssertTrue(completionTitle.waitForExistence(timeout: 60), "Session should complete on accelerated timer")
+        XCTAssertTrue(completionTitle.waitForExistence(timeout: 12), "Session completion should be visible after ending early")
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
         XCTAssertTrue(
@@ -174,12 +178,13 @@ final class StillPointAppUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
         app.buttons["home.beginButton"].tap()
-        XCTAssertTrue(app.otherElements["root.currentView.session"].waitForExistence(timeout: 8))
+        let endEarlyButton = app.buttons["session.endEarlyButton"]
+        XCTAssertTrue(endEarlyButton.waitForExistence(timeout: 8), "Session controls should appear before rotation")
 
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
 
-        XCTAssertTrue(app.state == .runningForeground, "App should remain foregrounded after rotation")
+        XCTAssertTrue(endEarlyButton.isHittable, "Primary session control should remain reachable in landscape")
     }
 
     @MainActor

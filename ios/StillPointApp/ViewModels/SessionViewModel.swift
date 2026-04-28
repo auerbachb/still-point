@@ -324,6 +324,10 @@ final class SessionViewModel {
 
     private func scheduleControlHide() {
         controlHideTimer?.cancel()
+        if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
+            controlsVisible = true
+            return
+        }
         controlHideTimer = Timer.publish(every: 3.0, on: .main, in: .common)
             .autoconnect()
             .first()

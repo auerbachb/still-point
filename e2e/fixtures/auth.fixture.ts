@@ -75,10 +75,20 @@ function computeStats(sessions: SessionRecord[]) {
   const completedSessions = standardSessions.filter((s) => s.completed);
   const totalSessions = standardSessions.length;
   let streak = 0;
-  const sortedByDay = [...standardSessions].sort((a, b) => b.dayNumber - a.dayNumber);
-  for (const s of sortedByDay) {
-    if (s.completed) streak += 1;
-    else break;
+  const completedByDay = new Map<number, boolean>();
+  for (const session of standardSessions) {
+    completedByDay.set(
+      session.dayNumber,
+      (completedByDay.get(session.dayNumber) ?? false) || session.completed,
+    );
+  }
+  const maxDay = Math.max(0, ...completedByDay.keys());
+  for (let day = maxDay; day >= 1; day -= 1) {
+    if (completedByDay.get(day) === true) {
+      streak += 1;
+    } else {
+      break;
+    }
   }
 
   const avgClearPercent = completedSessions.length
