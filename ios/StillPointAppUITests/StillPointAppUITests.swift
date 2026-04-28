@@ -39,7 +39,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: false,
             resetStore: true,
-            sessionSeconds: 6,
+            sessionSeconds: 12,
             timerMultiplier: 3.0
         )
         app.launch()
@@ -77,6 +77,18 @@ final class StillPointAppUITests: XCTestCase {
         let lightHold = app.staticTexts["session.lightDistractionHoldButton"]
         XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
         XCTAssertEqual(lightHold.value as? String, "inactive")
+
+        let hyperfocusHold = app.staticTexts["session.hyperfocusHoldButton"]
+        XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: 3))
+        XCTAssertTrue(lightHold.isHittable, "Light distraction hold should start in the persistent interactive layer")
+        XCTAssertTrue(hyperfocusHold.isHittable, "Hyperfocus hold should start in the persistent interactive layer")
+
+        let dimmedChrome = app.otherElements["session.secondaryChrome.dimmed"]
+        XCTAssertTrue(dimmedChrome.waitForExistence(timeout: 4), "Secondary controls should dim instead of collapsing")
+        XCTAssertTrue(app.buttons["session.pauseResumeButton"].isHittable, "Dimmed controls should remain hittable")
+        XCTAssertTrue(lightHold.isHittable, "Light distraction hold should stay interactive after controls dim")
+        XCTAssertTrue(hyperfocusHold.isHittable, "Hyperfocus hold should stay interactive after controls dim")
+
         pressAndHold(element: lightHold, duration: 1.0) {
             XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
         }

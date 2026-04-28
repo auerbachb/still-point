@@ -9,6 +9,31 @@ import {
 } from "../utils/mobile-helpers";
 
 test.describe("mobile session flow", () => {
+  test("tracking controls remain interactive when secondary chrome dims", async ({ page, ensureLoggedIn }) => {
+    await ensureLoggedIn();
+    await tap(page.getByRole("button", { name: "Begin" }));
+
+    const trackingLayer = page.locator('[data-session-tracking-layer="persistent"]');
+    const secondaryChrome = page.locator('[data-session-chrome="secondary"]');
+    const lightDistraction = page.getByRole("button", { name: /light distraction/i });
+    const hyperfocus = page.getByRole("button", { name: /hyperfocus/i });
+
+    await expect(trackingLayer).toBeVisible();
+    await expect(secondaryChrome).toHaveAttribute("data-visibility", "dimmed");
+    await expect(secondaryChrome).toHaveCSS("pointer-events", "auto");
+    await expect(trackingLayer).toHaveCSS("pointer-events", "auto");
+
+    await lightDistraction.dispatchEvent("touchstart");
+    await expect(lightDistraction).toContainText("Release");
+    await lightDistraction.dispatchEvent("touchend");
+    await expect(lightDistraction).toContainText("Hold");
+
+    await hyperfocus.dispatchEvent("touchstart");
+    await expect(hyperfocus).toContainText("Release");
+    await hyperfocus.dispatchEvent("touchend");
+    await expect(hyperfocus).toContainText("Hold");
+  });
+
   test("touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
     await ensureLoggedIn();
 
