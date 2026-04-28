@@ -32,7 +32,9 @@ final class AppBlockingManager {
         self.uiTestMode = uiTestMode
         self.uiTestSelectionEnabled = uiTestSelectionEnabled
         self.store = uiTestMode ? nil : ManagedSettingsStore()
-        refreshShielding()
+        if !uiTestMode {
+            refreshShielding()
+        }
     }
 
     var isAuthorizationApproved: Bool {
