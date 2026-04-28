@@ -92,4 +92,13 @@ describe("session progression rules", () => {
 
     expect(calculateSessionStats(sessions).streak).toBe(0);
   });
+
+  test("stops the streak at missing day gaps", () => {
+    const sessions: SessionStatsInput[] = [
+      { sessionType: "standard", dayNumber: 7, duration: 120, completed: true, clearPercent: 90, thoughtCount: 0 },
+      { sessionType: "standard", dayNumber: 5, duration: 100, completed: true, clearPercent: 80, thoughtCount: 1 },
+    ];
+
+    expect(calculateSessionStats(sessions).streak).toBe(1);
+  });
 });

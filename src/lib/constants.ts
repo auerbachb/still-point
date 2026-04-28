@@ -63,9 +63,9 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
       (completedByDay.get(session.dayNumber) ?? false) || session.completed,
     );
   }
-  const sortedDays = [...completedByDay.keys()].sort((a, b) => b - a);
-  for (const day of sortedDays) {
-    if (completedByDay.get(day)) {
+  const maxDay = Math.max(0, ...completedByDay.keys());
+  for (let day = maxDay; day >= 1; day--) {
+    if (completedByDay.get(day) === true) {
       streak++;
     } else {
       break;
