@@ -1,9 +1,15 @@
 import Foundation
+import os
 
 /// Network client for the Still Point web API.
 /// Uses cookie auth where available and bearer token auth for native reliability.
 public actor APIClient {
     public static let shared = APIClient()
+
+    /// Diagnostic logger. Used for the `[E2E-DIAG]` lines so they reach the
+    /// xcresult log (`print()` from the app process is not captured).
+    /// Subsystem matches the bundle id; category lets us filter in Console.
+    nonisolated static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
 
     // Default to the deployed web app; override for local dev
     private var baseURL: URL
@@ -36,6 +42,11 @@ public actor APIClient {
                 // credentials, AudioEngine sound prefs. Issue #266 surfaced this
                 // when the runner script started actually running tests after the
                 // silent-skip fix from issue #253.
+                // Note: the SwiftData store is wiped earlier in
+                // `StillPointApp.init()`, before `.modelContainer(...)` opens
+                // its SQLite files (issue #276 — APIClient.init runs lazily
+                // from RootView's .task, which is too late to delete an
+                // already-open store).
                 defaults.removeObject(forKey: uiTestStoreDefaultsKey)
                 AudioEngine.resetPersistedPrefs()
                 Self.clearPersistedSessionArtifacts(session: session)
@@ -44,22 +55,23 @@ public actor APIClient {
                 defaults.synchronize()
             }
 
+            let resolvedStore: UITestStore
             if let persistedData = defaults.data(forKey: uiTestStoreDefaultsKey),
                let persistedStore = try? JSONDecoder().decode(UITestStore.self, from: persistedData) {
-                self.uiTestStore = persistedStore
+                resolvedStore = persistedStore
             } else {
-                self.uiTestStore = UITestStore.makeDefault(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
-                persistUITestStore()
+                resolvedStore = UITestStore.makeDefault(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
+                Self.persist(store: resolvedStore, key: uiTestStoreDefaultsKey)
             }
+            self.uiTestStore = resolvedStore
 
-            // Diagnostic for issue #266 / PR #261 — log what the app actually
-            // observed at init so we can see in xcresult logs whether the env
-            // vars + reset-store contract are doing what we expect on macos-26
-            // CI runners. Cheap, noise-only in test builds since UITestConfig
-            // is nil in production.
-            print("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(parsedUITestConfig.seedAuthenticated) resetStore=\(parsedUITestConfig.resetStore) forceOffline=\(parsedUITestConfig.forceLaunchOffline) forceTokenExpired=\(parsedUITestConfig.forceTokenExpired) finalIsAuthenticated=\(uiTestStore?.isAuthenticated ?? false)")
+            // Diagnostic for issue #266 / #276. Use os_log so the line lands
+            // in the xcresult bundle — `print()` from the app process is not
+            // captured by Xcode UI test runs, which is why the prior
+            // [E2E-DIAG] prints from PR #261 never showed up in CI logs.
+            Self.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(parsedUITestConfig.seedAuthenticated, privacy: .public) resetStore=\(parsedUITestConfig.resetStore, privacy: .public) forceOffline=\(parsedUITestConfig.forceLaunchOffline, privacy: .public) forceTokenExpired=\(parsedUITestConfig.forceTokenExpired, privacy: .public) finalIsAuthenticated=\(resolvedStore.isAuthenticated, privacy: .public)")
         } else {
-            print("[E2E-DIAG] APIClient.init uiTestMode=NO")
+            Self.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=NO")
         }
     }
 
@@ -587,8 +599,15 @@ public actor APIClient {
 
     private func persistUITestStore() {
         guard let uiTestStore else { return }
-        guard let encoded = try? JSONEncoder().encode(uiTestStore) else { return }
-        UserDefaults.standard.set(encoded, forKey: uiTestStoreDefaultsKey)
+        Self.persist(store: uiTestStore, key: uiTestStoreDefaultsKey)
+    }
+
+    /// Nonisolated static analog of `persistUITestStore()`. Used during
+    /// `init` (which is nonisolated) so we don't trip Swift 6 actor-isolation
+    /// errors by calling an actor-isolated instance method from there.
+    private static func persist(store: UITestStore, key: String) {
+        guard let encoded = try? JSONEncoder().encode(store) else { return }
+        UserDefaults.standard.set(encoded, forKey: key)
     }
 
     private static func makeUITestStats(for sessions: [SessionDTO]) -> StatsDTO {

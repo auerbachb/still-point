@@ -8,6 +8,7 @@ struct SessionView: View {
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     init(appVM: AppViewModel) {
         self.appVM = appVM
@@ -164,6 +165,10 @@ struct SessionView: View {
 
     private var bottomOverlayReserve: CGFloat {
         Self.bottomOverlayReserveWithControls
+    }
+
+    private var controlsShouldBeVisible: Bool {
+        vm.controlsVisible || !vm.isActive || verticalSizeClass == .compact
     }
 
     private var thoughtCaptureBottomPadding: CGFloat {

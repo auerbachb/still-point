@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: PASSWORD_RESET_REQUEST_MESSAGE });
     }
 
-    const token = await poolDb.transaction(async (tx) => {
+    const tokenIssue = await poolDb.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`password-reset:${user.id}`}))`);
 
       const recentCutoff = new Date(Date.now() - 1000 * 60 * 5);
@@ -63,19 +63,41 @@ export async function POST(request: NextRequest) {
         return null;
       }
 
+      const [previousToken] = await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)))
+        .returning({ id: passwordResetTokens.id });
+
       const resetToken = await createPasswordResetToken({ userId: user.id });
-      await tx.insert(passwordResetTokens).values({
-        userId: user.id,
-        tokenHash: hashResetToken(resetToken),
-        requestIpHash: hashedIp,
-        expiresAt: passwordResetExpiresAt(),
-      });
-      return resetToken;
+      const [newToken] = await tx
+        .insert(passwordResetTokens)
+        .values({
+          userId: user.id,
+          tokenHash: hashResetToken(resetToken),
+          requestIpHash: hashedIp,
+          expiresAt: passwordResetExpiresAt(),
+        })
+        .returning({ id: passwordResetTokens.id });
+      return { token: resetToken, newTokenId: newToken.id, previousTokenId: previousToken?.id ?? null };
     });
-    if (token) {
+    if (tokenIssue) {
       try {
-        await sendPasswordResetEmail({ to: user.email, token });
+        await sendPasswordResetEmail({ to: user.email, token: tokenIssue.token });
       } catch (error) {
+        await poolDb.transaction(async (tx) => {
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`password-reset:${user.id}`}))`);
+          await tx
+            .update(passwordResetTokens)
+            .set({ usedAt: new Date() })
+            .where(eq(passwordResetTokens.id, tokenIssue.newTokenId));
+          if (tokenIssue.previousTokenId) {
+            await tx
+              .update(passwordResetTokens)
+              .set({ usedAt: null })
+              .where(eq(passwordResetTokens.id, tokenIssue.previousTokenId));
+          }
+        });
         console.error("Password reset email delivery error:", error);
       }
     }

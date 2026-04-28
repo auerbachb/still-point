@@ -60,6 +60,12 @@ export async function POST(_request: Request, context: Params) {
 
     const phaseErr = requireReadyCheckForStart(session);
     if (phaseErr) return phaseErr;
+    if (session.scheduledStartAt && session.scheduledStartAt.getTime() > Date.now()) {
+      return NextResponse.json(
+        { error: "This session is scheduled for later." },
+        { status: 409 },
+      );
+    }
 
     const roomName = `buddy-${sessionId}`;
     let dailyRoom: { name: string; url: string };
