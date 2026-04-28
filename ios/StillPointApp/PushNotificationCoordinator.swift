@@ -40,7 +40,7 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
                 try await APIClient.shared.registerDeviceToken(
                     DeviceTokenRegistrationRequest(token: token, apnsEnvironment: environment)
                 )
-                DeviceTokenStore.save(token, apnsEnvironment: environment)
+                DeviceTokenStore.save(token: token, apnsEnvironment: environment)
             } catch {
                 print("Device token registration failed: \(error.localizedDescription)")
             }
