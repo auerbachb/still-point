@@ -125,8 +125,6 @@ struct AuthView: View {
             .padding(.bottom, SPSpacing.s6)
         }
         .stillPointBackground()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("auth.view")
     }
 
     private func toggleButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
