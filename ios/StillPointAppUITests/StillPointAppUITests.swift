@@ -59,14 +59,11 @@ final class StillPointAppUITests: XCTestCase {
         passwordField.typeText("stillpoint-pass")
 
         let submitButton = app.buttons["auth.submitButton"]
-        XCTAssertTrue(submitButton.isHittable)
-        submitButton.tap()
+        tapWhenHittable(submitButton, timeout: 5)
 
         XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: 8))
         let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(beginButton.isHittable)
-        beginButton.tap()
+        tapWhenHittable(beginButton, timeout: 5)
 
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
         let timerLabel = app.staticTexts["session.timerLabel"]
@@ -105,8 +102,7 @@ final class StillPointAppUITests: XCTestCase {
         )
 
         let returnButton = app.buttons["completion.returnButton"]
-        XCTAssertTrue(returnButton.waitForExistence(timeout: 5))
-        returnButton.tap()
+        tapWhenHittable(returnButton, timeout: 5)
         XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: 8))
 
         app.terminate()
@@ -203,7 +199,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(rootElement("home", in: app).waitForExistence(timeout: launchTimeout))
-        app.buttons["home.beginButton"].tap()
+        tapWhenHittable(app.buttons["home.beginButton"], timeout: 5)
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
 
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -235,7 +231,7 @@ final class StillPointAppUITests: XCTestCase {
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
-        beginButton.tap()
+        tapWhenHittable(beginButton, timeout: 5)
 
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
         let timerLabel = app.staticTexts["session.timerLabel"]
@@ -280,12 +276,19 @@ final class StillPointAppUITests: XCTestCase {
 
     private func openTab(identifier: String, in app: XCUIApplication) {
         let tabButton = app.tabBars.buttons[identifier]
-        XCTAssertTrue(tabButton.waitForExistence(timeout: 5))
-        tabButton.tap()
+        tapWhenHittable(tabButton, timeout: 5)
     }
 
     private func rootElement(_ slug: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any)["root.currentView.\(slug)"]
+    }
+
+    private func tapWhenHittable(_ element: XCUIElement, timeout: TimeInterval) {
+        XCTAssertTrue(element.waitForExistence(timeout: timeout))
+        let hittable = NSPredicate(format: "hittable == true")
+        expectation(for: hittable, evaluatedWith: element)
+        waitForExpectations(timeout: timeout)
+        element.tap()
     }
 
     private func pressAndHold(element: XCUIElement, duration: TimeInterval, onHold: @escaping () -> Void) {
