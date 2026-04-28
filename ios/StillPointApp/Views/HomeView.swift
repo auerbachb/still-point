@@ -112,6 +112,10 @@ struct HomeView: View {
                 a: "Visual markers of time passing. Short sessions use 10-second blocks. Longer sessions use minute blocks with a final minute of 10-second blocks."
             )
             faqItem(
+                q: "How does the app gate work?",
+                a: "In Settings, choose apps for Still Point to hold. They stay blocked until you complete the timer, then open for two hours. Ending early keeps them blocked."
+            )
+            faqItem(
                 q: "This app is incredibly boring. What's the point?",
                 a: "That is the point."
             )

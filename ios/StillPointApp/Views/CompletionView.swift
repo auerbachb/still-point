@@ -23,6 +23,7 @@ struct CompletionView: View {
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
     private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
+    private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
     var body: some View {
         ScrollView {
@@ -186,6 +187,28 @@ struct CompletionView: View {
                     Text("\(nextDuration)s · \(nextBlocks) blocks")
                         .font(SPFont.mono(14, weight: .light))
                         .foregroundStyle(Color(SPColor.fg3))
+                }
+
+                if hasUnlockedApps {
+                    VStack(spacing: SPSpacing.s1) {
+                        Text("APP GATE OPEN")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .foregroundStyle(SPColor.green)
+                            .tracking(2)
+                            .accessibilityIdentifier("completion.appGateOpen")
+                        Text(appVM.appBlockingManager.statusText)
+                            .font(SPFont.serif(14, weight: .light))
+                            .foregroundStyle(Color(SPColor.fg3))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(SPSpacing.s3)
+                    .frame(maxWidth: .infinity)
+                    .background(SPColor.greenBgFaint)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(SPColor.greenBorderSubtle)
+                    )
                 }
 
                 // Return button

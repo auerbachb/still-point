@@ -10,6 +10,8 @@
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
 		16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */; };
+		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
+		17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000004 /* AppBlockingSettingsView.swift */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
 		25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
@@ -45,6 +47,9 @@
 		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
 		0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardViewModel.swift; sourceTree = "<group>"; };
 		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
+		17A248000000000000000002 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
+		17A248000000000000000004 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
+		17A248000000000000000005 /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -98,6 +103,7 @@
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
+				17A248000000000000000004 /* AppBlockingSettingsView.swift */,
 				0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */,
 				C683A9F0586D58020E60DD87 /* RootView.swift */,
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
@@ -130,8 +136,10 @@
 			isa = PBXGroup;
 			children = (
 				AB8762D63FDB945A01DEA97F /* Info.plist */,
+				17A248000000000000000005 /* StillPoint.entitlements */,
 				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
 				4DB1C67E76477BADB30F0F77 /* Components */,
+				17A248000000000000000006 /* Managers */,
 				551003AC2B5AD8A7B3C3D426 /* Navigation */,
 				09EA4336C05552F95AE85178 /* Resources */,
 				AC788F412B1414C8C2BDB3CB /* Theme */,
@@ -157,6 +165,14 @@
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
 			);
 			path = Navigation;
+			sourceTree = "<group>";
+		};
+		17A248000000000000000006 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				17A248000000000000000002 /* AppBlockingManager.swift */,
+			);
+			path = Managers;
 			sourceTree = "<group>";
 		};
 		9AEB18D5D4C55CB98F814D43 /* BuddySession */ = {
@@ -298,6 +314,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
+				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
+				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
@@ -337,6 +355,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPoint.entitlements;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
@@ -359,6 +378,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPoint.entitlements;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
