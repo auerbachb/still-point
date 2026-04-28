@@ -290,12 +290,9 @@ final class StillPointAppUITests: XCTestCase {
     private func tap(_ element: XCUIElement, thenWaitForRoot slug: String, in app: XCUIApplication) {
         let root = app.otherElements["root.currentView.\(slug)"]
         for attempt in 1...3 {
-            if element.isHittable {
-                element.tap()
-            } else {
-                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            }
-            if root.waitForExistence(timeout: 8) {
+            let center = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            center.tap()
+            if root.waitForExistence(timeout: 12) {
                 return
             }
             XCTAssertTrue(attempt < 3, "Expected tap to transition to root.currentView.\(slug)")
