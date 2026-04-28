@@ -1,7 +1,10 @@
 import SwiftUI
 import StillPointShared
+import os
 
 struct CompletionView: View {
+    private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
+
     let appVM: AppViewModel
     let sessionId: String
     let clearPercent: Int
@@ -255,10 +258,12 @@ struct CompletionView: View {
                 _ = try await APIClient.shared.batchThoughts(request)
                 isSaving = false
                 noteSaved = true
+                logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
             } catch let error as APIError {
                 print("Failed to save end note: \(error)")
                 isSaving = false
                 saveError = saveErrorMessage(for: error.status)
+                logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
             } catch {
                 print("Failed to save end note: \(error)")
                 isSaving = false
@@ -268,8 +273,19 @@ struct CompletionView: View {
                 } else {
                     saveError = "Failed to save note"
                 }
+                logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
             }
         }
+    }
+
+    private func logUITestDiagnostic(_ message: String) {
+        guard truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"]) else { return }
+        Self.diagLog.notice("[E2E-DIAG] \(message, privacy: .public)")
+    }
+
+    private func truthy(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
     private func saveErrorMessage(for status: Int) -> String {

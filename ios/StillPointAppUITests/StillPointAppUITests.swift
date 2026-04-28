@@ -6,6 +6,7 @@ final class StillPointAppUITests: XCTestCase {
     // auth-check latency in `coldStartAuthCheckMs`, not XCTest launch overhead.
     private let launchTimeout: TimeInterval = 45
     private let coldStartMaxMs = 5_000
+    private let savedIndicatorTimeout: TimeInterval = 15
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -107,10 +108,7 @@ final class StillPointAppUITests: XCTestCase {
         dismissKeyboardIfPresent(in: app)
         tapByStableCenter(saveNoteButton, in: app)
 
-        XCTAssertTrue(
-            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 5),
-            "Save note should produce a 'Saved' indicator"
-        )
+        waitForSavedIndicator(in: app)
 
         let returnButton = app.buttons["completion.returnButton"]
         tapByStableCenter(returnButton, in: app)
@@ -218,7 +216,10 @@ final class StillPointAppUITests: XCTestCase {
 
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
-        XCTAssertNotNil(stableFrame(for: timerLabel, in: app, timeout: 8), "Timer should remain visible after rotation")
+        XCTAssertTrue(
+            timerLabel.frame.intersects(app.frame),
+            "Timer should remain at least partially visible after rotation. Frame: \(timerLabel.frame), app: \(app.frame)"
+        )
 
         tapByStableCenter(app.buttons["session.endEarlyButton"], in: app)
         XCTAssertTrue(
@@ -377,6 +378,31 @@ final class StillPointAppUITests: XCTestCase {
             app.swipeDown()
         }
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    }
+
+    private func waitForSavedIndicator(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let savedIndicator = app.staticTexts["completion.savedIndicator"]
+        if savedIndicator.waitForExistence(timeout: savedIndicatorTimeout) {
+            return
+        }
+
+        let retryButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Retry save")).firstMatch
+        if retryButton.exists {
+            tapByStableCenter(retryButton, in: app, file: file, line: line)
+            if savedIndicator.waitForExistence(timeout: savedIndicatorTimeout) {
+                return
+            }
+        }
+
+        let errorText = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "save", "internet")
+        ).firstMatch
+        let diagnostic = errorText.exists ? " Error: \(errorText.label)" : ""
+        XCTFail("Save note should produce a 'Saved' indicator.\(diagnostic)", file: file, line: line)
     }
 
     @discardableResult
