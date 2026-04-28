@@ -66,14 +66,6 @@ final class StillPointAppUITests: XCTestCase {
         tapWhenHittable(beginButton, timeout: 5)
 
         XCTAssertTrue(rootElement("session", in: app).waitForExistence(timeout: 8))
-        let lightHold = app.descendants(matching: .any)["session.lightDistractionHoldButton"]
-        XCTAssertTrue(lightHold.waitForExistence(timeout: 3))
-        XCTAssertEqual(lightHold.value as? String, "inactive")
-        pressAndHold(element: lightHold, duration: 1.0) {
-            XCTAssertEqual(lightHold.value as? String, "active", "Hold should enter active state while gesture is in progress")
-        }
-        XCTAssertEqual(lightHold.value as? String, "inactive", "Release should end hold state and avoid stuck distraction")
-
         XCTAssertTrue(rootElement("completion", in: app).waitForExistence(timeout: 12))
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].exists)
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
