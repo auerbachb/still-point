@@ -101,6 +101,11 @@ describe("POST /api/auth/signup uniqueness handling", () => {
     await expect(response.json()).resolves.toEqual({ error: "Username already taken" });
     expect(response.status).toBe(409);
     expect(dbInsert).not.toHaveBeenCalled();
+    // Pin the predicate shape so a regression to plain eq(users.username, ...)
+    // (which would be case-sensitive) fails this test instead of silently passing.
+    expect(selectWhere).toHaveBeenCalledTimes(2);
+    const usernamePredicate = selectWhere.mock.calls[1][0] as { kind?: string };
+    expect(usernamePredicate?.kind).toBe("sql");
   });
 
   test("maps Postgres 23505 on email constraint to 'Email already in use' (race fallback)", async () => {
