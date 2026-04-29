@@ -254,16 +254,17 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(
             seedAuthenticated: true,
             resetStore: false,
-            forceLaunchOffline: true,
             forceSessionsFailure: true
         )
         app.launch()
 
-        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
-        let message = app.staticTexts["authView.launchAuthStatusMessage"]
-        XCTAssertTrue(message.waitForExistence(timeout: 8))
-        XCTAssertTrue(message.label.localizedCaseInsensitiveContains("failed")
-                        || message.label.localizedCaseInsensitiveContains("connection"))
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        let errorLabel = app.staticTexts["history.errorMessage"]
+        openTab(identifier: "tab.progress", in: app, waitingFor: errorLabel)
+
+        XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(errorLabel.label.localizedCaseInsensitiveContains("failed")
+                        || errorLabel.label.localizedCaseInsensitiveContains("connection"))
     }
 
     private func makeApp(
@@ -295,6 +296,10 @@ final class StillPointAppUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
+        if destination?.exists == true {
+            return
+        }
+
         for attempt in 1...3 {
             if tapTab(identifier: identifier, in: app, file: file, line: line),
                destination?.waitForExistence(timeout: 8) ?? true {
@@ -311,8 +316,13 @@ final class StillPointAppUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> Bool {
+        let directButton = app.buttons[identifier]
+        if directButton.waitForExistence(timeout: 5) {
+            return tapByStableCenter(directButton, in: app, file: file, line: line)
+        }
+
         let tabButton = app.tabBars.buttons[identifier]
-        if tabButton.waitForExistence(timeout: 10) {
+        if tabButton.waitForExistence(timeout: 5) {
             return tapByStableCenter(tabButton, in: app, file: file, line: line)
         }
         if let index = tabBarIndex(for: identifier) {
@@ -321,12 +331,8 @@ final class StillPointAppUITests: XCTestCase {
                 return tapByStableCenter(indexedButton, in: app, file: file, line: line)
             }
         }
-        let fallbackButton = app.buttons[identifier]
-        guard fallbackButton.waitForExistence(timeout: 5) else {
-            XCTFail("Expected tab button \(identifier) to exist", file: file, line: line)
-            return false
-        }
-        return tapByStableCenter(fallbackButton, in: app, file: file, line: line)
+        XCTFail("Expected tab button \(identifier) to exist", file: file, line: line)
+        return false
     }
 
     private func tabBarIndex(for identifier: String) -> Int? {
