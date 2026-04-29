@@ -1,8 +1,16 @@
 import Foundation
 
+public enum SessionType: String, Codable, Sendable {
+    case standard
+    case quick
+}
+
 public enum StillPoint {
     /// Base session duration in seconds (Day 1)
     public static let baseDuration = 60
+
+    /// Fixed duration in seconds for quick-minute sits.
+    public static let quickDuration = 60
 
     /// Seconds added per day
     public static let increment = 10
@@ -19,6 +27,14 @@ public enum StillPoint {
         assert(day >= 1, "Day must be >= 1, got \(day)")
         let safeDay = max(day, 1)
         return baseDuration + (safeDay - 1) * increment
+    }
+
+    public static func duration(for sessionType: SessionType, day: Int) -> Int {
+        sessionType == .quick ? quickDuration : duration(forDay: day)
+    }
+
+    public static func shouldAdvanceDay(sessionType: SessionType, completed: Bool) -> Bool {
+        completed && sessionType == .standard
     }
 
     /// Calculate number of blocks for a given duration

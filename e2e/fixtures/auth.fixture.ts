@@ -12,6 +12,7 @@ type UserRecord = {
 type SessionRecord = {
   id: string;
   dayNumber: number;
+  sessionType: "standard" | "quick";
   duration: number;
   completed: boolean;
   actualTime: number;
@@ -70,25 +71,36 @@ function getLocalIsoDate(offsetDays = 0) {
 }
 
 function computeStats(sessions: SessionRecord[]) {
-  const completedSessions = sessions.filter((s) => s.completed);
-  const totalSessions = sessions.length;
+  const standardSessions = sessions.filter((s) => s.sessionType === "standard");
+  const completedSessions = standardSessions.filter((s) => s.completed);
+  const totalSessions = standardSessions.length;
   let streak = 0;
-  const sortedByDay = [...sessions].sort((a, b) => b.dayNumber - a.dayNumber);
-  for (const s of sortedByDay) {
-    if (s.completed) streak += 1;
-    else break;
+  const completedByDay = new Map<number, boolean>();
+  for (const session of standardSessions) {
+    completedByDay.set(
+      session.dayNumber,
+      (completedByDay.get(session.dayNumber) ?? false) || session.completed,
+    );
+  }
+  const maxDay = Math.max(0, ...completedByDay.keys());
+  for (let day = maxDay; day >= 1; day -= 1) {
+    if (completedByDay.get(day) === true) {
+      streak += 1;
+    } else {
+      break;
+    }
   }
 
   const avgClearPercent = completedSessions.length
     ? Math.round(completedSessions.reduce((sum, s) => sum + s.clearPercent, 0) / completedSessions.length)
     : 0;
   const avgThoughtsPerSession = totalSessions
-    ? Number((sessions.reduce((sum, s) => sum + s.thoughtCount, 0) / totalSessions).toFixed(1))
+    ? Number((standardSessions.reduce((sum, s) => sum + s.thoughtCount, 0) / totalSessions).toFixed(1))
     : 0;
   const avgThoughtsPerMinute = totalSessions
     ? Number(
         (
-          sessions.reduce((sum, s) => {
+          standardSessions.reduce((sum, s) => {
             const minutes = s.duration / 60;
             return sum + (minutes > 0 ? s.thoughtCount / minutes : 0);
           }, 0) / totalSessions
@@ -192,6 +204,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const session: SessionRecord = {
         id: `session-${state.ids.session++}`,
         dayNumber: Number(body.dayNumber ?? state.user.currentDay),
+        sessionType: body.sessionType === "quick" ? "quick" : "standard",
         duration: Number(body.duration ?? 60),
         completed: Boolean(body.completed ?? true),
         actualTime: Number(body.actualTime ?? body.duration ?? 60),
@@ -201,7 +214,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         sessionDate: String(body.sessionDate ?? getLocalIsoDate()),
       };
       state.sessions.push(session);
-      if (session.completed) state.user.currentDay += 1;
+      if (session.completed && session.sessionType === "standard") state.user.currentDay += 1;
       return json(route, 200, { session });
     }
 
@@ -289,6 +302,7 @@ export const test = base.extend<AuthFixture>({
         const session: SessionRecord = {
           id: `session-${mockApiState.ids.session++}`,
           dayNumber: day,
+          sessionType: "standard",
           duration: 60 + (day - 1) * 10,
           completed: true,
           actualTime: 60 + (day - 1) * 10,

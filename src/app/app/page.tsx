@@ -15,6 +15,7 @@ import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { api, ApiError } from "@/lib/api";
+import type { SessionType } from "@/lib/constants";
 
 type View =
   | "home"
@@ -30,6 +31,7 @@ type View =
 type CompletionData = {
   sessionId: string | null;
   dayNumber: number;
+  sessionType: SessionType;
   duration: number;
   clearPercent: number;
   thoughtCount: number;
@@ -59,6 +61,7 @@ export default function StillPoint() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authRetryKey, setAuthRetryKey] = useState(0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
+  const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
@@ -159,7 +162,8 @@ export default function StillPoint() {
     setView("home");
   };
 
-  const handleBegin = () => {
+  const handleBegin = (sessionType: SessionType = "standard") => {
+    setActiveSessionType(sessionType);
     setView("session");
   };
 
@@ -176,6 +180,7 @@ export default function StillPoint() {
     setCompletionData({
       sessionId: data.sessionId,
       dayNumber: data.dayNumber,
+      sessionType: "standard",
       duration: data.duration,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
@@ -190,6 +195,7 @@ export default function StillPoint() {
 
   const handleSessionComplete = useCallback(async (data: {
     dayNumber: number;
+    sessionType: SessionType;
     duration: number;
     completed: boolean;
     actualTime: number;
@@ -207,6 +213,7 @@ export default function StillPoint() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dayNumber: data.dayNumber,
+          sessionType: data.sessionType,
           duration: data.duration,
           completed: data.completed,
           actualTime: data.actualTime,
@@ -237,7 +244,7 @@ export default function StillPoint() {
         }
 
         // Update local user state
-        if (data.completed && user) {
+        if (data.completed && data.sessionType === "standard" && user) {
           setUser({ ...user, currentDay: user.currentDay + 1 });
         }
       }
@@ -248,6 +255,7 @@ export default function StillPoint() {
     setCompletionData({
       sessionId: savedSessionId,
       dayNumber: data.dayNumber,
+      sessionType: data.sessionType,
       duration: data.duration,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
@@ -258,6 +266,7 @@ export default function StillPoint() {
 
   const handleSessionAbandon = useCallback(async (data: {
     dayNumber: number;
+    sessionType: SessionType;
     duration: number;
     completed: boolean;
     actualTime: number;
@@ -273,6 +282,7 @@ export default function StillPoint() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dayNumber: data.dayNumber,
+          sessionType: data.sessionType,
           duration: data.duration,
           completed: false,
           actualTime: data.actualTime,
@@ -505,7 +515,8 @@ export default function StillPoint() {
       {view === "home" && (
         <HomeView
           currentDay={user.currentDay}
-          onBegin={handleBegin}
+          onBegin={() => handleBegin("standard")}
+          onQuickBegin={() => handleBegin("quick")}
           onBuddy={() => {
             setBuddySessionId(null);
             setBuddyCalendarMessage(null);
@@ -538,6 +549,7 @@ export default function StillPoint() {
       {view === "session" && (
         <SessionView
           currentDay={user.currentDay}
+          sessionType={activeSessionType}
           onComplete={handleSessionComplete}
           onAbandon={handleSessionAbandon}
         />
@@ -546,6 +558,7 @@ export default function StillPoint() {
       {view === "complete" && completionData && (
         <CompletionScreen
           dayNumber={completionData.dayNumber}
+          sessionType={completionData.sessionType}
           duration={completionData.duration}
           clearPercent={completionData.clearPercent}
           thoughtCount={completionData.thoughtCount}

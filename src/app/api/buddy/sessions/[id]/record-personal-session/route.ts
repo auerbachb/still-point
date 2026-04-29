@@ -171,6 +171,7 @@ export async function POST(request: NextRequest, context: Params) {
             userId: auth.userId,
             buddySessionId: sessionId,
             dayNumber,
+            sessionType: "standard",
             duration,
             completed: true,
             actualTime,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { BASE_DURATION, INCREMENT } from "@/lib/constants";
+import { durationForDay } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
 
@@ -14,6 +14,7 @@ type HistoryEntry = {
   date: string;
   clearPercent: number;
   thoughtCount: number;
+  sessionType?: Session["sessionType"];
   missed?: boolean;
 };
 
@@ -44,7 +45,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
   // Build history entries including missed days
   const history: HistoryEntry[] = [];
-  const sortedSessions = [...sessions].sort((a, b) => a.dayNumber - b.dayNumber);
+  const sortedSessions = [...sessions]
+    .filter(s => s.sessionType !== "quick")
+    .sort((a, b) => a.dayNumber - b.dayNumber);
 
   for (let i = 0; i < sortedSessions.length; i++) {
     const s = sortedSessions[i];
@@ -77,16 +80,17 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       date: s.sessionDate,
       clearPercent: s.clearPercent,
       thoughtCount: s.thoughtCount,
+      sessionType: s.sessionType,
     });
   }
 
   const maxDuration = Math.max(
     ...history.filter(h => !h.missed).map(h => h.actualTime),
-    BASE_DURATION + (currentDay - 1) * INCREMENT,
+    durationForDay(currentDay),
     60,
   );
 
-  const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
+  const todayDuration = durationForDay(currentDay);
   const thoughtsBySession = useMemo(() => {
     const grouped: Record<string, Thought[]> = {};
     for (const t of thoughts) {

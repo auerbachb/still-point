@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
-import { BASE_DURATION, INCREMENT } from "@/lib/constants";
+import { durationForSession, type SessionType } from "@/lib/constants";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
@@ -12,8 +12,10 @@ type MindState = "clear" | "thinking" | "hyperfocus";
 
 type SessionViewProps = {
   currentDay: number;
+  sessionType?: SessionType;
   onComplete: (data: {
     dayNumber: number;
+    sessionType: SessionType;
     duration: number;
     completed: boolean;
     actualTime: number;
@@ -24,6 +26,7 @@ type SessionViewProps = {
   }) => void;
   onAbandon: (data: {
     dayNumber: number;
+    sessionType: SessionType;
     duration: number;
     completed: boolean;
     actualTime: number;
@@ -38,8 +41,8 @@ const mono: CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
 };
 
-export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewProps) {
-  const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
+export function SessionView({ currentDay, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
+  const todayDuration = durationForSession(sessionType, currentDay);
   const [isActive, setIsActive] = useState(true);
   const [mindState, setMindState] = useState<MindState>("clear");
   const mindStateRef = useRef<MindState>(mindState);
@@ -156,6 +159,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     const endT = elapsedRef.current || todayDuration;
     onComplete({
       dayNumber: currentDay,
+      sessionType,
       duration: todayDuration,
       completed: true,
       actualTime,
@@ -164,7 +168,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       mindStateLog: resolvedLog,
       thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, todayDuration, onComplete, snapshotForComplete]);
+  }, [currentDay, sessionType, todayDuration, onComplete, snapshotForComplete]);
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
@@ -211,6 +215,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     const endT = elapsedRef.current || todayDuration;
     onComplete({
       dayNumber: currentDay,
+      sessionType,
       duration: todayDuration,
       completed: false,
       actualTime,
@@ -228,6 +233,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
     const endT = elapsedRef.current || todayDuration;
     onAbandon({
       dayNumber: currentDay,
+      sessionType,
       duration: todayDuration,
       completed: false,
       actualTime,

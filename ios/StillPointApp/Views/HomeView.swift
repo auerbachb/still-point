@@ -61,6 +61,24 @@ struct HomeView: View {
 
                     Button {
                         withAnimation {
+                            appVM.beginSession(type: .quick)
+                        }
+                    } label: {
+                        Text("Quick minute · \(StillPoint.quickDuration)s")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .tracking(1.4)
+                            .foregroundStyle(SPColor.greenText)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, SPSpacing.s2)
+                            .background(SPColor.greenBgFaint)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.greenBorderSubtle))
+                    }
+                    .accessibilityIdentifier("home.quickMinuteButton")
+                    .accessibilityLabel("Start quick minute")
+
+                    Button {
+                        withAnimation {
                             appVM.beginBuddySession()
                         }
                     } label: {

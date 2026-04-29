@@ -1,15 +1,16 @@
 "use client";
 
-import { BASE_DURATION, INCREMENT, BLOCK_DURATION } from "@/lib/constants";
+import { BLOCK_DURATION, QUICK_DURATION, durationForDay } from "@/lib/constants";
 
 type HomeViewProps = {
   currentDay: number;
   onBegin: () => void;
+  onQuickBegin: () => void;
   onBuddy?: () => void;
 };
 
-export function HomeView({ currentDay, onBegin, onBuddy }: HomeViewProps) {
-  const todayDuration = BASE_DURATION + (currentDay - 1) * INCREMENT;
+export function HomeView({ currentDay, onBegin, onQuickBegin, onBuddy }: HomeViewProps) {
+  const todayDuration = durationForDay(currentDay);
   const totalBlocks = Math.ceil(todayDuration / BLOCK_DURATION);
 
   return (
@@ -92,6 +93,25 @@ export function HomeView({ currentDay, onBegin, onBuddy }: HomeViewProps) {
         }}
       >
         Begin
+      </button>
+
+      <button
+        type="button"
+        onClick={onQuickBegin}
+        style={{
+          background: "transparent",
+          border: "1px solid var(--accent-green-border)",
+          color: "var(--accent-green-text)",
+          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontSize: "11px",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          padding: "12px 24px",
+          borderRadius: "40px",
+          cursor: "pointer",
+        }}
+      >
+        Quick minute &middot; {QUICK_DURATION}s
       </button>
 
       {onBuddy && (

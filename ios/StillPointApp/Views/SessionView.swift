@@ -10,9 +10,9 @@ struct SessionView: View {
     @State private var showSaveError = false
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    init(appVM: AppViewModel) {
+    init(appVM: AppViewModel, sessionType: SessionType = .standard) {
         self.appVM = appVM
-        self._vm = State(initialValue: SessionViewModel(dayNumber: appVM.currentDay))
+        self._vm = State(initialValue: SessionViewModel(dayNumber: appVM.currentDay, sessionType: sessionType))
     }
 
     var body: some View {
@@ -123,8 +123,9 @@ struct SessionView: View {
                     thoughtCount: vm.thoughtCount,
                     thoughts: vm.capturedThoughts,
                     dayNumber: vm.dayNumber,
+                    sessionType: vm.sessionType,
                     duration: vm.totalSeconds,
-                    unlockAppGate: vm.completedNaturally
+                    unlockAppGate: vm.completedNaturally && vm.sessionType == .standard
                 )
             }
         } message: {
@@ -449,8 +450,9 @@ struct SessionView: View {
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,
                 dayNumber: session.dayNumber,
+                sessionType: session.sessionType,
                 duration: vm.totalSeconds,
-                unlockAppGate: vm.completedNaturally
+                unlockAppGate: vm.completedNaturally && session.sessionType == .standard
             )
         }
     }

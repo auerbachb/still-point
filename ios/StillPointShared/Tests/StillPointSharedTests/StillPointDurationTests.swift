@@ -12,6 +12,17 @@ final class StillPointDurationTests: XCTestCase {
         XCTAssertEqual(StillPoint.duration(forDay: 30), StillPoint.baseDuration + 29 * StillPoint.increment)
     }
 
+    func testQuickDurationIsAlwaysOneMinute() {
+        XCTAssertEqual(StillPoint.duration(for: .quick, day: 1), StillPoint.quickDuration)
+        XCTAssertEqual(StillPoint.duration(for: .quick, day: 30), StillPoint.quickDuration)
+    }
+
+    func testStandardSessionAdvancesDayButQuickDoesNot() {
+        XCTAssertTrue(StillPoint.shouldAdvanceDay(sessionType: .standard, completed: true))
+        XCTAssertFalse(StillPoint.shouldAdvanceDay(sessionType: .quick, completed: true))
+        XCTAssertFalse(StillPoint.shouldAdvanceDay(sessionType: .standard, completed: false))
+    }
+
     func testBlockCountForBaseDuration() {
         XCTAssertEqual(StillPoint.blockCount(forDuration: StillPoint.baseDuration), 6)
     }

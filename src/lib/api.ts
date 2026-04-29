@@ -33,6 +33,7 @@ export type Session = {
   id: string;
   dayNumber: number;
   duration: number;
+  sessionType: "standard" | "quick";
   completed: boolean;
   actualTime: number | null;
   clearPercent: number;
@@ -148,6 +149,7 @@ export const api = {
   createSession: (data: {
     dayNumber: number;
     duration: number;
+    sessionType?: "standard" | "quick";
     completed: boolean;
     actualTime: number;
     clearPercent: number;

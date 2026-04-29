@@ -13,19 +13,14 @@ struct RootView: View {
 
             // Always render the current-view branch so the accessibility
             // tree (and the `root.currentView.*` identifier on the ZStack
-            // below) is consistent from t=0. Issue #276: previously this
-            // branch was gated behind `if !isLoading`, so during the cold-
-            // start window the ZStack only contained two static Text views
-            // and the UI test could not find `root.currentView.auth` as an
-            // `otherElements` match — every test except the first
-            // seedAuth=true smoke test timed out at 30s.
+            // below) is consistent from t=0. Issue #276.
             switch appVM.currentView {
             case .auth:
                 AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
                     .transition(.opacity)
 
-            case .session:
-                SessionView(appVM: appVM)
+            case .session(let sessionType):
+                SessionView(appVM: appVM, sessionType: sessionType)
                     .transition(.opacity)
 
             case .buddyHub:
@@ -37,7 +32,7 @@ struct RootView: View {
                     .id(sessionId)
                     .transition(.opacity)
 
-            case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let duration):
+            case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration):
                 CompletionView(
                     appVM: appVM,
                     sessionId: sessionId,
@@ -45,6 +40,7 @@ struct RootView: View {
                     thoughtCount: thoughtCount,
                     thoughts: thoughts,
                     dayNumber: dayNumber,
+                    sessionType: sessionType,
                     duration: duration
                 )
                 .transition(.opacity)
@@ -57,18 +53,6 @@ struct RootView: View {
             // Brand-lockup overlay during cold-start auth check. Sits on top
             // of the current-view branch and dismisses when checkAuth flips
             // isLoading to false.
-            //
-            // CRITICAL: `.allowsHitTesting(false)` lets taps fall through to
-            // the AuthView/MainTabView layer underneath. Without it, the
-            // full-screen `SPColor.bg` participates in hit testing and
-            // XCUITest sees "Computed hit point {-1, -1}" on
-            // `auth.emailField`, even though the field exists in the
-            // accessibility tree (issue #276 round 4 — round 3 fixed
-            // existence; this fixes hittability).
-            //
-            // `.accessibilityHidden(true)` is orthogonal — it removes the
-            // overlay from VoiceOver / XCUITest's tree but does NOT disable
-            // hit testing. Both are needed.
             if appVM.isLoading {
                 ZStack {
                     SPColor.bg.ignoresSafeArea()
@@ -164,7 +148,6 @@ struct RootView: View {
         guard let value else { return false }
         return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
-
 }
 
 private struct AccessibilityMarkerView: UIViewRepresentable {

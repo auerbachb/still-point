@@ -21,6 +21,7 @@ public struct UserDTO: Codable, Sendable {
 public struct SessionDTO: Codable, Sendable {
     public let id: String
     public let dayNumber: Int
+    public let sessionType: SessionType
     public let duration: Int
     public let completed: Bool
     public let actualTime: Int?
@@ -33,6 +34,7 @@ public struct SessionDTO: Codable, Sendable {
     public init(
         id: String,
         dayNumber: Int,
+        sessionType: SessionType = .standard,
         duration: Int,
         completed: Bool,
         actualTime: Int?,
@@ -44,6 +46,7 @@ public struct SessionDTO: Codable, Sendable {
     ) {
         self.id = id
         self.dayNumber = dayNumber
+        self.sessionType = sessionType
         self.duration = duration
         self.completed = completed
         self.actualTime = actualTime
@@ -97,6 +100,7 @@ public struct StatsDTO: Codable, Sendable {
 
 public struct CreateSessionRequest: Codable, Sendable {
     public let dayNumber: Int
+    public let sessionType: SessionType
     public let duration: Int
     public let completed: Bool
     public let actualTime: Int
@@ -106,11 +110,18 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let sessionDate: String
 
     public init(
-        dayNumber: Int, duration: Int, completed: Bool, actualTime: Int,
-        clearPercent: Int, thoughtCount: Int, mindStateLog: [MindStateEntry],
+        dayNumber: Int,
+        sessionType: SessionType = .standard,
+        duration: Int,
+        completed: Bool,
+        actualTime: Int,
+        clearPercent: Int,
+        thoughtCount: Int,
+        mindStateLog: [MindStateEntry],
         sessionDate: String
     ) {
         self.dayNumber = dayNumber
+        self.sessionType = sessionType
         self.duration = duration
         self.completed = completed
         self.actualTime = actualTime
