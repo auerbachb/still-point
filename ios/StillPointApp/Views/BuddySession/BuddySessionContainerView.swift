@@ -168,7 +168,8 @@ struct BuddySessionContainerView: View {
             thoughtCount: saved.thoughtCount,
             thoughts: vm.capturedThoughts,
             dayNumber: saved.dayNumber,
-            duration: saved.duration
+            duration: saved.duration,
+            unlockAppGate: true
         )
     }
 }

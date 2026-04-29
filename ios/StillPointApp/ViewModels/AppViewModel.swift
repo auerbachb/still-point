@@ -51,6 +51,15 @@ final class AppViewModel {
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
+    private var appBlockingManagerStorage: AppBlockingManager?
+    var appBlockingManager: AppBlockingManager {
+        if let appBlockingManagerStorage {
+            return appBlockingManagerStorage
+        }
+        let manager = AppBlockingManager()
+        appBlockingManagerStorage = manager
+        return manager
+    }
     private var pendingBuddyInviteToken: String?
 
     var currentDay: Int {
@@ -187,8 +196,14 @@ final class AppViewModel {
         thoughtCount: Int,
         thoughts: [CapturedThought],
         dayNumber: Int,
-        duration: Int
+        duration: Int,
+        unlockAppGate: Bool
     ) {
+        if unlockAppGate {
+            appBlockingManager.unlockAfterCompletedSession()
+        } else {
+            appBlockingManager.prepareForSession()
+        }
         currentView = .completion(
             sessionId: sessionId,
             clearPercent: clearPercent,

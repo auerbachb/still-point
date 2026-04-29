@@ -116,6 +116,21 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     @MainActor
+    func testCompletedSessionUnlocksConfiguredAppGate() throws {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            appBlockingSelected: true
+        )
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: launchTimeout))
+        openTab(identifier: "tab.settings", in: app)
+        XCTAssertTrue(app.staticTexts["appBlocking.statusText"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["appBlocking.selectedCount"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testHistoryAndSettingsNavigationSmoke() throws {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
@@ -263,7 +278,8 @@ final class StillPointAppUITests: XCTestCase {
         timerMultiplier: Double = 1.0,
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
-        forceSessionsFailure: Bool = false
+        forceSessionsFailure: Bool = false,
+        appBlockingSelected: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -275,6 +291,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
+        app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = appBlockingSelected ? "1" : "0"
         return app
     }
 
