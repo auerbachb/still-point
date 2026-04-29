@@ -42,6 +42,16 @@ vi.mock("@/lib/auth", () => ({
   getCurrentUser,
 }));
 
+vi.mock("@/lib/username", () => ({
+  USERNAME_ERROR:
+    "Username must be 3-30 characters (letters, numbers, underscores)",
+  MIN_USERNAME_LENGTH: 3,
+  MAX_USERNAME_LENGTH: 30,
+  USERNAME_REGEX: /^[a-zA-Z0-9_]+$/,
+  isValidUsername: (value: string) =>
+    value.length >= 3 && value.length <= 30 && /^[a-zA-Z0-9_]+$/.test(value),
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),
   eq: (left: unknown, right: unknown) => ({ eq: [left, right] }),

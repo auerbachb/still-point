@@ -3,11 +3,9 @@ import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { USERNAME_ERROR, isValidUsername } from "@/lib/username";
 import { and, eq, ne, sql } from "drizzle-orm";
 
-const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
-const USERNAME_ERROR =
-  "Username must be 3-30 characters (letters, numbers, underscores)";
 const USERNAME_TAKEN_ERROR = "Username already taken";
 
 const RETURN_FIELDS = {
@@ -37,11 +35,7 @@ export async function PATCH(request: NextRequest) {
     if (typeof body.username === "string") {
       hasSupportedUpdate = true;
       const username = body.username.trim();
-      if (
-        username.length < 3 ||
-        username.length > 30 ||
-        !USERNAME_REGEX.test(username)
-      ) {
+      if (!isValidUsername(username)) {
         return NextResponse.json({ error: USERNAME_ERROR }, { status: 400 });
       }
 

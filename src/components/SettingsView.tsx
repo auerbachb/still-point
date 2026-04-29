@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { api } from "@/lib/api";
+import {
+  MAX_USERNAME_LENGTH,
+  USERNAME_ERROR,
+  isValidUsername,
+} from "@/lib/username";
 
 type User = {
   id: string;
@@ -18,10 +23,6 @@ type SettingsViewProps = {
   onUsernameChange: (username: string) => void;
   onLogout: () => void;
 };
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
-const USERNAME_FORMAT_ERROR =
-  "Username must be 3-30 characters (letters, numbers, underscores)";
 
 export function SettingsView({
   user,
@@ -58,12 +59,8 @@ export function SettingsView({
       setEditingUsername(false);
       return;
     }
-    if (
-      trimmed.length < 3 ||
-      trimmed.length > 30 ||
-      !USERNAME_REGEX.test(trimmed)
-    ) {
-      setUsernameError(USERNAME_FORMAT_ERROR);
+    if (!isValidUsername(trimmed)) {
+      setUsernameError(USERNAME_ERROR);
       return;
     }
 
@@ -153,7 +150,7 @@ export function SettingsView({
                 autoFocus
                 aria-label="Username"
                 aria-invalid={usernameError !== null}
-                maxLength={30}
+                maxLength={MAX_USERNAME_LENGTH}
                 style={{
                   fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
                   fontSize: "16px", color: "var(--fg)",
