@@ -17,8 +17,11 @@ import { relations, sql } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  /** Stored lowercased by the signup route, so the column-level unique constraint
+   *  is effectively case-insensitive and its btree backs login/password-reset
+   *  `eq(users.email, ...)` lookups. */
   email: varchar("email", { length: 255 }).unique().notNull(),
-  username: varchar("username", { length: 50 }).unique().notNull(),
+  username: varchar("username", { length: 50 }).notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   isPublic: boolean("is_public").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
@@ -26,6 +29,8 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   publicIdx: index("idx_users_public").on(table.isPublic),
+  /** #8: Case-insensitive uniqueness for username; display case preserved in column. */
+  usernameLowerUnique: uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`),
 }));
 
 export const deviceTokens = pgTable("device_tokens", {
