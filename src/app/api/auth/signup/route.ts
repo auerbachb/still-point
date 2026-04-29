@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { hashPassword, createToken, setAuthCookie } from "@/lib/auth";
+import { USERNAME_ERROR, isValidUsername } from "@/lib/username";
 import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
@@ -18,8 +19,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
 
-    if (username.length < 3 || username.length > 30 || !/^[a-zA-Z0-9_]+$/.test(username)) {
-      return NextResponse.json({ error: "Username must be 3-30 characters (letters, numbers, underscores)" }, { status: 400 });
+    if (!isValidUsername(username)) {
+      return NextResponse.json({ error: USERNAME_ERROR }, { status: 400 });
     }
 
     if (password.length < 8) {
