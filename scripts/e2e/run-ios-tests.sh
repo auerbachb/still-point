@@ -102,7 +102,13 @@ resolve_test_target() {
       echo "StillPointAppUITests/StillPointAppUITests/testLaunchLoginCompleteSessionAndHistoryPersistence"
       ;;
     critical)
-      echo "StillPointAppUITests/StillPointAppUITests"
+      echo "StillPointAppUITests/StillPointAppUITests/testHistoryAndSettingsNavigationSmoke"
+      echo "StillPointAppUITests/StillPointAppUITests/testLaunchOfflineShowsUserVisibleMessage"
+      echo "StillPointAppUITests/StillPointAppUITests/testPasswordResetEntryIsDiscoverable"
+      echo "StillPointAppUITests/StillPointAppUITests/testPrimaryControlsVisibleAboveHomeIndicator"
+      echo "StillPointAppUITests/StillPointAppUITests/testSessionsFailureShowsVisibleRetryMessage"
+      echo "StillPointAppUITests/StillPointAppUITests/testTokenExpiryRoutesToReauthMessage"
+      echo "StillPointAppUITests/StillPointAppUITests/testVoiceOverLabelsForTimerAndPrimaryButton"
       ;;
     *)
       echo "StillPointAppUITests/${1}"
@@ -123,8 +129,18 @@ run_lane() {
     -scheme "${TEST_SCHEME}"
     -destination "${TEST_DESTINATION}"
     -resultBundlePath "${result_bundle}"
-    -only-testing:"${test_target}"
   )
+  while IFS= read -r only_testing_target; do
+    [[ -n "${only_testing_target}" ]] && xcodebuild_args+=(-only-testing:"${only_testing_target}")
+  done <<< "${test_target}"
+  if [[ "${lane_tag}" == "critical" ]]; then
+    # The golden session path is covered by the smoke lane. Keep critical focused
+    # on the remaining UI tests so the same long simulator flow is not duplicated.
+    xcodebuild_args+=(
+      -skip-testing:"StillPointAppUITests/StillPointAppUITests/testLaunchLoginCompleteSessionAndHistoryPersistence"
+      -skip-testing:"StillPointAppUITests/StillPointAppUITests/testRotationDecisionSessionRemainsUsableInLandscape"
+    )
+  fi
   if [[ -n "${TEST_CONFIGURATION}" ]]; then
     xcodebuild_args+=(-configuration "${TEST_CONFIGURATION}")
   fi

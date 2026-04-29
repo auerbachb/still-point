@@ -108,6 +108,7 @@ struct RootView: View {
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
             }
+
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)

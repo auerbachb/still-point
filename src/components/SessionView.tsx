@@ -255,6 +255,7 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
   const stateLabel =
     mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
   const capturedCount = sessionThoughts.length;
+  const sessionChromeDimmed = isActive && !controlsVisible;
 
   const holdButtonBase: CSSProperties = {
     ...mono,
@@ -291,7 +292,10 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       />
 
       {isActive && (
-        <div style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 40px))", marginTop: "12px" }}>
+        <div
+          data-session-tracking-layer="persistent"
+          style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 40px))", marginTop: "12px" }}
+        >
           <div
             style={{
               display: "flex",
@@ -463,10 +467,12 @@ export function SessionView({ currentDay, onComplete, onAbandon }: SessionViewPr
       )}
 
       <div
+        data-session-chrome="secondary"
+        data-visibility={sessionChromeDimmed ? "dimmed" : "visible"}
         style={{
-          opacity: controlsVisible ? 1 : 0,
+          opacity: sessionChromeDimmed ? 0.32 : 1,
           transition: "opacity 0.5s ease",
-          pointerEvents: controlsVisible ? "auto" : "none",
+          pointerEvents: "auto",
         }}
       >
         {!showPostDistractionCapture && (
