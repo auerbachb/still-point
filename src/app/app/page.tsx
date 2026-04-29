@@ -604,8 +604,12 @@ export default function StillPoint() {
       {view === "settings" && (
         <SettingsView
           user={user}
-          onTogglePublic={(isPublic) => setUser({ ...user, isPublic })}
-          onUsernameChange={(username) => setUser({ ...user, username })}
+          onTogglePublic={(isPublic) =>
+            setUser((prev) => (prev ? { ...prev, isPublic } : prev))
+          }
+          onUsernameChange={(username) =>
+            setUser((prev) => (prev ? { ...prev, username } : prev))
+          }
           onLogout={handleLogout}
         />
       )}
