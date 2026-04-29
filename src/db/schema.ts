@@ -28,6 +28,31 @@ export const users = pgTable("users", {
   publicIdx: index("idx_users_public").on(table.isPublic),
 }));
 
+export const deviceTokens = pgTable("device_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  platform: varchar("platform", { length: 20 }).notNull(),
+  token: text("token").notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  apnsEnvironment: varchar("apns_environment", { length: 20 }).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  lastRegisteredAt: timestamp("last_registered_at", { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userEnabledIdx: index("idx_device_tokens_user_enabled").on(table.userId, table.enabled),
+  tokenEnvUnique: uniqueIndex("device_tokens_token_hash_env_unique").on(
+    table.tokenHash,
+    table.apnsEnvironment,
+  ),
+  platformCheck: check("device_tokens_platform_allowed", sql`${table.platform} in ('ios')`),
+  apnsEnvironmentCheck: check(
+    "device_tokens_apns_environment_allowed",
+    sql`${table.apnsEnvironment} in ('development', 'production')`,
+  ),
+}));
+
 export const accountDeletionLog = pgTable("account_deletion_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
@@ -210,11 +235,16 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(sessions),
   thoughts: many(thoughts),
   passwordResetTokens: many(passwordResetTokens),
+  deviceTokens: many(deviceTokens),
   googleOAuthToken: one(googleOAuthTokens, {
     fields: [users.id],
     references: [googleOAuthTokens.userId],
   }),
   buddyCalendarEvents: many(buddySessionCalendarEvents),
+}));
+
+export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
+  user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({

@@ -169,6 +169,29 @@ public actor APIClient {
         }
     }
 
+    // MARK: - Device Tokens
+
+    public func registerDeviceToken(_ request: DeviceTokenRegistrationRequest) async throws -> DeviceTokenResponse.RegisteredDeviceToken {
+        if uiTestConfig != nil {
+            return DeviceTokenResponse.RegisteredDeviceToken(
+                id: "ui-device-token",
+                platform: request.platform,
+                apnsEnvironment: request.apnsEnvironment
+            )
+        }
+        let response: DeviceTokenResponse = try await post("/api/device-token", body: request)
+        return response.deviceToken
+    }
+
+    public func unregisterDeviceToken(_ request: DeviceTokenRegistrationRequest) async throws {
+        if uiTestConfig != nil {
+            return
+        }
+        var urlRequest = makeRequest(method: "DELETE", path: "/api/device-token")
+        urlRequest.httpBody = try JSONEncoder().encode(request)
+        _ = try await executeRaw(urlRequest)
+    }
+
     // MARK: - Sessions
 
     public func getSessions() async throws -> (sessions: [SessionDTO], stats: StatsDTO) {

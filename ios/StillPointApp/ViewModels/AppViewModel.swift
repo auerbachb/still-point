@@ -103,6 +103,7 @@ final class AppViewModel {
                 currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session : .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
                 await consumePendingBuddyInviteIfNeeded()
                 return
             } else {
@@ -146,6 +147,7 @@ final class AppViewModel {
         currentUser = user
         currentView = .home
         authStatusMessage = nil
+        PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
         Task { await consumePendingBuddyInviteIfNeeded() }
     }
 
@@ -215,11 +217,10 @@ final class AppViewModel {
     }
 
     func returnHome() async {
-        // Refresh user data to get updated currentDay BEFORE navigating
+        currentView = .home
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }
-        currentView = .home
         await consumePendingBuddyInviteIfNeeded()
     }
 

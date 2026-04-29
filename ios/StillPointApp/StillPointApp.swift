@@ -5,6 +5,7 @@ import os
 
 @main
 struct StillPointApp: App {
+    @UIApplicationDelegateAdaptor(PushNotificationCoordinator.self) private var pushNotificationCoordinator
     private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
 
     init() {
