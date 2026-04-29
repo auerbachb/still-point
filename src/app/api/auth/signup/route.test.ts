@@ -105,7 +105,7 @@ describe("POST /api/auth/signup uniqueness handling", () => {
 
   test("maps Postgres 23505 on email constraint to 'Email already in use' (race fallback)", async () => {
     insertReturning.mockRejectedValueOnce(
-      Object.assign(new Error("dup"), { code: "23505", constraint: "users_email_lower_unique" }),
+      Object.assign(new Error("dup"), { code: "23505", constraint: "users_email_unique" }),
     );
     const { POST } = await import("./route");
 

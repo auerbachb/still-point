@@ -18,6 +18,18 @@
 --
 -- This script is idempotent (IF EXISTS / IF NOT EXISTS) and atomic (BEGIN/COMMIT
 -- so a failure mid-flight rolls the legacy constraint back into place).
+--
+-- Lock note: CREATE UNIQUE INDEX (non-CONCURRENTLY) takes ACCESS EXCLUSIVE on
+-- `users` for the duration of the build, blocking concurrent writes. This is
+-- fine on a small `users` table (sub-second build), which is the current shape.
+-- For a large table, prefer this two-step alternative run OUTSIDE the
+-- BEGIN/COMMIT block — it does not block writes, but cannot run inside a
+-- transaction so the DROP CONSTRAINT and CREATE INDEX are no longer atomic
+-- (the order below puts CREATE first to keep uniqueness enforced throughout):
+--
+--   CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "users_username_lower_unique"
+--     ON "users" (lower("username"));
+--   ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_username_unique";
 
 BEGIN;
 
