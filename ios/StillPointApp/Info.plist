@@ -35,6 +35,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Still Point needs camera access for partner video sessions.</string>
+	<key>NSFamilyControlsUsageDescription</key>
+	<string>Still Point uses Screen Time permission to block your selected apps until you complete a meditation session.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Still Point needs microphone access for partner video sessions.</string>
 	<key>UIAppFonts</key>

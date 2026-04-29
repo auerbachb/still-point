@@ -4,6 +4,7 @@ import UIKit
 
 struct RootView: View {
     @State private var appVM = AppViewModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -92,11 +93,17 @@ struct RootView: View {
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
             }
+
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
         .task {
             await appVM.checkAuth()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                appVM.appBlockingManager.refreshShielding()
+            }
         }
         .onOpenURL { url in
             appVM.handleIncomingURL(url)
