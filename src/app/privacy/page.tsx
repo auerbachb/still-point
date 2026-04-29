@@ -117,7 +117,8 @@ export default function PrivacyPolicyPage() {
         <ul style={list}>
           <li>
             <strong style={{ color: "var(--fg)" }}>Account and profile.</strong> Email address,
-            username, and a password hash (we do not store your password in plain text).
+            username, and either a password hash (we do not store your password in plain text) or a
+            link to a single sign-on provider you used to register.
           </li>
           <li>
             <strong style={{ color: "var(--fg)" }}>Session and practice data.</strong> Meditation
@@ -185,6 +186,31 @@ export default function PrivacyPolicyPage() {
           law, legal process, or to protect the rights, safety, or integrity of our users or the
           Service.
         </p>
+
+        <h2 style={sectionTitle}>Third-party sign-in</h2>
+        <p style={body}>
+          You can sign in to Still Point with a third-party identity provider in addition to (or
+          instead of) creating a password. When you choose a provider, we receive your verified email
+          address, your name (when available), and a stable provider account identifier so we can
+          link the provider to your Still Point account on subsequent sign-ins. We do not store your
+          provider password and we do not request access to your contacts, calendar, files, or other
+          provider data through sign-in. The provider's own privacy practices apply to anything you
+          do on their site.
+        </p>
+        <ul style={list}>
+          <li>
+            <strong style={{ color: "var(--fg)" }}>Google:</strong>{" "}
+            <a
+              href="https://policies.google.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--accent-green-text)", textDecoration: "underline" }}
+            >
+              Google Privacy Policy
+            </a>
+            .
+          </li>
+        </ul>
 
         <h2 style={sectionTitle}>Retention and your choices</h2>
         <p style={body}>

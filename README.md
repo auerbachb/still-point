@@ -1,6 +1,6 @@
 # Still Point
 
-**The app is live at [still-point.me](https://still-point.me)**
+**The app is live at [www.still-point.me](https://www.still-point.me/)** (production canonical URL — use this for OAuth redirect URIs, third-party developer console domain config, marketing links, and any external integration that needs the prod origin).
 
 Practice focus by watching the clock without thinking for fixed blocks of time.
 
