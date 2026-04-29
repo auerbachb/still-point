@@ -16,17 +16,10 @@ import {
   requireBuddySessionCompletedForPersonalRecord,
 } from "@/lib/buddySessionControlsPolicy";
 import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
+import { isUniqueViolation } from "@/lib/dbErrors";
 import { and, eq, sql } from "drizzle-orm";
 
 type Params = { params: Promise<{ id: string }> };
-
-function isUniqueViolation(e: unknown): boolean {
-  if (!e || typeof e !== "object") return false;
-  const o = e as { code?: string; cause?: unknown };
-  if (o.code === "23505") return true;
-  if (o.cause) return isUniqueViolation(o.cause);
-  return false;
-}
 
 function parseMindStateLog(raw: unknown): Array<{ time: number; state: string }> {
   if (!Array.isArray(raw)) return [];
