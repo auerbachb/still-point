@@ -4,8 +4,6 @@ import StillPointShared
 struct SessionView: View {
     /// Space reserved when both distraction hold bar and controls are visible.
     private static let bottomOverlayReserveWithControls: CGFloat = 268
-    /// Smaller reserve while controls are hidden to keep timer content readable.
-    private static let bottomOverlayReserveDistractionOnly: CGFloat = 176
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -70,16 +68,20 @@ struct SessionView: View {
                 }
             }
 
-            // Bottom chrome: distraction hold (always during sit) + controls (auto-hide while running)
+            // Bottom chrome: hold tracking never collapses; secondary controls dim while running.
             VStack {
                 Spacer()
                 if sessionInProgress {
                     persistentDistractionBar
                 }
-                if controlsShouldBeVisible {
-                    controlPanel
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                controlPanel
+                    .opacity(secondaryChromeDimmed ? 0.32 : 1)
+                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("session.secondaryChromeMarker")
+                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
             }
             .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
@@ -162,10 +164,7 @@ struct SessionView: View {
     }
 
     private var bottomOverlayReserve: CGFloat {
-        if controlsShouldBeVisible {
-            return Self.bottomOverlayReserveWithControls
-        }
-        return Self.bottomOverlayReserveDistractionOnly
+        Self.bottomOverlayReserveWithControls
     }
 
     private var controlsShouldBeVisible: Bool {
@@ -178,6 +177,10 @@ struct SessionView: View {
             return Self.bottomOverlayReserveWithControls + SPSpacing.s2
         }
         return bottomOverlayReserve + SPSpacing.s2
+    }
+
+    private var secondaryChromeDimmed: Bool {
+        vm.isActive && !vm.controlsVisible
     }
 
     /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
