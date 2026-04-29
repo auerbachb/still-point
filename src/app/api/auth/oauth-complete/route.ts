@@ -37,8 +37,14 @@ export async function GET() {
     // Always clear Auth.js cookies — on success because sp_token is now the
     // canonical session, on failure to avoid leaving the user pinned to a
     // half-completed Auth.js session that would loop them through the
-    // bridge again.
-    await clearAuthJsCookies();
+    // bridge again. Best-effort: a thrown error here must not prevent the
+    // redirect below from running, otherwise we'd serve a 500 and the user
+    // would have no path forward.
+    try {
+      await clearAuthJsCookies();
+    } catch (cookieError) {
+      console.error("oauth-complete cookie cleanup failed:", cookieError);
+    }
   }
 
   return NextResponse.redirect(new URL(redirectPath, APP_URL));

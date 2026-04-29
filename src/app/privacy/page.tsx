@@ -117,8 +117,8 @@ export default function PrivacyPolicyPage() {
         <ul style={list}>
           <li>
             <strong style={{ color: "var(--fg)" }}>Account and profile.</strong> Email address,
-            username, and either a password hash (we do not store your password in plain text) or a
-            link to a single sign-on provider you used to register.
+            username, and any combination of a password hash (we do not store your password in plain
+            text) and links to single sign-on providers you have used to sign in.
           </li>
           <li>
             <strong style={{ color: "var(--fg)" }}>Session and practice data.</strong> Meditation

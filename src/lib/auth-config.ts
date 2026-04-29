@@ -8,6 +8,7 @@ import {
   MIN_USERNAME_LENGTH,
   USERNAME_REGEX,
 } from "@/lib/username";
+import { uniqueViolationConstraint } from "@/lib/dbErrors";
 
 /** Sanitize a Google profile field into a username candidate that satisfies
  *  the existing users.username constraints (#136 + #8 case-insensitive
@@ -83,6 +84,57 @@ async function linkProviderToUser(
     throw new Error("oauth_accounts insert returned no rows and no existing link");
   }
   return existing.userId;
+}
+
+/** Insert a new user, retrying with a fresh username if the
+ *  case-insensitive username unique index races. The pre-check in
+ *  `generateUniqueUsername()` reduces but does not eliminate the race —
+ *  two concurrent first-time OAuth sign-ins with the same name seed could
+ *  both pre-check, both pick the same candidate, and both attempt the
+ *  same insert. The first wins; the loser regenerates and retries.
+ *
+ *  Email conflicts collapse via ON CONFLICT DO NOTHING (we re-look-up the
+ *  row a sibling callback inserted). Username conflicts cannot be handled
+ *  with a single ON CONFLICT clause alongside email, so they're caught as
+ *  a Postgres unique_violation and re-attempted with a new candidate. */
+const MAX_USERNAME_RETRIES = 5;
+
+async function createUserWithUsernameRetry(email: string, seed: string): Promise<string> {
+  for (let attempt = 0; attempt <= MAX_USERNAME_RETRIES; attempt++) {
+    const username = await generateUniqueUsername(seed);
+    try {
+      const inserted = await db
+        .insert(users)
+        .values({ email, username })
+        .onConflictDoNothing({ target: users.email })
+        .returning({ id: users.id });
+
+      if (inserted.length > 0) return inserted[0].id;
+
+      // Email conflict — another callback created this user. Look up.
+      const [racedRow] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (!racedRow) {
+        throw new Error("users insert raced and lookup returned no row");
+      }
+      return racedRow.id;
+    } catch (err) {
+      const constraint = uniqueViolationConstraint(err);
+      if (
+        constraint &&
+        constraint.toLowerCase().includes("username") &&
+        attempt < MAX_USERNAME_RETRIES
+      ) {
+        // Username unique index race — regenerate and retry.
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to allocate a unique username after retries");
 }
 
 declare module "next-auth" {
@@ -162,29 +214,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             (typeof profile.name === "string" && profile.name) ||
             email.split("@")[0] ||
             "user";
-          const username = await generateUniqueUsername(seed);
-
-          const inserted = await db
-            .insert(users)
-            .values({ email, username })
-            .onConflictDoNothing({ target: users.email })
-            .returning({ id: users.id });
-
-          if (inserted.length > 0) {
-            targetUserId = inserted[0].id;
-          } else {
-            // Race: another callback created a user with this email
-            // between our SELECT and INSERT. Look it up.
-            const [racedRow] = await db
-              .select({ id: users.id })
-              .from(users)
-              .where(eq(users.email, email))
-              .limit(1);
-            if (!racedRow) {
-              throw new Error("users insert raced and lookup returned no row");
-            }
-            targetUserId = racedRow.id;
-          }
+          targetUserId = await createUserWithUsernameRetry(email, seed);
         }
 
         userId = await linkProviderToUser(provider, providerAccountId, targetUserId);
