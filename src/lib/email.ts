@@ -12,7 +12,7 @@ type SendEmailParams = {
 
 const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://still-point.me";
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.still-point.me";
 
 function escapeHtml(value: string) {
   return value

@@ -82,7 +82,7 @@ npm run build:turbo
 | `POSTGRES_URL` | Runtime DB connection string used by the app (`src/db/index.ts`, `drizzle.config.ts`). In local dev, point at non-production Neon. | [Neon console](https://console.neon.tech) → project/branch → connection string |
 | `POSTGRES_URL_TEST` | **Not read by the app** — optional team alias for the non-production URL when documenting or mirroring Vercel Preview envs. | Same as non-prod `POSTGRES_URL` |
 | `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. Defaults to `https://still-point.me` when unset. | Deployment URL such as `https://still-point.me` or local `http://127.0.0.1:3000` |
+| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. Defaults to `https://www.still-point.me` when unset. | Deployment URL such as `https://www.still-point.me` or local `http://127.0.0.1:3000` |
 | `EMAIL_FROM` | Sender address for password reset email. Required with `RESEND_API_KEY` for password reset email delivery. | Verified sender/domain in the email provider |
 | `RESEND_API_KEY` | Server-only Resend API key for password reset email delivery. Never expose to the client. | Resend dashboard → API Keys |
 | `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |
@@ -205,7 +205,7 @@ echo "your_test_db_url" | npx vercel env add POSTGRES_URL_TEST preview
 
 Production should continue to use the production Neon URL for `POSTGRES_URL`.
 
-The app is live at [still-point.me](https://still-point.me).
+The app is live at [www.still-point.me](https://www.still-point.me/).
 
 ## Release operations
 

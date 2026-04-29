@@ -47,14 +47,16 @@ when the platform supports it. The native flow returns an `identityToken`
 Endpoint (to be implemented under issue
 [#286](https://github.com/auerbachb/still-point/issues/286)):
 
-```
+```http
 POST /api/auth/apple-native
 Content-Type: application/json
+```
 
+```json
 {
   "identityToken": "<JWS from ASAuthorizationCredential.identityToken>",
   "authorizationCode": "<from ASAuthorizationCredential.authorizationCode>",
-  "fullName": { "givenName": "Ada", "familyName": "Lovelace" }   // optional, first sign-in only
+  "fullName": { "givenName": "Ada", "familyName": "Lovelace" }
 }
 ```
 
@@ -81,7 +83,7 @@ than carrying provider SDKs. The flow:
 
 1. iOS opens `ASWebAuthenticationSession` pointed at:
 
-   ```
+   ```text
    https://www.still-point.me/api/auth/signin/<provider>
        ?callbackUrl=stillpoint%3A%2F%2Foauth-complete
    ```

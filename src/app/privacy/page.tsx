@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "How Still Point collects, uses, stores, and protects your information when you use our website and apps.",
   alternates: {
-    canonical: "https://still-point.me/privacy",
+    canonical: "https://www.still-point.me/privacy",
   },
 };
 
@@ -104,8 +104,8 @@ export default function PrivacyPolicyPage() {
         <p style={{ ...body, color: "var(--fg-3)", fontSize: "15px", marginBottom: "var(--s5)" }}>
           Effective date: April 10, 2026. This policy describes how Still Point (“we,” “us”) handles
           information when you use the website and services available at{" "}
-          <a href="https://still-point.me" style={{ color: "var(--accent-green-text)", textDecoration: "underline" }}>
-            https://still-point.me
+          <a href="https://www.still-point.me" style={{ color: "var(--accent-green-text)", textDecoration: "underline" }}>
+            https://www.still-point.me
           </a>{" "}
           (the “Service”).
         </p>
@@ -190,12 +190,12 @@ export default function PrivacyPolicyPage() {
         <h2 style={sectionTitle}>Third-party sign-in</h2>
         <p style={body}>
           You can sign in to Still Point with a third-party identity provider in addition to (or
-          instead of) creating a password. When you choose a provider, we receive your verified email
-          address, your name (when available), and a stable provider account identifier so we can
-          link the provider to your Still Point account on subsequent sign-ins. We do not store your
-          provider password and we do not request access to your contacts, calendar, files, or other
-          provider data through sign-in. The provider's own privacy practices apply to anything you
-          do on their site.
+          instead of) creating a password. When you choose a provider, we receive an email address
+          (which the provider verifies where supported), your name when available, and a stable
+          provider account identifier so we can link the provider to your Still Point account on
+          subsequent sign-ins. We do not store your provider password and we do not request access
+          to your contacts, calendar, files, or other provider data through sign-in. The provider's
+          own privacy practices apply to anything you do on their site.
         </p>
         <ul style={list}>
           <li>

@@ -12,11 +12,15 @@ import {
 /** Sanitize a Google profile field into a username candidate that satisfies
  *  the existing users.username constraints (#136 + #8 case-insensitive
  *  uniqueness). The function may still return a colliding name; the
- *  surrounding loop appends numeric suffixes until a free slot is found. */
+ *  surrounding loop appends random suffixes until a free slot is found. */
 function sanitizeUsernameSeed(seed: string): string {
   const cleaned = seed.replace(/[^A-Za-z0-9_]/g, "");
   if (cleaned.length === 0) return "user";
   return cleaned.slice(0, MAX_USERNAME_LENGTH);
+}
+
+function randomSuffix(length: number): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, length);
 }
 
 async function generateUniqueUsername(seed: string): Promise<string> {
@@ -24,7 +28,7 @@ async function generateUniqueUsername(seed: string): Promise<string> {
   const padded = base.length < MIN_USERNAME_LENGTH ? `${base}user`.slice(0, MAX_USERNAME_LENGTH) : base;
 
   for (let attempt = 0; attempt < 8; attempt++) {
-    const suffix = attempt === 0 ? "" : `_${Math.random().toString(36).slice(2, 6)}`;
+    const suffix = attempt === 0 ? "" : `_${randomSuffix(4)}`;
     const candidate = `${padded.slice(0, MAX_USERNAME_LENGTH - suffix.length)}${suffix}`;
 
     if (!USERNAME_REGEX.test(candidate)) continue;
@@ -38,11 +42,47 @@ async function generateUniqueUsername(seed: string): Promise<string> {
     if (!collision) return candidate;
   }
 
-  // Last resort: random suffix from crypto.randomUUID() so the probability
-  // of collision is negligible even under contention. Math.random() is not
-  // cryptographically secure and would not give the same guarantee.
-  const random = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
-  return `user_${random}`;
+  // Last resort: 10-char random suffix. Crypto-RNG keeps the probability of
+  // collision negligible even under contention.
+  return `user_${randomSuffix(10)}`;
+}
+
+/** Insert a (provider, providerAccountId) -> userId link, returning the
+ *  userId that ends up owning the link. If a link already exists (race or
+ *  re-sign-in), the existing row's userId wins via ON CONFLICT DO NOTHING +
+ *  fallback lookup. This guarantees the link/userId mapping is unique. */
+async function linkProviderToUser(
+  provider: string,
+  providerAccountId: string,
+  userId: string,
+): Promise<string> {
+  const inserted = await db
+    .insert(oauthAccounts)
+    .values({ userId, provider, providerAccountId })
+    .onConflictDoNothing({
+      target: [oauthAccounts.provider, oauthAccounts.providerAccountId],
+    })
+    .returning({ userId: oauthAccounts.userId });
+
+  if (inserted.length > 0) return inserted[0].userId;
+
+  // Race: another callback inserted the same link. Use whichever userId
+  // ended up owning it. (Cannot be `userId` we passed in if we lost the
+  // race for an already-linked-to-different-user row.)
+  const [existing] = await db
+    .select({ userId: oauthAccounts.userId })
+    .from(oauthAccounts)
+    .where(
+      and(
+        eq(oauthAccounts.provider, provider),
+        eq(oauthAccounts.providerAccountId, providerAccountId),
+      ),
+    )
+    .limit(1);
+  if (!existing) {
+    throw new Error("oauth_accounts insert returned no rows and no existing link");
+  }
+  return existing.userId;
 }
 
 declare module "next-auth" {
@@ -104,21 +144,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (existingLink) {
         userId = existingLink.userId;
       } else {
+        // No link yet → resolve target user (existing email match or
+        // freshly created), then link the provider identity to them
+        // atomically. ON CONFLICT collapses concurrent callbacks into a
+        // single row.
         const [emailMatch] = await db
           .select({ id: users.id })
           .from(users)
           .where(eq(users.email, email))
           .limit(1);
 
+        let targetUserId: string;
         if (emailMatch) {
-          // Email match without an existing link → attach this provider
-          // identity to the email-owning user.
-          userId = emailMatch.id;
-          await db.insert(oauthAccounts).values({
-            userId,
-            provider,
-            providerAccountId,
-          });
+          targetUserId = emailMatch.id;
         } else {
           const seed =
             (typeof profile.name === "string" && profile.name) ||
@@ -126,18 +164,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             "user";
           const username = await generateUniqueUsername(seed);
 
-          const [created] = await db
+          const inserted = await db
             .insert(users)
             .values({ email, username })
+            .onConflictDoNothing({ target: users.email })
             .returning({ id: users.id });
-          userId = created.id;
 
-          await db.insert(oauthAccounts).values({
-            userId,
-            provider,
-            providerAccountId,
-          });
+          if (inserted.length > 0) {
+            targetUserId = inserted[0].id;
+          } else {
+            // Race: another callback created a user with this email
+            // between our SELECT and INSERT. Look it up.
+            const [racedRow] = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(eq(users.email, email))
+              .limit(1);
+            if (!racedRow) {
+              throw new Error("users insert raced and lookup returned no row");
+            }
+            targetUserId = racedRow.id;
+          }
         }
+
+        userId = await linkProviderToUser(provider, providerAccountId, targetUserId);
       }
 
       // Auth.js passes `user` into the jwt callback only on initial sign-in;
@@ -157,9 +207,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // After OAuth completes, route through /api/auth/oauth-complete so the
-      // server can mint our sp_token cookie before the user lands on /app.
+      // Auth.js error redirects (e.g. /app?error=AccessDenied,
+      // /app?error=OAuthCallback) come through here when sign-in fails or
+      // is cancelled. Pass them through unchanged so AuthScreen can render
+      // the inline error — do NOT overwrite with the success bridge.
+      if (url.startsWith(`${baseUrl}/app`)) return url;
+
+      // Already in our sp_token bridge. Pass through.
       if (url.startsWith(`${baseUrl}/api/auth/oauth-complete`)) return url;
+
+      // Same-origin success URL → route through the bridge to mint sp_token.
+      // Anything off-origin (defensive) also goes through the bridge, which
+      // ends on /app.
       return `${baseUrl}/api/auth/oauth-complete`;
     },
   },
