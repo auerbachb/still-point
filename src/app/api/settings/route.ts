@@ -27,12 +27,15 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const updates: Record<string, unknown> = { updatedAt: new Date() };
+    let hasSupportedUpdate = false;
 
     if (typeof body.isPublic === "boolean") {
       updates.isPublic = body.isPublic;
+      hasSupportedUpdate = true;
     }
 
     if (typeof body.username === "string") {
+      hasSupportedUpdate = true;
       const username = body.username.trim();
       if (
         username.length < 3 ||
@@ -80,6 +83,13 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: USERNAME_TAKEN_ERROR }, { status: 409 });
       }
       return NextResponse.json({ user: result.user });
+    }
+
+    if (!hasSupportedUpdate) {
+      return NextResponse.json(
+        { error: "No supported settings provided" },
+        { status: 400 },
+      );
     }
 
     const [updated] = await db

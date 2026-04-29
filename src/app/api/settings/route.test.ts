@@ -161,6 +161,19 @@ describe("PATCH /api/settings", () => {
     await expect(res.json()).resolves.toEqual({ error: "Username already taken" });
   });
 
+  test("rejects PATCH bodies without any supported settings", async () => {
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ unrelated: "noise" }));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "No supported settings provided",
+    });
+    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
   test("isPublic-only updates skip the transaction and use the HTTP driver", async () => {
     const { PATCH } = await import("./route");
 
