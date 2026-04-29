@@ -319,12 +319,8 @@ final class StillPointAppUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        if destination?.exists == true {
-            return
-        }
-
         for attempt in 1...3 {
-            if tapTab(identifier: identifier, in: app, file: file, line: line),
+            if tapTab(identifier: identifier, in: app, shouldFailOnMissing: attempt == 3, file: file, line: line),
                destination?.waitForExistence(timeout: 8) ?? true {
                 return
             }
@@ -336,6 +332,7 @@ final class StillPointAppUITests: XCTestCase {
     private func tapTab(
         identifier: String,
         in app: XCUIApplication,
+        shouldFailOnMissing: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> Bool {
@@ -360,7 +357,9 @@ final class StillPointAppUITests: XCTestCase {
                 }
             }
         }
-        XCTFail("Expected tab button \(identifier) to exist", file: file, line: line)
+        if shouldFailOnMissing {
+            XCTFail("Expected tab button \(identifier) to exist", file: file, line: line)
+        }
         return false
     }
 
