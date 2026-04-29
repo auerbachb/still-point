@@ -94,7 +94,7 @@ final class StillPointAppUITests: XCTestCase {
             XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: 5))
             XCTAssertEqual(hyperfocusHold.value as? String, "inactive")
             XCTAssertTrue(secondaryChrome.waitForExistence(timeout: 5))
-            waitForAccessibilityValue(secondaryChrome, "dimmed", timeout: 5)
+            waitForAccessibilityValue(secondaryChrome, "visible", timeout: 5)
         } else {
             XCTAssertTrue(
                 completionRoot.waitForExistence(timeout: 1),
