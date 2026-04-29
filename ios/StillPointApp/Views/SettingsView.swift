@@ -57,6 +57,8 @@ struct SettingsView: View {
                         .stroke(SPColor.border1)
                 )
 
+                AppBlockingSettingsView(manager: appVM.appBlockingManager)
+
                 // Public board toggle
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
                     Text("VISIBILITY")

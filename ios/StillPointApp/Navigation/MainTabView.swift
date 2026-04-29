@@ -14,6 +14,7 @@ struct MainTabView: View {
             HomeView(appVM: appVM)
                 .tabItem {
                     Label("HOME", systemImage: "house")
+                        .accessibilityIdentifier("tab.home")
                 }
                 .tag(0)
 

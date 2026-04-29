@@ -4,8 +4,6 @@ import StillPointShared
 struct SessionView: View {
     /// Space reserved when both distraction hold bar and controls are visible.
     private static let bottomOverlayReserveWithControls: CGFloat = 268
-    /// Smaller reserve while controls are hidden to keep timer content readable.
-    private static let bottomOverlayReserveDistractionOnly: CGFloat = 176
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -70,16 +68,20 @@ struct SessionView: View {
                 }
             }
 
-            // Bottom chrome: distraction hold (always during sit) + controls (auto-hide while running)
+            // Bottom chrome: hold tracking never collapses; secondary controls dim while running.
             VStack {
                 Spacer()
                 if sessionInProgress {
                     persistentDistractionBar
                 }
-                if controlsShouldBeVisible {
-                    controlPanel
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                controlPanel
+                    .opacity(secondaryChromeDimmed ? 0.32 : 1)
+                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("session.secondaryChromeMarker")
+                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
             }
             .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
@@ -122,7 +124,8 @@ struct SessionView: View {
                     thoughts: vm.capturedThoughts,
                     dayNumber: vm.dayNumber,
                     sessionType: vm.sessionType,
-                    duration: vm.totalSeconds
+                    duration: vm.totalSeconds,
+                    unlockAppGate: vm.completedNaturally && vm.sessionType == .standard
                 )
             }
         } message: {
@@ -163,10 +166,7 @@ struct SessionView: View {
     }
 
     private var bottomOverlayReserve: CGFloat {
-        if controlsShouldBeVisible {
-            return Self.bottomOverlayReserveWithControls
-        }
-        return Self.bottomOverlayReserveDistractionOnly
+        Self.bottomOverlayReserveWithControls
     }
 
     private var controlsShouldBeVisible: Bool {
@@ -179,6 +179,10 @@ struct SessionView: View {
             return Self.bottomOverlayReserveWithControls + SPSpacing.s2
         }
         return bottomOverlayReserve + SPSpacing.s2
+    }
+
+    private var secondaryChromeDimmed: Bool {
+        vm.isActive && !vm.controlsVisible
     }
 
     /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
@@ -223,6 +227,14 @@ struct SessionView: View {
                 }
             }
             .padding(.horizontal, SPSpacing.s3)
+
+            if appVM.appBlockingManager.hasSelection {
+                Text("Complete the timer to open your selected app gate. Ending early keeps those apps held.")
+                    .font(SPFont.mono(10))
+                    .foregroundStyle(Color(SPColor.fg4))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s4)
+            }
 
             Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
                 .font(SPFont.mono(10))
@@ -439,7 +451,8 @@ struct SessionView: View {
                 thoughts: vm.capturedThoughts,
                 dayNumber: session.dayNumber,
                 sessionType: session.sessionType,
-                duration: vm.totalSeconds
+                duration: vm.totalSeconds,
+                unlockAppGate: vm.completedNaturally && session.sessionType == .standard
             )
         }
     }

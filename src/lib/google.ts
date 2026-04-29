@@ -508,4 +508,3 @@ export async function loadGoogleCalendarStatus(userId: string) {
     email: token.googleEmail,
   };
 }
-
