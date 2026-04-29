@@ -15,11 +15,81 @@ type User = {
 type SettingsViewProps = {
   user: User;
   onTogglePublic: (isPublic: boolean) => void;
+  onUsernameChange: (username: string) => void;
   onLogout: () => void;
 };
 
-export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewProps) {
+const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
+const USERNAME_FORMAT_ERROR =
+  "Username must be 3-30 characters (letters, numbers, underscores)";
+
+export function SettingsView({
+  user,
+  onTogglePublic,
+  onUsernameChange,
+  onLogout,
+}: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameInput, setUsernameInput] = useState(user.username);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null);
+
+  const beginEditUsername = () => {
+    setUsernameInput(user.username);
+    setUsernameError(null);
+    setUsernameSuccess(null);
+    setEditingUsername(true);
+  };
+
+  const cancelEditUsername = () => {
+    setEditingUsername(false);
+    setUsernameError(null);
+    setUsernameInput(user.username);
+  };
+
+  const handleSaveUsername = async () => {
+    const trimmed = usernameInput.trim();
+    setUsernameError(null);
+    setUsernameSuccess(null);
+
+    if (trimmed === user.username) {
+      setEditingUsername(false);
+      return;
+    }
+    if (
+      trimmed.length < 3 ||
+      trimmed.length > 30 ||
+      !USERNAME_REGEX.test(trimmed)
+    ) {
+      setUsernameError(USERNAME_FORMAT_ERROR);
+      return;
+    }
+
+    setSavingUsername(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUsernameError(data?.error ?? "Could not update username");
+        return;
+      }
+      const updated = data?.user?.username ?? trimmed;
+      onUsernameChange(updated);
+      setUsernameInput(updated);
+      setEditingUsername(false);
+      setUsernameSuccess("Username updated");
+    } catch {
+      setUsernameError("Could not update username");
+    } finally {
+      setSavingUsername(false);
+    }
+  };
 
   const handleToggle = async () => {
     setToggling(true);
@@ -73,12 +143,117 @@ export function SettingsView({ user, onTogglePublic, onLogout }: SettingsViewPro
           }}>
             ACCOUNT
           </div>
-          <div style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "16px", color: "var(--fg)",
-          }}>
-            {user.username}
-          </div>
+          {editingUsername ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <input
+                type="text"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                disabled={savingUsername}
+                autoFocus
+                aria-label="Username"
+                aria-invalid={usernameError !== null}
+                maxLength={30}
+                style={{
+                  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  fontSize: "16px", color: "var(--fg)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border-3)",
+                  borderRadius: "6px",
+                  padding: "6px 10px",
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={handleSaveUsername}
+                  disabled={savingUsername}
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--border-3)",
+                    color: "var(--fg)",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", letterSpacing: "0.12em",
+                    textTransform: "uppercase", padding: "6px 12px",
+                    borderRadius: "6px",
+                    cursor: savingUsername ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {savingUsername ? "saving…" : "save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditUsername}
+                  disabled={savingUsername}
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--border-3)",
+                    color: "var(--fg-3)",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", letterSpacing: "0.12em",
+                    textTransform: "uppercase", padding: "6px 12px",
+                    borderRadius: "6px",
+                    cursor: savingUsername ? "not-allowed" : "pointer",
+                  }}
+                >
+                  cancel
+                </button>
+              </div>
+              {usernameError && (
+                <div
+                  role="alert"
+                  style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    color: "var(--accent-danger-muted)",
+                  }}
+                >
+                  {usernameError}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: "12px",
+            }}>
+              <div style={{
+                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontSize: "16px", color: "var(--fg)",
+              }}>
+                {user.username}
+              </div>
+              <button
+                type="button"
+                onClick={beginEditUsername}
+                aria-label="Edit username"
+                style={{
+                  background: "none",
+                  border: "1px solid var(--border-3)",
+                  color: "var(--fg-3)",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "10px", letterSpacing: "0.12em",
+                  textTransform: "uppercase", padding: "4px 10px",
+                  borderRadius: "6px", cursor: "pointer",
+                }}
+              >
+                edit
+              </button>
+            </div>
+          )}
+          {usernameSuccess && !editingUsername && (
+            <div
+              role="status"
+              style={{
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "11px",
+                color: "var(--accent-green)",
+              }}
+            >
+              {usernameSuccess}
+            </div>
+          )}
           <div style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
             fontSize: "12px", color: "var(--fg-3)",
