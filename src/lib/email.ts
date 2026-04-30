@@ -14,7 +14,7 @@ const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
 // `??` would let an empty NEXT_PUBLIC_APP_URL through and `new URL()` below
 // would throw at runtime; trim + truthy check protects against that.
-const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.still-point.me";
+const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://still-point.me";
 
 function escapeHtml(value: string) {
   return value
