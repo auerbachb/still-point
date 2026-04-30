@@ -116,7 +116,14 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         <button
           type="button"
           onClick={() => {
-            window.location.href = "/api/auth/signin/google";
+            // Carry the current page (path + query) as callbackUrl so any
+            // deep-link state (invite links, ?buddy=..., etc.) survives the
+            // OAuth round-trip. The redirect callback in auth-config wraps
+            // this into ?return= for the sp_token bridge.
+            const callbackUrl = encodeURIComponent(
+              window.location.pathname + window.location.search,
+            );
+            window.location.href = `/api/auth/signin/google?callbackUrl=${callbackUrl}`;
           }}
           style={{
             background: "var(--surface-1)",

@@ -9,23 +9,26 @@ const publicExactPaths = [
   "/api/auth/logout",
   "/api/auth/google/callback",
   "/api/auth/oauth-complete",
-];
-
-const publicPrefixPaths = [
-  "/api/board",
-  "/api/auth/password-reset",
-  // Auth.js v5 catch-all routes (#136). The catch-all lives at
-  // /api/auth/[...nextauth], so /api/auth/signin, /api/auth/callback/*,
-  // /api/auth/csrf, /api/auth/session, /api/auth/providers, and
-  // /api/auth/error all need to bypass sp_token verification — Auth.js
-  // manages its own short-lived session cookie during the OAuth dance,
-  // and oauth-complete (above) hands off to sp_token afterwards.
+  // Auth.js v5 catch-all routes (#136) — bare endpoints. The catch-all
+  // lives at /api/auth/[...nextauth]; these and the prefixed variants
+  // below need to bypass sp_token verification because Auth.js manages
+  // its own short-lived session cookie during the OAuth dance, and
+  // oauth-complete (above) hands off to sp_token afterwards.
   "/api/auth/signin",
   "/api/auth/callback",
   "/api/auth/csrf",
   "/api/auth/session",
   "/api/auth/providers",
   "/api/auth/error",
+];
+
+const publicPrefixPaths = [
+  "/api/board",
+  "/api/auth/password-reset",
+  // Auth.js sub-paths (provider variants). Use trailing `/` so a future
+  // route like /api/auth/signin-admin would NOT silently bypass auth.
+  "/api/auth/signin/",
+  "/api/auth/callback/",
 ];
 
 export async function middleware(request: NextRequest) {

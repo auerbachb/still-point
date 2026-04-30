@@ -239,16 +239,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async redirect({ url, baseUrl }) {
       // Auth.js error redirects (e.g. /app?error=AccessDenied,
       // /app?error=OAuthCallback) come through here when sign-in fails or
-      // is cancelled. Pass them through unchanged so AuthScreen can render
-      // the inline error — do NOT overwrite with the success bridge.
-      if (url.startsWith(`${baseUrl}/app`)) return url;
+      // is cancelled. Identify them by the explicit ?error= query param
+      // and pass through unchanged so AuthScreen renders the inline error.
+      // The earlier broader rule (any /app URL) was too wide — the default
+      // post-sign-in callbackUrl is also /app, which would bypass the
+      // sp_token bridge entirely.
+      if (url.startsWith(`${baseUrl}/app`) && /[?&]error=/.test(url)) {
+        return url;
+      }
 
       // Already in our sp_token bridge. Pass through.
       if (url.startsWith(`${baseUrl}/api/auth/oauth-complete`)) return url;
 
-      // Same-origin success URL → route through the bridge to mint sp_token.
-      // Anything off-origin (defensive) also goes through the bridge, which
-      // ends on /app.
+      // Successful sign-in (or any other same-origin destination): route
+      // through the bridge so sp_token is minted before the user lands on
+      // the SPA. Encode the original target as ?return= so the bridge can
+      // honour deep-link/callbackUrl state after minting the cookie.
+      if (url.startsWith(baseUrl)) {
+        const target = url.slice(baseUrl.length) || "/app";
+        return `${baseUrl}/api/auth/oauth-complete?return=${encodeURIComponent(target)}`;
+      }
+
+      // Off-origin URL (defensive). Drop and use the bridge default.
       return `${baseUrl}/api/auth/oauth-complete`;
     },
   },
