@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "npm run db:migrate",
     "build": "next build",
     "build:turbo": "next build --turbopack",
     "build:verify": "bash ./scripts/verify-build.sh",
+    "db:migrate": "tsx scripts/apply-migrations.ts",
     "test:unit": "vitest run src",
     "start": "next start",
     "db:seed": "tsx scripts/seed.ts",
