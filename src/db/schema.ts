@@ -260,7 +260,6 @@ export const friendships = pgTable("friendships", {
 }, (table) => ({
   pk: primaryKey({ columns: [table.user1Id, table.user2Id] }),
   ordered: check("friendships_user_order", sql`${table.user1Id} < ${table.user2Id}`),
-  user1Idx: index("idx_friendships_user1").on(table.user1Id),
   user2Idx: index("idx_friendships_user2").on(table.user2Id),
 }));
 
