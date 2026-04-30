@@ -69,7 +69,7 @@ Checks:
 - `npm run e2e:policy:secrets`
 - `scripts/e2e/run-ios-tests.sh` rejects production-looking user emails when credentials are provided.
 - For credentialed flows, CI jobs should provide `E2E_TEST_USER_EMAIL` and `E2E_TEST_USER_PASSWORD` via secrets.
-- Mobile web Playwright against a real backend: use `E2E_WEB_EMAIL` / `E2E_WEB_PASSWORD` plus `POSTGRES_URL` (non-production Neon only) and `E2E_WEB_SETUP_USER=true` so `e2e/global-setup.ts` upserts the fixture user before tests (`e2e/README.md`).
+- Mobile web Playwright against a real backend: use `E2E_WEB_EMAIL` / `E2E_WEB_PASSWORD` plus `POSTGRES_URL` (non-production Neon only) and `E2E_WEB_SETUP_USER=true` so `e2e/global-setup.ts` upserts the fixture user before tests (`e2e/README.md`). When those values are missing in CI (for example fork PRs without secrets), setup is skipped and tests continue with mocked APIs until real-auth coverage is added.
 
 ## 5) Environment guardrails
 
