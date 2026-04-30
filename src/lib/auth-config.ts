@@ -123,12 +123,20 @@ async function createUserWithUsernameRetry(email: string, seed: string): Promise
       return racedRow.id;
     } catch (err) {
       const constraint = uniqueViolationConstraint(err);
-      if (
-        constraint &&
-        constraint.toLowerCase().includes("username") &&
-        attempt < MAX_USERNAME_RETRIES
-      ) {
-        // Username unique index race — regenerate and retry.
+      // uniqueViolationConstraint returns:
+      //   - null  → not a unique_violation, do not retry
+      //   - ""    → unique_violation but driver did not surface the
+      //             constraint name (Neon HTTP can do this)
+      //   - "..." → constraint name string
+      // The email conflict path is handled by onConflictDoNothing above
+      // (no throw), so any unique_violation that reaches here must be on
+      // the username index. Treat empty/unknown names as retryable too,
+      // otherwise an empty-string constraint silently falls through and
+      // the truthy check on `constraint &&` would skip the retry.
+      if (constraint === null) throw err;
+      const isLikelyUsernameConstraint =
+        constraint === "" || constraint.toLowerCase().includes("username");
+      if (isLikelyUsernameConstraint && attempt < MAX_USERNAME_RETRIES) {
         continue;
       }
       throw err;

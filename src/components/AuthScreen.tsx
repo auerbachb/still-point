@@ -118,10 +118,16 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onClick={() => {
             // Carry the current page (path + query) as callbackUrl so any
             // deep-link state (invite links, ?buddy=..., etc.) survives the
-            // OAuth round-trip. The redirect callback in auth-config wraps
-            // this into ?return= for the sp_token bridge.
+            // OAuth round-trip. Strip `error` first — if the user is
+            // retrying from /app?error=OAuthCallback, forwarding `error`
+            // back into callbackUrl would round-trip through the redirect
+            // callback in auth-config, which treats any /app?...error=...
+            // URL as a failure target and skips the sp_token bridge.
+            const params = new URLSearchParams(window.location.search);
+            params.delete("error");
+            const search = params.toString();
             const callbackUrl = encodeURIComponent(
-              window.location.pathname + window.location.search,
+              `${window.location.pathname}${search ? `?${search}` : ""}`,
             );
             window.location.href = `/api/auth/signin/google?callbackUrl=${callbackUrl}`;
           }}

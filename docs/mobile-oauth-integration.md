@@ -85,7 +85,6 @@ than carrying provider SDKs. The flow:
 
    ```text
    https://www.still-point.me/api/auth/signin/<provider>
-       ?callbackUrl=stillpoint%3A%2F%2Foauth-complete
    ```
 
    For `<provider>` use the Auth.js id: `google`, `microsoft-entra-id`, or
@@ -101,10 +100,23 @@ than carrying provider SDKs. The flow:
    the HttpOnly cookie scoped to `still-point.me`, then redirects to
    `/app`.
 
-4. `ASWebAuthenticationSession`'s callback URL scheme (registered in
-   `Info.plist` under `CFBundleURLTypes`, e.g. `stillpoint://oauth-complete`)
-   is invoked once the redirect chain reaches `/app`. iOS reads
-   `HTTPCookieStorage.shared` for the `sp_token` cookie and proceeds.
+4. **Detecting completion on iOS.** The redirect chain ends on `/app` —
+   the server does not redirect to a custom URL scheme today, so
+   `ASWebAuthenticationSession`'s `callbackURLScheme` completion handler
+   does NOT fire automatically. The iOS-side issue (separate from #136)
+   will choose one of:
+   - **(a)** Have the server redirect to `stillpoint://oauth-complete`
+     after `oauth-complete` instead of `/app`, with a server-side
+     allow-list keyed off a request marker (e.g. `?ios=1` propagated
+     from `signin/<provider>?callbackUrl=...`). This requires a small
+     extension to the `redirect` callback in `src/lib/auth-config.ts` so
+     known custom schemes survive.
+   - **(b)** Poll the session's current URL on a timer; when it reaches
+     `https://www.still-point.me/app`, dismiss the session and read
+     `sp_token` from `HTTPCookieStorage.shared`.
+   Until that decision lands, treat the existing custom-scheme
+   registration in `Info.plist` as scaffolding — it does not yet
+   round-trip end-to-end.
 
 Caveats for Pattern B:
 
