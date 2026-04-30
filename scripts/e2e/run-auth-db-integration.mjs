@@ -42,6 +42,8 @@ function run(cmd, args, extraEnv = {}) {
 }
 
 await run("npx", ["tsx", "scripts/apply-migrations.ts"]);
+const parsedRepeat = Number.parseInt(process.env.E2E_REPEAT_EACH ?? "1", 10);
+const repeatEach = Number.isNaN(parsedRepeat) ? 1 : Math.max(1, parsedRepeat);
 await run("npx", [
   "playwright",
   "test",
@@ -52,5 +54,5 @@ await run("npx", [
   "--workers",
   "1",
   "--repeat-each",
-  String(Number.parseInt(process.env.E2E_REPEAT_EACH ?? "1", 10) || 1),
+  String(repeatEach),
 ], { E2E_LANE: "authDb" });

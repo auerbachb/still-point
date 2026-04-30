@@ -74,8 +74,8 @@ Cross-cutting policy: `docs/testing/e2e-policy.md`. Full app seed for demo data 
 
 These tests validate case-insensitive username rules and cross-route race handling (#283). They require:
 
-1. **Postgres** with the app schema and the case-insensitive username migration applied. The runner executes `scripts/apply-migrations.ts` first, which applies every `drizzle/*.sql` file (including `users_uniqueness_incremental.sql`) idempotently.
-2. **`POSTGRES_URL`** — same Neon (or other) connection string the app uses; must not point at production.
+1. **`POSTGRES_URL`** — Neon (or other) connection string the app uses; must not point at production. The Playwright process and `npm run dev` both need it. Other E2E jobs omit it; those runs **skip** this file’s tests automatically. The dedicated `web-e2e-auth-db` CI job supplies it from secrets.
+2. **Postgres schema** — the case-insensitive username migration must be applied. `npm run e2e:web:authDb` runs `scripts/apply-migrations.ts` first, which applies every `drizzle/*.sql` file (including `users_uniqueness_incremental.sql`) idempotently.
 3. **`JWT_SECRET`** — any non-empty value consistent with the dev server (signup and settings PATCH issue JWT-backed cookies when applicable).
 
 ### Local
