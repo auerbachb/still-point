@@ -68,12 +68,12 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
         app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
-        app.terminate()
+        terminateAppReliably(app)
         app.launch()
         waitForRoot("home", in: app, failureMessage: "Home screen did not survive relaunch before session", assertColdStart: false)
         app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
-        app.terminate()
+        terminateAppReliably(app)
         app.launch()
         waitForRoot("session", in: app, failureMessage: "Session screen did not appear", assertColdStart: false)
 
@@ -111,7 +111,7 @@ final class StillPointAppUITests: XCTestCase {
         tapByStableCenter(returnButton, in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
-        app.terminate()
+        terminateAppReliably(app)
 
         let relaunch = makeApp(
             seedAuthenticated: true,
@@ -250,7 +250,8 @@ final class StillPointAppUITests: XCTestCase {
 
     @MainActor
     func testVoiceOverLabelsForTimerAndPrimaryButton() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 30, timerMultiplier: 1.0)
+        // Long wall-clock budget so completion cannot beat the timer assertion on slow CI navigations.
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
         app.launch()
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
@@ -435,6 +436,21 @@ final class StillPointAppUITests: XCTestCase {
 
         XCTFail("Element existed but never had a stable tappable frame: \(element.debugDescription)", file: file, line: line)
         return nil
+    }
+
+    /// Retries `terminate()` since XCTest occasionally reports "Failed to terminate … :0" on loaded CI simulators.
+    private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 4) {
+        for _ in 1...attempts {
+            app.terminate()
+            let deadline = Date().addingTimeInterval(15)
+            while Date() < deadline {
+                if app.state == .notRunning {
+                    return
+                }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            }
+        }
+        XCTFail("App did not reach notRunning after \(attempts) terminate attempts")
     }
 
     private func dismissKeyboardIfPresent(in app: XCUIApplication) {
