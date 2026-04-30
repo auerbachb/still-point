@@ -13,6 +13,11 @@ function readPackageVersion(): string {
   }
 }
 
+function nonBlankEnv(v: string | undefined): string | undefined {
+  const t = (v ?? "").trim();
+  return t.length > 0 ? t : undefined;
+}
+
 function shortGitSha(full: string | undefined): string {
   if (!full) return "";
   const t = full.trim();
@@ -32,10 +37,11 @@ function tryGitHead(): string {
 }
 
 const buildShaFull =
-  process.env.VERCEL_GIT_COMMIT_SHA ??
-  process.env.NEXT_PUBLIC_BUILD_SHA ??
-  process.env.SOURCE_VERSION ??
-  tryGitHead();
+  nonBlankEnv(process.env.VERCEL_GIT_COMMIT_SHA) ??
+  nonBlankEnv(process.env.NEXT_PUBLIC_BUILD_SHA) ??
+  nonBlankEnv(process.env.SOURCE_VERSION) ??
+  nonBlankEnv(tryGitHead()) ??
+  "";
 
 const nextConfig: NextConfig = {
   // Externalize Neon's WS driver and `ws` so Next does not bundle them.
