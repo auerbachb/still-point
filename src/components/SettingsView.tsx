@@ -337,7 +337,39 @@ export function SettingsView({
             onLogout();
           }}
         />
+
+        <AppVersionFooter />
       </div>
     </div>
+  );
+}
+
+function AppVersionFooter() {
+  const version = process.env.NEXT_PUBLIC_APP_VERSION?.trim() ?? "";
+  const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA?.trim() ?? "";
+  if (!version && !buildSha) return null;
+
+  const label =
+    version && buildSha
+      ? `v${version} (${buildSha})`
+      : version
+        ? `v${version}`
+        : buildSha;
+
+  return (
+    <p
+      style={{
+        margin: "24px 0 0",
+        padding: 0,
+        textAlign: "center",
+        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontSize: "10px",
+        letterSpacing: "0.04em",
+        color: "var(--fg-4)",
+        userSelect: "none",
+      }}
+    >
+      {label}
+    </p>
   );
 }
