@@ -251,6 +251,13 @@ export const friendRequests = pgTable("friend_requests", {
   ).where(sql`${table.status} = 'pending'`),
   fromIdx: index("idx_friend_requests_from").on(table.fromUserId),
   toIdx: index("idx_friend_requests_to").on(table.toUserId),
+  /** #146: pending inbox/outbox list — match API filters + created_at for ordering. */
+  toPendingCreatedIdx: index("idx_friend_requests_to_pending_created")
+    .on(table.toUserId, table.createdAt.desc())
+    .where(sql`${table.status} = 'pending'`),
+  fromPendingCreatedIdx: index("idx_friend_requests_from_pending_created")
+    .on(table.fromUserId, table.createdAt.desc())
+    .where(sql`${table.status} = 'pending'`),
 }));
 
 export const friendships = pgTable("friendships", {
