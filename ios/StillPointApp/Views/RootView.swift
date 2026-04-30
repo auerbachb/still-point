@@ -97,16 +97,26 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
+        .onAppear {
+            SessionIdleTimerController.syncSceneForegroundActive(
+                appVM: appVM,
+                isForegroundActive: scenePhase == .active
+            )
+        }
         .task {
             await appVM.checkAuth()
         }
         .onChange(of: scenePhase) { _, phase in
+            SessionIdleTimerController.syncSceneForegroundActive(
+                appVM: appVM,
+                isForegroundActive: phase == .active
+            )
             if phase == .active {
                 appVM.appBlockingManager.refreshShielding()
                 SessionIdleTimerController.applyDesiredIdleTimerState()
             } else if phase == .inactive || phase == .background {
-                // Avoid leaving the device awake when the app is not visible (issue #87).
-                UIApplication.shared.isIdleTimerDisabled = false
+                // Multi-window: only clear when no scene is foreground-active (issue #87).
+                SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()
             }
         }
         .onOpenURL { url in

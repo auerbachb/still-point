@@ -110,39 +110,49 @@ struct SessionView: View {
         .onAppear {
             vm.start()
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )
         }
         .onDisappear {
-            SessionIdleTimerController.syncLocalSession(isRunning: false, preferenceEnabled: appVM.keepScreenAwakeDuringSession)
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: false,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )
         }
         .onChange(of: vm.isActive) { _, _ in
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )
         }
         .onChange(of: vm.isPaused) { _, _ in
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )
         }
         .onChange(of: vm.isAbandoned) { _, _ in
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )
         }
         .onChange(of: vm.isComplete) { _, isComplete in
             SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
                 isRunning: sessionTimerRunning,
                 preferenceEnabled: appVM.keepScreenAwakeDuringSession
             )

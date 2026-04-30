@@ -54,14 +54,17 @@ struct BuddySessionContainerView: View {
             await saveCompletionIfPossible()
         }
         .onAppear {
-            SessionIdleTimerController.syncBuddySessionActive(vm.snapshot?.state == "active")
+            SessionIdleTimerController.syncBuddySessionActive(
+                appVM: appVM,
+                active: vm.snapshot?.state == "active"
+            )
         }
         .onDisappear {
             vm.stopPolling()
-            SessionIdleTimerController.syncBuddySessionActive(false)
+            SessionIdleTimerController.syncBuddySessionActive(appVM: appVM, active: false)
         }
         .onChange(of: vm.snapshot?.state) { _, newState in
-            SessionIdleTimerController.syncBuddySessionActive(newState == "active")
+            SessionIdleTimerController.syncBuddySessionActive(appVM: appVM, active: newState == "active")
             guard newState == "completed" else { return }
             Task { await saveCompletionIfPossible() }
         }
