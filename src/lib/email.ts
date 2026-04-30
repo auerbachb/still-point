@@ -12,9 +12,27 @@ type SendEmailParams = {
 
 const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
-// `??` would let an empty NEXT_PUBLIC_APP_URL through and `new URL()` below
-// would throw at runtime; trim + truthy check protects against that.
-const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://still-point.me";
+
+/** Base URL for password reset links. Prefer `NEXT_PUBLIC_APP_URL`; otherwise match the issuing deploy (Vercel preview URL or prod canonical). */
+export function passwordResetAppBaseUrl() {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit;
+
+  if (process.env.VERCEL_ENV === "production") {
+    return "https://still-point.me";
+  }
+
+  const vercelHost = process.env.VERCEL_URL?.trim();
+  if (vercelHost) {
+    return `https://${vercelHost}`;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return "https://still-point.me";
+  }
+
+  return "http://127.0.0.1:3000";
+}
 
 function escapeHtml(value: string) {
   return value
@@ -58,6 +76,7 @@ export async function sendEmail({ to, subject, text, html, devLogMessage }: Send
 }
 
 export async function sendPasswordResetEmail({ to, token }: { to: string; token: string }) {
+  const appUrl = passwordResetAppBaseUrl();
   const resetUrl = new URL("/reset-password", appUrl);
   resetUrl.searchParams.set("token", token);
   const link = resetUrl.toString();

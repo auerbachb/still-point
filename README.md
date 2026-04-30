@@ -82,7 +82,7 @@ npm run build:turbo
 | `POSTGRES_URL` | Runtime DB connection string used by the app (`src/db/index.ts`, `drizzle.config.ts`). In local dev, point at non-production Neon. | [Neon console](https://console.neon.tech) → project/branch → connection string |
 | `POSTGRES_URL_TEST` | **Not read by the app** — optional team alias for the non-production URL when documenting or mirroring Vercel Preview envs. | Same as non-prod `POSTGRES_URL` |
 | `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. Defaults to `https://still-point.me` when unset or empty. | Production: `https://still-point.me`; local: `http://127.0.0.1:3000` |
+| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. If unset: Vercel **Production** (`VERCEL_ENV=production`) defaults to `https://still-point.me`; Vercel **Preview** uses `https://${VERCEL_URL}`; otherwise `http://127.0.0.1:3000`. | Production: set explicitly to `https://still-point.me`; preview: optional override; local: `http://127.0.0.1:3000` |
 | `EMAIL_FROM` | Sender address for password reset email. Required with `RESEND_API_KEY` for password reset email delivery. | Verified sender/domain in the email provider |
 | `RESEND_API_KEY` | Server-only Resend API key for password reset email delivery. Never expose to the client. | Resend dashboard → API Keys |
 | `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |

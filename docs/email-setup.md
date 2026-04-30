@@ -8,7 +8,7 @@ This runbook covers **Resend** as the transactional provider for password reset 
 |----------|--------|---------|
 | `RESEND_API_KEY` | Server only | Authenticates to Resend’s API. Never commit; set in Vercel (and locally only in `.env.local`). |
 | `EMAIL_FROM` | Server only | Verified sender, e.g. `Still Point <noreply@still-point.me>`. Must match a domain or sender verified in Resend. |
-| `NEXT_PUBLIC_APP_URL` | Build / server | Base URL for reset links: `https://still-point.me` in production so links are `https://still-point.me/reset-password?token=...`. |
+| `NEXT_PUBLIC_APP_URL` | Build / server | Preferred base URL for reset links (`…/reset-password?token=…`). **Recommended** in every Vercel scope. If omitted: **Production** (`VERCEL_ENV=production`) falls back to `https://still-point.me`; **Preview** falls back to `https://${VERCEL_URL}` (set automatically by Vercel) so links stay on the same preview deploy as the token; **local** falls back to `http://127.0.0.1:3000`. |
 
 If `EMAIL_FROM` or `RESEND_API_KEY` is missing:
 
