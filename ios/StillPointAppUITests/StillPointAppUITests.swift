@@ -178,12 +178,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let field = app.textFields["settings.usernameField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.press(forDuration: 1.2)
-        let selectAll = app.menuItems["Select All"]
-        if selectAll.waitForExistence(timeout: 2) {
-            selectAll.tap()
-        }
+        clearUsernameFieldForUITest(field, in: app)
         field.typeText("fixture_renamed")
 
         let saveButton = app.buttons["settings.usernameSaveButton"]
@@ -211,12 +206,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let field = app.textFields["settings.usernameField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.press(forDuration: 1.2)
-        let selectAll = app.menuItems["Select All"]
-        if selectAll.waitForExistence(timeout: 2) {
-            selectAll.tap()
-        }
+        clearUsernameFieldForUITest(field, in: app)
         field.typeText("no")
 
         let saveButton = app.buttons["settings.usernameSaveButton"]
@@ -247,12 +237,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let field = app.textFields["settings.usernameField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.press(forDuration: 1.2)
-        let selectAll = app.menuItems["Select All"]
-        if selectAll.waitForExistence(timeout: 2) {
-            selectAll.tap()
-        }
+        clearUsernameFieldForUITest(field, in: app)
         field.typeText("taken_name")
 
         let saveButton = app.buttons["settings.usernameSaveButton"]
@@ -594,6 +579,25 @@ final class StillPointAppUITests: XCTestCase {
             app.swipeDown()
         }
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    }
+
+    /// Replaces field contents without relying on the "Select All" context menu (flaky in CI).
+    private func clearUsernameFieldForUITest(_ field: XCUIElement, in app: XCUIApplication) {
+        field.tap()
+        field.press(forDuration: 1.2)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 2) {
+            selectAll.tap()
+            return
+        }
+        let deleteKey = app.keyboards.keys["Delete"]
+        XCTAssertTrue(
+            deleteKey.waitForExistence(timeout: 3),
+            "Expected keyboard with Delete after focusing username field"
+        )
+        for _ in 0..<40 {
+            deleteKey.tap()
+        }
     }
 
     @discardableResult

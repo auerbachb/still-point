@@ -249,18 +249,18 @@ public actor APIClient {
     // MARK: - Settings
 
     public func updateSettings(isPublic: Bool) async throws -> UserDTO {
-        try await updateSettings(patch: SettingsPatchBody(isPublic: isPublic, username: nil))
+        try await updateSettings(body: SettingsPatchBody(isPublic: isPublic, username: nil))
     }
 
     public func updateSettings(username: String) async throws -> UserDTO {
-        try await updateSettings(patch: SettingsPatchBody(isPublic: nil, username: username))
+        try await updateSettings(body: SettingsPatchBody(isPublic: nil, username: username))
     }
 
-    private func updateSettings(patch: SettingsPatchBody) async throws -> UserDTO {
-        if let user = try uiTestUpdateSettings(patch: patch) {
+    private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
+        if let user = try uiTestUpdateSettings(body: body) {
             return user
         }
-        let response: UserResponse = try await patch("/api/settings", body: patch)
+        let response: UserResponse = try await patch("/api/settings", body: body)
         return response.user
     }
 
@@ -604,7 +604,7 @@ public actor APIClient {
         return createdThoughts
     }
 
-    private func uiTestUpdateSettings(patch: SettingsPatchBody) throws -> UserDTO? {
+    private func uiTestUpdateSettings(body: SettingsPatchBody) throws -> UserDTO? {
         guard let uiTestConfig else { return nil }
         guard var store = uiTestStore else {
             throw APIError(status: 0, message: "UI test store is unavailable")
@@ -614,7 +614,7 @@ public actor APIClient {
         var nextUsername = store.user.username
         var nextIsPublic = store.user.isPublic
 
-        if let usernamePatch = patch.username {
+        if let usernamePatch = body.username {
             let trimmed = usernamePatch.trimmingCharacters(in: .whitespacesAndNewlines)
             if uiTestConfig.forceUsernameConflict {
                 throw APIError(status: 409, message: "Username already taken")
@@ -625,7 +625,7 @@ public actor APIClient {
             nextUsername = trimmed
         }
 
-        if let isPublicPatch = patch.isPublic {
+        if let isPublicPatch = body.isPublic {
             nextIsPublic = isPublicPatch
         }
 

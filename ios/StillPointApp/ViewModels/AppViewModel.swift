@@ -173,6 +173,7 @@ final class AppViewModel {
     }
 
     func applySettingsUser(_ user: UserDTO) {
+        guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return }
         currentUser = user
     }
 
