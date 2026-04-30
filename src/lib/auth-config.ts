@@ -160,8 +160,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorization: { params: { scope: "openid email profile" } },
     }),
   ],
+  // Only override `error`. Setting `pages.signIn` to a custom path tells
+  // Auth.js v5 we render our own signin UI and changes the routing:
+  // `GET /api/auth/signin/<provider>` then expects a POST + CSRF from the
+  // custom page and rejects the GET with `UnknownAction`. We don't need
+  // a custom signin page (AuthScreen is rendered at /app whenever
+  // sp_token is missing — entirely outside Auth.js's flow), so we let
+  // Auth.js own /api/auth/signin and only redirect errors to /app where
+  // AuthScreen renders them inline.
   pages: {
-    signIn: "/app",
     error: "/app",
   },
   callbacks: {
