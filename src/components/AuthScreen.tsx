@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signIn } from "next-auth/react";
 
 type AuthScreenProps = {
   onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
@@ -118,18 +119,21 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           onClick={() => {
             // Carry the current page (path + query) as callbackUrl so any
             // deep-link state (invite links, ?buddy=..., etc.) survives the
-            // OAuth round-trip. Strip `error` first — if the user is
-            // retrying from /app?error=OAuthCallback, forwarding `error`
-            // back into callbackUrl would round-trip through the redirect
-            // callback in auth-config, which treats any /app?...error=...
-            // URL as a failure target and skips the sp_token bridge.
+            // OAuth round-trip. Strip `error` first — forwarding it back
+            // would land the user on /app?error=... after sign-in, which
+            // the redirect callback in auth-config treats as a failure
+            // target and bypasses the sp_token bridge.
             const params = new URLSearchParams(window.location.search);
             params.delete("error");
             const search = params.toString();
-            const callbackUrl = encodeURIComponent(
-              `${window.location.pathname}${search ? `?${search}` : ""}`,
-            );
-            window.location.href = `/api/auth/signin/google?callbackUrl=${callbackUrl}`;
+            const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+            // Auth.js v5 changed the contract: GET /api/auth/signin/<provider>
+            // is rejected with UnknownAction. Signin requires POST + CSRF.
+            // The signIn() helper from next-auth/react fetches the CSRF
+            // token, posts the form, and navigates the browser to Google's
+            // authorize URL — same UX as the previous direct navigation,
+            // correct v5 contract.
+            void signIn("google", { callbackUrl });
           }}
           style={{
             background: "var(--surface-1)",
