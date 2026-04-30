@@ -91,4 +91,4 @@ E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:web:authDb
 
 ### CI
 
-The workflow **E2E Web** defines a job `web-e2e-auth-db` that runs `npm run e2e:web:authDb` with `POSTGRES_URL` and `JWT_SECRET` from repository secrets **`E2E_AUTH_DB_POSTGRES_URL`** and **`E2E_AUTH_DB_JWT_SECRET`**. The job is **skipped** until both secrets are set (fork PRs and repos without secrets never fail the workflow). Point the Postgres URL at a **non-production** branch that already matches the rest of the app schema (same as preview/local); the runner applies `drizzle/*.sql` migrations before tests.
+The workflow **E2E Web** defines a job `web-e2e-auth-db` that runs `npm run e2e:web:authDb` when repository secrets **`E2E_AUTH_DB_POSTGRES_URL`** and **`E2E_AUTH_DB_JWT_SECRET`** are both set (mapped to `POSTGRES_URL` / `JWT_SECRET` for the job). If either is missing, the job **passes** after a notice so the workflow stays green until secrets are configured. Use a **non-production** Postgres URL aligned with preview/local schema; the runner applies `drizzle/*.sql` migrations before tests.
