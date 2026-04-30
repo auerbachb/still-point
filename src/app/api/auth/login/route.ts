@@ -32,6 +32,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
+    if (!user.passwordHash) {
+      // OAuth-only account (#136): no password ever set. Run a dummy
+      // compare so timing matches the password-set path, then reject with
+      // the same generic message as wrong-password / unknown-email — a
+      // distinct message would let attackers enumerate which emails exist
+      // AND which auth method they use.
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });

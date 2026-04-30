@@ -12,7 +12,9 @@ type SendEmailParams = {
 
 const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://still-point.me";
+// `??` would let an empty NEXT_PUBLIC_APP_URL through and `new URL()` below
+// would throw at runtime; trim + truthy check protects against that.
+const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.still-point.me";
 
 function escapeHtml(value: string) {
   return value

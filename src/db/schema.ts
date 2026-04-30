@@ -22,7 +22,8 @@ export const users = pgTable("users", {
    *  `eq(users.email, ...)` lookups. */
   email: varchar("email", { length: 255 }).unique().notNull(),
   username: varchar("username", { length: 50 }).notNull(),
-  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  /** Nullable: OAuth-only accounts (#136) never have a password. */
+  passwordHash: varchar("password_hash", { length: 255 }),
   isPublic: boolean("is_public").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -66,6 +67,28 @@ export const accountDeletionLog = pgTable("account_deletion_log", {
 }, (table) => ({
   emailHashIdx: index("idx_account_deletion_log_email_hash").on(table.emailHash),
   userIdx: index("idx_account_deletion_log_user").on(table.userId),
+}));
+
+/** OAuth provider identities linked to a user (#136).
+ *  One row per (provider, providerAccountId); a single user may have
+ *  multiple rows (one per provider). Email-match account linking is
+ *  performed in `src/lib/auth-config.ts` signIn callback. */
+export const oauthAccounts = pgTable("oauth_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  provider: varchar("provider", { length: 32 }).notNull(),
+  providerAccountId: varchar("provider_account_id", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  providerAccountUnique: uniqueIndex("oauth_accounts_provider_account_unique").on(
+    table.provider,
+    table.providerAccountId,
+  ),
+  userIdx: index("idx_oauth_accounts_user").on(table.userId),
+  providerCheck: check(
+    "oauth_accounts_provider_allowed",
+    sql`${table.provider} in ('google', 'apple', 'facebook', 'microsoft-entra-id')`,
+  ),
 }));
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -246,11 +269,16 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   thoughts: many(thoughts),
   passwordResetTokens: many(passwordResetTokens),
   deviceTokens: many(deviceTokens),
+  oauthAccounts: many(oauthAccounts),
   googleOAuthToken: one(googleOAuthTokens, {
     fields: [users.id],
     references: [googleOAuthTokens.userId],
   }),
   buddyCalendarEvents: many(buddySessionCalendarEvents),
+}));
+
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, { fields: [oauthAccounts.userId], references: [users.id] }),
 }));
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
