@@ -14,7 +14,7 @@ The App Store **subtitle** must spell **meditate** correctly (not `medite`). In 
 | **Subtitle** | `Meditate one minute at a time` (30 characters max in App Store Connect; spell **meditate**, never `medite`.) |
 | **Privacy Policy URL** | `https://still-point.me/privacy` |
 
-If marketing chooses a different approved subtitle, replace the **Subtitle** cell here and in App Store Connect so the repo stays the delegate source of truth.
+If marketing chooses a different approved subtitle, replace the **Subtitle** cell here and in App Store Connect so the repo remains the single source of truth.
 
 ## Promotional / description alignment (web parity)
 
