@@ -20,7 +20,7 @@ struct SessionView: View {
             SPColor.bg.ignoresSafeArea()
 
             GeometryReader { geo in
-                let contentHeight = geo.size.height - bottomOverlayReserve
+                let contentHeight = max(0, geo.size.height - bottomOverlayReserve)
 
                 VStack(spacing: 0) {
                     // Main content — fits in viewport above controls

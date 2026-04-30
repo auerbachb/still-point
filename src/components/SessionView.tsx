@@ -63,6 +63,8 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
+  const [wasPausedInSession, setWasPausedInSession] = useState(false);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -154,6 +156,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
 
   const handleComplete = useCallback(() => {
     const resolvedLog = snapshotForComplete();
+    setWasPausedInSession(false);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || todayDuration;
@@ -210,6 +213,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
 
   const handleEndEarly = () => {
     const resolvedLog = snapshotForComplete();
+    setWasPausedInSession(false);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || todayDuration;
@@ -228,6 +232,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
 
   const handleAbandon = () => {
     const resolvedLog = snapshotForComplete();
+    setWasPausedInSession(false);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || todayDuration;
@@ -253,6 +258,9 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
     if (isActive) {
       resetHoldTracking();
       finalizeActiveHold(elapsedRef.current);
+      setWasPausedInSession(true);
+    } else {
+      setWasPausedInSession(false);
     }
     setIsActive(a => !a);
   };
@@ -262,6 +270,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
     mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
   const capturedCount = sessionThoughts.length;
   const sessionChromeDimmed = isActive && !controlsVisible;
+  const showSessionTrackingLayer = isActive || wasPausedInSession;
   /** Capture stays in the persistent tracking layer while running so it is never hidden with secondary chrome. */
   const captureNoteButtonStyle: CSSProperties = {
     background: "none",
@@ -313,7 +322,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
         soundPrefs={soundPrefs}
       />
 
-      {isActive && (
+      {showSessionTrackingLayer && (
         <div
           data-session-tracking-layer="persistent"
           style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 40px))", marginTop: "12px" }}
@@ -534,16 +543,6 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
             >
               {isActive ? "pause" : "resume"}
             </button>
-            {!isActive && (
-              <button
-                type="button"
-                onClick={handleOpenThoughtCapture}
-                aria-label="Capture note"
-                style={captureNoteButtonStyle}
-              >
-                capture note
-              </button>
-            )}
             <button
               type="button"
               onClick={handleEndEarly}
