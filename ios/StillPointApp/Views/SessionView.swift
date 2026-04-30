@@ -2,8 +2,8 @@ import SwiftUI
 import StillPointShared
 
 struct SessionView: View {
-    /// Space reserved when both distraction hold bar and controls are visible.
-    private static let bottomOverlayReserveWithControls: CGFloat = 268
+    /// Space reserved when both distraction hold bar and controls are visible (includes persistent Capture row).
+    private static let bottomOverlayReserveWithControls: CGFloat = 324
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -248,6 +248,26 @@ struct SessionView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, SPSpacing.s4)
 
+            if !vm.showPostDistractionCapture, vm.isActive || vm.isPaused {
+                Button {
+                    vm.openThoughtCapture()
+                } label: {
+                    Text("Capture")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(SPColor.amberText)
+                        .padding(.horizontal, SPSpacing.s3)
+                        .padding(.vertical, SPSpacing.s1)
+                        .frame(minHeight: 44)
+                        .background(SPColor.amberBgFaint)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                }
+                .accessibilityIdentifier("session.captureButton")
+                .opacity(vm.isActive && !vm.controlsVisible ? 0.48 : 0.88)
+                .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
+                .padding(.top, SPSpacing.s1)
+            }
+
             HStack(spacing: SPSpacing.s2) {
                 Text("Hold — light distraction")
                     .font(SPFont.serifItalic(15))
@@ -367,21 +387,23 @@ struct SessionView: View {
                 }
                 .accessibilityIdentifier("session.endEarlyButton")
 
-                Button {
-                    vm.openThoughtCapture()
-                } label: {
-                    Text("Capture")
-                        .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(SPColor.amberText)
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.amberBgFaint)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                if !(sessionInProgress && !vm.showPostDistractionCapture && (vm.isActive || vm.isPaused)) {
+                    Button {
+                        vm.openThoughtCapture()
+                    } label: {
+                        Text("Capture")
+                            .font(SPFont.mono(12, weight: .medium))
+                            .foregroundStyle(SPColor.amberText)
+                            .padding(.horizontal, SPSpacing.s3)
+                            .padding(.vertical, SPSpacing.s1)
+                            .background(SPColor.amberBgFaint)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                    }
+                    .accessibilityIdentifier("session.captureButton")
+                    .disabled(!vm.isActive)
+                    .opacity(vm.isActive ? 1 : 0.45)
                 }
-                .accessibilityIdentifier("session.captureButton")
-                .disabled(!vm.isActive)
-                .opacity(vm.isActive ? 1 : 0.45)
 
                 // Abandon
                 Button {

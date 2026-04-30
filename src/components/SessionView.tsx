@@ -262,6 +262,22 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
     mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
   const capturedCount = sessionThoughts.length;
   const sessionChromeDimmed = isActive && !controlsVisible;
+  /** Capture stays in the persistent tracking layer while running so it is never hidden with secondary chrome. */
+  const captureNoteButtonStyle: CSSProperties = {
+    background: "none",
+    border: "1px solid var(--accent-amber-border)",
+    color: "var(--accent-amber-border)",
+    ...mono,
+    fontSize: "11px",
+    letterSpacing: "0.15em",
+    textTransform: "uppercase",
+    padding: "14px 24px",
+    minHeight: "44px",
+    minWidth: "44px",
+    borderRadius: "20px",
+    cursor: "pointer",
+    transition: "opacity 0.5s ease",
+  };
 
   const holdButtonBase: CSSProperties = {
     ...mono,
@@ -461,6 +477,22 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
             <span style={{ color: "var(--accent-amber-border)" }}>{distractionPercent}% distraction</span>
           </div>
 
+          {!showPostDistractionCapture && (
+            <div style={{ marginTop: "18px", display: "flex", justifyContent: "center", width: "100%" }}>
+              <button
+                type="button"
+                onClick={handleOpenThoughtCapture}
+                aria-label="Capture note"
+                style={{
+                  ...captureNoteButtonStyle,
+                  opacity: sessionChromeDimmed ? 0.48 : 0.88,
+                }}
+              >
+                capture note
+              </button>
+            </div>
+          )}
+
           {showPostDistractionCapture && (
             <div
               data-no-space-distraction
@@ -502,25 +534,16 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
             >
               {isActive ? "pause" : "resume"}
             </button>
-            <button
-              type="button"
-              onClick={handleOpenThoughtCapture}
-              style={{
-                background: "none",
-                border: "1px solid var(--accent-amber-border)",
-                color: "var(--accent-amber-border)",
-                ...mono,
-                fontSize: "11px",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                padding: "14px 24px",
-                minHeight: "44px",
-                borderRadius: "20px",
-                cursor: "pointer",
-              }}
-            >
-              capture note
-            </button>
+            {!isActive && (
+              <button
+                type="button"
+                onClick={handleOpenThoughtCapture}
+                aria-label="Capture note"
+                style={captureNoteButtonStyle}
+              >
+                capture note
+              </button>
+            )}
             <button
               type="button"
               onClick={handleEndEarly}
