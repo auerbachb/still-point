@@ -102,9 +102,10 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 }, (table) => ({
   userIdx: index("idx_password_reset_tokens_user").on(table.userId),
   tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_unique").on(table.tokenHash),
-  /** Keep one unused reset token per user; expiresAt remains data, not uniqueness scope. */
-  activeUserIdx: uniqueIndex("password_reset_tokens_active_user_unique").on(table.userId)
-    .where(sql`${table.usedAt} is null`),
+  /** Partial unique index: only rows with `used_at IS NULL` participate, so one active token per user while allowing many historical used rows. */
+  activeUserIdx: uniqueIndex("password_reset_tokens_active_user_unique").on(table.userId).where(
+    sql`${table.usedAt} is null`,
+  ),
 }));
 
 /** waiting | ready_check | active | completed | abandoned */
