@@ -1,7 +1,7 @@
 import UIKit
 
 /// Central place to apply `UIApplication.shared.isIdleTimerDisabled` for active sits.
-/// Resets to `false` whenever the app is not in an active session UI or the user opts out.
+/// When the preference is off, or no sit timer is running, the system idle timer stays enabled.
 @MainActor
 enum SessionIdleTimerController {
     private static let userDefaultsKey = "sp_keepScreenAwakeDuringSession"
