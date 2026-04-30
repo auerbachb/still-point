@@ -172,6 +172,10 @@ final class AppViewModel {
         Task { await consumePendingBuddyInviteIfNeeded() }
     }
 
+    func applySettingsUser(_ user: UserDTO) {
+        currentUser = user
+    }
+
     func didLogout() {
         currentUser = nil
         pendingBuddyInviteToken = nil

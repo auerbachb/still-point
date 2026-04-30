@@ -249,11 +249,18 @@ public actor APIClient {
     // MARK: - Settings
 
     public func updateSettings(isPublic: Bool) async throws -> UserDTO {
-        if let user = try uiTestUpdateSettings(isPublic: isPublic) {
+        try await updateSettings(patch: SettingsPatchBody(isPublic: isPublic, username: nil))
+    }
+
+    public func updateSettings(username: String) async throws -> UserDTO {
+        try await updateSettings(patch: SettingsPatchBody(isPublic: nil, username: username))
+    }
+
+    private func updateSettings(patch: SettingsPatchBody) async throws -> UserDTO {
+        if let user = try uiTestUpdateSettings(patch: patch) {
             return user
         }
-        let body = ["isPublic": isPublic]
-        let response: UserResponse = try await patch("/api/settings", body: body)
+        let response: UserResponse = try await patch("/api/settings", body: patch)
         return response.user
     }
 
@@ -597,17 +604,36 @@ public actor APIClient {
         return createdThoughts
     }
 
-    private func uiTestUpdateSettings(isPublic: Bool) throws -> UserDTO? {
-        guard uiTestConfig != nil else { return nil }
+    private func uiTestUpdateSettings(patch: SettingsPatchBody) throws -> UserDTO? {
+        guard let uiTestConfig else { return nil }
         guard var store = uiTestStore else {
             throw APIError(status: 0, message: "UI test store is unavailable")
         }
         try ensureUITestAuthenticated(store: store)
+
+        var nextUsername = store.user.username
+        var nextIsPublic = store.user.isPublic
+
+        if let usernamePatch = patch.username {
+            let trimmed = usernamePatch.trimmingCharacters(in: .whitespacesAndNewlines)
+            if uiTestConfig.forceUsernameConflict {
+                throw APIError(status: 409, message: "Username already taken")
+            }
+            guard UsernameValidation.isValid(trimmed) else {
+                throw APIError(status: 400, message: UsernameValidation.errorMessage)
+            }
+            nextUsername = trimmed
+        }
+
+        if let isPublicPatch = patch.isPublic {
+            nextIsPublic = isPublicPatch
+        }
+
         store.user = UserDTO(
             id: store.user.id,
             email: store.user.email,
-            username: store.user.username,
-            isPublic: isPublic,
+            username: nextUsername,
+            isPublic: nextIsPublic,
             currentDay: store.user.currentDay
         )
         uiTestStore = store
@@ -672,12 +698,29 @@ public actor APIClient {
     }
 }
 
+private struct SettingsPatchBody: Encodable {
+    let isPublic: Bool?
+    let username: String?
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let isPublic { try c.encode(isPublic, forKey: .isPublic) }
+        if let username { try c.encode(username, forKey: .username) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isPublic
+        case username
+    }
+}
+
 private struct UITestConfig: Sendable {
     let seedAuthenticated: Bool
     let resetStore: Bool
     let forceLaunchOffline: Bool
     let forceTokenExpired: Bool
     let forceSessionsFailure: Bool
+    let forceUsernameConflict: Bool
 
     static func fromProcessInfo() -> UITestConfig? {
         let env = ProcessInfo.processInfo.environment
@@ -687,7 +730,8 @@ private struct UITestConfig: Sendable {
             resetStore: truthy(env["SP_UI_TEST_RESET_STORE"]),
             forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
-            forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"])
+            forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
+            forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"])
         )
     }
 
