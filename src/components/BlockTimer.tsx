@@ -373,7 +373,9 @@ export function BlockTimer({
     );
   };
 
-  const boxesAreaWidth = `min(${6 * blockSize + blockGap * 5}px, calc(100vw - 24px))`;
+  const boxesAreaMaxPx = 6 * blockSize + blockGap * 5;
+  const boxesAreaViewportInset = boxesAreaMaxPx > 500 ? 24 : 40;
+  const boxesAreaWidth = `min(${boxesAreaMaxPx}px, calc(100vw - ${boxesAreaViewportInset}px))`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
