@@ -94,7 +94,7 @@ export const oauthAccounts = pgTable("oauth_accounts", {
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  tokenHash: varchar("token_hash", { length: 64 }).unique().notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
   requestIpHash: varchar("request_ip_hash", { length: 64 }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),

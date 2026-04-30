@@ -111,8 +111,7 @@ CREATE TABLE "password_reset_tokens" (
 	"request_ip_hash" varchar(64),
 	"expires_at" timestamp with time zone NOT NULL,
 	"used_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "password_reset_tokens_token_hash_unique" UNIQUE("token_hash")
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
