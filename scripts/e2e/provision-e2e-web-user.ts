@@ -1,35 +1,31 @@
+import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import bcrypt from "bcryptjs";
-import { poolDb } from "../../src/db/pool";
+import { eq, sql } from "drizzle-orm";
+import { closePoolDb, poolDb } from "../../src/db/pool";
 import { users } from "../../src/db/schema";
+import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, USERNAME_REGEX } from "../../src/lib/username";
+import { assertNeonNonProdPostgresUrl } from "../lib/assert-neon-postgres-url";
 
 loadEnvConfig(process.cwd());
 
-/** Rejects non-Neon or malformed URLs (same guard as `scripts/seed.ts`). */
-function assertNeonNonProdPostgresUrl(rawUrl: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error("POSTGRES_URL is not a valid URL.");
-  }
-
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-    throw new Error("POSTGRES_URL must use postgres:// or postgresql://.");
-  }
-
-  const host = parsed.hostname.toLowerCase();
-  if (!host.endsWith(".neon.tech") && host !== "neon.tech") {
-    throw new Error(
-      "Refusing to provision E2E user: POSTGRES_URL hostname must be a Neon host (*.neon.tech).",
-    );
-  }
+function trimEnv(key: string): string {
+  return (process.env[key] ?? "").trim();
 }
 
+/** Username derived from email hash so it stays unique and within app contract (3–30 chars). */
 function deriveUsername(email: string): string {
-  const local = (email.split("@")[0] ?? "user").replace(/[^a-z0-9]/gi, "_").replace(/_+/g, "_");
-  const base = `e2e_${local}`.toLowerCase();
-  return base.slice(0, 50);
+  const normalized = email.trim().toLowerCase();
+  const suffix = createHash("sha256").update(normalized).digest("hex").slice(0, 12);
+  const candidate = `e2e_${suffix}`;
+  if (
+    candidate.length < MIN_USERNAME_LENGTH ||
+    candidate.length > MAX_USERNAME_LENGTH ||
+    !USERNAME_REGEX.test(candidate)
+  ) {
+    throw new Error("Internal error: derived E2E username does not satisfy app contract.");
+  }
+  return candidate;
 }
 
 export type ProvisionE2EWebUserOptions = {
@@ -65,31 +61,70 @@ export async function provisionE2EWebUser(options: ProvisionE2EWebUserOptions): 
   const passwordHash = await bcrypt.hash(password, 12);
   const username = deriveUsername(email);
 
-  await poolDb
-    .insert(users)
-    .values({
-      email,
-      username,
-      passwordHash,
-      currentDay: 1,
-      isPublic: false,
-    })
-    .onConflictDoUpdate({
-      target: users.email,
-      set: {
+  try {
+    const [existing] = await poolDb.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+
+    if (existing) {
+      const [nameClash] = await poolDb
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.username}) = ${username.toLowerCase()} and ${users.id} <> ${existing.id}`)
+        .limit(1);
+
+      if (nameClash) {
+        throw new Error(
+          "E2E fixture username collides with another account; remove the conflicting user or change E2E_WEB_EMAIL.",
+        );
+      }
+
+      await poolDb
+        .update(users)
+        .set({
+          passwordHash,
+          username,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existing.id));
+    } else {
+      const [clash] = await poolDb
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.username}) = ${username.toLowerCase()}`)
+        .limit(1);
+
+      if (clash) {
+        throw new Error(
+          "E2E fixture username is taken by another account; free the derived username or use a different E2E_WEB_EMAIL.",
+        );
+      }
+
+      await poolDb.insert(users).values({
+        email,
+        username,
         passwordHash,
-        updatedAt: new Date(),
-      },
-    });
+        currentDay: 1,
+        isPublic: false,
+      });
+    }
+  } finally {
+    await closePoolDb();
+  }
 
   console.log("[e2e:setup-web-user] Upserted fixture user (email redacted).");
 }
 
 export function readE2EWebCredentials(): { email: string; password: string } | null {
-  const email = (process.env.E2E_WEB_EMAIL ?? process.env.E2E_TEST_USER_EMAIL ?? "").trim();
-  const password = process.env.E2E_WEB_PASSWORD ?? process.env.E2E_TEST_USER_PASSWORD ?? "";
-  if (!email || !password) {
-    return null;
+  const webEmail = trimEnv("E2E_WEB_EMAIL");
+  const webPassword = trimEnv("E2E_WEB_PASSWORD");
+  if (webEmail && webPassword) {
+    return { email: webEmail, password: webPassword };
   }
-  return { email, password };
+
+  const testEmail = trimEnv("E2E_TEST_USER_EMAIL");
+  const testPassword = trimEnv("E2E_TEST_USER_PASSWORD");
+  if (testEmail && testPassword) {
+    return { email: testEmail, password: testPassword };
+  }
+
+  return null;
 }

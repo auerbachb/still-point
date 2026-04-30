@@ -26,13 +26,13 @@ Configure these in **GitHub Actions secrets** (and the same values in your non-p
 | `E2E_WEB_PASSWORD` | Password that must match the hash stored for that email. |
 | `POSTGRES_URL` | Neon **non-production** connection string used to upsert the fixture user before tests. |
 
-Optional aliases: `E2E_TEST_USER_EMAIL` / `E2E_TEST_USER_PASSWORD` are read if the `E2E_WEB_*` names are unset.
+Aliases: if `E2E_WEB_EMAIL` or `E2E_WEB_PASSWORD` is unset **or empty** (GitHub Actions resolves missing secrets to `""`), `E2E_TEST_USER_EMAIL` / `E2E_TEST_USER_PASSWORD` are used instead. The fixture username is always `e2e_` plus 12 hex chars derived from the email so it stays within the app’s 3–30 character username rules and avoids collisions on `email` vs `username` uniqueness.
 
 **Never** commit real values, paste them into issues or PRs, or print them in logs.
 
 ### Automatic provisioning (recommended for CI)
 
-The workflow `.github/workflows/e2e-mobile.yml` sets `E2E_WEB_SETUP_USER=true` and runs Playwright `globalSetup`, which upserts the fixture user via `scripts/e2e/provision-e2e-web-user.ts` (same Neon guard as `scripts/seed.ts`: hostname must be `*.neon.tech`). The hash is derived from `E2E_WEB_PASSWORD`, so it stays aligned with GitHub secrets after deploys, manual DB wipes, or password rotation.
+The workflow `.github/workflows/e2e-mobile.yml` sets `E2E_WEB_SETUP_USER=true` and runs Playwright `globalSetup`, which upserts the fixture user via `scripts/e2e/provision-e2e-web-user.ts` when `POSTGRES_URL` and credentials are all non-empty (same Neon guard as `scripts/seed.ts`: hostname must be `*.neon.tech`). If any of those are missing, global setup **skips** provisioning so the default mock-based suite still passes; configure secrets to enable real DB alignment. The password hash follows whichever non-empty password env pair is selected.
 
 Manual one-off (same as CI global setup):
 

@@ -10,6 +10,13 @@ jobs:
   e2e-mobile:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      E2E_WEB_SETUP_USER: "true"
+      POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+      E2E_WEB_EMAIL: ${{ secrets.E2E_WEB_EMAIL }}
+      E2E_WEB_PASSWORD: ${{ secrets.E2E_WEB_PASSWORD }}
+      E2E_TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER_EMAIL }}
+      E2E_TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,11 +41,6 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Run mobile e2e project
-        env:
-          E2E_WEB_SETUP_USER: "true"
-          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
-          E2E_WEB_EMAIL: ${{ secrets.E2E_WEB_EMAIL }}
-          E2E_WEB_PASSWORD: ${{ secrets.E2E_WEB_PASSWORD }}
         run: npx playwright test --project ${{ matrix.project }}
 
       - name: Upload Playwright report
