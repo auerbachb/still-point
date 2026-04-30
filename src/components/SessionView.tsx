@@ -261,9 +261,9 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   };
 
   const extendSessionSeconds = useCallback((extra: number) => {
-    if (sessionFinished || showPostDistractionCapture) return;
+    if (sessionFinished || showPostDistractionCapture || !isActive) return;
     setBonusSeconds(b => b + extra);
-  }, [sessionFinished, showPostDistractionCapture]);
+  }, [sessionFinished, showPostDistractionCapture, isActive]);
 
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
@@ -529,11 +529,11 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
         </div>
       )}
 
-      {(!sessionFinished || !showPostDistractionCapture) && (
+      {!sessionFinished && !showPostDistractionCapture && (
         <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
           <button
             type="button"
-            disabled={sessionFinished || showPostDistractionCapture}
+            disabled={sessionFinished || showPostDistractionCapture || !isActive}
             onClick={() => extendSessionSeconds(60)}
             aria-label="Add one minute to this session"
             style={{
@@ -547,15 +547,15 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
               padding: "12px 18px",
               minHeight: "44px",
               borderRadius: "16px",
-              cursor: sessionFinished || showPostDistractionCapture ? "default" : "pointer",
-              opacity: sessionFinished || showPostDistractionCapture ? 0.4 : 1,
+              cursor: sessionFinished || showPostDistractionCapture || !isActive ? "default" : "pointer",
+              opacity: sessionFinished || showPostDistractionCapture || !isActive ? 0.4 : 1,
             }}
           >
             +1 min
           </button>
           <button
             type="button"
-            disabled={sessionFinished || showPostDistractionCapture}
+            disabled={sessionFinished || showPostDistractionCapture || !isActive}
             onClick={() => extendSessionSeconds(300)}
             aria-label="Add five minutes to this session"
             style={{
@@ -569,8 +569,8 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
               padding: "12px 18px",
               minHeight: "44px",
               borderRadius: "16px",
-              cursor: sessionFinished || showPostDistractionCapture ? "default" : "pointer",
-              opacity: sessionFinished || showPostDistractionCapture ? 0.4 : 1,
+              cursor: sessionFinished || showPostDistractionCapture || !isActive ? "default" : "pointer",
+              opacity: sessionFinished || showPostDistractionCapture || !isActive ? 0.4 : 1,
             }}
           >
             +5 min
@@ -579,6 +579,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
       )}
 
       <div
+        data-session-chrome="secondary"
         data-visibility={sessionChromeDimmed ? "dimmed" : "visible"}
         style={{
           opacity: sessionChromeDimmed ? 0.32 : 1,

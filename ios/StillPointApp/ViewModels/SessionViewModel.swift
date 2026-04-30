@@ -141,7 +141,7 @@ final class SessionViewModel {
     }
 
     func extendBonus(seconds: Int) {
-        guard seconds > 0, !isComplete, !isAbandoned, !showPostDistractionCapture else { return }
+        guard seconds > 0, isActive, !isComplete, !isAbandoned, !showPostDistractionCapture else { return }
         bonusSeconds += seconds
         userInteracted()
     }

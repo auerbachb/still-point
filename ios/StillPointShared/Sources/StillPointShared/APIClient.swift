@@ -659,8 +659,8 @@ public actor APIClient {
         let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
         let totalMinutes = standardSessions.reduce(0.0) { partial, session in
             let bonus = Double(session.bonusSeconds ?? 0)
-            let duration = Double(max(session.actualTime ?? session.duration, 1))
-            return partial + ((duration + bonus) / 60.0)
+            let planned = Double(max(session.duration, 1))
+            return partial + ((planned + bonus) / 60.0)
         }
         let avgClearPercent = completedSessions.isEmpty ? 0 : totalClear / completedSessions.count
         let avgThoughtsPerSession = Double(totalThoughts) / Double(standardSessions.count)

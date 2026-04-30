@@ -212,7 +212,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         duration: Number(body.duration ?? 60),
         bonusSeconds:
           typeof body.bonusSeconds === "number" && Number.isFinite(body.bonusSeconds)
-            ? Math.max(0, Math.floor(body.bonusSeconds))
+            ? Math.max(0, Math.min(86_400, Math.floor(body.bonusSeconds)))
             : 0,
         completed: Boolean(body.completed ?? true),
         actualTime: Number(body.actualTime ?? body.duration ?? 60),

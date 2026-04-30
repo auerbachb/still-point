@@ -7,6 +7,7 @@ type CompletionScreenProps = {
   dayNumber: number;
   sessionType?: SessionType;
   duration: number;
+  bonusSeconds?: number;
   clearPercent: number;
   thoughtCount: number;
   thoughts: Array<{ timeInSession: number; text: string }>;
@@ -17,7 +18,8 @@ type CompletionScreenProps = {
 export function CompletionScreen({
   dayNumber,
   sessionType = "standard",
-  duration: completedDuration,
+  duration: plannedDuration,
+  bonusSeconds = 0,
   clearPercent,
   thoughtCount,
   thoughts,
@@ -32,6 +34,11 @@ export function CompletionScreen({
   const nextDuration = durationForDay(dayNumber + 1);
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
   const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
+  const totalDurationSeconds = plannedDuration + bonusSeconds;
+  const sustainedAttentionLabel =
+    bonusSeconds > 0
+      ? `${plannedDuration} planned · ${bonusSeconds}s bonus (${totalDurationSeconds}s timer)`
+      : `${totalDurationSeconds} seconds of sustained attention`;
 
   return (
     <div style={{
@@ -53,7 +60,7 @@ export function CompletionScreen({
           fontSize: "13px", color: "var(--accent-green-text)",
           marginTop: "var(--s2)", letterSpacing: "0.07em",
         }}>
-          {completedDuration} seconds of sustained attention
+          {sustainedAttentionLabel}
         </p>
 
         <div style={{

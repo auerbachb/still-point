@@ -462,8 +462,8 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
-                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned)
-                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned ? 0.45 : 1)
+                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
                 .accessibilityIdentifier("session.extendOneMinuteButton")
 
                 Button {
@@ -478,8 +478,8 @@ struct SessionView: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border1))
                 }
-                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned)
-                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned ? 0.45 : 1)
+                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
                 .accessibilityIdentifier("session.extendFiveMinuteButton")
 
                 // Abandon

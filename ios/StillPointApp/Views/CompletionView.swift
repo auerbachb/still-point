@@ -29,11 +29,11 @@ struct CompletionView: View {
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
     private var durationSubtitle: String {
-        let planned = duration - bonusSeconds
         guard bonusSeconds > 0 else {
             return "\(duration) seconds of sustained attention"
         }
-        return "\(planned) planned · \(bonusSeconds)s bonus (\(duration)s timer)"
+        let total = duration + bonusSeconds
+        return "\(duration) planned · \(bonusSeconds)s bonus (\(total)s timer)"
     }
 
     var body: some View {
