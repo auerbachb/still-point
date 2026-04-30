@@ -1,8 +1,12 @@
-# Mobile web E2E (Playwright)
+# End-to-end and integration tests
+
+Most Playwright specs under `e2e/` hit the dev server with **mocked** API routes (see `e2e/fixtures/auth.fixture.ts`). The **auth DB integration** lane is different: it exercises the real `/api/auth/signup` and `/api/settings` handlers against **live Postgres** (no API mocks).
+
+## Mobile web E2E (Playwright)
 
 Playwright config lives at the repo root (`playwright.config.ts`). Tests are under `e2e/` and use the `mobile-chromium-narrow`, `mobile-chromium-wide`, and `mobile-webkit-iphone` projects by default.
 
-## Local run (mock API)
+### Local run (mock API)
 
 By default, `e2e/fixtures/auth.fixture.ts` mocks `/api/**` so no database or credentials are required:
 
@@ -12,11 +16,11 @@ npx playwright install --with-deps chromium webkit
 npm run test:e2e
 ```
 
-## Credentialed run against a remote app (CI / preview)
+### Credentialed run against a remote app (CI / preview)
 
 When tests call the real backend (for example after adding real-auth flows), login returns **401** if the fixture user row is missing or if the password hash in the database no longer matches the secret used in CI.
 
-### Fixture user and secrets
+#### Fixture user and secrets
 
 Configure these in **GitHub Actions secrets** (and the same values in your non-production database policy):
 
@@ -26,11 +30,11 @@ Configure these in **GitHub Actions secrets** (and the same values in your non-p
 | `E2E_WEB_PASSWORD` | Password that must match the hash stored for that email. |
 | `POSTGRES_URL` | Neon **non-production** connection string used to upsert the fixture user before tests. |
 
-Aliases: if `E2E_WEB_EMAIL` or `E2E_WEB_PASSWORD` is unset **or empty** (GitHub Actions resolves missing secrets to `""`), `E2E_TEST_USER_EMAIL` / `E2E_TEST_USER_PASSWORD` are used instead. The fixture username is always `e2e_` plus 12 hex chars derived from the email so it stays within the app’s 3–30 character username rules and avoids collisions on `email` vs `username` uniqueness.
+Aliases: if `E2E_WEB_EMAIL` or `E2E_WEB_PASSWORD` is unset **or empty** (GitHub Actions resolves missing secrets to `""`), `E2E_TEST_USER_EMAIL` / `E2E_TEST_USER_PASSWORD` are used instead. The fixture username is always `e2e_` plus 12 hex chars derived from the email so it stays within the app's 3–30 character username rules and avoids collisions on `email` vs `username` uniqueness.
 
 **Never** commit real values, paste them into issues or PRs, or print them in logs.
 
-### Automatic provisioning (recommended for CI)
+#### Automatic provisioning (recommended for CI)
 
 The workflow `.github/workflows/e2e-mobile.yml` sets `E2E_WEB_SETUP_USER=true` and runs Playwright `globalSetup`, which upserts the fixture user via `scripts/e2e/provision-e2e-web-user.ts` when `POSTGRES_URL` and credentials are all non-empty (same Neon guard as `scripts/seed.ts`: hostname must be `*.neon.tech`). If any of those are missing, global setup **skips** provisioning so the default mock-based suite still passes; configure secrets to enable real DB alignment. The password hash follows whichever non-empty password env pair is selected.
 
@@ -47,7 +51,7 @@ npm run e2e:setup-web-user
 
 Without `E2E_WEB_SETUP_USER=true`, the script skips if creds or `POSTGRES_URL` are missing (safe for local mock runs).
 
-### Re-seed / diagnostics (operators)
+#### Re-seed / diagnostics (operators)
 
 **Root-cause triage** (run against the dev/staging DB; replace the email placeholder with the value from `E2E_WEB_EMAIL` **only in your shell**, never in the issue or git):
 
@@ -62,6 +66,29 @@ Interpretation (see issue #435):
 - Row exists but login still 401 → password hash mismatch; confirm `E2E_WEB_PASSWORD` matches what was written (re-run provisioning with the current secret).
 - Row exists and local login works with the same secrets → inspect CI env wiring (wrong secret name, wrong workflow, or missing `POSTGRES_URL`).
 
-### Policy alignment
+#### Policy alignment
 
 Cross-cutting policy: `docs/testing/e2e-policy.md`. Full app seed for demo data remains `SEED_CONFIRM=still-point-nonprod npm run db:seed` (`scripts/seed.ts`); that is separate from the **single-user** E2E fixture upsert described here.
+
+## Username uniqueness integration (`@authDbIntegration`)
+
+These tests validate case-insensitive username rules and cross-route race handling (#283). They require:
+
+1. **Postgres** with the app schema and the case-insensitive username migration applied. The runner executes `scripts/apply-migrations.ts` first, which applies every `drizzle/*.sql` file (including `users_uniqueness_incremental.sql`) idempotently.
+2. **`POSTGRES_URL`** — same Neon (or other) connection string the app uses; must not point at production.
+3. **`JWT_SECRET`** — any non-empty value consistent with the dev server (signup and settings PATCH issue JWT-backed cookies when applicable).
+
+### Local
+
+```bash
+# .env.local: POSTGRES_URL, JWT_SECRET (non-production branch)
+npm run dev   # separate terminal, app on http://127.0.0.1:3000
+
+E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:web:authDb
+```
+
+`e2e:web:authDb` loads `.env.local` / `.env` via `@next/env` before migrations and Playwright, so you do not need to export secrets in the shell.
+
+### CI
+
+The workflow **E2E Web** defines a job `web-e2e-auth-db` that runs `npm run e2e:web:authDb` with `POSTGRES_URL` and `JWT_SECRET` from repository secrets **`E2E_AUTH_DB_POSTGRES_URL`** and **`E2E_AUTH_DB_JWT_SECRET`**. The job is **skipped** until both secrets are set (fork PRs and repos without secrets never fail the workflow). Point the Postgres URL at a **non-production** branch that already matches the rest of the app schema (same as preview/local); the runner applies `drizzle/*.sql` migrations before tests.

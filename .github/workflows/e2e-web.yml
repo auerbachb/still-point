@@ -124,3 +124,49 @@ jobs:
             test-results/**
           if-no-files-found: warn
           retention-days: 14
+
+  web-e2e-auth-db:
+    name: web-e2e-auth-db
+    # Requires repo secrets (Neon non-prod + test JWT). Skipped until configured — see e2e/README.md.
+    if: ${{ secrets.E2E_AUTH_DB_POSTGRES_URL != '' && secrets.E2E_AUTH_DB_JWT_SECRET != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-policy
+    env:
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_WORKERS: "1"
+      E2E_REPEAT_EACH: "1"
+      E2E_RUN_ID: ${{ github.run_id }}
+      SEED_CONFIRM: still-point-nonprod
+      POSTGRES_URL: ${{ secrets.E2E_AUTH_DB_POSTGRES_URL }}
+      JWT_SECRET: ${{ secrets.E2E_AUTH_DB_JWT_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run auth DB integration lane
+        run: npm run e2e:web:authDb
+
+      - name: Upload auth DB integration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-auth-db-artifacts
+          path: |
+            artifacts/e2e/web/**
+            playwright-report/**
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 14
