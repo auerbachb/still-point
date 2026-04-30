@@ -36,6 +36,14 @@ public enum SessionCalendar {
         df.calendar = Calendar(identifier: .gregorian)
         return df
     }()
+
+    /// Strict `YYYY-MM-DD` that parses as a real UTC calendar day and round-trips.
+    public static func isValidSessionCalendarDate(_ value: String) -> Bool {
+        guard value.count == 10,
+              value.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil,
+              let date = isoFormatter.date(from: value) else { return false }
+        return isoFormatter.string(from: date) == value
+    }
 }
 
 // MARK: - Streak / aggregate stats (matches web `calculateSessionStats`)
@@ -48,7 +56,7 @@ public enum SessionStatistics {
         }
 
         let completedSessions = standard.filter(\.completed)
-        let allHaveSessionDate = standard.allSatisfy { !$0.sessionDate.isEmpty }
+        let allHaveSessionDate = standard.allSatisfy { SessionCalendar.isValidSessionCalendarDate($0.sessionDate) }
 
         var streak = 0
         if allHaveSessionDate {
@@ -64,7 +72,9 @@ public enum SessionStatistics {
                 var cursor = latestCal
                 while completedDates.contains(cursor) {
                     streak += 1
-                    cursor = SessionCalendar.addDays(toIsoDate: cursor, deltaDays: -1)
+                    let next = SessionCalendar.addDays(toIsoDate: cursor, deltaDays: -1)
+                    if next == cursor { break }
+                    cursor = next
                 }
             }
         } else {
@@ -102,7 +112,7 @@ public enum SessionStatistics {
 
 // MARK: - History journey rows (standard sessions; quick excluded by caller)
 
-public enum HistoryJourneyListRow: Equatable, Sendable {
+public enum HistoryJourneyListRow: Sendable {
     case missed(date: String)
     case standardSession(session: SessionDTO, sessionIndexInDay: Int)
 }

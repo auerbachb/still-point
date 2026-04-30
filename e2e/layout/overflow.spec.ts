@@ -33,9 +33,10 @@ test.describe("mobile overflow and scrolling", () => {
     await expectNoHorizontalOverflow(page);
 
     const firstEntry = page.getByText(/^Session 1$/).first();
-    const lastEntry = page.getByText(/^Session 24$/).last();
+    // One standard sit per calendar day → each row is "Session 1"; target the chronologically last row.
+    const lastEntry = page.getByText(/^Session 1$/).last();
     await expect(firstEntry).toBeVisible();
-    await expect(lastEntry).toHaveCount(1);
+    await expect(lastEntry).toBeVisible();
 
     await lastEntry.scrollIntoViewIfNeeded();
     await expectVisibleInViewport(page, lastEntry, "latest history session row");

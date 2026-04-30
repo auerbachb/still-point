@@ -1,5 +1,19 @@
 /** ISO calendar date `YYYY-MM-DD` helpers (UTC date arithmetic; matches stored `session_date`). */
 
+const ISO_CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Strict `YYYY-MM-DD` that parses as a real UTC calendar day and round-trips. */
+export function isValidSessionCalendarDate(value: string | undefined | null): boolean {
+  if (typeof value !== "string" || !ISO_CALENDAR_DAY.test(value)) return false;
+  const [ys, ms, ds] = value.split("-").map(Number);
+  const d = new Date(Date.UTC(ys, ms - 1, ds));
+  if (Number.isNaN(d.getTime())) return false;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}` === value;
+}
+
 export function addDaysToIsoDate(isoDate: string, deltaDays: number): string {
   const [ys, ms, ds] = isoDate.split("-").map(Number);
   const base = new Date(Date.UTC(ys, ms - 1, ds));

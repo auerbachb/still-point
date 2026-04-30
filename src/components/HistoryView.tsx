@@ -38,8 +38,7 @@ function formatShortDateLabel(isoDate: string): string {
 }
 
 function sessionSortKey(s: Session): string {
-  if (s.createdAt) return s.createdAt;
-  return s.id;
+  return s.createdAt;
 }
 
 type HistoryViewProps = {
@@ -200,13 +199,21 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
                   padding: "2px 0", opacity: 0.35,
                 }}>
-                  {!isMobile && (
+                  {!isMobile ? (
                     <div style={{
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
                       {dateLabel}
+                    </div>
+                  ) : (
+                    <div style={{
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "10px", color: "var(--fg-4)",
+                      minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
+                    }}>
+                      {formatShortDateLabel(entry.date)}
                     </div>
                   )}
                   <div style={{

@@ -1,4 +1,4 @@
-import { addDaysToIsoDate } from "./sessionCalendar";
+import { addDaysToIsoDate, isValidSessionCalendarDate } from "./sessionCalendar";
 
 export const BASE_DURATION = 60;
 export const QUICK_DURATION = 60;
@@ -56,7 +56,7 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
 
   let streak = 0;
   const allHaveSessionDate = standardSessions.length > 0
-    && standardSessions.every(s => typeof s.sessionDate === "string" && s.sessionDate.length >= 10);
+    && standardSessions.every(s => isValidSessionCalendarDate(s.sessionDate));
 
   if (allHaveSessionDate) {
     const completedCalendarDates = new Set<string>();
@@ -80,7 +80,9 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
       let cursor = latestCal;
       while (completedCalendarDates.has(cursor)) {
         streak++;
-        cursor = addDaysToIsoDate(cursor, -1);
+        const next = addDaysToIsoDate(cursor, -1);
+        if (next === cursor) break;
+        cursor = next;
       }
     }
   } else {
