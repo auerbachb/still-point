@@ -37,8 +37,8 @@ function tryGitHead(): string {
 }
 
 const buildShaFull =
-  nonBlankEnv(process.env.VERCEL_GIT_COMMIT_SHA) ??
   nonBlankEnv(process.env.NEXT_PUBLIC_BUILD_SHA) ??
+  nonBlankEnv(process.env.VERCEL_GIT_COMMIT_SHA) ??
   nonBlankEnv(process.env.SOURCE_VERSION) ??
   nonBlankEnv(tryGitHead()) ??
   "";
