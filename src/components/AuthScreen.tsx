@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signIn } from "next-auth/react";
 
 type AuthScreenProps = {
   onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
@@ -126,10 +127,12 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             const params = new URLSearchParams(window.location.search);
             params.delete("error");
             const search = params.toString();
-            const callbackUrl = encodeURIComponent(
-              `${window.location.pathname}${search ? `?${search}` : ""}`,
-            );
-            window.location.href = `/api/auth/signin/google?callbackUrl=${callbackUrl}`;
+            const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+            // Auth.js v5 requires POST + CSRF for /api/auth/signin/<provider>;
+            // a raw GET is rejected with UnknownAction. The signIn() helper
+            // fetches CSRF, posts the form, and navigates the browser to
+            // Google's authorize URL.
+            void signIn("google", { callbackUrl });
           }}
           style={{
             background: "var(--surface-1)",
