@@ -16,9 +16,9 @@ extension XCUIElement {
         tap()
 
         let focusPredicate = NSPredicate(format: "hasKeyboardFocus == true")
-        // Instance waiter (no delegate) so timeouts return `.timedOut` instead of XCTest auto-failing,
-        // allowing a single descriptive `XCTFail` below.
-        let waiter = XCTWaiter(delegate: nil, delegateQueue: nil)
+        // Fresh waiter instance so predicate timeouts return `.timedOut` instead of XCTest auto-failing
+        // via the default XCTestCase delegate (allows one descriptive `XCTFail` below).
+        let waiter = XCTWaiter()
         let primaryFocus = XCTNSPredicateExpectation(predicate: focusPredicate, object: self)
         var outcome = waiter.wait(for: [primaryFocus], timeout: timeout)
 
