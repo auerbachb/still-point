@@ -27,8 +27,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
+        emailField.tapAndType("ios.fixture@stillpoint.test", in: app)
 
         let forgotPasswordButton = app.buttons["auth.forgotPasswordButton"]
         XCTAssertTrue(forgotPasswordButton.waitForExistence(timeout: 5))
@@ -55,13 +54,11 @@ final class StillPointAppUITests: XCTestCase {
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
+        emailField.tapAndType("ios.fixture@stillpoint.test", in: app)
 
         let passwordField = app.secureTextFields["auth.passwordField"]
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
+        passwordField.tapAndType("stillpoint-pass", in: app)
 
         let submitButton = app.buttons["auth.submitButton"]
         tapByStableCenter(submitButton, in: app)
@@ -174,10 +171,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
         XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
 
-        emailField.tap()
-        emailField.typeText("ios.fixture@stillpoint.test")
-        passwordField.tap()
-        passwordField.typeText("stillpoint-pass")
+        emailField.tapAndType("ios.fixture@stillpoint.test", in: app)
+        passwordField.tapAndType("stillpoint-pass", in: app)
         let keyboard = app.keyboards.firstMatch
         XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "Keyboard should be visible for overlap reachability check")
         XCTAssertTrue(submitButton.isHittable, "Submit should remain reachable with keyboard visible")
