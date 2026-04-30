@@ -13,6 +13,7 @@ struct CompletionView: View {
     let dayNumber: Int
     let sessionType: SessionType
     let duration: Int
+    let bonusSeconds: Int
 
     @State private var endNote = ""
     @State private var noteSaved = false
@@ -27,6 +28,14 @@ struct CompletionView: View {
     private var isQuickSession: Bool { sessionType == .quick }
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
+    private var durationSubtitle: String {
+        let planned = duration - bonusSeconds
+        guard bonusSeconds > 0 else {
+            return "\(duration) seconds of sustained attention"
+        }
+        return "\(planned) planned · \(bonusSeconds)s bonus (\(duration)s timer)"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: SPSpacing.s5) {
@@ -39,7 +48,7 @@ struct CompletionView: View {
                         .foregroundStyle(Color(SPColor.fg))
                         .accessibilityIdentifier("completion.dayTitle")
 
-                    Text("\(duration) seconds of sustained attention")
+                    Text(durationSubtitle)
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg3))
                         .tracking(1)

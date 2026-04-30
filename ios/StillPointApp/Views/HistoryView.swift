@@ -57,11 +57,13 @@ struct HistoryView: View {
                             GridItem(.flexible()),
                             GridItem(.flexible()),
                             GridItem(.flexible()),
+                            GridItem(.flexible()),
                         ], spacing: SPSpacing.s3) {
                             statCell(value: "\(stats.streak)", label: "STREAK")
                             statCell(value: "\(stats.avgClearPercent)%", label: "AVG CLEAR")
                             statCell(value: String(format: "%.1f", stats.avgThoughtsPerSession), label: "THOUGHTS/SESSION")
                             statCell(value: String(format: "%.2f", stats.avgThoughtsPerMinute), label: "THOUGHTS/MIN")
+                            statCell(value: "\(stats.bonusMinutesTotal ?? 0)", label: "BONUS MIN TOTAL")
                         }
                     }
 
@@ -175,6 +177,12 @@ struct HistoryView: View {
                             .foregroundStyle(Color(SPColor.fg4))
                         Text("\(entry.thoughtCount)\u{1F4AD}")
                             .foregroundStyle(SPColor.amberText)
+                        if entry.bonusSeconds > 0 {
+                            Text("·")
+                                .foregroundStyle(Color(SPColor.fg4))
+                            Text("+\(entry.bonusSeconds / 60)m bonus")
+                                .foregroundStyle(Color(SPColor.fg2))
+                        }
                     }
                     .font(SPFont.mono(10))
                     .frame(width: 100, alignment: .leading)

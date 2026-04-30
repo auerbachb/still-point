@@ -17,6 +17,7 @@ type SessionViewProps = {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -28,6 +29,7 @@ type SessionViewProps = {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -42,7 +44,10 @@ const mono: CSSProperties = {
 };
 
 export function SessionView({ currentDay, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
-  const todayDuration = durationForSession(sessionType, currentDay);
+  const plannedSeconds = durationForSession(sessionType, currentDay);
+  const [bonusSeconds, setBonusSeconds] = useState(0);
+  const totalSeconds = plannedSeconds + bonusSeconds;
+  const [sessionFinished, setSessionFinished] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [mindState, setMindState] = useState<MindState>("clear");
   const mindStateRef = useRef<MindState>(mindState);
@@ -133,9 +138,9 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   });
 
   const calcClearPercent = useCallback(() => {
-    const endTime = elapsedRef.current || todayDuration;
+    const endTime = elapsedRef.current || totalSeconds;
     return computeClearPercentFromLog(mindStateLog, endTime);
-  }, [mindStateLog, todayDuration]);
+  }, [mindStateLog, totalSeconds]);
 
   const snapshotForComplete = useCallback(() => {
     const at = elapsedRef.current;
@@ -157,13 +162,15 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   const handleComplete = useCallback(() => {
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
+    setSessionFinished(true);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
-    const endT = elapsedRef.current || todayDuration;
+    const endT = elapsedRef.current || totalSeconds;
     onComplete({
       dayNumber: currentDay,
       sessionType,
-      duration: todayDuration,
+      duration: plannedSeconds,
+      bonusSeconds,
       completed: true,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
@@ -171,7 +178,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
       mindStateLog: resolvedLog,
       thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, sessionType, todayDuration, onComplete, snapshotForComplete]);
+  }, [currentDay, sessionType, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
@@ -214,13 +221,15 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   const handleEndEarly = () => {
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
+    setSessionFinished(true);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
-    const endT = elapsedRef.current || todayDuration;
+    const endT = elapsedRef.current || totalSeconds;
     onComplete({
       dayNumber: currentDay,
       sessionType,
-      duration: todayDuration,
+      duration: plannedSeconds,
+      bonusSeconds,
       completed: false,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
@@ -233,13 +242,15 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   const handleAbandon = () => {
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
+    setSessionFinished(true);
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
-    const endT = elapsedRef.current || todayDuration;
+    const endT = elapsedRef.current || totalSeconds;
     onAbandon({
       dayNumber: currentDay,
       sessionType,
-      duration: todayDuration,
+      duration: plannedSeconds,
+      bonusSeconds,
       completed: false,
       actualTime,
       clearPercent: computeClearPercentFromLog(resolvedLog, endT),
@@ -248,6 +259,11 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
       thoughts: sessionThoughtsRef.current,
     });
   };
+
+  const extendSessionSeconds = useCallback((extra: number) => {
+    if (sessionFinished || showPostDistractionCapture) return;
+    setBonusSeconds(b => b + extra);
+  }, [sessionFinished, showPostDistractionCapture]);
 
   const handleElapsedChange = useCallback((elapsed: number) => {
     elapsedRef.current = elapsed;
@@ -313,7 +329,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <BlockTimer
-        totalSeconds={todayDuration}
+        totalSeconds={totalSeconds}
         isActive={isActive}
         onComplete={handleComplete}
         mindState={mindState}
@@ -513,8 +529,56 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
         </div>
       )}
 
+      {(!sessionFinished || !showPostDistractionCapture) && (
+        <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            disabled={sessionFinished || showPostDistractionCapture}
+            onClick={() => extendSessionSeconds(60)}
+            aria-label="Add one minute to this session"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border-2)",
+              color: "var(--fg-2)",
+              ...mono,
+              fontSize: "11px",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              padding: "12px 18px",
+              minHeight: "44px",
+              borderRadius: "16px",
+              cursor: sessionFinished || showPostDistractionCapture ? "default" : "pointer",
+              opacity: sessionFinished || showPostDistractionCapture ? 0.4 : 1,
+            }}
+          >
+            +1 min
+          </button>
+          <button
+            type="button"
+            disabled={sessionFinished || showPostDistractionCapture}
+            onClick={() => extendSessionSeconds(300)}
+            aria-label="Add five minutes to this session"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border-2)",
+              color: "var(--fg-2)",
+              ...mono,
+              fontSize: "11px",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              padding: "12px 18px",
+              minHeight: "44px",
+              borderRadius: "16px",
+              cursor: sessionFinished || showPostDistractionCapture ? "default" : "pointer",
+              opacity: sessionFinished || showPostDistractionCapture ? 0.4 : 1,
+            }}
+          >
+            +5 min
+          </button>
+        </div>
+      )}
+
       <div
-        data-session-chrome="secondary"
         data-visibility={sessionChromeDimmed ? "dimmed" : "visible"}
         style={{
           opacity: sessionChromeDimmed ? 0.32 : 1,

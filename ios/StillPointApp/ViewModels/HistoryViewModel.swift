@@ -7,6 +7,7 @@ struct HistoryEntry: Identifiable {
     let sessionId: String?
     let dayNumber: Int?
     let duration: Int
+    let bonusSeconds: Int
     let actualTime: Int
     let completed: Bool
     let date: String          // "YYYY-MM-DD"
@@ -86,6 +87,7 @@ final class HistoryViewModel {
                                 sessionId: nil,
                                 dayNumber: nil,
                                 duration: 0,
+                                bonusSeconds: 0,
                                 actualTime: 0,
                                 completed: false,
                                 date: df.string(from: missedDate),
@@ -103,6 +105,7 @@ final class HistoryViewModel {
                 sessionId: session.id,
                 dayNumber: session.dayNumber,
                 duration: session.duration,
+                bonusSeconds: session.bonusSeconds ?? 0,
                 actualTime: session.actualTime ?? session.duration,
                 completed: session.completed,
                 date: session.sessionDate,

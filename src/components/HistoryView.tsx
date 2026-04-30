@@ -9,6 +9,7 @@ type HistoryEntry = {
   sessionId?: string;
   day: number | null;
   duration: number;
+  bonusSeconds: number;
   actualTime: number;
   completed: boolean;
   date: string;
@@ -26,7 +27,13 @@ type HistoryViewProps = {
 export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [thoughts, setThoughts] = useState<Thought[]>([]);
-  const [stats, setStats] = useState({ streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0 });
+  const [stats, setStats] = useState({
+    streak: 0,
+    avgClearPercent: 0,
+    avgThoughtsPerSession: 0,
+    avgThoughtsPerMinute: 0,
+    bonusMinutesTotal: 0,
+  });
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
@@ -37,7 +44,13 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       fetch("/api/thoughts").then(r => r.json()),
     ]).then(([sessData, thoughtData]) => {
       setSessions(sessData.sessions || []);
-      setStats(sessData.stats || { streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0 });
+      setStats(sessData.stats || {
+        streak: 0,
+        avgClearPercent: 0,
+        avgThoughtsPerSession: 0,
+        avgThoughtsPerMinute: 0,
+        bonusMinutesTotal: 0,
+      });
       setThoughts(thoughtData.thoughts || []);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -62,6 +75,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         history.push({
           day: null,
           duration: 0,
+          bonusSeconds: 0,
           actualTime: 0,
           completed: false,
           date: missedDate.toISOString().split("T")[0],
@@ -75,6 +89,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       sessionId: s.id,
       day: s.dayNumber,
       duration: s.duration,
+      bonusSeconds: s.bonusSeconds ?? 0,
       actualTime: s.actualTime ?? s.duration,
       completed: s.completed,
       date: s.sessionDate,
@@ -140,6 +155,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
           { label: "avg clear mind", value: `${stats.avgClearPercent}%` },
           { label: "\uD83D\uDCAD/session", value: String(stats.avgThoughtsPerSession) },
           { label: "\uD83D\uDCAD/min", value: String(stats.avgThoughtsPerMinute) },
+          { label: "bonus min total", value: String(stats.bonusMinutesTotal) },
         ].map(s => (
           <div key={s.label} style={{ textAlign: "center" }}>
             <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--fg)" }}>{s.value}</div>
@@ -306,6 +322,12 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                     <span>{entry.clearPercent}%</span>
                     <span style={{ color: "var(--fg-4)" }}>&middot;</span>
                     <span style={{ color: "var(--accent-amber-border)" }}>{entry.thoughtCount}\uD83D\uDCAD</span>
+                    {entry.bonusSeconds > 0 && (
+                      <>
+                        <span style={{ color: "var(--fg-4)" }}>&middot;</span>
+                        <span style={{ color: "var(--fg-2)" }}>+{Math.round(entry.bonusSeconds / 60)}m bonus</span>
+                      </>
+                    )}
                   </div>
                 </div>
 

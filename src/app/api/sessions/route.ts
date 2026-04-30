@@ -20,7 +20,10 @@ export async function GET() {
 
     return NextResponse.json({
       sessions: userSessions,
-      stats,
+      stats: {
+        ...stats,
+        bonusMinutesTotal: Math.round(stats.bonusSecondsTotal / 60),
+      },
     });
   } catch (error) {
     console.error("Get sessions error:", error);
@@ -39,6 +42,11 @@ export async function POST(request: NextRequest) {
     const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
     const completed = parseCompleted(body.completed);
     const sessionType = parseOptionalSessionType(body.sessionType);
+    const bonusSecondsRaw = body.bonusSeconds;
+    const bonusSeconds =
+      typeof bonusSecondsRaw === "number" && Number.isFinite(bonusSecondsRaw)
+        ? Math.max(0, Math.min(86_400, Math.floor(bonusSecondsRaw)))
+        : 0;
 
     if (!dayNumber || !duration || clearPercent === undefined || !sessionDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -55,6 +63,7 @@ export async function POST(request: NextRequest) {
       dayNumber,
       sessionType,
       duration,
+      bonusSeconds,
       completed,
       actualTime: actualTime ?? duration,
       clearPercent,

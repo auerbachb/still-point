@@ -516,6 +516,7 @@ public actor APIClient {
             dayNumber: data.dayNumber,
             sessionType: data.sessionType,
             duration: data.duration,
+            bonusSeconds: data.bonusSeconds,
             completed: data.completed,
             actualTime: data.actualTime,
             clearPercent: data.clearPercent,
@@ -637,7 +638,7 @@ public actor APIClient {
     private static func makeUITestStats(for sessions: [SessionDTO]) -> StatsDTO {
         let standardSessions = sessions.filter { $0.sessionType == .standard }
         guard !standardSessions.isEmpty else {
-            return StatsDTO(streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0)
+            return StatsDTO(streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0, bonusMinutesTotal: 0)
         }
 
         let completedSessions = standardSessions.filter(\.completed)
@@ -657,17 +658,20 @@ public actor APIClient {
         let totalClear = completedSessions.reduce(0) { $0 + $1.clearPercent }
         let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
         let totalMinutes = standardSessions.reduce(0.0) { partial, session in
+            let bonus = Double(session.bonusSeconds ?? 0)
             let duration = Double(max(session.actualTime ?? session.duration, 1))
-            return partial + (duration / 60.0)
+            return partial + ((duration + bonus) / 60.0)
         }
         let avgClearPercent = completedSessions.isEmpty ? 0 : totalClear / completedSessions.count
         let avgThoughtsPerSession = Double(totalThoughts) / Double(standardSessions.count)
         let avgThoughtsPerMinute = totalMinutes > 0 ? Double(totalThoughts) / totalMinutes : 0
+        let bonusSecondsTotal = standardSessions.reduce(0) { $0 + ($1.bonusSeconds ?? 0) }
         return StatsDTO(
             streak: streak,
             avgClearPercent: avgClearPercent,
             avgThoughtsPerSession: avgThoughtsPerSession,
-            avgThoughtsPerMinute: avgThoughtsPerMinute
+            avgThoughtsPerMinute: avgThoughtsPerMinute,
+            bonusMinutesTotal: (bonusSecondsTotal + 30) / 60
         )
     }
 }

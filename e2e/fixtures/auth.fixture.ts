@@ -14,6 +14,7 @@ type SessionRecord = {
   dayNumber: number;
   sessionType: "standard" | "quick";
   duration: number;
+  bonusSeconds: number;
   completed: boolean;
   actualTime: number;
   clearPercent: number;
@@ -101,13 +102,16 @@ function computeStats(sessions: SessionRecord[]) {
     ? Number(
         (
           standardSessions.reduce((sum, s) => {
-            const minutes = s.duration / 60;
+            const bonus = s.bonusSeconds ?? 0;
+            const minutes = (s.duration + bonus) / 60;
             return sum + (minutes > 0 ? s.thoughtCount / minutes : 0);
           }, 0) / totalSessions
         ).toFixed(1),
       )
     : 0;
-  return { streak, avgClearPercent, avgThoughtsPerSession, avgThoughtsPerMinute };
+  const bonusSecondsTotal = standardSessions.reduce((sum, s) => sum + (s.bonusSeconds ?? 0), 0);
+  const bonusMinutesTotal = Math.round(bonusSecondsTotal / 60);
+  return { streak, avgClearPercent, avgThoughtsPerSession, avgThoughtsPerMinute, bonusMinutesTotal };
 }
 
 function json(route: Route, status: number, body: unknown) {
@@ -206,6 +210,10 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         dayNumber: Number(body.dayNumber ?? state.user.currentDay),
         sessionType: body.sessionType === "quick" ? "quick" : "standard",
         duration: Number(body.duration ?? 60),
+        bonusSeconds:
+          typeof body.bonusSeconds === "number" && Number.isFinite(body.bonusSeconds)
+            ? Math.max(0, Math.floor(body.bonusSeconds))
+            : 0,
         completed: Boolean(body.completed ?? true),
         actualTime: Number(body.actualTime ?? body.duration ?? 60),
         clearPercent: Number(body.clearPercent ?? 100),
@@ -304,6 +312,7 @@ export const test = base.extend<AuthFixture>({
           dayNumber: day,
           sessionType: "standard",
           duration: 60 + (day - 1) * 10,
+          bonusSeconds: 0,
           completed: true,
           actualTime: 60 + (day - 1) * 10,
           clearPercent: Math.max(55, 90 - (day % 9) * 3),

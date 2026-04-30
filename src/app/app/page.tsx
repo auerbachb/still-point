@@ -197,6 +197,7 @@ export default function StillPoint() {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -215,6 +216,7 @@ export default function StillPoint() {
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
           duration: data.duration,
+          bonusSeconds: data.bonusSeconds,
           completed: data.completed,
           actualTime: data.actualTime,
           clearPercent: data.clearPercent,
@@ -268,6 +270,7 @@ export default function StillPoint() {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -284,6 +287,7 @@ export default function StillPoint() {
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
           duration: data.duration,
+          bonusSeconds: data.bonusSeconds,
           completed: false,
           actualTime: data.actualTime,
           clearPercent: data.clearPercent,
