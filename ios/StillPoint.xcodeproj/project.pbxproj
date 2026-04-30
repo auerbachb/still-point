@@ -12,6 +12,7 @@
 		16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */; };
 		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
 		17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000004 /* AppBlockingSettingsView.swift */; };
+		17A248000000000000000007 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000008 /* SessionIdleTimerController.swift */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
 		25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
@@ -49,6 +50,7 @@
 		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
 		17A248000000000000000002 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		17A248000000000000000004 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
+		17A248000000000000000008 /* SessionIdleTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIdleTimerController.swift; sourceTree = "<group>"; };
 		17A248000000000000000005 /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
@@ -171,6 +173,7 @@
 			isa = PBXGroup;
 			children = (
 				17A248000000000000000002 /* AppBlockingManager.swift */,
+				17A248000000000000000008 /* SessionIdleTimerController.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -316,6 +319,7 @@
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
 				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
 				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
+				17A248000000000000000007 /* SessionIdleTimerController.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,

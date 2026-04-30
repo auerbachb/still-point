@@ -59,6 +59,34 @@ struct SettingsView: View {
 
                 AppBlockingSettingsView(manager: appVM.appBlockingManager)
 
+                // Session display
+                VStack(alignment: .leading, spacing: SPSpacing.s2) {
+                    Text("SESSION")
+                        .font(SPFont.mono(11, weight: .medium))
+                        .foregroundStyle(Color(SPColor.fg4))
+                        .tracking(2)
+
+                    Toggle(isOn: Bindable(appVM).keepScreenAwakeDuringSession) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Keep screen on during session")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Prevents auto-lock while a sit timer is running")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .accessibilityIdentifier("settings.keepScreenAwakeDuringSessionToggle")
+                }
+                .padding(SPSpacing.s3)
+                .background(SPColor.surface1)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(SPColor.border1)
+                )
+
                 // Public board toggle
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
                     Text("VISIBILITY")

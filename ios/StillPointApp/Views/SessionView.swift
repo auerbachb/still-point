@@ -1,5 +1,6 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct SessionView: View {
     /// Space reserved when both distraction hold bar and controls are visible.
@@ -108,8 +109,43 @@ struct SessionView: View {
         }
         .onAppear {
             vm.start()
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
+        }
+        .onDisappear {
+            SessionIdleTimerController.syncLocalSession(isRunning: false, preferenceEnabled: appVM.keepScreenAwakeDuringSession)
+        }
+        .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
+        }
+        .onChange(of: vm.isActive) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
+        }
+        .onChange(of: vm.isPaused) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
+        }
+        .onChange(of: vm.isAbandoned) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
         }
         .onChange(of: vm.isComplete) { _, isComplete in
+            SessionIdleTimerController.syncLocalSession(
+                isRunning: sessionTimerRunning,
+                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+            )
             if isComplete && !vm.isAbandoned {
                 handleCompletion()
             }
@@ -163,6 +199,11 @@ struct SessionView: View {
 
     private var sessionInProgress: Bool {
         !vm.isComplete && !vm.isAbandoned && (vm.isActive || vm.isPaused)
+    }
+
+    /// Timer is running or paused (sit not finished); used for idle-timer / screen awake.
+    private var sessionTimerRunning: Bool {
+        sessionInProgress
     }
 
     private var bottomOverlayReserve: CGFloat {

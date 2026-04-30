@@ -103,6 +103,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 appVM.appBlockingManager.refreshShielding()
+                SessionIdleTimerController.applyDesiredIdleTimerState()
+            } else if phase == .inactive || phase == .background {
+                // Avoid leaving the device awake when the app is not visible (issue #87).
+                UIApplication.shared.isIdleTimerDisabled = false
             }
         }
         .onOpenURL { url in
