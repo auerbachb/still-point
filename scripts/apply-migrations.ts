@@ -42,7 +42,17 @@ async function main() {
   const pool = new Pool({ connectionString: url });
   console.log(`[migrate] Connecting to host=${new URL(url).host}`);
 
+  // pg session-level advisory lock — serializes concurrent migration runs across
+  // processes (e.g., overlapping Vercel deploys, dev + CI hitting the same DB).
+  // Released automatically when the session ends; we also unlock explicitly below.
+  // Key is an arbitrary 64-bit int unique to this runner.
+  const ADVISORY_LOCK_KEY = 7195279_0001;
+  let lockHeld = false;
+
   try {
+    await pool.query(`SELECT pg_advisory_lock($1)`, [ADVISORY_LOCK_KEY]);
+    lockHeld = true;
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "schema_migrations" (
         "filename" text PRIMARY KEY,
@@ -105,6 +115,13 @@ async function main() {
       `[migrate] done. applied=${appliedCount} skipped=${skippedCount} backfilled=${backfilledCount}`,
     );
   } finally {
+    if (lockHeld) {
+      try {
+        await pool.query(`SELECT pg_advisory_unlock($1)`, [ADVISORY_LOCK_KEY]);
+      } catch {
+        // best-effort; the session ending also releases it.
+      }
+    }
     await pool.end();
   }
 }
