@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { durationForDay } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { buildHistoryJourneyRows } from "@/lib/historyJourney";
 
 type HistoryEntry = {
   sessionId?: string;
@@ -16,7 +17,30 @@ type HistoryEntry = {
   thoughtCount: number;
   sessionType?: Session["sessionType"];
   missed?: boolean;
+  /** 1-based index among standard sessions on the same calendar day */
+  sessionIndexInDay?: number;
 };
+
+function formatFullDateLabel(isoDate: string): string {
+  const d = new Date(isoDate + "T12:00:00");
+  const dow = d.toLocaleDateString("en-US", { weekday: "short" });
+  const mon = d.toLocaleDateString("en-US", { month: "short" });
+  const dayOfMonth = d.getDate();
+  const y = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(dayOfMonth).padStart(2, "0");
+  return `${dow} ${mon} ${dayOfMonth} (${y}.${mm}.${dd})`;
+}
+
+function formatShortDateLabel(isoDate: string): string {
+  const d = new Date(isoDate + "T12:00:00");
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function sessionSortKey(s: Session): string {
+  if (s.createdAt) return s.createdAt;
+  return s.id;
+}
 
 type HistoryViewProps = {
   currentDay: number;
@@ -43,46 +67,48 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
     }).catch(() => setLoading(false));
   }, []);
 
-  // Build history entries including missed days
-  const history: HistoryEntry[] = [];
-  const sortedSessions = [...sessions]
-    .filter(s => s.sessionType !== "quick")
-    .sort((a, b) => a.dayNumber - b.dayNumber);
+  const journeyRows = useMemo(() => {
+    const standard = sessions.filter(s => s.sessionType !== "quick");
+    return buildHistoryJourneyRows(
+      standard.map(s => ({
+        sessionDate: s.sessionDate,
+        sortKey: sessionSortKey(s),
+        data: s,
+      })),
+    );
+  }, [sessions]);
 
-  for (let i = 0; i < sortedSessions.length; i++) {
-    const s = sortedSessions[i];
-    // Check for gaps between sessions (missed days)
-    if (i > 0) {
-      const prevDate = new Date(sortedSessions[i - 1].sessionDate + "T12:00:00");
-      const currDate = new Date(s.sessionDate + "T12:00:00");
-      const daysBetween = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-      for (let gap = 1; gap < daysBetween; gap++) {
-        const missedDate = new Date(prevDate);
-        missedDate.setDate(missedDate.getDate() + gap);
-        history.push({
-          day: null,
-          duration: 0,
-          actualTime: 0,
-          completed: false,
-          date: missedDate.toISOString().split("T")[0],
-          clearPercent: 0,
-          thoughtCount: 0,
-          missed: true,
-        });
-      }
-    }
-    history.push({
-      sessionId: s.id,
-      day: s.dayNumber,
-      duration: s.duration,
-      actualTime: s.actualTime ?? s.duration,
-      completed: s.completed,
-      date: s.sessionDate,
-      clearPercent: s.clearPercent,
-      thoughtCount: s.thoughtCount,
-      sessionType: s.sessionType,
-    });
-  }
+  const history: HistoryEntry[] = useMemo(
+    () =>
+      journeyRows.map(row => {
+        if (row.kind === "missed") {
+          return {
+            day: null,
+            duration: 0,
+            actualTime: 0,
+            completed: false,
+            date: row.date,
+            clearPercent: 0,
+            thoughtCount: 0,
+            missed: true,
+          };
+        }
+        const s = row.data;
+        return {
+          sessionId: s.id,
+          day: s.dayNumber,
+          duration: s.duration,
+          actualTime: s.actualTime ?? s.duration,
+          completed: s.completed,
+          date: row.date,
+          clearPercent: s.clearPercent,
+          thoughtCount: s.thoughtCount,
+          sessionType: s.sessionType,
+          sessionIndexInDay: row.sessionIndexInDay,
+        };
+      }),
+    [journeyRows],
+  );
 
   const maxDuration = Math.max(
     ...history.filter(h => !h.missed).map(h => h.actualTime),
@@ -162,15 +188,13 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           {history.map((entry, idx) => {
+            const prev = idx > 0 ? history[idx - 1] : undefined;
+            const showDateColumn = entry.missed
+              ? true
+              : !prev || prev.missed || prev.date !== entry.date;
+
             if (entry.missed) {
-              const d = new Date(entry.date + "T12:00:00");
-              const dow = d.toLocaleDateString("en-US", { weekday: "short" });
-              const mon = d.toLocaleDateString("en-US", { month: "short" });
-              const day = d.getDate();
-              const y = d.getFullYear();
-              const mm = String(d.getMonth() + 1).padStart(2, "0");
-              const dd = String(day).padStart(2, "0");
-              const dateLabel = `${dow} ${mon} ${day} (${y}.${mm}.${dd})`;
+              const dateLabel = formatFullDateLabel(entry.date);
               return (
                 <div key={`missed-${idx}`} style={{
                   display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
@@ -209,16 +233,12 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
               );
             }
 
-            const d = new Date(entry.date + "T12:00:00");
-            const dow = d.toLocaleDateString("en-US", { weekday: "short" });
-            const mon = d.toLocaleDateString("en-US", { month: "short" });
-            const dayOfMonth = d.getDate();
-            const y = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, "0");
-            const dd = String(dayOfMonth).padStart(2, "0");
-            const dateLabel = `${dow} ${mon} ${dayOfMonth} (${y}.${mm}.${dd})`;
+            const dateLabelFull = formatFullDateLabel(entry.date);
+            const dateLabelShort = formatShortDateLabel(entry.date);
+            const sessionOrdinal = entry.sessionIndexInDay ?? 1;
+            const sessionLabel = `Session ${sessionOrdinal}`;
 
-            const entryId = `day-${entry.day}-${idx}`;
+            const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;
             const isExpanded = expandedEntryId === entryId;
             const entryThoughts = getThoughtsForSession(entry.sessionId);
             const canExpand = entryThoughts.length > 0;
@@ -264,15 +284,24 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                       fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
-                      {dateLabel}
+                      {showDateColumn ? dateLabelFull : ""}
+                    </div>
+                  )}
+                  {isMobile && showDateColumn && (
+                    <div style={{
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "10px", color: "var(--fg-4)",
+                      minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
+                    }}>
+                      {dateLabelShort}
                     </div>
                   )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", color: "var(--fg-3)",
-                    width: "32px", textAlign: "right",
+                    width: isMobile ? "88px" : "100px", textAlign: "right",
                   }}>
-                    D{entry.day}
+                    {sessionLabel}
                   </div>
                   <div style={{
                     flex: 1, height: "24px", borderRadius: "3px", overflow: "hidden",
@@ -313,7 +342,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   <div
                     id={`${entryId}-thoughts`}
                     role="region"
-                    aria-label={`Day ${entry.day} captured thoughts (entry ${idx + 1})`}
+                    aria-label={`${sessionLabel} on ${dateLabelFull} captured thoughts`}
                     style={{
                     marginLeft: isMobile ? "44px" : "216px", marginTop: "4px", marginBottom: "8px",
                     padding: "10px 14px", background: "var(--surface-1)",
@@ -407,7 +436,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
         fontSize: "11px", color: "var(--fg-4)", textAlign: "center",
       }}>
-        click any day to see captured thoughts
+        click any session row to see captured thoughts
       </p>
     </div>
   );

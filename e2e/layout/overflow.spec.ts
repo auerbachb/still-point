@@ -32,15 +32,15 @@ test.describe("mobile overflow and scrolling", () => {
     await expect(page.getByRole("heading", { name: "Progress" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
-    const firstEntry = page.getByText(/^D1$/).first();
-    const lastEntry = page.getByText(/^D24$/).last();
+    const firstEntry = page.getByText(/^Session 1$/).first();
+    const lastEntry = page.getByText(/^Session 24$/).last();
     await expect(firstEntry).toBeVisible();
     await expect(lastEntry).toHaveCount(1);
 
     await lastEntry.scrollIntoViewIfNeeded();
-    await expectVisibleInViewport(page, lastEntry, "latest history day chip");
+    await expectVisibleInViewport(page, lastEntry, "latest history session row");
     await expectNoVerticalOverlap(lastEntry, page.getByRole("button", { name: /^home$/i }), {
-      upper: "latest history day chip",
+      upper: "latest history session row",
       lower: "bottom home nav",
     });
   });
