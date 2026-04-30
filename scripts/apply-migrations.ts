@@ -100,14 +100,27 @@ async function main() {
       // Not yet recorded. Run it. Idempotent files re-applied to a hand-migrated
       // DB are safe — this also backfills the journal for migrations that were
       // applied out-of-band before this runner existed.
+      //
+      // Strip any outer BEGIN/COMMIT the file ships with (a few files manage
+      // their own transactions), since we wrap the body + journal write in a
+      // single transaction below to keep them atomic. Inner BEGIN inside
+      // DO $$ ... $$ blocks is left alone (matches start-of-line only).
+      const stripped = body.replace(/^[ \t]*BEGIN[ \t]*;\s*$/im, "").replace(/^[ \t]*COMMIT[ \t]*;\s*$/im, "");
       process.stdout.write(`[migrate] ${file} ... `);
       try {
-        await client.query(body);
-        await client.query(
-          `INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)
-           ON CONFLICT (filename) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = now()`,
-          [file, checksum],
-        );
+        await client.query("BEGIN");
+        try {
+          await client.query(stripped);
+          await client.query(
+            `INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)
+             ON CONFLICT (filename) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = now()`,
+            [file, checksum],
+          );
+          await client.query("COMMIT");
+        } catch (err) {
+          await client.query("ROLLBACK");
+          throw err;
+        }
         process.stdout.write("ok\n");
         appliedCount++;
       } catch (err) {
