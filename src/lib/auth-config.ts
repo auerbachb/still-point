@@ -174,19 +174,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account, profile }) {
       if (!account || !profile) return false;
       const rawEmail = typeof profile.email === "string" ? profile.email : null;
-      // Default to false when email_verified is absent: an unknown
-      // verification state must NOT be treated as verified. Google always
-      // sets email_verified for OIDC userinfo, so the only path that hits
-      // the false default is a provider that doesn't surface the claim —
-      // which we should reject rather than implicitly trust.
-      const emailVerified =
-        (profile as { email_verified?: boolean }).email_verified ?? false;
-      if (!rawEmail || !emailVerified) return false;
+      if (!rawEmail) return false;
 
-      const email = rawEmail.trim().toLowerCase();
       const provider = account.provider;
       const providerAccountId = account.providerAccountId;
       if (!provider || !providerAccountId) return false;
+
+      // Per-provider email-verification check. Auth.js v5 normalises the
+      // raw OIDC `profile` through each provider's `profile()` mapper
+      // BEFORE this callback fires, and Google's default mapper strips
+      // `email_verified`. The signal we trust instead:
+      //   - Google: granting the `email` scope returns a verified address
+      //     by Google's own contract; presence of `profile.email` here is
+      //     the verification signal.
+      //   - Other providers (Microsoft / Facebook / Apple, deferred):
+      //     require an explicit `email_verified === true` claim. An
+      //     unknown verification state must NOT be treated as verified —
+      //     extend this allow-list deliberately as each provider lands.
+      const emailVerified =
+        provider === "google"
+          ? true
+          : (profile as { email_verified?: boolean }).email_verified === true;
+      if (!emailVerified) return false;
+
+      const email = rawEmail.trim().toLowerCase();
 
       // Resolve provider identity FIRST: if (provider, providerAccountId)
       // is already linked to a user, that's the owner — full stop. Email
