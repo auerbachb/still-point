@@ -245,6 +245,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
+      // Auth.js may invoke this callback with a relative same-origin path
+      // (e.g. "/app?error=AccessDenied" or a relative `callbackUrl`).
+      // Normalise to an absolute URL up front so the comparisons below
+      // match both relative and absolute forms — without this, relative
+      // values fell through to the final fallback and lost their error /
+      // deep-link state.
+      const normalizedUrl = url.startsWith("/") ? `${baseUrl}${url}` : url;
+
       // Auth.js error redirects (e.g. /app?error=AccessDenied,
       // /app?error=OAuthCallback) come through here when sign-in fails or
       // is cancelled. Identify them by the explicit ?error= query param
@@ -252,19 +260,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // The earlier broader rule (any /app URL) was too wide — the default
       // post-sign-in callbackUrl is also /app, which would bypass the
       // sp_token bridge entirely.
-      if (url.startsWith(`${baseUrl}/app`) && /[?&]error=/.test(url)) {
-        return url;
+      if (
+        normalizedUrl.startsWith(`${baseUrl}/app`) &&
+        /[?&]error=/.test(normalizedUrl)
+      ) {
+        return normalizedUrl;
       }
 
       // Already in our sp_token bridge. Pass through.
-      if (url.startsWith(`${baseUrl}/api/auth/oauth-complete`)) return url;
+      if (normalizedUrl.startsWith(`${baseUrl}/api/auth/oauth-complete`)) {
+        return normalizedUrl;
+      }
 
       // Successful sign-in (or any other same-origin destination): route
       // through the bridge so sp_token is minted before the user lands on
       // the SPA. Encode the original target as ?return= so the bridge can
       // honour deep-link/callbackUrl state after minting the cookie.
-      if (url.startsWith(baseUrl)) {
-        const target = url.slice(baseUrl.length) || "/app";
+      if (normalizedUrl.startsWith(baseUrl)) {
+        const target = normalizedUrl.slice(baseUrl.length) || "/app";
         return `${baseUrl}/api/auth/oauth-complete?return=${encodeURIComponent(target)}`;
       }
 
