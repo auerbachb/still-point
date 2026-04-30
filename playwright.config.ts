@@ -7,6 +7,7 @@ const shouldReuseExternalServer = process.env.E2E_REUSE_SERVER === "true" || Boo
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: process.env.E2E_WEB_SETUP_USER === "true" ? "./e2e/global-setup.ts" : undefined,
   timeout: 45_000,
   expect: {
     timeout: 8_000,

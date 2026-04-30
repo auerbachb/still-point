@@ -34,6 +34,11 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Run mobile e2e project
+        env:
+          E2E_WEB_SETUP_USER: "true"
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          E2E_WEB_EMAIL: ${{ secrets.E2E_WEB_EMAIL }}
+          E2E_WEB_PASSWORD: ${{ secrets.E2E_WEB_PASSWORD }}
         run: npx playwright test --project ${{ matrix.project }}
 
       - name: Upload Playwright report
