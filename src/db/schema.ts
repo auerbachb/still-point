@@ -87,7 +87,7 @@ export const oauthAccounts = pgTable("oauth_accounts", {
   userIdx: index("idx_oauth_accounts_user").on(table.userId),
   providerCheck: check(
     "oauth_accounts_provider_allowed",
-    sql`${table.provider} in ('google', 'apple', 'facebook', 'microsoft')`,
+    sql`${table.provider} in ('google', 'apple', 'facebook', 'microsoft-entra-id')`,
   ),
 }));
 

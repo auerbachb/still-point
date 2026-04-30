@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS "oauth_accounts" (
   "provider_account_id" varchar(255) NOT NULL,
   "created_at" timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT "oauth_accounts_provider_allowed"
-    CHECK ("provider" IN ('google', 'apple', 'facebook', 'microsoft'))
+    CHECK ("provider" IN ('google', 'apple', 'facebook', 'microsoft-entra-id'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "oauth_accounts_provider_account_unique"
