@@ -52,6 +52,9 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
+      # iOS UITest retries are controlled by `scripts/e2e/run-ios-tests.sh` (2nd arg =
+      # MAX_RETRIES). `package.json` passes `1` for both smoke and critical (`e2e:ios:*`),
+      # so each lane runs a single xcodebuild attempt unless that script is changed.
       - name: Run iOS ${{ matrix.lane }} lane
         env:
           E2E_ENV: ci
