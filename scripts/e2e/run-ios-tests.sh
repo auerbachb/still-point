@@ -184,17 +184,27 @@ is_retriable_failure() {
      && find "${diag_dir}" -type f -name '*StillPoint*' -newer "${attempt_marker}" -print -quit 2>/dev/null | grep -q .; then
     return 0
   fi
-  # Timeout-shaped XCTAssertTrue failures: messages like "X did not appear",
-  # "X should be visible", "X did not exist" come from waitForExistence(timeout:)
-  # checks. On macos-26, these are commonly UI timing flakes (sim animations,
+  # Timeout-shaped UI-wait failures. Two surface forms:
+  #   a) `XCTAssertTrue failed - <msg>` from waitForExistence(timeout:) checks
+  #      where <msg> contains a wait/visibility indicator phrase.
+  #   b) `Asynchronous wait failed: Exceeded timeout of N seconds` from
+  #      XCTestExpectation/wait(for:) calls (e.g. predicate-value waits like
+  #      session.secondaryChromeMarker).
+  # On macos-26, both are commonly UI timing flakes (sim animations,
   # mocked-API delays, focus-handoff timing) rather than real product bugs —
   # even when no .ips crash report is correlated with the attempt. Treat as
   # retriable; if the failure repeats on the second attempt, the lane still
   # surfaces red. Empirically observed flake messages this week:
   #   "Home did not appear after login" (PR #311)
-  #   "Session screen did not appear after Begin tap" (PR #319 v1)
+  #   "Session screen did not appear after Begin tap" (PR #319 v1, #328 attempt 1)
   #   "Password reset request confirmation should be visible" (PR #328 round 3)
+  #   "Asynchronous wait failed: Exceeded timeout of 5 seconds, with unfulfilled
+  #    expectations: \"Expect predicate value == 'visible' for object
+  #    'session.secondaryChromeMarker'\"" (PR #328 attempt 2)
   if grep -qiE 'XCTAssertTrue failed - .*(did not appear|never appear(ed)?|did not exist|does not exist|should be visible|should appear|should exist|not found|never became|did not become|did not show)' "$log"; then
+    return 0
+  fi
+  if grep -qE 'Asynchronous wait failed: Exceeded timeout' "$log"; then
     return 0
   fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
