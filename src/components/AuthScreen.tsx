@@ -11,11 +11,11 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_session_missing: "Sign-in didn't complete. Please try again.",
   oauth_user_missing: "We couldn't find your account. Please try again.",
   oauth_internal_error: "Something went wrong on our end. Please try again.",
-  OAuthSignin: "Couldn't start Google sign-in. Please try again.",
-  OAuthCallback: "Google sign-in was cancelled or failed.",
+  OAuthSignin: "Couldn't start sign-in. Please try again.",
+  OAuthCallback: "Sign-in was cancelled or failed.",
   OAuthCreateAccount: "Couldn't create your account. Please try again.",
   AccessDenied: "Access denied. Please try again.",
-  Verification: "We couldn't verify your Google account.",
+  Verification: "We couldn't verify your account.",
   Configuration: "Sign-in is temporarily unavailable.",
 };
 
@@ -167,6 +167,49 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/>
           </svg>
           Continue with Google
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams(window.location.search);
+            params.delete("error");
+            const search = params.toString();
+            const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+            void signIn("facebook", { callbackUrl });
+          }}
+          style={{
+            background: "var(--surface-1)",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg)",
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "15px",
+            padding: "12px 16px",
+            borderRadius: "30px",
+            cursor: "pointer",
+            transition: "all 0.3s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "10px",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "var(--border-3)";
+            e.currentTarget.style.background = "var(--surface-2)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "var(--border-2)";
+            e.currentTarget.style.background = "var(--surface-1)";
+          }}
+          aria-label="Continue with Facebook"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="#1877F2"
+              d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+            />
+          </svg>
+          Continue with Facebook
         </button>
 
         <p style={{

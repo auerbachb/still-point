@@ -210,6 +210,18 @@ export default function PrivacyPolicyPage() {
             </a>
             .
           </li>
+          <li>
+            <strong style={{ color: "var(--fg)" }}>Meta (Facebook):</strong>{" "}
+            <a
+              href="https://www.facebook.com/about/privacy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--accent-green-text)", textDecoration: "underline" }}
+            >
+              Meta Data Policy
+            </a>
+            .
+          </li>
         </ul>
 
         <h2 style={sectionTitle}>Retention and your choices</h2>

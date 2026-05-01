@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import Facebook from "next-auth/providers/facebook";
 import Google from "next-auth/providers/google";
 import { db } from "@/db";
 import { users, oauthAccounts } from "@/db/schema";
@@ -159,6 +160,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
       authorization: { params: { scope: "openid email profile" } },
     }),
+    Facebook({
+      clientId: process.env.AUTH_FACEBOOK_ID,
+      clientSecret: process.env.AUTH_FACEBOOK_SECRET,
+      authorization: { params: { scope: "email" } },
+    }),
   ],
   // Only override `error`. Setting `pages.signIn` to a custom path tells
   // Auth.js v5 that we render our own signin UI on that path, which
@@ -187,12 +193,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       //   - Google: granting the `email` scope returns a verified address
       //     by Google's own contract; presence of `profile.email` here is
       //     the verification signal.
-      //   - Other providers (Microsoft / Facebook / Apple, deferred):
-      //     require an explicit `email_verified === true` claim. An
-      //     unknown verification state must NOT be treated as verified —
-      //     extend this allow-list deliberately as each provider lands.
+      //   - Facebook: default Auth.js provider requests `email`; Graph
+      //     `/me` returns the primary email for the logged-in account when
+      //     granted (same trust pattern as Google — we require email below).
+      //   - Other providers (Microsoft / Apple): require an explicit
+      //     `email_verified === true` claim. Unknown verification state must
+      //     NOT be treated as verified — extend this allow-list deliberately.
       const emailVerified =
-        provider === "google"
+        provider === "google" || provider === "facebook"
           ? true
           : (profile as { email_verified?: boolean }).email_verified === true;
       if (!emailVerified) return false;
