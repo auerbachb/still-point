@@ -140,7 +140,7 @@ Caveats for Pattern B:
 | Google | B (web flow) | `ASWebAuthenticationSession` | Web available today (#136). iOS-side issue not yet filed. |
 | Apple | A (native) | `ASAuthorizationController` | Web Auth.js + native endpoint deferred to [#286](https://github.com/auerbachb/still-point/issues/286). |
 | Facebook | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#285](https://github.com/auerbachb/still-point/issues/285). |
-| Microsoft | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#284](https://github.com/auerbachb/still-point/issues/284). |
+| Microsoft | B (web flow) | `ASWebAuthenticationSession` | Web available (#284). iOS-side issue not yet filed. |
 
 ---
 

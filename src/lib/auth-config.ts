@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { db } from "@/db";
 import { users, oauthAccounts } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -145,6 +146,18 @@ async function createUserWithUsernameRetry(email: string, seed: string): Promise
   throw new Error("Failed to allocate a unique username after retries");
 }
 
+function microsoftEntraIdProviderOptions(): Parameters<typeof MicrosoftEntraID>[0] | null {
+  const clientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim();
+  const clientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+  const issuer = process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER?.trim();
+  return {
+    clientId,
+    clientSecret,
+    ...(issuer ? { issuer } : {}),
+  };
+}
+
 declare module "next-auth" {
   interface Session {
     userId?: string;
@@ -159,6 +172,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
       authorization: { params: { scope: "openid email profile" } },
     }),
+    ...((): Array<ReturnType<typeof MicrosoftEntraID>> => {
+      const ms = microsoftEntraIdProviderOptions();
+      return ms ? [MicrosoftEntraID(ms)] : [];
+    })(),
   ],
   // Only override `error`. Setting `pages.signIn` to a custom path tells
   // Auth.js v5 that we render our own signin UI on that path, which
@@ -187,12 +204,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       //   - Google: granting the `email` scope returns a verified address
       //     by Google's own contract; presence of `profile.email` here is
       //     the verification signal.
-      //   - Other providers (Microsoft / Facebook / Apple, deferred):
+      //   - Microsoft Entra ID (#284): `common` v2.0 + `email` scope; the
+      //     platform treats the returned primary email as verified for
+      //     sign-in (same practical bar as Google for this product).
+      //   - Other providers (Facebook / Apple, deferred):
       //     require an explicit `email_verified === true` claim. An
       //     unknown verification state must NOT be treated as verified —
       //     extend this allow-list deliberately as each provider lands.
       const emailVerified =
-        provider === "google"
+        provider === "google" || provider === "microsoft-entra-id"
           ? true
           : (profile as { email_verified?: boolean }).email_verified === true;
       if (!emailVerified) return false;

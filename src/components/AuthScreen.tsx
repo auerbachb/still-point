@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { getProviders, signIn } from "next-auth/react";
 
 type AuthScreenProps = {
   onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
@@ -11,11 +11,11 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_session_missing: "Sign-in didn't complete. Please try again.",
   oauth_user_missing: "We couldn't find your account. Please try again.",
   oauth_internal_error: "Something went wrong on our end. Please try again.",
-  OAuthSignin: "Couldn't start Google sign-in. Please try again.",
-  OAuthCallback: "Google sign-in was cancelled or failed.",
+  OAuthSignin: "Couldn't start sign-in. Please try again.",
+  OAuthCallback: "Sign-in was cancelled or failed.",
   OAuthCreateAccount: "Couldn't create your account. Please try again.",
   AccessDenied: "Access denied. Please try again.",
-  Verification: "We couldn't verify your Google account.",
+  Verification: "We couldn't verify your account.",
   Configuration: "Sign-in is temporarily unavailable.",
 };
 
@@ -26,6 +26,13 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [microsoftSignInEnabled, setMicrosoftSignInEnabled] = useState(false);
+
+  useEffect(() => {
+    void getProviders().then(providers => {
+      setMicrosoftSignInEnabled(Boolean(providers?.["microsoft-entra-id"]));
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -74,6 +81,22 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSubmit();
+  };
+
+  const oauthButtonStyle: React.CSSProperties = {
+    background: "var(--surface-1)",
+    border: "1px solid var(--border-2)",
+    color: "var(--fg)",
+    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+    fontSize: "15px",
+    padding: "12px 16px",
+    borderRadius: "30px",
+    cursor: "pointer",
+    transition: "all 0.3s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -130,26 +153,12 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             // Auth.js v5 changed the contract: GET /api/auth/signin/<provider>
             // is rejected with UnknownAction. Signin requires POST + CSRF.
             // The signIn() helper from next-auth/react fetches the CSRF
-            // token, posts the form, and navigates the browser to Google's
-            // authorize URL — same UX as the previous direct navigation,
-            // correct v5 contract.
+            // token, posts the form, and navigates the browser to the
+            // provider authorize URL — same UX as the previous direct
+            // navigation, correct v5 contract.
             void signIn("google", { callbackUrl });
           }}
-          style={{
-            background: "var(--surface-1)",
-            border: "1px solid var(--border-2)",
-            color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "15px",
-            padding: "12px 16px",
-            borderRadius: "30px",
-            cursor: "pointer",
-            transition: "all 0.3s",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-          }}
+          style={oauthButtonStyle}
           onMouseEnter={e => {
             e.currentTarget.style.borderColor = "var(--border-3)";
             e.currentTarget.style.background = "var(--surface-2)";
@@ -168,6 +177,37 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           </svg>
           Continue with Google
         </button>
+
+        {microsoftSignInEnabled && (
+          <button
+            type="button"
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              params.delete("error");
+              const search = params.toString();
+              const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+              void signIn("microsoft-entra-id", { callbackUrl });
+            }}
+            style={oauthButtonStyle}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = "var(--border-3)";
+              e.currentTarget.style.background = "var(--surface-2)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = "var(--border-2)";
+              e.currentTarget.style.background = "var(--surface-1)";
+            }}
+            aria-label="Continue with Microsoft"
+          >
+            <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+            </svg>
+            Continue with Microsoft
+          </button>
+        )}
 
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
