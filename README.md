@@ -82,7 +82,7 @@ npm run build:turbo
 | `POSTGRES_URL` | Runtime DB connection string used by the app (`src/db/index.ts`, `drizzle.config.ts`). In local dev, point at non-production Neon. | [Neon console](https://console.neon.tech) → project/branch → connection string |
 | `POSTGRES_URL_TEST` | **Not read by the app** — optional team alias for the non-production URL when documenting or mirroring Vercel Preview envs. | Same as non-prod `POSTGRES_URL` |
 | `JWT_SECRET` | Secret for signing auth tokens (`src/lib/auth.ts`, `src/middleware.ts`) | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. Defaults to `https://www.still-point.me` when unset. | Deployment URL such as `https://www.still-point.me` or local `http://127.0.0.1:3000` |
+| `NEXT_PUBLIC_APP_URL` | Public absolute URL used when generating password reset links. If unset: Vercel **Production** (`VERCEL_ENV=production`) defaults to `https://still-point.me`; Vercel **Preview** uses `https://${VERCEL_URL}`; non-Vercel **`NODE_ENV=production`** (no Vercel URL vars) also defaults to `https://still-point.me`; otherwise `http://127.0.0.1:3000`. See `passwordResetAppBaseUrl()` in `src/lib/email.ts`. | Production: set explicitly to `https://still-point.me`; preview: optional override; local: `http://127.0.0.1:3000` |
 | `EMAIL_FROM` | Sender address for password reset email. Required with `RESEND_API_KEY` for password reset email delivery. | Verified sender/domain in the email provider |
 | `RESEND_API_KEY` | Server-only Resend API key for password reset email delivery. Never expose to the client. | Resend dashboard → API Keys |
 | `DAILY_API_KEY` | [Daily.co](https://www.daily.co/) REST API key — buddy video rooms and meeting tokens (`src/lib/daily.ts`). Server-only; never expose to the client. | Daily dashboard → Developers → API key |
@@ -99,6 +99,8 @@ Never commit credentials. Keep actual values only in local/Vercel environment se
 Password reset requests always return the same success message whether or not an account exists, so the endpoint does not reveal registered email addresses. When an account exists, the server stores a single-use hashed reset token that expires after one hour and emails a signed reset link to `/reset-password?token=...`.
 
 The reset request endpoint applies a lightweight per-process rate limit by email plus IP address. Keep platform/WAF throttling enabled in production for stronger abuse protection across serverless instances.
+
+**Production email (Resend, DNS, Vercel):** see [docs/email-setup.md](docs/email-setup.md).
 
 ## Database environment topology
 
@@ -153,7 +155,7 @@ Third-party keys in use today:
 
 | Service | Variable | Used for |
 |---------|----------|----------|
-| Resend (optional) | `EMAIL_FROM`, `RESEND_API_KEY` | Send password reset links (`src/lib/email.ts`). If unset, links are logged server-side for development only. |
+| Resend (optional) | `EMAIL_FROM`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL` | Send password reset links (`src/lib/email.ts`). If `EMAIL_FROM` / `RESEND_API_KEY` unset, non-prod logs links; prod requires both or send fails safely. Setup: [docs/email-setup.md](docs/email-setup.md). |
 | Daily.co | `DAILY_API_KEY` | Create/delete rooms, issue meeting tokens for buddy video (`src/lib/daily.ts`, `src/app/api/buddy/sessions/[id]/start`, `…/meeting-token`). |
 | YouTube (optional) | `STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID` | **Marketing only:** 11-character video id for the landing-page demo embed. Unset or empty → no embed (#166). |
 | Apple Push Notification service | `APNS_BUNDLE_ID`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY` | iOS push notifications (`src/lib/apns.ts`). |
