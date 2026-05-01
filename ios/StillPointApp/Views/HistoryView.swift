@@ -197,7 +197,7 @@ struct HistoryView: View {
                         if let bonus = session.bonusSeconds, bonus > 0 {
                             Text("·")
                                 .foregroundStyle(Color(SPColor.fg4))
-                            Text("+\(bonus / 60)m bonus")
+                            Text("+\(Int((Double(bonus) / 60.0).rounded()))m bonus")
                                 .foregroundStyle(Color(SPColor.fg2))
                         }
                     }
