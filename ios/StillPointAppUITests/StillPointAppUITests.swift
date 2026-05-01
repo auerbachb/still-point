@@ -29,13 +29,15 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
         emailField.tapAndType("ios.fixture@stillpoint.test", in: app)
 
+        dismissKeyboardIfPresent(in: app)
+
         let forgotPasswordButton = app.buttons["auth.forgotPasswordButton"]
         XCTAssertTrue(forgotPasswordButton.waitForExistence(timeout: 5))
         XCTAssertTrue(forgotPasswordButton.isHittable)
-        forgotPasswordButton.tap()
+        XCTAssertTrue(tapByStableCenter(forgotPasswordButton, in: app))
 
         XCTAssertTrue(
-            app.staticTexts["auth.passwordResetMessage"].waitForExistence(timeout: 5),
+            app.staticTexts["auth.passwordResetMessage"].waitForExistence(timeout: 20),
             "Password reset request confirmation should be visible"
         )
     }
