@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var deleteAccountError = ""
     @State private var showDeleteAccountError = false
 
+    private var isSavingSettings: Bool { isUpdating || savingUsername }
+
     var body: some View {
         ScrollView {
             VStack(spacing: SPSpacing.s5) {
@@ -102,11 +104,11 @@ struct SettingsView: View {
                         }
                     }
                     .tint(SPColor.green)
-                    .disabled(isUpdating)
+                    .disabled(isSavingSettings)
                     .onChange(of: isPublic) { _, newValue in
-                        guard !isUpdating else { return }
+                        guard !isSavingSettings else { return }
+                        isUpdating = true
                         Task {
-                            isUpdating = true
                             defer { isUpdating = false }
                             do {
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
@@ -226,7 +228,7 @@ struct SettingsView: View {
                     .foregroundStyle(Color(SPColor.fg))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .disabled(savingUsername)
+                    .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.usernameField")
                     .onChange(of: usernameDraft) { _, newValue in
                         if newValue.count > UsernameValidation.maxLength {
@@ -243,7 +245,7 @@ struct SettingsView: View {
                             .tracking(2)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(savingUsername)
+                    .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.usernameSaveButton")
 
                     Button("Cancel") {
@@ -252,7 +254,7 @@ struct SettingsView: View {
                     .font(SPFont.mono(11, weight: .medium))
                     .tracking(2)
                     .buttonStyle(.bordered)
-                    .disabled(savingUsername)
+                    .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.usernameCancelButton")
                 }
 
@@ -281,6 +283,7 @@ struct SettingsView: View {
                     .buttonStyle(.bordered)
                     .accessibilityLabel("Edit username")
                     .accessibilityIdentifier("settings.usernameEditButton")
+                    .disabled(isSavingSettings)
                 }
 
                 if let usernameSuccessMessage {
@@ -314,6 +317,7 @@ struct SettingsView: View {
     }
 
     private func saveUsername(currentUsername: String) async {
+        guard !isUpdating else { return }
         let trimmed = usernameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         usernameFieldError = nil
         usernameSuccessMessage = nil
