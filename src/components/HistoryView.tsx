@@ -68,12 +68,12 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
       fetch("/api/thoughts").then(r => r.json()),
     ]).then(([sessData, thoughtData]) => {
       setSessions(sessData.sessions || []);
-      setStats(sessData.stats || {
-        streak: 0,
-        avgClearPercent: 0,
-        avgThoughtsPerSession: 0,
-        avgThoughtsPerMinute: 0,
-        bonusMinutesTotal: 0,
+      setStats({
+        streak: sessData.stats?.streak ?? 0,
+        avgClearPercent: sessData.stats?.avgClearPercent ?? 0,
+        avgThoughtsPerSession: sessData.stats?.avgThoughtsPerSession ?? 0,
+        avgThoughtsPerMinute: sessData.stats?.avgThoughtsPerMinute ?? 0,
+        bonusMinutesTotal: sessData.stats?.bonusMinutesTotal ?? 0,
       });
       setThoughts(thoughtData.thoughts || []);
       setLoading(false);
