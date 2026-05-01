@@ -1,7 +1,72 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { signIn } from "next-auth/react";
+
+/** Current path + query as callbackUrl for OAuth. Preserves deep-link state (e.g. ?buddy=...); strips
+ *  `error` so we do not forward /app?error=... after sign-in (redirect callback would bypass sp_token bridge). */
+function buildOAuthCallbackUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  params.delete("error");
+  const search = params.toString();
+  return `${window.location.pathname}${search ? `?${search}` : ""}`;
+}
+
+const OAUTH_PROVIDER_BUTTON_STYLE: CSSProperties = {
+  background: "var(--surface-1)",
+  border: "1px solid var(--border-2)",
+  color: "var(--fg)",
+  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontSize: "15px",
+  padding: "12px 16px",
+  borderRadius: "30px",
+  cursor: "pointer",
+  transition: "all 0.3s",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
+};
+
+function onOAuthProviderButtonMouseEnter(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.style.borderColor = "var(--border-3)";
+  e.currentTarget.style.background = "var(--surface-2)";
+}
+
+function onOAuthProviderButtonMouseLeave(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.style.borderColor = "var(--border-2)";
+  e.currentTarget.style.background = "var(--surface-1)";
+}
+
+type OAuthProviderSignInButtonProps = {
+  provider: "google" | "facebook";
+  ariaLabel: string;
+  label: string;
+  icon: ReactNode;
+};
+
+function OAuthProviderSignInButton({
+  provider,
+  ariaLabel,
+  label,
+  icon,
+}: OAuthProviderSignInButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void signIn(provider, { callbackUrl: buildOAuthCallbackUrl() });
+      }}
+      style={OAUTH_PROVIDER_BUTTON_STYLE}
+      onMouseEnter={onOAuthProviderButtonMouseEnter}
+      onMouseLeave={onOAuthProviderButtonMouseLeave}
+      aria-label={ariaLabel}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
 type AuthScreenProps = {
   onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
@@ -114,103 +179,37 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       </div>
 
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <button
-          type="button"
-          onClick={() => {
-            // Carry the current page (path + query) as callbackUrl so any
-            // deep-link state (invite links, ?buddy=..., etc.) survives the
-            // OAuth round-trip. Strip `error` first — forwarding it back
-            // would land the user on /app?error=... after sign-in, which
-            // the redirect callback in auth-config treats as a failure
-            // target and bypasses the sp_token bridge.
-            const params = new URLSearchParams(window.location.search);
-            params.delete("error");
-            const search = params.toString();
-            const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
-            // Auth.js v5 changed the contract: GET /api/auth/signin/<provider>
-            // is rejected with UnknownAction. Signin requires POST + CSRF.
-            // The signIn() helper from next-auth/react fetches the CSRF
-            // token, posts the form, and navigates the browser to Google's
-            // authorize URL — same UX as the previous direct navigation,
-            // correct v5 contract.
-            void signIn("google", { callbackUrl });
-          }}
-          style={{
-            background: "var(--surface-1)",
-            border: "1px solid var(--border-2)",
-            color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "15px",
-            padding: "12px 16px",
-            borderRadius: "30px",
-            cursor: "pointer",
-            transition: "all 0.3s",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--border-3)";
-            e.currentTarget.style.background = "var(--surface-2)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border-2)";
-            e.currentTarget.style.background = "var(--surface-1)";
-          }}
-          aria-label="Continue with Google"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-            <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/>
-            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/>
-          </svg>
-          Continue with Google
-        </button>
+        {/*
+          Auth.js v5: GET /api/auth/signin/<provider> is rejected (UnknownAction).
+          signIn() from next-auth/react POSTs with CSRF then redirects to the provider.
+        */}
+        <OAuthProviderSignInButton
+          provider="google"
+          ariaLabel="Continue with Google"
+          label="Continue with Google"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+              <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/>
+              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/>
+            </svg>
+          }
+        />
 
-        <button
-          type="button"
-          onClick={() => {
-            const params = new URLSearchParams(window.location.search);
-            params.delete("error");
-            const search = params.toString();
-            const callbackUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
-            void signIn("facebook", { callbackUrl });
-          }}
-          style={{
-            background: "var(--surface-1)",
-            border: "1px solid var(--border-2)",
-            color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-            fontSize: "15px",
-            padding: "12px 16px",
-            borderRadius: "30px",
-            cursor: "pointer",
-            transition: "all 0.3s",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--border-3)";
-            e.currentTarget.style.background = "var(--surface-2)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border-2)";
-            e.currentTarget.style.background = "var(--surface-1)";
-          }}
-          aria-label="Continue with Facebook"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="#1877F2"
-              d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-            />
-          </svg>
-          Continue with Facebook
-        </button>
+        <OAuthProviderSignInButton
+          provider="facebook"
+          ariaLabel="Continue with Facebook"
+          label="Continue with Facebook"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#1877F2"
+                d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+              />
+            </svg>
+          }
+        />
 
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
