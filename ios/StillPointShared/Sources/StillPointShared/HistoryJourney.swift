@@ -100,6 +100,8 @@ public enum SessionStatistics {
 
         let totalClear = completedSessions.reduce(0) { $0 + $1.clearPercent }
         let totalThoughts = standard.reduce(0) { $0 + $1.thoughtCount }
+        let bonusSecondsTotal = completedSessions.reduce(0) { $0 + ($1.bonusSeconds ?? 0) }
+        let bonusMinutesTotal = bonusSecondsTotal / 60
         let sumThoughtRates = standard.reduce(0.0) { sum, session in
             let minutes = Double(max(session.actualTime ?? session.duration, 1)) / 60.0
             return sum + (minutes > 0 ? Double(session.thoughtCount) / minutes : 0)
@@ -111,7 +113,8 @@ public enum SessionStatistics {
             streak: streak,
             avgClearPercent: avgClearPercent,
             avgThoughtsPerSession: avgThoughtsPerSession,
-            avgThoughtsPerMinute: avgThoughtsPerMinute
+            avgThoughtsPerMinute: avgThoughtsPerMinute,
+            bonusMinutesTotal: bonusMinutesTotal
         )
     }
 }

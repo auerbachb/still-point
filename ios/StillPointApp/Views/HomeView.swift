@@ -91,6 +91,7 @@ struct HomeView: View {
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(SPColor.border1))
                     }
+                    .accessibilityIdentifier("home.buddySessionButton")
                 }
 
                 if let inviteError = appVM.buddyInviteError {

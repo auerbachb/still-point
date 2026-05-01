@@ -1,0 +1,103 @@
+name: iOS screenshot candidates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-screenshots
+  cancel-in-progress: false
+
+jobs:
+  regenerate-candidates:
+    name: fastlane screenshots
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: false
+          working-directory: ios
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Bundle install (Fastlane)
+        working-directory: ios
+        run: bundle install
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Resolve Snapshot device names for this Xcode
+        working-directory: ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          list="$(xcrun simctl list devices available)"
+          pick() {
+            local label="$1"
+            if grep -F "    ${label} (" <<<"${list}" >/dev/null 2>&1; then
+              printf '%s\n' "${label}"
+              return 0
+            fi
+            return 1
+          }
+          devices=()
+          pick "iPhone 17 Pro Max" && devices+=("iPhone 17 Pro Max") || true
+          pick "iPhone 16 Pro Max" && devices+=("iPhone 16 Pro Max") || true
+          pick "iPhone 17 Pro" && devices+=("iPhone 17 Pro") || true
+          pick "iPhone 16 Pro" && devices+=("iPhone 16 Pro") || true
+          pick "iPhone 11 Pro Max" && devices+=("iPhone 11 Pro Max") || true
+          pick "iPhone 8 Plus" && devices+=("iPhone 8 Plus") || true
+          pick "iPad Pro 13-inch (M5)" && devices+=("iPad Pro 13-inch (M5)") || true
+          pick "iPad Pro (12.9-inch) (6th generation)" && devices+=("iPad Pro (12.9-inch) (6th generation)") || true
+          if [[ "${#devices[@]}" -lt 4 ]]; then
+            echo "::error::Could not resolve enough simulators for snapshot (need 6.7 / 6.5 / 5.5 / iPad Pro classes)."
+            echo "$list"
+            exit 1
+          fi
+          joined="$(IFS=','; echo "${devices[*]}")"
+          echo "SNAPSHOT_DEVICES=${joined}" >> "${GITHUB_ENV}"
+
+      - name: Run snapshot lane
+        working-directory: ios
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_TIMESTAMP: "true"
+        run: bundle exec fastlane screenshots
+
+      - name: Upload candidates bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshot-candidates
+          path: ios/screenshots/candidates/**
+          if-no-files-found: error
+          retention-days: 14

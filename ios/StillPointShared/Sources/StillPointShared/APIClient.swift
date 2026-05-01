@@ -56,8 +56,11 @@ public actor APIClient {
             }
 
             let resolvedStore: UITestStore
-            if let persistedData = defaults.data(forKey: uiTestStoreDefaultsKey),
-               let persistedStore = try? JSONDecoder().decode(UITestStore.self, from: persistedData) {
+            if parsedUITestConfig.snapshotSeed {
+                resolvedStore = UITestStore.makeSnapshot(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
+                Self.persist(store: resolvedStore, key: uiTestStoreDefaultsKey)
+            } else if let persistedData = defaults.data(forKey: uiTestStoreDefaultsKey),
+                      let persistedStore = try? JSONDecoder().decode(UITestStore.self, from: persistedData) {
                 resolvedStore = persistedStore
             } else {
                 resolvedStore = UITestStore.makeDefault(seedAuthenticated: parsedUITestConfig.seedAuthenticated)
@@ -247,8 +250,8 @@ public actor APIClient {
     // MARK: - Board
 
     public func getBoard() async throws -> [BoardEntryDTO] {
-        if uiTestConfig != nil {
-            return []
+        if let uiTestResult = uiTestGetBoard() {
+            return uiTestResult
         }
         let response: BoardResponse = try await get("/api/board")
         return response.board
@@ -531,6 +534,7 @@ public actor APIClient {
             dayNumber: data.dayNumber,
             sessionType: data.sessionType,
             duration: data.duration,
+            bonusSeconds: data.bonusSeconds == 0 ? nil : data.bonusSeconds,
             completed: data.completed,
             actualTime: data.actualTime,
             clearPercent: data.clearPercent,
@@ -629,6 +633,19 @@ public actor APIClient {
         return createdThoughts
     }
 
+    /// Fixed practitioner list for App Store marketing screenshots (UI-test snapshot seed only).
+    private func uiTestGetBoard() -> [BoardEntryDTO]? {
+        guard let uiTestConfig, uiTestConfig.snapshotSeed else { return nil }
+        guard let store = uiTestStore, store.isAuthenticated else { return nil }
+        let me = store.user.username
+        return [
+            BoardEntryDTO(username: "quietledger", currentDay: 24, streak: 18, avgClear: 84, totalSessions: 52),
+            BoardEntryDTO(username: me, currentDay: store.user.currentDay, streak: 6, avgClear: 77, totalSessions: 22),
+            BoardEntryDTO(username: "morningstill", currentDay: 11, streak: 9, avgClear: 71, totalSessions: 30),
+            BoardEntryDTO(username: "deepamber", currentDay: 9, streak: 4, avgClear: 68, totalSessions: 17),
+        ]
+    }
+
     private func uiTestUpdateSettings(body: SettingsPatchBody) throws -> UserDTO? {
         guard let uiTestConfig else { return nil }
         guard var store = uiTestStore else {
@@ -709,6 +726,8 @@ private struct UITestConfig: Sendable {
     let forceTokenExpired: Bool
     let forceSessionsFailure: Bool
     let forceUsernameConflict: Bool
+    /// Deterministic marketing/scenario data for Fastlane snapshot runs (Issue #325).
+    let snapshotSeed: Bool
 
     static func fromProcessInfo() -> UITestConfig? {
         let env = ProcessInfo.processInfo.environment
@@ -719,7 +738,8 @@ private struct UITestConfig: Sendable {
             forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
             forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
-            forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"])
+            forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
+            snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"])
         )
     }
 
@@ -756,6 +776,146 @@ private struct UITestStore: Codable, Sendable {
             thoughts: [],
             nextSessionOrdinal: 1,
             nextThoughtOrdinal: 1
+        )
+    }
+
+    /// Rich canned history, journal rows, and board-relevant profile for Fastlane screenshots.
+    static func makeSnapshot(seedAuthenticated: Bool) -> UITestStore {
+        let fixtureUser = UserDTO(
+            id: "snapshot-user-1",
+            email: "snapshot@stillpoint.test",
+            username: "still_snapshot",
+            isPublic: true,
+            currentDay: 9
+        )
+
+        let sessions: [SessionDTO] = [
+            SessionDTO(
+                id: "snap-sess-1",
+                dayNumber: 4,
+                sessionType: .standard,
+                duration: 120,
+                bonusSeconds: 60,
+                completed: true,
+                actualTime: 125,
+                clearPercent: 74,
+                thoughtCount: 2,
+                mindStateLog: [],
+                sessionDate: "2026-01-05",
+                createdAt: "2026-01-05T08:30:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-sess-2",
+                dayNumber: 4,
+                sessionType: .standard,
+                duration: 120,
+                bonusSeconds: nil,
+                completed: true,
+                actualTime: 118,
+                clearPercent: 81,
+                thoughtCount: 1,
+                mindStateLog: [],
+                sessionDate: "2026-01-05",
+                createdAt: "2026-01-05T19:15:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-sess-3",
+                dayNumber: 5,
+                sessionType: .standard,
+                duration: 130,
+                bonusSeconds: 300,
+                completed: true,
+                actualTime: 400,
+                clearPercent: 69,
+                thoughtCount: 4,
+                mindStateLog: [],
+                sessionDate: "2026-01-06",
+                createdAt: "2026-01-06T07:00:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-sess-4",
+                dayNumber: 6,
+                sessionType: .standard,
+                duration: 140,
+                bonusSeconds: nil,
+                completed: true,
+                actualTime: 140,
+                clearPercent: 88,
+                thoughtCount: 0,
+                mindStateLog: [],
+                sessionDate: "2026-01-07",
+                createdAt: "2026-01-07T12:20:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-sess-5",
+                dayNumber: 7,
+                sessionType: .standard,
+                duration: 150,
+                bonusSeconds: nil,
+                completed: true,
+                actualTime: 150,
+                clearPercent: 72,
+                thoughtCount: 3,
+                mindStateLog: [],
+                sessionDate: "2026-01-08",
+                createdAt: "2026-01-08T06:45:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-sess-6",
+                dayNumber: 8,
+                sessionType: .standard,
+                duration: 160,
+                bonusSeconds: 120,
+                completed: true,
+                actualTime: 265,
+                clearPercent: 79,
+                thoughtCount: 2,
+                mindStateLog: [],
+                sessionDate: "2026-01-09",
+                createdAt: "2026-01-09T21:05:00Z",
+                buddySessionId: nil
+            ),
+            SessionDTO(
+                id: "snap-quick-1",
+                dayNumber: 8,
+                sessionType: .quick,
+                duration: StillPoint.quickDuration,
+                bonusSeconds: nil,
+                completed: true,
+                actualTime: StillPoint.quickDuration,
+                clearPercent: 62,
+                thoughtCount: 1,
+                mindStateLog: [],
+                sessionDate: "2026-01-09",
+                createdAt: "2026-01-09T08:10:00Z",
+                buddySessionId: nil
+            ),
+        ]
+
+        let thoughts: [ThoughtDTO] = [
+            ThoughtDTO(id: "snap-th-1", sessionId: "snap-sess-1", dayNumber: 4, timeInSession: 42, text: "Planning the week instead of watching the timer."),
+            ThoughtDTO(id: "snap-th-2", sessionId: "snap-sess-1", dayNumber: 4, timeInSession: 96, text: "Sound of traffic — came back to the breath."),
+            ThoughtDTO(id: "snap-th-3", sessionId: "snap-sess-3", dayNumber: 5, timeInSession: 55, text: "Should I adjust tomorrow's sit length?"),
+            ThoughtDTO(id: "snap-th-4", sessionId: "snap-sess-3", dayNumber: 5, timeInSession: 200, text: "Lost thread for a moment; noticed and returned."),
+            ThoughtDTO(id: "snap-th-5", sessionId: "snap-sess-5", dayNumber: 7, timeInSession: 22, text: "Flash of an old conversation."),
+            ThoughtDTO(id: "snap-th-6", sessionId: "snap-sess-6", dayNumber: 8, timeInSession: 140, text: "Room felt quieter toward the end."),
+            ThoughtDTO(id: "snap-th-7", sessionId: "snap-quick-1", dayNumber: 8, timeInSession: 12, text: "Quick reset between meetings."),
+        ]
+
+        return UITestStore(
+            user: fixtureUser,
+            loginEmail: fixtureUser.email,
+            loginPassword: "snapshot-pass",
+            isAuthenticated: seedAuthenticated,
+            sessions: sessions,
+            thoughts: thoughts,
+            nextSessionOrdinal: 100,
+            nextThoughtOrdinal: 100
         )
     }
 }

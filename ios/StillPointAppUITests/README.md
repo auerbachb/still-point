@@ -36,6 +36,8 @@ The app reads these launch environment keys in UI test mode:
 - `SP_UI_TEST_FORCE_LAUNCH_OFFLINE=1` (simulate failed API/airplane mode on launch)
 - `SP_UI_TEST_FORCE_TOKEN_EXPIRED=1` (simulate expired token during cold-start auth check)
 - `SP_UI_TEST_FORCE_SESSIONS_FAILURE=1` (optional sessions API failure simulation)
+- `SP_UI_TEST_FORCE_USERNAME_CONFLICT=1` (simulate username taken on settings save)
+- `SP_UI_TEST_SNAPSHOT_SEED=1` (Fastlane snapshot lane — canned sessions, thoughts, and practitioners board for marketing captures; use with `SP_UI_TEST_RESET_STORE=1` on first launch)
 
 Fixture login account (used when auth screen is shown):
 

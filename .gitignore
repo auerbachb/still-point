@@ -50,6 +50,12 @@ ios/build/
 ios/StillPointShared/build/
 ios/StillPointShared/.build/
 
+# Fastlane snapshot output (regenerate via `fastlane screenshots`; curate into screenshots/selected/)
+ios/screenshots/candidates/
+
+# Bundler / Fastlane (install with `bundle install` under ios/)
+ios/vendor/
+
 # Nested agent worktrees (gitlinks); keep out of the app repo
 .claude/worktrees/
 .worktrees/
