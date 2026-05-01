@@ -40,7 +40,7 @@ struct HistoryView: View {
                         .foregroundStyle(SPColor.green)
                     }
                     .padding(.top, SPSpacing.s6)
-                } else if vm.sessions.isEmpty {
+                } else if vm.journeyRows.isEmpty {
                     VStack(spacing: SPSpacing.s3) {
                         Text("No sessions yet")
                             .font(SPFont.serifItalic(15))

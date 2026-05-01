@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, thoughts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { isUuid } from "@/lib/friends";
 import { eq, and, asc } from "drizzle-orm";
 
 export async function GET(
@@ -15,7 +16,7 @@ export async function GET(
     }
 
     const { sessionId } = await params;
-    if (!sessionId) {
+    if (!sessionId || !isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
 

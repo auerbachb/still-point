@@ -1,5 +1,8 @@
 import { addDaysToIsoDate, daysBetweenIsoDatesInclusive } from "./sessionCalendar";
 
+/** Max consecutive missed-day rows between two sessions (then remaining gap is collapsed). */
+export const MAX_MISSED_GAP_ROWS = 366;
+
 export type HistoryJourneySession<T> = {
   sessionDate: string;
   sessionType?: string;
@@ -32,7 +35,9 @@ export function buildHistoryJourneyRows<T>(sessions: HistoryJourneySession<T>[])
     if (i > 0) {
       const prev = sorted[i - 1]!;
       const daysBetween = daysBetweenIsoDatesInclusive(prev.sessionDate, cur.sessionDate);
-      for (let gap = 1; gap < daysBetween; gap++) {
+      const missedCount = Math.max(0, daysBetween - 1);
+      const toEmit = Math.min(missedCount, MAX_MISSED_GAP_ROWS);
+      for (let gap = 1; gap <= toEmit; gap++) {
         const missedDate = addDaysToIsoDate(prev.sessionDate, gap);
         rows.push({ kind: "missed", date: missedDate });
       }

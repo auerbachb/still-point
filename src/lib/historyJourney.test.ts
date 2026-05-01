@@ -23,7 +23,14 @@ describe("buildHistoryJourneyRows", () => {
     ]);
   });
 
-  test("sorts by date then sortKey", () => {
+  test("caps missed rows for very large calendar gaps", () => {
+    const rows = buildHistoryJourneyRows([
+      { sessionDate: "2020-01-01", sortKey: "a", data: { id: "1" } },
+      { sessionDate: "2030-01-01", sortKey: "b", data: { id: "2" } },
+    ]);
+    const missed = rows.filter(r => r.kind === "missed");
+    expect(missed.length).toBe(366);
+  });
     const sorted = sortSessionsForHistory([
       { sessionDate: "2026-04-28", sortKey: "b", data: 2 },
       { sessionDate: "2026-04-28", sortKey: "a", data: 1 },

@@ -53,6 +53,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
+  const sessionLabelColWidth = isMobile ? "88px" : "100px";
 
   useEffect(() => {
     Promise.all([
@@ -219,7 +220,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", color: "var(--fg-3)",
-                    width: "32px", textAlign: "right",
+                    width: sessionLabelColWidth, textAlign: "right",
                   }}>
                     &mdash;
                   </div>
@@ -294,19 +295,19 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                       {showDateColumn ? dateLabelFull : ""}
                     </div>
                   )}
-                  {isMobile && showDateColumn && (
+                  {isMobile && (
                     <div style={{
                       fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: "10px", color: "var(--fg-4)",
                       minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
-                      {dateLabelShort}
+                      {showDateColumn ? dateLabelShort : ""}
                     </div>
                   )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                     fontSize: "11px", color: "var(--fg-3)",
-                    width: isMobile ? "88px" : "100px", textAlign: "right",
+                    width: sessionLabelColWidth, textAlign: "right",
                   }}>
                     {sessionLabel}
                   </div>
@@ -389,10 +390,17 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                 today
               </div>
             )}
+            {isMobile && (
+              <div style={{
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "10px", color: "var(--fg-4)",
+                minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
+              }} />
+            )}
             <div style={{
               fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
               fontSize: "11px", color: "var(--fg-4)",
-              width: "32px", textAlign: "right",
+              width: sessionLabelColWidth, textAlign: "right",
             }}>
               D{currentDay}
             </div>

@@ -530,6 +530,7 @@ public actor APIClient {
             thoughtCount: data.thoughtCount,
             mindStateLog: data.mindStateLog,
             sessionDate: data.sessionDate,
+            createdAt: nil,
             buddySessionId: nil
         )
         store.nextSessionOrdinal += 1
