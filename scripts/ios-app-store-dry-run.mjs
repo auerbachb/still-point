@@ -18,7 +18,10 @@ const requiredWorkflowSecrets = [
   "APPSTORE_API_PRIVATE_KEY",
 ];
 
-const workflowUrl = "https://github.com/auerbachb/still-point/actions/workflows/ios-testflight.yml";
+const testflightWorkflowUrl =
+  "https://github.com/auerbachb/still-point/actions/workflows/ios-testflight.yml";
+const appStoreReleaseWorkflowUrl =
+  "https://github.com/auerbachb/still-point/actions/workflows/ios-app-store-release.yml";
 const appStoreConnectBaseUrl = "https://appstoreconnect.apple.com/apps";
 const appStoreApiMinimumRole =
   "App Manager or Admin for app/version/build/metadata/screenshot/submission operations; Account Holder/Admin for agreements, tax, banking, and some compliance decisions.";
@@ -27,11 +30,11 @@ const issueChecklist = [
   ["A1", "Read README Release operations and confirm both canonical iOS runbooks are referenced."],
   ["A2", "Read ios/RELEASING.md and confirm MARKETING_VERSION, CURRENT_PROJECT_VERSION, and ios-v* tag plan."],
   ["A3", "Read docs/operations/ios-app-store-submission.md and map every Phase A-F item to automation, AI-assisted verification, or human decision."],
-  ["A4", "Read .github/workflows/ios-testflight.yml and confirm the intended tag triggers TestFlight upload."],
+  ["A4", "Read .github/workflows/ios-testflight.yml and ios-app-store-release.yml and confirm tag triggers (TestFlight vs App Store release)."],
   ["A5", "Confirm ios/PARITY_CHECKLIST.md and ios/QA_CHECKLIST.md satisfy workflow-required checked items before tagging."],
   ["B1", "Confirm an App Store Connect API key is available with minimum roles for version/build/metadata/screenshot/submission operations."],
   ["B2", "Confirm GitHub secrets used by the TestFlight workflow are present."],
-  ["B3", "Create or identify a script/tooling approach for App Store Connect API calls instead of manual website entry where possible."],
+  ["B3", "Create or identify a script/tooling approach for App Store Connect API calls instead of manual website entry where possible (Fastlane under ios/fastlane/)."],
   ["B4", "API-check Apple agreements/tax/banking if possible; otherwise record Account Holder/Admin confirmation."],
   ["B5", "API-query the latest processed TestFlight build for the intended version/build and fail fast on missing, processing, invalid, or non-incremented build."],
   ["C1", "Create or open the target App Store version programmatically."],
@@ -274,7 +277,7 @@ function classifyIssueChecklist({ project, asc, trackingIssue, requireLive }) {
         reportSecretStatus.status,
         reportSecretStatus.message,
       ],
-      B3: ["pass", "This script is the dry-run tooling approach and records ASC endpoints for build/version validation."],
+      B3: ["pass", "Fastlane under ios/fastlane/ (gym, pilot, deliver) plus this dry-run script cover ASC API automation paths."],
       B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
       B5: !asc.live
         ? [offlineStatus, asc.reason]
@@ -326,7 +329,8 @@ Generated: ${report.generatedAt}
 - Bundle ID: ${report.project.bundleId}
 - Release owner: ${report.releaseOwner}
 - Submission URL: ${report.submissionUrl}
-- Workflow URL: ${report.preflightSummary.workflowUrl}
+- TestFlight workflow: ${report.preflightSummary.testflightWorkflowUrl}
+- App Store release workflow: ${report.preflightSummary.appStoreReleaseWorkflowUrl}
 - TestFlight build status: ${report.preflightSummary.testFlightBuildStatus}
 - App Store version URL: ${report.preflightSummary.appStoreVersionUrl}
 - Attached build: ${report.preflightSummary.attachedBuild}
@@ -370,6 +374,7 @@ async function main() {
   const releasing = read("ios/RELEASING.md");
   const submissionRunbook = read("docs/operations/ios-app-store-submission.md");
   const workflow = read(".github/workflows/ios-testflight.yml");
+  const releaseWorkflow = read(".github/workflows/ios-app-store-release.yml");
   const parity = read("ios/PARITY_CHECKLIST.md");
   const qa = read("ios/QA_CHECKLIST.md");
   const projectYml = read("ios/project.yml");
@@ -389,9 +394,20 @@ async function main() {
     ? pass("A3", "Submission runbook covers phases A-F.", { phases: phaseMatches })
     : fail("A3", "Submission runbook does not cover every phase A-F.", { phases: phaseMatches });
 
-  workflow.includes("tags:") && workflow.includes("'ios-v*'")
-    ? pass("A4", "TestFlight workflow is triggered by ios-v* tags.", { intendedTag })
-    : fail("A4", "TestFlight workflow is missing ios-v* tag trigger.");
+  const testflightTagOk =
+    workflow.includes("tags:") && workflow.includes("'ios-v*-build*'");
+  const releaseTagOk =
+    releaseWorkflow.includes("tags:") && releaseWorkflow.includes("'ios-v[0-9]+.[0-9]+.[0-9]+'");
+  testflightTagOk && releaseTagOk
+    ? pass("A4", "TestFlight uses ios-v*-build* tags; App Store release uses strict ios-vMAJOR.MINOR.PATCH tags.", {
+        intendedTag,
+        testflightTagPattern: "ios-v*-build*",
+        appStoreReleaseTagPattern: "ios-vMAJOR.MINOR.PATCH",
+      })
+    : fail("A4", "Workflow tag triggers are misconfigured for TestFlight vs App Store release.", {
+        testflightTagOk,
+        releaseTagOk,
+      });
 
   const parityOk = requiredChecked(parity, "Feature parity checklist between iOS and web is completed.")
     && requiredChecked(parity, "All critical parity gaps are fixed or explicitly deferred with owner/date.");
@@ -401,32 +417,34 @@ async function main() {
     ? pass("A5", "Workflow-required release-readiness checklist items are checked.")
     : fail("A5", "One or more workflow-required release-readiness checklist items are missing.");
 
-  const workflowSecretRefs = requiredWorkflowSecrets.filter((secret) => workflow.includes(`secrets.${secret}`));
+  const workflowSecretRefs = requiredWorkflowSecrets.filter(
+    (secret) => workflow.includes(`secrets.${secret}`) && releaseWorkflow.includes(`secrets.${secret}`),
+  );
   const githubSecrets = listGithubSecrets();
   const missingWorkflowRefs = requiredWorkflowSecrets.filter((secret) => !workflowSecretRefs.includes(secret));
   const missingGithubSecrets = githubSecrets.available
     ? requiredWorkflowSecrets.filter((secret) => !githubSecrets.names.includes(secret))
     : [];
   if (missingWorkflowRefs.length > 0) {
-    fail("B2", "TestFlight workflow is missing required secret references.", {
+    fail("B2", "One or both iOS workflows are missing required secret references.", {
       requiredWorkflowSecrets,
       workflowSecretRefs,
       missingWorkflowRefs,
     });
     reportSecretStatus = {
       status: "fail",
-      message: `Workflow is missing required secret references: ${missingWorkflowRefs.join(", ")}.`,
+      message: `Workflow(s) missing required secret references: ${missingWorkflowRefs.join(", ")}.`,
     };
   } else if (githubSecrets.available && missingGithubSecrets.length === 0) {
-    pass("B2", "TestFlight workflow references every required secret and GitHub reports all required secret names.", {
+    pass("B2", "Both iOS workflows reference every required secret and GitHub reports all required secret names.", {
       requiredWorkflowSecrets,
     });
     reportSecretStatus = {
       status: "pass",
-      message: "TestFlight workflow references every required secret and GitHub reports all required secret names.",
+      message: "Both iOS workflows reference every required secret and GitHub reports all required secret names.",
     };
   } else if (githubSecrets.available) {
-    warn("B2", "TestFlight workflow references every required secret, but GitHub is missing one or more required secret names.", {
+    warn("B2", "Both iOS workflows reference every required secret, but GitHub is missing one or more required secret names.", {
       requiredWorkflowSecrets,
       missingGithubSecrets,
     });
@@ -435,13 +453,13 @@ async function main() {
       message: `GitHub secret names missing: ${missingGithubSecrets.join(", ")}.`,
     };
   } else {
-    warn("B2", "TestFlight workflow references every required secret, but repository secret visibility could not be confirmed.", {
+    warn("B2", "Both iOS workflows reference every required secret, but repository secret visibility could not be confirmed.", {
       requiredWorkflowSecrets,
       reason: githubSecrets.reason,
     });
     reportSecretStatus = {
       status: "warning",
-      message: `Workflow references required secrets; GitHub secret list unavailable: ${githubSecrets.reason}.`,
+      message: `Workflows reference required secrets; GitHub secret list unavailable: ${githubSecrets.reason}.`,
     };
   }
 
@@ -514,10 +532,17 @@ async function main() {
     intendedTag,
     releaseOwner: args.releaseOwner ?? "UNSET_RELEASE_OWNER",
     submissionUrl: args.submissionUrl ?? "UNSET_SUBMISSION_URL",
-    workflow: {
-      path: ".github/workflows/ios-testflight.yml",
-      tagTrigger: "ios-v*",
-      url: workflowUrl,
+    workflows: {
+      testflight: {
+        path: ".github/workflows/ios-testflight.yml",
+        tagTrigger: "ios-v*-build*",
+        url: testflightWorkflowUrl,
+      },
+      appStoreRelease: {
+        path: ".github/workflows/ios-app-store-release.yml",
+        tagTrigger: "ios-vMAJOR.MINOR.PATCH",
+        url: appStoreReleaseWorkflowUrl,
+      },
       requiredSecrets: requiredWorkflowSecrets,
     },
     asc,
@@ -530,7 +555,8 @@ async function main() {
     intendedTag,
     version: project.marketingVersion,
     build: project.buildNumber,
-    workflowUrl,
+    testflightWorkflowUrl,
+    appStoreReleaseWorkflowUrl,
     appStoreApiMinimumRole,
     testFlightBuildStatus: asc.live
       ? asc.intendedBuild?.processingState ?? "intended build not found"

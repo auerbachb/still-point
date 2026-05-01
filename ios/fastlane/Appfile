@@ -1,2 +1,7 @@
+# frozen_string_literal: true
+
+# App Store Connect app identifier (matches ios/project.yml).
 app_identifier("com.brettonauerbach.stillpoint")
-# Optional: FASTLANE_USER for Apple ID flows not used by API-key deliver.
+
+# Apple Developer Team ID (matches ios/project.yml DEVELOPMENT_TEAM).
+team_id("T5UU4BP6AV")

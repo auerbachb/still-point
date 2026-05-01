@@ -1,17 +1,16 @@
-name: Build & Upload to TestFlight
+name: iOS App Store release (Fastlane)
 
 on:
   push:
     tags:
-      # TestFlight binary uploads use extended tags, e.g. ios-v1.0.3-build10.
-      # Semver-only tags (ios-v1.0.0) trigger App Store release — see ios-app-store-release.yml.
-      - 'ios-v*-build*'
+      # Strict semver: ios-v1.2.3 (no -build suffix — those stay on TestFlight workflow).
+      - 'ios-v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ios-testflight
+  group: ios-app-store-release
   cancel-in-progress: false
 
 jobs:
@@ -54,9 +53,6 @@ jobs:
         run: xcodegen generate
 
       - name: Run iOS smoke lane in Release configuration
-        # iOS UI tests run fully in-app via SP_UI_TEST_MODE=1 (set in
-        # StillPointAppUITests.makeApp); no real backend is reached, so
-        # we deliberately omit E2E_BASE_URL and credentials here.
         env:
           E2E_ENV: ci
           E2E_SECRETS_REQUIRED: "false"
@@ -67,7 +63,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-testflight-preflight-diagreports
+          name: ios-app-store-release-preflight-diagreports
           path: ~/Library/Logs/DiagnosticReports/**
           if-no-files-found: ignore
           retention-days: 14
@@ -76,62 +72,73 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-testflight-preflight-xcresult
+          name: ios-app-store-release-preflight-xcresult
           path: artifacts/e2e/ios/**
           if-no-files-found: warn
           retention-days: 14
 
-  build-and-upload:
+  fastlane-release:
     needs: pre-flight-tests
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate tag matches ios project marketing version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^ios-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be ios-vMAJOR.MINOR.PATCH (got $TAG)"
+            exit 1
+          fi
+          VER="${TAG#ios-v}"
+          MARKETING="$(grep -E '^\s+MARKETING_VERSION:' ios/project.yml | head -1 | sed -E 's/.*MARKETING_VERSION:\s*"?([^"#]+)"?.*/\1/')"
+          if [[ "$VER" != "$MARKETING" ]]; then
+            echo "::error::Tag version $VER does not match ios/project.yml MARKETING_VERSION=$MARKETING"
+            exit 1
+          fi
 
       - name: Validate release-readiness artifacts
         shell: bash
         run: |
           set -euo pipefail
           if ! test -f ios/PARITY_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing ios/PARITY_CHECKLIST.md"
+            echo "::error::Missing ios/PARITY_CHECKLIST.md"
             exit 1
           fi
-
           if ! test -f ios/QA_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing ios/QA_CHECKLIST.md"
+            echo "::error::Missing ios/QA_CHECKLIST.md"
             exit 1
           fi
-
           if ! grep -qE '^- \[[xX]\] Feature parity checklist between iOS and web is completed\.$' ios/PARITY_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing PARITY_CHECKLIST entry: Feature parity checklist between iOS and web is completed"
+            echo "::error::Missing PARITY_CHECKLIST entry: Feature parity checklist between iOS and web is completed"
             exit 1
           fi
-
           if ! grep -qE '^- \[[xX]\] All critical parity gaps are fixed or explicitly deferred with owner/date\.$' ios/PARITY_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing PARITY_CHECKLIST entry: All critical parity gaps are fixed or explicitly deferred with owner/date"
+            echo "::error::Missing PARITY_CHECKLIST entry: All critical parity gaps are fixed or explicitly deferred with owner/date"
             exit 1
           fi
-
           if ! grep -qE '^- \[[xX]\] Regression/QA pass for release candidate is completed\.$' ios/QA_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing QA_CHECKLIST entry: Regression/QA pass for release candidate is completed"
+            echo "::error::Missing QA_CHECKLIST entry: Regression/QA pass for release candidate is completed"
             exit 1
           fi
-
           if ! grep -qE '^- \[[xX]\] App Store metadata/versioning/release notes are finalized\.$' ios/QA_CHECKLIST.md; then
-            echo "::error file=.github/workflows/ios-testflight.yml::Missing QA_CHECKLIST entry: App Store metadata/versioning/release notes are finalized"
+            echo "::error::Missing QA_CHECKLIST entry: App Store metadata/versioning/release notes are finalized"
             exit 1
           fi
 
       - name: Generate App Store submission dry-run evidence
-        run: npm run ios:app-store:dry-run -- --release-owner "GitHub Actions preflight"
+        run: npm run ios:app-store:dry-run -- --release-owner "GitHub Actions App Store release"
 
       - name: Upload App Store submission dry-run evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app-store-dry-run
+          name: ios-app-store-dry-run-release
           path: artifacts/ios-app-store-dry-run/**
           if-no-files-found: error
           retention-days: 30
@@ -153,12 +160,10 @@ jobs:
             if brew install xcodegen; then
               exit 0
             fi
-
             if [[ "$attempt" -lt 3 ]]; then
               sleep $((attempt * 10))
             fi
           done
-
           echo "Failed to install xcodegen after 3 attempts."
           exit 1
 
@@ -166,86 +171,55 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: ios
+
       - name: Install Apple certificate and provisioning profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
         run: |
-          # Create variables
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
-          PP_INSTALL_PATH=~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision
 
-          # Import certificate and provisioning profile from secrets
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
-          # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificate to keychain
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | tr -d '"')
 
-          # Apply provisioning profile and extract UUID for manual signing
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i $PP_PATH)")
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PP_UUID}.mobileprovision
 
-      - name: Build archive
+      - name: Fastlane release (preflight, gym, deliver)
         working-directory: ios
-        env:
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-        run: |
-          # Extract provisioning profile UUID for manual signing
-          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
-          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i $PP_PATH)")
-
-          xcodebuild archive \
-            -project StillPoint.xcodeproj \
-            -scheme StillPoint \
-            -configuration Release \
-            -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=T5UU4BP6AV \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
-            CODE_SIGN_IDENTITY="Apple Distribution"
-
-      - name: Upload to App Store Connect
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-        run: |
-          # Write API key to file for authentication
-          mkdir -p ~/.private_keys
-          printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          RELEASE_OWNER: ${{ github.actor }}
+          # Default dry-run for App Store: upload binary + metadata, do not submit for review.
+          # Set repository variable IOS_SUBMIT_FOR_REVIEW to the literal "1" to enable submit.
+          SUBMIT_FOR_REVIEW: ${{ vars.IOS_SUBMIT_FOR_REVIEW }}
+          AUTOMATIC_RELEASE: ${{ vars.IOS_AUTOMATIC_RELEASE }}
+        run: bundle exec fastlane release
 
-          # Export and upload in one step using xcodebuild
-          # The ExportOptions.plist has destination=upload and method=app-store-connect
-          # which makes xcodebuild upload directly to App Store Connect / TestFlight
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/StillPoint.xcarchive \
-            -exportOptionsPlist ios/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/.private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8 \
-            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
-
-      - name: Clean up keychain, provisioning profile, and API key
+      - name: Clean up keychain and provisioning profile
         if: always()
         run: |
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
           rm -f $RUNNER_TEMP/build_certificate.p12 2>/dev/null || true
           rm -f $RUNNER_TEMP/build_pp.mobileprovision 2>/dev/null || true
-          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision 2>/dev/null || true
-          rm -rf ~/.private_keys 2>/dev/null || true

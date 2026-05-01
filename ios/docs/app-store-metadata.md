@@ -1,6 +1,6 @@
 # App Store Connect — canonical marketing copy
 
-This file is the **repository source of truth** for App Store Connect text that should match product positioning. Paste or reconcile these strings in App Store Connect when creating or editing a version. If the live storefront differs, update either ASC or this doc and note the change in release notes or the PR that touched copy.
+This file documents **positioning and parity** for App Store Connect. The **machine-deliverable** strings (name, subtitle, description, keywords, release notes, URLs, review notes) live under [`../fastlane/metadata/`](../fastlane/metadata/) as `deliver` locale files (`en-US` is canonical). Reconcile App Store Connect with those files when preparing a submission. If the live storefront differs, update ASC or the `fastlane/metadata` files (and this doc if narrative context changes) and note the change in release notes or the PR that touched copy.
 
 ## Manual fix (issue #195)
 

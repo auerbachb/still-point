@@ -43,12 +43,12 @@ Before your first TestFlight release, configure a tester group and handle encryp
    git add ios/project.yml ios/PARITY_CHECKLIST.md ios/QA_CHECKLIST.md ios/RELEASING.md
    git commit -m "Finalize iOS 1.0.3 (build 10) release readiness"
    ```
-4. Tag and push:
+4. Tag and push using the **TestFlight** tag pattern (`ios-v{version}-build{number}`):
    ```bash
    git tag ios-v1.0.3-build10
    git push origin ios-v1.0.3-build10
    ```
-5. The GitHub Actions workflow builds and uploads to TestFlight automatically.
+5. The [Build & Upload to TestFlight](../.github/workflows/ios-testflight.yml) workflow (`ios-v*-build*` tags) builds and uploads to TestFlight automatically.
 6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
 7. Record the processed build number and processing timestamp in `ios/QA_CHECKLIST.md`.
 8. Before App Store submission, run the automation dry run and save its artifact:
@@ -62,17 +62,48 @@ Before your first TestFlight release, configure a tester group and handle encryp
    `APPSTORE_APP_ID` plus the App Store Connect API key environment variables
    and rerun with `-- --require-live`.
 
+## App Store release (tag → Fastlane)
+
+When you are ready to push **metadata + binary** to App Store Connect for the version in `ios/project.yml` (typically after TestFlight validation):
+
+1. Ensure `MARKETING_VERSION` in `ios/project.yml` matches the storefront version you intend to ship.
+2. Use a **strict semver tag** (no `-build` suffix): `ios-vMAJOR.MINOR.PATCH` must equal `MARKETING_VERSION`, e.g. `ios-v1.0.3`.
+3. Push the tag:
+   ```bash
+   git tag ios-v1.0.3
+   git push origin ios-v1.0.3
+   ```
+4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs: smoke tests, checklist gate, `npm run ios:app-store:dry-run`, then `bundle exec fastlane release` (preflight → `gym` → `deliver`).
+
+**Submit for review** is off by default in CI (binary and metadata still upload). To enable programmatic submission for a run, set the GitHub repository variable `IOS_SUBMIT_FOR_REVIEW` to `1`. Optional: `IOS_AUTOMATIC_RELEASE=1` for automatic release after approval.
+
+### Fastlane (local or debugging)
+
+Bundler + Fastlane live under `ios/`:
+
+```bash
+cd ios
+bundle install
+bundle exec fastlane preflight   # same as npm dry-run from repo root
+bundle exec fastlane build       # gym only
+bundle exec fastlane metadata_only
+bundle exec fastlane release     # preflight + gym + deliver
+```
+
+Lanes are defined in [`fastlane/Fastfile`](./fastlane/Fastfile). App identifier and team are in [`fastlane/Appfile`](./fastlane/Appfile). Default `deliver` options are in [`fastlane/Deliverfile`](./fastlane/Deliverfile). **Localized copy** for `en-US` is under [`fastlane/metadata/en-US/`](./fastlane/metadata/en-US/) (canonical for `deliver`).
+
 ## App Store submission handoff
 
-After the intended TestFlight build is processed and valid, use the delegate-ready [iOS App Store submission runbook](../docs/operations/ios-app-store-submission.md) to complete App Store Connect setup, reviewer notes, submission, rejection handling, approval, and release tracking.
+After the intended TestFlight build is processed and valid, use the delegate-ready [iOS App Store submission runbook](../docs/operations/ios-app-store-submission.md) to complete App Store Connect setup, reviewer notes, submission, rejection handling, approval, and release tracking. For what is automated vs manual in tooling, see [Automation evidence log](../docs/operations/automation-evidence.md).
 
 ## Version numbering
 
 - `MARKETING_VERSION` - user-facing version (e.g., `1.0.0`, `1.0.3`).
 - `CURRENT_PROJECT_VERSION` - build number; increment every upload (`1`, `2`, `3`, ...).
-- **Git tag** must match `ios-v*` to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
-- Tag value does not have to equal `MARKETING_VERSION`; uploaded app version is controlled by `ios/project.yml`.
-- Re-uploads for same marketing version require a new tag and incremented build number, e.g. `ios-v<marketing-version>-build<next-build>`.
+- **TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build10`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
+- **App Store automation:** push a strict semver tag `ios-vMAJOR.MINOR.PATCH` that **equals** `MARKETING_VERSION` to trigger [`.github/workflows/ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml).
+- Uploaded app version is controlled by `ios/project.yml`, not the tag string (except the App Store workflow enforces tag ↔ `MARKETING_VERSION` match).
+- Re-uploads for the same marketing version require a new TestFlight tag and incremented build number, e.g. `ios-v<marketing-version>-build<next-build>`.
 
 ## Regenerate candidate App Store screenshots (Issue #325)
 
@@ -126,7 +157,7 @@ Workflow [`.github/workflows/ios-screenshots.yml`](../.github/workflows/ios-scre
 
 ## App Store metadata and release notes checklist
 
-Canonical App Store Connect copy (subtitle, description alignment, privacy URL) lives in [`ios/docs/app-store-metadata.md`](./docs/app-store-metadata.md). Reconcile App Store Connect with that file when preparing a submission.
+Canonical **deliverable** App Store Connect strings for English (U.S.) live in [`fastlane/metadata/en-US/`](./fastlane/metadata/en-US/). Positioning context and parity notes remain in [`ios/docs/app-store-metadata.md`](./docs/app-store-metadata.md). Reconcile App Store Connect with the `fastlane/metadata` files when preparing a submission.
 
 Before "Add for Review," verify the following in App Store Connect:
 

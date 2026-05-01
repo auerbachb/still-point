@@ -1,0 +1,10 @@
+Thank you for reviewing Still Point.
+
+Sign in using the demo credentials in the private review fields, or create a new account from the sign-in screen.
+
+Account deletion path for Guideline 5.1.1(v):
+1. Open Settings.
+2. Tap Delete Account.
+3. Tap Continue on the first prompt.
+4. Tap Delete Account on the final confirmation alert.
+5. Confirm the app returns to the signed-out screen.

@@ -1,0 +1,5 @@
+Still Point improves session reliability and social sitting stability.
+
+- Refines buddy session join/start/leave flows for more reliable partner synchronization.
+- Improves solo session save behavior and completion-note consistency.
+- Includes account and visibility settings polish ahead of App Store review.

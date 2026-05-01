@@ -216,7 +216,7 @@ All iOS release and App Store submission work must reference:
 - [iOS release / TestFlight runbook](ios/RELEASING.md)
 - [iOS App Store submission and delegation runbook](docs/operations/ios-app-store-submission.md)
 
-Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. The TestFlight upload path is automated through GitHub Actions; the App Store submission runbook identifies which App Store Connect steps are automatable through Apple's API and which still require an Account Holder/Admin or human release decision.
+Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. **TestFlight** uploads run on `ios-v*-build*` tags via [`.github/workflows/ios-testflight.yml`](.github/workflows/ios-testflight.yml). **App Store** metadata + binary automation runs on strict `ios-vMAJOR.MINOR.PATCH` tags (matching `MARKETING_VERSION` in `ios/project.yml`) via [`.github/workflows/ios-app-store-release.yml`](.github/workflows/ios-app-store-release.yml) and Fastlane under `ios/fastlane/`. The App Store submission runbook identifies which App Store Connect steps are automatable through Apple's API and which still require an Account Holder/Admin or human release decision. For automated vs manual steps, see [docs/operations/automation-evidence.md](docs/operations/automation-evidence.md).
 
 Before the next live App Store submission, run the AI-assisted dry run and save its generated evidence:
 
@@ -224,7 +224,7 @@ Before the next live App Store submission, run the AI-assisted dry run and save 
 npm run ios:app-store:dry-run
 ```
 
-The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks the TestFlight workflow's required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
+The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks both iOS workflows' required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
 
 ### Neon (database)
 
@@ -274,7 +274,7 @@ What should be green before merge:
 
 Notes:
 
-- The GitHub Actions workflow `Build & Upload to TestFlight` is **release-only** (tag trigger `ios-v*`) and is not a pull-request merge gate.
+- The GitHub Actions workflows **Build & Upload to TestFlight** (`ios-v*-build*` tags) and **iOS App Store release (Fastlane)** (`ios-vMAJOR.MINOR.PATCH` tags) are **release-only** and are not pull-request merge gates.
 - For strict enforcement, add these check names under GitHub branch protection required checks for `main`.
 
 ## Project structure

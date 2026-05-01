@@ -1,0 +1,3 @@
+Still Point is a meditation timer for people struggling to get started and stay consistent: it begins at one minute, adds ten seconds per day, and shows time as boxes that fill up as you go to make sitting still easier.
+
+Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.
