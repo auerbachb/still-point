@@ -72,6 +72,13 @@ final class AppViewModel {
     }
     private var pendingBuddyInviteToken: String?
 
+    /// Persisted: keep device screen awake during an active sit when enabled.
+    var keepScreenAwakeDuringSession: Bool {
+        didSet {
+            SessionIdleTimerController.setKeepScreenAwakePreferenceEnabled(keepScreenAwakeDuringSession)
+        }
+    }
+
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
     }
@@ -89,6 +96,10 @@ final class AppViewModel {
         if case .buddySession = currentView { return true }
         if case .completion = currentView { return true }
         return false
+    }
+
+    init() {
+        self.keepScreenAwakeDuringSession = SessionIdleTimerController.keepScreenAwakePreferenceEnabled
     }
 
     func checkAuth() async {
