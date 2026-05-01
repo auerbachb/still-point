@@ -153,6 +153,38 @@ run_lane() {
   return $status
 }
 
+# Returns 0 if the previous attempt's failure looks retriable (infra/transient
+# or unknown — default), 1 if it carries a known XCTest assertion signature
+# (real product/test bug — do not consume retry budget). Aligns with the
+# "Non-retriable failures" column in docs/testing/e2e-policy.md Section 1.
+is_retriable_failure() {
+  local log="$1"
+  [[ -f "$log" ]] || return 0
+  # If a simulator-side crash report for our app exists, treat as infra
+  # regardless of the test log's surface symptom. macos-26 runners showed
+  # XPC faults (EXC_GUARD/XPC_EXIT_REASON_FAULT) that surface as "did not
+  # appear" XCTAssertTrue timeouts but are actually launchd/sim-level
+  # crashes. CI runners are ephemeral, so any *StillPoint*.ips here is
+  # from this job's runs.
+  local diag_dir="${HOME}/Library/Logs/DiagnosticReports"
+  if [[ -d "${diag_dir}" ]] \
+     && find "${diag_dir}" -type f -name '*StillPoint*' -print -quit 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  # XCTAssert* failures: e.g., "XCTAssertTrue failed - <msg>".
+  if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
+    return 1
+  fi
+  # XCTest method-level error frames referencing a test selector starting
+  # with "test...": e.g., "error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...".
+  if grep -qE 'error: -\[[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*[[:space:]]+test[A-Za-z0-9_]+' "$log"; then
+    return 1
+  fi
+  # Default: retriable (covers simulator XPC faults, sim boot timeouts,
+  # xcodebuild infra errors, signal-killed processes with no test output).
+  return 0
+}
+
 while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
   echo "Running iOS ${LANE} lane attempt ${ATTEMPT}/${MAX_RETRIES}"
   if run_lane "${LANE}"; then
@@ -161,11 +193,19 @@ while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
     exit 0
   fi
 
+  attempt_log="artifacts/e2e/ios/${LANE}-attempt-${ATTEMPT}.log"
+  if ! is_retriable_failure "${attempt_log}"; then
+    echo "iOS ${LANE} lane failed with non-retriable signature (XCTest assertion); skipping retry."
+    FINAL_STATUS="failed"
+    exit 1
+  fi
+
   if [[ "$ATTEMPT" -ge "$MAX_RETRIES" ]]; then
     echo "iOS ${LANE} lane failed after ${MAX_RETRIES} attempt(s)."
     FINAL_STATUS="failed"
     exit 1
   fi
 
+  echo "iOS ${LANE} lane failed with retriable/unknown signature; retrying..."
   ATTEMPT=$((ATTEMPT + 1))
 done

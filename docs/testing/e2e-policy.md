@@ -25,6 +25,8 @@ Rules:
 2. If a failure reproduces consistently on rerun, classify it as product/test debt, not infra.
 3. CI should preserve first-failure artifacts even when retries eventually pass.
 
+**Enforcement (iOS lanes):** `scripts/e2e/run-ios-tests.sh` greps each failed attempt's log for known XCTest assertion signatures (e.g. `XCTAssertX failed`, `error: -[<TestClass> <testMethod>]`) and exits without consuming the retry budget when one is detected. Other failures (infra/transient/unknown) consume retries up to the table value above. Web lanes still rely on Playwright's own retry handling.
+
 ## 2) Test data isolation policy
 
 Use isolated users for every run:
