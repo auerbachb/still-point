@@ -19,7 +19,7 @@ test.describe("@authDbIntegration username uniqueness (Postgres)", () => {
     const email1 = `ci_u1_${rid}@stillpoint.test`;
     const email2 = `ci_u2_${rid}@stillpoint.test`;
     const usernameFirst = `Alice_${rid}`;
-    const usernameSecond = `alice_${rid}`;
+    const usernameSecond = usernameFirst.toLowerCase();
     const password = "password123";
 
     const first = await request.post("/api/auth/signup", {
@@ -48,8 +48,12 @@ test.describe("@authDbIntegration username uniqueness (Postgres)", () => {
     const targetDisplay = `T_${rid}`;
     const targetSignup = `t_${rid}`;
 
-    const contextA = await browser.newContext();
-    const contextB = await browser.newContext();
+    const baseURL =
+      process.env.E2E_BASE_URL?.trim() ||
+      process.env.PLAYWRIGHT_BASE_URL?.trim() ||
+      "http://127.0.0.1:3000";
+    const contextA = await browser.newContext({ baseURL });
+    const contextB = await browser.newContext({ baseURL });
     try {
       const requestA = contextA.request;
       const requestB = contextB.request;
