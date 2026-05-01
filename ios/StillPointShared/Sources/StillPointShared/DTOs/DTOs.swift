@@ -23,6 +23,8 @@ public struct SessionDTO: Codable, Sendable {
     public let dayNumber: Int
     public let sessionType: SessionType
     public let duration: Int
+    /// Extension seconds beyond `duration` from +1/+5 controls (#90).
+    public let bonusSeconds: Int?
     public let completed: Bool
     public let actualTime: Int?
     public let clearPercent: Int
@@ -38,6 +40,7 @@ public struct SessionDTO: Codable, Sendable {
         dayNumber: Int,
         sessionType: SessionType = .standard,
         duration: Int,
+        bonusSeconds: Int? = nil,
         completed: Bool,
         actualTime: Int?,
         clearPercent: Int,
@@ -51,6 +54,7 @@ public struct SessionDTO: Codable, Sendable {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
         self.duration = duration
+        self.bonusSeconds = bonusSeconds
         self.completed = completed
         self.actualTime = actualTime
         self.clearPercent = clearPercent
@@ -91,12 +95,20 @@ public struct StatsDTO: Codable, Sendable {
     public let avgClearPercent: Int
     public let avgThoughtsPerSession: Double
     public let avgThoughtsPerMinute: Double
+    public let bonusMinutesTotal: Int?
 
-    public init(streak: Int, avgClearPercent: Int, avgThoughtsPerSession: Double, avgThoughtsPerMinute: Double) {
+    public init(
+        streak: Int,
+        avgClearPercent: Int,
+        avgThoughtsPerSession: Double,
+        avgThoughtsPerMinute: Double,
+        bonusMinutesTotal: Int? = nil
+    ) {
         self.streak = streak
         self.avgClearPercent = avgClearPercent
         self.avgThoughtsPerSession = avgThoughtsPerSession
         self.avgThoughtsPerMinute = avgThoughtsPerMinute
+        self.bonusMinutesTotal = bonusMinutesTotal
     }
 }
 
@@ -106,6 +118,7 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let dayNumber: Int
     public let sessionType: SessionType
     public let duration: Int
+    public let bonusSeconds: Int
     public let completed: Bool
     public let actualTime: Int
     public let clearPercent: Int
@@ -117,6 +130,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         dayNumber: Int,
         sessionType: SessionType = .standard,
         duration: Int,
+        bonusSeconds: Int = 0,
         completed: Bool,
         actualTime: Int,
         clearPercent: Int,
@@ -127,6 +141,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
         self.duration = duration
+        self.bonusSeconds = bonusSeconds
         self.completed = completed
         self.actualTime = actualTime
         self.clearPercent = clearPercent

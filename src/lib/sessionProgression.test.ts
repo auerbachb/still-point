@@ -32,6 +32,7 @@ describe("session progression rules", () => {
       avgClearPercent: 90,
       avgThoughtsPerSession: 1,
       avgThoughtsPerMinute: 1,
+      bonusSecondsTotal: 0,
     });
   });
 
@@ -46,6 +47,7 @@ describe("session progression rules", () => {
       avgClearPercent: 80,
       avgThoughtsPerSession: 2,
       avgThoughtsPerMinute: 2,
+      bonusSecondsTotal: 0,
     });
   });
 
@@ -196,5 +198,15 @@ describe("session progression rules", () => {
     ];
 
     expect(calculateSessionStats(sessions).streak).toBe(1);
+  });
+
+  test("bonus time does not affect streak; counts toward bonusSecondsTotal and thoughts/min denominator", () => {
+    const sessions: SessionStatsInput[] = [
+      { sessionType: "standard", dayNumber: 1, duration: 300, bonusSeconds: 120, completed: true, clearPercent: 80, thoughtCount: 6 },
+    ];
+    const stats = calculateSessionStats(sessions);
+    expect(stats.streak).toBe(1);
+    expect(stats.bonusSecondsTotal).toBe(120);
+    expect(stats.avgThoughtsPerMinute).toBe(0.9);
   });
 });

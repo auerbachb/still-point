@@ -11,6 +11,8 @@ export type SessionStatsInput = {
   sessionType?: string;
   dayNumber: number;
   duration: number;
+  /** Extension seconds beyond `duration` from +1/+5 controls (#90). */
+  bonusSeconds?: number;
   completed: boolean;
   clearPercent: number;
   thoughtCount: number;
@@ -113,15 +115,19 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
 
   const avgThoughtsPerMinute = totalSessions > 0
     ? parseFloat((standardSessions.reduce((sum, s) => {
-        const minutes = s.duration / 60;
+        const bonus = s.bonusSeconds ?? 0;
+        const minutes = (s.duration + bonus) / 60;
         return sum + (minutes > 0 ? s.thoughtCount / minutes : 0);
       }, 0) / totalSessions).toFixed(1))
     : 0;
+
+  const bonusSecondsTotal = standardSessions.reduce((sum, s) => sum + (s.bonusSeconds ?? 0), 0);
 
   return {
     streak,
     avgClearPercent,
     avgThoughtsPerSession,
     avgThoughtsPerMinute,
+    bonusSecondsTotal,
   };
 }

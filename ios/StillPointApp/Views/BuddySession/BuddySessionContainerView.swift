@@ -178,6 +178,7 @@ struct BuddySessionContainerView: View {
             dayNumber: saved.dayNumber,
             sessionType: saved.sessionType,
             duration: saved.duration,
+            bonusSeconds: saved.bonusSeconds ?? 0,
             unlockAppGate: true
         )
     }

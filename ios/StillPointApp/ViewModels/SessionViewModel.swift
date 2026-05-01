@@ -7,7 +7,12 @@ final class SessionViewModel {
     // Session config
     let dayNumber: Int
     let sessionType: SessionType
-    let totalSeconds: Int
+    let plannedSeconds: Int
+    var bonusSeconds: Int = 0
+
+    var totalSeconds: Int {
+        plannedSeconds + bonusSeconds
+    }
 
     // Timer state
     var elapsed: Double = 0
@@ -84,7 +89,7 @@ final class SessionViewModel {
     init(dayNumber: Int, sessionType: SessionType = .standard) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
-        self.totalSeconds = Self.resolveTotalSeconds(for: dayNumber, sessionType: sessionType)
+        self.plannedSeconds = Self.resolveTotalSeconds(for: dayNumber, sessionType: sessionType)
         self.soundPrefs = AudioEngine.loadPrefs()
         self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
         // Initial mind state log entry
@@ -93,7 +98,9 @@ final class SessionViewModel {
 
     func start() {
         let resumeElapsed = pausedElapsed
-        let isResume = resumeElapsed > 0 && resumeElapsed < Double(totalSeconds)
+        let isResume =
+            resumeElapsed < Double(totalSeconds)
+            && (resumeElapsed > 0 || isPaused || isActive)
 
         if isResume {
             lastTickSec = Int(floor(resumeElapsed))
@@ -131,6 +138,12 @@ final class SessionViewModel {
     func resume() {
         guard isPaused else { return }
         start()
+    }
+
+    func extendBonus(seconds: Int) {
+        guard seconds > 0, isActive, !isComplete, !isAbandoned, !showPostDistractionCapture else { return }
+        bonusSeconds += seconds
+        userInteracted()
     }
 
     /// Hold to mark a distraction segment (`thinking`); release returns to aware (`clear`).
@@ -221,7 +234,8 @@ final class SessionViewModel {
         let request = CreateSessionRequest(
             dayNumber: dayNumber,
             sessionType: sessionType,
-            duration: totalSeconds,
+            duration: plannedSeconds,
+            bonusSeconds: bonusSeconds,
             completed: completed,
             actualTime: Int(elapsed),
             clearPercent: clearPercent,

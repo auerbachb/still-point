@@ -72,7 +72,11 @@ function getLocalIsoDate(offsetDays = 0) {
 }
 
 function computeStats(sessions: SessionRecord[]) {
-  return calculateSessionStats(sessions);
+  const stats = calculateSessionStats(sessions);
+  return {
+    ...stats,
+    bonusMinutesTotal: Math.round(stats.bonusSecondsTotal / 60),
+  };
 }
 
 function json(route: Route, status: number, body: unknown) {

@@ -198,6 +198,8 @@ export const sessions = pgTable("sessions", {
   dayNumber: integer("day_number").notNull(),
   sessionType: varchar("session_type", { length: 20 }).notNull().default("standard"),
   duration: integer("duration").notNull(),
+  /** Seconds added via in-session +1/+5 extensions beyond `duration` (#90). */
+  bonusSeconds: integer("bonus_seconds").notNull().default(0),
   completed: boolean("completed").notNull(),
   actualTime: integer("actual_time"),
   clearPercent: integer("clear_percent").notNull(),

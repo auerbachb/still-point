@@ -16,7 +16,8 @@ enum AppView: Equatable {
         thoughts: [CapturedThought],
         dayNumber: Int,
         sessionType: SessionType,
-        duration: Int
+        duration: Int,
+        bonusSeconds: Int
     )
     case history
     case journal
@@ -226,6 +227,7 @@ final class AppViewModel {
         dayNumber: Int,
         sessionType: SessionType = .standard,
         duration: Int,
+        bonusSeconds: Int = 0,
         unlockAppGate: Bool
     ) {
         if unlockAppGate && sessionType == .standard {
@@ -240,7 +242,8 @@ final class AppViewModel {
             thoughts: thoughts,
             dayNumber: dayNumber,
             sessionType: sessionType,
-            duration: duration
+            duration: duration,
+            bonusSeconds: bonusSeconds
         )
     }
 

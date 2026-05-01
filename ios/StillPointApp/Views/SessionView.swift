@@ -163,7 +163,8 @@ struct SessionView: View {
                     thoughts: vm.capturedThoughts,
                     dayNumber: vm.dayNumber,
                     sessionType: vm.sessionType,
-                    duration: vm.totalSeconds,
+                    duration: vm.plannedSeconds,
+                    bonusSeconds: vm.bonusSeconds,
                     unlockAppGate: vm.completedNaturally && vm.sessionType == .standard
                 )
             }
@@ -449,6 +450,38 @@ struct SessionView: View {
                     .opacity(vm.isActive ? 1 : 0.45)
                 }
 
+                Button {
+                    vm.extendBonus(seconds: 60)
+                } label: {
+                    Text("+1 min")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(Color(SPColor.fg2))
+                        .padding(.horizontal, SPSpacing.s3)
+                        .padding(.vertical, SPSpacing.s1)
+                        .background(SPColor.surface1)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.border1))
+                }
+                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
+                .accessibilityIdentifier("session.extendOneMinuteButton")
+
+                Button {
+                    vm.extendBonus(seconds: 300)
+                } label: {
+                    Text("+5 min")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(Color(SPColor.fg2))
+                        .padding(.horizontal, SPSpacing.s3)
+                        .padding(.vertical, SPSpacing.s1)
+                        .background(SPColor.surface1)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.border1))
+                }
+                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
+                .accessibilityIdentifier("session.extendFiveMinuteButton")
+
                 // Abandon
                 Button {
                     vm.abandon()
@@ -517,7 +550,8 @@ struct SessionView: View {
                 thoughts: vm.capturedThoughts,
                 dayNumber: session.dayNumber,
                 sessionType: session.sessionType,
-                duration: vm.totalSeconds,
+                duration: vm.plannedSeconds,
+                bonusSeconds: vm.bonusSeconds,
                 unlockAppGate: vm.completedNaturally && session.sessionType == .standard
             )
         }

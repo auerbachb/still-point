@@ -33,6 +33,8 @@ export type Session = {
   id: string;
   dayNumber: number;
   duration: number;
+  /** Seconds added via +1/+5 extensions beyond planned duration (#90). */
+  bonusSeconds?: number;
   sessionType: "standard" | "quick";
   completed: boolean;
   actualTime: number | null;
@@ -145,11 +147,18 @@ export const api = {
     request<{ user: User }>("/api/auth/me"),
 
   getSessions: () =>
-    request<{ sessions: Session[]; stats: { streak: number; avgClearPercent: number; avgThoughtsPerSession: number; avgThoughtsPerMinute: number } }>("/api/sessions"),
+    request<{ sessions: Session[]; stats: {
+      streak: number;
+      avgClearPercent: number;
+      avgThoughtsPerSession: number;
+      avgThoughtsPerMinute: number;
+      bonusMinutesTotal: number;
+    } }>("/api/sessions"),
 
   createSession: (data: {
     dayNumber: number;
     duration: number;
+    bonusSeconds?: number;
     sessionType?: "standard" | "quick";
     completed: boolean;
     actualTime: number;

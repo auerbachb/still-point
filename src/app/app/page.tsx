@@ -33,6 +33,7 @@ type CompletionData = {
   dayNumber: number;
   sessionType: SessionType;
   duration: number;
+  bonusSeconds: number;
   clearPercent: number;
   thoughtCount: number;
   thoughts: Array<{ timeInSession: number; text: string }>;
@@ -182,6 +183,7 @@ export default function StillPoint() {
       dayNumber: data.dayNumber,
       sessionType: "standard",
       duration: data.duration,
+      bonusSeconds: 0,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
@@ -197,6 +199,7 @@ export default function StillPoint() {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -215,6 +218,7 @@ export default function StillPoint() {
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
           duration: data.duration,
+          bonusSeconds: data.bonusSeconds,
           completed: data.completed,
           actualTime: data.actualTime,
           clearPercent: data.clearPercent,
@@ -257,6 +261,7 @@ export default function StillPoint() {
       dayNumber: data.dayNumber,
       sessionType: data.sessionType,
       duration: data.duration,
+      bonusSeconds: data.bonusSeconds,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
@@ -268,6 +273,7 @@ export default function StillPoint() {
     dayNumber: number;
     sessionType: SessionType;
     duration: number;
+    bonusSeconds: number;
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -284,6 +290,7 @@ export default function StillPoint() {
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
           duration: data.duration,
+          bonusSeconds: data.bonusSeconds,
           completed: false,
           actualTime: data.actualTime,
           clearPercent: data.clearPercent,
@@ -560,6 +567,7 @@ export default function StillPoint() {
           dayNumber={completionData.dayNumber}
           sessionType={completionData.sessionType}
           duration={completionData.duration}
+          bonusSeconds={completionData.bonusSeconds}
           clearPercent={completionData.clearPercent}
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}

@@ -23,6 +23,7 @@ export async function GET() {
         dayNumber: sessions.dayNumber,
         sessionType: sessions.sessionType,
         duration: sessions.duration,
+        bonusSeconds: sessions.bonusSeconds,
         completed: sessions.completed,
         clearPercent: sessions.clearPercent,
         thoughtCount: sessions.thoughtCount,

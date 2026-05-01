@@ -134,7 +134,9 @@ export function BlockTimer({
 
     // Reset or seed refs based on whether this is a fresh session or a resume
     const resumeElapsed = pausedElapsedRef.current;
-    const isResume = resumeElapsed > 0 && resumeElapsed < totalSeconds;
+    const isResume =
+      resumeElapsed < totalSeconds &&
+      (resumeElapsed > 0 || startTimeRef.current !== null);
 
     if (isResume) {
       lastTickSecRef.current = Math.floor(resumeElapsed);
