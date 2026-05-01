@@ -13,7 +13,7 @@ type SendEmailParams = {
 const fromAddress = process.env.EMAIL_FROM;
 const resendApiKey = process.env.RESEND_API_KEY;
 
-/** Base URL for password reset links. Prefer `NEXT_PUBLIC_APP_URL`; otherwise match the issuing deploy (Vercel preview URL or prod canonical). */
+/** Base URL for password reset links. Prefer `NEXT_PUBLIC_APP_URL`; else `VERCEL_ENV=production` → still-point.me; else `VERCEL_URL` → preview host; else `NODE_ENV=production` → still-point.me; else localhost. */
 export function passwordResetAppBaseUrl() {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (explicit) return explicit;
