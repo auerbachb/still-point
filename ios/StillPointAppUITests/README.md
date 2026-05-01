@@ -73,7 +73,7 @@ Planned lane: `ios-ui-smoke`
 
 If a test triggers navigation (taps a button that pushes a new screen, starts audio, kicks off any non-trivial transition) and then calls `app.terminate()`, the simulator's `launchd` on macos-26 / iOS 26 sometimes loses track of the process and hangs for tens of seconds before reporting:
 
-```
+```text
 Failed to terminate <bundle>:<pid>
 ```
 
@@ -105,7 +105,7 @@ The `tap(_:thenWaitForRoot:in:)` helper in [`StillPointAppUITests.swift`](StillP
 
 The trap: in flows where the source element's frame is briefly unstable (e.g. immediately after the home screen mounts following a fresh login), `tapByStableCenter` returns `false` *without ever tapping* — the helper then waits 12s for a root that never appears, retries, and ultimately asserts `Expected tap to transition to root.currentView.<slug>`.
 
-Concrete case: the v1 commit (`d9e69aa`) of [#319](https://github.com/auerbachb/still-point/pull/319) used the helper for the post-login `home → session` transition in `testLaunchLoginCompleteSessionAndHistoryPersistence` and failed CI on [run 25218186115](https://github.com/auerbachb/still-point/actions/runs/25218186115). The shipping fix (`ddf7b69`) kept the direct `.tap()` and added an explicit `waitForExistence` for the destination root.
+Concrete case: the v1 commit (`d9e69aa`) of [#319](https://github.com/auerbachb/still-point/pull/319) used the helper for the post-login `home → session` transition in `testLaunchLoginCompleteSessionAndHistoryPersistence` and failed CI on [run 25218186115](https://github.com/auerbachb/still-point/actions/runs/25218186115). The shipping fix (`ddf7b69`) kept the direct `.tap()` and added an explicit `waitForExistence` for the destination root — verified passing on [run 25218888601](https://github.com/auerbachb/still-point/actions/runs/25218888601).
 
 **Rule of thumb:**
 
