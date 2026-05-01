@@ -146,6 +146,25 @@ async function createUserWithUsernameRetry(email: string, seed: string): Promise
   throw new Error("Failed to allocate a unique username after retries");
 }
 
+/** True when Entra optional claims (or OIDC `email_verified`) indicate we may
+ *  trust `profile.email` for **email-match linking** to an existing user.
+ *  First-time Microsoft sign-in without these claims still creates a new
+ *  account (no link); see signIn callback. Configure optional claims in the
+ *  Entra app registration if you need MS ↔ password account merge. */
+function microsoftEntraEmailVerifiedForLinking(profile: unknown): boolean {
+  const p = profile as {
+    email_verified?: boolean;
+    verified_primary_email?: unknown;
+    xms_edov?: boolean;
+  };
+  if (p.email_verified === true) return true;
+  if (p.xms_edov === true) return true;
+  if (!Array.isArray(p.verified_primary_email)) return false;
+  return p.verified_primary_email.some(
+    (e): e is string => typeof e === "string" && e.trim().length > 0,
+  );
+}
+
 function microsoftEntraIdProviderOptions(): Parameters<typeof MicrosoftEntraID>[0] | null {
   const clientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim();
   const clientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET?.trim();
@@ -204,9 +223,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       //   - Google: granting the `email` scope returns a verified address
       //     by Google's own contract; presence of `profile.email` here is
       //     the verification signal.
-      //   - Microsoft Entra ID (#284): `common` v2.0 + `email` scope; the
-      //     platform treats the returned primary email as verified for
-      //     sign-in (same practical bar as Google for this product).
+      //   - Microsoft Entra ID (#284): the bare `email` claim can be mutable;
+      //     email-match **linking** to an existing account requires optional
+      //     Entra claims (`verified_primary_email`, `xms_edov`) or standard
+      //     `email_verified === true`. First-time sign-in without those
+      //     still creates a new user (no link).
       //   - Other providers (Facebook / Apple, deferred):
       //     require an explicit `email_verified === true` claim. An
       //     unknown verification state must NOT be treated as verified —
@@ -253,6 +274,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let targetUserId: string;
         if (emailMatch) {
+          if (
+            provider === "microsoft-entra-id" &&
+            !microsoftEntraEmailVerifiedForLinking(profile)
+          ) {
+            return false;
+          }
           targetUserId = emailMatch.id;
         } else {
           const seed =

@@ -29,9 +29,19 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [microsoftSignInEnabled, setMicrosoftSignInEnabled] = useState(false);
 
   useEffect(() => {
-    void getProviders().then(providers => {
-      setMicrosoftSignInEnabled(Boolean(providers?.["microsoft-entra-id"]));
-    });
+    let active = true;
+    void getProviders()
+      .then(providers => {
+        if (!active) return;
+        setMicrosoftSignInEnabled(Boolean(providers?.["microsoft-entra-id"]));
+      })
+      .catch(() => {
+        if (!active) return;
+        setMicrosoftSignInEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
