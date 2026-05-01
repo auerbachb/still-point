@@ -24,8 +24,8 @@
     "e2e:web:critical": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard && node scripts/e2e/run-playwright-lane.mjs critical @critical 2",
     "e2e:web:authDb": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard && node scripts/e2e/run-auth-db-integration.mjs",
     "e2e:web:perf": "node scripts/e2e/report-web-perf.mjs",
-    "e2e:ios:smoke": "bash scripts/e2e/run-ios-tests.sh smoke 1",
-    "e2e:ios:critical": "bash scripts/e2e/run-ios-tests.sh critical 1",
+    "e2e:ios:smoke": "bash scripts/e2e/run-ios-tests.sh smoke 2",
+    "e2e:ios:critical": "bash scripts/e2e/run-ios-tests.sh critical 2",
     "e2e:ios:perf": "node scripts/e2e/report-ios-perf.mjs"
   },
   "dependencies": {
