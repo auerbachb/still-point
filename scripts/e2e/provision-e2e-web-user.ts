@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import bcrypt from "bcryptjs";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { closePoolDb, poolDb } from "../../src/db/pool";
 import { users } from "../../src/db/schema";
 import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, USERNAME_REGEX } from "../../src/lib/username";
@@ -62,50 +62,37 @@ export async function provisionE2EWebUser(options: ProvisionE2EWebUserOptions): 
   const username = deriveUsername(email);
 
   try {
-    const [existing] = await poolDb.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    // Another account owning this derived username blocks provisioning (rare; hash is unique per email).
+    const [nameClash] = await poolDb
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.username}) = ${username.toLowerCase()} and lower(${users.email}) <> ${email}`)
+      .limit(1);
 
-    if (existing) {
-      const [nameClash] = await poolDb
-        .select({ id: users.id })
-        .from(users)
-        .where(sql`lower(${users.username}) = ${username.toLowerCase()} and ${users.id} <> ${existing.id}`)
-        .limit(1);
+    if (nameClash) {
+      throw new Error(
+        "E2E fixture username collides with another account; remove the conflicting user or change E2E_WEB_EMAIL.",
+      );
+    }
 
-      if (nameClash) {
-        throw new Error(
-          "E2E fixture username collides with another account; remove the conflicting user or change E2E_WEB_EMAIL.",
-        );
-      }
-
-      await poolDb
-        .update(users)
-        .set({
-          passwordHash,
-          username,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, existing.id));
-    } else {
-      const [clash] = await poolDb
-        .select({ id: users.id })
-        .from(users)
-        .where(sql`lower(${users.username}) = ${username.toLowerCase()}`)
-        .limit(1);
-
-      if (clash) {
-        throw new Error(
-          "E2E fixture username is taken by another account; free the derived username or use a different E2E_WEB_EMAIL.",
-        );
-      }
-
-      await poolDb.insert(users).values({
+    // Single atomic upsert on email so parallel Playwright matrix jobs do not race on INSERT.
+    await poolDb
+      .insert(users)
+      .values({
         email,
         username,
         passwordHash,
         currentDay: 1,
         isPublic: false,
+      })
+      .onConflictDoUpdate({
+        target: users.email,
+        set: {
+          passwordHash,
+          username,
+          updatedAt: new Date(),
+        },
       });
-    }
   } finally {
     await closePoolDb();
   }
