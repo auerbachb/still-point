@@ -120,8 +120,14 @@ run_lane() {
   local lane_tag="$1"
   local test_target
   local result_bundle
+  local attempt_marker
   test_target="$(resolve_test_target "${lane_tag}")"
   result_bundle="artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.xcresult"
+  # Start-of-attempt sentinel for is_retriable_failure(): its mtime is fixed
+  # at attempt start, unlike the .log file (which `tee` keeps updating until
+  # xcodebuild exits). See is_retriable_failure() below for the rationale.
+  attempt_marker="artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.start"
+  : > "${attempt_marker}"
 
   local -a xcodebuild_args=(
     test
@@ -153,6 +159,72 @@ run_lane() {
   return $status
 }
 
+# Returns 0 if the previous attempt's failure looks retriable (infra/transient
+# or unknown — default), 1 if it carries a known XCTest assertion signature
+# (real product/test bug — do not consume retry budget). Aligns with the
+# "Non-retriable failures" column in docs/testing/e2e-policy.md Section 1.
+is_retriable_failure() {
+  local log="$1"
+  # Optional 2nd arg: a sentinel file whose mtime marks attempt-start. Defaults
+  # to `<log>.start` (`run_lane()` creates `<lane>-attempt-N.start` before
+  # invoking xcodebuild, so deriving from `<lane>-attempt-N.log` recovers it).
+  local attempt_marker="${2:-${log%.log}.start}"
+  [[ -f "$log" ]] || return 0
+  # If a simulator-side crash report for our app was written during this
+  # attempt, treat as infra regardless of the test log's surface symptom.
+  # macos-26 runners showed XPC faults (EXC_GUARD/XPC_EXIT_REASON_FAULT)
+  # that surface as "did not appear" XCTAssertTrue timeouts but are actually
+  # launchd/sim-level crashes. We compare against the attempt-start marker
+  # rather than the log file because `tee` updates the log's mtime
+  # continuously throughout the run; a crash from mid-run could end up
+  # older than the log's final mtime and be missed.
+  local diag_dir="${HOME}/Library/Logs/DiagnosticReports"
+  if [[ -f "${attempt_marker}" ]] \
+     && [[ -d "${diag_dir}" ]] \
+     && find "${diag_dir}" -type f -name '*StillPoint*' -newer "${attempt_marker}" -print -quit 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  # Timeout-shaped UI-wait failures. Two surface forms:
+  #   a) `XCTAssertTrue failed - <msg>` from waitForExistence(timeout:) checks
+  #      where <msg> contains a wait/visibility indicator phrase.
+  #   b) `Asynchronous wait failed: Exceeded timeout of N seconds` from
+  #      XCTestExpectation/wait(for:) calls (e.g. predicate-value waits like
+  #      session.secondaryChromeMarker).
+  # On macos-26, both are commonly UI timing flakes (sim animations,
+  # mocked-API delays, focus-handoff timing) rather than real product bugs —
+  # even when no .ips crash report is correlated with the attempt. Treat as
+  # retriable; if the failure repeats on the second attempt, the lane still
+  # surfaces red. Empirically observed flake messages this week:
+  #   "Home did not appear after login" (PR #311)
+  #   "Session screen did not appear after Begin tap" (PR #319 v1, #328 attempt 1)
+  #   "Password reset request confirmation should be visible" (PR #328 round 3)
+  #   "Asynchronous wait failed: Exceeded timeout of 5 seconds, with unfulfilled
+  #    expectations: \"Expect predicate value == 'visible' for object
+  #    'session.secondaryChromeMarker'\"" (PR #328 attempt 2)
+  if grep -qiE 'XCTAssertTrue failed - .*(did not appear|never appear(ed)?|did not exist|does not exist|should be visible|should appear|should exist|not found|never became|did not become|did not show)' "$log"; then
+    return 0
+  fi
+  if grep -qE 'Asynchronous wait failed: Exceeded timeout' "$log"; then
+    return 0
+  fi
+  # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
+  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)".
+  if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
+    return 1
+  fi
+  # XCTest method-level error frames referencing a test selector starting
+  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
+  # plain "Class" forms. Examples:
+  #   error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...
+  #   error: -[StillPointAppUITests testFoo] : ...
+  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
+    return 1
+  fi
+  # Default: retriable (covers simulator XPC faults, sim boot timeouts,
+  # xcodebuild infra errors, signal-killed processes with no test output).
+  return 0
+}
+
 while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
   echo "Running iOS ${LANE} lane attempt ${ATTEMPT}/${MAX_RETRIES}"
   if run_lane "${LANE}"; then
@@ -161,11 +233,20 @@ while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
     exit 0
   fi
 
+  attempt_log="artifacts/e2e/ios/${LANE}-attempt-${ATTEMPT}.log"
+  attempt_marker="artifacts/e2e/ios/${LANE}-attempt-${ATTEMPT}.start"
+  if ! is_retriable_failure "${attempt_log}" "${attempt_marker}"; then
+    echo "iOS ${LANE} lane failed with non-retriable signature (XCTest assertion); skipping retry."
+    FINAL_STATUS="failed"
+    exit 1
+  fi
+
   if [[ "$ATTEMPT" -ge "$MAX_RETRIES" ]]; then
     echo "iOS ${LANE} lane failed after ${MAX_RETRIES} attempt(s)."
     FINAL_STATUS="failed"
     exit 1
   fi
 
+  echo "iOS ${LANE} lane failed with retriable/unknown signature; retrying..."
   ATTEMPT=$((ATTEMPT + 1))
 done
