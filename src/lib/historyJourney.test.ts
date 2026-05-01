@@ -31,6 +31,8 @@ describe("buildHistoryJourneyRows", () => {
     const missed = rows.filter(r => r.kind === "missed");
     expect(missed.length).toBe(366);
   });
+
+  test("sorts by sessionDate then sortKey", () => {
     const sorted = sortSessionsForHistory([
       { sessionDate: "2026-04-28", sortKey: "b", data: 2 },
       { sessionDate: "2026-04-28", sortKey: "a", data: 1 },

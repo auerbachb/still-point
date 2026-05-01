@@ -46,7 +46,11 @@ export async function GET(
           eq(thoughts.userId, auth.userId),
         ),
       )
-      .orderBy(asc(thoughts.timeInSession));
+      .orderBy(
+        asc(thoughts.timeInSession),
+        asc(thoughts.createdAt),
+        asc(thoughts.id),
+      );
 
     return NextResponse.json({ session, thoughts: sessionThoughts });
   } catch (error) {

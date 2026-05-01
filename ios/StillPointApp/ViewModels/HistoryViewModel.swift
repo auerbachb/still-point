@@ -46,7 +46,9 @@ final class HistoryViewModel {
                     sessionThoughts[sessionId] = detail.thoughts
                 } catch {
                     print("Failed to load session \(sessionId) thoughts: \(error)")
-                    expandedSessionId = nil
+                    if expandedSessionId == sessionId {
+                        expandedSessionId = nil
+                    }
                 }
             }
         }
