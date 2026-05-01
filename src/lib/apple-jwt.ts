@@ -12,9 +12,9 @@ function normalizePem(raw: string): string {
   return trimmed;
 }
 
-/** Mint the client_secret JWT Apple requires for the “web” / server OAuth
- *  client (Services ID). Cached so we do not re-sign on every request. */
-export async function getAppleClientSecret(): Promise<string> {
+/** Mint the client_secret JWT Apple requires for the Services ID (web OAuth).
+ *  Cached so we do not re-sign on every cold start. */
+export async function getAppleClientSecretJwt(): Promise<string> {
   const now = Date.now();
   if (cachedSecret && cachedSecret.expiresAt > now + 60_000) {
     return cachedSecret.value;
@@ -26,7 +26,9 @@ export async function getAppleClientSecret(): Promise<string> {
   const privateKeyRaw = process.env.APPLE_PRIVATE_KEY;
 
   if (!teamId || !keyId || !clientId || !privateKeyRaw) {
-    throw new Error("Apple OAuth env incomplete: need AUTH_APPLE_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY");
+    throw new Error(
+      "Apple OAuth env incomplete: need AUTH_APPLE_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY",
+    );
   }
 
   const privateKey = await importPKCS8(normalizePem(privateKeyRaw), "ES256");
