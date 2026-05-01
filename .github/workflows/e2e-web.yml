@@ -124,3 +124,64 @@ jobs:
             test-results/**
           if-no-files-found: warn
           retention-days: 14
+
+  web-e2e-auth-db:
+    name: web-e2e-auth-db
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-policy
+    env:
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_WORKERS: "1"
+      E2E_REPEAT_EACH: "1"
+      E2E_RUN_ID: ${{ github.run_id }}
+      SEED_CONFIRM: still-point-nonprod
+      POSTGRES_URL: ${{ secrets.E2E_AUTH_DB_POSTGRES_URL }}
+      JWT_SECRET: ${{ secrets.E2E_AUTH_DB_JWT_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check auth DB secrets
+        id: authdb
+        run: |
+          # Trim so whitespace-only secrets skip (matches run-auth-db-integration.mjs).
+          POSTGRES_TRIMMED="$(echo -n "${POSTGRES_URL}" | xargs)"
+          JWT_TRIMMED="$(echo -n "${JWT_SECRET}" | xargs)"
+          if [ -z "${POSTGRES_TRIMMED}" ] || [ -z "${JWT_TRIMMED}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping web-e2e-auth-db: set E2E_AUTH_DB_POSTGRES_URL and E2E_AUTH_DB_JWT_SECRET (see e2e/README.md)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.authdb.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.authdb.outputs.configured == 'true'
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: steps.authdb.outputs.configured == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run auth DB integration lane
+        if: steps.authdb.outputs.configured == 'true'
+        run: npm run e2e:web:authDb
+
+      - name: Upload auth DB integration artifacts
+        if: always() && steps.authdb.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-auth-db-artifacts
+          path: |
+            artifacts/e2e/web/**
+            playwright-report/**
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 14

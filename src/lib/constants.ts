@@ -1,3 +1,5 @@
+import { addDaysToIsoDate, isValidSessionCalendarDate } from "./sessionCalendar";
+
 export const BASE_DURATION = 60;
 export const QUICK_DURATION = 60;
 export const INCREMENT = 10;
@@ -14,6 +16,7 @@ export type SessionStatsInput = {
   completed: boolean;
   clearPercent: number;
   thoughtCount: number;
+  /** When set, streak counts unique calendar days (consecutive `sessionDate`s with a completed standard sit). */
   sessionDate?: string;
   createdAt?: Date | string;
 };
@@ -54,19 +57,51 @@ export function calculateSessionStats(sessions: SessionStatsInput[]) {
   const totalSessions = standardSessions.length;
 
   let streak = 0;
-  const completedByDay = new Map<number, boolean>();
-  for (const session of standardSessions) {
-    completedByDay.set(
-      session.dayNumber,
-      (completedByDay.get(session.dayNumber) ?? false) || session.completed,
+  const allHaveSessionDate = standardSessions.length > 0
+    && standardSessions.every(s => isValidSessionCalendarDate(s.sessionDate));
+
+  if (allHaveSessionDate) {
+    const completedCalendarDates = new Set<string>();
+    for (const session of standardSessions) {
+      if (session.completed && session.sessionDate) {
+        completedCalendarDates.add(session.sessionDate);
+      }
+    }
+    let latestCal = "";
+    for (const session of standardSessions) {
+      if (session.sessionDate && session.sessionDate > latestCal) {
+        latestCal = session.sessionDate;
+      }
+    }
+    const latestDayHasCompletion = standardSessions.some(
+      s => s.sessionDate === latestCal && s.completed,
     );
-  }
-  const maxDay = Math.max(0, ...completedByDay.keys());
-  for (let day = maxDay; day >= 1; day--) {
-    if (completedByDay.get(day) === true) {
-      streak++;
+    if (!latestCal || !latestDayHasCompletion) {
+      streak = 0;
     } else {
-      break;
+      let cursor = latestCal;
+      while (completedCalendarDates.has(cursor)) {
+        streak++;
+        const next = addDaysToIsoDate(cursor, -1);
+        if (next === cursor) break;
+        cursor = next;
+      }
+    }
+  } else {
+    const completedByDay = new Map<number, boolean>();
+    for (const session of standardSessions) {
+      completedByDay.set(
+        session.dayNumber,
+        (completedByDay.get(session.dayNumber) ?? false) || session.completed,
+      );
+    }
+    const maxDay = Math.max(0, ...completedByDay.keys());
+    for (let day = maxDay; day >= 1; day--) {
+      if (completedByDay.get(day) === true) {
+        streak++;
+      } else {
+        break;
+      }
     }
   }
 

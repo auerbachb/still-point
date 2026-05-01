@@ -218,6 +218,14 @@ public actor APIClient {
         return (response.session, response.thoughts)
     }
 
+    public func getSessionBySessionId(_ sessionId: String) async throws -> (session: SessionDTO, thoughts: [ThoughtDTO]) {
+        if let uiTestResult = try uiTestGetSession(sessionId: sessionId) {
+            return uiTestResult
+        }
+        let response: SessionDetailResponse = try await get("/api/sessions/by-session/\(sessionId)")
+        return (response.session, response.thoughts)
+    }
+
     // MARK: - Thoughts
 
     public func getThoughts() async throws -> [ThoughtDTO] {
@@ -249,10 +257,17 @@ public actor APIClient {
     // MARK: - Settings
 
     public func updateSettings(isPublic: Bool) async throws -> UserDTO {
-        if let user = try uiTestUpdateSettings(isPublic: isPublic) {
+        try await updateSettings(body: SettingsPatchBody(isPublic: isPublic, username: nil))
+    }
+
+    public func updateSettings(username: String) async throws -> UserDTO {
+        try await updateSettings(body: SettingsPatchBody(isPublic: nil, username: username))
+    }
+
+    private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
+        if let user = try uiTestUpdateSettings(body: body) {
             return user
         }
-        let body = ["isPublic": isPublic]
         let response: UserResponse = try await patch("/api/settings", body: body)
         return response.user
     }
@@ -500,7 +515,7 @@ public actor APIClient {
         }
 
         let sortedSessions = store.sessions.sorted { $0.sessionDate < $1.sessionDate }
-        return (sortedSessions, Self.makeUITestStats(for: sortedSessions))
+        return (sortedSessions, SessionStatistics.calculateStats(for: sortedSessions))
     }
 
     private func uiTestCreateSession(_ data: CreateSessionRequest) throws -> SessionDTO? {
@@ -516,13 +531,13 @@ public actor APIClient {
             dayNumber: data.dayNumber,
             sessionType: data.sessionType,
             duration: data.duration,
-            bonusSeconds: data.bonusSeconds,
             completed: data.completed,
             actualTime: data.actualTime,
             clearPercent: data.clearPercent,
             thoughtCount: data.thoughtCount,
             mindStateLog: data.mindStateLog,
             sessionDate: data.sessionDate,
+            createdAt: nil,
             buddySessionId: nil
         )
         store.nextSessionOrdinal += 1
@@ -541,6 +556,22 @@ public actor APIClient {
         uiTestStore = store
         persistUITestStore()
         return session
+    }
+
+    private func uiTestGetSession(sessionId: String) throws -> (session: SessionDTO, thoughts: [ThoughtDTO])? {
+        guard uiTestConfig != nil else { return nil }
+        guard let store = uiTestStore else {
+            throw APIError(status: 0, message: "UI test store is unavailable")
+        }
+        try ensureUITestAuthenticated(store: store)
+
+        guard let session = store.sessions.first(where: { $0.id == sessionId }) else {
+            throw APIError(status: 404, message: "Session not found")
+        }
+
+        let thoughts = store.thoughts.filter { $0.sessionId == session.id }
+            .sorted { $0.timeInSession < $1.timeInSession }
+        return (session, thoughts)
     }
 
     private func uiTestGetSession(dayNumber: Int) throws -> (session: SessionDTO, thoughts: [ThoughtDTO])? {
@@ -598,17 +629,36 @@ public actor APIClient {
         return createdThoughts
     }
 
-    private func uiTestUpdateSettings(isPublic: Bool) throws -> UserDTO? {
-        guard uiTestConfig != nil else { return nil }
+    private func uiTestUpdateSettings(body: SettingsPatchBody) throws -> UserDTO? {
+        guard let uiTestConfig else { return nil }
         guard var store = uiTestStore else {
             throw APIError(status: 0, message: "UI test store is unavailable")
         }
         try ensureUITestAuthenticated(store: store)
+
+        var nextUsername = store.user.username
+        var nextIsPublic = store.user.isPublic
+
+        if let usernamePatch = body.username {
+            let trimmed = usernamePatch.trimmingCharacters(in: .whitespacesAndNewlines)
+            if uiTestConfig.forceUsernameConflict {
+                throw APIError(status: 409, message: "Username already taken")
+            }
+            guard UsernameValidation.isValid(trimmed) else {
+                throw APIError(status: 400, message: UsernameValidation.errorMessage)
+            }
+            nextUsername = trimmed
+        }
+
+        if let isPublicPatch = body.isPublic {
+            nextIsPublic = isPublicPatch
+        }
+
         store.user = UserDTO(
             id: store.user.id,
             email: store.user.email,
-            username: store.user.username,
-            isPublic: isPublic,
+            username: nextUsername,
+            isPublic: nextIsPublic,
             currentDay: store.user.currentDay
         )
         uiTestStore = store
@@ -634,45 +684,21 @@ public actor APIClient {
         guard let encoded = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(encoded, forKey: key)
     }
+}
 
-    private static func makeUITestStats(for sessions: [SessionDTO]) -> StatsDTO {
-        let standardSessions = sessions.filter { $0.sessionType == .standard }
-        guard !standardSessions.isEmpty else {
-            return StatsDTO(streak: 0, avgClearPercent: 0, avgThoughtsPerSession: 0, avgThoughtsPerMinute: 0, bonusMinutesTotal: 0)
-        }
+private struct SettingsPatchBody: Encodable {
+    let isPublic: Bool?
+    let username: String?
 
-        let completedSessions = standardSessions.filter(\.completed)
-        var completedByDay: [Int: Bool] = [:]
-        for session in standardSessions {
-            completedByDay[session.dayNumber] = (completedByDay[session.dayNumber] ?? false) || session.completed
-        }
-        let maxDay = completedByDay.keys.max() ?? 0
-        var streak = 0
-        for day in stride(from: maxDay, through: 1, by: -1) {
-            if completedByDay[day] == true {
-                streak += 1
-            } else {
-                break
-            }
-        }
-        let totalClear = completedSessions.reduce(0) { $0 + $1.clearPercent }
-        let totalThoughts = standardSessions.reduce(0) { $0 + $1.thoughtCount }
-        let totalMinutes = standardSessions.reduce(0.0) { partial, session in
-            let bonus = Double(session.bonusSeconds ?? 0)
-            let planned = Double(max(session.duration, 1))
-            return partial + ((planned + bonus) / 60.0)
-        }
-        let avgClearPercent = completedSessions.isEmpty ? 0 : totalClear / completedSessions.count
-        let avgThoughtsPerSession = Double(totalThoughts) / Double(standardSessions.count)
-        let avgThoughtsPerMinute = totalMinutes > 0 ? Double(totalThoughts) / totalMinutes : 0
-        let bonusSecondsTotal = standardSessions.reduce(0) { $0 + ($1.bonusSeconds ?? 0) }
-        return StatsDTO(
-            streak: streak,
-            avgClearPercent: avgClearPercent,
-            avgThoughtsPerSession: avgThoughtsPerSession,
-            avgThoughtsPerMinute: avgThoughtsPerMinute,
-            bonusMinutesTotal: (bonusSecondsTotal + 30) / 60
-        )
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let isPublic { try c.encode(isPublic, forKey: .isPublic) }
+        if let username { try c.encode(username, forKey: .username) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isPublic
+        case username
     }
 }
 
@@ -682,6 +708,7 @@ private struct UITestConfig: Sendable {
     let forceLaunchOffline: Bool
     let forceTokenExpired: Bool
     let forceSessionsFailure: Bool
+    let forceUsernameConflict: Bool
 
     static func fromProcessInfo() -> UITestConfig? {
         let env = ProcessInfo.processInfo.environment
@@ -691,7 +718,8 @@ private struct UITestConfig: Sendable {
             resetStore: truthy(env["SP_UI_TEST_RESET_STORE"]),
             forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
-            forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"])
+            forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
+            forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"])
         )
     }
 

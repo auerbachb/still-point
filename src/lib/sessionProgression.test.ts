@@ -95,6 +95,102 @@ describe("session progression rules", () => {
     expect(calculateSessionStats(sessions).streak).toBe(0);
   });
 
+  test("falls back to day-number streak when sessionDate is not a strict calendar day", () => {
+    const sessions: SessionStatsInput[] = [
+      {
+        sessionType: "standard",
+        dayNumber: 2,
+        duration: 70,
+        completed: true,
+        clearPercent: 100,
+        thoughtCount: 0,
+        sessionDate: "2026-04-30T12:00:00.000Z",
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 1,
+        duration: 60,
+        completed: true,
+        clearPercent: 80,
+        thoughtCount: 0,
+        sessionDate: "2026-04-30T18:00:00.000Z",
+      },
+    ];
+    expect(calculateSessionStats(sessions).streak).toBe(2);
+  });
+
+  test("streak uses unique calendar days when sessionDate is present (multiple sits same day)", () => {
+    const sessions: SessionStatsInput[] = [
+      {
+        sessionType: "standard",
+        dayNumber: 2,
+        duration: 70,
+        completed: true,
+        clearPercent: 100,
+        thoughtCount: 0,
+        sessionDate: "2026-04-30",
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 1,
+        duration: 60,
+        completed: true,
+        clearPercent: 80,
+        thoughtCount: 0,
+        sessionDate: "2026-04-30",
+      },
+    ];
+    expect(calculateSessionStats(sessions).streak).toBe(1);
+  });
+
+  test("calendar-day streak walks consecutive dates including gaps in day numbers", () => {
+    const sessions: SessionStatsInput[] = [
+      {
+        sessionType: "standard",
+        dayNumber: 5,
+        duration: 100,
+        completed: true,
+        clearPercent: 80,
+        thoughtCount: 0,
+        sessionDate: "2026-04-29",
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 3,
+        duration: 60,
+        completed: true,
+        clearPercent: 90,
+        thoughtCount: 0,
+        sessionDate: "2026-04-28",
+      },
+    ];
+    expect(calculateSessionStats(sessions).streak).toBe(2);
+  });
+
+  test("calendar streak breaks on missed calendar day", () => {
+    const sessions: SessionStatsInput[] = [
+      {
+        sessionType: "standard",
+        dayNumber: 3,
+        duration: 80,
+        completed: true,
+        clearPercent: 90,
+        thoughtCount: 0,
+        sessionDate: "2026-04-30",
+      },
+      {
+        sessionType: "standard",
+        dayNumber: 2,
+        duration: 70,
+        completed: true,
+        clearPercent: 100,
+        thoughtCount: 0,
+        sessionDate: "2026-04-28",
+      },
+    ];
+    expect(calculateSessionStats(sessions).streak).toBe(1);
+  });
+
   test("stops the streak at missing day gaps", () => {
     const sessions: SessionStatsInput[] = [
       { sessionType: "standard", dayNumber: 7, duration: 120, completed: true, clearPercent: 90, thoughtCount: 0 },

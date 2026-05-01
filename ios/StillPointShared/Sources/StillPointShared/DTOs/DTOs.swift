@@ -31,6 +31,8 @@ public struct SessionDTO: Codable, Sendable {
     public let thoughtCount: Int
     public let mindStateLog: [MindStateEntry]?
     public let sessionDate: String
+    /// ISO-8601 from API when present; used for same-day ordering (matches web `sessionSortKey`).
+    public let createdAt: String?
     public let buddySessionId: String?
 
     public init(
@@ -45,6 +47,7 @@ public struct SessionDTO: Codable, Sendable {
         thoughtCount: Int,
         mindStateLog: [MindStateEntry]?,
         sessionDate: String,
+        createdAt: String? = nil,
         buddySessionId: String?
     ) {
         self.id = id
@@ -58,6 +61,7 @@ public struct SessionDTO: Codable, Sendable {
         self.thoughtCount = thoughtCount
         self.mindStateLog = mindStateLog
         self.sessionDate = sessionDate
+        self.createdAt = createdAt
         self.buddySessionId = buddySessionId
     }
 }

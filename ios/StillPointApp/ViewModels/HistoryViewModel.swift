@@ -1,21 +1,6 @@
 import SwiftUI
 import StillPointShared
 
-/// A display-ready row in the Journey list (session or missed day).
-struct HistoryEntry: Identifiable {
-    let id: String
-    let sessionId: String?
-    let dayNumber: Int?
-    let duration: Int
-    let bonusSeconds: Int
-    let actualTime: Int
-    let completed: Bool
-    let date: String          // "YYYY-MM-DD"
-    let clearPercent: Int
-    let thoughtCount: Int
-    let missed: Bool
-}
-
 @MainActor
 @Observable
 final class HistoryViewModel {
@@ -23,13 +8,14 @@ final class HistoryViewModel {
     var stats: StatsDTO?
     var isLoading = false
     var errorMessage: String?
-    var expandedDay: Int?
-    var dayThoughts: [Int: [ThoughtDTO]] = [:]
+    /// Expanded standard session (by row id).
+    var expandedSessionId: String?
+    var sessionThoughts: [String: [ThoughtDTO]] = [:]
 
-    /// Flattened journey entries including missed days.
-    var history: [HistoryEntry] = []
+    /// Standard sits only, ordered for the Journey list (missed gaps + per-day session indices).
+    var journeyRows: [HistoryJourneyListRow] = []
 
-    /// Longest actualTime across all real sessions (floor 60).
+    /// Longest actualTime across standard sessions in the journey (floor 60).
     var maxDuration: Int = 60
 
     func load() async {
@@ -42,24 +28,27 @@ final class HistoryViewModel {
             let result = try await APIClient.shared.getSessions()
             sessions = result.sessions.sorted { $0.sessionDate < $1.sessionDate }
             stats = result.stats
-            buildHistory()
+            buildJourney()
         } catch {
             errorMessage = "Failed to load sessions. Check your connection."
             print("Failed to load sessions: \(error)")
         }
     }
 
-    func toggleDay(_ dayNumber: Int) async {
-        if expandedDay == dayNumber {
-            expandedDay = nil
+    func toggleSession(_ sessionId: String) async {
+        if expandedSessionId == sessionId {
+            expandedSessionId = nil
         } else {
-            expandedDay = dayNumber
-            if dayThoughts[dayNumber] == nil {
+            expandedSessionId = sessionId
+            if sessionThoughts[sessionId] == nil {
                 do {
-                    let detail = try await APIClient.shared.getSession(dayNumber: dayNumber)
-                    dayThoughts[dayNumber] = detail.thoughts
+                    let detail = try await APIClient.shared.getSessionBySessionId(sessionId)
+                    sessionThoughts[sessionId] = detail.thoughts
                 } catch {
-                    print("Failed to load day \(dayNumber) thoughts: \(error)")
+                    print("Failed to load session \(sessionId) thoughts: \(error)")
+                    if expandedSessionId == sessionId {
+                        expandedSessionId = nil
+                    }
                 }
             }
         }
@@ -67,57 +56,11 @@ final class HistoryViewModel {
 
     // MARK: - Private
 
-    private func buildHistory() {
-        var entries: [HistoryEntry] = []
-        let cal = Calendar.current
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
+    private func buildJourney() {
+        let standard = sessions.filter { $0.sessionType == .standard }
+        journeyRows = HistoryJourney.buildRows(fromStandardSessions: standard)
 
-        for (i, session) in sessions.enumerated() {
-            // Detect missed days between consecutive sessions
-            if i > 0,
-               let prevDate = df.date(from: sessions[i - 1].sessionDate),
-               let currDate = df.date(from: session.sessionDate) {
-                let daysBetween = cal.dateComponents([.day], from: prevDate, to: currDate).day ?? 0
-                if daysBetween > 1 {
-                    for gap in 1..<daysBetween {
-                        if let missedDate = cal.date(byAdding: .day, value: gap, to: prevDate) {
-                            entries.append(HistoryEntry(
-                                id: "missed-\(df.string(from: missedDate))",
-                                sessionId: nil,
-                                dayNumber: nil,
-                                duration: 0,
-                                bonusSeconds: 0,
-                                actualTime: 0,
-                                completed: false,
-                                date: df.string(from: missedDate),
-                                clearPercent: 0,
-                                thoughtCount: 0,
-                                missed: true
-                            ))
-                        }
-                    }
-                }
-            }
-
-            entries.append(HistoryEntry(
-                id: session.id,
-                sessionId: session.id,
-                dayNumber: session.dayNumber,
-                duration: session.duration,
-                bonusSeconds: session.bonusSeconds ?? 0,
-                actualTime: session.actualTime ?? session.duration,
-                completed: session.completed,
-                date: session.sessionDate,
-                clearPercent: session.clearPercent,
-                thoughtCount: session.thoughtCount,
-                missed: false
-            ))
-        }
-
-        history = entries
-
-        let sessionTimes = entries.filter { !$0.missed }.map(\.actualTime)
+        let sessionTimes = standard.map { $0.actualTime ?? $0.duration }
         maxDuration = max(sessionTimes.max() ?? 60, 60)
     }
 }
