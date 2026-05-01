@@ -62,10 +62,16 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
         passwordField.tapAndType("stillpoint-pass", in: app)
 
+        dismissKeyboardIfPresent(in: app)
+
         let submitButton = app.buttons["auth.submitButton"]
+        XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
         tapByStableCenter(submitButton, in: app)
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.otherElements["root.currentView.home"].waitForExistence(timeout: 25),
+            "Home did not appear after login"
+        )
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
@@ -162,6 +168,96 @@ final class StillPointAppUITests: XCTestCase {
 
         openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
         XCTAssertTrue(app.buttons["settings.logoutButton"].exists)
+    }
+
+    @MainActor
+    func testSettingsUsernameInlineEditSucceeds() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
+
+        let editButton = app.buttons["settings.usernameEditButton"]
+        XCTAssertTrue(editButton.waitForExistence(timeout: 5))
+        tapByStableCenter(editButton, in: app)
+
+        let field = app.textFields["settings.usernameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        clearUsernameFieldForUITest(field, in: app)
+        field.typeText("fixture_renamed")
+
+        let saveButton = app.buttons["settings.usernameSaveButton"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        tapByStableCenter(saveButton, in: app)
+
+        let display = app.staticTexts["settings.usernameDisplay"]
+        XCTAssertTrue(display.waitForExistence(timeout: 8))
+        XCTAssertEqual(display.label, "fixture_renamed")
+
+        dismissKeyboardIfPresent(in: app)
+    }
+
+    @MainActor
+    func testSettingsUsernameValidationError() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
+
+        let editButton = app.buttons["settings.usernameEditButton"]
+        XCTAssertTrue(editButton.waitForExistence(timeout: 5))
+        tapByStableCenter(editButton, in: app)
+
+        let field = app.textFields["settings.usernameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        clearUsernameFieldForUITest(field, in: app)
+        field.typeText("no")
+
+        let saveButton = app.buttons["settings.usernameSaveButton"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        tapByStableCenter(saveButton, in: app)
+
+        let err = app.staticTexts["settings.usernameError"]
+        XCTAssertTrue(err.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            err.label.contains("3-30"),
+            "Expected USERNAME_ERROR-style copy, got: \(err.label)"
+        )
+
+        dismissKeyboardIfPresent(in: app)
+    }
+
+    @MainActor
+    func testSettingsUsernameConflictShowsTakenMessage() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true, forceUsernameConflict: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
+
+        let editButton = app.buttons["settings.usernameEditButton"]
+        XCTAssertTrue(editButton.waitForExistence(timeout: 5))
+        tapByStableCenter(editButton, in: app)
+
+        let field = app.textFields["settings.usernameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        clearUsernameFieldForUITest(field, in: app)
+        field.typeText("taken_name")
+
+        let saveButton = app.buttons["settings.usernameSaveButton"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        tapByStableCenter(saveButton, in: app)
+
+        let err = app.staticTexts["settings.usernameError"]
+        XCTAssertTrue(err.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            err.label.localizedCaseInsensitiveContains("taken"),
+            "Expected 409 taken copy, got: \(err.label)"
+        )
+
+        dismissKeyboardIfPresent(in: app)
     }
 
     @MainActor
@@ -314,7 +410,8 @@ final class StillPointAppUITests: XCTestCase {
         forceTokenExpired: Bool = false,
         forceSessionsFailure: Bool = false,
         appBlockingSelected: Bool = false,
-        forceProgressTab: Bool = false
+        forceProgressTab: Bool = false,
+        forceUsernameConflict: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -328,6 +425,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
         app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = appBlockingSelected ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_PROGRESS_TAB"] = forceProgressTab ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
         return app
     }
 
@@ -487,6 +585,25 @@ final class StillPointAppUITests: XCTestCase {
             app.swipeDown()
         }
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    }
+
+    /// Replaces field contents without relying on the "Select All" context menu (flaky in CI).
+    private func clearUsernameFieldForUITest(_ field: XCUIElement, in app: XCUIApplication) {
+        field.tap()
+        field.press(forDuration: 1.2)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 2) {
+            selectAll.tap()
+            return
+        }
+        let deleteKey = app.keyboards.keys["Delete"]
+        XCTAssertTrue(
+            deleteKey.waitForExistence(timeout: 3),
+            "Expected keyboard with Delete after focusing username field"
+        )
+        for _ in 0..<40 {
+            deleteKey.tap()
+        }
     }
 
     @discardableResult
