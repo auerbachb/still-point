@@ -111,50 +111,43 @@ struct SessionView: View {
             vm.start()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
         }
         .onDisappear {
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: false,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: false
             )
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
         }
         .onChange(of: vm.isActive) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
         }
         .onChange(of: vm.isPaused) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
         }
         .onChange(of: vm.isAbandoned) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
         }
         .onChange(of: vm.isComplete) { _, isComplete in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
-                isRunning: sessionTimerRunning,
-                preferenceEnabled: appVM.keepScreenAwakeDuringSession
+                isRunning: sessionTimerRunning
             )
             if isComplete && !vm.isAbandoned {
                 handleCompletion()

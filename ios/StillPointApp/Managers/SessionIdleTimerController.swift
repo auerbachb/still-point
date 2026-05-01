@@ -32,10 +32,10 @@ enum SessionIdleTimerController {
     }
 
     /// Call when local `SessionView` is on screen and timer state changes, or preference toggles.
-    static func syncLocalSession(appVM: AppViewModel, isRunning: Bool, preferenceEnabled: Bool) {
+    static func syncLocalSession(appVM: AppViewModel, isRunning: Bool) {
         let reg = registration(for: appVM)
         reg.localSessionRunning = isRunning
-        applyDesiredIdleTimerState(localSessionPreference: preferenceEnabled)
+        applyDesiredIdleTimerState()
     }
 
     /// Call when buddy shared sit is in the `active` server state.
@@ -53,9 +53,9 @@ enum SessionIdleTimerController {
     }
 
     /// Recompute from all registrations and UserDefaults (e.g. after foreground).
-    static func applyDesiredIdleTimerState(localSessionPreference: Bool? = nil) {
+    static func applyDesiredIdleTimerState() {
         pruneDeadRegistrations()
-        let pref = localSessionPreference ?? keepScreenAwakePreferenceEnabled
+        let pref = keepScreenAwakePreferenceEnabled
         let shouldDisable = pref && registrations.values.contains { reg in
             reg.appViewModel != nil && reg.sceneForegroundActive
                 && (reg.localSessionRunning || reg.buddySessionActive)
