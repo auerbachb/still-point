@@ -238,7 +238,9 @@ struct SettingsView: View {
 
                 HStack(spacing: SPSpacing.s2) {
                     Button {
-                        Task { await saveUsername(currentUsername: user.username) }
+                        Task { @MainActor in
+                            await saveUsername(currentUsername: user.username)
+                        }
                     } label: {
                         Text(savingUsername ? "Saving…" : "Save")
                             .font(SPFont.mono(11, weight: .medium))
@@ -316,8 +318,10 @@ struct SettingsView: View {
         usernameDraft = savedUsername
     }
 
+    @MainActor
     private func saveUsername(currentUsername: String) async {
-        guard !isUpdating else { return }
+        guard !isSavingSettings else { return }
+
         let trimmed = usernameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         usernameFieldError = nil
         usernameSuccessMessage = nil
