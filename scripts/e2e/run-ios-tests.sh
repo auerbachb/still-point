@@ -120,8 +120,14 @@ run_lane() {
   local lane_tag="$1"
   local test_target
   local result_bundle
+  local attempt_marker
   test_target="$(resolve_test_target "${lane_tag}")"
   result_bundle="artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.xcresult"
+  # Start-of-attempt sentinel for is_retriable_failure(): its mtime is fixed
+  # at attempt start, unlike the .log file (which `tee` keeps updating until
+  # xcodebuild exits). See is_retriable_failure() below for the rationale.
+  attempt_marker="artifacts/e2e/ios/${lane_tag}-attempt-${ATTEMPT}.start"
+  : > "${attempt_marker}"
 
   local -a xcodebuild_args=(
     test
@@ -159,18 +165,23 @@ run_lane() {
 # "Non-retriable failures" column in docs/testing/e2e-policy.md Section 1.
 is_retriable_failure() {
   local log="$1"
+  # Optional 2nd arg: a sentinel file whose mtime marks attempt-start. Defaults
+  # to `<log>.start` (`run_lane()` creates `<lane>-attempt-N.start` before
+  # invoking xcodebuild, so deriving from `<lane>-attempt-N.log` recovers it).
+  local attempt_marker="${2:-${log%.log}.start}"
   [[ -f "$log" ]] || return 0
   # If a simulator-side crash report for our app was written during this
   # attempt, treat as infra regardless of the test log's surface symptom.
   # macos-26 runners showed XPC faults (EXC_GUARD/XPC_EXIT_REASON_FAULT)
   # that surface as "did not appear" XCTAssertTrue timeouts but are actually
-  # launchd/sim-level crashes. The `-newer "$log"` filter scopes detection
-  # to .ips files written after this attempt's log was created, so a stale
-  # crash from a prior attempt cannot mask a real assertion failure on the
-  # current attempt.
+  # launchd/sim-level crashes. We compare against the attempt-start marker
+  # rather than the log file because `tee` updates the log's mtime
+  # continuously throughout the run; a crash from mid-run could end up
+  # older than the log's final mtime and be missed.
   local diag_dir="${HOME}/Library/Logs/DiagnosticReports"
-  if [[ -d "${diag_dir}" ]] \
-     && find "${diag_dir}" -type f -name '*StillPoint*' -newer "$log" -print -quit 2>/dev/null | grep -q .; then
+  if [[ -f "${attempt_marker}" ]] \
+     && [[ -d "${diag_dir}" ]] \
+     && find "${diag_dir}" -type f -name '*StillPoint*' -newer "${attempt_marker}" -print -quit 2>/dev/null | grep -q .; then
     return 0
   fi
   # XCTAssert* failures: e.g., "XCTAssertTrue failed - <msg>".
@@ -199,7 +210,8 @@ while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
   fi
 
   attempt_log="artifacts/e2e/ios/${LANE}-attempt-${ATTEMPT}.log"
-  if ! is_retriable_failure "${attempt_log}"; then
+  attempt_marker="artifacts/e2e/ios/${LANE}-attempt-${ATTEMPT}.start"
+  if ! is_retriable_failure "${attempt_log}" "${attempt_marker}"; then
     echo "iOS ${LANE} lane failed with non-retriable signature (XCTest assertion); skipping retry."
     FINAL_STATUS="failed"
     exit 1
