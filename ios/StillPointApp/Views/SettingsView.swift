@@ -107,6 +107,7 @@ struct SettingsView: View {
                     .disabled(isSavingSettings)
                     .onChange(of: isPublic) { _, newValue in
                         guard !isSavingSettings else { return }
+                        guard appVM.currentUser?.isPublic != newValue else { return }
                         isUpdating = true
                         Task {
                             defer { isUpdating = false }
