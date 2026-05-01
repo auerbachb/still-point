@@ -27,11 +27,11 @@ Rules:
 
 **Enforcement (iOS lanes):** `scripts/e2e/run-ios-tests.sh` runs a 2-tier classifier on each failed attempt:
 
-1. **Crash check first** — if a `*StillPoint*` diagnostic report under `~/Library/Logs/DiagnosticReports/` was written after the attempt-start sentinel (`<lane>-attempt-N.start`), the failure is treated as infra and consumes a retry, **regardless of any concurrent assertion-shape line in the log**. This catches macos-26 simulator XPC faults that surface as `XCTAssertTrue failed - <X> did not appear` timeouts but are actually launchd/sim-level crashes.
-2. **Assertion check second** — if no crash report is correlated with this attempt, the script greps the log for known XCTest assertion signatures (e.g. `XCTAssertX failed`, `error: -[<Module.>?<TestClass> <testMethod>]`) and exits without consuming the retry budget.
+1. **Crash check first** — if a `*StillPoint*` diagnostic report under `~/Library/Logs/DiagnosticReports/` was written after the attempt-start sentinel (`<lane>-attempt-N.start`), the failure is treated as infra and consumes a retry, **regardless of any concurrent assertion-shape line in the log**. This catches macos-26 simulator XPC faults that surface as timeout-shaped assertions like `XCTAssertTrue failed - Session screen did not appear after Begin tap` but are actually launchd/sim-level crashes.
+2. **Assertion check second** — if no crash report is correlated with this attempt, the script greps the log for known XCTest assertion signatures (matched as Bash extended regex against the attempt log: `XCTAssert[A-Za-z]* failed` and `error: -\[(([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+\][[:space:]]*:`) and exits without consuming the retry budget.
 3. **Default** — any other failure (infra/transient/unknown) consumes retries up to the table value.
 
-Note: the runner does not implement the "deterministic app crash with same stack" rule from the table — detecting cross-attempt stack identity is intentionally out-of-scope (see [#324](https://github.com/auerbachb/still-point/issues/324)). Repeated identical crashes will currently consume the full retry budget, then fail; if same-stack detection becomes important, file a follow-up.
+Note: detecting "same stack across attempts" (a stricter, repeated-crash signal) is intentionally out-of-scope — it would require diffing per-attempt diagnostic reports across runs (see [#324](https://github.com/auerbachb/still-point/issues/324)). Repeated identical simulator crashes will currently consume the full retry budget, then fail through the default branch; if cross-attempt stack-identity detection becomes important, file a follow-up.
 
 Web lanes still rely on Playwright's own retry handling.
 
