@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, thoughts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { isUuid } from "@/lib/friends";
 import { eq, and, asc } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ dayNumber: string }> }
+  { params }: { params: Promise<{ sessionId: string }> },
 ) {
   try {
     const auth = await getCurrentUser();
@@ -14,17 +15,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { dayNumber } = await params;
-    const dayNum = parseInt(dayNumber, 10);
-    if (isNaN(dayNum)) {
-      return NextResponse.json({ error: "Invalid day number" }, { status: 400 });
+    const { sessionId } = await params;
+    if (!sessionId || !isUuid(sessionId)) {
+      return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
 
     const [session] = await db.select()
       .from(sessions)
       .where(and(
         eq(sessions.userId, auth.userId),
-        eq(sessions.dayNumber, dayNum),
+        eq(sessions.id, sessionId),
       ))
       .limit(1);
 
@@ -54,7 +54,7 @@ export async function GET(
 
     return NextResponse.json({ session, thoughts: sessionThoughts });
   } catch (error) {
-    console.error("Get session error:", error);
+    console.error("Get session by id error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

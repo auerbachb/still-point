@@ -1,4 +1,5 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
+import { calculateSessionStats } from "../../src/lib/constants";
 import { tap } from "../utils/mobile-helpers";
 
 type UserRecord = {
@@ -71,43 +72,7 @@ function getLocalIsoDate(offsetDays = 0) {
 }
 
 function computeStats(sessions: SessionRecord[]) {
-  const standardSessions = sessions.filter((s) => s.sessionType === "standard");
-  const completedSessions = standardSessions.filter((s) => s.completed);
-  const totalSessions = standardSessions.length;
-  let streak = 0;
-  const completedByDay = new Map<number, boolean>();
-  for (const session of standardSessions) {
-    completedByDay.set(
-      session.dayNumber,
-      (completedByDay.get(session.dayNumber) ?? false) || session.completed,
-    );
-  }
-  const maxDay = Math.max(0, ...completedByDay.keys());
-  for (let day = maxDay; day >= 1; day -= 1) {
-    if (completedByDay.get(day) === true) {
-      streak += 1;
-    } else {
-      break;
-    }
-  }
-
-  const avgClearPercent = completedSessions.length
-    ? Math.round(completedSessions.reduce((sum, s) => sum + s.clearPercent, 0) / completedSessions.length)
-    : 0;
-  const avgThoughtsPerSession = totalSessions
-    ? Number((standardSessions.reduce((sum, s) => sum + s.thoughtCount, 0) / totalSessions).toFixed(1))
-    : 0;
-  const avgThoughtsPerMinute = totalSessions
-    ? Number(
-        (
-          standardSessions.reduce((sum, s) => {
-            const minutes = s.duration / 60;
-            return sum + (minutes > 0 ? s.thoughtCount / minutes : 0);
-          }, 0) / totalSessions
-        ).toFixed(1),
-      )
-    : 0;
-  return { streak, avgClearPercent, avgThoughtsPerSession, avgThoughtsPerMinute };
+  return calculateSessionStats(sessions);
 }
 
 function json(route: Route, status: number, body: unknown) {

@@ -40,6 +40,7 @@ export type Session = {
   thoughtCount: number;
   mindStateLog: Array<{ time: number; state: string }> | null;
   sessionDate: string;
+  createdAt: string;
   /** Present when this row was created from a completed buddy sit (#119). */
   buddySessionId?: string | null;
 };

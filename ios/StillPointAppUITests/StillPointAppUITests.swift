@@ -133,8 +133,8 @@ final class StillPointAppUITests: XCTestCase {
             relaunch.staticTexts["history.title"].waitForExistence(timeout: launchTimeout),
             "History screen did not appear after relaunch"
         )
-        let dayRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.day.")).firstMatch
-        XCTAssertTrue(dayRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
+        let sessionRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.")).firstMatch
+        XCTAssertTrue(sessionRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
     }
 
     @MainActor

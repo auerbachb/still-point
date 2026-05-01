@@ -40,7 +40,7 @@ struct HistoryView: View {
                         .foregroundStyle(SPColor.green)
                     }
                     .padding(.top, SPSpacing.s6)
-                } else if vm.sessions.isEmpty {
+                } else if vm.journeyRows.isEmpty {
                     VStack(spacing: SPSpacing.s3) {
                         Text("No sessions yet")
                             .font(SPFont.serifItalic(15))
@@ -73,11 +73,15 @@ struct HistoryView: View {
                             .tracking(2)
                             .padding(.bottom, 4)
 
-                        ForEach(vm.history) { entry in
-                            if entry.missed {
-                                missedRow(entry)
-                            } else {
-                                sessionRow(entry)
+                        ForEach(0..<vm.journeyRows.count, id: \.self) { index in
+                            let row = vm.journeyRows[index]
+                            let prevDate: String? = index > 0 ? previousSessionDate(before: index) : nil
+                            switch row {
+                            case .missed(let date):
+                                missedRow(date: date)
+                            case .standardSession(let session, let sessionIndex):
+                                let showDate = prevDate.map { $0 != session.sessionDate } ?? true
+                                sessionRow(session: session, sessionIndexInDay: sessionIndex, showDateColumn: showDate)
                             }
                         }
 
@@ -93,6 +97,20 @@ struct HistoryView: View {
         .task {
             await vm.load()
         }
+    }
+
+    private func previousSessionDate(before index: Int) -> String? {
+        var i = index - 1
+        while i >= 0 {
+            switch vm.journeyRows[i] {
+            case .missed(let date):
+                return date
+            case .standardSession(let session, _):
+                return session.sessionDate
+            }
+            i -= 1
+        }
+        return nil
     }
 
     private func statCell(value: String, label: String) -> some View {
@@ -111,35 +129,34 @@ struct HistoryView: View {
     // MARK: - Session Row
 
     @ViewBuilder
-    private func sessionRow(_ entry: HistoryEntry) -> some View {
-        if let dayNumber = entry.dayNumber {
-            let isExpanded = vm.expandedDay == dayNumber
+    private func sessionRow(session: SessionDTO, sessionIndexInDay: Int, showDateColumn: Bool) -> some View {
+        let isExpanded = vm.expandedSessionId == session.id
 
         VStack(spacing: 0) {
             Button {
-                Task { await vm.toggleDay(dayNumber) }
+                Task { await vm.toggleSession(session.id) }
             } label: {
                 HStack(spacing: 8) {
-                    // Date label
-                    Text(shortDateLabel(entry.date))
+                    // Date label (only first row of each calendar day)
+                    Text(showDateColumn ? shortDateLabel(session.sessionDate) : "")
                         .font(SPFont.mono(10))
                         .foregroundStyle(Color(SPColor.fg4))
                         .frame(width: 56, alignment: .trailing)
                         .lineLimit(1)
 
-                    // Day number
-                    Text("D\(dayNumber)")
+                    // Session label within the day
+                    Text("Session \(sessionIndexInDay)")
                         .font(SPFont.mono(11, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg3))
-                        .frame(width: 28, alignment: .trailing)
+                        .frame(width: 72, alignment: .trailing)
 
                     // Proportional bar
                     GeometryReader { geo in
                         let barFraction = vm.maxDuration > 0
-                            ? CGFloat(entry.actualTime) / CGFloat(vm.maxDuration)
+                            ? CGFloat(session.actualTime ?? session.duration) / CGFloat(vm.maxDuration)
                             : 0
                         let barWidth = geo.size.width * barFraction
-                        let clearWidth = barWidth * CGFloat(entry.clearPercent) / 100.0
+                        let clearWidth = barWidth * CGFloat(session.clearPercent) / 100.0
                         let thinkWidth = barWidth - clearWidth
 
                         ZStack(alignment: .leading) {
@@ -151,10 +168,10 @@ struct HistoryView: View {
                             // Proportional filled portion
                             HStack(spacing: 0) {
                                 Rectangle()
-                                    .fill(SPColor.green.opacity(entry.completed ? 0.7 : 0.4))
+                                    .fill(SPColor.green.opacity(session.completed ? 0.7 : 0.4))
                                     .frame(width: max(0, clearWidth))
                                 Rectangle()
-                                    .fill(SPColor.amber.opacity(entry.completed ? 0.5 : 0.3))
+                                    .fill(SPColor.amber.opacity(session.completed ? 0.5 : 0.3))
                                     .frame(width: max(0, thinkWidth))
                             }
                             .frame(height: 16)
@@ -165,15 +182,15 @@ struct HistoryView: View {
 
                     // Metadata: duration · clear% · thoughts
                     HStack(spacing: 4) {
-                        Text("\(entry.actualTime)s")
+                        Text("\(session.actualTime ?? session.duration)s")
                             .foregroundStyle(Color(SPColor.fg3))
                         Text("·")
                             .foregroundStyle(Color(SPColor.fg4))
-                        Text("\(entry.clearPercent)%")
+                        Text("\(session.clearPercent)%")
                             .foregroundStyle(SPColor.greenText)
                         Text("·")
                             .foregroundStyle(Color(SPColor.fg4))
-                        Text("\(entry.thoughtCount)\u{1F4AD}")
+                        Text("\(session.thoughtCount)\u{1F4AD}")
                             .foregroundStyle(SPColor.amberText)
                     }
                     .font(SPFont.mono(10))
@@ -182,10 +199,10 @@ struct HistoryView: View {
                 }
                 .padding(.vertical, 2)
             }
-            .accessibilityIdentifier("history.session.day.\(dayNumber)")
+            .accessibilityIdentifier("history.session.\(session.id)")
 
             // Expanded thoughts
-            if isExpanded, let thoughts = vm.dayThoughts[dayNumber] {
+            if isExpanded, let thoughts = vm.sessionThoughts[session.id] {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(thoughts, id: \.id) { thought in
                         HStack(alignment: .top, spacing: SPSpacing.s2) {
@@ -204,25 +221,24 @@ struct HistoryView: View {
                 .padding(.vertical, 4)
             }
         }
-        } // if let dayNumber
     }
 
     // MARK: - Missed Row
 
-    private func missedRow(_ entry: HistoryEntry) -> some View {
+    private func missedRow(date: String) -> some View {
         HStack(spacing: 8) {
             // Date label
-            Text(shortDateLabel(entry.date))
+            Text(shortDateLabel(date))
                 .font(SPFont.mono(10))
                 .foregroundStyle(Color(SPColor.fg4))
                 .frame(width: 56, alignment: .trailing)
                 .lineLimit(1)
 
-            // Em-dash instead of day number
+            // Em-dash instead of session label
             Text("\u{2014}")
                 .font(SPFont.mono(11, weight: .medium))
                 .foregroundStyle(Color(SPColor.fg3))
-                .frame(width: 28, alignment: .trailing)
+                .frame(width: 72, alignment: .trailing)
 
             // Dashed border container
             RoundedRectangle(cornerRadius: 3)
@@ -256,11 +272,11 @@ struct HistoryView: View {
                 .foregroundStyle(Color(SPColor.fg4))
                 .frame(width: 56, alignment: .trailing)
 
-            // Day number
-            Text("D\(appVM.currentDay)")
+            // Placeholder aligned with session label column
+            Text("\u{2014}")
                 .font(SPFont.mono(11, weight: .medium))
                 .foregroundStyle(Color(SPColor.fg4))
-                .frame(width: 28, alignment: .trailing)
+                .frame(width: 72, alignment: .trailing)
 
             // Proportional dashed bar
             GeometryReader { geo in
@@ -293,8 +309,6 @@ struct HistoryView: View {
     }
 
     // MARK: - Helpers
-
-    // MARK: - Cached Formatters
 
     private static let isoDateFormatter: DateFormatter = {
         let df = DateFormatter()
