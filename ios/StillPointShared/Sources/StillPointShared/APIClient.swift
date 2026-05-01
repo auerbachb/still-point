@@ -132,6 +132,36 @@ public actor APIClient {
         return response.user
     }
 
+    /// Native Sign in with Apple → server JWKS verification (#286).
+    public func appleNativeSignIn(
+        identityToken: String,
+        authorizationCode: String,
+        fullName: [String: String]?
+    ) async throws -> UserDTO {
+        if let user = try uiTestAppleNativeSignIn() {
+            return user
+        }
+        struct Body: Encodable {
+            let identityToken: String
+            let authorizationCode: String
+            let fullName: [String: String]?
+        }
+        let body = Body(
+            identityToken: identityToken,
+            authorizationCode: authorizationCode,
+            fullName: fullName
+        )
+        let response: UserResponse = try await post("/api/auth/apple-native", body: body)
+        if let token = response.token, !token.isEmpty {
+            guard AuthTokenStore.save(token) else {
+                throw APIError(status: 0, message: "Unable to securely save auth token")
+            }
+        } else {
+            _ = AuthTokenStore.clear()
+        }
+        return response.user
+    }
+
     public func requestPasswordReset(email: String) async throws -> String {
         if let message = try uiTestRequestPasswordReset(email: email) {
             return message
@@ -471,6 +501,11 @@ public actor APIClient {
         uiTestStore = store
         persistUITestStore()
         return store.user
+    }
+
+    private func uiTestAppleNativeSignIn() throws -> UserDTO? {
+        guard uiTestConfig != nil else { return nil }
+        throw APIError(status: 0, message: "Apple sign-in is not stubbed in UI tests")
     }
 
     private func uiTestRequestPasswordReset(email: String) throws -> String? {

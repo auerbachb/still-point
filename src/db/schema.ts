@@ -72,7 +72,7 @@ export const accountDeletionLog = pgTable("account_deletion_log", {
 /** OAuth provider identities linked to a user (#136).
  *  One row per (provider, providerAccountId); a single user may have
  *  multiple rows (one per provider). Email-match account linking is
- *  performed in `src/lib/auth-config.ts` signIn callback. */
+ *  performed in `src/lib/oauth-account-resolution.ts` (Auth.js + native). */
 export const oauthAccounts = pgTable("oauth_accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),

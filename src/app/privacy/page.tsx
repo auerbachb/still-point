@@ -210,6 +210,18 @@ export default function PrivacyPolicyPage() {
             </a>
             .
           </li>
+          <li>
+            <strong style={{ color: "var(--fg)" }}>Apple:</strong>{" "}
+            <a
+              href="https://www.apple.com/legal/privacy/data/en/sign-in-with-apple/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--accent-green-text)", textDecoration: "underline" }}
+            >
+              Sign in with Apple: how we handle your data
+            </a>
+            .
+          </li>
         </ul>
 
         <h2 style={sectionTitle}>Retention and your choices</h2>

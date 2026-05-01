@@ -21,6 +21,8 @@ targets:
         buildPhase: resources
     dependencies:
       - package: StillPointShared
+    entitlements:
+      path: StillPointApp/StillPointApp.entitlements
     info:
       path: StillPointApp/Info.plist
       properties:

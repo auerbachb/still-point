@@ -26,6 +26,8 @@
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
 		5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */; };
+		A28600000000000000000003 /* AppleSignInButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28600000000000000000001 /* AppleSignInButtonView.swift */; };
+		A28600000000000000000004 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28600000000000000000002 /* AppleSignInController.swift */; };
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
 		760C4A2F57E6B207F729ABEA /* BuddyActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E9BBE4830753E3B8FCC1C0 /* BuddyActiveSessionView.swift */; };
@@ -66,6 +68,8 @@
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyVideoWebView.swift; sourceTree = "<group>"; };
+		A28600000000000000000001 /* AppleSignInButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInButtonView.swift; sourceTree = "<group>"; };
+		A28600000000000000000002 /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
 		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -98,6 +102,7 @@
 		0125A97693D46BCCED4DC74E /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A28600000000000000000001 /* AppleSignInButtonView.swift */,
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
 				9AEB18D5D4C55CB98F814D43 /* BuddySession */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
@@ -132,6 +137,14 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
+		A28600000000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A28600000000000000000002 /* AppleSignInController.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 		489EB05EBE530B8F6E4F1C7F /* StillPointApp */ = {
 			isa = PBXGroup;
 			children = (
@@ -140,6 +153,7 @@
 				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
 				4DB1C67E76477BADB30F0F77 /* Components */,
 				17A248000000000000000006 /* Managers */,
+				A28600000000000000000005 /* Services */,
 				551003AC2B5AD8A7B3C3D426 /* Navigation */,
 				09EA4336C05552F95AE85178 /* Resources */,
 				AC788F412B1414C8C2BDB3CB /* Theme */,
@@ -316,6 +330,8 @@
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
 				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
 				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
+				A28600000000000000000003 /* AppleSignInButtonView.swift in Sources */,
+				A28600000000000000000004 /* AppleSignInController.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,

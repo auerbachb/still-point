@@ -11,6 +11,8 @@ final class AuthViewModel {
     var resetMessage: String?
     var isSubmitting = false
     var isRequestingPasswordReset = false
+    /// Lazily created for Sign in with Apple (#286).
+    private(set) var appleCoordinator: AppleSignInController.Coordinator?
 
     var isValid: Bool {
         let emailValid = email.contains("@") && email.contains(".")
@@ -50,6 +52,23 @@ final class AuthViewModel {
             self.error = "Connection failed. Please try again."
             return nil
         }
+    }
+
+    func ensureAppleCoordinator(appVM: AppViewModel) {
+        guard appleCoordinator == nil else { return }
+        appleCoordinator = AppleSignInController.makeCoordinator(
+            onSuccess: { [weak self] user in
+                Task { @MainActor in
+                    self?.error = nil
+                    appVM.didLogin(user: user)
+                }
+            },
+            onError: { [weak self] msg in
+                Task { @MainActor in
+                    self?.error = msg
+                }
+            }
+        )
     }
 
     func requestPasswordReset() async {

@@ -11,11 +11,11 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_session_missing: "Sign-in didn't complete. Please try again.",
   oauth_user_missing: "We couldn't find your account. Please try again.",
   oauth_internal_error: "Something went wrong on our end. Please try again.",
-  OAuthSignin: "Couldn't start Google sign-in. Please try again.",
-  OAuthCallback: "Google sign-in was cancelled or failed.",
+  OAuthSignin: "Couldn't start sign-in. Please try again.",
+  OAuthCallback: "Sign-in was cancelled or failed.",
   OAuthCreateAccount: "Couldn't create your account. Please try again.",
   AccessDenied: "Access denied. Please try again.",
-  Verification: "We couldn't verify your Google account.",
+  Verification: "We couldn't verify your account with the provider.",
   Configuration: "Sign-in is temporarily unavailable.",
 };
 
@@ -168,6 +168,40 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           </svg>
           Continue with Google
         </button>
+
+        <a
+          href="/api/auth/signin?provider=apple"
+          style={{
+            textDecoration: "none",
+            background: "var(--surface-1)",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg)",
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "15px",
+            padding: "12px 16px",
+            borderRadius: "30px",
+            cursor: "pointer",
+            transition: "all 0.3s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "10px",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "var(--border-3)";
+            e.currentTarget.style.background = "var(--surface-2)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "var(--border-2)";
+            e.currentTarget.style.background = "var(--surface-1)";
+          }}
+          aria-label="Continue with Apple"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" fill="currentColor">
+            <path d="M13.65 9.52c-.02-1.95 1.6-2.89 1.67-2.93-.91-1.33-2.33-1.51-2.83-1.53-1.2-.12-2.35.71-2.96.71-.61 0-1.55-.69-2.55-.67-1.31.02-2.52.76-3.2 1.93-1.36 2.36-.35 5.86.98 7.78.65.94 1.42 2 2.44 1.96.98-.04 1.35-.63 2.53-.63 1.18 0 1.51.63 2.54.61 1.05-.02 1.71-.95 2.36-1.9.74-1.08 1.05-2.13 1.06-2.19-.02-.01-2.04-.78-2.06-3.1zM11.29 3.07c.53-.64.89-1.53.79-2.42-.76.03-1.68.51-2.22 1.15-.49.57-.92 1.48-.8 2.36.85.07 1.71-.43 2.23-1.09z" />
+          </svg>
+          Continue with Apple
+        </a>
 
         <p style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",

@@ -22,6 +22,13 @@ struct AuthView: View {
                 }
                 .padding(.top, 60)
 
+                if let coord = vm.appleCoordinator {
+                    AppleSignInButtonView(coordinator: coord)
+                        .frame(height: 48)
+                        .padding(.horizontal, SPSpacing.s4)
+                        .accessibilityIdentifier("auth.appleSignInButton")
+                }
+
                 // Login / Sign Up toggle
                 HStack(spacing: 0) {
                     toggleButton("Log In", isSelected: !vm.isSignUp) {
@@ -125,6 +132,9 @@ struct AuthView: View {
             .padding(.bottom, SPSpacing.s6)
         }
         .stillPointBackground()
+        .task {
+            vm.ensureAppleCoordinator(appVM: appVM)
+        }
     }
 
     private func toggleButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

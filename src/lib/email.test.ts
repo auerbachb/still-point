@@ -6,12 +6,15 @@ import { passwordResetAppBaseUrl } from "./email";
 
 describe("passwordResetAppBaseUrl", () => {
   const env = { ...process.env };
+  const setNodeEnv = (value: string) => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = value;
+  };
 
   beforeEach(() => {
     delete process.env.NEXT_PUBLIC_APP_URL;
     delete process.env.VERCEL_ENV;
     delete process.env.VERCEL_URL;
-    process.env.NODE_ENV = "test";
+    setNodeEnv("test");
   });
 
   afterEach(() => {
@@ -35,12 +38,12 @@ describe("passwordResetAppBaseUrl", () => {
   });
 
   it("uses localhost in non-production without Vercel", () => {
-    process.env.NODE_ENV = "development";
+    setNodeEnv("development");
     expect(passwordResetAppBaseUrl()).toBe("http://127.0.0.1:3000");
   });
 
   it("uses still-point.me in production without Vercel", () => {
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
     expect(passwordResetAppBaseUrl()).toBe("https://still-point.me");
   });
 });

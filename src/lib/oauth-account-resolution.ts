@@ -1,0 +1,156 @@
+import { db } from "@/db";
+import { users, oauthAccounts } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import {
+  MAX_USERNAME_LENGTH,
+  MIN_USERNAME_LENGTH,
+  USERNAME_REGEX,
+} from "@/lib/username";
+import { uniqueViolationConstraint } from "@/lib/dbErrors";
+
+/** Sanitize a profile field into a username candidate that satisfies
+ *  users.username constraints (#136 + #8). */
+function sanitizeUsernameSeed(seed: string): string {
+  const cleaned = seed.replace(/[^A-Za-z0-9_]/g, "");
+  if (cleaned.length === 0) return "user";
+  return cleaned.slice(0, MAX_USERNAME_LENGTH);
+}
+
+function randomSuffix(length: number): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, length);
+}
+
+async function generateUniqueUsername(seed: string): Promise<string> {
+  const base = sanitizeUsernameSeed(seed);
+  const padded = base.length < MIN_USERNAME_LENGTH ? `${base}user`.slice(0, MAX_USERNAME_LENGTH) : base;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const suffix = attempt === 0 ? "" : `_${randomSuffix(4)}`;
+    const candidate = `${padded.slice(0, MAX_USERNAME_LENGTH - suffix.length)}${suffix}`;
+
+    if (!USERNAME_REGEX.test(candidate)) continue;
+    if (candidate.length < MIN_USERNAME_LENGTH || candidate.length > MAX_USERNAME_LENGTH) continue;
+
+    const [collision] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.username}) = lower(${candidate})`)
+      .limit(1);
+    if (!collision) return candidate;
+  }
+
+  return `user_${randomSuffix(10)}`;
+}
+
+async function linkProviderToUser(
+  provider: string,
+  providerAccountId: string,
+  userId: string,
+): Promise<string> {
+  const inserted = await db
+    .insert(oauthAccounts)
+    .values({ userId, provider, providerAccountId })
+    .onConflictDoNothing({
+      target: [oauthAccounts.provider, oauthAccounts.providerAccountId],
+    })
+    .returning({ userId: oauthAccounts.userId });
+
+  if (inserted.length > 0) return inserted[0].userId;
+
+  const [existing] = await db
+    .select({ userId: oauthAccounts.userId })
+    .from(oauthAccounts)
+    .where(
+      and(
+        eq(oauthAccounts.provider, provider),
+        eq(oauthAccounts.providerAccountId, providerAccountId),
+      ),
+    )
+    .limit(1);
+  if (!existing) {
+    throw new Error("oauth_accounts insert returned no rows and no existing link");
+  }
+  return existing.userId;
+}
+
+const MAX_USERNAME_RETRIES = 5;
+
+async function createUserWithUsernameRetry(email: string, seed: string): Promise<string> {
+  for (let attempt = 0; attempt <= MAX_USERNAME_RETRIES; attempt++) {
+    const username = await generateUniqueUsername(seed);
+    try {
+      const inserted = await db
+        .insert(users)
+        .values({ email, username })
+        .onConflictDoNothing({ target: users.email })
+        .returning({ id: users.id });
+
+      if (inserted.length > 0) return inserted[0].id;
+
+      const [racedRow] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (!racedRow) {
+        throw new Error("users insert raced and lookup returned no row");
+      }
+      return racedRow.id;
+    } catch (err) {
+      const constraint = uniqueViolationConstraint(err);
+      if (constraint === null) throw err;
+      const isLikelyUsernameConstraint =
+        constraint === "" || constraint.toLowerCase().includes("username");
+      if (isLikelyUsernameConstraint && attempt < MAX_USERNAME_RETRIES) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to allocate a unique username after retries");
+}
+
+export type ResolveOAuthUserInput = {
+  provider: string;
+  providerAccountId: string;
+  email: string;
+  profileName: string | null;
+};
+
+/** Shared find-or-create + oauth_accounts link used by Auth.js `signIn` and
+ *  native bridges (e.g. Apple). Always resolves by `(provider, sub)` first so
+ *  “Hide My Email” relay addresses cannot fork accounts across sign-ins. */
+export async function resolveOrCreateUserForOAuthLink(input: ResolveOAuthUserInput): Promise<string> {
+  const { provider, providerAccountId, email, profileName } = input;
+
+  const [existingLink] = await db
+    .select({ userId: oauthAccounts.userId })
+    .from(oauthAccounts)
+    .where(
+      and(
+        eq(oauthAccounts.provider, provider),
+        eq(oauthAccounts.providerAccountId, providerAccountId),
+      ),
+    )
+    .limit(1);
+
+  if (existingLink) {
+    return existingLink.userId;
+  }
+
+  const [emailMatch] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  let targetUserId: string;
+  if (emailMatch) {
+    targetUserId = emailMatch.id;
+  } else {
+    const seed = profileName || email.split("@")[0] || "user";
+    targetUserId = await createUserWithUsernameRetry(email, seed);
+  }
+
+  return linkProviderToUser(provider, providerAccountId, targetUserId);
+}

@@ -7,10 +7,6 @@ companion spec for issue #136 (web Google sign-in) and follow-ups
 [#285](https://github.com/auerbachb/still-point/issues/285) (Facebook), and
 [#286](https://github.com/auerbachb/still-point/issues/286) (Apple).
 
-The iOS implementation itself ships in a separate iOS-side issue. This file
-describes only what the web backend already supports today and what each
-provider expects from the client.
-
 ---
 
 ## Account model
@@ -22,15 +18,19 @@ A single Still Point user account can have:
 - Zero or more linked OAuth identities, recorded in `oauth_accounts` as
   `(provider, provider_account_id) -> user_id`.
 
-Linking rule: when a sign-in provider returns a verified email that matches
-an existing `users.email` (case-insensitively), the new
-`(provider, provider_account_id)` is attached to that user. Otherwise a new
-user is created with a null `password_hash`.
+Linking rule: **provider identity is authoritative.** On each sign-in we first
+look up `(provider, provider_account_id)` in `oauth_accounts`. If a row exists,
+that user owns the session — even when the provider-supplied email is a relay
+address or changes. If no row exists, we may attach the new identity to an
+existing user whose `users.email` matches (case-insensitive), or create a new
+user. Shared implementation: `src/lib/oauth-account-resolution.ts` (used by
+Auth.js web callbacks and native bridges).
 
 The session token format is unchanged. The web backend mints the same
 HttpOnly `sp_token` JWT it has always used; iOS continues to read
 `sp_token` from `HTTPCookieStorage.shared` and attach it to subsequent
-requests.
+requests. For native flows, `APIClient` also persists the JWT from the JSON
+body when the server returns `token` (header `X-Still-Point-Client: ios`).
 
 ---
 
@@ -38,18 +38,18 @@ requests.
 
 There are two patterns iOS uses depending on the provider:
 
-### Pattern A: Native SDK + dedicated server endpoint (Apple only)
+### Pattern A: Native SDK + dedicated server endpoint (Apple)
 
 Apple requires Sign in with Apple to use `ASAuthorizationController` on iOS
 when the platform supports it. The native flow returns an `identityToken`
 (JWT signed by Apple) and an `authorizationCode` to the app, not a redirect.
 
-Endpoint (to be implemented under issue
-[#286](https://github.com/auerbachb/still-point/issues/286)):
+Endpoint (implemented under [#286](https://github.com/auerbachb/still-point/issues/286)):
 
 ```http
 POST /api/auth/apple-native
 Content-Type: application/json
+X-Still-Point-Client: ios
 ```
 
 ```json
@@ -60,21 +60,38 @@ Content-Type: application/json
 }
 ```
 
+`fullName` is optional; Apple only supplies it on the **first** authorization
+for that Apple ID in your app. Omit or send `{}` on subsequent sign-ins.
+
 Server responsibilities:
 
 1. Verify `identityToken` against Apple's JWKS
-   (`https://appleid.apple.com/auth/keys`) using the `jose` library that is
-   already in the project; check `iss == "https://appleid.apple.com"`,
-   `aud == AUTH_APPLE_ID` (the Services ID), and `exp`.
-2. Extract `sub` (Apple user id, stable across sign-ins) and `email`.
-3. Apply the same find/create-and-link logic as the web `signIn` callback,
-   keyed on email when present (Apple may return a relay address) and on
-   `(provider='apple', provider_account_id=sub)` for re-sign-in.
-4. Mint `sp_token`, set the cookie, and return the same response shape as
-   `POST /api/auth/login`.
+   (`https://appleid.apple.com/auth/keys`) with `jose.jwtVerify`; require
+   `iss === "https://appleid.apple.com"`, valid signature, and `exp`.
+2. Require `aud` to be either `AUTH_APPLE_ID` (Services ID / web client id) or
+   the iOS host app bundle id (default `com.brettonauerbach.stillpoint`). If
+   your bundle id differs, set optional `AUTH_APPLE_NATIVE_ID` on the server.
+3. Extract `sub` (Apple user id, stable across sign-ins) and `email` from the
+   JWT. Reject if `email` or `email_verified` is missing or false — Apple omits
+   `email` on later native sign-ins unless the user revoked and re-granted; in
+   that case the user should complete a fresh authorization or use web sign-in
+   once so we can store the relay address.
+4. Call `resolveOrCreateUserForOAuthLink({ provider: 'apple', providerAccountId: sub, email, profileName })`.
+5. Mint `sp_token`, set the HttpOnly cookie, return the same JSON shape as
+   `POST /api/auth/login`, plus `token` in the body when `X-Still-Point-Client: ios`.
 
-This endpoint does not exist yet. It is gated on
-[#286](https://github.com/auerbachb/still-point/issues/286).
+**Hide My Email:** Relay addresses (`*@privaterelay.appleid.com`) are stable
+per (user, app). We always key `oauth_accounts` rows by Apple `sub`, so repeat
+sign-ins attach to the same Still Point user even if email matching would
+otherwise be ambiguous.
+
+**Security:** Do not log `identityToken`, `authorizationCode`, or provider access
+tokens. The route logs only generic errors.
+
+**iOS app wiring:** `AppleSignInController` + `AppleSignInButtonView` in
+`ios/StillPointApp` call `APIClient.appleNativeSignIn`. Enable the Sign in with
+Apple capability in Xcode / Apple Developer for the app id that matches the
+native token `aud`.
 
 ### Pattern B: `ASWebAuthenticationSession` over the web flow (Google, Microsoft, Facebook)
 
@@ -138,7 +155,7 @@ Caveats for Pattern B:
 | Provider | Pattern | iOS framework | Status |
 |---|---|---|---|
 | Google | B (web flow) | `ASWebAuthenticationSession` | Web available today (#136). iOS-side issue not yet filed. |
-| Apple | A (native) | `ASAuthorizationController` | Web Auth.js + native endpoint deferred to [#286](https://github.com/auerbachb/still-point/issues/286). |
+| Apple | A (native) | `ASAuthorizationController` | Web Auth.js + `POST /api/auth/apple-native` (#286). |
 | Facebook | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#285](https://github.com/auerbachb/still-point/issues/285). |
 | Microsoft | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#284](https://github.com/auerbachb/still-point/issues/284). |
 
@@ -150,7 +167,7 @@ Caveats for Pattern B:
   identifiers.
 - Provider tokens (`identityToken`, OAuth access tokens, refresh tokens)
   must not appear in application logs. Auth.js does not log them by default;
-  custom server code (e.g., `/api/auth/apple-native`) must follow the same
+  custom server code (e.g. `/api/auth/apple-native`) must follow the same
   rule.
 - `sp_token` remains the only credential the iOS app sees and stores. It is
   HttpOnly on web; on iOS it lives in `HTTPCookieStorage.shared` and is
