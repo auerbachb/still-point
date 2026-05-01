@@ -168,6 +168,14 @@ struct SettingsView: View {
                     Text(deleteAccountError)
                 }
 
+                Text(appVersionFooter)
+                    .font(SPFont.mono(11, weight: .regular))
+                    .foregroundStyle(Color(SPColor.fg4))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, SPSpacing.s5)
+                    .accessibilityIdentifier("settings.appVersion")
+
                 Spacer().frame(height: SPSpacing.s6)
             }
             .padding(.horizontal, SPSpacing.s4)
@@ -176,6 +184,12 @@ struct SettingsView: View {
         .onAppear {
             isPublic = appVM.currentUser?.isPublic ?? false
         }
+    }
+
+    private var appVersionFooter: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "v\(version) (\(build))"
     }
 
     private func deleteAccount() async {
