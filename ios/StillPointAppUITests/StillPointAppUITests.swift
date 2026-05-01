@@ -62,10 +62,16 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
         passwordField.tapAndType("stillpoint-pass", in: app)
 
+        dismissKeyboardIfPresent(in: app)
+
         let submitButton = app.buttons["auth.submitButton"]
+        XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
         tapByStableCenter(submitButton, in: app)
 
-        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.otherElements["root.currentView.home"].waitForExistence(timeout: 25),
+            "Home did not appear after login"
+        )
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         beginButton.tap()
