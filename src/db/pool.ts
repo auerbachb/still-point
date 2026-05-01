@@ -45,3 +45,12 @@ export const poolDb = new Proxy({} as PoolDb, {
     return (getPoolDb() as unknown as Record<string | symbol, unknown>)[prop as string];
   },
 });
+
+/** End WebSocket pool (scripts / Playwright globalSetup only; not used in serverless). */
+export async function closePoolDb(): Promise<void> {
+  if (globalForPool.__drizzlePool) {
+    await globalForPool.__drizzlePool.end();
+    globalForPool.__drizzlePool = undefined;
+    globalForPool.__poolDb = undefined;
+  }
+}

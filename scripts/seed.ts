@@ -5,6 +5,7 @@ import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import { poolDb } from "../src/db/pool";
 import * as schema from "../src/db/schema";
 import { friendships, sessions, thoughts, users } from "../src/db/schema";
+import { assertNeonHostedPostgresUrl } from "./lib/assert-neon-postgres-url";
 
 loadEnvConfig(process.cwd());
 
@@ -49,27 +50,6 @@ function buildSeedUsers(runId: string): SeedUser[] {
 
 type AppDb = NeonDatabase<typeof schema>;
 
-/** Rejects non-Neon or malformed URLs so the seed script cannot target arbitrary hosts by mistake. */
-function assertNeonNonProdPostgresUrl(rawUrl: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error("POSTGRES_URL is not a valid URL.");
-  }
-
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-    throw new Error("POSTGRES_URL must use postgres:// or postgresql://.");
-  }
-
-  const host = parsed.hostname.toLowerCase();
-  if (!host.endsWith(".neon.tech") && host !== "neon.tech") {
-    throw new Error(
-      "Refusing to seed: POSTGRES_URL hostname must be a Neon host (*.neon.tech). Point POSTGRES_URL at your non-production Neon branch.",
-    );
-  }
-}
-
 /** Idempotent non-production seed: replaces fixture users by email, then inserts sessions, thoughts, and friendship. */
 async function main() {
   if (process.env.NODE_ENV === "production") {
@@ -82,12 +62,13 @@ async function main() {
     );
   }
 
-  const postgresUrl = process.env.POSTGRES_URL;
+  const postgresUrl = (process.env.POSTGRES_URL ?? "").trim();
   if (!postgresUrl) {
     throw new Error("POSTGRES_URL is required.");
   }
 
-  assertNeonNonProdPostgresUrl(postgresUrl);
+  assertNeonHostedPostgresUrl(postgresUrl);
+  process.env.POSTGRES_URL = postgresUrl;
 
   const runId = (process.env.E2E_RUN_ID ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
   const seedUsers = buildSeedUsers(runId);
