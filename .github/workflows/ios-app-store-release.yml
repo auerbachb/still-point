@@ -207,14 +207,17 @@ jobs:
       - name: Fastlane release (preflight, gym, deliver)
         working-directory: ios
         env:
+          # Map existing GitHub Actions secrets → Fastlane standard env (spaceship / deliver).
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          # Same secrets (explicit refs keep ios:app-store:dry-run B2 checks satisfied).
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           RELEASE_OWNER: ${{ github.actor }}
-          # Default dry-run for App Store: upload binary + metadata, do not submit for review.
-          # Set repository variable IOS_SUBMIT_FOR_REVIEW to the literal "1" to enable submit.
-          SUBMIT_FOR_REVIEW: ${{ vars.IOS_SUBMIT_FOR_REVIEW }}
-          AUTOMATIC_RELEASE: ${{ vars.IOS_AUTOMATIC_RELEASE }}
+          # Harness default: upload binary + metadata only — no Submit for Review (#296 enables submission).
+          DELIVER_SKIP_SUBMISSION: "1"
         run: bundle exec fastlane release
 
       - name: Clean up keychain and provisioning profile

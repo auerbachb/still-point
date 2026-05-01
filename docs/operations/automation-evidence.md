@@ -6,7 +6,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 
 | Step | Owner | Notes |
 |------|--------|------|
-| Create App Store Connect API key (`.p8`), **never commit the key** | Account Holder / Admin | Store in 1Password; add `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, `APPSTORE_API_PRIVATE_KEY` as GitHub Actions **secrets** only. |
+| Create App Store Connect API key (`.p8`), **never commit the key** | Account Holder / Admin | One-time setup; this repo already stores `APPSTORE_API_*` in GitHub Actions secrets (rotate in ASC + GitHub if the key is revoked). |
 | Confirm `gh secret list` shows required names (values are never visible) | Release owner | Cannot be automated inside CI without elevated token scope. |
 | Distribution certificate + provisioning profile secrets | Engineering | `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `BUILD_PROVISION_PROFILE_BASE64`. |
 | Apple Agreements, Tax, Banking | Account Holder / Admin | Not reliably exposed via public API; uploads can fail until clear. |
@@ -19,7 +19,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | Both |
 | Machine-readable preflight | `npm run ios:app-store:dry-run` | Both |
 | Archive + upload binary to App Store Connect / TestFlight | `xcodebuild -exportArchive` with API key | TestFlight (`ios-testflight.yml`) |
-| Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`) |
+| Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`); `deliver` runs with `skip_submission` unless explicitly disabled for #296+ |
 
 ## Automated locally or on a Mac runner (Fastlane)
 
@@ -31,7 +31,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | `bundle exec fastlane metadata_only` | `deliver` metadata only (no binary). |
 | `bundle exec fastlane release` | Preflight (unless `SKIP_PREFLIGHT=1`) + `gym` + `deliver` (binary + metadata). |
 
-**Submit for review:** CI defaults to **not** submitting (`SUBMIT_FOR_REVIEW` unset). Set the repository variable `IOS_SUBMIT_FOR_REVIEW` to `1` when a release owner explicitly enables programmatic submission. Optional `IOS_AUTOMATIC_RELEASE=1` maps to Deliver’s automatic release after approval.
+**Submit for review:** In GitHub Actions, `ios-app-store-release.yml` sets `DELIVER_SKIP_SUBMISSION=1`, so `deliver` uploads the IPA and metadata but does not submit for review (issue #242 / harness default). For a future live submission (#296+), remove that guard in the workflow and set `DELIVER_SKIP_SUBMISSION=0` plus `SUBMIT_FOR_REVIEW=1` only when a release owner explicitly approves. Optional: `AUTOMATIC_RELEASE=1` after submission is enabled.
 
 ## Explicit human gates (not fully automatable)
 

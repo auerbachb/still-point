@@ -9,16 +9,18 @@ Treat these files as required merge artifacts for iOS release candidates:
 
 ## Prerequisites
 
-The following GitHub repository secrets must be configured (Settings -> Secrets and variables -> Actions):
+The following GitHub Actions **secrets** are used by the iOS workflows (already configured for this repo; do not rename). Values never appear in logs or git.
 
-| Secret | Description | How to get it |
-|--------|-------------|---------------|
-| `BUILD_CERTIFICATE_BASE64` | Base64-encoded `.p12` distribution certificate | Export from Keychain Access, then `base64 -i cert.p12 \| pbcopy` |
-| `P12_PASSWORD` | Password used when exporting the `.p12` | The password you set during `.p12` export |
-| `BUILD_PROVISION_PROFILE_BASE64` | Base64-encoded `.mobileprovision` file | Download from developer.apple.com, then `base64 -i profile.mobileprovision \| pbcopy` |
-| `APPSTORE_API_KEY_ID` | App Store Connect API Key ID | From appstoreconnect.apple.com -> Users and Access -> Integrations |
-| `APPSTORE_API_ISSUER_ID` | App Store Connect API Issuer ID | Same page as above |
-| `APPSTORE_API_PRIVATE_KEY` | Contents of the `.p8` API key file | Paste the full file contents including BEGIN/END lines |
+| Secret | Used for |
+|--------|----------|
+| `BUILD_CERTIFICATE_BASE64` | Distribution signing (`xcodebuild` / `gym`) |
+| `P12_PASSWORD` | `.p12` import password |
+| `BUILD_PROVISION_PROFILE_BASE64` | App Store provisioning profile |
+| `APPSTORE_API_KEY_ID` | App Store Connect API (JWT `kid`) |
+| `APPSTORE_API_ISSUER_ID` | App Store Connect API issuer |
+| `APPSTORE_API_PRIVATE_KEY` | API private key (full `.p8` contents as a secret; never commit the file) |
+
+The App Store release workflow maps these to Fastlane’s standard `APP_STORE_CONNECT_API_*` environment names at runtime (see `.github/workflows/ios-app-store-release.yml`).
 
 ## First-time setup
 
@@ -75,7 +77,9 @@ When you are ready to push **metadata + binary** to App Store Connect for the ve
    ```
 4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs: smoke tests, checklist gate, `npm run ios:app-store:dry-run`, then `bundle exec fastlane release` (preflight → `gym` → `deliver`).
 
-**Submit for review** is off by default in CI (binary and metadata still upload). To enable programmatic submission for a run, set the GitHub repository variable `IOS_SUBMIT_FOR_REVIEW` to `1`. Optional: `IOS_AUTOMATIC_RELEASE=1` for automatic release after approval.
+**Submit for review:** CI sets `DELIVER_SKIP_SUBMISSION=1` so `deliver` uploads the IPA and metadata but does **not** submit the version for review (harness / #242 default). Issue **#296** can turn on full submission by clearing that guard and following the release-owner checklist.
+
+Optional after #296: set `DELIVER_SKIP_SUBMISSION=0` and `SUBMIT_FOR_REVIEW=1` when programmatic submission is explicitly approved; optional `AUTOMATIC_RELEASE=1`.
 
 ### Fastlane (local or debugging)
 
