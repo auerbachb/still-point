@@ -76,6 +76,8 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 
 ## App Store metadata and release notes checklist
 
+Canonical App Store Connect copy (subtitle, description alignment, privacy URL) lives in [`ios/docs/app-store-metadata.md`](./docs/app-store-metadata.md). Reconcile App Store Connect with that file when preparing a submission.
+
 Before "Add for Review," verify the following in App Store Connect:
 
 - [ ] Version record created for current `MARKETING_VERSION`.
