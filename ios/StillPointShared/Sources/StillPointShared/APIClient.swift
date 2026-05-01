@@ -250,8 +250,8 @@ public actor APIClient {
     // MARK: - Board
 
     public func getBoard() async throws -> [BoardEntryDTO] {
-        if let uiTestResult = uiTestGetBoard() {
-            return uiTestResult
+        if uiTestConfig != nil {
+            return uiTestGetBoard()
         }
         let response: BoardResponse = try await get("/api/board")
         return response.board
@@ -633,10 +633,10 @@ public actor APIClient {
         return createdThoughts
     }
 
-    /// Fixed practitioner list for App Store marketing screenshots (UI-test snapshot seed only).
-    private func uiTestGetBoard() -> [BoardEntryDTO]? {
-        guard let uiTestConfig, uiTestConfig.snapshotSeed else { return nil }
-        guard let store = uiTestStore, store.isAuthenticated else { return nil }
+    /// Board data in UI test mode: empty unless snapshot seed is enabled (marketing screenshots).
+    private func uiTestGetBoard() -> [BoardEntryDTO] {
+        guard let uiTestConfig, uiTestConfig.snapshotSeed else { return [] }
+        guard let store = uiTestStore, store.isAuthenticated else { return [] }
         let me = store.user.username
         return [
             BoardEntryDTO(username: "quietledger", currentDay: 24, streak: 18, avgClear: 84, totalSessions: 52),

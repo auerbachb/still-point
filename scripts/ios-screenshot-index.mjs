@@ -28,16 +28,32 @@ async function collectPngs(dir) {
   return out.sort();
 }
 
+/**
+ * Fastlane snapshot names files `{Simulator Name}-{snapshot name}.png`.
+ * Simulator names contain hyphens (e.g. iPad Pro 13-inch (M5)), so we split on
+ * the hyphen before the shot prefix `NN-` (numeric ordering).
+ */
+function splitSnapshotBasename(base) {
+  const re = /^(.+)-(\d{2}-.+)$/;
+  const m = base.match(re);
+  if (m) {
+    return { device: m[1], shot: m[2] };
+  }
+  const idx = base.indexOf("-");
+  if (idx === -1) {
+    return { device: base, shot: base };
+  }
+  return { device: base.slice(0, idx), shot: base.slice(idx + 1) };
+}
+
 function devicePrefix(filename) {
   const base = path.basename(filename, ".png");
-  const idx = base.indexOf("-");
-  return idx === -1 ? base : base.slice(0, idx);
+  return splitSnapshotBasename(base).device;
 }
 
 function shotSuffix(filename) {
   const base = path.basename(filename, ".png");
-  const idx = base.indexOf("-");
-  return idx === -1 ? base : base.slice(idx + 1);
+  return splitSnapshotBasename(base).shot;
 }
 
 const pngs = await collectPngs(root);
