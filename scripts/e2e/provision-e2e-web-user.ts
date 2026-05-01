@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { closePoolDb, poolDb } from "../../src/db/pool";
 import { users } from "../../src/db/schema";
 import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, USERNAME_REGEX } from "../../src/lib/username";
-import { assertNeonNonProdPostgresUrl } from "../lib/assert-neon-postgres-url";
+import { assertNeonHostedPostgresUrl } from "../lib/assert-neon-postgres-url";
 
 loadEnvConfig(process.cwd());
 
@@ -42,12 +42,13 @@ export async function provisionE2EWebUser(options: ProvisionE2EWebUserOptions): 
     throw new Error("Refusing to provision E2E user with NODE_ENV=production.");
   }
 
-  const postgresUrl = process.env.POSTGRES_URL;
+  const postgresUrl = (process.env.POSTGRES_URL ?? "").trim();
   if (!postgresUrl) {
     throw new Error("POSTGRES_URL is required to provision the E2E web user.");
   }
 
-  assertNeonNonProdPostgresUrl(postgresUrl);
+  assertNeonHostedPostgresUrl(postgresUrl);
+  process.env.POSTGRES_URL = postgresUrl;
 
   const email = options.email.trim().toLowerCase();
   const password = options.password;

@@ -5,7 +5,7 @@ import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import { poolDb } from "../src/db/pool";
 import * as schema from "../src/db/schema";
 import { friendships, sessions, thoughts, users } from "../src/db/schema";
-import { assertNeonNonProdPostgresUrl } from "./lib/assert-neon-postgres-url";
+import { assertNeonHostedPostgresUrl } from "./lib/assert-neon-postgres-url";
 
 loadEnvConfig(process.cwd());
 
@@ -62,12 +62,13 @@ async function main() {
     );
   }
 
-  const postgresUrl = process.env.POSTGRES_URL;
+  const postgresUrl = (process.env.POSTGRES_URL ?? "").trim();
   if (!postgresUrl) {
     throw new Error("POSTGRES_URL is required.");
   }
 
-  assertNeonNonProdPostgresUrl(postgresUrl);
+  assertNeonHostedPostgresUrl(postgresUrl);
+  process.env.POSTGRES_URL = postgresUrl;
 
   const runId = (process.env.E2E_RUN_ID ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
   const seedUsers = buildSeedUsers(runId);
