@@ -10,10 +10,10 @@ This runbook covers **Resend** as the transactional provider for password reset 
 | `EMAIL_FROM` | Server only | Verified sender, e.g. `Still Point <noreply@still-point.me>`. Must match a domain or sender verified in Resend. |
 | `NEXT_PUBLIC_APP_URL` | Build / server | Preferred base URL for reset links (`…/reset-password?token=…`). **Recommended** in every Vercel scope. If omitted: Vercel **Production** (`VERCEL_ENV=production`) falls back to `https://still-point.me`; Vercel **Preview** falls back to `https://${VERCEL_URL}` (set automatically by Vercel) so links stay on the same preview deploy as the token; non-Vercel `NODE_ENV=production` (no `VERCEL_ENV` / `VERCEL_URL`) also falls back to `https://still-point.me`; otherwise **local** falls back to `http://127.0.0.1:3000`. Resolution order: `NEXT_PUBLIC_APP_URL` → `VERCEL_ENV` → `VERCEL_URL` → `NODE_ENV` (`src/lib/email.ts`). |
 
-If `EMAIL_FROM` or `RESEND_API_KEY` is missing:
+If `EMAIL_FROM` or `RESEND_API_KEY` is missing, behavior is gated on `NODE_ENV` (not `VERCEL_ENV`):
 
-- **Non-production:** the app skips sending and logs the reset URL server-side (local/preview debugging).
-- **Production:** sending throws; the request handler rolls back the new token and still returns the same generic success message as unknown emails (no account enumeration).
+- **`NODE_ENV !== "production"` (local dev / `next dev`):** the app skips sending and logs the reset URL server-side for debugging.
+- **`NODE_ENV === "production"` (any Vercel deploy — Production *or* Preview, plus self-hosted prod):** `sendEmail` throws; the request handler rolls back the new token and still returns the same generic success message as unknown emails (no account enumeration). **Vercel Preview deploys therefore require `EMAIL_FROM` + `RESEND_API_KEY` to actually deliver a reset email** — without them, the request silently fails. If you need log-only behavior on Preview, gate `sendEmail` on `VERCEL_ENV !== "production"` instead of `NODE_ENV`.
 
 ## Resend account and API key
 
@@ -45,7 +45,7 @@ NEXT_PUBLIC_APP_URL=https://still-point.me
 - Scope each variable to **Production** (and **Preview** only if you intentionally test real email from preview deploys).
 - Redeploy after changing env vars so the runtime picks them up.
 
-Optional **Preview** copy of the three vars if you want preview builds to send via Resend to a test inbox; otherwise preview behaves like dev (no key → log-only path when not production).
+**Preview** scope: if you want preview builds to send via Resend to a test inbox, copy the three vars (or at least `EMAIL_FROM` + `RESEND_API_KEY`) into Preview. Without those keys, Preview password-reset requests **fail silently** (token rollback, generic success response, no email, no logged link) because Vercel sets `NODE_ENV=production` on Preview deploys. This is *not* the dev log-only path — that only applies to local `next dev`.
 
 ## Smoke test (production)
 
