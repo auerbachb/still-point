@@ -8,8 +8,8 @@ import { expect, test } from "@playwright/test";
 test.describe("@authDbIntegration username uniqueness (Postgres)", () => {
   test.beforeEach(() => {
     test.skip(
-      !process.env.POSTGRES_URL?.trim(),
-      "POSTGRES_URL required for @authDbIntegration (see e2e/README.md; web-e2e-auth-db job sets it).",
+      !process.env.POSTGRES_URL?.trim() || !process.env.JWT_SECRET?.trim(),
+      "POSTGRES_URL and JWT_SECRET required for @authDbIntegration (see e2e/README.md; web-e2e-auth-db job sets them).",
     );
   });
   test("second signup with case-only variant returns 409 Username already taken", async ({

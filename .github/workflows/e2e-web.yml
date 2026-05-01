@@ -145,7 +145,10 @@ jobs:
       - name: Check auth DB secrets
         id: authdb
         run: |
-          if [ -z "${POSTGRES_URL}" ] || [ -z "${JWT_SECRET}" ]; then
+          # Trim so whitespace-only secrets skip (matches run-auth-db-integration.mjs).
+          POSTGRES_TRIMMED="$(echo -n "${POSTGRES_URL}" | xargs)"
+          JWT_TRIMMED="$(echo -n "${JWT_SECRET}" | xargs)"
+          if [ -z "${POSTGRES_TRIMMED}" ] || [ -z "${JWT_TRIMMED}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Skipping web-e2e-auth-db: set E2E_AUTH_DB_POSTGRES_URL and E2E_AUTH_DB_JWT_SECRET (see e2e/README.md)."
           else

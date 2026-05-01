@@ -74,9 +74,8 @@ Cross-cutting policy: `docs/testing/e2e-policy.md`. Full app seed for demo data 
 
 These tests validate case-insensitive username rules and cross-route race handling (#283). They require:
 
-1. **`POSTGRES_URL`** — Neon (or other) connection string the app uses; must not point at production. The Playwright process and `npm run dev` both need it. Other E2E jobs omit it; those runs **skip** this file’s tests automatically. The dedicated `web-e2e-auth-db` CI job supplies it from secrets.
+1. **`POSTGRES_URL`** and **`JWT_SECRET`** — both must be set for the Playwright process and `npm run dev` (settings PATCH verifies JWTs). Other E2E jobs omit them; those runs **skip** this file’s tests automatically. The dedicated `web-e2e-auth-db` CI job supplies them from secrets.
 2. **Postgres schema** — the case-insensitive username migration must be applied. `npm run e2e:web:authDb` runs `scripts/apply-migrations.ts` first, which applies every `drizzle/*.sql` file (including `users_uniqueness_incremental.sql`) idempotently.
-3. **`JWT_SECRET`** — any non-empty value consistent with the dev server (signup and settings PATCH issue JWT-backed cookies when applicable).
 
 ### Local
 
@@ -91,4 +90,4 @@ E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:web:authDb
 
 ### CI
 
-The workflow **E2E Web** defines a job `web-e2e-auth-db` that runs `npm run e2e:web:authDb` when repository secrets **`E2E_AUTH_DB_POSTGRES_URL`** and **`E2E_AUTH_DB_JWT_SECRET`** are both set (mapped to `POSTGRES_URL` / `JWT_SECRET` for the job). If either is missing, the job **passes** after a notice so the workflow stays green until secrets are configured. Use a **non-production** Postgres URL aligned with preview/local schema; the runner applies `drizzle/*.sql` migrations before tests.
+The workflow **E2E Web** defines a job `web-e2e-auth-db` that runs `npm run e2e:web:authDb` when repository secrets **`E2E_AUTH_DB_POSTGRES_URL`** and **`E2E_AUTH_DB_JWT_SECRET`** are both set to non-empty values after trimming whitespace (mapped to `POSTGRES_URL` / `JWT_SECRET` for the job). If either is missing or whitespace-only, the job **passes** after a notice so the workflow stays green until secrets are configured. Use a **non-production** Postgres URL aligned with preview/local schema; the runner applies `drizzle/*.sql` migrations before tests.
