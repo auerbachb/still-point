@@ -158,21 +158,19 @@ platform :ios do
     )
   end
 
-  desc "Preflight → build → deliver metadata + IPA. Submission: set DELIVER_SKIP_SUBMISSION=0 and SUBMIT_FOR_REVIEW=1 (issue #296+)."
+  desc "Preflight → build → deliver metadata + IPA. Set SUBMIT_FOR_REVIEW=1 for programmatic submit (#296+)."
   lane :release do
     preflight unless ENV["SKIP_PREFLIGHT"] == "1"
     stillpoint_api_key
     build
-    # Default skips ASC submission (upload-only). Unset is treated as skip (safe for harness / #242).
-    skip_submission = ENV["DELIVER_SKIP_SUBMISSION"] != "0"
+    submit = ENV["SUBMIT_FOR_REVIEW"] == "1"
     deliver(
       api_key: lane_context[SharedValues::APP_STORE_CONNECT_API_KEY],
       ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
       force: true,
       skip_binary_upload: false,
-      skip_submission: skip_submission,
-      submit_for_review: !skip_submission && ENV["SUBMIT_FOR_REVIEW"] == "1",
-      automatic_release: ENV["AUTOMATIC_RELEASE"] == "1",
+      submit_for_review: submit,
+      automatic_release: submit && ENV["AUTOMATIC_RELEASE"] == "1",
       run_precheck_before_submit: false
     )
   end

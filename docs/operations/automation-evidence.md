@@ -19,7 +19,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | Both |
 | Machine-readable preflight | `npm run ios:app-store:dry-run` | Both |
 | Archive + upload binary to App Store Connect / TestFlight | `xcodebuild -exportArchive` with API key | TestFlight (`ios-testflight.yml`) |
-| Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`); `deliver` runs with `skip_submission` unless explicitly disabled for #296+ |
+| Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`); `submit_for_review` is false unless `SUBMIT_FOR_REVIEW=1` |
 
 ## Automated locally or on a Mac runner (Fastlane)
 
@@ -31,7 +31,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | `bundle exec fastlane metadata_only` | `deliver` metadata only (no binary). |
 | `bundle exec fastlane release` | Preflight (unless `SKIP_PREFLIGHT=1`) + `gym` + `deliver` (binary + metadata). |
 
-**Submit for review:** In GitHub Actions, `ios-app-store-release.yml` sets `DELIVER_SKIP_SUBMISSION=1`, so `deliver` uploads the IPA and metadata but does not submit for review (issue #242 / harness default). For a future live submission (#296+), remove that guard in the workflow and set `DELIVER_SKIP_SUBMISSION=0` plus `SUBMIT_FOR_REVIEW=1` only when a release owner explicitly approves. Optional: `AUTOMATIC_RELEASE=1` after submission is enabled.
+**Submit for review:** CI does **not** set `SUBMIT_FOR_REVIEW`, so `deliver` runs with `submit_for_review: false` (upload-only; issue #242 default). For a future live submission (#296+), set `SUBMIT_FOR_REVIEW=1` in the workflow when a release owner approves. Optional: `AUTOMATIC_RELEASE=1` (only applied when submitting).
 
 ## Explicit human gates (not fully automatable)
 

@@ -216,8 +216,8 @@ jobs:
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           RELEASE_OWNER: ${{ github.actor }}
-          # Harness default: upload binary + metadata only — no Submit for Review (#296 enables submission).
-          DELIVER_SKIP_SUBMISSION: "1"
+          # Harness default: upload binary + metadata only — omit SUBMIT_FOR_REVIEW (deliver uses submit_for_review: false).
+          # Issue #296+: set SUBMIT_FOR_REVIEW=1 (and optionally AUTOMATIC_RELEASE=1) when a release owner approves submission.
         run: bundle exec fastlane release
 
       - name: Clean up keychain and provisioning profile

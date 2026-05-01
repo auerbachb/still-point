@@ -77,9 +77,9 @@ When you are ready to push **metadata + binary** to App Store Connect for the ve
    ```
 4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs: smoke tests, checklist gate, `npm run ios:app-store:dry-run`, then `bundle exec fastlane release` (preflight → `gym` → `deliver`).
 
-**Submit for review:** CI sets `DELIVER_SKIP_SUBMISSION=1` so `deliver` uploads the IPA and metadata but does **not** submit the version for review (harness / #242 default). Issue **#296** can turn on full submission by clearing that guard and following the release-owner checklist.
+**Submit for review:** CI leaves `SUBMIT_FOR_REVIEW` unset, so `deliver` uses `submit_for_review: false` (upload only; harness / #242 default). Issue **#296** can enable programmatic submission by setting `SUBMIT_FOR_REVIEW=1` in the workflow when a release owner approves.
 
-Optional after #296: set `DELIVER_SKIP_SUBMISSION=0` and `SUBMIT_FOR_REVIEW=1` when programmatic submission is explicitly approved; optional `AUTOMATIC_RELEASE=1`.
+Optional after #296: set `AUTOMATIC_RELEASE=1` together with `SUBMIT_FOR_REVIEW=1` if automatic release after approval is desired.
 
 ### Fastlane (local or debugging)
 
