@@ -204,9 +204,9 @@ struct SessionView: View {
         !vm.isComplete && !vm.isAbandoned && (vm.isActive || vm.isPaused)
     }
 
-    /// Timer is running or paused (sit not finished); used for idle-timer / screen awake.
+    /// Active sit timer only (not paused); idle timer may lock while paused.
     private var sessionTimerRunning: Bool {
-        sessionInProgress
+        vm.isActive && !vm.isPaused && !vm.isComplete && !vm.isAbandoned
     }
 
     private var bottomOverlayReserve: CGFloat {
