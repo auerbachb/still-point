@@ -94,7 +94,7 @@ export const oauthAccounts = pgTable("oauth_accounts", {
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  tokenHash: varchar("token_hash", { length: 64 }).unique().notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
   requestIpHash: varchar("request_ip_hash", { length: 64 }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
@@ -102,9 +102,10 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 }, (table) => ({
   userIdx: index("idx_password_reset_tokens_user").on(table.userId),
   tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_unique").on(table.tokenHash),
-  /** Keep one unused reset token per user; expiresAt remains data, not uniqueness scope. */
-  activeUserIdx: uniqueIndex("password_reset_tokens_active_user_unique").on(table.userId)
-    .where(sql`${table.usedAt} is null`),
+  /** Partial unique index: only rows with `used_at IS NULL` participate, so one active token per user while allowing many historical used rows. */
+  activeUserIdx: uniqueIndex("password_reset_tokens_active_user_unique").on(table.userId).where(
+    sql`${table.usedAt} is null`,
+  ),
 }));
 
 /** waiting | ready_check | active | completed | abandoned */

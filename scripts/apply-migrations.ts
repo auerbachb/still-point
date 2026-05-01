@@ -34,9 +34,14 @@ async function main() {
     return;
   }
 
+  // `drizzle-kit generate` writes numbered files (`0000_*.sql`) plus `meta/` for
+  // drift detection; production was built from `*_incremental.sql` + `push`.
+  // Do not execute numbered migrations here — they are not idempotent on
+  // existing databases and would fail with "already exists".
   const files = fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
+    .filter((f) => !/^\d{4}_/.test(f))
     .sort();
 
   if (files.length === 0) {
