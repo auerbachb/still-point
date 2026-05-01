@@ -1,4 +1,7 @@
 # Docs: https://docs.fastlane.tools/actions/snapshot/
+#
+# Device strings must match `xcrun simctl list devices available` exactly.
+# CI overrides via SNAPSHOT_DEVICES (comma-separated). Local runs use this list.
 
 devices([
   "iPhone 17 Pro Max",
