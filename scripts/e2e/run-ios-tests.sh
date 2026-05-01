@@ -160,15 +160,17 @@ run_lane() {
 is_retriable_failure() {
   local log="$1"
   [[ -f "$log" ]] || return 0
-  # If a simulator-side crash report for our app exists, treat as infra
-  # regardless of the test log's surface symptom. macos-26 runners showed
-  # XPC faults (EXC_GUARD/XPC_EXIT_REASON_FAULT) that surface as "did not
-  # appear" XCTAssertTrue timeouts but are actually launchd/sim-level
-  # crashes. CI runners are ephemeral, so any *StillPoint*.ips here is
-  # from this job's runs.
+  # If a simulator-side crash report for our app was written during this
+  # attempt, treat as infra regardless of the test log's surface symptom.
+  # macos-26 runners showed XPC faults (EXC_GUARD/XPC_EXIT_REASON_FAULT)
+  # that surface as "did not appear" XCTAssertTrue timeouts but are actually
+  # launchd/sim-level crashes. The `-newer "$log"` filter scopes detection
+  # to .ips files written after this attempt's log was created, so a stale
+  # crash from a prior attempt cannot mask a real assertion failure on the
+  # current attempt.
   local diag_dir="${HOME}/Library/Logs/DiagnosticReports"
   if [[ -d "${diag_dir}" ]] \
-     && find "${diag_dir}" -type f -name '*StillPoint*' -print -quit 2>/dev/null | grep -q .; then
+     && find "${diag_dir}" -type f -name '*StillPoint*' -newer "$log" -print -quit 2>/dev/null | grep -q .; then
     return 0
   fi
   # XCTAssert* failures: e.g., "XCTAssertTrue failed - <msg>".
@@ -176,8 +178,11 @@ is_retriable_failure() {
     return 1
   fi
   # XCTest method-level error frames referencing a test selector starting
-  # with "test...": e.g., "error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...".
-  if grep -qE 'error: -\[[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*[[:space:]]+test[A-Za-z0-9_]+' "$log"; then
+  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
+  # plain "Class" forms. Examples:
+  #   error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...
+  #   error: -[StillPointAppUITests testFoo] : ...
+  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
     return 1
   fi
   # Default: retriable (covers simulator XPC faults, sim boot timeouts,
