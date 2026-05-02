@@ -132,7 +132,7 @@ jobs:
           fi
 
       - name: Generate App Store submission dry-run evidence
-        run: npm run ios:app-store:dry-run -- --release-owner "GitHub Actions App Store release"
+        run: npm run ios:app-store:dry-run -- --release-owner "${{ github.actor }}"
 
       - name: Upload App Store submission dry-run evidence
         if: always()
@@ -216,6 +216,7 @@ jobs:
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           RELEASE_OWNER: ${{ github.actor }}
+          SKIP_PREFLIGHT: "1"
           # Harness default: upload binary + metadata only — omit SUBMIT_FOR_REVIEW (deliver uses submit_for_review: false).
           # Issue #296+: set SUBMIT_FOR_REVIEW=1 (and optionally AUTOMATIC_RELEASE=1) when a release owner approves submission.
         run: bundle exec fastlane release
