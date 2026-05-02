@@ -83,7 +83,7 @@ jobs:
 
           devices=()
           pick_first "iPhone 17 Pro Max" "iPhone 16 Pro Max" || true
-          pick_first "iPhone 17 Pro" "iPhone 16 Pro" "iPhone 11 Pro Max" || true
+          pick_first "iPhone 11 Pro Max" "iPhone XS Max" || true
           pick_first "iPhone 8 Plus" "iPhone 7 Plus" || true
           pick_first "iPad Pro 13-inch (M5)" "iPad Pro (12.9-inch) (6th generation)" || true
           if [[ "${#devices[@]}" -ne 4 ]]; then

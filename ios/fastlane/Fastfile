@@ -43,7 +43,7 @@ platform :ios do
     pngs = Dir.glob(File.join(candidate_root, "**", "*.png"))
     UI.user_error!("snapshot completed without producing any PNGs") if pngs.empty?
 
-    sh("node #{index_script} #{candidate_root}") if File.exist?(index_script)
+    sh("node", index_script, candidate_root) if File.exist?(index_script)
 
     UI.success("Candidates written under ios/screenshots/candidates/ — open index.html locally.")
   end
