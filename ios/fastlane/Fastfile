@@ -128,7 +128,7 @@ platform :ios do
       project: "StillPoint.xcodeproj",
       scheme: "StillPoint",
       configuration: "Release",
-      export_options: "ExportOptions.plist",
+      export_options: "ExportOptionsFastlane.plist",
       output_directory: ENV["GYM_OUTPUT_DIRECTORY"] || "build",
       output_name: "StillPoint.ipa",
       clean: !ENV["GYM_NO_CLEAN"]
