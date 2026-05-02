@@ -37,6 +37,7 @@ platform :ios do
       only_testing: ["StillPointAppUITests/SnapshotTests/testStillPointMarketingSnapshots"]
     }
     snapshot_params.delete(:devices) if resolved_devices.nil? || resolved_devices.empty?
+    snapshot_params.delete(:languages) if snapshot_params[:languages].nil?
 
     snapshot(snapshot_params)
 
