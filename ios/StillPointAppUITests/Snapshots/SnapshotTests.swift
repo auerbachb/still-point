@@ -52,6 +52,8 @@ final class SnapshotTests: XCTestCase {
             XCTAssertTrue(app.textFields["thoughtCapture.textField"].waitForExistence(timeout: 5))
             snapshot("05-session-thought-capture", timeWaitingForIdle: 0)
             dismissThoughtCaptureIfPresent(app)
+        } else {
+            XCTFail("Thought capture did not appear for snapshot generation")
         }
 
         let hyperHold = app.staticTexts["session.hyperfocusHoldButton"]
@@ -184,6 +186,7 @@ final class SnapshotTests: XCTestCase {
             tries += 1
         }
         XCTAssertTrue(marker.waitForExistence(timeout: 5))
+        XCTAssertTrue(marker.isHittable, "FAQ marker not hittable after scrolling — cannot capture 02-home-faq-expanded snapshot")
     }
 
     // MARK: - Interaction

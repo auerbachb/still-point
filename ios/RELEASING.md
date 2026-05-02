@@ -85,7 +85,7 @@ The repo ships a **wide candidate set** (Fastlane snapshot) under `ios/screensho
 3. `cd ios && bundle install` (installs Fastlane from `ios/Gemfile`).
 4. Edit `ios/fastlane/Snapfile` so every `devices([...])` entry matches a name from `xcrun simctl list devices available` on your machine (6.7", 6.5", 5.5", iPad Pro 12.9" class).
 
-Optional: export `SNAPSHOT_DEVICES='iPhone 17 Pro Max,iPhone 17 Pro,iPhone 8 Plus,iPad Pro 13-inch (M5)'` before `fastlane screenshots` to override the Snapfile list without editing files.
+Optional: export `SNAPSHOT_DEVICES='iPhone 17 Pro Max,iPhone 17 Pro,iPhone 11 Pro Max,iPhone 8 Plus,iPad Pro 13-inch (M5)'` before `fastlane screenshots` to override the Snapfile list without editing files.
 
 ### Regenerate candidates
 

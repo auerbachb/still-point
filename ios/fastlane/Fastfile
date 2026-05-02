@@ -40,6 +40,9 @@ platform :ios do
 
     snapshot(snapshot_params)
 
+    pngs = Dir.glob(File.join(candidate_root, "**", "*.png"))
+    UI.user_error!("snapshot completed without producing any PNGs") if pngs.empty?
+
     sh("node #{index_script} #{candidate_root}") if File.exist?(index_script)
 
     UI.success("Candidates written under ios/screenshots/candidates/ — open index.html locally.")
@@ -50,6 +53,16 @@ platform :ios do
     ios_root = File.expand_path("..", __dir__)
     selected = File.join(ios_root, "screenshots", "selected")
     UI.user_error!("Missing #{selected}. Create device-class folders (see ios/RELEASING.md).") unless Dir.exist?(selected)
+
+    counts = Hash.new(0)
+    Dir.glob(File.join(selected, "*", "*.png")).each do |path|
+      device = File.basename(File.dirname(path))
+      counts[device] += 1
+    end
+    counts.each do |device, count|
+      next if count <= 10
+      UI.user_error!("Too many screenshots for #{device}: #{count} (max 10)")
+    end
 
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("APPSTORE_API_KEY_ID"),

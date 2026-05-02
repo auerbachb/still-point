@@ -13,7 +13,7 @@ concurrency:
 jobs:
   regenerate-candidates:
     name: fastlane screenshots
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 120
 
     steps:
@@ -70,16 +70,23 @@ jobs:
             fi
             return 1
           }
+          pick_first() {
+            local candidate
+            for candidate in "$@"; do
+              if pick "$candidate" >/dev/null; then
+                devices+=("$candidate")
+                return 0
+              fi
+            done
+            return 1
+          }
+
           devices=()
-          pick "iPhone 17 Pro Max" && devices+=("iPhone 17 Pro Max") || true
-          pick "iPhone 16 Pro Max" && devices+=("iPhone 16 Pro Max") || true
-          pick "iPhone 17 Pro" && devices+=("iPhone 17 Pro") || true
-          pick "iPhone 16 Pro" && devices+=("iPhone 16 Pro") || true
-          pick "iPhone 11 Pro Max" && devices+=("iPhone 11 Pro Max") || true
-          pick "iPhone 8 Plus" && devices+=("iPhone 8 Plus") || true
-          pick "iPad Pro 13-inch (M5)" && devices+=("iPad Pro 13-inch (M5)") || true
-          pick "iPad Pro (12.9-inch) (6th generation)" && devices+=("iPad Pro (12.9-inch) (6th generation)") || true
-          if [[ "${#devices[@]}" -lt 4 ]]; then
+          pick_first "iPhone 17 Pro Max" "iPhone 16 Pro Max" || true
+          pick_first "iPhone 17 Pro" "iPhone 16 Pro" "iPhone 11 Pro Max" || true
+          pick_first "iPhone 8 Plus" "iPhone 7 Plus" || true
+          pick_first "iPad Pro 13-inch (M5)" "iPad Pro (12.9-inch) (6th generation)" || true
+          if [[ "${#devices[@]}" -ne 4 ]]; then
             echo "::error::Could not resolve enough simulators for snapshot (need 6.7 / 6.5 / 5.5 / iPad Pro classes)."
             echo "$list"
             exit 1
