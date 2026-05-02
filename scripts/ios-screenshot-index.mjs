@@ -39,11 +39,7 @@ function splitSnapshotBasename(base) {
   if (m) {
     return { device: m[1], shot: m[2] };
   }
-  const idx = base.indexOf("-");
-  if (idx === -1) {
-    return { device: base, shot: base };
-  }
-  return { device: base.slice(0, idx), shot: base.slice(idx + 1) };
+  return { device: base, shot: base };
 }
 
 function devicePrefix(filename) {

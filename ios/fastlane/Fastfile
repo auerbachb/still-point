@@ -56,12 +56,15 @@ platform :ios do
 
     counts = Hash.new(0)
     Dir.glob(File.join(selected, "*", "*.png")).each do |path|
-      device = File.basename(File.dirname(path))
-      counts[device] += 1
+      locale = File.basename(File.dirname(path))
+      basename = File.basename(path, ".png")
+      m = basename.match(/\A(.+)-\d{2}-.+\z/)
+      device = m ? m[1] : basename
+      counts[[locale, device]] += 1
     end
-    counts.each do |device, count|
+    counts.each do |(locale, device), count|
       next if count <= 10
-      UI.user_error!("Too many screenshots for #{device}: #{count} (max 10)")
+      UI.user_error!("Too many screenshots for #{locale}/#{device}: #{count} (max 10)")
     end
 
     api_key = app_store_connect_api_key(
