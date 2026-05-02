@@ -73,6 +73,7 @@ final class SnapshotTests: XCTestCase {
         let noteField = app.textViews["completion.endNoteEditor"]
         XCTAssertTrue(noteField.waitForExistence(timeout: 8))
         tapStable(noteField, in: app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Keyboard did not appear for note entry")
         noteField.typeText("Steady attention through the full sit.")
 
         XCTAssertTrue(
@@ -129,7 +130,7 @@ final class SnapshotTests: XCTestCase {
 
         let appGateHeader = app.staticTexts["APP GATE"]
         var scrollTries = 0
-        while !appGateHeader.exists && scrollTries < 12 {
+        while !appGateHeader.isHittable && scrollTries < 12 {
             app.swipeUp(velocity: .fast)
             scrollTries += 1
         }
