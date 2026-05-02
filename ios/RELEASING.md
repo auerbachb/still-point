@@ -74,6 +74,56 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 - Tag value does not have to equal `MARKETING_VERSION`; uploaded app version is controlled by `ios/project.yml`.
 - Re-uploads for same marketing version require a new tag and incremented build number, e.g. `ios-v<marketing-version>-build<next-build>`.
 
+## Regenerate candidate App Store screenshots (Issue #325)
+
+The repo ships a **wide candidate set** (Fastlane snapshot) under `ios/screenshots/candidates/` when you run the lane locally or via GitHub Actions. Those files are **gitignored**; you **curate** into `ios/screenshots/selected/` and commit only the chosen PNGs.
+
+### One-time setup (Mac)
+
+1. Install Xcode and command-line tools.
+2. From repo root: `cd ios && brew install xcodegen` (CI uses the same).
+3. `cd ios && bundle install` (installs Fastlane from `ios/Gemfile`).
+4. Edit `ios/fastlane/Snapfile` so every `devices([...])` entry matches a name from `xcrun simctl list devices available` on your machine (6.7", 6.5", 5.5", iPad Pro 12.9" class).
+
+Optional: export `SNAPSHOT_DEVICES='iPhone 17 Pro Max,iPhone 17 Pro,iPhone 11 Pro Max,iPhone 8 Plus,iPad Pro 13-inch (M5)'` before `fastlane screenshots` to override the Snapfile list without editing files.
+
+### Regenerate candidates
+
+```bash
+cd ios
+xcodegen generate
+bundle exec fastlane screenshots
+```
+
+This runs `StillPointAppUITests/SnapshotTests` with `SP_UI_TEST_SNAPSHOT_SEED=1` (deterministic in-app data, no backend). The lane writes PNGs to `ios/screenshots/candidates/` and builds `ios/screenshots/candidates/index.html` for side-by-side preview.
+
+### Curate and upload (selected set only)
+
+1. Pick up to **10 screenshots per device class** for App Store Connect.
+2. Copy chosen files into `ios/screenshots/selected/` using Fastlane’s folder layout, for example:
+
+   `ios/screenshots/selected/en-US/iPhone 17 Pro Max-01-home.png`
+
+   Use **numeric prefixes** in the filename (`01-`, `02-`, …) so ordering in Finder matches upload order (deliver preserves lexicographic order per device folder).
+
+3. Commit **only** `ios/screenshots/selected/` (not `candidates/`).
+
+4. Upload with API key env vars (same secrets as CI — never commit the `.p8`):
+
+   ```bash
+   cd ios
+   export APPSTORE_API_KEY_ID=...
+   export APPSTORE_API_ISSUER_ID=...
+   export APPSTORE_API_PRIVATE_KEY="$(cat AuthKey_xxx.p8)"
+   bundle exec fastlane upload_app_store_screenshots
+   ```
+
+   Alias: `bundle exec fastlane release` (screenshots-only; does not submit binary).
+
+### CI
+
+Workflow [`.github/workflows/ios-screenshots.yml`](../.github/workflows/ios-screenshots.yml) is **manual** (`workflow_dispatch`). It runs `fastlane screenshots`, resolves simulator names for the runner’s Xcode, and uploads `ios/screenshots/candidates/**` as an artifact for review.
+
 ## App Store metadata and release notes checklist
 
 Canonical App Store Connect copy (subtitle, description alignment, privacy URL) lives in [`ios/docs/app-store-metadata.md`](./docs/app-store-metadata.md). Reconcile App Store Connect with that file when preparing a submission.

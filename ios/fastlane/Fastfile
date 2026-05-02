@@ -1,0 +1,98 @@
+# frozen_string_literal: true
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Regenerate App Store screenshot candidates (15–20 per device via SnapshotTests)"
+  lane :screenshots do
+    UI.header("Still Point — snapshot candidates")
+
+    ios_root = File.expand_path("..", __dir__)
+    candidate_root = File.join(ios_root, "screenshots", "candidates")
+    index_script = File.expand_path("../../scripts/ios-screenshot-index.mjs", __dir__)
+
+    xcodegen_available = system("which xcodegen > /dev/null 2>&1")
+    if xcodegen_available
+      Dir.chdir(ios_root) { sh("xcodegen generate") }
+    else
+      UI.important("xcodegen not found on PATH — assuming ios/StillPoint.xcodeproj is already generated.")
+    end
+
+    resolved_devices = ENV["SNAPSHOT_DEVICES"]
+      &.split(",")
+      &.map(&:strip)
+      &.reject(&:empty?)
+
+    snapshot_params = {
+      devices: resolved_devices,
+      languages: nil,
+      scheme: "StillPoint",
+      output_directory: candidate_root,
+      clear_previous_screenshots: true,
+      override_status_bar: true,
+      reinstall_app: true,
+      concurrent_simulators: false,
+      stop_after_first_error: false,
+      test_without_building: false,
+      only_testing: ["StillPointAppUITests/SnapshotTests/testStillPointMarketingSnapshots"]
+    }
+    snapshot_params.delete(:devices) if resolved_devices.nil? || resolved_devices.empty?
+    snapshot_params.delete(:languages) if snapshot_params[:languages].nil?
+
+    snapshot(snapshot_params)
+
+    pngs = Dir.glob(File.join(candidate_root, "**", "*.png"))
+    UI.user_error!("snapshot completed without producing any PNGs") if pngs.empty?
+
+    sh("node", index_script, candidate_root) if File.exist?(index_script)
+
+    UI.success("Candidates written under ios/screenshots/candidates/ — open index.html locally.")
+  end
+
+  desc "Upload curated screenshots from ios/screenshots/selected to App Store Connect (max 10 per device class)"
+  lane :upload_app_store_screenshots do
+    ios_root = File.expand_path("..", __dir__)
+    selected = File.join(ios_root, "screenshots", "selected")
+    UI.user_error!("Missing #{selected}. Create device-class folders (see ios/RELEASING.md).") unless Dir.exist?(selected)
+
+    counts = Hash.new(0)
+    Dir.glob(File.join(selected, "*", "*.png")).each do |path|
+      locale = File.basename(File.dirname(path))
+      basename = File.basename(path, ".png")
+      m = basename.match(/\A(.+)-\d{2}-.+\z/)
+      device = m ? m[1] : basename
+      counts[[locale, device]] += 1
+    end
+    counts.each do |(locale, device), count|
+      next if count <= 10
+      UI.user_error!("Too many screenshots for #{locale}/#{device}: #{count} (max 10)")
+    end
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APPSTORE_API_KEY_ID"),
+      issuer_id: ENV.fetch("APPSTORE_API_ISSUER_ID"),
+      key_content: ENV.fetch("APPSTORE_API_PRIVATE_KEY"),
+      is_key_content_base64: false,
+      in_house: false
+    )
+
+    deliver(
+      api_key: api_key,
+      app_identifier: "com.brettonauerbach.stillpoint",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: false,
+      screenshots_path: selected,
+      overwrite_screenshots: true,
+      force: true,
+      submit_for_review: false,
+      run_precheck_before_submit: false,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Alias for upload_app_store_screenshots"
+  lane :release do
+    upload_app_store_screenshots
+  end
+end

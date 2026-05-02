@@ -1,0 +1,2 @@
+app_identifier("com.brettonauerbach.stillpoint")
+# Optional: FASTLANE_USER for Apple ID flows not used by API-key deliver.

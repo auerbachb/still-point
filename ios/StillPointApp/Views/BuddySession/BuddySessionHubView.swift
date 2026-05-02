@@ -53,6 +53,7 @@ struct BuddySessionHubView: View {
                         .font(SPFont.mono(12, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg3))
                 }
+                .accessibilityIdentifier("buddy.backToHomeButton")
                 .padding(.top, SPSpacing.s2)
             }
             .padding(.horizontal, SPSpacing.s4)

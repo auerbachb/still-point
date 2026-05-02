@@ -29,12 +29,14 @@ struct ThoughtCaptureView: View {
                         .frame(width: Self.minTapTarget, height: Self.minTapTarget)
                         .contentShape(Rectangle())
                 }
+                .accessibilityIdentifier("thoughtCapture.dismissButton")
             }
 
             TextField("what were you thinking about?", text: $text)
                 .font(SPFont.serifItalic(15))
                 .foregroundStyle(Color(SPColor.fg))
                 .focused($isFocused)
+                .accessibilityIdentifier("thoughtCapture.textField")
                 .onSubmit {
                     if !trimmedText.isEmpty {
                         onCapture(trimmedText)

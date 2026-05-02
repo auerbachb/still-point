@@ -1,0 +1,40 @@
+# Docs: https://docs.fastlane.tools/actions/snapshot/
+#
+# Device strings must match `xcrun simctl list devices available` exactly.
+# CI overrides via SNAPSHOT_DEVICES (comma-separated). Local runs use this list.
+
+devices([
+  "iPhone 17 Pro Max",
+  "iPhone 17 Pro",
+  "iPhone 11 Pro Max",
+  "iPhone 8 Plus",
+  "iPad Pro 13-inch (M5)",
+])
+
+languages(["en-US"])
+
+scheme("StillPoint")
+
+output_directory("../screenshots/candidates")
+
+clear_previous_screenshots(true)
+
+override_status_bar(true)
+
+disable_slide_to_type(true)
+
+stop_after_first_error(false)
+
+launch_arguments(["-FASTLANE_SNAPSHOT", "YES"])
+
+output_simulator_logs(false)
+
+headless(false)
+
+concurrent_simulators(false)
+
+reinstall_app(true)
+
+number_of_retries(1)
+
+test_without_building(false)
