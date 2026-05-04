@@ -87,6 +87,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Validate tag matches ios project marketing version
         shell: bash
         run: |
@@ -97,7 +102,7 @@ jobs:
             exit 1
           fi
           VER="${TAG#ios-v}"
-          MARKETING="$(grep -E '^[[:space:]]+MARKETING_VERSION:' ios/project.yml | head -1 | sed -E 's/.*MARKETING_VERSION:[[:space:]]*"?([^"#]+)"?.*/\1/')"
+          MARKETING="$(grep -E '^[[:space:]]+MARKETING_VERSION:' ios/project.yml | head -1 | sed -E 's/.*MARKETING_VERSION:[[:space:]]*"?([^"#]+)"?.*/\1/' | xargs)"
           if [[ "$VER" != "$MARKETING" ]]; then
             echo "::error::Tag version $VER does not match ios/project.yml MARKETING_VERSION=$MARKETING"
             exit 1
