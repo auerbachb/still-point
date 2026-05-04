@@ -41,6 +41,8 @@ Relay addresses (`@privaterelay.appleid.com`) are stable per user + app. We stor
 
 Sign in with Apple on the **Simulator is unreliable**. Use a **physical device** and a real Apple ID for acceptance testing.
 
+In **UI test mode** (`SP_UI_TEST_MODE=1`), the app **does not render** the Sign in with Apple button so XCUITest can rely on stable hit-testing for email/password fields; production builds show the button normally.
+
 ### Local API development
 
 The native client targets `https://still-point.me` by default (`APIClient`). Point it at a Vercel preview URL if you need to test server changes before production.
