@@ -3,7 +3,8 @@
 # Localized metadata lives under fastlane/metadata/<locale>/ (en-US canonical).
 # Screenshots: issue #325 / separate workflow; not required for metadata-only lanes.
 
-# Default: do not auto-submit; CI passes submit_for_review: true when releasing.
+# Default: do not auto-submit from CI.
+# CI uploads binary + metadata without submission unless SUBMIT_FOR_REVIEW=1 is set (issue #296).
 submit_for_review(false)
 automatic_release(false)
 skip_screenshots(true)

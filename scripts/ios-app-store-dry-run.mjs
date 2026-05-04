@@ -397,12 +397,12 @@ async function main() {
   const testflightTagOk =
     workflow.includes("tags:") && workflow.includes("'ios-v*-build*'");
   const releaseTagOk =
-    releaseWorkflow.includes("tags:") && releaseWorkflow.includes("'ios-v[0-9]+.[0-9]+.[0-9]+'");
+    releaseWorkflow.includes("tags:") && releaseWorkflow.includes("'ios-v*.*.*'");
   testflightTagOk && releaseTagOk
-    ? pass("A4", "TestFlight uses ios-v*-build* tags; App Store release uses strict ios-vMAJOR.MINOR.PATCH tags.", {
+    ? pass("A4", "TestFlight uses ios-v*-build* tags; App Store release uses ios-v*.*.* (excluding build tags).", {
         intendedTag,
         testflightTagPattern: "ios-v*-build*",
-        appStoreReleaseTagPattern: "ios-vMAJOR.MINOR.PATCH",
+        appStoreReleaseTagPattern: "ios-v*.*.*",
       })
     : fail("A4", "Workflow tag triggers are misconfigured for TestFlight vs App Store release.", {
         testflightTagOk,

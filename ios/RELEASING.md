@@ -153,7 +153,7 @@ This runs `StillPointAppUITests/SnapshotTests` with `SP_UI_TEST_SNAPSHOT_SEED=1`
    bundle exec fastlane upload_app_store_screenshots
    ```
 
-   Alias: `bundle exec fastlane release` (screenshots-only; does not submit binary).
+   Use `bundle exec fastlane upload_app_store_screenshots` for screenshot-only uploads. Note: `bundle exec fastlane release` now runs preflight → gym → deliver (builds and uploads the IPA) — do not use it for screenshots only.
 
 ### CI
 

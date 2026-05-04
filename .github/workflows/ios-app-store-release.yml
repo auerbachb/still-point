@@ -5,6 +5,7 @@ on:
     tags:
       # Strict semver: ios-v1.2.3 (no -build suffix — those stay on TestFlight workflow).
       - 'ios-v*.*.*'
+      - '!ios-v*-build*'
 
 permissions:
   contents: read
@@ -189,8 +190,8 @@ jobs:
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
 
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 -D -o "$PP_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
