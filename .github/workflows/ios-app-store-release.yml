@@ -4,7 +4,7 @@ on:
   push:
     tags:
       # Strict semver: ios-v1.2.3 (no -build suffix — those stay on TestFlight workflow).
-      - 'ios-v[0-9]+.[0-9]+.[0-9]+'
+      - 'ios-v*.*.*'
 
 permissions:
   contents: read
@@ -96,7 +96,7 @@ jobs:
             exit 1
           fi
           VER="${TAG#ios-v}"
-          MARKETING="$(grep -E '^\s+MARKETING_VERSION:' ios/project.yml | head -1 | sed -E 's/.*MARKETING_VERSION:\s*"?([^"#]+)"?.*/\1/')"
+          MARKETING="$(grep -E '^[[:space:]]+MARKETING_VERSION:' ios/project.yml | head -1 | sed -E 's/.*MARKETING_VERSION:[[:space:]]*"?([^"#]+)"?.*/\1/')"
           if [[ "$VER" != "$MARKETING" ]]; then
             echo "::error::Tag version $VER does not match ios/project.yml MARKETING_VERSION=$MARKETING"
             exit 1
