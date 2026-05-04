@@ -1,160 +1,61 @@
-# Mobile OAuth Integration (iOS)
+# Mobile OAuth integration (native iOS)
 
-This document defines the architecture and API contract the iOS app uses to
-sign in users via the same OAuth providers offered on the web. It is the
-companion spec for issue #136 (web Google sign-in) and follow-ups
-[#284](https://github.com/auerbachb/still-point/issues/284) (Microsoft),
-[#285](https://github.com/auerbachb/still-point/issues/285) (Facebook), and
-[#286](https://github.com/auerbachb/still-point/issues/286) (Apple).
+This document describes how the Still Point iOS app completes OAuth-style sign-in **outside** Auth.js’s browser-only OAuth flow. Auth.js handles **web** redirects (`/api/auth/callback/…`); native apps receive Apple credentials locally and must verify them on the server.
 
-The iOS implementation itself ships in a separate iOS-side issue. This file
-describes only what the web backend already supports today and what each
-provider expects from the client.
+## Sign in with Apple (native)
 
----
+### Endpoint
 
-## Account model
+`POST /api/auth/apple-native`
 
-A single Still Point user account can have:
+Public route (no prior `sp_token`). Middleware allows this path without JWT verification.
 
-- An optional password (stored as a bcrypt hash in `users.password_hash`,
-  nullable as of #136).
-- Zero or more linked OAuth identities, recorded in `oauth_accounts` as
-  `(provider, provider_account_id) -> user_id`.
+### Request body (JSON)
 
-Linking rule: when a sign-in provider returns a verified email that matches
-an existing `users.email` (case-insensitively), the new
-`(provider, provider_account_id)` is attached to that user. Otherwise a new
-user is created with a null `password_hash`.
+| Field | Required | Description |
+| --- | --- | --- |
+| `identityToken` | Yes | UTF-8 string of the JWT from `ASAuthorizationAppleIDCredential.identityToken`. |
+| `authorizationCode` | No | Optional opaque authorization code from Apple (included for parity with Apple’s API and future server-side token exchange). Not used for account linking today. |
+| `user` | No | Present **only on the first consent** for this Apple ID + client pair. Same shape Apple sends to web (`name.firstName`, `name.lastName`, `email`). Subsequent sign-ins omit this object entirely — **never rely on name/email being present after first launch.** |
 
-The session token format is unchanged. The web backend mints the same
-HttpOnly `sp_token` JWT it has always used; iOS continues to read
-`sp_token` from `HTTPCookieStorage.shared` and attach it to subsequent
-requests.
+### Server validation
 
----
+1. Verifies `identityToken` with Apple’s JWKS (`https://appleid.apple.com/auth/keys`) via `jose` (`jwtVerify` + `createRemoteJWKSet`).
+2. Validates issuer `https://appleid.apple.com`.
+3. Validates **audience** against the iOS App ID bundle identifier — **not** the Sign in with Apple **Services ID** used for web (`AUTH_APPLE_ID`). Default audience is `com.brettonauerbach.stillpoint`. Override with optional env **`AUTH_APPLE_IOS_AUDIENCE`** if you use a different bundle ID or multiple apps.
+4. When the JWT includes `email`, requires `email_verified` true (boolean or string `"true"`). When `email` is omitted (common on repeat native sign-ins), accepts the token if **`sub`** already maps to an existing `oauth_accounts` row; first-time account creation still requires `email` in the token (Apple sends it on first consent).
+5. Uses **`sub`** as the stable Apple account identifier. Lookup order matches web OAuth (`src/lib/oauth-user-resolution.ts`): existing `(provider='apple', provider_account_id=sub)` wins first; otherwise email match or new user creation when email is present.
 
-## Provider integration patterns
+### Response
 
-There are two patterns iOS uses depending on the provider:
+- JSON `{ user, token }` — same shape as email/password login when `X-Still-Point-Client: ios` is used (`token` is the JWT for `Authorization: Bearer`).
+- Sets HTTP-only cookie **`sp_token`** for parity with web sessions (Safari / embedded WebViews if applicable).
 
-### Pattern A: Native SDK + dedicated server endpoint (Apple only)
+### Hide My Email (relay)
 
-Apple requires Sign in with Apple to use `ASAuthorizationController` on iOS
-when the platform supports it. The native flow returns an `identityToken`
-(JWT signed by Apple) and an `authorizationCode` to the app, not a redirect.
+Relay addresses (`@privaterelay.appleid.com`) are stable per user + app. We store the relay email on first sign-in and **always** resolve returning users by Apple `sub` in `oauth_accounts`, not by mutating email. If the user revokes relay or changes forwarding, sign-in still works.
 
-Endpoint (to be implemented under issue
-[#286](https://github.com/auerbachb/still-point/issues/286)):
+**Outbound email:** Apple Private Email Relay only delivers mail from **registered** sender domains. Until outgoing mail is registered with Apple (see **#339**), transactional email to relay addresses may not arrive. This does not block sign-in.
 
-```http
-POST /api/auth/apple-native
-Content-Type: application/json
-```
+### Device testing
 
-```json
-{
-  "identityToken": "<JWS from ASAuthorizationCredential.identityToken>",
-  "authorizationCode": "<from ASAuthorizationCredential.authorizationCode>",
-  "fullName": { "givenName": "Ada", "familyName": "Lovelace" }
-}
-```
+Sign in with Apple on the **Simulator is unreliable**. Use a **physical device** and a real Apple ID for acceptance testing.
 
-Server responsibilities:
+In **UI test mode** (`SP_UI_TEST_MODE=1`), the app **does not render** the Sign in with Apple button so XCUITest can rely on stable hit-testing for email/password fields; production builds show the button normally.
 
-1. Verify `identityToken` against Apple's JWKS
-   (`https://appleid.apple.com/auth/keys`) using the `jose` library that is
-   already in the project; check `iss == "https://appleid.apple.com"`,
-   `aud == AUTH_APPLE_ID` (the Services ID), and `exp`.
-2. Extract `sub` (Apple user id, stable across sign-ins) and `email`.
-3. Apply the same find/create-and-link logic as the web `signIn` callback,
-   keyed on email when present (Apple may return a relay address) and on
-   `(provider='apple', provider_account_id=sub)` for re-sign-in.
-4. Mint `sp_token`, set the cookie, and return the same response shape as
-   `POST /api/auth/login`.
+### Local API development
 
-This endpoint does not exist yet. It is gated on
-[#286](https://github.com/auerbachb/still-point/issues/286).
-
-### Pattern B: `ASWebAuthenticationSession` over the web flow (Google, Microsoft, Facebook)
-
-For all non-Apple providers, iOS reuses the existing web OAuth flow rather
-than carrying provider SDKs. The flow:
-
-1. iOS opens `ASWebAuthenticationSession` pointed at:
-
-   ```text
-   https://www.still-point.me/api/auth/signin/<provider>
-   ```
-
-   For `<provider>` use the Auth.js id: `google`, `microsoft-entra-id`, or
-   `facebook`.
-
-2. The user authenticates with the provider in a system-managed browser tab
-   that shares cookies with Safari (set
-   `prefersEphemeralWebBrowserSession: false` so returning users do not
-   re-enter their password).
-
-3. Auth.js (server) handles `/api/auth/callback/<provider>` and redirects
-   to `/api/auth/oauth-complete`. `oauth-complete` mints `sp_token`, sets
-   the HttpOnly cookie scoped to `still-point.me`, then redirects to
-   `/app`.
-
-4. **Detecting completion on iOS.** The redirect chain ends on `/app` —
-   the server does not redirect to a custom URL scheme today, so
-   `ASWebAuthenticationSession`'s `callbackURLScheme` completion handler
-   does NOT fire automatically. The iOS-side issue (separate from #136)
-   will choose one of:
-   - **(a)** Have the server redirect to `stillpoint://oauth-complete`
-     after `oauth-complete` instead of `/app`, with a server-side
-     allow-list keyed off a request marker (e.g. `?ios=1` propagated
-     from `signin/<provider>?callbackUrl=...`). This requires a small
-     extension to the `redirect` callback in `src/lib/auth-config.ts` so
-     known custom schemes survive.
-   - **(b)** Poll the session's current URL on a timer; when it reaches
-     `https://www.still-point.me/app`, dismiss the session and read
-     `sp_token` from `HTTPCookieStorage.shared`.
-   Until that decision lands, treat the existing custom-scheme
-   registration in `Info.plist` as scaffolding — it does not yet
-   round-trip end-to-end.
-
-Caveats for Pattern B:
-
-- The redirect URI registered with each provider must be the **server**
-  callback (`https://www.still-point.me/api/auth/callback/<provider>`),
-  not the iOS custom scheme. Auth.js owns the OAuth handshake; iOS only
-  cares about the final `sp_token` cookie.
-- iOS must use `HTTPCookieStorage.shared` (the default) so cookies set
-  by the system browser are visible to the app's `URLSession`. Custom
-  cookie stores will miss `sp_token`.
-- If `sp_token` is unexpectedly absent after the session callback, the
-  app should call `GET /api/auth/me` once. If it returns 401, treat the
-  attempt as a failed sign-in and surface a retry UI.
+The native client targets `https://still-point.me` by default (`APIClient`). Point it at a Vercel preview URL if you need to test server changes before production.
 
 ---
 
-## Provider-specific notes
+## Follow-up work (not shipped here)
 
-| Provider | Pattern | iOS framework | Status |
-|---|---|---|---|
-| Google | B (web flow) | `ASWebAuthenticationSession` | Web available today (#136). iOS-side issue not yet filed. |
-| Apple | A (native) | `ASAuthorizationController` | Web Auth.js + native endpoint deferred to [#286](https://github.com/auerbachb/still-point/issues/286). |
-| Facebook | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#285](https://github.com/auerbachb/still-point/issues/285). |
-| Microsoft | B (web flow) | `ASWebAuthenticationSession` | Deferred to [#284](https://github.com/auerbachb/still-point/issues/284). |
+- **#338** — Server-to-server Apple notifications (account deleted, consent revoked, email disabled).
+- **#339** — Register outbound email sources for Apple Private Email Relay deliverability.
 
 ---
 
-## Security expectations (all providers)
+## Other providers
 
-- Verify provider tokens server-side; never trust client-supplied user
-  identifiers.
-- Provider tokens (`identityToken`, OAuth access tokens, refresh tokens)
-  must not appear in application logs. Auth.js does not log them by default;
-  custom server code (e.g., `/api/auth/apple-native`) must follow the same
-  rule.
-- `sp_token` remains the only credential the iOS app sees and stores. It is
-  HttpOnly on web; on iOS it lives in `HTTPCookieStorage.shared` and is
-  attached automatically by `URLSession`.
-- CSRF/state for the OAuth handshake is owned by Auth.js for Pattern B;
-  Pattern A endpoints (`/api/auth/apple-native`) do not need CSRF protection
-  because the request is a one-shot exchange of a provider-issued JWT.
+Google / Microsoft / Facebook on mobile would follow the same **pattern**: native SDK obtains tokens → server route verifies tokens / exchanges codes → `resolveOAuthUserId`-style linking → `sp_token`. Only Apple is implemented in this shape today.

@@ -7,6 +7,7 @@ const publicExactPaths = [
   "/api/auth/signup",
   "/api/auth/login",
   "/api/auth/logout",
+  "/api/auth/apple-native",
   "/api/auth/google/callback",
   "/api/auth/oauth-complete",
   // Auth.js v5 catch-all routes (#136) — bare endpoints. The catch-all

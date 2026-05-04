@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import StillPointShared
 
 struct AuthView: View {
@@ -51,6 +52,43 @@ struct AuthView: View {
                         .textInputAutocapitalization(.never)
                         .accessibilityIdentifier("auth.emailField")
 
+                    // `SignInWithAppleButton` sits in a UIKit bridge that can steal hit-testing /
+                    // layout from sibling fields on CI simulators. XCTest targets stable ids on the
+                    // email/password path — hide OAuth chrome under UI test mode only (#286 / CI).
+                    if !isUiTestMode {
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let authorization):
+                                guard
+                                    let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                                    let body = AppleSignInController.nativeSignInRequest(from: credential)
+                                else {
+                                    vm.error = "Could not read Sign in with Apple credentials."
+                                    return
+                                }
+                                Task {
+                                    if let user = await vm.signInWithApple(using: body) {
+                                        appVM.didLogin(user: user)
+                                    }
+                                }
+                            case .failure(let error):
+                                if let authError = error as? ASAuthorizationError,
+                                   authError.code == .canceled {
+                                    return
+                                }
+                                vm.error = "Sign in with Apple failed. Please try again."
+                            }
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 44)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.border2))
+                        .disabled(vm.isAuthInFlight)
+                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
+                    }
+
                     if vm.isSignUp {
                         styledField("Username", text: $vm.username)
                             .textContentType(.username)
@@ -95,8 +133,8 @@ struct AuthView: View {
                             .overlay(Capsule().stroke(SPColor.border2))
                     }
                     .accessibilityIdentifier("auth.submitButton")
-                    .disabled(!vm.isValid || vm.isSubmitting)
-                    .opacity(vm.isValid ? 1 : 0.5)
+                    .disabled(!vm.isValid || vm.isAuthInFlight)
+                    .opacity(vm.isValid && !vm.isAuthInFlight ? 1 : 0.5)
 
                     if let resetMessage = vm.resetMessage {
                         Text(resetMessage)
@@ -125,6 +163,10 @@ struct AuthView: View {
             .padding(.bottom, SPSpacing.s6)
         }
         .stillPointBackground()
+    }
+
+    private var isUiTestMode: Bool {
+        ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1"
     }
 
     private func toggleButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
