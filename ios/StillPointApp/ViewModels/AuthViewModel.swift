@@ -9,9 +9,9 @@ final class AuthViewModel {
     var password = ""
     var error: String?
     var resetMessage: String?
-    var isSubmitting = false
     var isRequestingPasswordReset = false
-    var isAppleSignInInFlight = false
+    /// True while any sign-in path (email/password or Apple) is in flight.
+    var isAuthInFlight = false
 
     var isValid: Bool {
         let emailValid = email.contains("@") && email.contains(".")
@@ -25,11 +25,11 @@ final class AuthViewModel {
     }
 
     func submit() async -> UserDTO? {
-        guard isValid, !isSubmitting else { return nil }
-        isSubmitting = true
+        guard isValid, !isAuthInFlight else { return nil }
+        isAuthInFlight = true
         error = nil
         resetMessage = nil
-        defer { isSubmitting = false }
+        defer { isAuthInFlight = false }
 
         do {
             if isSignUp {
@@ -54,11 +54,11 @@ final class AuthViewModel {
     }
 
     func signInWithApple(using request: AppleNativeSignInRequest) async -> UserDTO? {
-        guard !isAppleSignInInFlight else { return nil }
-        isAppleSignInInFlight = true
+        guard !isAuthInFlight else { return nil }
+        isAuthInFlight = true
         error = nil
         resetMessage = nil
-        defer { isAppleSignInInFlight = false }
+        defer { isAuthInFlight = false }
 
         do {
             return try await APIClient.shared.signInWithApple(request)

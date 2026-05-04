@@ -8,10 +8,17 @@ vi.mock("jose", () => ({
   jwtVerify,
 }));
 
-const resolveOAuthUserId = vi.fn();
-vi.mock("@/lib/oauth-user-resolution", () => ({
-  resolveOAuthUserId,
+const { resolveOAuthUserId } = vi.hoisted(() => ({
+  resolveOAuthUserId: vi.fn(),
 }));
+
+vi.mock("@/lib/oauth-user-resolution", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/oauth-user-resolution")>();
+  return {
+    ...actual,
+    resolveOAuthUserId,
+  };
+});
 
 const dbSelectWhereLimit = vi.fn();
 const dbSelectFromWhere = vi.fn(() => ({ limit: dbSelectWhereLimit }));
@@ -86,6 +93,46 @@ describe("POST /api/auth/apple-native", () => {
 
     const cookie = res.cookies.get("sp_token");
     expect(cookie?.value).toBe("jwt-from-createToken");
+  });
+
+  test("accepts token without email when resolveOAuthUserId links by sub", async () => {
+    jwtVerify.mockResolvedValue({
+      payload: {
+        sub: "apple-sub-repeat",
+        email_verified: true,
+      },
+    });
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({ identityToken: "tok" }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(resolveOAuthUserId).toHaveBeenCalledWith({
+      provider: "apple",
+      providerAccountId: "apple-sub-repeat",
+      email: undefined,
+      profile: { name: null },
+    });
+  });
+
+  test("returns 400 when OAuthEmailRequiredError is thrown", async () => {
+    const { OAuthEmailRequiredError } = await import("@/lib/oauth-user-resolution");
+    jwtVerify.mockResolvedValue({
+      payload: {
+        sub: "apple-new",
+        email_verified: true,
+      },
+    });
+    resolveOAuthUserId.mockRejectedValueOnce(new OAuthEmailRequiredError());
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({ identityToken: "tok" }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
   });
 
   test("rejects missing identity token", async () => {

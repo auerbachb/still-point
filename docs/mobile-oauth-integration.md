@@ -23,8 +23,8 @@ Public route (no prior `sp_token`). Middleware allows this path without JWT veri
 1. Verifies `identityToken` with Apple’s JWKS (`https://appleid.apple.com/auth/keys`) via `jose` (`jwtVerify` + `createRemoteJWKSet`).
 2. Validates issuer `https://appleid.apple.com`.
 3. Validates **audience** against the iOS App ID bundle identifier — **not** the Sign in with Apple **Services ID** used for web (`AUTH_APPLE_ID`). Default audience is `com.brettonauerbach.stillpoint`. Override with optional env **`AUTH_APPLE_IOS_AUDIENCE`** if you use a different bundle ID or multiple apps.
-4. Requires `email_verified` true (Apple sends boolean or string `"true"`).
-5. Uses **`sub`** as the stable Apple account identifier. Lookup order matches web OAuth (`src/lib/oauth-user-resolution.ts`): existing `(provider='apple', provider_account_id=sub)` row wins; otherwise email match for linking or new user creation.
+4. When the JWT includes `email`, requires `email_verified` true (boolean or string `"true"`). When `email` is omitted (common on repeat native sign-ins), accepts the token if **`sub`** already maps to an existing `oauth_accounts` row; first-time account creation still requires `email` in the token (Apple sends it on first consent).
+5. Uses **`sub`** as the stable Apple account identifier. Lookup order matches web OAuth (`src/lib/oauth-user-resolution.ts`): existing `(provider='apple', provider_account_id=sub)` wins first; otherwise email match or new user creation when email is present.
 
 ### Response
 

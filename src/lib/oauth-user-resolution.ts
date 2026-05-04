@@ -116,16 +116,26 @@ export type OAuthProfileInput = {
   name?: string | null;
 };
 
+/** Thrown when a new account / email-based link is needed but no verified email was supplied
+ *  (e.g. native Apple repeat sign-in with identity token omitting `email`). */
+export class OAuthEmailRequiredError extends Error {
+  constructor() {
+    super("Email is required to create or link a new account for this sign-in");
+    this.name = "OAuthEmailRequiredError";
+  }
+}
+
 /** Resolve or create the app user id for an OAuth provider identity.
  *  Lookup order: existing (provider, providerAccountId) link first;
- *  then email match for linking; else new user. */
+ *  then email match for linking; else new user. `email` may be omitted only when
+ *  an existing oauth_accounts row already exists for (provider, providerAccountId). */
 export async function resolveOAuthUserId(params: {
   provider: string;
   providerAccountId: string;
-  email: string;
+  email?: string | null;
   profile: OAuthProfileInput;
 }): Promise<string> {
-  const { provider, providerAccountId, email, profile } = params;
+  const { provider, providerAccountId, profile } = params;
 
   const [existingLink] = await db
     .select({ userId: oauthAccounts.userId })
@@ -140,6 +150,12 @@ export async function resolveOAuthUserId(params: {
 
   if (existingLink) {
     return existingLink.userId;
+  }
+
+  const rawEmail = params.email;
+  const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+  if (!email) {
+    throw new OAuthEmailRequiredError();
   }
 
   const [emailMatch] = await db

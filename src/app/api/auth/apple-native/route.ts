@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, SP_TOKEN_COOKIE } from "@/lib/auth";
-import { resolveOAuthUserId } from "@/lib/oauth-user-resolution";
+import { resolveOAuthUserId, OAuthEmailRequiredError } from "@/lib/oauth-user-resolution";
 
 const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
 const ISSUER = "https://appleid.apple.com";
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   let sub: string;
-  let email: string;
+  let emailFromToken: string | undefined;
   try {
     const { payload } = await jwtVerify(identityToken, APPLE_JWKS, {
       issuer: ISSUER,
@@ -56,17 +56,18 @@ export async function POST(request: NextRequest) {
     }
     sub = payload.sub;
     const emailClaim = payload.email;
-    if (typeof emailClaim !== "string" || !emailClaim.trim()) {
-      return NextResponse.json({ error: "Email not available" }, { status: 401 });
-    }
-    email = emailClaim.trim().toLowerCase();
-    const ev = payload.email_verified;
-    if (ev !== true && ev !== "true") {
-      return NextResponse.json({ error: "Email not verified" }, { status: 401 });
+    if (typeof emailClaim === "string" && emailClaim.trim()) {
+      emailFromToken = emailClaim.trim().toLowerCase();
+      const ev = payload.email_verified;
+      if (ev !== true && ev !== "true") {
+        return NextResponse.json({ error: "Email not verified" }, { status: 401 });
+      }
     }
   } catch {
     return NextResponse.json({ error: "Invalid identity token" }, { status: 401 });
   }
+
+  const emailForResolution = emailFromToken;
 
   const fromApple = displayNameFromAppleUser(body.user);
   const nameForProfile = fromApple;
@@ -76,10 +77,16 @@ export async function POST(request: NextRequest) {
     userId = await resolveOAuthUserId({
       provider: "apple",
       providerAccountId: sub,
-      email,
+      email: emailForResolution,
       profile: { name: nameForProfile },
     });
   } catch (error) {
+    if (error instanceof OAuthEmailRequiredError) {
+      return NextResponse.json(
+        { error: "Email required for first sign-in with this Apple ID" },
+        { status: 400 },
+      );
+    }
     console.error("apple-native user resolution error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

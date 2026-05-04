@@ -14,14 +14,14 @@ function isEmailVerifiedForProvider(
   provider: string,
   profile: { email_verified?: string | boolean | undefined },
 ): boolean {
+  const ev = profile.email_verified;
   if (provider === "google") {
-    return true;
+    return ev !== false && ev !== "false";
   }
   if (provider === "apple") {
-    const ev = profile.email_verified;
     return ev === true || ev === "true";
   }
-  return profile.email_verified === true;
+  return ev === true;
 }
 
 const appleEnvReady =
@@ -30,7 +30,15 @@ const appleEnvReady =
   Boolean(process.env.APPLE_KEY_ID) &&
   Boolean(process.env.APPLE_PRIVATE_KEY);
 
-const appleClientSecretForWeb = appleEnvReady ? await getAppleClientSecret() : undefined;
+let appleClientSecretForWeb: string | undefined;
+if (appleEnvReady) {
+  try {
+    appleClientSecretForWeb = await getAppleClientSecret();
+  } catch (error) {
+    console.error("Apple Sign In: failed to mint client secret; disabling Apple provider:", error);
+    appleClientSecretForWeb = undefined;
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,

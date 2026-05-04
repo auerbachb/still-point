@@ -3,10 +3,10 @@ import { SignJWT, importPKCS8 } from "jose";
 const APPLE_JWT_AUDIENCE = "https://appleid.apple.com";
 /** Apple allows up to 6 months; stay under with ample margin for cache refresh. */
 const SECRET_TTL_SECONDS = 130 * 24 * 60 * 60;
-/** Regenerate before Apple's max lifetime (~6 months). */
-const CACHE_MAX_MS = 140 * 24 * 60 * 60 * 1000;
+/** Refresh before JWT exp — must stay below SECRET_TTL_SECONDS wall time. */
+const CACHE_REFRESH_SKEW_MS = 7 * 24 * 60 * 60 * 1000;
 
-let cache: { jwt: string; mintedAt: number } | null = null;
+let cache: { jwt: string; expiresAt: number } | null = null;
 
 function requireAppleSigningEnv() {
   const teamId = process.env.APPLE_TEAM_ID;
@@ -49,10 +49,10 @@ export async function mintAppleClientSecret(): Promise<string> {
 /** Cached secret for Auth.js Apple provider (avoids re-importing the key every request). */
 export async function getAppleClientSecret(): Promise<string> {
   const now = Date.now();
-  if (cache && now - cache.mintedAt < CACHE_MAX_MS) {
+  if (cache && now < cache.expiresAt - CACHE_REFRESH_SKEW_MS) {
     return cache.jwt;
   }
   const jwt = await mintAppleClientSecret();
-  cache = { jwt, mintedAt: now };
+  cache = { jwt, expiresAt: now + SECRET_TTL_SECONDS * 1000 };
   return jwt;
 }

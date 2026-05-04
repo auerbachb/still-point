@@ -73,16 +73,20 @@ struct AuthView: View {
                                         appVM.didLogin(user: user)
                                     }
                                 }
-                            case .failure:
-                                vm.error = "Sign in with Apple was cancelled or failed."
+                            case .failure(let error):
+                                if let authError = error as? ASAuthorizationError,
+                                   authError.code == .canceled {
+                                    return
+                                }
+                                vm.error = "Sign in with Apple failed. Please try again."
                             }
                         }
                         .signInWithAppleButtonStyle(.black)
                         .frame(height: 44)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border2))
-                        .disabled(vm.isAppleSignInInFlight)
-                        .opacity(vm.isAppleSignInInFlight ? 0.5 : 1)
+                        .disabled(vm.isAuthInFlight)
+                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
                     }
 
                     if vm.isSignUp {
@@ -129,8 +133,8 @@ struct AuthView: View {
                             .overlay(Capsule().stroke(SPColor.border2))
                     }
                     .accessibilityIdentifier("auth.submitButton")
-                    .disabled(!vm.isValid || vm.isSubmitting)
-                    .opacity(vm.isValid ? 1 : 0.5)
+                    .disabled(!vm.isValid || vm.isAuthInFlight)
+                    .opacity(vm.isValid && !vm.isAuthInFlight ? 1 : 0.5)
 
                     if let resetMessage = vm.resetMessage {
                         Text(resetMessage)
