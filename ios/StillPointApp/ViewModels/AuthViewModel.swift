@@ -11,6 +11,7 @@ final class AuthViewModel {
     var resetMessage: String?
     var isSubmitting = false
     var isRequestingPasswordReset = false
+    var isAppleSignInInFlight = false
 
     var isValid: Bool {
         let emailValid = email.contains("@") && email.contains(".")
@@ -47,6 +48,24 @@ final class AuthViewModel {
             return nil
         } catch {
             print("Auth submit failed: \(error.localizedDescription)")
+            self.error = "Connection failed. Please try again."
+            return nil
+        }
+    }
+
+    func signInWithApple(using request: AppleNativeSignInRequest) async -> UserDTO? {
+        guard !isAppleSignInInFlight else { return nil }
+        isAppleSignInInFlight = true
+        error = nil
+        resetMessage = nil
+        defer { isAppleSignInInFlight = false }
+
+        do {
+            return try await APIClient.shared.signInWithApple(request)
+        } catch let apiError as APIError {
+            error = apiError.message
+            return nil
+        } catch {
             self.error = "Connection failed. Please try again."
             return nil
         }

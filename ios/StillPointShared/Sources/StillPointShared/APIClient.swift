@@ -135,6 +135,22 @@ public actor APIClient {
         return response.user
     }
 
+    /// Native Sign in with Apple → server verifies JWT and returns `user` + `token` (same as login with ios header).
+    public func signInWithApple(_ request: AppleNativeSignInRequest) async throws -> UserDTO {
+        if uiTestConfig != nil {
+            throw APIError(status: 0, message: "Apple sign-in is not available in UI test mode")
+        }
+        let response: UserResponse = try await post("/api/auth/apple-native", body: request)
+        if let token = response.token, !token.isEmpty {
+            guard AuthTokenStore.save(token) else {
+                throw APIError(status: 0, message: "Unable to securely save auth token")
+            }
+        } else {
+            _ = AuthTokenStore.clear()
+        }
+        return response.user
+    }
+
     public func requestPasswordReset(email: String) async throws -> String {
         if let message = try uiTestRequestPasswordReset(email: email) {
             return message

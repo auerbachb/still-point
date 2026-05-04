@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import StillPointShared
 
 struct AuthView: View {
@@ -50,6 +51,34 @@ struct AuthView: View {
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .accessibilityIdentifier("auth.emailField")
+
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = [.fullName, .email]
+                    } onCompletion: { result in
+                        switch result {
+                        case .success(let authorization):
+                            guard
+                                let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                                let body = AppleSignInController.nativeSignInRequest(from: credential)
+                            else {
+                                vm.error = "Could not read Sign in with Apple credentials."
+                                return
+                            }
+                            Task {
+                                if let user = await vm.signInWithApple(using: body) {
+                                    appVM.didLogin(user: user)
+                                }
+                            }
+                        case .failure:
+                            vm.error = "Sign in with Apple was cancelled or failed."
+                        }
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 44)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(SPColor.border2))
+                    .disabled(vm.isAppleSignInInFlight)
+                    .opacity(vm.isAppleSignInInFlight ? 0.5 : 1)
 
                     if vm.isSignUp {
                         styledField("Username", text: $vm.username)

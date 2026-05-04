@@ -256,6 +256,42 @@ public struct RecordBuddyPersonalSessionRequest: Codable, Sendable {
 
 // MARK: - API Wrappers (match JSON response shapes)
 
+public struct AppleNativeSignInRequest: Encodable, Sendable {
+    public let identityToken: String
+    public let authorizationCode: String?
+    public let user: AppleUserFirstSignInPayload?
+
+    public struct AppleUserFirstSignInPayload: Encodable, Sendable {
+        public let name: Name?
+        public let email: String?
+
+        public struct Name: Encodable, Sendable {
+            public let firstName: String?
+            public let lastName: String?
+
+            public init(firstName: String?, lastName: String?) {
+                self.firstName = firstName
+                self.lastName = lastName
+            }
+        }
+
+        public init(name: Name?, email: String?) {
+            self.name = name
+            self.email = email
+        }
+    }
+
+    public init(
+        identityToken: String,
+        authorizationCode: String?,
+        user: AppleUserFirstSignInPayload?
+    ) {
+        self.identityToken = identityToken
+        self.authorizationCode = authorizationCode
+        self.user = user
+    }
+}
+
 public struct UserResponse: Codable, Sendable {
     public let user: UserDTO
     public let token: String?

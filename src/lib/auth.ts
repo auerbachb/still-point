@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 
-const COOKIE_NAME = "sp_token";
+export const SP_TOKEN_COOKIE = "sp_token";
 
 function getSecret() {
   const secret = process.env.JWT_SECRET;
@@ -38,7 +38,7 @@ export async function verifyToken(token: string): Promise<{ userId: string; emai
 
 export async function setAuthCookie(token: string) {
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
+  cookieStore.set(SP_TOKEN_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -49,12 +49,12 @@ export async function setAuthCookie(token: string) {
 
 export async function clearAuthCookie() {
   const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+  cookieStore.delete(SP_TOKEN_COOKIE);
 }
 
 export async function getCurrentUser(): Promise<{ userId: string; email: string } | null> {
   const cookieStore = await cookies();
-  const tokenFromCookie = cookieStore.get(COOKIE_NAME)?.value;
+  const tokenFromCookie = cookieStore.get(SP_TOKEN_COOKIE)?.value;
   const authorization = (await headers()).get("authorization");
   const tokenFromBearer =
     authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : null;

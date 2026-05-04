@@ -10,6 +10,7 @@
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
 		16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */; };
+		17A248000000000000000008 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000007 /* AppleSignInController.swift */; };
 		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
 		17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000004 /* AppBlockingSettingsView.swift */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
@@ -50,6 +51,7 @@
 		17A248000000000000000002 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		17A248000000000000000004 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
 		17A248000000000000000005 /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
+		17A248000000000000000007 /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -140,6 +142,7 @@
 				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
 				4DB1C67E76477BADB30F0F77 /* Components */,
 				17A248000000000000000006 /* Managers */,
+				17A248000000000000000009 /* Services */,
 				551003AC2B5AD8A7B3C3D426 /* Navigation */,
 				09EA4336C05552F95AE85178 /* Resources */,
 				AC788F412B1414C8C2BDB3CB /* Theme */,
@@ -173,6 +176,14 @@
 				17A248000000000000000002 /* AppBlockingManager.swift */,
 			);
 			path = Managers;
+			sourceTree = "<group>";
+		};
+		17A248000000000000000009 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				17A248000000000000000007 /* AppleSignInController.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		9AEB18D5D4C55CB98F814D43 /* BuddySession */ = {
@@ -314,6 +325,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
+				17A248000000000000000008 /* AppleSignInController.swift in Sources */,
 				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
 				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
