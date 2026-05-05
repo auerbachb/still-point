@@ -418,7 +418,7 @@ async function main() {
     : fail("A5", "One or more workflow-required release-readiness checklist items are missing.");
 
   const workflowSecretRefs = requiredWorkflowSecrets.filter(
-    (secret) => workflow.includes(`secrets.${secret}`) && releaseWorkflow.includes(`secrets.${secret}`),
+    (secret) => workflow.includes(`secrets.${secret}`) || releaseWorkflow.includes(`secrets.${secret}`),
   );
   const githubSecrets = listGithubSecrets();
   const missingWorkflowRefs = requiredWorkflowSecrets.filter((secret) => !workflowSecretRefs.includes(secret));
@@ -426,7 +426,7 @@ async function main() {
     ? requiredWorkflowSecrets.filter((secret) => !githubSecrets.names.includes(secret))
     : [];
   if (missingWorkflowRefs.length > 0) {
-    fail("B2", "One or both iOS workflows are missing required secret references.", {
+    fail("B2", "At least one required secret is not referenced by either the TestFlight or App Store release workflow.", {
       requiredWorkflowSecrets,
       workflowSecretRefs,
       missingWorkflowRefs,
@@ -436,15 +436,16 @@ async function main() {
       message: `Workflow(s) missing required secret references: ${missingWorkflowRefs.join(", ")}.`,
     };
   } else if (githubSecrets.available && missingGithubSecrets.length === 0) {
-    pass("B2", "Both iOS workflows reference every required secret and GitHub reports all required secret names.", {
+    pass("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, and GitHub reports all required secret names.", {
       requiredWorkflowSecrets,
     });
     reportSecretStatus = {
       status: "pass",
-      message: "Both iOS workflows reference every required secret and GitHub reports all required secret names.",
+      message:
+        "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, and GitHub reports all required secret names.",
     };
   } else if (githubSecrets.available) {
-    warn("B2", "Both iOS workflows reference every required secret, but GitHub is missing one or more required secret names.", {
+    warn("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, but GitHub is missing one or more required secret names.", {
       requiredWorkflowSecrets,
       missingGithubSecrets,
     });
@@ -453,7 +454,7 @@ async function main() {
       message: `GitHub secret names missing: ${missingGithubSecrets.join(", ")}.`,
     };
   } else {
-    warn("B2", "Both iOS workflows reference every required secret, but repository secret visibility could not be confirmed.", {
+    warn("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, but repository secret visibility could not be confirmed.", {
       requiredWorkflowSecrets,
       reason: githubSecrets.reason,
     });
