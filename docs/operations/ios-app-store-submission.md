@@ -8,7 +8,7 @@ Use this runbook after an iOS build has been uploaded to TestFlight and before c
 - **Product / App Store** owns screenshots, copy, age rating, review notes, the account-deletion recording, demo credentials, and release timing.
 - **Account Holder / Admin** owns Apple Developer and App Store Connect agreements, tax, and banking.
 
-Record submission status, reviewer notes, build strings, and final outcome in ops tracker #103. Use `ios/RELEASING.md` for tag format, build bumps, and CI upload details.
+Record submission status, reviewer notes, build strings, and final outcome in ops tracker #103. Use `ios/RELEASING.md` for tag format, build bumps, and CI upload details. Binary uploads use [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) (`ios-v*-build*` tags). App Store metadata + binary automation uses [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) (strict `ios-vMAJOR.MINOR.PATCH` tags) and Fastlane under `ios/fastlane/`.
 
 ## AI-assisted dry run
 
@@ -18,7 +18,7 @@ Before a live submission, generate the issue #242 evidence package:
 npm run ios:app-store:dry-run
 ```
 
-The command reads `README.md`, `ios/RELEASING.md`, this runbook, `.github/workflows/ios-testflight.yml`, `ios/PARITY_CHECKLIST.md`, `ios/QA_CHECKLIST.md`, and `ios/project.yml`. It writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log` with:
+The command reads `README.md`, `ios/RELEASING.md`, this runbook, `.github/workflows/ios-testflight.yml`, `.github/workflows/ios-app-store-release.yml`, `ios/PARITY_CHECKLIST.md`, `ios/QA_CHECKLIST.md`, and `ios/project.yml`. It writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log` with:
 
 - the intended `ios-v*` tag, marketing version, build number, bundle ID, workflow trigger, and release artifact placeholders;
 - a 38-item issue #242 checklist map across phases A-F, App Store Connect API readiness, submission execution, review follow-up, proof, and definition-of-done items;
@@ -119,6 +119,6 @@ Account deletion path for Guideline 5.1.1(v):
 
 - Ops / submission log: #103
 - Submit / archive checklist (historical): #37
-- CI workflow: `.github/workflows/ios-testflight.yml`
+- CI workflows: `.github/workflows/ios-testflight.yml`, `.github/workflows/ios-app-store-release.yml`
 - Release / tag / build docs: `ios/RELEASING.md`
 - App Store Connect submission URL pattern: `https://appstoreconnect.apple.com/apps/<app-id>/distribution/reviewsubmissions/details/<submission-id>`

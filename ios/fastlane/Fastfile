@@ -1,6 +1,30 @@
 # frozen_string_literal: true
 
+require "shellwords"
+
 default_platform(:ios)
+
+def asc_api_key_id
+  ENV["APP_STORE_CONNECT_API_KEY_ID"] || ENV.fetch("APPSTORE_API_KEY_ID")
+end
+
+def asc_api_key_issuer_id
+  ENV["APP_STORE_CONNECT_API_ISSUER_ID"] || ENV.fetch("APPSTORE_API_ISSUER_ID")
+end
+
+def asc_api_key_content
+  raw = ENV["APP_STORE_CONNECT_API_KEY_CONTENT"] || ENV.fetch("APPSTORE_API_PRIVATE_KEY")
+  raw.gsub("\\n", "\n")
+end
+
+def stillpoint_api_key
+  app_store_connect_api_key(
+    key_id: asc_api_key_id,
+    issuer_id: asc_api_key_issuer_id,
+    key_content: asc_api_key_content,
+    in_house: false
+  )
+end
 
 platform :ios do
   desc "Regenerate App Store screenshot candidates (15–20 per device via SnapshotTests)"
@@ -91,8 +115,63 @@ platform :ios do
     )
   end
 
-  desc "Alias for upload_app_store_screenshots"
+  desc "Machine-readable preflight (npm dry-run). Invoke from ios/ (see RELEASING.md)."
+  lane :preflight do
+    release_owner = ENV["RELEASE_OWNER"] || "fastlane"
+    repo_root = File.expand_path("../..", __dir__)
+    sh("cd #{repo_root.shellescape} && npm run ios:app-store:dry-run -- --release-owner #{release_owner.shellescape}")
+  end
+
+  desc "Build Release IPA (no upload). Requires Xcode project generated (xcodegen)."
+  lane :build do
+    gym(
+      project: "StillPoint.xcodeproj",
+      scheme: "StillPoint",
+      configuration: "Release",
+      export_options: "ExportOptionsFastlane.plist",
+      output_directory: ENV["GYM_OUTPUT_DIRECTORY"] || "build",
+      output_name: "StillPoint.ipa",
+      clean: !ENV["GYM_NO_CLEAN"]
+    )
+  end
+
+  desc "Build and upload to TestFlight (pilot)."
+  lane :beta do
+    stillpoint_api_key
+    build
+    pilot(
+      api_key: lane_context[SharedValues::APP_STORE_CONNECT_API_KEY],
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Upload local metadata to App Store Connect (no IPA)."
+  lane :metadata_only do
+    stillpoint_api_key
+    deliver(
+      api_key: lane_context[SharedValues::APP_STORE_CONNECT_API_KEY],
+      force: true,
+      skip_binary_upload: true,
+      submit_for_review: false,
+      run_precheck_before_submit: false
+    )
+  end
+
+  desc "Preflight → build → deliver metadata + IPA. Set SUBMIT_FOR_REVIEW=1 for programmatic submit (#296+)."
   lane :release do
-    upload_app_store_screenshots
+    preflight unless ENV["SKIP_PREFLIGHT"] == "1"
+    stillpoint_api_key
+    build
+    submit = ENV["SUBMIT_FOR_REVIEW"] == "1"
+    deliver(
+      api_key: lane_context[SharedValues::APP_STORE_CONNECT_API_KEY],
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      force: true,
+      skip_binary_upload: false,
+      submit_for_review: submit,
+      automatic_release: submit && ENV["AUTOMATIC_RELEASE"] == "1",
+      run_precheck_before_submit: false
+    )
   end
 end
