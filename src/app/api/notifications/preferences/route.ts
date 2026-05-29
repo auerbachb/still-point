@@ -38,6 +38,7 @@ export async function GET() {
 
     return NextResponse.json({
       preferences: serializeNotificationPreferences(row),
+      persisted: !!row,
     });
   } catch (error) {
     console.error("Notification preferences GET error:", error);
@@ -115,23 +116,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const now = new Date();
-    const [existing] = await db
-      .select({ userId: notificationPreferences.userId })
-      .from(notificationPreferences)
-      .where(eq(notificationPreferences.userId, auth.userId))
-      .limit(1);
-
-    if (existing) {
-      const [updated] = await db
-        .update(notificationPreferences)
-        .set({ ...patch, updatedAt: now })
-        .where(eq(notificationPreferences.userId, auth.userId))
-        .returning(RETURN_FIELDS);
-      return NextResponse.json({ preferences: serializeNotificationPreferences(updated) });
-    }
-
     const merged: NotificationPreferencesData = { ...defaults, ...patch };
-    const [inserted] = await db
+
+    const [saved] = await db
       .insert(notificationPreferences)
       .values({
         userId: auth.userId,
@@ -145,9 +132,19 @@ export async function PATCH(request: NextRequest) {
         createdAt: now,
         updatedAt: now,
       })
+      .onConflictDoUpdate({
+        target: notificationPreferences.userId,
+        set: {
+          ...patch,
+          updatedAt: now,
+        },
+      })
       .returning(RETURN_FIELDS);
 
-    return NextResponse.json({ preferences: serializeNotificationPreferences(inserted) });
+    return NextResponse.json({
+      preferences: serializeNotificationPreferences(saved),
+      persisted: true,
+    });
   } catch (error) {
     console.error("Notification preferences PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

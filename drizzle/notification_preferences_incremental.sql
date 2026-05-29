@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS "notification_preferences" (
 	"frequency" varchar(20) DEFAULT 'daily' NOT NULL,
 	"quiet_hours_start" varchar(5),
 	"quiet_hours_end" varchar(5),
-	"timezone" varchar(64) DEFAULT 'America/New_York' NOT NULL,
+	"timezone" varchar(64) DEFAULT 'UTC' NOT NULL,
 	"last_daily_reminder_sent_at" timestamp with time zone,
 	"last_miss_a_day_sent_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

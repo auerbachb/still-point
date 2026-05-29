@@ -34,6 +34,8 @@ export type DailyReminderEligibilityInput = {
   streak: number;
   now?: Date;
   tickMinutes?: number;
+  /** When true, skip session/streak gates (scheduler preflight before DB lookups). */
+  preflightOnly?: boolean;
 };
 
 export type DailyReminderSkipReason =
@@ -75,11 +77,14 @@ export function evaluateDailyReminderEligibility(
   if (wasSentOnLocalCalendarDay(pref.lastMissADaySentAt, pref.timezone, now)) {
     return { eligible: false, reason: "miss_a_day_sent_today" };
   }
-  if (input.hasCompletedSessionToday) {
-    return { eligible: false, reason: "meditated_today" };
-  }
   if (!matchesFrequency(pref, now)) {
     return { eligible: false, reason: "frequency_skip" };
+  }
+  if (input.preflightOnly) {
+    return { eligible: true };
+  }
+  if (input.hasCompletedSessionToday) {
+    return { eligible: false, reason: "meditated_today" };
   }
 
   return { eligible: true };

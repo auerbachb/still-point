@@ -57,6 +57,17 @@ describe("evaluateDailyReminderEligibility", () => {
     expect(result).toEqual({ eligible: false, reason: "quiet_hours" });
   });
 
+  test("preflight skips expensive gates until session data is loaded", () => {
+    const result = evaluateDailyReminderEligibility({
+      preference: basePreference(),
+      hasCompletedSessionToday: true,
+      streak: 10,
+      now: dueNow,
+      preflightOnly: true,
+    });
+    expect(result).toEqual({ eligible: true });
+  });
+
   test("skips when daily reminder toggle is off", () => {
     const result = evaluateDailyReminderEligibility({
       preference: basePreference({ dailyReminderEnabled: false }),

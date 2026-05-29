@@ -21,7 +21,8 @@ export function getDefaultPreferences(): NotificationPreferencesData {
     frequency: "daily",
     quietHoursStart: null,
     quietHoursEnd: null,
-    timezone: "America/New_York",
+    /** Placeholder until the client persists the device IANA timezone. */
+    timezone: "UTC",
   };
 }
 

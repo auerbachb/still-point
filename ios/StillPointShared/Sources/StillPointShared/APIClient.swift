@@ -293,19 +293,42 @@ public actor APIClient {
 
     // MARK: - Notification preferences
 
-    public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
-        let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
-        return response.preferences
+    public func getNotificationPreferences() async throws -> NotificationPreferencesResponse {
+        if uiTestConfig != nil {
+            return uiTestNotificationPreferencesResponse()
+        }
+        return try await get("/api/notifications/preferences")
     }
 
     public func updateNotificationPreferences(
         _ request: UpdateNotificationPreferencesRequest
-    ) async throws -> NotificationPreferencesDTO {
-        let response: NotificationPreferencesResponse = try await patch(
+    ) async throws -> NotificationPreferencesResponse {
+        if uiTestConfig != nil {
+            return uiTestNotificationPreferencesResponse(
+                applying: request,
+                persisted: true
+            )
+        }
+        return try await patch(
             "/api/notifications/preferences",
             body: request
         )
-        return response.preferences
+    }
+
+    private func uiTestNotificationPreferencesResponse(
+        applying request: UpdateNotificationPreferencesRequest? = nil,
+        persisted: Bool = false
+    ) -> NotificationPreferencesResponse {
+        let prefs = NotificationPreferencesDTO(
+            enabled: request?.enabled ?? false,
+            dailyReminderEnabled: request?.dailyReminderEnabled ?? true,
+            preferredTime: request?.preferredTime ?? "09:00",
+            frequency: request?.frequency ?? "daily",
+            quietHoursStart: request?.quietHoursStart,
+            quietHoursEnd: request?.quietHoursEnd,
+            timezone: request?.timezone ?? TimeZone.current.identifier
+        )
+        return NotificationPreferencesResponse(preferences: prefs, persisted: persisted)
     }
 
     // MARK: - Buddy Sessions

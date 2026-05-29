@@ -143,8 +143,8 @@ struct NotificationSettingsView: View {
                 Task {
                     if newValue {
                         await PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
-                        await refreshAuthorizationStatus()
                     }
+                    await refreshAuthorizationStatus()
                     await save(UpdateNotificationPreferencesRequest(enabled: newValue))
                 }
             }
@@ -238,33 +238,46 @@ struct NotificationSettingsView: View {
         loadError = nil
         defer { isLoading = false }
         do {
-            let loaded = try await APIClient.shared.getNotificationPreferences()
-            preferences = loaded
-            preferredTimeDate = dateFromHHMM(loaded.preferredTime) ?? preferredTimeDate
-            if let start = loaded.quietHoursStart, let end = loaded.quietHoursEnd {
-                quietHoursEnabled = true
-                quietStartDate = dateFromHHMM(start) ?? quietStartDate
-                quietEndDate = dateFromHHMM(end) ?? quietEndDate
-            } else {
-                quietHoursEnabled = false
-            }
-            if loaded.timezone.isEmpty {
-                await save(UpdateNotificationPreferencesRequest(timezone: TimeZone.current.identifier))
+            let response = try await APIClient.shared.getNotificationPreferences()
+            applyLoadedPreferences(response)
+            if !response.persisted {
+                await save(
+                    UpdateNotificationPreferencesRequest(timezone: TimeZone.current.identifier),
+                    reloadOnFailure: false
+                )
             }
         } catch {
             loadError = "Could not load notification settings."
         }
     }
 
-    private func save(_ request: UpdateNotificationPreferencesRequest) async {
+    private func applyLoadedPreferences(_ response: NotificationPreferencesResponse) {
+        let loaded = response.preferences
+        preferences = loaded
+        preferredTimeDate = dateFromHHMM(loaded.preferredTime) ?? preferredTimeDate
+        if let start = loaded.quietHoursStart, let end = loaded.quietHoursEnd {
+            quietHoursEnabled = true
+            quietStartDate = dateFromHHMM(start) ?? quietStartDate
+            quietEndDate = dateFromHHMM(end) ?? quietEndDate
+        } else {
+            quietHoursEnabled = false
+        }
+    }
+
+    private func save(
+        _ request: UpdateNotificationPreferencesRequest,
+        reloadOnFailure: Bool = true
+    ) async {
         isSaving = true
         defer { isSaving = false }
         do {
-            let updated = try await APIClient.shared.updateNotificationPreferences(request)
-            preferences = updated
+            let response = try await APIClient.shared.updateNotificationPreferences(request)
+            applyLoadedPreferences(response)
         } catch {
             loadError = "Could not save notification settings."
-            await loadPreferences()
+            if reloadOnFailure {
+                await loadPreferences()
+            }
         }
     }
 

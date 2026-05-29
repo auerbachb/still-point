@@ -401,6 +401,8 @@ public struct UpdateNotificationPreferencesRequest: Codable, Sendable {
 
 public struct NotificationPreferencesResponse: Codable, Sendable {
     public let preferences: NotificationPreferencesDTO
+    /// False when the user has never saved preferences (defaults only).
+    public let persisted: Bool
 }
 
 public struct DeviceTokenResponse: Codable, Sendable {

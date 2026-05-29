@@ -283,7 +283,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   frequency: varchar("frequency", { length: 20 }).default("daily").notNull(),
   quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
   quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
-  timezone: varchar("timezone", { length: 64 }).default("America/New_York").notNull(),
+  timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
   lastDailyReminderSentAt: timestamp("last_daily_reminder_sent_at", { withTimezone: true }),
   /** De-dup with miss-a-day pushes (#247): daily reminder skips if this is set for today (user TZ). */
   lastMissADaySentAt: timestamp("last_miss_a_day_sent_at", { withTimezone: true }),

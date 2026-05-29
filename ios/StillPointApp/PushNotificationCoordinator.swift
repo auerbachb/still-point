@@ -7,7 +7,13 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
     static let shared = PushNotificationCoordinator()
 
     /// Invoked when the user opens a push notification (or cold-starts from one).
-    var deepLinkHandler: ((URL) -> Void)?
+    var deepLinkHandler: ((URL) -> Void)? {
+        didSet {
+            deliverPendingDeepLinkIfNeeded()
+        }
+    }
+
+    private var pendingDeepLinkURL: URL?
 
     func application(
         _ application: UIApplication,
@@ -15,23 +21,28 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
-            handleNotificationUserInfo(userInfo)
+            queueOrDeliverDeepLink(from: userInfo)
         }
         return true
     }
 
-    func requestAuthorizationAndRegister() {
+    func requestAuthorizationAndRegister() async {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
 
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error {
-                print("Push notification authorization failed: \(error.localizedDescription)")
-                return
-            }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+                if let error {
+                    print("Push notification authorization failed: \(error.localizedDescription)")
+                    continuation.resume()
+                    return
+                }
 
-            guard granted else { return }
-            DispatchQueue.main.async {
-                UIApplication.shared.registerForRemoteNotifications()
+                if granted {
+                    DispatchQueue.main.async {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                }
+                continuation.resume()
             }
         }
     }
@@ -72,7 +83,7 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        handleNotificationUserInfo(response.notification.request.content.userInfo)
+        queueOrDeliverDeepLink(from: response.notification.request.content.userInfo)
     }
 
     func getAuthorizationStatus() async -> UNAuthorizationStatus {
@@ -80,11 +91,25 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         return settings.authorizationStatus
     }
 
-    private func handleNotificationUserInfo(_ userInfo: [AnyHashable: Any]) {
+    private func queueOrDeliverDeepLink(from userInfo: [AnyHashable: Any]) {
         guard let url = deepLinkURL(from: userInfo) else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.deepLinkHandler?(url)
+            self?.deliverDeepLink(url)
         }
+    }
+
+    private func deliverDeepLink(_ url: URL) {
+        if let handler = deepLinkHandler {
+            handler(url)
+        } else {
+            pendingDeepLinkURL = url
+        }
+    }
+
+    private func deliverPendingDeepLinkIfNeeded() {
+        guard let url = pendingDeepLinkURL, let handler = deepLinkHandler else { return }
+        pendingDeepLinkURL = nil
+        handler(url)
     }
 
     private func deepLinkURL(from userInfo: [AnyHashable: Any]) -> URL? {
