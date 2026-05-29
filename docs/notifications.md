@@ -7,11 +7,23 @@ This document covers **preferences**, the **scheduler**, and how to add new noti
 ## Architecture
 
 1. Users opt in and configure timing in **Settings → Notifications** (iOS) backed by `notification_preferences`.
-2. Vercel Cron calls `GET /api/cron/notifications` every five minutes (`vercel.json`).
+2. A scheduler invokes `GET /api/cron/notifications` every five minutes (see **Scheduling** below).
 3. The scheduler evaluates due notifications per user (local timezone, quiet hours, frequency, idempotency).
 4. Eligible sends go through `sendPushNotificationToUser()` → APNs.
 
-Cron requests must include `Authorization: Bearer <CRON_SECRET>`. Vercel sets `CRON_SECRET` on cron invocations; mirror it locally to test.
+Cron requests must include `Authorization: Bearer <CRON_SECRET>`. Mirror the same secret locally to test.
+
+## Scheduling
+
+The scheduler route is designed for a **5-minute** cadence. Vercel Hobby only allows **once-per-day** built-in crons, so `vercel.json` does not register a Vercel cron (deploy would fail on `*/5 * * * *`).
+
+Production options:
+
+1. **Vercel Pro** — add to `vercel.json`: `{ "path": "/api/cron/notifications", "schedule": "*/5 * * * *" }`
+2. **External ping** — GitHub Actions, Runhooks, etc. `GET https://<app>/api/cron/notifications` with `Authorization: Bearer $CRON_SECRET` every 5 minutes
+3. **Manual / preview** — `curl` locally (see below)
+
+Until a 5-minute trigger is configured, daily reminders will not fire in production automatically.
 
 ## Database: `notification_preferences`
 
