@@ -6,11 +6,17 @@ import UserNotifications
 final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationCoordinator()
 
+    /// Invoked when the user opens a push notification (or cold-starts from one).
+    var deepLinkHandler: ((URL) -> Void)?
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            handleNotificationUserInfo(userInfo)
+        }
         return true
     }
 
@@ -60,6 +66,35 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .badge]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        handleNotificationUserInfo(response.notification.request.content.userInfo)
+    }
+
+    func getAuthorizationStatus() async -> UNAuthorizationStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus
+    }
+
+    private func handleNotificationUserInfo(_ userInfo: [AnyHashable: Any]) {
+        guard let url = deepLinkURL(from: userInfo) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.deepLinkHandler?(url)
+        }
+    }
+
+    private func deepLinkURL(from userInfo: [AnyHashable: Any]) -> URL? {
+        if let deepLink = userInfo["deepLink"] as? String, let url = URL(string: deepLink) {
+            return url
+        }
+        if let type = userInfo["type"] as? String, type == "daily_reminder" {
+            return URL(string: "stillpoint://home")
+        }
+        return nil
     }
 
     func unregisterCurrentDeviceToken() async throws {

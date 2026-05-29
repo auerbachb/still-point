@@ -273,6 +273,35 @@ export const friendships = pgTable("friendships", {
   user2Idx: index("idx_friendships_user2").on(table.user2Id),
 }));
 
+/** Per-user push notification preferences (#345) and send cursors for idempotency (#346, #247). */
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  enabled: boolean("enabled").default(false).notNull(),
+  dailyReminderEnabled: boolean("daily_reminder_enabled").default(true).notNull(),
+  preferredTime: varchar("preferred_time", { length: 5 }).default("09:00").notNull(),
+  frequency: varchar("frequency", { length: 20 }).default("daily").notNull(),
+  quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
+  quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
+  timezone: varchar("timezone", { length: 64 }).default("America/New_York").notNull(),
+  lastDailyReminderSentAt: timestamp("last_daily_reminder_sent_at", { withTimezone: true }),
+  /** De-dup with miss-a-day pushes (#247): daily reminder skips if this is set for today (user TZ). */
+  lastMissADaySentAt: timestamp("last_miss_a_day_sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userUnique: uniqueIndex("notification_preferences_user_unique").on(table.userId),
+  schedulerIdx: index("idx_notification_preferences_scheduler").on(
+    table.enabled,
+    table.dailyReminderEnabled,
+    table.timezone,
+  ),
+  frequencyCheck: check(
+    "notification_preferences_frequency_allowed",
+    sql`${table.frequency} in ('daily', 'every_other_day', 'weekly')`,
+  ),
+}));
+
 export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(sessions),
   thoughts: many(thoughts),
@@ -284,6 +313,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [googleOAuthTokens.userId],
   }),
   buddyCalendarEvents: many(buddySessionCalendarEvents),
+  notificationPreferences: one(notificationPreferences, {
+    fields: [users.id],
+    references: [notificationPreferences.userId],
+  }),
+}));
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  user: one(users, { fields: [notificationPreferences.userId], references: [users.id] }),
 }));
 
 export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({

@@ -291,6 +291,23 @@ public actor APIClient {
         return response.user
     }
 
+    // MARK: - Notification preferences
+
+    public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
+        let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
+        return response.preferences
+    }
+
+    public func updateNotificationPreferences(
+        _ request: UpdateNotificationPreferencesRequest
+    ) async throws -> NotificationPreferencesDTO {
+        let response: NotificationPreferencesResponse = try await patch(
+            "/api/notifications/preferences",
+            body: request
+        )
+        return response.preferences
+    }
+
     // MARK: - Buddy Sessions
 
     public func createBuddySession() async throws -> BuddySessionCreatedDTO {
