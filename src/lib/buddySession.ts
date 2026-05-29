@@ -54,7 +54,7 @@ export async function syncBuddySessionDurationForParticipants(
       rows.map((row) => row.currentDay),
     );
 
-    await tx
+    const updated = await tx
       .update(buddySessions)
       .set({
         durationSeconds,
@@ -65,8 +65,10 @@ export async function syncBuddySessionDurationForParticipants(
           eq(buddySessions.id, sessionId),
           inArray(buddySessions.state, ["waiting", "ready_check"]),
         ),
-      );
+      )
+      .returning({ id: buddySessions.id });
 
+    if (updated.length === 0) return null;
     return durationSeconds;
   });
 }

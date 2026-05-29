@@ -19,6 +19,22 @@ describe("readBuddySessionCreateBody", () => {
     }
   });
 
+  test("rejects non-ISO scheduledStartAt strings", async () => {
+    const request = new NextRequest("http://test.local/api/buddy/sessions", {
+      method: "POST",
+      body: JSON.stringify({ scheduledStartAt: "2026-06-01" }),
+    });
+
+    const result = await readBuddySessionCreateBody(request);
+    expect(result).toBeInstanceOf(Response);
+    if (result instanceof Response) {
+      expect(result.status).toBe(400);
+      await expect(result.json()).resolves.toEqual({
+        error: "scheduledStartAt must be an ISO timestamp",
+      });
+    }
+  });
+
   test("rejects durationSeconds key even when null", async () => {
     const request = new NextRequest("http://test.local/api/buddy/sessions", {
       method: "POST",

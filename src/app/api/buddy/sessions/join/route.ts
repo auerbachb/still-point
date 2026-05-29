@@ -135,10 +135,17 @@ export async function POST(request: NextRequest) {
       const normalizedDuration = await syncBuddySessionDurationForParticipants(session.id);
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      const sessionForCalendar =
-        normalizedDuration != null
-          ? { ...session, durationSeconds: normalizedDuration }
-          : session;
+      let sessionForCalendar = session;
+      if (normalizedDuration != null) {
+        sessionForCalendar = { ...session, durationSeconds: normalizedDuration };
+      } else {
+        const [fresh] = await db
+          .select()
+          .from(buddySessions)
+          .where(eq(buddySessions.id, session.id))
+          .limit(1);
+        if (fresh) sessionForCalendar = fresh;
+      }
       const calendarSync = await syncCalendarBestEffort(sessionForCalendar, auth.userId);
       return NextResponse.json({
         sessionId: session.id,

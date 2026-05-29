@@ -4,9 +4,15 @@ export type BuddySessionCreateBody = {
   scheduledStartAt: Date | null;
 };
 
+const ISO_TIMESTAMP_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 function parseScheduledStartAt(raw: unknown): Date | null | NextResponse {
   if (raw == null || raw === "") return null;
   if (typeof raw !== "string") {
+    return NextResponse.json({ error: "scheduledStartAt must be an ISO timestamp" }, { status: 400 });
+  }
+  if (!ISO_TIMESTAMP_RE.test(raw)) {
     return NextResponse.json({ error: "scheduledStartAt must be an ISO timestamp" }, { status: 400 });
   }
   const scheduledStartAt = new Date(raw);
