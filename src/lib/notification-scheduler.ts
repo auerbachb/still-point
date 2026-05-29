@@ -160,39 +160,58 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   let skipped = 0;
 
   for (const prefs of candidates) {
-    const local = getLocalParts(now, prefs.tz);
-    const reminderMinutes = parseReminderMinutes(prefs.dailyReminderTime);
+    try {
+      const local = getLocalParts(now, prefs.tz);
+      const reminderMinutes = parseReminderMinutes(prefs.dailyReminderTime);
 
-    if (!isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes)) {
+      if (!isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes)) {
+        skipped += 1;
+        continue;
+      }
+
+      if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
+        skipped += 1;
+        continue;
+      }
+
+      const frequency = prefs.dailyReminderFrequency as DailyReminderFrequency;
+      if (!frequencyAllowsSend(frequency, local)) {
+        skipped += 1;
+        continue;
+      }
+
+      const windowKey = windowKeyForFrequency(frequency, local);
+      const claimed = await claimNotificationDispatch({
+        userId: prefs.userId,
+        notificationType: "daily_reminder",
+        windowKey,
+      });
+
+      if (!claimed) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await sendDailyReminderNotification({ recipientUserId: prefs.userId });
+        sent += 1;
+      } catch (sendError) {
+        console.error(`Failed to send daily reminder to user ${prefs.userId}:`, sendError);
+        await db
+          .delete(notificationDispatches)
+          .where(
+            and(
+              eq(notificationDispatches.userId, prefs.userId),
+              eq(notificationDispatches.notificationType, "daily_reminder"),
+              eq(notificationDispatches.windowKey, windowKey),
+            ),
+          );
+        skipped += 1;
+      }
+    } catch (error) {
+      console.error(`Scheduler error for user ${prefs.userId}:`, error);
       skipped += 1;
-      continue;
     }
-
-    if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
-      skipped += 1;
-      continue;
-    }
-
-    const frequency = prefs.dailyReminderFrequency as DailyReminderFrequency;
-    if (!frequencyAllowsSend(frequency, local)) {
-      skipped += 1;
-      continue;
-    }
-
-    const windowKey = windowKeyForFrequency(frequency, local);
-    const claimed = await claimNotificationDispatch({
-      userId: prefs.userId,
-      notificationType: "daily_reminder",
-      windowKey,
-    });
-
-    if (!claimed) {
-      skipped += 1;
-      continue;
-    }
-
-    await sendDailyReminderNotification({ recipientUserId: prefs.userId });
-    sent += 1;
   }
 
   return { scanned: candidates.length, sent, skipped };

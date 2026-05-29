@@ -98,13 +98,16 @@ final class NotificationPreferencesViewModel {
         }
         isSaving = true
         errorMessage = nil
-        defer { isSaving = false }
 
         do {
             let updated = try await APIClient.shared.updateNotificationPreferences(patch)
+            isSaving = false
             apply(updated)
         } catch {
             errorMessage = "Could not save notification settings."
+            // Clear isSaving before reload; keeping it set would deadlock because
+            // load() → syncTimezoneIfNeeded() → persist() would spin forever.
+            isSaving = false
             await load()
         }
     }

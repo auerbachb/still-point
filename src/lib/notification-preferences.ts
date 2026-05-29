@@ -81,7 +81,7 @@ export async function getOrCreateNotificationPreferences(userId: string): Promis
     .limit(1);
 
   if (existing[0]) {
-    return existing[0] as NotificationPreferencesRow;
+    return asNotificationPreferencesRow(existing[0]);
   }
 
   const now = new Date();
@@ -97,7 +97,7 @@ export async function getOrCreateNotificationPreferences(userId: string): Promis
     .returning();
 
   if (created) {
-    return created as NotificationPreferencesRow;
+    return asNotificationPreferencesRow(created);
   }
 
   const [row] = await db
@@ -106,5 +106,8 @@ export async function getOrCreateNotificationPreferences(userId: string): Promis
     .where(eq(notificationPreferences.userId, userId))
     .limit(1);
 
-  return row as NotificationPreferencesRow;
+  if (!row) {
+    throw new Error(`Failed to get or create notification preferences for user ${userId}`);
+  }
+  return asNotificationPreferencesRow(row);
 }
