@@ -86,6 +86,7 @@ final class NotificationPreferencesViewModel {
     }
 
     private func syncTimezoneIfNeeded(_ prefs: NotificationPreferencesDTO) async {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
         let deviceTz = TimeZone.current.identifier
         guard prefs.tz != deviceTz else { return }
         await persist(patch: NotificationPreferencesPatch(tz: deviceTz))

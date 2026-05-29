@@ -366,6 +366,9 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(SPColor.border1)
         )
+        .task {
+            await notificationPrefs.load()
+        }
     }
 
     @ViewBuilder
