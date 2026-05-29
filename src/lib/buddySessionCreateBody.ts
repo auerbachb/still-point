@@ -41,11 +41,7 @@ export async function readBuddySessionCreateBody(
 
   const record = parsed as Record<string, unknown>;
 
-  if (
-    "durationSeconds" in record &&
-    record.durationSeconds != null &&
-    record.durationSeconds !== ""
-  ) {
+  if ("durationSeconds" in record) {
     return NextResponse.json(
       { error: "Session length is set automatically for buddy sessions" },
       { status: 400 },

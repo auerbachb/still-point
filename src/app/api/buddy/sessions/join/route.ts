@@ -132,10 +132,14 @@ export async function POST(request: NextRequest) {
           lastSeenAt: now,
         });
       }
-      await syncBuddySessionDurationForParticipants(session.id);
+      const normalizedDuration = await syncBuddySessionDurationForParticipants(session.id);
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
+      const sessionForCalendar =
+        normalizedDuration != null
+          ? { ...session, durationSeconds: normalizedDuration }
+          : session;
+      const calendarSync = await syncCalendarBestEffort(sessionForCalendar, auth.userId);
       return NextResponse.json({
         sessionId: session.id,
         scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,

@@ -18,4 +18,17 @@ describe("readBuddySessionCreateBody", () => {
       });
     }
   });
+
+  test("rejects durationSeconds key even when null", async () => {
+    const request = new NextRequest("http://test.local/api/buddy/sessions", {
+      method: "POST",
+      body: JSON.stringify({ durationSeconds: null }),
+    });
+
+    const result = await readBuddySessionCreateBody(request);
+    expect(result).toBeInstanceOf(Response);
+    if (result instanceof Response) {
+      expect(result.status).toBe(400);
+    }
+  });
 });

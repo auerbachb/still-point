@@ -4,6 +4,7 @@
  * #119: POST …/record-personal-session creates each participant’s own `sessions` row; notes use `thoughts`.
  */
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import {
   buddySessions,
   buddySessionParticipants,
@@ -35,37 +36,39 @@ import { normalizedBuddySessionDurationSeconds } from "@/lib/buddySessionDuratio
 export async function syncBuddySessionDurationForParticipants(
   sessionId: string,
 ): Promise<number | null> {
-  const rows = await db
-    .select({ currentDay: users.currentDay })
-    .from(buddySessionParticipants)
-    .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
-    .where(
-      and(
-        eq(buddySessionParticipants.buddySessionId, sessionId),
-        isNull(buddySessionParticipants.leftAt),
-      ),
+  return poolDb.transaction(async (tx) => {
+    const rows = await tx
+      .select({ currentDay: users.currentDay })
+      .from(buddySessionParticipants)
+      .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
+      .where(
+        and(
+          eq(buddySessionParticipants.buddySessionId, sessionId),
+          isNull(buddySessionParticipants.leftAt),
+        ),
+      );
+
+    if (rows.length === 0) return null;
+
+    const durationSeconds = normalizedBuddySessionDurationSeconds(
+      rows.map((row) => row.currentDay),
     );
 
-  if (rows.length === 0) return null;
+    await tx
+      .update(buddySessions)
+      .set({
+        durationSeconds,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(buddySessions.id, sessionId),
+          inArray(buddySessions.state, ["waiting", "ready_check"]),
+        ),
+      );
 
-  const durationSeconds = normalizedBuddySessionDurationSeconds(
-    rows.map((row) => row.currentDay),
-  );
-
-  await db
-    .update(buddySessions)
-    .set({
-      durationSeconds,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(buddySessions.id, sessionId),
-        inArray(buddySessions.state, ["waiting", "ready_check"]),
-      ),
-    );
-
-  return durationSeconds;
+    return durationSeconds;
+  });
 }
 
 export async function assertBuddyFriendshipIfRequired(
