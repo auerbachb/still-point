@@ -142,7 +142,7 @@ struct NotificationSettingsView: View {
             set: { newValue in
                 Task {
                     if newValue {
-                        await PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
+                        await PushNotificationCoordinator.shared.requestAuthorizationAndRegisterAsync()
                     }
                     await refreshAuthorizationStatus()
                     await save(UpdateNotificationPreferencesRequest(enabled: newValue))
