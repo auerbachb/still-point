@@ -21,6 +21,7 @@ function PerBuddyCalendarContent({
     if (!buddyId) return;
     let cancelled = false;
     setBuddyLookupError(null);
+    setBuddyUsername(null);
 
     api
       .getFriends()

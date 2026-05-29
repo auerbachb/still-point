@@ -107,10 +107,15 @@ export function BuddyCalendarView({
     setLoading(true);
     setError(null);
     try {
-      const result =
-        mode === "perBuddy" && buddyId
-          ? await api.getBuddyCalendarForBuddy(buddyId)
-          : await api.getBuddyCalendar();
+      let result: BuddyCalendarListResponse;
+      if (mode === "perBuddy") {
+        if (!buddyId) {
+          throw new Error("Missing buddy id.");
+        }
+        result = await api.getBuddyCalendarForBuddy(buddyId);
+      } else {
+        result = await api.getBuddyCalendar();
+      }
       setData(result);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load buddy calendar.");

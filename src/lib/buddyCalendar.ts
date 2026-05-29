@@ -23,7 +23,7 @@ import {
   type BuddyCalendarSession,
   buddySessionCalendarDate,
 } from "@/lib/buddyCalendarRange";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, ne, sql } from "drizzle-orm";
 
 export {
   BUDDY_CALENDAR_DEFAULT_DAYS,
@@ -69,12 +69,20 @@ function sessionPlacementDateSql() {
   )`;
 }
 
-async function fetchParticipantRows(
+function sessionSortTimestampSql() {
+  return sql`coalesce(
+    ${buddySessions.startedAt},
+    ${buddySessions.scheduledStartAt},
+    ${buddySessions.createdAt}
+  )`;
+}
+
+function sharedSessionConditions(
   viewerUserId: string,
   buddyIdFilter: string | null,
   fromDate: string,
   toDate: string,
-): Promise<SessionRow[]> {
+) {
   const placementDate = sessionPlacementDateSql();
 
   const viewerSessionIds = db
@@ -82,10 +90,21 @@ async function fetchParticipantRows(
     .from(buddySessionParticipants)
     .where(eq(buddySessionParticipants.userId, viewerUserId));
 
+  const otherParticipant = db
+    .select({ id: buddySessionParticipants.id })
+    .from(buddySessionParticipants)
+    .where(
+      and(
+        eq(buddySessionParticipants.buddySessionId, buddySessions.id),
+        ne(buddySessionParticipants.userId, viewerUserId),
+      ),
+    );
+
   const conditions = [
     inArray(buddySessions.id, viewerSessionIds),
     sql`${placementDate} >= ${fromDate}`,
     sql`${placementDate} <= ${toDate}`,
+    exists(otherParticipant),
   ];
 
   if (buddyIdFilter) {
@@ -95,6 +114,43 @@ async function fetchParticipantRows(
       .where(eq(buddySessionParticipants.userId, buddyIdFilter));
     conditions.push(inArray(buddySessions.id, buddySessionIds));
   }
+
+  return conditions;
+}
+
+/** Paginated shared-session ids in range (SQL limit/offset before loading participants). */
+async function fetchPagedSharedSessionIds(
+  viewerUserId: string,
+  buddyIdFilter: string | null,
+  fromDate: string,
+  toDate: string,
+  limit: number,
+  offset: number,
+): Promise<{ sessionIds: string[]; hasMore: boolean }> {
+  const conditions = sharedSessionConditions(
+    viewerUserId,
+    buddyIdFilter,
+    fromDate,
+    toDate,
+  );
+
+  const rows = await db
+    .select({ id: buddySessions.id })
+    .from(buddySessions)
+    .where(and(...conditions))
+    .orderBy(desc(sessionSortTimestampSql()), desc(buddySessions.id))
+    .limit(limit + 1)
+    .offset(offset);
+
+  const hasMore = rows.length > limit;
+  const sessionIds = rows.slice(0, limit).map((r) => r.id);
+  return { sessionIds, hasMore };
+}
+
+async function fetchParticipantRowsForSessions(
+  sessionIds: string[],
+): Promise<SessionRow[]> {
+  if (sessionIds.length === 0) return [];
 
   return db
     .select({
@@ -113,7 +169,7 @@ async function fetchParticipantRows(
       eq(buddySessions.id, buddySessionParticipants.buddySessionId),
     )
     .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
-    .where(and(...conditions));
+    .where(inArray(buddySessions.id, sessionIds));
 }
 
 function assembleSessions(
@@ -162,6 +218,7 @@ function assembleSessions(
     entry.buddyIds = entry.participants
       .map((p) => p.userId)
       .filter((id) => id !== viewerUserId);
+    if (entry.buddyIds.length === 0) continue;
     sessions.push(entry);
   }
 
@@ -184,18 +241,19 @@ export async function listBuddyCalendarSessions(
   viewerUserId: string,
   range: { fromDate: string; toDate: string; limit: number; offset: number },
 ): Promise<BuddyCalendarListResult> {
-  const rows = await fetchParticipantRows(
+  const { sessionIds, hasMore } = await fetchPagedSharedSessionIds(
     viewerUserId,
     null,
     range.fromDate,
     range.toDate,
+    range.limit,
+    range.offset,
   );
-  const filtered = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
-  const slice = filtered.slice(range.offset, range.offset + range.limit);
-  const hasMore = range.offset + slice.length < filtered.length;
+  const rows = await fetchParticipantRowsForSessions(sessionIds);
+  const sessions = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
 
   return {
-    sessions: slice,
+    sessions,
     fromDate: range.fromDate,
     toDate: range.toDate,
     hasMore,
@@ -219,18 +277,19 @@ export async function listBuddyCalendarSessionsForBuddy(
     return { error: "NOT_FRIEND" };
   }
 
-  const rows = await fetchParticipantRows(
+  const { sessionIds, hasMore } = await fetchPagedSharedSessionIds(
     viewerUserId,
     buddyId,
     range.fromDate,
     range.toDate,
+    range.limit,
+    range.offset,
   );
-  const filtered = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
-  const slice = filtered.slice(range.offset, range.offset + range.limit);
-  const hasMore = range.offset + slice.length < filtered.length;
+  const rows = await fetchParticipantRowsForSessions(sessionIds);
+  const sessions = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
 
   return {
-    sessions: slice,
+    sessions,
     fromDate: range.fromDate,
     toDate: range.toDate,
     hasMore,
