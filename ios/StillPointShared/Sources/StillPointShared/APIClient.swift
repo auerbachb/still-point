@@ -17,6 +17,7 @@ public actor APIClient {
     private let session: URLSession
     private let uiTestConfig: UITestConfig?
     private var uiTestStore: UITestStore?
+    private var uiTestNotificationPrefs: NotificationPreferencesDTO?
     private let uiTestStoreDefaultsKey = "StillPoint.UITest.Store"
 
     private init() {
@@ -295,6 +296,9 @@ public actor APIClient {
 
     public func getNotificationPreferences() async throws -> NotificationPreferencesResponse {
         if uiTestConfig != nil {
+            if let cached = uiTestNotificationPrefs {
+                return NotificationPreferencesResponse(preferences: cached, persisted: true)
+            }
             return uiTestNotificationPreferencesResponse()
         }
         return try await get("/api/notifications/preferences")
@@ -304,10 +308,12 @@ public actor APIClient {
         _ request: UpdateNotificationPreferencesRequest
     ) async throws -> NotificationPreferencesResponse {
         if uiTestConfig != nil {
-            return uiTestNotificationPreferencesResponse(
+            let response = uiTestNotificationPreferencesResponse(
                 applying: request,
                 persisted: true
             )
+            uiTestNotificationPrefs = response.preferences
+            return response
         }
         return try await patch(
             "/api/notifications/preferences",
@@ -319,14 +325,23 @@ public actor APIClient {
         applying request: UpdateNotificationPreferencesRequest? = nil,
         persisted: Bool = false
     ) -> NotificationPreferencesResponse {
+        let base = uiTestNotificationPrefs ?? NotificationPreferencesDTO(
+            enabled: false,
+            dailyReminderEnabled: true,
+            preferredTime: "09:00",
+            frequency: "daily",
+            quietHoursStart: nil,
+            quietHoursEnd: nil,
+            timezone: TimeZone.current.identifier
+        )
         let prefs = NotificationPreferencesDTO(
-            enabled: request?.enabled ?? false,
-            dailyReminderEnabled: request?.dailyReminderEnabled ?? true,
-            preferredTime: request?.preferredTime ?? "09:00",
-            frequency: request?.frequency ?? "daily",
-            quietHoursStart: request?.quietHoursStart,
-            quietHoursEnd: request?.quietHoursEnd,
-            timezone: request?.timezone ?? TimeZone.current.identifier
+            enabled: request?.enabled ?? base.enabled,
+            dailyReminderEnabled: request?.dailyReminderEnabled ?? base.dailyReminderEnabled,
+            preferredTime: request?.preferredTime ?? base.preferredTime,
+            frequency: request?.frequency ?? base.frequency,
+            quietHoursStart: request?.quietHoursStart ?? base.quietHoursStart,
+            quietHoursEnd: request?.quietHoursEnd ?? base.quietHoursEnd,
+            timezone: request?.timezone ?? base.timezone
         )
         return NotificationPreferencesResponse(preferences: prefs, persisted: persisted)
     }

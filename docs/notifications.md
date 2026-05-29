@@ -46,7 +46,7 @@ Migration: `drizzle/notification_preferences_incremental.sql` (applied via `npm 
 
 ### `GET /api/notifications/preferences`
 
-Returns `{ preferences: { enabled, dailyReminderEnabled, preferredTime, frequency, quietHoursStart, quietHoursEnd, timezone } }`. Defaults when no row exists.
+Returns `{ preferences: { enabled, dailyReminderEnabled, preferredTime, frequency, quietHoursStart, quietHoursEnd, timezone }, persisted }`. Defaults when no row exists (`persisted: false`).
 
 ### `PATCH /api/notifications/preferences`
 

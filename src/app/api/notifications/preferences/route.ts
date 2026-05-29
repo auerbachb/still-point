@@ -61,11 +61,17 @@ export async function PATCH(request: NextRequest) {
     const patch: Partial<NotificationPreferencesData> = {};
     let hasUpdate = false;
 
-    if (typeof body.enabled === "boolean") {
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== "boolean") {
+        return NextResponse.json({ error: "Invalid enabled" }, { status: 400 });
+      }
       patch.enabled = body.enabled;
       hasUpdate = true;
     }
-    if (typeof body.dailyReminderEnabled === "boolean") {
+    if (body.dailyReminderEnabled !== undefined) {
+      if (typeof body.dailyReminderEnabled !== "boolean") {
+        return NextResponse.json({ error: "Invalid dailyReminderEnabled" }, { status: 400 });
+      }
       patch.dailyReminderEnabled = body.dailyReminderEnabled;
       hasUpdate = true;
     }

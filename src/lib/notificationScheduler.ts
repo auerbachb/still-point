@@ -216,7 +216,7 @@ export async function dispatchDailyReminderForUser(params: {
   const now = new Date();
   const lockKey = `daily-reminder:${params.userId}`;
 
-  return poolDb.transaction(async (tx) => {
+  const claimed = await poolDb.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`,
     );
@@ -236,11 +236,6 @@ export async function dispatchDailyReminderForUser(params: {
       return false;
     }
 
-    await sendPushNotificationToUser({
-      recipientUserId: params.userId,
-      payload,
-    });
-
     await tx
       .update(notificationPreferences)
       .set({
@@ -251,6 +246,27 @@ export async function dispatchDailyReminderForUser(params: {
 
     return true;
   });
+
+  if (!claimed) return false;
+
+  try {
+    await sendPushNotificationToUser({
+      recipientUserId: params.userId,
+      payload,
+    });
+    return true;
+  } catch (error) {
+    await db
+      .update(notificationPreferences)
+      .set({ lastDailyReminderSentAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(notificationPreferences.userId, params.userId),
+          eq(notificationPreferences.lastDailyReminderSentAt, now),
+        ),
+      );
+    throw error;
+  }
 }
 
 function wasSentToday(sentAt: Date | null, timezone: string, now: Date): boolean {

@@ -13,6 +13,12 @@ describe("notificationTime", () => {
     expect(isPreferredTimeDue("09:10", "America/New_York", 5, at)).toBe(false);
   });
 
+  test("isPreferredTimeDue handles midnight-crossing preferred times", () => {
+    const at = new Date("2026-05-30T03:59:00.000Z");
+    expect(isPreferredTimeDue("23:58", "America/New_York", 5, at)).toBe(true);
+    expect(isPreferredTimeDue("23:50", "America/New_York", 5, at)).toBe(false);
+  });
+
   test("isWithinQuietHours handles overnight windows", () => {
     const evening = new Date("2026-05-29T02:30:00.000Z");
     expect(isWithinQuietHours("22:00", "07:00", "America/New_York", evening)).toBe(true);

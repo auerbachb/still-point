@@ -79,7 +79,10 @@ export function isPreferredTimeDue(
 ): boolean {
   const preferred = parseTimeToMinutes(preferredTime);
   const current = getLocalMinutesSinceMidnight(timezone, at);
-  return current >= preferred && current < preferred + tickMinutes;
+  if (tickMinutes <= 0) return false;
+  const dayMinutes = 24 * 60;
+  const delta = (current - preferred + dayMinutes) % dayMinutes;
+  return delta < tickMinutes;
 }
 
 /**
