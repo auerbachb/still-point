@@ -26,6 +26,22 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         return true
     }
 
+    func requestAuthorizationAndRegister() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if let error {
+                print("Push notification authorization failed: \(error.localizedDescription)")
+                return
+            }
+
+            guard granted else { return }
+            DispatchQueue.main.async {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
     func requestAuthorizationAndRegister() async {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
 
