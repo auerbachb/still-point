@@ -27,6 +27,16 @@ describe("notification time helpers", () => {
     })).toBe(false);
   });
 
+  test("isReminderDueNow handles windows that cross local midnight", () => {
+    const now = new Date("2026-05-30T00:01:00.000Z");
+    expect(isReminderDueNow({
+      now,
+      timeZone: "UTC",
+      reminderTime: "23:58",
+      tickWindowMinutes: 5,
+    })).toBe(true);
+  });
+
   test("isInQuietHours handles windows spanning midnight", () => {
     const now = new Date("2026-05-29T23:30:00.000Z");
     expect(isInQuietHours({

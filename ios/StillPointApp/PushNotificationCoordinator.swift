@@ -7,7 +7,13 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
     static let shared = PushNotificationCoordinator()
 
     /// Set from `RootView` so notification taps can route into the app shell.
-    var onDeepLink: (@MainActor (URL) -> Void)?
+    var onDeepLink: (@MainActor (URL) -> Void)? {
+        didSet {
+            deliverPendingDeepLinkIfReady()
+        }
+    }
+
+    private var pendingDeepLink: URL?
 
     func application(
         _ application: UIApplication,
@@ -75,8 +81,24 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
             return
         }
         await MainActor.run {
-            onDeepLink?(url)
+            routeDeepLink(url)
         }
+    }
+
+    @MainActor
+    private func routeDeepLink(_ url: URL) {
+        if let onDeepLink {
+            onDeepLink(url)
+        } else {
+            pendingDeepLink = url
+        }
+    }
+
+    @MainActor
+    func deliverPendingDeepLinkIfReady() {
+        guard let url = pendingDeepLink, onDeepLink != nil else { return }
+        pendingDeepLink = nil
+        onDeepLink?(url)
     }
 
     func unregisterCurrentDeviceToken() async throws {

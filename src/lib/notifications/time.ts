@@ -54,7 +54,12 @@ export function isReminderDueNow(params: {
   const window = params.tickWindowMinutes ?? 5;
   const target = parseTimeOfDayToMinutes(params.reminderTime);
   const current = localMinutesSinceMidnight(params.now, params.timeZone);
-  return current >= target && current < target + window;
+  const end = target + window;
+  if (end <= 24 * 60) {
+    return current >= target && current < end;
+  }
+  // Reminder window crosses local midnight (e.g. 23:58 + 5 minutes).
+  return current >= target || current < end % (24 * 60);
 }
 
 export function addCalendarDays(isoDate: string, deltaDays: number): string {
@@ -100,20 +105,24 @@ export function localIsoWeekday(now: Date, timeZone: string): number {
   return map[weekday] ?? 1;
 }
 
+/** Epoch day number for a local calendar date (UTC noon anchor avoids DST edges). */
+export function localEpochDay(isoDate: string): number {
+  return Math.floor(Date.parse(`${isoDate}T12:00:00.000Z`) / 86_400_000);
+}
+
 export function frequencyAllowsSendToday(params: {
   frequency: string;
   now: Date;
   timeZone: string;
 }): boolean {
-  const weekday = localIsoWeekday(params.now, params.timeZone);
+  const localDate = localCalendarDate(params.now, params.timeZone);
   switch (params.frequency) {
     case "daily":
       return true;
     case "every_other_day":
-      // Stable cadence keyed to ISO weekday parity in the user's TZ.
-      return weekday % 2 === 1;
+      return localEpochDay(localDate) % 2 === 0;
     case "weekly":
-      return weekday === 1;
+      return localIsoWeekday(params.now, params.timeZone) === 1;
     default:
       return false;
   }

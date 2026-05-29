@@ -18,6 +18,7 @@ export type NotificationSchedulerResult = {
   missADaySent: number;
   dailyReminderSent: number;
   skipped: number;
+  errors: number;
 };
 
 export async function runNotificationScheduler(now: Date = new Date()): Promise<NotificationSchedulerResult> {
@@ -27,40 +28,49 @@ export async function runNotificationScheduler(now: Date = new Date()): Promise<
     missADaySent: 0,
     dailyReminderSent: 0,
     skipped: 0,
+    errors: 0,
   };
 
   for (const prefs of candidates) {
-    const localDate = localCalendarDate(now, prefs.timezone);
-    if (await hasDispatchedToday({ userId: prefs.userId, localDate })) {
+    try {
+      const localDate = localCalendarDate(now, prefs.timezone);
+      if (await hasDispatchedToday({ userId: prefs.userId, localDate })) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const missADay = await evaluateMissADayEligibility(prefs, now);
+      if (missADay.eligible) {
+        const sent = await sendMissADayNotification({
+          userId: prefs.userId,
+          localDate: missADay.localDate,
+        });
+        if (sent) result.missADaySent += 1;
+        else result.skipped += 1;
+        continue;
+      }
+
+      const daily = await evaluateDailyReminderEligibility(prefs, now);
+      if (daily.eligible) {
+        const sent = await sendDailyReminderNotification({
+          userId: prefs.userId,
+          localDate: daily.localDate,
+          title: daily.title,
+          body: daily.body,
+        });
+        if (sent) result.dailyReminderSent += 1;
+        else result.skipped += 1;
+        continue;
+      }
+
       result.skipped += 1;
-      continue;
-    }
-
-    const missADay = await evaluateMissADayEligibility(prefs, now);
-    if (missADay.eligible) {
-      const sent = await sendMissADayNotification({
+    } catch (error) {
+      result.errors += 1;
+      console.error("Notification scheduler candidate failed", {
         userId: prefs.userId,
-        localDate: missADay.localDate,
+        error,
       });
-      if (sent) result.missADaySent += 1;
-      else result.skipped += 1;
-      continue;
     }
-
-    const daily = await evaluateDailyReminderEligibility(prefs, now);
-    if (daily.eligible) {
-      const sent = await sendDailyReminderNotification({
-        userId: prefs.userId,
-        localDate: daily.localDate,
-        title: daily.title,
-        body: daily.body,
-      });
-      if (sent) result.dailyReminderSent += 1;
-      else result.skipped += 1;
-      continue;
-    }
-
-    result.skipped += 1;
   }
 
   return result;

@@ -299,9 +299,12 @@ public actor APIClient {
     }
 
     public func updateNotificationPreferences(
-        patch: NotificationPreferencesPatch
+        preferencesPatch: NotificationPreferencesPatch
     ) async throws -> NotificationPreferencesDTO {
-        let response: NotificationPreferencesResponse = try await patch("/api/notifications/preferences", body: patch)
+        let response: NotificationPreferencesResponse = try await patch(
+            "/api/notifications/preferences",
+            body: preferencesPatch
+        )
         return response.preferences
     }
 

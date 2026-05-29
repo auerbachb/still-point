@@ -7,6 +7,7 @@ struct NotificationSettingsView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var reminderDate = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
+    @State private var pendingPatch: NotificationPreferencesPatch?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -140,18 +141,31 @@ struct NotificationSettingsView: View {
 
     @MainActor
     private func savePatch(_ patch: NotificationPreferencesPatch) async {
-        guard !isSaving else { return }
+        if isSaving {
+            pendingPatch = patch
+            return
+        }
         isSaving = true
         errorMessage = nil
-        let previous = preferences
+        var patchToApply = patch
         defer { isSaving = false }
-        do {
-            let updated = try await APIClient.shared.updateNotificationPreferences(patch: patch)
-            preferences = updated
-            reminderDate = Self.date(fromReminderTime: updated.reminderTime) ?? reminderDate
-        } catch {
-            preferences = previous
-            errorMessage = "Could not save notification settings."
+        while true {
+            let previous = preferences
+            do {
+                let updated = try await APIClient.shared.updateNotificationPreferences(
+                    preferencesPatch: patchToApply
+                )
+                preferences = updated
+                reminderDate = Self.date(fromReminderTime: updated.reminderTime) ?? reminderDate
+            } catch {
+                preferences = previous
+                errorMessage = "Could not save notification settings."
+                pendingPatch = nil
+                return
+            }
+            guard let next = pendingPatch else { return }
+            pendingPatch = nil
+            patchToApply = next
         }
     }
 

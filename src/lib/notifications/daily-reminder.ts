@@ -71,14 +71,7 @@ export async function sendDailyReminderNotification(params: {
   title: string;
   body: string;
 }): Promise<boolean> {
-  const recorded = await recordDispatch({
-    userId: params.userId,
-    localDate: params.localDate,
-    notificationType: "daily_reminder",
-  });
-  if (!recorded) return false;
-
-  await sendPushNotificationToUser({
+  const { delivered } = await sendPushNotificationToUser({
     recipientUserId: params.userId,
     payload: {
       aps: {
@@ -93,5 +86,11 @@ export async function sendDailyReminderNotification(params: {
       deepLink: DAILY_REMINDER_DEEP_LINK,
     },
   });
-  return true;
+  if (!delivered) return false;
+
+  return recordDispatch({
+    userId: params.userId,
+    localDate: params.localDate,
+    notificationType: "daily_reminder",
+  });
 }

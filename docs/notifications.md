@@ -1,6 +1,8 @@
 # Push notifications (iOS MVP)
 
-Scheduled meditation reminders use the server-side cron at `/api/cron/notifications` (every five minutes on Vercel). Delivery reuses APNs (`src/lib/notifications.ts`).
+Scheduled meditation reminders use the server-side scheduler at `GET /api/cron/notifications` (authorized with `Authorization: Bearer $CRON_SECRET`). The route should be invoked about every five minutes in production.
+
+**Vercel Hobby** only allows one cron invocation per day in `vercel.json`, so this repo does not declare a sub-daily Vercel cron. Use Vercel Pro cron, an external scheduler, or a CI workflow that calls the endpoint on the desired interval. Delivery reuses APNs (`src/lib/notifications.ts`).
 
 ## Registering a new notification type
 
@@ -26,4 +28,4 @@ Fields: `pushEnabled`, `timezone`, `reminderTime`, `frequency`, `quietHoursStart
 
 ## Cron auth
 
-Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
+Set `CRON_SECRET` in Vercel. Callers must send `Authorization: Bearer <CRON_SECRET>`.

@@ -55,14 +55,7 @@ export async function sendMissADayNotification(params: {
   userId: string;
   localDate: string;
 }): Promise<boolean> {
-  const recorded = await recordDispatch({
-    userId: params.userId,
-    localDate: params.localDate,
-    notificationType: "miss_a_day",
-  });
-  if (!recorded) return false;
-
-  await sendPushNotificationToUser({
+  const { delivered } = await sendPushNotificationToUser({
     recipientUserId: params.userId,
     payload: {
       aps: {
@@ -77,5 +70,11 @@ export async function sendMissADayNotification(params: {
       deepLink: MISS_A_DAY_DEEP_LINK,
     },
   });
-  return true;
+  if (!delivered) return false;
+
+  return recordDispatch({
+    userId: params.userId,
+    localDate: params.localDate,
+    notificationType: "miss_a_day",
+  });
 }

@@ -81,13 +81,14 @@ describe("sendMissADayNotification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     recordDispatch.mockResolvedValue(true);
-    sendPushNotificationToUser.mockResolvedValue(undefined);
+    sendPushNotificationToUser.mockResolvedValue({ delivered: true });
   });
 
   test("sends quick-minute deep link payload", async () => {
     const { sendMissADayNotification, MISS_A_DAY_DEEP_LINK } = await import("./miss-a-day");
     const sent = await sendMissADayNotification({ userId: "user-1", localDate: "2026-05-29" });
     expect(sent).toBe(true);
+    expect(recordDispatch).toHaveBeenCalled();
     expect(sendPushNotificationToUser).toHaveBeenCalledWith({
       recipientUserId: "user-1",
       payload: expect.objectContaining({

@@ -11,22 +11,22 @@ import {
 import type { NotificationPreferencesRow } from "@/lib/notifications/types";
 
 async function getOrCreatePreferences(userId: string): Promise<NotificationPreferencesRow> {
-  const existing = await db
+  await db
+    .insert(notificationPreferences)
+    .values({ userId, ...DEFAULT_NOTIFICATION_PREFERENCES })
+    .onConflictDoNothing();
+
+  const [row] = await db
     .select()
     .from(notificationPreferences)
     .where(eq(notificationPreferences.userId, userId))
     .limit(1);
 
-  if (existing[0]) {
-    return existing[0] as NotificationPreferencesRow;
+  if (!row) {
+    throw new Error(`notification_preferences missing for user ${userId}`);
   }
 
-  const [created] = await db
-    .insert(notificationPreferences)
-    .values({ userId, ...DEFAULT_NOTIFICATION_PREFERENCES })
-    .returning();
-
-  return created as NotificationPreferencesRow;
+  return row as NotificationPreferencesRow;
 }
 
 export async function GET() {
@@ -51,7 +51,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const validated = validatePreferencesPatch(body);
     if (!validated.ok) {
       return NextResponse.json({ error: validated.error }, { status: 400 });

@@ -6,13 +6,26 @@ const selectLimit = vi.fn();
 const selectWhere = vi.fn(() => ({ limit: selectLimit }));
 const selectFrom = vi.fn(() => ({ where: selectWhere }));
 const dbSelect = vi.fn(() => ({ from: selectFrom }));
-const insertReturning = vi.fn();
-const insertValues = vi.fn(() => ({ returning: insertReturning }));
+const insertValues = vi.fn(() => ({
+  onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+}));
 const dbInsert = vi.fn(() => ({ values: insertValues }));
 const updateReturning = vi.fn();
 const updateWhere = vi.fn(() => ({ returning: updateReturning }));
 const updateSet = vi.fn(() => ({ where: updateWhere }));
 const dbUpdate = vi.fn(() => ({ set: updateSet }));
+
+const defaultRow = {
+  userId: "user-1",
+  pushEnabled: false,
+  timezone: "UTC",
+  reminderTime: "09:00",
+  frequency: "daily",
+  quietHoursStart: null,
+  quietHoursEnd: null,
+  dailyReminderEnabled: true,
+  missADayEnabled: true,
+};
 
 vi.mock("@/db", () => ({
   db: {
@@ -50,24 +63,10 @@ describe("/api/notifications/preferences", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getCurrentUser.mockResolvedValue({ userId: "user-1", email: "a@b.com" });
+    selectLimit.mockResolvedValue([defaultRow]);
   });
 
   test("GET returns defaults when no row exists", async () => {
-    selectLimit.mockResolvedValueOnce([]);
-    insertReturning.mockResolvedValueOnce([
-      {
-        userId: "user-1",
-        pushEnabled: false,
-        timezone: "UTC",
-        reminderTime: "09:00",
-        frequency: "daily",
-        quietHoursStart: null,
-        quietHoursEnd: null,
-        dailyReminderEnabled: true,
-        missADayEnabled: true,
-      },
-    ]);
-
     const { GET } = await import("./route");
     const response = await GET();
     const body = await response.json();
@@ -75,11 +74,23 @@ describe("/api/notifications/preferences", () => {
     expect(response.status).toBe(200);
     expect(body.preferences.missADayEnabled).toBe(true);
     expect(dbInsert).toHaveBeenCalled();
+    expect(insertValues).toHaveBeenCalled();
   });
 
   test("PATCH validates reminder time", async () => {
     const { PATCH } = await import("./route");
     const request = { json: async () => ({ reminderTime: "25:99" }) } as NextRequest;
+    const response = await PATCH(request);
+    expect(response.status).toBe(400);
+  });
+
+  test("PATCH returns 400 for invalid JSON", async () => {
+    const { PATCH } = await import("./route");
+    const request = {
+      json: async () => {
+        throw new SyntaxError("Unexpected token");
+      },
+    } as NextRequest;
     const response = await PATCH(request);
     expect(response.status).toBe(400);
   });

@@ -123,10 +123,11 @@ struct RootView: View {
         .onOpenURL { url in
             appVM.handleIncomingURL(url)
         }
-        .onAppear {
-            PushNotificationCoordinator.shared.onDeepLink = { [appVM] url in
+        .task {
+            PushNotificationCoordinator.shared.onDeepLink = { url in
                 appVM.handlePushDeepLink(url)
             }
+            PushNotificationCoordinator.shared.deliverPendingDeepLinkIfReady()
         }
     }
 
