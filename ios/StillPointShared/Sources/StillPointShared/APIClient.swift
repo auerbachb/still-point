@@ -291,6 +291,33 @@ public actor APIClient {
         return response.user
     }
 
+    // MARK: - Notification preferences
+
+    public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
+        if uiTestConfig != nil {
+            return NotificationPreferencesDTO(
+                pushEnabled: false,
+                dailyReminderEnabled: false,
+                missADayEnabled: false,
+                dailyReminderTime: "09:00",
+                dailyReminderFrequency: .daily,
+                quietHoursStart: nil,
+                quietHoursEnd: nil,
+                tz: TimeZone.current.identifier
+            )
+        }
+        let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
+        return response.preferences
+    }
+
+    public func updateNotificationPreferences(_ patch: NotificationPreferencesPatch) async throws -> NotificationPreferencesDTO {
+        if uiTestConfig != nil {
+            return try await getNotificationPreferences()
+        }
+        let response: NotificationPreferencesResponse = try await patch("/api/notifications/preferences", body: patch)
+        return response.preferences
+    }
+
     // MARK: - Buddy Sessions
 
     public func createBuddySession() async throws -> BuddySessionCreatedDTO {

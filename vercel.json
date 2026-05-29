@@ -1,4 +1,10 @@
 {
   "buildCommand": "npm run db:migrate && npm run build",
-  "ignoreCommand": "BASE=${VERCEL_GIT_PREVIOUS_SHA:-$(git rev-parse HEAD^ 2>/dev/null || true)}; [ -n \"$BASE\" ] || exit 1; git diff --quiet \"$BASE\" HEAD -- . ':!ios' ':!.claude' || exit 1"
+  "ignoreCommand": "BASE=${VERCEL_GIT_PREVIOUS_SHA:-$(git rev-parse HEAD^ 2>/dev/null || true)}; [ -n \"$BASE\" ] || exit 1; git diff --quiet \"$BASE\" HEAD -- . ':!ios' ':!.claude' || exit 1",
+  "crons": [
+    {
+      "path": "/api/cron/dispatch-notifications",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

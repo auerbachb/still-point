@@ -50,6 +50,25 @@ export async function sendPushNotificationToUser(params: {
   }
 }
 
+export async function sendDailyReminderNotification(params: {
+  recipientUserId: string;
+}): Promise<void> {
+  await sendPushNotificationToUser({
+    recipientUserId: params.recipientUserId,
+    payload: {
+      aps: {
+        alert: {
+          title: "Time for your sit",
+          body: "Take a few minutes for your daily practice.",
+        },
+        sound: "default",
+        "thread-id": "daily-reminder",
+      },
+      type: "daily_reminder",
+    },
+  });
+}
+
 export async function sendFriendRequestNotification(params: {
   recipientUserId: string;
   senderUsername: string;
