@@ -34,6 +34,47 @@ export const users = pgTable("users", {
   usernameLowerUnique: uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`),
 }));
 
+/** Per-user push notification preferences (#345). */
+export const notificationPreferences = pgTable("notification_preferences", {
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).primaryKey(),
+  pushEnabled: boolean("push_enabled").default(false).notNull(),
+  timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+  /** Local HH:MM when scheduled reminders may fire. */
+  reminderTime: varchar("reminder_time", { length: 5 }).default("09:00").notNull(),
+  frequency: varchar("frequency", { length: 20 }).default("daily").notNull(),
+  quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
+  quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
+  dailyReminderEnabled: boolean("daily_reminder_enabled").default(true).notNull(),
+  missADayEnabled: boolean("miss_a_day_enabled").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  frequencyCheck: check(
+    "notification_preferences_frequency_allowed",
+    sql`${table.frequency} in ('daily', 'every_other_day', 'weekly')`,
+  ),
+}));
+
+/** Idempotent send log: at most one scheduled push per user per local calendar day (#345 / #346 / #247). */
+export const notificationDispatches = pgTable("notification_dispatches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  /** User-local calendar date (YYYY-MM-DD) for de-duplication. */
+  localDate: date("local_date").notNull(),
+  notificationType: varchar("notification_type", { length: 32 }).notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userLocalDateUnique: uniqueIndex("notification_dispatches_user_local_date_unique").on(
+    table.userId,
+    table.localDate,
+  ),
+  userIdx: index("idx_notification_dispatches_user").on(table.userId),
+  typeCheck: check(
+    "notification_dispatches_type_allowed",
+    sql`${table.notificationType} in ('daily_reminder', 'miss_a_day')`,
+  ),
+}));
+
 export const deviceTokens = pgTable("device_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
@@ -278,6 +319,11 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   thoughts: many(thoughts),
   passwordResetTokens: many(passwordResetTokens),
   deviceTokens: many(deviceTokens),
+  notificationPreferences: one(notificationPreferences, {
+    fields: [users.id],
+    references: [notificationPreferences.userId],
+  }),
+  notificationDispatches: many(notificationDispatches),
   oauthAccounts: many(oauthAccounts),
   googleOAuthToken: one(googleOAuthTokens, {
     fields: [users.id],
@@ -292,6 +338,14 @@ export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
   user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
+}));
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  user: one(users, { fields: [notificationPreferences.userId], references: [users.id] }),
+}));
+
+export const notificationDispatchesRelations = relations(notificationDispatches, ({ one }) => ({
+  user: one(users, { fields: [notificationDispatches.userId], references: [users.id] }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({

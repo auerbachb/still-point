@@ -291,6 +291,20 @@ public actor APIClient {
         return response.user
     }
 
+    // MARK: - Notification preferences (#345 / #247)
+
+    public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
+        let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
+        return response.preferences
+    }
+
+    public func updateNotificationPreferences(
+        patch: NotificationPreferencesPatch
+    ) async throws -> NotificationPreferencesDTO {
+        let response: NotificationPreferencesResponse = try await patch("/api/notifications/preferences", body: patch)
+        return response.preferences
+    }
+
     // MARK: - Buddy Sessions
 
     public func createBuddySession() async throws -> BuddySessionCreatedDTO {
@@ -716,6 +730,50 @@ public actor APIClient {
     private static func persist(store: UITestStore, key: String) {
         guard let encoded = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(encoded, forKey: key)
+    }
+}
+
+public struct NotificationPreferencesPatch: Encodable, Sendable {
+    public var pushEnabled: Bool?
+    public var timezone: String?
+    public var reminderTime: String?
+    public var frequency: String?
+    public var dailyReminderEnabled: Bool?
+    public var missADayEnabled: Bool?
+
+    public init(
+        pushEnabled: Bool? = nil,
+        timezone: String? = nil,
+        reminderTime: String? = nil,
+        frequency: String? = nil,
+        dailyReminderEnabled: Bool? = nil,
+        missADayEnabled: Bool? = nil
+    ) {
+        self.pushEnabled = pushEnabled
+        self.timezone = timezone
+        self.reminderTime = reminderTime
+        self.frequency = frequency
+        self.dailyReminderEnabled = dailyReminderEnabled
+        self.missADayEnabled = missADayEnabled
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let pushEnabled { try container.encode(pushEnabled, forKey: .pushEnabled) }
+        if let timezone { try container.encode(timezone, forKey: .timezone) }
+        if let reminderTime { try container.encode(reminderTime, forKey: .reminderTime) }
+        if let frequency { try container.encode(frequency, forKey: .frequency) }
+        if let dailyReminderEnabled { try container.encode(dailyReminderEnabled, forKey: .dailyReminderEnabled) }
+        if let missADayEnabled { try container.encode(missADayEnabled, forKey: .missADayEnabled) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pushEnabled
+        case timezone
+        case reminderTime
+        case frequency
+        case dailyReminderEnabled
+        case missADayEnabled
     }
 }
 

@@ -6,6 +6,9 @@ import UserNotifications
 final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationCoordinator()
 
+    /// Set from `RootView` so notification taps can route into the app shell.
+    var onDeepLink: (@MainActor (URL) -> Void)?
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -60,6 +63,20 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .badge]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let userInfo = response.notification.request.content.userInfo
+        guard let deepLink = userInfo["deepLink"] as? String,
+              let url = URL(string: deepLink) else {
+            return
+        }
+        await MainActor.run {
+            onDeepLink?(url)
+        }
     }
 
     func unregisterCurrentDeviceToken() async throws {

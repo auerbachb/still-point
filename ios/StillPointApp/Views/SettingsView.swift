@@ -58,6 +58,8 @@ struct SettingsView: View {
 
                 AppBlockingSettingsView(manager: appVM.appBlockingManager)
 
+                NotificationSettingsView()
+
                 // Session display
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
                     Text("SESSION")
