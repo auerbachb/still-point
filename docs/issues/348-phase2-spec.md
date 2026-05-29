@@ -62,7 +62,7 @@ File separate bugs for anything broken beyond the model change.
 
 ## Phase 2 target state machine
 
-```
+```text
 States: MORNING_BLOCKED | EARNED_UNLOCKED  (per calendar day, device local TZ)
 
 MORNING_BLOCKED + session_completed_today     → EARNED_UNLOCKED
