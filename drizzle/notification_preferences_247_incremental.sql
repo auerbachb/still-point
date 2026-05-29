@@ -33,6 +33,28 @@ BEGIN
   END IF;
 END $$;
 
+-- Preview may have a partial apply without local_date; drop only when empty and mis-scoped.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'notification_dispatches'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'notification_dispatches'
+      AND column_name = 'local_date'
+  ) THEN
+    IF NOT EXISTS (SELECT 1 FROM notification_dispatches LIMIT 1) THEN
+      DROP TABLE notification_dispatches;
+    ELSE
+      RAISE EXCEPTION 'notification_dispatches exists without local_date and contains rows';
+    END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS "notification_dispatches" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
