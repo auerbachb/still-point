@@ -101,6 +101,25 @@ describe("sendFriendRequestNotification", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
+  test("sends the daily reminder APNs payload", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    const { sendDailyReminderNotification } = await import("./notifications");
+
+    await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
+
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Time for your sit",
+          body: "Take a few minutes for your daily practice.",
+        },
+        sound: "default",
+        "thread-id": "daily-reminder",
+      },
+      type: "daily_reminder",
+    });
+  });
+
   test("limits APNs sends to bounded batches", async () => {
     for (let i = 0; i < 7; i += 1) {
       tokenRows.push({ id: `dt-${i}`, token: `${i}`.repeat(64), apnsEnvironment: "development" });
