@@ -42,7 +42,7 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         }
     }
 
-    func requestAuthorizationAndRegister() async {
+    func requestAuthorizationAndRegisterAsync() async {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
