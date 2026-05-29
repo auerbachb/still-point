@@ -1,6 +1,25 @@
 -- Incremental DDL for notification preferences + dispatch ledger (issue #345).
 -- Preferred: apply schema with `npx drizzle-kit push` (see README).
 
+-- Preview DBs may have a partial apply (table exists without expected columns).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'notification_preferences'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'notification_preferences'
+      AND column_name = 'push_enabled'
+  ) THEN
+    DROP TABLE IF EXISTS "notification_dispatches" CASCADE;
+    DROP TABLE IF EXISTS "notification_preferences" CASCADE;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS "notification_preferences" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"push_enabled" boolean DEFAULT false NOT NULL,
