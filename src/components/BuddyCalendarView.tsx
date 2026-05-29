@@ -8,7 +8,7 @@ import {
   type BuddyCalendarListResponse,
   type BuddyCalendarSession,
 } from "@/lib/api";
-import { buddyColorFromUserId } from "@/lib/buddyCalendar";
+import { buddyColorFromUserId } from "@/lib/buddyCalendarColors";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 const labelStyle: React.CSSProperties = {
@@ -159,8 +159,8 @@ export function BuddyCalendarView({
   const visibleSessions = useMemo(() => {
     if (!data) return [];
     if (!showBuddyFilters || hiddenBuddyIds.size === 0) return data.sessions;
-    return data.sessions.filter((s) =>
-      s.buddyIds.some((id) => !hiddenBuddyIds.has(id)),
+    return data.sessions.filter(
+      (s) => !s.buddyIds.some((id) => hiddenBuddyIds.has(id)),
     );
   }, [data, showBuddyFilters, hiddenBuddyIds]);
 

@@ -3,83 +3,44 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppSubpageShell } from "@/components/AppSubpageShell";
+import { BuddyCalendarAuthGate } from "@/components/BuddyCalendarAuthGate";
 import { BuddyCalendarView } from "@/components/BuddyCalendarView";
-import { AuthScreen } from "@/components/AuthScreen";
-import { api, type User } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
-export default function BuddyPerBuddyCalendarPage() {
-  const params = useParams();
-  const buddyId = typeof params.id === "string" ? params.id : "";
-  const [user, setUser] = useState<User | null>(null);
+function PerBuddyCalendarContent({
+  buddyId,
+  userId,
+}: {
+  buddyId: string;
+  userId: string;
+}) {
   const [buddyUsername, setBuddyUsername] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [buddyLookupError, setBuddyLookupError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!buddyId) return;
     let cancelled = false;
+    setBuddyLookupError(null);
 
-    async function load() {
-      try {
-        const meRes = await fetch("/api/auth/me");
-        if (!meRes.ok) {
-          if (!cancelled) {
-            setUser(null);
-            setAuthChecked(true);
-          }
-          return;
-        }
-        const meData = await meRes.json();
+    api
+      .getFriends()
+      .then(({ friends }) => {
         if (cancelled) return;
-        setUser(meData.user ?? null);
+        const friend = friends.find((f) => f.id === buddyId);
+        setBuddyUsername(friend?.username ?? null);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setBuddyUsername(null);
+        setBuddyLookupError(
+          e instanceof ApiError ? e.message : "Could not load buddy name.",
+        );
+      });
 
-        if (buddyId && meData.user) {
-          const { friends } = await api.getFriends();
-          const friend = friends.find((f) => f.id === buddyId);
-          if (!cancelled) setBuddyUsername(friend?.username ?? null);
-        }
-      } catch {
-        if (!cancelled) setUser(null);
-      } finally {
-        if (!cancelled) setAuthChecked(true);
-      }
-    }
-
-    void load();
     return () => {
       cancelled = true;
     };
-  }, [buddyId]);
-
-  if (!authChecked) {
-    return (
-      <div
-        style={{
-          minHeight: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--fg-4)",
-        }}
-      >
-        Loading…
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div
-        style={{
-          minHeight: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "40px 20px",
-        }}
-      >
-        <AuthScreen onLogin={setUser} />
-      </div>
-    );
-  }
+  }, [buddyId, userId]);
 
   const title = buddyUsername
     ? `Calendar with ${buddyUsername}`
@@ -91,12 +52,37 @@ export default function BuddyPerBuddyCalendarPage() {
       backHref="/app/buddies/calendar"
       backLabel="All buddy sits"
     >
+      {buddyLookupError && (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 12px",
+            textAlign: "center",
+            fontSize: "12px",
+            color: "var(--fg-3)",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          }}
+        >
+          {buddyLookupError}
+        </p>
+      )}
       <BuddyCalendarView
         mode="perBuddy"
         buddyId={buddyId}
         buddyUsername={buddyUsername ?? undefined}
-        viewerUserId={user.id}
+        viewerUserId={userId}
       />
     </AppSubpageShell>
+  );
+}
+
+export default function BuddyPerBuddyCalendarPage() {
+  const params = useParams();
+  const buddyId = typeof params.id === "string" ? params.id : "";
+
+  return (
+    <BuddyCalendarAuthGate>
+      {(user) => <PerBuddyCalendarContent buddyId={buddyId} userId={user.id} />}
+    </BuddyCalendarAuthGate>
   );
 }

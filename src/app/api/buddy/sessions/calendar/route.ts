@@ -21,7 +21,11 @@ export async function GET(request: Request) {
       range = parseBuddyCalendarRange(new URL(request.url).searchParams);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
-      if (msg === "INVALID_FROM_DATE" || msg === "INVALID_TO_DATE") {
+      if (
+        msg === "INVALID_FROM_DATE" ||
+        msg === "INVALID_TO_DATE" ||
+        msg === "INVALID_DATE_RANGE"
+      ) {
         return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
       }
       throw e;

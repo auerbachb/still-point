@@ -8,6 +8,8 @@
  * Default window: last {@link BUDDY_CALENDAR_DEFAULT_DAYS} calendar days (#83-style scope).
  * Per-buddy views include only shared sits (not the other person's solo history).
  */
+import "server-only";
+
 import { db } from "@/db";
 import {
   buddySessions,
@@ -17,113 +19,22 @@ import {
 } from "@/db/schema";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import {
-  addDaysToIsoDate,
-  isValidSessionCalendarDate,
-} from "@/lib/sessionCalendar";
-import { and, eq, inArray } from "drizzle-orm";
+  type BuddyCalendarListResult,
+  type BuddyCalendarSession,
+  buddySessionCalendarDate,
+} from "@/lib/buddyCalendarRange";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
-/** Default lookback for buddy calendar APIs (matches #83-style history windows). */
-export const BUDDY_CALENDAR_DEFAULT_DAYS = 90;
-
-export const BUDDY_CALENDAR_MAX_LIMIT = 500;
-
-export type BuddyCalendarParticipant = {
-  userId: string;
-  username: string;
-};
-
-export type BuddyCalendarSession = {
-  id: string;
-  state: string;
-  durationSeconds: number;
-  /** ISO `YYYY-MM-DD` placement date for the calendar row. */
-  calendarDate: string;
-  scheduledStartAt: string | null;
-  startedAt: string | null;
-  participants: BuddyCalendarParticipant[];
-  /** Co-participant user ids excluding the viewer (for filters / color chips). */
-  buddyIds: string[];
-};
-
-export type BuddyCalendarListResult = {
-  sessions: BuddyCalendarSession[];
-  fromDate: string;
-  toDate: string;
-  hasMore: boolean;
-};
-
-const BUDDY_CALENDAR_PALETTE = [
-  "#5B8C7A",
-  "#7A6B8C",
-  "#8C7A5B",
-  "#5B6F8C",
-  "#8C5B6B",
-  "#6B8C5B",
-  "#8C6B5B",
-  "#5B8C8C",
-] as const;
-
-/** Deterministic accent color from buddy user id (stable across unified + per-buddy views). */
-export function buddyColorFromUserId(userId: string): string {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  }
-  return BUDDY_CALENDAR_PALETTE[hash % BUDDY_CALENDAR_PALETTE.length];
-}
-
-export function todayIsoDateUtc(): string {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(now.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/** Pick calendar placement date: started → scheduled → created (UTC day). */
-export function buddySessionCalendarDate(session: {
-  startedAt: Date | null;
-  scheduledStartAt: Date | null;
-  createdAt: Date;
-}): string {
-  const ts = session.startedAt ?? session.scheduledStartAt ?? session.createdAt;
-  const y = ts.getUTCFullYear();
-  const m = String(ts.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(ts.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-export function parseBuddyCalendarRange(searchParams: URLSearchParams): {
-  fromDate: string;
-  toDate: string;
-  limit: number;
-  offset: number;
-} {
-  const toDate =
-    searchParams.get("to")?.trim() ||
-    searchParams.get("toDate")?.trim() ||
-    todayIsoDateUtc();
-  if (!isValidSessionCalendarDate(toDate)) {
-    throw new Error("INVALID_TO_DATE");
-  }
-
-  const fromParam = searchParams.get("from")?.trim() || searchParams.get("fromDate")?.trim();
-  const fromDate = fromParam
-    ? fromParam
-    : addDaysToIsoDate(toDate, -(BUDDY_CALENDAR_DEFAULT_DAYS - 1));
-  if (!isValidSessionCalendarDate(fromDate)) {
-    throw new Error("INVALID_FROM_DATE");
-  }
-
-  const limitRaw = Number.parseInt(searchParams.get("limit") ?? "200", 10);
-  const offsetRaw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
-  const limit = Number.isFinite(limitRaw)
-    ? Math.min(Math.max(limitRaw, 1), BUDDY_CALENDAR_MAX_LIMIT)
-    : 200;
-  const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
-
-  return { fromDate, toDate, limit, offset };
-}
+export {
+  BUDDY_CALENDAR_DEFAULT_DAYS,
+  BUDDY_CALENDAR_MAX_LIMIT,
+  type BuddyCalendarListResult,
+  type BuddyCalendarParticipant,
+  type BuddyCalendarSession,
+  buddySessionCalendarDate,
+  parseBuddyCalendarRange,
+  todayIsoDateUtc,
+} from "@/lib/buddyCalendarRange";
 
 async function assertFriendship(userId: string, buddyId: string): Promise<boolean> {
   if (!isUuid(buddyId) || buddyId === userId) return false;
@@ -147,16 +58,35 @@ type SessionRow = {
   username: string;
 };
 
+function sessionPlacementDateSql() {
+  return sql<string>`to_char(
+    coalesce(
+      ${buddySessions.startedAt},
+      ${buddySessions.scheduledStartAt},
+      ${buddySessions.createdAt}
+    ) at time zone 'UTC',
+    'YYYY-MM-DD'
+  )`;
+}
+
 async function fetchParticipantRows(
   viewerUserId: string,
   buddyIdFilter: string | null,
+  fromDate: string,
+  toDate: string,
 ): Promise<SessionRow[]> {
+  const placementDate = sessionPlacementDateSql();
+
   const viewerSessionIds = db
     .select({ id: buddySessionParticipants.buddySessionId })
     .from(buddySessionParticipants)
     .where(eq(buddySessionParticipants.userId, viewerUserId));
 
-  const conditions = [inArray(buddySessions.id, viewerSessionIds)];
+  const conditions = [
+    inArray(buddySessions.id, viewerSessionIds),
+    sql`${placementDate} >= ${fromDate}`,
+    sql`${placementDate} <= ${toDate}`,
+  ];
 
   if (buddyIdFilter) {
     const buddySessionIds = db
@@ -227,25 +157,23 @@ function assembleSessions(
     }
   }
 
-  const sessions: BuddyCalendarSession[] = [];
+  const sessions: Array<BuddyCalendarSession & { sortTs: number }> = [];
   for (const entry of byId.values()) {
     entry.buddyIds = entry.participants
       .map((p) => p.userId)
       .filter((id) => id !== viewerUserId);
-    const { sortTs: _sortTs, ...rest } = entry;
-    sessions.push(rest);
+    sessions.push(entry);
   }
 
   sessions.sort((a, b) => {
     if (a.calendarDate !== b.calendarDate) {
       return b.calendarDate.localeCompare(a.calendarDate);
     }
-    const aTs = a.startedAt ?? a.scheduledStartAt ?? "";
-    const bTs = b.startedAt ?? b.scheduledStartAt ?? "";
-    return bTs.localeCompare(aTs);
+    if (b.sortTs !== a.sortTs) return b.sortTs - a.sortTs;
+    return b.id.localeCompare(a.id);
   });
 
-  return sessions;
+  return sessions.map(({ sortTs: _sortTs, ...rest }) => rest);
 }
 
 /**
@@ -256,7 +184,12 @@ export async function listBuddyCalendarSessions(
   viewerUserId: string,
   range: { fromDate: string; toDate: string; limit: number; offset: number },
 ): Promise<BuddyCalendarListResult> {
-  const rows = await fetchParticipantRows(viewerUserId, null);
+  const rows = await fetchParticipantRows(
+    viewerUserId,
+    null,
+    range.fromDate,
+    range.toDate,
+  );
   const filtered = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
   const slice = filtered.slice(range.offset, range.offset + range.limit);
   const hasMore = range.offset + slice.length < filtered.length;
@@ -286,7 +219,12 @@ export async function listBuddyCalendarSessionsForBuddy(
     return { error: "NOT_FRIEND" };
   }
 
-  const rows = await fetchParticipantRows(viewerUserId, buddyId);
+  const rows = await fetchParticipantRows(
+    viewerUserId,
+    buddyId,
+    range.fromDate,
+    range.toDate,
+  );
   const filtered = assembleSessions(rows, viewerUserId, range.fromDate, range.toDate);
   const slice = filtered.slice(range.offset, range.offset + range.limit);
   const hasMore = range.offset + slice.length < filtered.length;

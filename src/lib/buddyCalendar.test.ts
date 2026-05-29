@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
+import { buddyColorFromUserId } from "./buddyCalendarColors";
 import {
   BUDDY_CALENDAR_DEFAULT_DAYS,
-  buddyColorFromUserId,
   buddySessionCalendarDate,
   parseBuddyCalendarRange,
-} from "./buddyCalendar";
+} from "./buddyCalendarRange";
 import { addDaysToIsoDate } from "./sessionCalendar";
 
 describe("buddyColorFromUserId", () => {
@@ -59,5 +59,13 @@ describe("parseBuddyCalendarRange", () => {
     expect(() =>
       parseBuddyCalendarRange(new URLSearchParams({ to: "not-a-date" })),
     ).toThrow("INVALID_TO_DATE");
+  });
+
+  test("rejects reversed from/to range", () => {
+    expect(() =>
+      parseBuddyCalendarRange(
+        new URLSearchParams({ from: "2025-06-01", to: "2025-01-01" }),
+      ),
+    ).toThrow("INVALID_DATE_RANGE");
   });
 });
