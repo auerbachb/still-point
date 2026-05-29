@@ -6,6 +6,7 @@ import {
   assertBuddyFriendshipIfRequired,
   bumpBuddyRevision,
   reconcileBuddySession,
+  syncBuddySessionDurationForParticipants,
 } from "@/lib/buddySession";
 import {
   GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
           lastSeenAt: now,
         });
       }
+      await syncBuddySessionDurationForParticipants(session.id);
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
       const calendarSync = await syncCalendarBestEffort(session, auth.userId);

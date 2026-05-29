@@ -10,10 +10,9 @@ import {
   users,
   friendships,
 } from "@/db/schema";
-import { durationForDay } from "@/lib/constants";
 import { deleteRoom } from "@/lib/daily";
 import { orderedUserPair } from "@/lib/friends";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export type BuddySessionState =
   | "waiting"
@@ -22,8 +21,51 @@ export type BuddySessionState =
   | "completed"
   | "abandoned";
 
-export function buddyDurationForDay(currentDay: number): number {
-  return durationForDay(currentDay);
+export {
+  buddyDurationForDay,
+  BUDDY_SESSION_LENGTH_EXPLAINER,
+  normalizedBuddySessionDurationSeconds,
+} from "@/lib/buddySessionDuration";
+
+import { normalizedBuddySessionDurationSeconds } from "@/lib/buddySessionDuration";
+
+/**
+ * Recompute `durationSeconds` from active lobby participants. Only updates waiting/ready_check sessions.
+ */
+export async function syncBuddySessionDurationForParticipants(
+  sessionId: string,
+): Promise<number | null> {
+  const rows = await db
+    .select({ currentDay: users.currentDay })
+    .from(buddySessionParticipants)
+    .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
+    .where(
+      and(
+        eq(buddySessionParticipants.buddySessionId, sessionId),
+        isNull(buddySessionParticipants.leftAt),
+      ),
+    );
+
+  if (rows.length === 0) return null;
+
+  const durationSeconds = normalizedBuddySessionDurationSeconds(
+    rows.map((row) => row.currentDay),
+  );
+
+  await db
+    .update(buddySessions)
+    .set({
+      durationSeconds,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(buddySessions.id, sessionId),
+        inArray(buddySessions.state, ["waiting", "ready_check"]),
+      ),
+    );
+
+  return durationSeconds;
 }
 
 export async function assertBuddyFriendshipIfRequired(

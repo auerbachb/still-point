@@ -31,6 +31,12 @@ struct BuddyWaitingRoomView: View {
                         .padding(.horizontal, SPSpacing.s4)
                 }
 
+                Text("Buddy sits use the shortest of everyone's current sit length (at least 1 minute). The group timer is set automatically—you can't choose a longer session.")
+                    .font(SPFont.serif(15, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg2))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SPSpacing.s4)
+
                 waitingStatusCard
                 participantsList
 
