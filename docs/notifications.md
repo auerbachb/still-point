@@ -23,7 +23,7 @@ flowchart LR
 | `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz` |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 
-Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_incremental.sql`).
+Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_345_incremental.sql`).
 
 ## API
 
