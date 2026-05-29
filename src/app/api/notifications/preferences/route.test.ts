@@ -129,6 +129,20 @@ describe("/api/notifications/preferences", () => {
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
+  test("PATCH rejects partial quiet hours updates", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ quietHoursStart: "22:00" }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(400);
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
   test("GET returns 401 when unauthenticated", async () => {
     getCurrentUser.mockResolvedValue(null);
     const { GET } = await import("./route");

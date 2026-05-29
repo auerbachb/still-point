@@ -18,6 +18,16 @@ public actor APIClient {
     private let uiTestConfig: UITestConfig?
     private var uiTestStore: UITestStore?
     private let uiTestStoreDefaultsKey = "StillPoint.UITest.Store"
+    private var uiTestNotificationPreferences = NotificationPreferencesDTO(
+        pushEnabled: false,
+        dailyReminderEnabled: false,
+        missADayEnabled: false,
+        dailyReminderTime: "09:00",
+        dailyReminderFrequency: .daily,
+        quietHoursStart: nil,
+        quietHoursEnd: nil,
+        tz: TimeZone.current.identifier
+    )
 
     private init() {
         #if DEBUG
@@ -295,26 +305,20 @@ public actor APIClient {
 
     public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
         if uiTestConfig != nil {
-            return NotificationPreferencesDTO(
-                pushEnabled: false,
-                dailyReminderEnabled: false,
-                missADayEnabled: false,
-                dailyReminderTime: "09:00",
-                dailyReminderFrequency: .daily,
-                quietHoursStart: nil,
-                quietHoursEnd: nil,
-                tz: TimeZone.current.identifier
-            )
+            return uiTestNotificationPreferences
         }
         let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
         return response.preferences
     }
 
-    public func updateNotificationPreferences(_ patch: NotificationPreferencesPatch) async throws -> NotificationPreferencesDTO {
-        if uiTestConfig != nil {
-            return try await getNotificationPreferences()
+    public func updateNotificationPreferences(_ preferencesPatch: NotificationPreferencesPatch) async throws -> NotificationPreferencesDTO {
+        if let updated = try uiTestUpdateNotificationPreferences(preferencesPatch) {
+            return updated
         }
-        let response: NotificationPreferencesResponse = try await patch("/api/notifications/preferences", body: patch)
+        let response: NotificationPreferencesResponse = try await patch(
+            "/api/notifications/preferences",
+            body: preferencesPatch
+        )
         return response.preferences
     }
 
@@ -724,6 +728,47 @@ public actor APIClient {
         uiTestStore = store
         persistUITestStore()
         return store.user
+    }
+
+    private func uiTestUpdateNotificationPreferences(
+        _ patch: NotificationPreferencesPatch
+    ) throws -> NotificationPreferencesDTO? {
+        guard uiTestConfig != nil else { return nil }
+        guard let store = uiTestStore else {
+            throw APIError(status: 0, message: "UI test store is unavailable")
+        }
+        try ensureUITestAuthenticated(store: store)
+
+        let current = uiTestNotificationPreferences
+        var quietStart = current.quietHoursStart
+        var quietEnd = current.quietHoursEnd
+        if let quietHoursStart = patch.quietHoursStart {
+            switch quietHoursStart {
+            case .none: quietStart = nil
+            case .some(let value): quietStart = value
+            }
+        }
+        if let quietHoursEnd = patch.quietHoursEnd {
+            switch quietHoursEnd {
+            case .none: quietEnd = nil
+            case .some(let value): quietEnd = value
+            }
+        }
+
+        let next = NotificationPreferencesDTO(
+            pushEnabled: patch.pushEnabled ?? current.pushEnabled,
+            dailyReminderEnabled: patch.dailyReminderEnabled ?? current.dailyReminderEnabled,
+            missADayEnabled: patch.missADayEnabled ?? current.missADayEnabled,
+            dailyReminderTime: patch.dailyReminderTime ?? current.dailyReminderTime,
+            dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
+            quietHoursStart: quietStart,
+            quietHoursEnd: quietEnd,
+            tz: patch.tz ?? current.tz,
+            updatedAt: current.updatedAt
+        )
+
+        uiTestNotificationPreferences = next
+        return next
     }
 
     private func ensureUITestAuthenticated(store: UITestStore) throws {

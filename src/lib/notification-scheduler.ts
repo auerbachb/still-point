@@ -48,7 +48,8 @@ function getLocalParts(date: Date, timeZone: string): LocalParts {
   };
 
   const dateKey = `${year}-${month}-${day}`;
-  const weekKey = `${year}-W${isoWeekFromDateKey(dateKey)}`;
+  const { isoYear, week } = isoWeekPartsFromDateKey(dateKey);
+  const weekKey = `${isoYear}-W${week}`;
 
   return {
     dateKey,
@@ -60,14 +61,15 @@ function getLocalParts(date: Date, timeZone: string): LocalParts {
   };
 }
 
-function isoWeekFromDateKey(dateKey: string): string {
+export function isoWeekPartsFromDateKey(dateKey: string): { isoYear: number; week: string } {
   const [y, m, d] = dateKey.split("-").map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   const dayNum = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const isoYear = date.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
   const weekNo = Math.ceil((((date.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
-  return String(weekNo).padStart(2, "0");
+  return { isoYear, week: String(weekNo).padStart(2, "0") };
 }
 
 function parseReminderMinutes(time: string): number {
@@ -76,8 +78,8 @@ function parseReminderMinutes(time: string): number {
 }
 
 function isWithinCronWindow(localMinutes: number, reminderMinutes: number): boolean {
-  const delta = (localMinutes - reminderMinutes + 24 * 60) % (24 * 60);
-  return delta < CRON_WINDOW_MINUTES;
+  const delta = localMinutes - reminderMinutes;
+  return delta >= 0 && delta < CRON_WINDOW_MINUTES;
 }
 
 function isInQuietHours(

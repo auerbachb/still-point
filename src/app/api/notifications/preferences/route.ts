@@ -8,6 +8,7 @@ import {
   isValidFrequency,
   isValidReminderTime,
   isValidTimezone,
+  asNotificationPreferencesRow,
   serializeNotificationPreferences,
 } from "@/lib/notification-preferences";
 import { readJsonObject } from "@/lib/readJsonObject";
@@ -105,6 +106,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "No supported preference fields provided" }, { status: 400 });
     }
 
+    const quietStartTouched = Object.prototype.hasOwnProperty.call(updates, "quietHoursStart");
+    const quietEndTouched = Object.prototype.hasOwnProperty.call(updates, "quietHoursEnd");
+    if (quietStartTouched !== quietEndTouched) {
+      return NextResponse.json(
+        { error: "quietHoursStart and quietHoursEnd must be updated together" },
+        { status: 400 },
+      );
+    }
+
     await getOrCreateNotificationPreferences(auth.userId);
 
     const [updated] = await db
@@ -125,10 +135,14 @@ export async function PATCH(request: NextRequest) {
           updatedAt: now,
         })
         .returning();
-      return NextResponse.json({ preferences: serializeNotificationPreferences(inserted) });
+      return NextResponse.json({
+        preferences: serializeNotificationPreferences(asNotificationPreferencesRow(inserted)),
+      });
     }
 
-    return NextResponse.json({ preferences: serializeNotificationPreferences(updated) });
+    return NextResponse.json({
+      preferences: serializeNotificationPreferences(asNotificationPreferencesRow(updated)),
+    });
   } catch (error) {
     console.error("Notification preferences PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

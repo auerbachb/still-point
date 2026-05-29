@@ -96,6 +96,13 @@ describe("notification scheduler", () => {
     expect(second.sent).toBe(0);
   });
 
+  test("isWithinCronWindow does not wrap across midnight", async () => {
+    const { isoWeekPartsFromDateKey } = await import("./notification-scheduler");
+    const lateDecember = isoWeekPartsFromDateKey("2025-12-29");
+    expect(lateDecember.isoYear).toBe(2026);
+    expect(lateDecember.week).toBe("01");
+  });
+
   test("dispatchDueNotifications skips quiet hours", async () => {
     selectWhere.mockResolvedValue([
       {

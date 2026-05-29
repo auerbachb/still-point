@@ -49,6 +49,16 @@ export function isValidFrequency(value: string): value is DailyReminderFrequency
   return frequencyValues.has(value as DailyReminderFrequency);
 }
 
+export function asNotificationPreferencesRow(
+  row: typeof notificationPreferences.$inferSelect,
+): NotificationPreferencesRow {
+  const frequency = row.dailyReminderFrequency;
+  if (!isValidFrequency(frequency)) {
+    throw new Error(`Invalid dailyReminderFrequency: ${frequency}`);
+  }
+  return { ...row, dailyReminderFrequency: frequency };
+}
+
 export function serializeNotificationPreferences(row: NotificationPreferencesRow) {
   return {
     pushEnabled: row.pushEnabled,

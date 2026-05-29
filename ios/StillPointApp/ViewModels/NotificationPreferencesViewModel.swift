@@ -17,8 +17,6 @@ final class NotificationPreferencesViewModel {
     var quietStartTime = Calendar.current.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
     var quietEndTime = Calendar.current.date(from: DateComponents(hour: 7, minute: 0)) ?? Date()
 
-    private var loaded = false
-
     func load() async {
         guard !isLoading else { return }
         isLoading = true
@@ -28,7 +26,7 @@ final class NotificationPreferencesViewModel {
         do {
             let prefs = try await APIClient.shared.getNotificationPreferences()
             apply(prefs)
-            loaded = true
+            await syncTimezoneIfNeeded(prefs)
         } catch {
             errorMessage = "Could not load notification settings."
         }
@@ -41,7 +39,7 @@ final class NotificationPreferencesViewModel {
         }
         await persist(patch: NotificationPreferencesPatch(
             pushEnabled: isEnabled,
-            tz: loaded ? nil : TimeZone.current.identifier
+            tz: TimeZone.current.identifier
         ))
     }
 
@@ -70,8 +68,8 @@ final class NotificationPreferencesViewModel {
         } else {
             await persist(
                 patch: NotificationPreferencesPatch(
-                    quietHoursStart: .none,
-                    quietHoursEnd: .none
+                    quietHoursStart: .some(nil),
+                    quietHoursEnd: .some(nil)
                 )
             )
         }
@@ -87,8 +85,16 @@ final class NotificationPreferencesViewModel {
         )
     }
 
+    private func syncTimezoneIfNeeded(_ prefs: NotificationPreferencesDTO) async {
+        let deviceTz = TimeZone.current.identifier
+        guard prefs.tz != deviceTz else { return }
+        await persist(patch: NotificationPreferencesPatch(tz: deviceTz))
+    }
+
     private func persist(patch: NotificationPreferencesPatch) async {
-        guard !isSaving else { return }
+        while isSaving {
+            await Task.yield()
+        }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
