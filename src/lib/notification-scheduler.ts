@@ -2,6 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDispatches, notificationPreferences } from "@/db/schema";
 import type { DailyReminderFrequency } from "@/lib/notification-preferences";
+import {
+  hasMissADayDispatchForDate,
+  loadUserStreak,
+  userCompletedSessionOnDate,
+} from "@/lib/notifications/daily-reminder";
 import { sendDailyReminderNotification } from "@/lib/notifications";
 
 const CRON_WINDOW_MINUTES = 5;
@@ -78,8 +83,9 @@ function parseReminderMinutes(time: string): number {
 }
 
 function isWithinCronWindow(localMinutes: number, reminderMinutes: number): boolean {
-  const delta = localMinutes - reminderMinutes;
-  return delta >= 0 && delta < CRON_WINDOW_MINUTES;
+  const dayMinutes = 24 * 60;
+  const delta = (localMinutes - reminderMinutes + dayMinutes) % dayMinutes;
+  return delta < CRON_WINDOW_MINUTES;
 }
 
 function isInQuietHours(
@@ -180,6 +186,16 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
         continue;
       }
 
+      if (await userCompletedSessionOnDate(prefs.userId, local.dateKey)) {
+        skipped += 1;
+        continue;
+      }
+
+      if (await hasMissADayDispatchForDate(prefs.userId, local.dateKey)) {
+        skipped += 1;
+        continue;
+      }
+
       const windowKey = windowKeyForFrequency(frequency, local);
       const claimed = await claimNotificationDispatch({
         userId: prefs.userId,
@@ -193,7 +209,8 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       try {
-        await sendDailyReminderNotification({ recipientUserId: prefs.userId });
+        const streak = await loadUserStreak(prefs.userId, local.dateKey);
+        await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
         sent += 1;
       } catch (sendError) {
         console.error(`Failed to send daily reminder to user ${prefs.userId}:`, sendError);

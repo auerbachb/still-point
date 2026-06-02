@@ -110,13 +110,14 @@ describe("sendFriendRequestNotification", () => {
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
       aps: {
         alert: {
-          title: "Time for your sit",
-          body: "Take a few minutes for your daily practice.",
+          title: "Still Point",
+          body: "Time for a moment of stillness. Tap to begin.",
         },
         sound: "default",
         "thread-id": "daily-reminder",
       },
       type: "daily_reminder",
+      deepLink: "stillpoint://home",
     });
   });
 

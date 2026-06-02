@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deviceTokens } from "@/db/schema";
 import { type ApnsEnvironment, type ApnsPayload, sendApnsNotification } from "@/lib/apns";
+import { buildDailyReminderPayload } from "@/lib/notifications/daily-reminder";
 
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
 const PUSH_SEND_CONCURRENCY = 3;
@@ -52,20 +53,11 @@ export async function sendPushNotificationToUser(params: {
 
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
+  streak?: number;
 }): Promise<void> {
   await sendPushNotificationToUser({
     recipientUserId: params.recipientUserId,
-    payload: {
-      aps: {
-        alert: {
-          title: "Time for your sit",
-          body: "Take a few minutes for your daily practice.",
-        },
-        sound: "default",
-        "thread-id": "daily-reminder",
-      },
-      type: "daily_reminder",
-    },
+    payload: buildDailyReminderPayload(params.streak ?? 0),
   });
 }
 

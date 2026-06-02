@@ -206,6 +206,9 @@ final class AppViewModel {
     }
 
     func handleIncomingURL(_ url: URL) {
+        if handleNotificationDeepLink(url) {
+            return
+        }
         guard let token = extractBuddyToken(from: url) else { return }
         if currentUser == nil {
             pendingBuddyInviteToken = token
@@ -271,6 +274,22 @@ final class AppViewModel {
         } catch {
             buddyInviteError = "Could not open buddy invite."
         }
+    }
+
+    func openHomeFromNotification() {
+        guard currentUser != nil else { return }
+        if isInSession {
+            return
+        }
+        currentView = .home
+    }
+
+    private func handleNotificationDeepLink(_ url: URL) -> Bool {
+        let scheme = (url.scheme ?? "").lowercased()
+        let host = (url.host ?? "").lowercased()
+        guard scheme == "stillpoint", host == "home" else { return false }
+        openHomeFromNotification()
+        return true
     }
 
     private func extractBuddyToken(from url: URL) -> String? {
