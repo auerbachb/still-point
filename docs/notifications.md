@@ -1,94 +1,83 @@
-# Push notifications (iOS)
+# Notifications
 
-Still Point delivers iOS push notifications through Apple Push Notification service (APNs). Transport is implemented in `src/lib/apns.ts` and `src/lib/notifications.ts` (see PR #273).
-
-This document covers **preferences**, the **scheduler**, and how to add new notification types.
+Still Point delivers remote push notifications via APNs. User-facing schedules and opt-in live in `notification_preferences`; the server dispatches on a cron and records sends in `notification_dispatches` for idempotency.
 
 ## Architecture
 
-1. Users opt in and configure timing in **Settings → Notifications** (iOS) backed by `notification_preferences`.
-2. A scheduler invokes `GET /api/cron/notifications` every five minutes (see **Scheduling** below).
-3. The scheduler evaluates due notifications per user (local timezone, quiet hours, frequency, idempotency).
-4. Eligible sends go through `sendPushNotificationToUser()` → APNs.
+```mermaid
+flowchart LR
+  iOS[Settings UI] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
+  PrefsAPI --> NP[(notification_preferences)]
+  Cron["/api/cron/dispatch-notifications"] --> Scheduler[notification-scheduler]
+  Scheduler --> NP
+  Scheduler --> Ledger[(notification_dispatches)]
+  Scheduler --> Send[notifications.ts]
+  Send --> APNs[apns.ts]
+  Send --> DT[(device_tokens)]
+```
 
-Cron requests must include `Authorization: Bearer <CRON_SECRET>`. Mirror the same secret locally to test.
+## Database
 
-## Scheduling
+| Table | Purpose |
+|-------|---------|
+| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz` |
+| `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 
-The scheduler route is designed for a **5-minute** cadence. Vercel Hobby only allows **once-per-day** built-in crons, so `vercel.json` does not register a Vercel cron (deploy would fail on `*/5 * * * *`).
-
-Production options:
-
-1. **Vercel Pro** — add to `vercel.json`: `{ "path": "/api/cron/notifications", "schedule": "*/5 * * * *" }`
-2. **External ping** — GitHub Actions, Runhooks, etc. `GET https://<app>/api/cron/notifications` with `Authorization: Bearer $CRON_SECRET` every 5 minutes
-3. **Manual / preview** — `curl` locally (see below)
-
-Until a 5-minute trigger is configured, daily reminders will not fire in production automatically.
-
-## Database: `notification_preferences`
-
-| Column | Purpose |
-|--------|---------|
-| `enabled` | Master push opt-in |
-| `daily_reminder_enabled` | Per-type toggle for daily reminder (#346) |
-| `preferred_time` | Local `HH:MM` reminder time |
-| `frequency` | `daily`, `every_other_day`, or `weekly` |
-| `quiet_hours_start` / `quiet_hours_end` | Optional local quiet window |
-| `timezone` | IANA timezone for all local-time checks |
-| `last_daily_reminder_sent_at` | Idempotency cursor for daily reminder |
-| `last_miss_a_day_sent_at` | De-dup with miss-a-day (#247) |
-
-One row per user (`user_id` unique). Created on first PATCH from the app.
-
-Migration: `drizzle/notification_preferences_incremental.sql` (applied via `npm run db:migrate`).
+Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_345_incremental.sql`).
 
 ## API
 
 ### `GET /api/notifications/preferences`
 
-Returns `{ preferences: { enabled, dailyReminderEnabled, preferredTime, frequency, quietHoursStart, quietHoursEnd, timezone }, persisted }`. Defaults when no row exists (`persisted: false`).
+Returns defaults (created on first read) for the authenticated user.
 
 ### `PATCH /api/notifications/preferences`
 
-Partial update of the same fields. Requires session auth (`getCurrentUser()`).
+Partial update. Supported fields:
 
-## Daily reminder (#346)
+- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled` (boolean)
+- `dailyReminderTime`, `quietHoursStart`, `quietHoursEnd` (`HH:MM` 24h; quiet hours nullable)
+- `dailyReminderFrequency`: `daily` | `every_other` | `weekly`
+- `tz`: IANA timezone string
 
-Logic lives in `src/lib/notifications/daily-reminder.ts` and is invoked from `src/lib/notificationScheduler.ts`.
+## Scheduler
 
-A user receives a daily reminder when:
+- **Route:** `GET|POST /api/cron/dispatch-notifications`
+- **Schedule:** every 5 minutes (`vercel.json` crons)
+- **Auth:** `Authorization: Bearer $CRON_SECRET` (required in production)
+- **Window:** matches users whose local reminder time falls within the last 5 minutes
+- **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
+- **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
 
-- Master `enabled` and `dailyReminderEnabled` are true
-- Local time is within the scheduler tick of `preferredTime` (5-minute window)
-- Not in quiet hours
-- Has **not** completed any session today (`session_date` in user TZ, `completed = true`)
-- `last_daily_reminder_sent_at` is not today (user TZ)
-- `last_miss_a_day_sent_at` is not today (de-dup with #247)
-- Frequency rule passes (`every_other_day` / `weekly`)
+## Adding a notification type
 
-Copy:
+1. **Preference flag** — Add a boolean column on `notification_preferences` (migration + schema + PATCH validation).
+2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` using `sendPushNotificationToUser` with a distinct `type` in the payload.
+3. **Scheduler branch** — In `src/lib/notification-scheduler.ts`, select eligible users, compute a stable `window_key`, call `claimNotificationDispatch`, then the send helper.
+4. **iOS** — Expose the flag in Settings (PATCH preferences) and handle the payload `type` when the user taps the notification.
+5. **Tests** — Unit tests for preference validation, scheduler gating, and idempotent `claimNotificationDispatch`.
 
-- Default: `Time for a moment of stillness. Tap to begin.`
-- Streak > 3: `Day {N} of your streak — keep it going.`
+### Daily reminder (#346)
 
-Payload includes `type: "daily_reminder"` and `deepLink: "stillpoint://home"`. iOS opens the home screen from `PushNotificationCoordinator`.
+- Type: `daily_reminder`
+- Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
+- Helper: `sendDailyReminderNotification` (streak-aware copy + `deepLink: stillpoint://home`)
+- Gated by: `push_enabled` && `daily_reminder_enabled`, not in quiet hours, frequency rule, no completed session today, no `miss_a_day` dispatch for the same local date
+- iOS: `PushNotificationCoordinator` queues cold-start deep links until `RootView` wires `deepLinkHandler`
 
-## Adding a new notification type
+## iOS
 
-1. Add a boolean column (and optional `last_*_sent_at`) to `notification_preferences` in `src/db/schema.ts`.
-2. Add an idempotent SQL migration under `drizzle/`.
-3. Expose the toggle in `NotificationSettingsView` and PATCH validation.
-4. Add eligibility + payload builders under `src/lib/notifications/`.
-5. Register dispatch in `runNotificationScheduler()` with transactional idempotency.
-6. Handle tap / deep link in `PushNotificationCoordinator` (iOS).
+- Settings → **NOTIFICATIONS**: master push toggle (triggers system permission on first opt-in), daily reminder toggle, time picker, frequency picker, quiet hours.
+- `PushNotificationCoordinator.requestAuthorizationAndRegister()` runs when the user enables push; login only re-registers the device token if permission was already granted.
+- Device tokens: `POST|DELETE /api/device-token` (unchanged from #203).
 
-Do **not** log device tokens or notification bodies containing user content (see `.claude/rules/safety.md`).
+## Security
 
-## Local testing
+- Never log raw APNs device tokens.
+- Cron endpoint must not be callable without `CRON_SECRET` in production.
 
-```bash
-export CRON_SECRET=local-dev-secret
-curl -s -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/notifications
-```
+## Related issues
 
-Real-device verification is required before merge; the Simulator is unreliable for push delivery.
+- #203 — APNs + `device_tokens`
+- #346 — Daily reminder product behavior (builds on this foundation)
+- #347 — Miss-a-day notifications

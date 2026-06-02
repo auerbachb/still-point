@@ -17,8 +17,17 @@ public actor APIClient {
     private let session: URLSession
     private let uiTestConfig: UITestConfig?
     private var uiTestStore: UITestStore?
-    private var uiTestNotificationPrefs: NotificationPreferencesDTO?
     private let uiTestStoreDefaultsKey = "StillPoint.UITest.Store"
+    private var uiTestNotificationPreferences = NotificationPreferencesDTO(
+        pushEnabled: false,
+        dailyReminderEnabled: false,
+        missADayEnabled: false,
+        dailyReminderTime: "09:00",
+        dailyReminderFrequency: .daily,
+        quietHoursStart: nil,
+        quietHoursEnd: nil,
+        tz: TimeZone.current.identifier
+    )
 
     private init() {
         #if DEBUG
@@ -294,56 +303,23 @@ public actor APIClient {
 
     // MARK: - Notification preferences
 
-    public func getNotificationPreferences() async throws -> NotificationPreferencesResponse {
+    public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
         if uiTestConfig != nil {
-            if let cached = uiTestNotificationPrefs {
-                return NotificationPreferencesResponse(preferences: cached, persisted: true)
-            }
-            return uiTestNotificationPreferencesResponse()
+            return uiTestNotificationPreferences
         }
-        return try await get("/api/notifications/preferences")
+        let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
+        return response.preferences
     }
 
-    public func updateNotificationPreferences(
-        _ request: UpdateNotificationPreferencesRequest
-    ) async throws -> NotificationPreferencesResponse {
-        if uiTestConfig != nil {
-            let response = uiTestNotificationPreferencesResponse(
-                applying: request,
-                persisted: true
-            )
-            uiTestNotificationPrefs = response.preferences
-            return response
+    public func updateNotificationPreferences(_ preferencesPatch: NotificationPreferencesPatch) async throws -> NotificationPreferencesDTO {
+        if let updated = try uiTestUpdateNotificationPreferences(preferencesPatch) {
+            return updated
         }
-        return try await patch(
+        let response: NotificationPreferencesResponse = try await patch(
             "/api/notifications/preferences",
-            body: request
+            body: preferencesPatch
         )
-    }
-
-    private func uiTestNotificationPreferencesResponse(
-        applying request: UpdateNotificationPreferencesRequest? = nil,
-        persisted: Bool = false
-    ) -> NotificationPreferencesResponse {
-        let base = uiTestNotificationPrefs ?? NotificationPreferencesDTO(
-            enabled: false,
-            dailyReminderEnabled: true,
-            preferredTime: "09:00",
-            frequency: "daily",
-            quietHoursStart: nil,
-            quietHoursEnd: nil,
-            timezone: TimeZone.current.identifier
-        )
-        let prefs = NotificationPreferencesDTO(
-            enabled: request?.enabled ?? base.enabled,
-            dailyReminderEnabled: request?.dailyReminderEnabled ?? base.dailyReminderEnabled,
-            preferredTime: request?.preferredTime ?? base.preferredTime,
-            frequency: request?.frequency ?? base.frequency,
-            quietHoursStart: request?.quietHoursStart ?? base.quietHoursStart,
-            quietHoursEnd: request?.quietHoursEnd ?? base.quietHoursEnd,
-            timezone: request?.timezone ?? base.timezone
-        )
-        return NotificationPreferencesResponse(preferences: prefs, persisted: persisted)
+        return response.preferences
     }
 
     // MARK: - Buddy Sessions
@@ -752,6 +728,47 @@ public actor APIClient {
         uiTestStore = store
         persistUITestStore()
         return store.user
+    }
+
+    private func uiTestUpdateNotificationPreferences(
+        _ patch: NotificationPreferencesPatch
+    ) throws -> NotificationPreferencesDTO? {
+        guard uiTestConfig != nil else { return nil }
+        guard let store = uiTestStore else {
+            throw APIError(status: 0, message: "UI test store is unavailable")
+        }
+        try ensureUITestAuthenticated(store: store)
+
+        let current = uiTestNotificationPreferences
+        var quietStart = current.quietHoursStart
+        var quietEnd = current.quietHoursEnd
+        if let quietHoursStart = patch.quietHoursStart {
+            switch quietHoursStart {
+            case .none: quietStart = nil
+            case .some(let value): quietStart = value
+            }
+        }
+        if let quietHoursEnd = patch.quietHoursEnd {
+            switch quietHoursEnd {
+            case .none: quietEnd = nil
+            case .some(let value): quietEnd = value
+            }
+        }
+
+        let next = NotificationPreferencesDTO(
+            pushEnabled: patch.pushEnabled ?? current.pushEnabled,
+            dailyReminderEnabled: patch.dailyReminderEnabled ?? current.dailyReminderEnabled,
+            missADayEnabled: patch.missADayEnabled ?? current.missADayEnabled,
+            dailyReminderTime: patch.dailyReminderTime ?? current.dailyReminderTime,
+            dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
+            quietHoursStart: quietStart,
+            quietHoursEnd: quietEnd,
+            tz: patch.tz ?? current.tz,
+            updatedAt: current.updatedAt
+        )
+
+        uiTestNotificationPreferences = next
+        return next
     }
 
     private func ensureUITestAuthenticated(store: UITestStore) throws {

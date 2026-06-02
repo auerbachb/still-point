@@ -101,6 +101,26 @@ describe("sendFriendRequestNotification", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
+  test("sends the daily reminder APNs payload", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    const { sendDailyReminderNotification } = await import("./notifications");
+
+    await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
+
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Time for a moment of stillness. Tap to begin.",
+        },
+        sound: "default",
+        "thread-id": "daily-reminder",
+      },
+      type: "daily_reminder",
+      deepLink: "stillpoint://home",
+    });
+  });
+
   test("limits APNs sends to bounded batches", async () => {
     for (let i = 0; i < 7; i += 1) {
       tokenRows.push({ id: `dt-${i}`, token: `${i}`.repeat(64), apnsEnvironment: "development" });

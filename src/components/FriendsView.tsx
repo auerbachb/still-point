@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { api, ApiError, type FriendPublicUser, type FriendRequestRow } from "@/lib/api";
 
@@ -314,7 +315,28 @@ export function FriendsView() {
       </div>
 
       <div style={{ ...cardStyle, gap: "16px" }}>
-        <div style={labelStyle}>Your friends</div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+          }}
+        >
+          <div style={labelStyle}>Your friends</div>
+          <Link
+            href="/app/buddies/calendar"
+            style={{
+              ...btnOutline,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            Buddy calendar
+          </Link>
+        </div>
         {loading ? (
           <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>Loading…</span>
         ) : friends.length === 0 ? (
@@ -322,16 +344,39 @@ export function FriendsView() {
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
             {friends.map((f) => (
-              <li key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                <span style={{ color: "var(--fg)" }}>{f.username}</span>
-                <button
-                  type="button"
-                  disabled={actionId === f.id}
-                  onClick={() => unfriend(f.id)}
-                  style={{ ...btnOutline, fontSize: "10px" }}
-                >
-                  Remove
-                </button>
+              <li
+                key={f.id}
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                }}
+              >
+                <span style={{ color: "var(--fg)", flex: "1 1 120px" }}>{f.username}</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  <Link
+                    href={`/app/buddies/${f.id}/calendar`}
+                    style={{
+                      ...btnOutline,
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: "10px",
+                    }}
+                  >
+                    View calendar
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={actionId === f.id}
+                    onClick={() => unfriend(f.id)}
+                    style={{ ...btnOutline, fontSize: "10px" }}
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

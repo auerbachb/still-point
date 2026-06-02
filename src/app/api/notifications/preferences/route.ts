@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationPreferences } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import {
-  getDefaultPreferences,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  getOrCreateNotificationPreferences,
   isValidFrequency,
-  isValidTimeFormat,
+  isValidReminderTime,
   isValidTimezone,
+  asNotificationPreferencesRow,
   serializeNotificationPreferences,
-  type NotificationPreferencesData,
-} from "@/lib/notificationPreferences";
+} from "@/lib/notification-preferences";
 import { readJsonObject } from "@/lib/readJsonObject";
-
-const RETURN_FIELDS = {
-  enabled: notificationPreferences.enabled,
-  dailyReminderEnabled: notificationPreferences.dailyReminderEnabled,
-  preferredTime: notificationPreferences.preferredTime,
-  frequency: notificationPreferences.frequency,
-  quietHoursStart: notificationPreferences.quietHoursStart,
-  quietHoursEnd: notificationPreferences.quietHoursEnd,
-  timezone: notificationPreferences.timezone,
-};
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -30,16 +21,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [row] = await db
-      .select(RETURN_FIELDS)
-      .from(notificationPreferences)
-      .where(eq(notificationPreferences.userId, auth.userId))
-      .limit(1);
-
-    return NextResponse.json({
-      preferences: serializeNotificationPreferences(row),
-      persisted: !!row,
-    });
+    const prefs = await getOrCreateNotificationPreferences(auth.userId);
+    return NextResponse.json({ preferences: serializeNotificationPreferences(prefs) });
   } catch (error) {
     console.error("Notification preferences GET error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -54,66 +37,68 @@ export async function PATCH(request: NextRequest) {
     }
 
     const json = await readJsonObject(request);
-    if (!json.ok) return json.response;
+    if (!json.ok) {
+      return json.response;
+    }
 
     const body = json.body;
-    const defaults = getDefaultPreferences();
-    const patch: Partial<NotificationPreferencesData> = {};
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
     let hasUpdate = false;
 
-    if (body.enabled !== undefined) {
-      if (typeof body.enabled !== "boolean") {
-        return NextResponse.json({ error: "Invalid enabled" }, { status: 400 });
-      }
-      patch.enabled = body.enabled;
+    if (typeof body.pushEnabled === "boolean") {
+      updates.pushEnabled = body.pushEnabled;
       hasUpdate = true;
     }
-    if (body.dailyReminderEnabled !== undefined) {
-      if (typeof body.dailyReminderEnabled !== "boolean") {
-        return NextResponse.json({ error: "Invalid dailyReminderEnabled" }, { status: 400 });
-      }
-      patch.dailyReminderEnabled = body.dailyReminderEnabled;
+    if (typeof body.dailyReminderEnabled === "boolean") {
+      updates.dailyReminderEnabled = body.dailyReminderEnabled;
       hasUpdate = true;
     }
-    if (body.preferredTime !== undefined) {
-      if (typeof body.preferredTime !== "string" || !isValidTimeFormat(body.preferredTime)) {
-        return NextResponse.json({ error: "Invalid preferredTime" }, { status: 400 });
-      }
-      patch.preferredTime = body.preferredTime;
+    if (typeof body.missADayEnabled === "boolean") {
+      updates.missADayEnabled = body.missADayEnabled;
       hasUpdate = true;
     }
-    if (body.frequency !== undefined) {
-      if (typeof body.frequency !== "string" || !isValidFrequency(body.frequency)) {
-        return NextResponse.json({ error: "Invalid frequency" }, { status: 400 });
+    if (typeof body.dailyReminderTime === "string") {
+      if (!isValidReminderTime(body.dailyReminderTime)) {
+        return NextResponse.json({ error: "dailyReminderTime must be HH:MM (24h)" }, { status: 400 });
       }
-      patch.frequency = body.frequency;
+      updates.dailyReminderTime = body.dailyReminderTime;
       hasUpdate = true;
     }
-    if (body.quietHoursStart !== undefined) {
-      const normalized = body.quietHoursStart === "" ? null : body.quietHoursStart;
-      if (normalized !== null) {
-        if (typeof normalized !== "string" || !isValidTimeFormat(normalized)) {
-          return NextResponse.json({ error: "Invalid quietHoursStart" }, { status: 400 });
-        }
+    if (typeof body.dailyReminderFrequency === "string") {
+      if (!isValidFrequency(body.dailyReminderFrequency)) {
+        return NextResponse.json(
+          { error: "dailyReminderFrequency must be daily, every_other, or weekly" },
+          { status: 400 },
+        );
       }
-      patch.quietHoursStart = normalized as string | null;
+      updates.dailyReminderFrequency = body.dailyReminderFrequency;
       hasUpdate = true;
     }
-    if (body.quietHoursEnd !== undefined) {
-      const normalized = body.quietHoursEnd === "" ? null : body.quietHoursEnd;
-      if (normalized !== null) {
-        if (typeof normalized !== "string" || !isValidTimeFormat(normalized)) {
-          return NextResponse.json({ error: "Invalid quietHoursEnd" }, { status: 400 });
-        }
+    if (body.quietHoursStart === null) {
+      updates.quietHoursStart = null;
+      hasUpdate = true;
+    } else if (typeof body.quietHoursStart === "string") {
+      if (!isValidReminderTime(body.quietHoursStart)) {
+        return NextResponse.json({ error: "quietHoursStart must be HH:MM (24h)" }, { status: 400 });
       }
-      patch.quietHoursEnd = normalized as string | null;
+      updates.quietHoursStart = body.quietHoursStart;
       hasUpdate = true;
     }
-    if (body.timezone !== undefined) {
-      if (typeof body.timezone !== "string" || !isValidTimezone(body.timezone)) {
-        return NextResponse.json({ error: "Invalid timezone" }, { status: 400 });
+    if (body.quietHoursEnd === null) {
+      updates.quietHoursEnd = null;
+      hasUpdate = true;
+    } else if (typeof body.quietHoursEnd === "string") {
+      if (!isValidReminderTime(body.quietHoursEnd)) {
+        return NextResponse.json({ error: "quietHoursEnd must be HH:MM (24h)" }, { status: 400 });
       }
-      patch.timezone = body.timezone;
+      updates.quietHoursEnd = body.quietHoursEnd;
+      hasUpdate = true;
+    }
+    if (typeof body.tz === "string") {
+      if (!isValidTimezone(body.tz)) {
+        return NextResponse.json({ error: "tz must be a valid IANA timezone" }, { status: 400 });
+      }
+      updates.tz = body.tz;
       hasUpdate = true;
     }
 
@@ -121,35 +106,42 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "No supported preference fields provided" }, { status: 400 });
     }
 
-    const now = new Date();
-    const merged: NotificationPreferencesData = { ...defaults, ...patch };
+    const quietStartTouched = Object.prototype.hasOwnProperty.call(updates, "quietHoursStart");
+    const quietEndTouched = Object.prototype.hasOwnProperty.call(updates, "quietHoursEnd");
+    if (quietStartTouched !== quietEndTouched) {
+      return NextResponse.json(
+        { error: "quietHoursStart and quietHoursEnd must be updated together" },
+        { status: 400 },
+      );
+    }
 
-    const [saved] = await db
-      .insert(notificationPreferences)
-      .values({
-        userId: auth.userId,
-        enabled: merged.enabled,
-        dailyReminderEnabled: merged.dailyReminderEnabled,
-        preferredTime: merged.preferredTime,
-        frequency: merged.frequency,
-        quietHoursStart: merged.quietHoursStart,
-        quietHoursEnd: merged.quietHoursEnd,
-        timezone: merged.timezone,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: notificationPreferences.userId,
-        set: {
-          ...patch,
+    await getOrCreateNotificationPreferences(auth.userId);
+
+    const [updated] = await db
+      .update(notificationPreferences)
+      .set(updates)
+      .where(eq(notificationPreferences.userId, auth.userId))
+      .returning();
+
+    if (!updated) {
+      const now = new Date();
+      const [inserted] = await db
+        .insert(notificationPreferences)
+        .values({
+          userId: auth.userId,
+          ...DEFAULT_NOTIFICATION_PREFERENCES,
+          ...updates,
+          createdAt: now,
           updatedAt: now,
-        },
-      })
-      .returning(RETURN_FIELDS);
+        })
+        .returning();
+      return NextResponse.json({
+        preferences: serializeNotificationPreferences(asNotificationPreferencesRow(inserted)),
+      });
+    }
 
     return NextResponse.json({
-      preferences: serializeNotificationPreferences(saved),
-      persisted: true,
+      preferences: serializeNotificationPreferences(asNotificationPreferencesRow(updated)),
     });
   } catch (error) {
     console.error("Notification preferences PATCH error:", error);

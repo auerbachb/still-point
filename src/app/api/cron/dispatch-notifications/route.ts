@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runNotificationScheduler } from "@/lib/notificationScheduler";
+import { dispatchDueNotifications } from "@/lib/notification-scheduler";
 
 function isAuthorizedCron(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = request.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  const token = auth.slice("Bearer ".length).trim();
-  return token.length > 0 && token === secret;
+  if (!secret) {
+    return process.env.NODE_ENV !== "production";
+  }
+  const authHeader = request.headers.get("authorization");
+  return authHeader === `Bearer ${secret}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -16,10 +16,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await runNotificationScheduler();
+    const result = await dispatchDueNotifications();
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    console.error("Notification cron error:", error);
+    console.error("dispatch-notifications cron error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest) {
+  return GET(request);
 }

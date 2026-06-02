@@ -125,7 +125,7 @@ final class AppViewModel {
                 currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session(type: .standard) : .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
+                PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
                 await consumePendingBuddyInviteIfNeeded()
                 return
             } else {
@@ -169,7 +169,7 @@ final class AppViewModel {
         currentUser = user
         currentView = .home
         authStatusMessage = nil
-        PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
+        PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         Task { await consumePendingBuddyInviteIfNeeded() }
     }
 

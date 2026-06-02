@@ -127,6 +127,30 @@ export type CalendarSyncResult =
   | { status: "skipped"; userId: string; reason: string }
   | { status: "failed"; userId: string; error: string };
 
+/** #350: shared buddy sit row for unified / per-buddy calendar views. */
+export type BuddyCalendarParticipant = {
+  userId: string;
+  username: string;
+};
+
+export type BuddyCalendarSession = {
+  id: string;
+  state: string;
+  durationSeconds: number;
+  calendarDate: string;
+  scheduledStartAt: string | null;
+  startedAt: string | null;
+  participants: BuddyCalendarParticipant[];
+  buddyIds: string[];
+};
+
+export type BuddyCalendarListResponse = {
+  sessions: BuddyCalendarSession[];
+  fromDate: string;
+  toDate: string;
+  hasMore: boolean;
+};
+
 export const api = {
   signup: (data: { email: string; username: string; password: string }) =>
     request<{ user: User }>("/api/auth/signup", { method: "POST", body: JSON.stringify(data) }),
@@ -297,4 +321,38 @@ export const api = {
       `/api/buddy/sessions/${sessionId}/record-personal-session`,
       { method: "POST", body: JSON.stringify(body) },
     ),
+
+  /** #350: unified multi-buddy calendar — mirrors `listBuddyCalendarSessions`. */
+  getBuddyCalendar: (params?: {
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const qs = q.toString();
+    return request<BuddyCalendarListResponse>(
+      `/api/buddy/sessions/calendar${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  /** #350: per-buddy shared calendar — mirrors `listBuddyCalendarSessionsForBuddy`. */
+  getBuddyCalendarForBuddy: (
+    buddyId: string,
+    params?: { from?: string; to?: string; limit?: number; offset?: number },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const qs = q.toString();
+    return request<BuddyCalendarListResponse>(
+      `/api/buddy/sessions/calendar/${buddyId}${qs ? `?${qs}` : ""}`,
+    );
+  },
 };

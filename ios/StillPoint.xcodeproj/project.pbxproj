@@ -13,7 +13,6 @@
 		17A248000000000000000008 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000007 /* AppleSignInController.swift */; };
 		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
 		17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000004 /* AppBlockingSettingsView.swift */; };
-		17A248000000000000000010 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000011 /* NotificationSettingsView.swift */; };
 		17A248000000000000000012 /* PushNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000013 /* PushNotificationCoordinator.swift */; };
 		17A248000000000000000014 /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000015 /* DeviceTokenStore.swift */; };
 		17A248000000000000000016 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000017 /* SessionIdleTimerController.swift */; };
@@ -21,6 +20,7 @@
 		25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
+		17A345000000000000000002 /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A345000000000000000001 /* NotificationPreferencesViewModel.swift */; };
 		3F95AB4ED8A3AB01D8D2B042 /* BuddySessionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E4D291539A7556C58555EC6 /* BuddySessionHubView.swift */; };
 		42BF1908A778629F7C747264 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
@@ -54,13 +54,13 @@
 		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
 		17A248000000000000000002 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		17A248000000000000000004 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
-		17A248000000000000000011 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		17A248000000000000000013 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
 		17A248000000000000000015 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		17A248000000000000000017 /* SessionIdleTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIdleTimerController.swift; sourceTree = "<group>"; };
 		17A248000000000000000005 /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
 		17A248000000000000000007 /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
+		17A345000000000000000001 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
@@ -114,7 +114,6 @@
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
 				17A248000000000000000004 /* AppBlockingSettingsView.swift */,
-				17A248000000000000000011 /* NotificationSettingsView.swift */,
 				0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */,
 				C683A9F0586D58020E60DD87 /* RootView.swift */,
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
@@ -245,6 +244,7 @@
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
 				FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */,
 				42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */,
+				17A345000000000000000001 /* NotificationPreferencesViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -340,7 +340,6 @@
 				17A248000000000000000008 /* AppleSignInController.swift in Sources */,
 				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
 				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
-				17A248000000000000000010 /* NotificationSettingsView.swift in Sources */,
 				17A248000000000000000012 /* PushNotificationCoordinator.swift in Sources */,
 				17A248000000000000000014 /* DeviceTokenStore.swift in Sources */,
 				17A248000000000000000016 /* SessionIdleTimerController.swift in Sources */,
@@ -370,6 +369,7 @@
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
+				17A345000000000000000002 /* NotificationPreferencesViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
