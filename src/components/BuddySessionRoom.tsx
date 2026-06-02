@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type BuddySnapshot } from "@/lib/api";
+import { BUDDY_SESSION_LENGTH_EXPLAINER } from "@/lib/buddySessionDuration";
 import { BUDDY_POLICY_CODES, buddyPolicyUserMessage } from "@/lib/buddyPolicyCodes";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { BlockTimer } from "./BlockTimer";
@@ -678,6 +679,19 @@ export function BuddySessionRoom({
 
       {inLobby && (
         <>
+          <p
+            role="note"
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "var(--fg-2)",
+              textAlign: "center",
+              lineHeight: 1.45,
+            }}
+          >
+            {BUDDY_SESSION_LENGTH_EXPLAINER}
+          </p>
+
           <div
             role="status"
             style={{

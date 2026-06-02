@@ -18,6 +18,16 @@ public actor APIClient {
     private let uiTestConfig: UITestConfig?
     private var uiTestStore: UITestStore?
     private let uiTestStoreDefaultsKey = "StillPoint.UITest.Store"
+    private var uiTestNotificationPreferences = NotificationPreferencesDTO(
+        pushEnabled: false,
+        dailyReminderEnabled: false,
+        missADayEnabled: false,
+        dailyReminderTime: "09:00",
+        dailyReminderFrequency: .daily,
+        quietHoursStart: nil,
+        quietHoursEnd: nil,
+        tz: TimeZone.current.identifier
+    )
 
     private init() {
         #if DEBUG
@@ -291,16 +301,20 @@ public actor APIClient {
         return response.user
     }
 
-    // MARK: - Notification preferences (#345 / #247)
+    // MARK: - Notification preferences
 
     public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {
+        if uiTestConfig != nil {
+            return uiTestNotificationPreferences
+        }
         let response: NotificationPreferencesResponse = try await get("/api/notifications/preferences")
         return response.preferences
     }
 
-    public func updateNotificationPreferences(
-        preferencesPatch: NotificationPreferencesPatch
-    ) async throws -> NotificationPreferencesDTO {
+    public func updateNotificationPreferences(_ preferencesPatch: NotificationPreferencesPatch) async throws -> NotificationPreferencesDTO {
+        if let updated = try uiTestUpdateNotificationPreferences(preferencesPatch) {
+            return updated
+        }
         let response: NotificationPreferencesResponse = try await patch(
             "/api/notifications/preferences",
             body: preferencesPatch
@@ -716,6 +730,47 @@ public actor APIClient {
         return store.user
     }
 
+    private func uiTestUpdateNotificationPreferences(
+        _ patch: NotificationPreferencesPatch
+    ) throws -> NotificationPreferencesDTO? {
+        guard uiTestConfig != nil else { return nil }
+        guard let store = uiTestStore else {
+            throw APIError(status: 0, message: "UI test store is unavailable")
+        }
+        try ensureUITestAuthenticated(store: store)
+
+        let current = uiTestNotificationPreferences
+        var quietStart = current.quietHoursStart
+        var quietEnd = current.quietHoursEnd
+        if let quietHoursStart = patch.quietHoursStart {
+            switch quietHoursStart {
+            case .none: quietStart = nil
+            case .some(let value): quietStart = value
+            }
+        }
+        if let quietHoursEnd = patch.quietHoursEnd {
+            switch quietHoursEnd {
+            case .none: quietEnd = nil
+            case .some(let value): quietEnd = value
+            }
+        }
+
+        let next = NotificationPreferencesDTO(
+            pushEnabled: patch.pushEnabled ?? current.pushEnabled,
+            dailyReminderEnabled: patch.dailyReminderEnabled ?? current.dailyReminderEnabled,
+            missADayEnabled: patch.missADayEnabled ?? current.missADayEnabled,
+            dailyReminderTime: patch.dailyReminderTime ?? current.dailyReminderTime,
+            dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
+            quietHoursStart: quietStart,
+            quietHoursEnd: quietEnd,
+            tz: patch.tz ?? current.tz,
+            updatedAt: current.updatedAt
+        )
+
+        uiTestNotificationPreferences = next
+        return next
+    }
+
     private func ensureUITestAuthenticated(store: UITestStore) throws {
         guard store.isAuthenticated else {
             throw APIError(status: 401, message: "Please log in", code: "UNAUTHORIZED")
@@ -733,50 +788,6 @@ public actor APIClient {
     private static func persist(store: UITestStore, key: String) {
         guard let encoded = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(encoded, forKey: key)
-    }
-}
-
-public struct NotificationPreferencesPatch: Encodable, Sendable {
-    public var pushEnabled: Bool?
-    public var timezone: String?
-    public var reminderTime: String?
-    public var frequency: String?
-    public var dailyReminderEnabled: Bool?
-    public var missADayEnabled: Bool?
-
-    public init(
-        pushEnabled: Bool? = nil,
-        timezone: String? = nil,
-        reminderTime: String? = nil,
-        frequency: String? = nil,
-        dailyReminderEnabled: Bool? = nil,
-        missADayEnabled: Bool? = nil
-    ) {
-        self.pushEnabled = pushEnabled
-        self.timezone = timezone
-        self.reminderTime = reminderTime
-        self.frequency = frequency
-        self.dailyReminderEnabled = dailyReminderEnabled
-        self.missADayEnabled = missADayEnabled
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        if let pushEnabled { try container.encode(pushEnabled, forKey: .pushEnabled) }
-        if let timezone { try container.encode(timezone, forKey: .timezone) }
-        if let reminderTime { try container.encode(reminderTime, forKey: .reminderTime) }
-        if let frequency { try container.encode(frequency, forKey: .frequency) }
-        if let dailyReminderEnabled { try container.encode(dailyReminderEnabled, forKey: .dailyReminderEnabled) }
-        if let missADayEnabled { try container.encode(missADayEnabled, forKey: .missADayEnabled) }
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case pushEnabled
-        case timezone
-        case reminderTime
-        case frequency
-        case dailyReminderEnabled
-        case missADayEnabled
     }
 }
 

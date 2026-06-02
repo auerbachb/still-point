@@ -39,6 +39,18 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         }
     }
 
+    /// Re-uploads the device token when the user already granted permission (e.g. after login).
+    func registerIfAlreadyAuthorized() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
+            DispatchQueue.main.async {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data

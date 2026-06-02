@@ -3,6 +3,7 @@ import StillPointShared
 
 struct SettingsView: View {
     let appVM: AppViewModel
+    @State private var notificationPrefs = NotificationPreferencesViewModel()
     @State private var isPublic: Bool = false
     @State private var isUpdating = false
     @State private var editingUsername = false
@@ -58,7 +59,7 @@ struct SettingsView: View {
 
                 AppBlockingSettingsView(manager: appVM.appBlockingManager)
 
-                NotificationSettingsView()
+                notificationSettingsSection
 
                 // Session display
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -212,6 +213,9 @@ struct SettingsView: View {
             .padding(.horizontal, SPSpacing.s4)
         }
         .stillPointBackground()
+        .task {
+            await notificationPrefs.load()
+        }
         .onAppear {
             syncFromCurrentUser()
         }
@@ -220,6 +224,167 @@ struct SettingsView: View {
                 syncFromCurrentUser()
             }
         }
+    }
+
+    private var notificationSettingsSection: some View {
+        VStack(alignment: .leading, spacing: SPSpacing.s2) {
+            Text("NOTIFICATIONS")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .tracking(2)
+
+            if notificationPrefs.isLoading && notificationPrefs.pushEnabled == false {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            } else {
+                Toggle(isOn: Binding(
+                    get: { notificationPrefs.pushEnabled },
+                    set: { newValue in
+                        let was = notificationPrefs.pushEnabled
+                        Task {
+                            await notificationPrefs.persistPushEnabledChange(wasEnabled: was, isEnabled: newValue)
+                        }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Push notifications")
+                            .font(SPFont.mono(13))
+                            .foregroundStyle(Color(SPColor.fg))
+                        Text("Receive reminders and updates on this device")
+                            .font(SPFont.serif(13, weight: .light))
+                            .foregroundStyle(Color(SPColor.fg4))
+                    }
+                }
+                .tint(SPColor.green)
+                .disabled(notificationPrefs.isSaving)
+                .accessibilityIdentifier("settings.pushNotificationsToggle")
+
+                if notificationPrefs.pushEnabled {
+                    Toggle(isOn: Binding(
+                        get: { notificationPrefs.dailyReminderEnabled },
+                        set: { newValue in
+                            Task { await notificationPrefs.persistDailyReminderEnabled(newValue) }
+                        }
+                    )) {
+                        Text("Daily practice reminder")
+                            .font(SPFont.mono(13))
+                            .foregroundStyle(Color(SPColor.fg))
+                    }
+                    .tint(SPColor.green)
+                    .disabled(notificationPrefs.isSaving)
+                    .accessibilityIdentifier("settings.dailyReminderToggle")
+
+                    Toggle(isOn: Binding(
+                        get: { notificationPrefs.missADayEnabled },
+                        set: { newValue in
+                            Task { await notificationPrefs.persistMissADayEnabled(newValue) }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Miss-a-day reminder")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Nudge for a quick sit if you missed yesterday")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .disabled(notificationPrefs.isSaving)
+                    .accessibilityIdentifier("settings.missADayToggle")
+
+                    if notificationPrefs.dailyReminderEnabled {
+                        DatePicker(
+                            "Reminder time",
+                            selection: Binding(
+                                get: { notificationPrefs.reminderTime },
+                                set: { notificationPrefs.reminderTime = $0 }
+                            ),
+                            displayedComponents: .hourAndMinute
+                        )
+                        .font(SPFont.mono(13))
+                        .foregroundStyle(Color(SPColor.fg))
+                        .disabled(notificationPrefs.isSaving)
+                        .onChange(of: notificationPrefs.reminderTime) { _, _ in
+                            Task { await notificationPrefs.persistReminderTime() }
+                        }
+                        .accessibilityIdentifier("settings.dailyReminderTimePicker")
+
+                        Picker("Frequency", selection: Binding(
+                            get: { notificationPrefs.dailyReminderFrequency },
+                            set: { newValue in
+                                notificationPrefs.dailyReminderFrequency = newValue
+                                Task { await notificationPrefs.persistFrequency() }
+                            }
+                        )) {
+                            ForEach(DailyReminderFrequency.allCases, id: \.self) { freq in
+                                Text(freq.label).tag(freq)
+                            }
+                        }
+                        .font(SPFont.mono(13))
+                        .disabled(notificationPrefs.isSaving)
+                        .accessibilityIdentifier("settings.dailyReminderFrequencyPicker")
+
+                        Toggle(isOn: Binding(
+                            get: { notificationPrefs.quietHoursEnabled },
+                            set: { newValue in
+                                Task { await notificationPrefs.persistQuietHoursToggle(enabled: newValue) }
+                            }
+                        )) {
+                            Text("Quiet hours")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                        }
+                        .tint(SPColor.green)
+                        .disabled(notificationPrefs.isSaving)
+                        .accessibilityIdentifier("settings.quietHoursToggle")
+
+                        if notificationPrefs.quietHoursEnabled {
+                            DatePicker(
+                                "Quiet from",
+                                selection: Binding(
+                                    get: { notificationPrefs.quietStartTime },
+                                    set: { notificationPrefs.quietStartTime = $0 }
+                                ),
+                                displayedComponents: .hourAndMinute
+                            )
+                            .font(SPFont.mono(13))
+                            .disabled(notificationPrefs.isSaving)
+                            .onChange(of: notificationPrefs.quietStartTime) { _, _ in
+                                Task { await notificationPrefs.persistQuietHoursTimes() }
+                            }
+
+                            DatePicker(
+                                "Quiet until",
+                                selection: Binding(
+                                    get: { notificationPrefs.quietEndTime },
+                                    set: { notificationPrefs.quietEndTime = $0 }
+                                ),
+                                displayedComponents: .hourAndMinute
+                            )
+                            .font(SPFont.mono(13))
+                            .disabled(notificationPrefs.isSaving)
+                            .onChange(of: notificationPrefs.quietEndTime) { _, _ in
+                                Task { await notificationPrefs.persistQuietHoursTimes() }
+                            }
+                        }
+                    }
+                }
+
+                if let error = notificationPrefs.errorMessage {
+                    Text(error)
+                        .font(SPFont.mono(11))
+                        .foregroundStyle(SPColor.dangerMuted)
+                }
+            }
+        }
+        .padding(SPSpacing.s3)
+        .background(SPColor.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SPColor.border1)
+        )
     }
 
     @ViewBuilder

@@ -59,6 +59,48 @@ export async function sendPushNotificationToUser(params: {
   return { delivered };
 }
 
+export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
+
+export async function sendDailyReminderNotification(params: {
+  recipientUserId: string;
+}): Promise<void> {
+  await sendPushNotificationToUser({
+    recipientUserId: params.recipientUserId,
+    payload: {
+      aps: {
+        alert: {
+          title: "Time for your sit",
+          body: "Take a few minutes for your daily practice.",
+        },
+        sound: "default",
+        "thread-id": "daily-reminder",
+      },
+      type: "daily_reminder",
+      deepLink: "stillpoint://session",
+    },
+  });
+}
+
+export async function sendMissADayNotification(params: {
+  recipientUserId: string;
+}): Promise<{ delivered: boolean }> {
+  return sendPushNotificationToUser({
+    recipientUserId: params.recipientUserId,
+    payload: {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Missed yesterday — try a quick 1-min sit to get back.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "miss_a_day",
+      deepLink: MISS_A_DAY_DEEP_LINK,
+    },
+  });
+}
+
 export async function sendFriendRequestNotification(params: {
   recipientUserId: string;
   senderUsername: string;

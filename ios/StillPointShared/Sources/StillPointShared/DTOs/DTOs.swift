@@ -397,3 +397,121 @@ public struct RecordBuddyPersonalSessionResponse: Codable, Sendable {
     public let session: SessionDTO
     public let already: Bool?
 }
+
+// MARK: - Notification preferences (#345)
+
+public enum DailyReminderFrequency: String, Codable, Sendable, CaseIterable {
+    case daily
+    case everyOther = "every_other"
+    case weekly
+
+    public var label: String {
+        switch self {
+        case .daily: return "Daily"
+        case .everyOther: return "Every other day"
+        case .weekly: return "Weekly"
+        }
+    }
+}
+
+public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
+    public let pushEnabled: Bool
+    public let dailyReminderEnabled: Bool
+    public let missADayEnabled: Bool
+    public let dailyReminderTime: String
+    public let dailyReminderFrequency: DailyReminderFrequency
+    public let quietHoursStart: String?
+    public let quietHoursEnd: String?
+    public let tz: String
+    public let updatedAt: String?
+
+    public init(
+        pushEnabled: Bool,
+        dailyReminderEnabled: Bool,
+        missADayEnabled: Bool,
+        dailyReminderTime: String,
+        dailyReminderFrequency: DailyReminderFrequency,
+        quietHoursStart: String?,
+        quietHoursEnd: String?,
+        tz: String,
+        updatedAt: String? = nil
+    ) {
+        self.pushEnabled = pushEnabled
+        self.dailyReminderEnabled = dailyReminderEnabled
+        self.missADayEnabled = missADayEnabled
+        self.dailyReminderTime = dailyReminderTime
+        self.dailyReminderFrequency = dailyReminderFrequency
+        self.quietHoursStart = quietHoursStart
+        self.quietHoursEnd = quietHoursEnd
+        self.tz = tz
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct NotificationPreferencesResponse: Codable, Sendable {
+    public let preferences: NotificationPreferencesDTO
+}
+
+public struct NotificationPreferencesPatch: Encodable, Sendable {
+    public var pushEnabled: Bool?
+    public var dailyReminderEnabled: Bool?
+    public var missADayEnabled: Bool?
+    public var dailyReminderTime: String?
+    public var dailyReminderFrequency: DailyReminderFrequency?
+    public var quietHoursStart: String??
+    public var quietHoursEnd: String??
+    public var tz: String?
+
+    public init(
+        pushEnabled: Bool? = nil,
+        dailyReminderEnabled: Bool? = nil,
+        missADayEnabled: Bool? = nil,
+        dailyReminderTime: String? = nil,
+        dailyReminderFrequency: DailyReminderFrequency? = nil,
+        quietHoursStart: String?? = nil,
+        quietHoursEnd: String?? = nil,
+        tz: String? = nil
+    ) {
+        self.pushEnabled = pushEnabled
+        self.dailyReminderEnabled = dailyReminderEnabled
+        self.missADayEnabled = missADayEnabled
+        self.dailyReminderTime = dailyReminderTime
+        self.dailyReminderFrequency = dailyReminderFrequency
+        self.quietHoursStart = quietHoursStart
+        self.quietHoursEnd = quietHoursEnd
+        self.tz = tz
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let pushEnabled { try c.encode(pushEnabled, forKey: .pushEnabled) }
+        if let dailyReminderEnabled { try c.encode(dailyReminderEnabled, forKey: .dailyReminderEnabled) }
+        if let missADayEnabled { try c.encode(missADayEnabled, forKey: .missADayEnabled) }
+        if let dailyReminderTime { try c.encode(dailyReminderTime, forKey: .dailyReminderTime) }
+        if let dailyReminderFrequency { try c.encode(dailyReminderFrequency, forKey: .dailyReminderFrequency) }
+        if let quietHoursStart {
+            switch quietHoursStart {
+            case .none: try c.encodeNil(forKey: .quietHoursStart)
+            case .some(let value): try c.encode(value, forKey: .quietHoursStart)
+            }
+        }
+        if let quietHoursEnd {
+            switch quietHoursEnd {
+            case .none: try c.encodeNil(forKey: .quietHoursEnd)
+            case .some(let value): try c.encode(value, forKey: .quietHoursEnd)
+            }
+        }
+        if let tz { try c.encode(tz, forKey: .tz) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pushEnabled
+        case dailyReminderEnabled
+        case missADayEnabled
+        case dailyReminderTime
+        case dailyReminderFrequency
+        case quietHoursStart
+        case quietHoursEnd
+        case tz
+    }
+}

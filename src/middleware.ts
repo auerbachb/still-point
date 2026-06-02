@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 const COOKIE_NAME = "sp_token";
 
 const publicExactPaths = [
-  "/api/cron/notifications",
+  "/api/cron/dispatch-notifications",
   "/api/auth/signup",
   "/api/auth/login",
   "/api/auth/logout",

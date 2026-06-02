@@ -101,6 +101,47 @@ describe("sendFriendRequestNotification", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
+  test("sends the daily reminder APNs payload", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    const { sendDailyReminderNotification } = await import("./notifications");
+
+    await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
+
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Time for your sit",
+          body: "Take a few minutes for your daily practice.",
+        },
+        sound: "default",
+        "thread-id": "daily-reminder",
+      },
+      type: "daily_reminder",
+      deepLink: "stillpoint://session",
+    });
+  });
+
+  test("sends the miss-a-day APNs payload with quick session deep link", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Missed yesterday — try a quick 1-min sit to get back.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "miss_a_day",
+      deepLink: "stillpoint://session/quick",
+    });
+  });
+
   test("limits APNs sends to bounded batches", async () => {
     for (let i = 0; i < 7; i += 1) {
       tokenRows.push({ id: `dt-${i}`, token: `${i}`.repeat(64), apnsEnvironment: "development" });
