@@ -47,10 +47,14 @@ const nextConfig: NextConfig = {
   // Externalize Neon's WS driver and `ws` so Next does not bundle them.
   // Bundling tree-shakes `ws`'s mask path on Vercel and crashes every
   // `poolDb.transaction()` with `b.mask is not a function`. See #246.
-  serverExternalPackages: ["@neondatabase/serverless", "ws"],
+  serverExternalPackages: ["@neondatabase/serverless", "ws", "web-push"],
   env: {
     NEXT_PUBLIC_APP_VERSION: readPackageVersion(),
     NEXT_PUBLIC_BUILD_SHA: shortGitSha(buildShaFull),
+    NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY:
+      nonBlankEnv(process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY)
+      ?? nonBlankEnv(process.env.WEB_PUSH_VAPID_PUBLIC_KEY)
+      ?? "",
   },
 };
 

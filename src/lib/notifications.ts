@@ -2,6 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deviceTokens } from "@/db/schema";
 import { type ApnsEnvironment, type ApnsPayload, sendApnsNotification } from "@/lib/apns";
+import { sendWebPushToUser } from "@/lib/web-push";
+
+const DAILY_REMINDER_TITLE = "Time for your sit";
+const DAILY_REMINDER_BODY = "Take a few minutes for your daily practice.";
 
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
 const PUSH_SEND_CONCURRENCY = 3;
@@ -53,20 +57,31 @@ export async function sendPushNotificationToUser(params: {
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
 }): Promise<void> {
-  await sendPushNotificationToUser({
-    recipientUserId: params.recipientUserId,
-    payload: {
-      aps: {
-        alert: {
-          title: "Time for your sit",
-          body: "Take a few minutes for your daily practice.",
+  await Promise.all([
+    sendPushNotificationToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        aps: {
+          alert: {
+            title: DAILY_REMINDER_TITLE,
+            body: DAILY_REMINDER_BODY,
+          },
+          sound: "default",
+          "thread-id": "daily-reminder",
         },
-        sound: "default",
-        "thread-id": "daily-reminder",
+        type: "daily_reminder",
       },
-      type: "daily_reminder",
-    },
-  });
+    }),
+    sendWebPushToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        title: DAILY_REMINDER_TITLE,
+        body: DAILY_REMINDER_BODY,
+        type: "daily_reminder",
+        url: "/app",
+      },
+    }),
+  ]);
 }
 
 export async function sendFriendRequestNotification(params: {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
+import { WebNotificationSettings } from "@/components/WebNotificationSettings";
 import { api } from "@/lib/api";
 import {
   MAX_USERNAME_LENGTH,
@@ -258,6 +259,8 @@ export function SettingsView({
             {user.email}
           </div>
         </div>
+
+        <WebNotificationSettings />
 
         {/* Public board toggle */}
         <div style={{

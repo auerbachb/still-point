@@ -1,19 +1,23 @@
 # Notifications
 
-Still Point delivers remote push notifications via APNs. User-facing schedules and opt-in live in `notification_preferences`; the server dispatches on a cron and records sends in `notification_dispatches` for idempotency.
+Still Point delivers remote push notifications via **APNs** (iOS) and **Web Push** (browsers). User-facing schedules and opt-in live in `notification_preferences`; the server dispatches on a cron and records sends in `notification_dispatches` for idempotency.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  iOS[Settings UI] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
+  Clients[iOS + Web Settings] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
+  Web[Web browser] -->|POST/DELETE| SubAPI["/api/notifications/push/subscription"]
+  SubAPI --> WPS[(web_push_subscriptions)]
   PrefsAPI --> NP[(notification_preferences)]
   Cron["/api/cron/dispatch-notifications"] --> Scheduler[notification-scheduler]
   Scheduler --> NP
   Scheduler --> Ledger[(notification_dispatches)]
   Scheduler --> Send[notifications.ts]
   Send --> APNs[apns.ts]
+  Send --> WebPush[web-push.ts]
   Send --> DT[(device_tokens)]
+  WebPush --> WPS
 ```
 
 ## Database
@@ -22,8 +26,9 @@ flowchart LR
 |-------|---------|
 | `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz` |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
+| `web_push_subscriptions` | Browser Push API endpoints + `p256dh` / `auth` keys per device (#347) |
 
-Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_345_incremental.sql`).
+Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`).
 
 ## API
 
@@ -64,6 +69,41 @@ Partial update. Supported fields:
 - Helper: `sendDailyReminderNotification`
 - Gated by: `push_enabled` && `daily_reminder_enabled`
 
+## Web Push (#347)
+
+### Environment
+
+Generate keys locally (never commit the private key):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Set in Vercel (and `.env.local` for local sends):
+
+| Variable | Purpose |
+|----------|---------|
+| `WEB_PUSH_VAPID_PUBLIC_KEY` | VAPID public key (also exposed to the client as `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` via `next.config.ts`) |
+| `WEB_PUSH_VAPID_PRIVATE_KEY` | Server-only; used by `src/lib/web-push.ts` |
+| `WEB_PUSH_VAPID_SUBJECT` | `mailto:you@still-point.me` contact for push services |
+
+### Service worker
+
+- Static file: `public/sw.js` (scope `/`)
+- Handles `push` → `showNotification`, `notificationclick` → focus or open `/app` (deep link from payload `url`)
+
+### API
+
+- `GET /api/notifications/push/subscription` — returns `{ publicKey }` when configured
+- `POST /api/notifications/push/subscription` — body `{ subscription: { endpoint, keys } }` (authenticated)
+- `DELETE /api/notifications/push/subscription` — body `{ endpoint }` (authenticated)
+
+Web Settings (`WebNotificationSettings` in `SettingsView`) mirrors iOS: master push toggle, daily reminder, time, frequency. **Safari on iOS** requires the site as a home-screen PWA (iOS 16.4+); the UI explains this.
+
+### Cross-channel behavior
+
+If a user has both iOS and web push enabled, **both channels receive** the daily reminder (V1). Per-channel opt-out is via disabling push on that device/browser.
+
 ## iOS
 
 - Settings → **NOTIFICATIONS**: master push toggle (triggers system permission on first opt-in), daily reminder toggle, time picker, frequency picker, quiet hours.
@@ -72,11 +112,13 @@ Partial update. Supported fields:
 
 ## Security
 
-- Never log raw APNs device tokens.
+- Never log raw APNs device tokens or Web Push `auth` keys.
+- Never commit `WEB_PUSH_VAPID_PRIVATE_KEY`.
 - Cron endpoint must not be callable without `CRON_SECRET` in production.
 
 ## Related issues
 
 - #203 — APNs + `device_tokens`
-- #346 — Daily reminder product behavior (builds on this foundation)
-- #347 — Miss-a-day notifications
+- #345 — Preferences + scheduler foundation
+- #346 — Daily reminder product behavior
+- #347 — Web Push parity

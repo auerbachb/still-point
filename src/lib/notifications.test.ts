@@ -32,6 +32,12 @@ vi.mock("@/lib/apns", () => ({
   sendApnsNotification,
 }));
 
+const sendWebPushToUser = vi.fn();
+
+vi.mock("@/lib/web-push", () => ({
+  sendWebPushToUser,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -43,6 +49,7 @@ describe("sendFriendRequestNotification", () => {
     tokenRows.length = 0;
     selectWhere.mockResolvedValue(tokenRows);
     sendApnsNotification.mockResolvedValue({ ok: true, status: 200 });
+    sendWebPushToUser.mockResolvedValue(undefined);
   });
 
   test("sends the friend request APNs payload to each enabled device token", async () => {
@@ -101,12 +108,21 @@ describe("sendFriendRequestNotification", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
-  test("sends the daily reminder APNs payload", async () => {
+  test("sends the daily reminder to APNs and Web Push", async () => {
     tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
     const { sendDailyReminderNotification } = await import("./notifications");
 
     await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
 
+    expect(sendWebPushToUser).toHaveBeenCalledWith({
+      recipientUserId: "recipient-id",
+      payload: {
+        title: "Time for your sit",
+        body: "Take a few minutes for your daily practice.",
+        type: "daily_reminder",
+        url: "/app",
+      },
+    });
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
       aps: {
         alert: {
