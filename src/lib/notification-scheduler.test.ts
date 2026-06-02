@@ -39,6 +39,16 @@ vi.mock("@/lib/notifications", () => ({
   sendDailyReminderNotification,
 }));
 
+const hasMissADayDispatchForDate = vi.fn();
+const userCompletedSessionOnDate = vi.fn();
+const loadUserStreak = vi.fn();
+
+vi.mock("@/lib/notifications/daily-reminder", () => ({
+  hasMissADayDispatchForDate,
+  userCompletedSessionOnDate,
+  loadUserStreak,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -50,6 +60,9 @@ describe("notification scheduler", () => {
     vi.resetModules();
     sendDailyReminderNotification.mockResolvedValue(undefined);
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
+    hasMissADayDispatchForDate.mockResolvedValue(false);
+    userCompletedSessionOnDate.mockResolvedValue(false);
+    loadUserStreak.mockResolvedValue(0);
   });
 
   test("claimNotificationDispatch is idempotent on conflict", async () => {

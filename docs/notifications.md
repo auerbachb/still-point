@@ -62,12 +62,13 @@ Partial update. Supported fields:
 4. **iOS** — Expose the flag in Settings (PATCH preferences) and handle the payload `type` when the user taps the notification.
 5. **Tests** — Unit tests for preference validation, scheduler gating, and idempotent `claimNotificationDispatch`.
 
-### Example: daily reminder (#346)
+### Daily reminder (#346)
 
 - Type: `daily_reminder`
 - Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
-- Helper: `sendDailyReminderNotification`
-- Gated by: `push_enabled` && `daily_reminder_enabled`
+- Helper: `sendDailyReminderNotification` (streak-aware copy + `deepLink: stillpoint://home`)
+- Gated by: `push_enabled` && `daily_reminder_enabled`, not in quiet hours, frequency rule, no completed session today, no `miss_a_day` dispatch for the same local date
+- iOS: `PushNotificationCoordinator` queues cold-start deep links until `RootView` wires `deepLinkHandler`
 
 ## Web Push (#347)
 
