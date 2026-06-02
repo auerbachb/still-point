@@ -343,41 +343,6 @@ public struct BuddyBooleanResponse: Codable, Sendable {
     public let ok: Bool
 }
 
-public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
-    public let pushEnabled: Bool
-    public let timezone: String
-    public let reminderTime: String
-    public let frequency: String
-    public let quietHoursStart: String?
-    public let quietHoursEnd: String?
-    public let dailyReminderEnabled: Bool
-    public let missADayEnabled: Bool
-
-    public init(
-        pushEnabled: Bool,
-        timezone: String,
-        reminderTime: String,
-        frequency: String,
-        quietHoursStart: String?,
-        quietHoursEnd: String?,
-        dailyReminderEnabled: Bool,
-        missADayEnabled: Bool
-    ) {
-        self.pushEnabled = pushEnabled
-        self.timezone = timezone
-        self.reminderTime = reminderTime
-        self.frequency = frequency
-        self.quietHoursStart = quietHoursStart
-        self.quietHoursEnd = quietHoursEnd
-        self.dailyReminderEnabled = dailyReminderEnabled
-        self.missADayEnabled = missADayEnabled
-    }
-}
-
-public struct NotificationPreferencesResponse: Codable, Sendable {
-    public let preferences: NotificationPreferencesDTO
-}
-
 public struct DeviceTokenResponse: Codable, Sendable {
     public struct RegisteredDeviceToken: Codable, Sendable {
         public let id: String
