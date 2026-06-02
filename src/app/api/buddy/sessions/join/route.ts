@@ -6,6 +6,7 @@ import {
   assertBuddyFriendshipIfRequired,
   bumpBuddyRevision,
   reconcileBuddySession,
+  syncBuddySessionDurationForParticipants,
 } from "@/lib/buddySession";
 import {
   GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
@@ -131,9 +132,21 @@ export async function POST(request: NextRequest) {
           lastSeenAt: now,
         });
       }
+      const normalizedDuration = await syncBuddySessionDurationForParticipants(session.id);
       await bumpBuddyRevision(session.id);
       await reconcileBuddySession(session.id);
-      const calendarSync = await syncCalendarBestEffort(session, auth.userId);
+      let sessionForCalendar = session;
+      if (normalizedDuration != null) {
+        sessionForCalendar = { ...session, durationSeconds: normalizedDuration };
+      } else {
+        const [fresh] = await db
+          .select()
+          .from(buddySessions)
+          .where(eq(buddySessions.id, session.id))
+          .limit(1);
+        if (fresh) sessionForCalendar = fresh;
+      }
+      const calendarSync = await syncCalendarBestEffort(sessionForCalendar, auth.userId);
       return NextResponse.json({
         sessionId: session.id,
         scheduledStartAt: session.scheduledStartAt?.toISOString() ?? null,

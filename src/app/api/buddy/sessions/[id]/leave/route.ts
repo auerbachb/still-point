@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   bumpBuddyRevision,
   reconcileBuddySession,
+  syncBuddySessionDurationForParticipants,
   teardownBuddyDailyRoomByName,
 } from "@/lib/buddySession";
 import { hostLeaveShouldAbandonSession } from "@/lib/buddySessionControlsPolicy";
@@ -65,6 +66,7 @@ export async function POST(_request: Request, context: Params) {
         })
         .where(eq(buddySessions.id, sessionId));
     } else {
+      await syncBuddySessionDurationForParticipants(sessionId);
       await bumpBuddyRevision(sessionId);
     }
 

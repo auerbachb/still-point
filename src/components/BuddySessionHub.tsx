@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { BUDDY_SESSION_LENGTH_EXPLAINER } from "@/lib/buddySessionDuration";
 
 function extractBuddyToken(input: string): string {
   const t = input.trim();
@@ -173,6 +174,18 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
         }}
       >
         Create a room now, or schedule a shared sit and let each connected Google Calendar add the agreed time.
+      </p>
+      <p
+        role="note"
+        style={{
+          fontSize: "13px",
+          color: "var(--fg-3)",
+          lineHeight: 1.45,
+          textAlign: "center",
+          margin: 0,
+        }}
+      >
+        {BUDDY_SESSION_LENGTH_EXPLAINER}
       </p>
 
       <div

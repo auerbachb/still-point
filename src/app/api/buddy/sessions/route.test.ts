@@ -32,7 +32,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/buddySession", () => ({
-  buddyDurationForDay: vi.fn(() => 600),
+  normalizedBuddySessionDurationSeconds: vi.fn(() => 600),
 }));
 
 vi.mock("@/lib/google", () => ({
@@ -113,6 +113,20 @@ describe("POST /api/buddy/sessions", () => {
     );
     expect(body.session.scheduledStartAt).toBe(future);
     expect(body.session.calendarSync).toHaveLength(1);
+  });
+
+  test("rejects client-provided durationSeconds override", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      buddyCreateRequest({ durationSeconds: 120 } as Record<string, unknown>),
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Session length is set automatically for buddy sessions",
+    });
+    expect(response.status).toBe(400);
+    expect(dbInsert).not.toHaveBeenCalled();
   });
 
   test("creates an immediate session without calendar sync", async () => {

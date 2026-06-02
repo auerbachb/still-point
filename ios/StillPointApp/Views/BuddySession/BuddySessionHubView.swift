@@ -26,6 +26,11 @@ struct BuddySessionHubView: View {
                     .foregroundStyle(Color(SPColor.fg2))
                     .multilineTextAlignment(.center)
 
+                Text("Buddy sits use the shortest of everyone's current sit length (at least 1 minute). The group timer is set automatically—you can't choose a longer session.")
+                    .font(SPFont.serif(15, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg2))
+                    .multilineTextAlignment(.center)
+
                 if let errorMessage {
                     Text(errorMessage)
                         .font(SPFont.mono(12))
