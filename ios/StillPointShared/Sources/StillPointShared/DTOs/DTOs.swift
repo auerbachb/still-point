@@ -343,68 +343,6 @@ public struct BuddyBooleanResponse: Codable, Sendable {
     public let ok: Bool
 }
 
-public struct NotificationPreferencesDTO: Codable, Sendable {
-    public let enabled: Bool
-    public let dailyReminderEnabled: Bool
-    public let preferredTime: String
-    public let frequency: String
-    public let quietHoursStart: String?
-    public let quietHoursEnd: String?
-    public let timezone: String
-
-    public init(
-        enabled: Bool,
-        dailyReminderEnabled: Bool,
-        preferredTime: String,
-        frequency: String,
-        quietHoursStart: String?,
-        quietHoursEnd: String?,
-        timezone: String
-    ) {
-        self.enabled = enabled
-        self.dailyReminderEnabled = dailyReminderEnabled
-        self.preferredTime = preferredTime
-        self.frequency = frequency
-        self.quietHoursStart = quietHoursStart
-        self.quietHoursEnd = quietHoursEnd
-        self.timezone = timezone
-    }
-}
-
-public struct UpdateNotificationPreferencesRequest: Codable, Sendable {
-    public let enabled: Bool?
-    public let dailyReminderEnabled: Bool?
-    public let preferredTime: String?
-    public let frequency: String?
-    public let quietHoursStart: String?
-    public let quietHoursEnd: String?
-    public let timezone: String?
-
-    public init(
-        enabled: Bool? = nil,
-        dailyReminderEnabled: Bool? = nil,
-        preferredTime: String? = nil,
-        frequency: String? = nil,
-        quietHoursStart: String? = nil,
-        quietHoursEnd: String? = nil,
-        timezone: String? = nil
-    ) {
-        self.enabled = enabled
-        self.dailyReminderEnabled = dailyReminderEnabled
-        self.preferredTime = preferredTime
-        self.frequency = frequency
-        self.quietHoursStart = quietHoursStart
-        self.quietHoursEnd = quietHoursEnd
-        self.timezone = timezone
-    }
-}
-
-public struct NotificationPreferencesResponse: Codable, Sendable {
-    public let preferences: NotificationPreferencesDTO
-    /// False when the user has never saved preferences (defaults only).
-    public let persisted: Bool
-}
-
 public struct DeviceTokenResponse: Codable, Sendable {
     public struct RegisteredDeviceToken: Codable, Sendable {
         public let id: String
