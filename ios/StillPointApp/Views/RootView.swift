@@ -99,6 +99,9 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
         .onAppear {
+            PushNotificationCoordinator.shared.deepLinkHandler = { url in
+                appVM.handleIncomingURL(url)
+            }
             SessionIdleTimerController.syncSceneForegroundActive(
                 appVM: appVM,
                 isForegroundActive: scenePhase == .active
@@ -124,10 +127,9 @@ struct RootView: View {
             appVM.handleIncomingURL(url)
         }
         .task {
-            PushNotificationCoordinator.shared.onDeepLink = { url in
+            PushNotificationCoordinator.shared.deepLinkHandler = { url in
                 appVM.handlePushDeepLink(url)
             }
-            PushNotificationCoordinator.shared.deliverPendingDeepLinkIfReady()
         }
     }
 

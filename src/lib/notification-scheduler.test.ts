@@ -51,6 +51,16 @@ vi.mock("@/lib/notifications", () => ({
   sendMissADayNotification,
 }));
 
+const hasMissADayDispatchForDate = vi.fn();
+const userCompletedSessionOnDate = vi.fn();
+const loadUserStreak = vi.fn();
+
+vi.mock("@/lib/notifications/daily-reminder", () => ({
+  hasMissADayDispatchForDate,
+  userCompletedSessionOnDate,
+  loadUserStreak,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -92,6 +102,9 @@ describe("notification scheduler", () => {
     sendMissADayNotification.mockResolvedValue({ delivered: true });
     insertReturning.mockReset();
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
+    hasMissADayDispatchForDate.mockResolvedValue(false);
+    userCompletedSessionOnDate.mockResolvedValue(false);
+    loadUserStreak.mockResolvedValue(0);
   });
 
   test("claimNotificationDispatch is idempotent on conflict", async () => {
@@ -133,7 +146,8 @@ describe("notification scheduler", () => {
 
   test("dispatchDueNotifications sends miss-a-day when yesterday was missed", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
-    queueLimitResults([], [], []);
+    queueLimitResults([]);
+    userCompletedSessionOnDate.mockResolvedValue(false);
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
     const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));
@@ -145,7 +159,8 @@ describe("notification scheduler", () => {
 
   test("dispatchDueNotifications skips miss-a-day when user meditated today", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
-    queueLimitResults([], [{ id: "session-today" }]);
+    queueLimitResults([]);
+    userCompletedSessionOnDate.mockImplementation(async (_userId, date) => date === "2026-05-29");
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
     const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));

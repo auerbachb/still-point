@@ -55,7 +55,7 @@ Partial update. Supported fields:
 | Type | Issue | Deep link | Precedence |
 |------|-------|-----------|------------|
 | `miss_a_day` | #247 | `stillpoint://session/quick` | Wins over daily reminder when yesterday was missed |
-| `daily_reminder` | #346 | `stillpoint://session` | Default when miss-a-day does not apply |
+| `daily_reminder` | #346 | `stillpoint://home` | Default when miss-a-day does not apply |
 
 ### Miss-a-day (#247)
 
@@ -68,8 +68,9 @@ Partial update. Supported fields:
 
 - Type: `daily_reminder`
 - Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
-- Helper: `sendDailyReminderNotification`
-- Gated by: `push_enabled` && `daily_reminder_enabled`
+- Helper: `sendDailyReminderNotification` (streak-aware copy + `deepLink: stillpoint://home`)
+- Gated by: `push_enabled` && `daily_reminder_enabled`, not in quiet hours, frequency rule, no completed session today, no `miss_a_day` dispatch for the same local date
+- iOS: `PushNotificationCoordinator` queues cold-start deep links until `RootView` wires `deepLinkHandler`
 
 ## Adding a notification type
 

@@ -6,20 +6,23 @@ import UserNotifications
 final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationCoordinator()
 
-    /// Set from `RootView` so notification taps can route into the app shell.
-    var onDeepLink: (@MainActor (URL) -> Void)? {
+    /// Invoked when the user opens a push notification (or cold-starts from one).
+    var deepLinkHandler: ((URL) -> Void)? {
         didSet {
-            deliverPendingDeepLinkIfReady()
+            deliverPendingDeepLinkIfNeeded()
         }
     }
 
-    private var pendingDeepLink: URL?
+    private var pendingDeepLinkURL: URL?
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            queueOrDeliverDeepLink(from: userInfo)
+        }
         return true
     }
 
@@ -35,6 +38,27 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
             guard granted else { return }
             DispatchQueue.main.async {
                 UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
+    func requestAuthorizationAndRegisterAsync() async {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+                if let error {
+                    print("Push notification authorization failed: \(error.localizedDescription)")
+                    continuation.resume()
+                    return
+                }
+
+                if granted {
+                    DispatchQueue.main.async {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                }
+                continuation.resume()
             }
         }
     }
@@ -87,30 +111,43 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        let userInfo = response.notification.request.content.userInfo
-        guard let deepLink = userInfo["deepLink"] as? String,
-              let url = URL(string: deepLink) else {
-            return
-        }
-        await MainActor.run {
-            routeDeepLink(url)
+        queueOrDeliverDeepLink(from: response.notification.request.content.userInfo)
+    }
+
+    func getAuthorizationStatus() async -> UNAuthorizationStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus
+    }
+
+    private func queueOrDeliverDeepLink(from userInfo: [AnyHashable: Any]) {
+        guard let url = deepLinkURL(from: userInfo) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.deliverDeepLink(url)
         }
     }
 
-    @MainActor
-    private func routeDeepLink(_ url: URL) {
-        if let onDeepLink {
-            onDeepLink(url)
+    private func deliverDeepLink(_ url: URL) {
+        if let handler = deepLinkHandler {
+            handler(url)
         } else {
-            pendingDeepLink = url
+            pendingDeepLinkURL = url
         }
     }
 
-    @MainActor
-    func deliverPendingDeepLinkIfReady() {
-        guard let url = pendingDeepLink, onDeepLink != nil else { return }
-        pendingDeepLink = nil
-        onDeepLink?(url)
+    private func deliverPendingDeepLinkIfNeeded() {
+        guard let url = pendingDeepLinkURL, let handler = deepLinkHandler else { return }
+        pendingDeepLinkURL = nil
+        handler(url)
+    }
+
+    private func deepLinkURL(from userInfo: [AnyHashable: Any]) -> URL? {
+        if let deepLink = userInfo["deepLink"] as? String, let url = URL(string: deepLink) {
+            return url
+        }
+        if let type = userInfo["type"] as? String, type == "daily_reminder" {
+            return URL(string: "stillpoint://home")
+        }
+        return nil
     }
 
     func unregisterCurrentDeviceToken() async throws {
