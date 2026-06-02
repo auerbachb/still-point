@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
+		17A359000000000000000002 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A359000000000000000001 /* NotificationsSettingsView.swift */; };
 		16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */; };
 		17A248000000000000000008 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000007 /* AppleSignInController.swift */; };
 		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
@@ -85,6 +86,7 @@
 		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		17A359000000000000000001 /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		D903EE2C350B6705F6917952 /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 				C683A9F0586D58020E60DD87 /* RootView.swift */,
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
 				D356465C1B0F69C57FE47A80 /* SettingsView.swift */,
+				17A359000000000000000001 /* NotificationsSettingsView.swift */,
 				44912B427658554F984CCC3A /* ThoughtJournalView.swift */,
 			);
 			path = Views;
@@ -365,6 +368,7 @@
 				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
 				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
+				17A359000000000000000002 /* NotificationsSettingsView.swift in Sources */,
 				E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */,
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,

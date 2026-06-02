@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+function mockWhereResult(rows: unknown[]) {
+  return {
+    limit: vi.fn().mockResolvedValue([]),
+    then(onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) {
+      return Promise.resolve(rows).then(onFulfilled, onRejected);
+    },
+  };
+}
+
 const selectWhere = vi.fn();
 const selectFrom = vi.fn(() => ({ where: selectWhere }));
 const dbSelect = vi.fn(() => ({ from: selectFrom }));
@@ -8,11 +17,17 @@ const insertOnConflict = vi.fn(() => ({ returning: insertReturning }));
 const insertValues = vi.fn(() => ({ onConflictDoNothing: insertOnConflict }));
 const dbInsert = vi.fn(() => ({ values: insertValues }));
 const sendDailyReminderNotification = vi.fn();
+const sendMissADayNotification = vi.fn();
+const dbDelete = vi.fn();
+const deleteWhere = vi.fn();
+deleteWhere.mockReturnValue(Promise.resolve());
+dbDelete.mockReturnValue({ where: deleteWhere });
 
 vi.mock("@/db", () => ({
   db: {
     select: dbSelect,
     insert: dbInsert,
+    delete: dbDelete,
   },
 }));
 
@@ -20,6 +35,7 @@ vi.mock("@/db/schema", () => ({
   notificationPreferences: {
     pushEnabled: "pushEnabled",
     dailyReminderEnabled: "dailyReminderEnabled",
+    missADayEnabled: "missADayEnabled",
     userId: "userId",
     tz: "tz",
     dailyReminderTime: "dailyReminderTime",
@@ -37,6 +53,7 @@ vi.mock("@/db/schema", () => ({
 
 vi.mock("@/lib/notifications", () => ({
   sendDailyReminderNotification,
+  sendMissADayNotification,
 }));
 
 const hasMissADayDispatchForDate = vi.fn();
@@ -52,6 +69,7 @@ vi.mock("@/lib/notifications/daily-reminder", () => ({
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
+  or: vi.fn((...args) => ({ or: args })),
 }));
 
 describe("notification scheduler", () => {
@@ -59,6 +77,7 @@ describe("notification scheduler", () => {
     vi.clearAllMocks();
     vi.resetModules();
     sendDailyReminderNotification.mockResolvedValue(undefined);
+    sendMissADayNotification.mockResolvedValue({ delivered: true });
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
     hasMissADayDispatchForDate.mockResolvedValue(false);
     userCompletedSessionOnDate.mockResolvedValue(false);
@@ -86,16 +105,18 @@ describe("notification scheduler", () => {
   });
 
   test("dispatchDueNotifications sends once when reminder window matches", async () => {
-    selectWhere.mockResolvedValue([
+    selectWhere.mockImplementation(() => mockWhereResult([
       {
         userId: "user-1",
         tz: "UTC",
         dailyReminderTime: "09:00",
         dailyReminderFrequency: "daily",
+        dailyReminderEnabled: true,
+        missADayEnabled: false,
         quietHoursStart: null,
         quietHoursEnd: null,
       },
-    ]);
+    ]));
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
     const now = new Date("2026-05-29T09:02:00.000Z");
@@ -117,16 +138,18 @@ describe("notification scheduler", () => {
   });
 
   test("dispatchDueNotifications skips quiet hours", async () => {
-    selectWhere.mockResolvedValue([
+    selectWhere.mockImplementation(() => mockWhereResult([
       {
         userId: "user-1",
         tz: "UTC",
         dailyReminderTime: "09:00",
         dailyReminderFrequency: "daily",
+        dailyReminderEnabled: true,
+        missADayEnabled: false,
         quietHoursStart: "08:00",
         quietHoursEnd: "10:00",
       },
-    ]);
+    ]));
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
     const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));

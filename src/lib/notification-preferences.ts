@@ -9,6 +9,7 @@ export type NotificationPreferencesRow = {
   pushEnabled: boolean;
   dailyReminderEnabled: boolean;
   missADayEnabled: boolean;
+  friendRequestNotificationsEnabled: boolean;
   dailyReminderTime: string;
   dailyReminderFrequency: DailyReminderFrequency;
   quietHoursStart: string | null;
@@ -25,6 +26,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   pushEnabled: false,
   dailyReminderEnabled: false,
   missADayEnabled: false,
+  friendRequestNotificationsEnabled: true,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as DailyReminderFrequency,
   quietHoursStart: null as string | null,
@@ -64,6 +66,7 @@ export function serializeNotificationPreferences(row: NotificationPreferencesRow
     pushEnabled: row.pushEnabled,
     dailyReminderEnabled: row.dailyReminderEnabled,
     missADayEnabled: row.missADayEnabled,
+    friendRequestNotificationsEnabled: row.friendRequestNotificationsEnabled,
     dailyReminderTime: row.dailyReminderTime,
     dailyReminderFrequency: row.dailyReminderFrequency,
     quietHoursStart: row.quietHoursStart,
@@ -71,6 +74,14 @@ export function serializeNotificationPreferences(row: NotificationPreferencesRow
     tz: row.tz,
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** True when friend-request pushes may be sent for this user. */
+export function friendRequestNotificationsAllowed(prefs: Pick<
+  NotificationPreferencesRow,
+  "pushEnabled" | "friendRequestNotificationsEnabled"
+>): boolean {
+  return prefs.pushEnabled && prefs.friendRequestNotificationsEnabled;
 }
 
 export async function getOrCreateNotificationPreferences(userId: string): Promise<NotificationPreferencesRow> {

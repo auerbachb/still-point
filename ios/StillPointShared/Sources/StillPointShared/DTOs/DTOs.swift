@@ -383,6 +383,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
     public let pushEnabled: Bool
     public let dailyReminderEnabled: Bool
     public let missADayEnabled: Bool
+    public let friendRequestNotificationsEnabled: Bool
     public let dailyReminderTime: String
     public let dailyReminderFrequency: DailyReminderFrequency
     public let quietHoursStart: String?
@@ -394,6 +395,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         pushEnabled: Bool,
         dailyReminderEnabled: Bool,
         missADayEnabled: Bool,
+        friendRequestNotificationsEnabled: Bool = true,
         dailyReminderTime: String,
         dailyReminderFrequency: DailyReminderFrequency,
         quietHoursStart: String?,
@@ -404,6 +406,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         self.pushEnabled = pushEnabled
         self.dailyReminderEnabled = dailyReminderEnabled
         self.missADayEnabled = missADayEnabled
+        self.friendRequestNotificationsEnabled = friendRequestNotificationsEnabled
         self.dailyReminderTime = dailyReminderTime
         self.dailyReminderFrequency = dailyReminderFrequency
         self.quietHoursStart = quietHoursStart
@@ -421,6 +424,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
     public var pushEnabled: Bool?
     public var dailyReminderEnabled: Bool?
     public var missADayEnabled: Bool?
+    public var friendRequestNotificationsEnabled: Bool?
     public var dailyReminderTime: String?
     public var dailyReminderFrequency: DailyReminderFrequency?
     public var quietHoursStart: String??
@@ -431,6 +435,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         pushEnabled: Bool? = nil,
         dailyReminderEnabled: Bool? = nil,
         missADayEnabled: Bool? = nil,
+        friendRequestNotificationsEnabled: Bool? = nil,
         dailyReminderTime: String? = nil,
         dailyReminderFrequency: DailyReminderFrequency? = nil,
         quietHoursStart: String?? = nil,
@@ -440,6 +445,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         self.pushEnabled = pushEnabled
         self.dailyReminderEnabled = dailyReminderEnabled
         self.missADayEnabled = missADayEnabled
+        self.friendRequestNotificationsEnabled = friendRequestNotificationsEnabled
         self.dailyReminderTime = dailyReminderTime
         self.dailyReminderFrequency = dailyReminderFrequency
         self.quietHoursStart = quietHoursStart
@@ -452,6 +458,9 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         if let pushEnabled { try c.encode(pushEnabled, forKey: .pushEnabled) }
         if let dailyReminderEnabled { try c.encode(dailyReminderEnabled, forKey: .dailyReminderEnabled) }
         if let missADayEnabled { try c.encode(missADayEnabled, forKey: .missADayEnabled) }
+        if let friendRequestNotificationsEnabled {
+            try c.encode(friendRequestNotificationsEnabled, forKey: .friendRequestNotificationsEnabled)
+        }
         if let dailyReminderTime { try c.encode(dailyReminderTime, forKey: .dailyReminderTime) }
         if let dailyReminderFrequency { try c.encode(dailyReminderFrequency, forKey: .dailyReminderFrequency) }
         if let quietHoursStart {
@@ -473,6 +482,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         case pushEnabled
         case dailyReminderEnabled
         case missADayEnabled
+        case friendRequestNotificationsEnabled
         case dailyReminderTime
         case dailyReminderFrequency
         case quietHoursStart

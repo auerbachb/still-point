@@ -6,8 +6,11 @@ import StillPointShared
 final class NotificationPreferencesViewModel {
     var pushEnabled = false
     var dailyReminderEnabled = false
+    var missADayEnabled = false
+    var friendRequestNotificationsEnabled = true
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
+    var timezoneDisplay = "UTC"
 
     var isLoading = false
     var isSaving = false
@@ -85,6 +88,21 @@ final class NotificationPreferencesViewModel {
         )
     }
 
+    func persistMissADayEnabled(_ enabled: Bool) async {
+        missADayEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(missADayEnabled: enabled))
+    }
+
+    func persistFriendRequestNotificationsEnabled(_ enabled: Bool) async {
+        friendRequestNotificationsEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(friendRequestNotificationsEnabled: enabled))
+    }
+
+    func persistTimezone(_ tz: String) async {
+        timezoneDisplay = tz
+        await persist(patch: NotificationPreferencesPatch(tz: tz))
+    }
+
     private func syncTimezoneIfNeeded(_ prefs: NotificationPreferencesDTO) async {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
         let deviceTz = TimeZone.current.identifier
@@ -115,6 +133,9 @@ final class NotificationPreferencesViewModel {
     private func apply(_ dto: NotificationPreferencesDTO) {
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
+        missADayEnabled = dto.missADayEnabled
+        friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
+        timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil
         if let parsed = parseHHMM(dto.dailyReminderTime) {

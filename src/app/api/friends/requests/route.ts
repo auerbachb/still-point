@@ -3,6 +3,10 @@ import { db } from "@/db";
 import { friendRequests, friendships, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
+import {
+  friendRequestNotificationsAllowed,
+  getOrCreateNotificationPreferences,
+} from "@/lib/notification-preferences";
 import { sendFriendRequestNotification } from "@/lib/notifications";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, or } from "drizzle-orm";
@@ -129,6 +133,10 @@ export async function POST(request: NextRequest) {
 
       after(async () => {
         try {
+          const prefs = await getOrCreateNotificationPreferences(created.toUserId);
+          if (!friendRequestNotificationsAllowed(prefs)) {
+            return;
+          }
           await sendFriendRequestNotification({
             requestId: created.id,
             recipientUserId: created.toUserId,

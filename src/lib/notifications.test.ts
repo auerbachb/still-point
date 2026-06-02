@@ -66,6 +66,15 @@ describe("sendFriendRequestNotification", () => {
     });
 
     expect(sendApnsNotification).toHaveBeenCalledTimes(2);
+    expect(sendWebPushToUser).toHaveBeenCalledWith({
+      recipientUserId: "recipient-id",
+      payload: {
+        title: "New friend request",
+        body: "maya wants to connect on Still Point.",
+        type: "friend_request",
+        url: "/app",
+      },
+    });
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
       aps: {
         alert: {
@@ -77,6 +86,7 @@ describe("sendFriendRequestNotification", () => {
       },
       type: "friend_request",
       requestId: "request-id",
+      deepLink: "stillpoint://friends",
     });
     expect(dbUpdate).toHaveBeenCalledTimes(2);
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ lastUsedAt: expect.any(Date) }));

@@ -24,6 +24,7 @@ vi.mock("@/db/schema", () => ({
     pushEnabled: "pushEnabled",
     dailyReminderEnabled: "dailyReminderEnabled",
     missADayEnabled: "missADayEnabled",
+    friendRequestNotificationsEnabled: "friendRequestNotificationsEnabled",
     dailyReminderTime: "dailyReminderTime",
     dailyReminderFrequency: "dailyReminderFrequency",
     quietHoursStart: "quietHoursStart",
@@ -59,6 +60,7 @@ const samplePrefs = {
   pushEnabled: true,
   dailyReminderEnabled: true,
   missADayEnabled: false,
+  friendRequestNotificationsEnabled: true,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as const,
   quietHoursStart: null,
@@ -127,6 +129,22 @@ describe("/api/notifications/preferences", () => {
 
     expect(response.status).toBe(400);
     expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  test("PATCH updates friend request notification preference", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ friendRequestNotificationsEnabled: false }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ friendRequestNotificationsEnabled: false }),
+    );
   });
 
   test("PATCH rejects partial quiet hours updates", async () => {

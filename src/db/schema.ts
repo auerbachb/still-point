@@ -40,6 +40,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   pushEnabled: boolean("push_enabled").default(false).notNull(),
   dailyReminderEnabled: boolean("daily_reminder_enabled").default(false).notNull(),
   missADayEnabled: boolean("miss_a_day_enabled").default(false).notNull(),
+  friendRequestNotificationsEnabled: boolean("friend_request_notifications_enabled").default(true).notNull(),
   /** Local reminder time as HH:MM (24h). */
   dailyReminderTime: varchar("daily_reminder_time", { length: 5 }).default("09:00").notNull(),
   /** daily | every_other | weekly */

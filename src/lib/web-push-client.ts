@@ -4,6 +4,7 @@ export type NotificationPreferencesDto = {
   pushEnabled: boolean;
   dailyReminderEnabled: boolean;
   missADayEnabled: boolean;
+  friendRequestNotificationsEnabled: boolean;
   dailyReminderTime: string;
   dailyReminderFrequency: "daily" | "every_other" | "weekly";
   quietHoursStart: string | null;

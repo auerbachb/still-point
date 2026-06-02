@@ -21,15 +21,22 @@ const frequencyOptions = [
   { value: "weekly", label: "Weekly (Mondays)" },
 ] as const;
 
-export function WebNotificationSettings() {
+type WebNotificationSettingsProps = {
+  /** When true, omit the outer NOTIFICATIONS card header (used on the dedicated page). */
+  pageMode?: boolean;
+};
+
+export function WebNotificationSettings({ pageMode = false }: WebNotificationSettingsProps) {
   const [prefs, setPrefs] = useState<NotificationPreferencesDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pushEndpoint, setPushEndpoint] = useState<string | null>(null);
+  const [tzDraft, setTzDraft] = useState("");
 
   const supported = isWebPushSupported();
   const pwaRequired = needsPwaInstallForWebPush();
+  const pushOn = Boolean(prefs?.pushEnabled);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,6 +44,7 @@ export function WebNotificationSettings() {
     try {
       const next = await fetchNotificationPreferences();
       setPrefs(next);
+      setTzDraft(next.tz);
       if (supported && next.pushEnabled) {
         const registration = await navigator.serviceWorker.ready.catch(() => null);
         const sub = registration ? await registration.pushManager.getSubscription() : null;
@@ -55,9 +63,23 @@ export function WebNotificationSettings() {
     void load();
   }, [load]);
 
+  const runBusy = async (fn: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save notification settings");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const persist = async (patch: Partial<NotificationPreferencesDto>) => {
     const updated = await patchNotificationPreferences(patch);
     setPrefs(updated);
+    setTzDraft(updated.tz);
     return updated;
   };
 
@@ -92,74 +114,12 @@ export function WebNotificationSettings() {
     await persist({ pushEnabled: false, dailyReminderEnabled: false });
   };
 
-  const handlePushToggle = async () => {
-    if (!prefs || busy) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (prefs.pushEnabled) {
-        await disablePush();
-      } else {
-        await enablePush();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update push notifications");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleDailyReminderToggle = async () => {
-    if (!prefs || busy || !prefs.pushEnabled) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await persist({ dailyReminderEnabled: !prefs.dailyReminderEnabled });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update daily reminder");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleTimeChange = async (value: string) => {
-    if (!prefs || busy) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await persist({ dailyReminderTime: value });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update reminder time");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleFrequencyChange = async (value: NotificationPreferencesDto["dailyReminderFrequency"]) => {
-    if (!prefs || busy) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await persist({ dailyReminderFrequency: value });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update reminder frequency");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const quietHoursOn = Boolean(prefs?.quietHoursStart && prefs?.quietHoursEnd);
 
   if (loading) {
     return (
-      <div style={cardStyle}>
-        <div style={labelStyle}>NOTIFICATIONS</div>
+      <div style={pageMode ? pageWrapStyle : cardStyle}>
+        {!pageMode && <div style={labelStyle}>NOTIFICATIONS</div>}
         <div style={hintStyle}>Loading…</div>
       </div>
     );
@@ -167,8 +127,8 @@ export function WebNotificationSettings() {
 
   if (!supported) {
     return (
-      <div style={cardStyle}>
-        <div style={labelStyle}>NOTIFICATIONS</div>
+      <div style={pageMode ? pageWrapStyle : cardStyle}>
+        {!pageMode && <div style={labelStyle}>NOTIFICATIONS</div>}
         <div style={hintStyle}>
           This browser does not support web push. Use Chrome, Firefox, or Safari on desktop, Chrome on Android,
           or add Still Point to your iPhone Home Screen (iOS 16.4+).
@@ -178,8 +138,8 @@ export function WebNotificationSettings() {
   }
 
   return (
-    <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: "14px" }}>
-      <div style={labelStyle}>NOTIFICATIONS</div>
+    <div style={pageMode ? pageWrapStyle : cardStyle}>
+      {!pageMode && <div style={labelStyle}>NOTIFICATIONS</div>}
 
       {pwaRequired && (
         <div style={hintStyle} role="note">
@@ -187,33 +147,42 @@ export function WebNotificationSettings() {
         </div>
       )}
 
+      <SectionLabel>Push on this device</SectionLabel>
       <ToggleRow
         title="Push notifications"
         description="Reminders and updates in this browser"
-        pressed={Boolean(prefs?.pushEnabled)}
+        pressed={pushOn}
         disabled={busy}
-        onToggle={() => { void handlePushToggle(); }}
+        onToggle={() => { void runBusy(async () => {
+          if (pushOn) await disablePush();
+          else await enablePush();
+        }); }}
       />
 
-      {prefs?.pushEnabled && (
+      {pushOn && prefs && (
         <>
+          <SectionLabel>Daily practice reminder</SectionLabel>
           <ToggleRow
-            title="Daily reminder"
+            title="Daily practice reminder"
             description="Nudge to sit at your chosen local time"
             pressed={prefs.dailyReminderEnabled}
             disabled={busy}
-            onToggle={() => { void handleDailyReminderToggle(); }}
+            onToggle={() => { void runBusy(async () => {
+              await persist({ dailyReminderEnabled: !prefs.dailyReminderEnabled });
+            }); }}
           />
 
           {prefs.dailyReminderEnabled && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={fieldsStyle}>
               <label style={fieldLabelStyle}>
                 Reminder time
                 <input
                   type="time"
                   value={prefs.dailyReminderTime}
                   disabled={busy}
-                  onChange={(e) => { void handleTimeChange(e.target.value); }}
+                  onChange={(e) => { void runBusy(async () => {
+                    await persist({ dailyReminderTime: e.target.value });
+                  }); }}
                   style={timeInputStyle}
                 />
               </label>
@@ -222,11 +191,11 @@ export function WebNotificationSettings() {
                 <select
                   value={prefs.dailyReminderFrequency}
                   disabled={busy}
-                  onChange={(e) => {
-                    void handleFrequencyChange(
-                      e.target.value as NotificationPreferencesDto["dailyReminderFrequency"],
-                    );
-                  }}
+                  onChange={(e) => { void runBusy(async () => {
+                    await persist({
+                      dailyReminderFrequency: e.target.value as NotificationPreferencesDto["dailyReminderFrequency"],
+                    });
+                  }); }}
                   style={selectStyle}
                 >
                   {frequencyOptions.map((opt) => (
@@ -234,17 +203,116 @@ export function WebNotificationSettings() {
                   ))}
                 </select>
               </label>
-              <div style={hintStyle}>
-                Timezone: {prefs.tz}
+              <label style={fieldLabelStyle}>
+                Timezone
+                <input
+                  type="text"
+                  value={tzDraft}
+                  disabled={busy}
+                  onChange={(e) => setTzDraft(e.target.value)}
+                  onBlur={() => { void runBusy(async () => {
+                    const trimmed = tzDraft.trim();
+                    if (!trimmed || trimmed === prefs.tz) return;
+                    await persist({ tz: trimmed });
+                  }); }}
+                  style={timeInputStyle}
+                  aria-describedby="notifications-tz-hint"
+                />
+              </label>
+              <div id="notifications-tz-hint" style={hintStyle}>
+                IANA timezone (e.g. America/New_York). Schedules use this zone.
               </div>
             </div>
           )}
+
+          <SectionLabel>Quiet hours</SectionLabel>
+          <ToggleRow
+            title="Quiet hours"
+            description="Pause scheduled reminders during these hours"
+            pressed={quietHoursOn}
+            disabled={busy}
+            onToggle={() => { void runBusy(async () => {
+              if (quietHoursOn) {
+                await persist({ quietHoursStart: null, quietHoursEnd: null });
+              } else {
+                await persist({ quietHoursStart: "22:00", quietHoursEnd: "07:00" });
+              }
+            }); }}
+          />
+          {quietHoursOn && prefs.quietHoursStart && prefs.quietHoursEnd && (
+            <div style={fieldsStyle}>
+              <label style={fieldLabelStyle}>
+                Quiet from
+                <input
+                  type="time"
+                  value={prefs.quietHoursStart}
+                  disabled={busy}
+                  onChange={(e) => { void runBusy(async () => {
+                    await persist({
+                      quietHoursStart: e.target.value,
+                      quietHoursEnd: prefs.quietHoursEnd,
+                    });
+                  }); }}
+                  style={timeInputStyle}
+                />
+              </label>
+              <label style={fieldLabelStyle}>
+                Quiet until
+                <input
+                  type="time"
+                  value={prefs.quietHoursEnd}
+                  disabled={busy}
+                  onChange={(e) => { void runBusy(async () => {
+                    await persist({
+                      quietHoursStart: prefs.quietHoursStart,
+                      quietHoursEnd: e.target.value,
+                    });
+                  }); }}
+                  style={timeInputStyle}
+                />
+              </label>
+            </div>
+          )}
+
+          <SectionLabel>Miss a day</SectionLabel>
+          <ToggleRow
+            title="Miss a day"
+            description="Sent when you did not practice yesterday and have not sat yet today"
+            pressed={prefs.missADayEnabled}
+            disabled={busy}
+            onToggle={() => { void runBusy(async () => {
+              await persist({ missADayEnabled: !prefs.missADayEnabled });
+            }); }}
+          />
+
+          <SectionLabel>Friend activity</SectionLabel>
+          <ToggleRow
+            title="Friend requests"
+            description="When someone sends you a friend request"
+            pressed={prefs.friendRequestNotificationsEnabled}
+            disabled={busy}
+            onToggle={() => { void runBusy(async () => {
+              await persist({ friendRequestNotificationsEnabled: !prefs.friendRequestNotificationsEnabled });
+            }); }}
+          />
         </>
       )}
 
       {error && (
         <div role="alert" style={errorStyle}>{error}</div>
       )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div style={{
+      ...labelStyle,
+      marginTop: "8px",
+    }}
+    >
+      {children}
     </div>
   );
 }
@@ -310,6 +378,16 @@ const cardStyle: CSSProperties = {
   padding: "16px 20px",
   background: "var(--surface-1)",
   borderRadius: "10px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+};
+
+const pageWrapStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+  width: "100%",
 };
 
 const labelStyle: CSSProperties = {
@@ -332,6 +410,13 @@ const errorStyle: CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
   fontSize: "11px",
   color: "var(--accent-danger-muted)",
+};
+
+const fieldsStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  paddingLeft: "4px",
 };
 
 const fieldLabelStyle: CSSProperties = {
