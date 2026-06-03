@@ -274,6 +274,25 @@ struct SettingsView: View {
                     .disabled(notificationPrefs.isSaving)
                     .accessibilityIdentifier("settings.dailyReminderToggle")
 
+                    Toggle(isOn: Binding(
+                        get: { notificationPrefs.missADayEnabled },
+                        set: { newValue in
+                            Task { await notificationPrefs.persistMissADayEnabled(newValue) }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Miss-a-day reminder")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Nudge for a quick sit if you missed yesterday")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .disabled(notificationPrefs.isSaving)
+                    .accessibilityIdentifier("settings.missADayToggle")
+
                     if notificationPrefs.dailyReminderEnabled {
                         DatePicker(
                             "Reminder time",
@@ -366,9 +385,6 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(SPColor.border1)
         )
-        .task {
-            await notificationPrefs.load()
-        }
     }
 
     @ViewBuilder

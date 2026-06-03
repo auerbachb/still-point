@@ -6,6 +6,7 @@ import StillPointShared
 final class NotificationPreferencesViewModel {
     var pushEnabled = false
     var dailyReminderEnabled = false
+    var missADayEnabled = false
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
 
@@ -46,6 +47,11 @@ final class NotificationPreferencesViewModel {
     func persistDailyReminderEnabled(_ enabled: Bool) async {
         dailyReminderEnabled = enabled
         await persist(patch: NotificationPreferencesPatch(dailyReminderEnabled: enabled))
+    }
+
+    func persistMissADayEnabled(_ enabled: Bool) async {
+        missADayEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(missADayEnabled: enabled))
     }
 
     func persistReminderTime() async {
@@ -115,6 +121,7 @@ final class NotificationPreferencesViewModel {
     private func apply(_ dto: NotificationPreferencesDTO) {
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
+        missADayEnabled = dto.missADayEnabled
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil
         if let parsed = parseHHMM(dto.dailyReminderTime) {

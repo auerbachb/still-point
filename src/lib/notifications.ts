@@ -14,7 +14,7 @@ function toApnsEnvironment(value: string): ApnsEnvironment {
 export async function sendPushNotificationToUser(params: {
   recipientUserId: string;
   payload: ApnsPayload;
-}): Promise<void> {
+}): Promise<{ delivered: boolean }> {
   const tokens = await db
     .select({
       id: deviceTokens.id,
@@ -24,6 +24,12 @@ export async function sendPushNotificationToUser(params: {
     .from(deviceTokens)
     .where(and(eq(deviceTokens.userId, params.recipientUserId), eq(deviceTokens.enabled, true)));
 
+  if (tokens.length === 0) {
+    return { delivered: false };
+  }
+
+  let delivered = false;
+
   for (let i = 0; i < tokens.length; i += PUSH_SEND_CONCURRENCY) {
     const batch = tokens.slice(i, i + PUSH_SEND_CONCURRENCY);
     await Promise.all(batch.map(async (row) => {
@@ -31,6 +37,7 @@ export async function sendPushNotificationToUser(params: {
         const result = await sendApnsNotification(row.token, toApnsEnvironment(row.apnsEnvironment), params.payload);
         const now = new Date();
         if (result.ok) {
+          delivered = true;
           await db.update(deviceTokens).set({ lastUsedAt: now, updatedAt: now }).where(eq(deviceTokens.id, row.id));
           return;
         }
@@ -49,7 +56,11 @@ export async function sendPushNotificationToUser(params: {
       }
     }));
   }
+
+  return { delivered };
 }
+
+export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
 
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
@@ -58,6 +69,26 @@ export async function sendDailyReminderNotification(params: {
   await sendPushNotificationToUser({
     recipientUserId: params.recipientUserId,
     payload: buildDailyReminderPayload(params.streak ?? 0),
+  });
+}
+
+export async function sendMissADayNotification(params: {
+  recipientUserId: string;
+}): Promise<{ delivered: boolean }> {
+  return sendPushNotificationToUser({
+    recipientUserId: params.recipientUserId,
+    payload: {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Missed yesterday — try a quick 1-min sit to get back.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "miss_a_day",
+      deepLink: MISS_A_DAY_DEEP_LINK,
+    },
   });
 }
 

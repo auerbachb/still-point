@@ -121,6 +121,27 @@ describe("sendFriendRequestNotification", () => {
     });
   });
 
+  test("sends the miss-a-day APNs payload with quick session deep link", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Missed yesterday — try a quick 1-min sit to get back.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "miss_a_day",
+      deepLink: "stillpoint://session/quick",
+    });
+  });
+
   test("limits APNs sends to bounded batches", async () => {
     for (let i = 0; i < 7; i += 1) {
       tokenRows.push({ id: `dt-${i}`, token: `${i}`.repeat(64), apnsEnvironment: "development" });

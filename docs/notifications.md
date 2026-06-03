@@ -45,17 +45,24 @@ Partial update. Supported fields:
 - **Route:** `GET|POST /api/cron/dispatch-notifications`
 - **Schedule:** every 5 minutes (`vercel.json` crons)
 - **Auth:** `Authorization: Bearer $CRON_SECRET` (required in production)
-- **Window:** matches users whose local reminder time falls within the last 5 minutes
+- **Window:** matches users whose local reminder time falls within the last 5 minutes (including windows that cross local midnight)
 - **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
 - **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
+- **One push per local calendar day:** before sending, the scheduler checks `notification_dispatches` for any row with `window_key` equal to the user's local `YYYY-MM-DD`. Miss-a-day and daily reminder share this cap when frequency is `daily`.
 
-## Adding a notification type
+## Notification types
 
-1. **Preference flag** — Add a boolean column on `notification_preferences` (migration + schema + PATCH validation).
-2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` using `sendPushNotificationToUser` with a distinct `type` in the payload.
-3. **Scheduler branch** — In `src/lib/notification-scheduler.ts`, select eligible users, compute a stable `window_key`, call `claimNotificationDispatch`, then the send helper.
-4. **iOS** — Expose the flag in Settings (PATCH preferences) and handle the payload `type` when the user taps the notification.
-5. **Tests** — Unit tests for preference validation, scheduler gating, and idempotent `claimNotificationDispatch`.
+| Type | Issue | Deep link | Precedence |
+|------|-------|-----------|------------|
+| `miss_a_day` | #247 | `stillpoint://session/quick` | Wins over daily reminder when yesterday was missed |
+| `daily_reminder` | #346 | `stillpoint://home` | Default when miss-a-day does not apply |
+
+### Miss-a-day (#247)
+
+- Gated by: `push_enabled` && `miss_a_day_enabled`
+- Fires in the user's daily reminder window when they have **not** completed a session today and **did not** complete one yesterday (local dates)
+- Uses `window_key` = local `YYYY-MM-DD` and type `miss_a_day`
+- Helper: `sendMissADayNotification`
 
 ### Daily reminder (#346)
 
@@ -65,10 +72,19 @@ Partial update. Supported fields:
 - Gated by: `push_enabled` && `daily_reminder_enabled`, not in quiet hours, frequency rule, no completed session today, no `miss_a_day` dispatch for the same local date
 - iOS: `PushNotificationCoordinator` queues cold-start deep links until `RootView` wires `deepLinkHandler`
 
+## Adding a notification type
+
+1. **Preference flag** — Add a boolean column on `notification_preferences` (migration + schema + PATCH validation).
+2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` using `sendPushNotificationToUser` with a distinct `type` in the payload.
+3. **Scheduler branch** — In `src/lib/notification-scheduler.ts`, select eligible users, compute a stable `window_key`, call `claimNotificationDispatch`, then the send helper. Roll back the dispatch row if APNs delivery fails.
+4. **iOS** — Expose the flag in Settings (PATCH preferences) and handle the payload `type` / `deepLink` when the user taps the notification.
+5. **Tests** — Unit tests for preference validation, scheduler gating, and idempotent `claimNotificationDispatch`.
+
 ## iOS
 
-- Settings → **NOTIFICATIONS**: master push toggle (triggers system permission on first opt-in), daily reminder toggle, time picker, frequency picker, quiet hours.
+- Settings → **NOTIFICATIONS**: master push toggle (triggers system permission on first opt-in), daily reminder toggle, miss-a-day toggle, time picker, frequency picker, quiet hours.
 - `PushNotificationCoordinator.requestAuthorizationAndRegister()` runs when the user enables push; login only re-registers the device token if permission was already granted.
+- Tap handling: `PushNotificationCoordinator` stores pending deep links; `AppViewModel.consumePendingSessionDeepLinkIfNeeded()` opens `stillpoint://session` or `stillpoint://session/quick`.
 - Device tokens: `POST|DELETE /api/device-token` (unchanged from #203).
 
 ## Security
@@ -79,5 +95,6 @@ Partial update. Supported fields:
 ## Related issues
 
 - #203 — APNs + `device_tokens`
-- #346 — Daily reminder product behavior (builds on this foundation)
-- #347 — Miss-a-day notifications
+- #345 — Notification preferences foundation
+- #346 — Daily reminder
+- #247 — Miss-a-day notifications

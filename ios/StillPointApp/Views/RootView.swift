@@ -126,6 +126,11 @@ struct RootView: View {
         .onOpenURL { url in
             appVM.handleIncomingURL(url)
         }
+        .task {
+            PushNotificationCoordinator.shared.deepLinkHandler = { url in
+                appVM.handlePushDeepLink(url)
+            }
+        }
     }
 
     private var viewAccessibilitySlug: String {

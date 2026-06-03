@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDispatches, notificationPreferences } from "@/db/schema";
 import type { DailyReminderFrequency } from "@/lib/notification-preferences";
@@ -7,7 +7,7 @@ import {
   loadUserStreak,
   userCompletedSessionOnDate,
 } from "@/lib/notifications/daily-reminder";
-import { sendDailyReminderNotification } from "@/lib/notifications";
+import { sendDailyReminderNotification, sendMissADayNotification } from "@/lib/notifications";
 
 const CRON_WINDOW_MINUTES = 5;
 
@@ -147,10 +147,31 @@ export async function claimNotificationDispatch(params: {
   return inserted.length > 0;
 }
 
+function addCalendarDays(dateKey: string, deltaDays: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d + deltaDays));
+  return utc.toISOString().slice(0, 10);
+}
+
+async function hasDispatchForLocalDate(userId: string, dateKey: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: notificationDispatches.id })
+    .from(notificationDispatches)
+    .where(
+      and(
+        eq(notificationDispatches.userId, userId),
+        eq(notificationDispatches.windowKey, dateKey),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function dispatchDueNotifications(now: Date = new Date()): Promise<{
   scanned: number;
   sent: number;
   skipped: number;
+  missADaySent: number;
 }> {
   const candidates = await db
     .select()
@@ -158,12 +179,16 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
     .where(
       and(
         eq(notificationPreferences.pushEnabled, true),
-        eq(notificationPreferences.dailyReminderEnabled, true),
+        or(
+          eq(notificationPreferences.dailyReminderEnabled, true),
+          eq(notificationPreferences.missADayEnabled, true),
+        ),
       ),
     );
 
   let sent = 0;
   let skipped = 0;
+  let missADaySent = 0;
 
   for (const prefs of candidates) {
     try {
@@ -176,6 +201,48 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
+        skipped += 1;
+        continue;
+      }
+
+      if (await hasDispatchForLocalDate(prefs.userId, local.dateKey)) {
+        skipped += 1;
+        continue;
+      }
+
+      if (prefs.missADayEnabled) {
+        const yesterday = addCalendarDays(local.dateKey, -1);
+        const meditatedToday = await userCompletedSessionOnDate(prefs.userId, local.dateKey);
+        const completedYesterday = await userCompletedSessionOnDate(prefs.userId, yesterday);
+
+        if (!meditatedToday && !completedYesterday) {
+          const claimed = await claimNotificationDispatch({
+            userId: prefs.userId,
+            notificationType: "miss_a_day",
+            windowKey: local.dateKey,
+          });
+
+          if (claimed) {
+            const { delivered } = await sendMissADayNotification({ recipientUserId: prefs.userId });
+            if (delivered) {
+              missADaySent += 1;
+              sent += 1;
+              continue;
+            }
+            await db
+              .delete(notificationDispatches)
+              .where(
+                and(
+                  eq(notificationDispatches.userId, prefs.userId),
+                  eq(notificationDispatches.notificationType, "miss_a_day"),
+                  eq(notificationDispatches.windowKey, local.dateKey),
+                ),
+              );
+          }
+        }
+      }
+
+      if (!prefs.dailyReminderEnabled) {
         skipped += 1;
         continue;
       }
@@ -231,5 +298,5 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
     }
   }
 
-  return { scanned: candidates.length, sent, skipped };
+  return { scanned: candidates.length, sent, skipped, missADaySent };
 }
