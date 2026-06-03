@@ -178,6 +178,9 @@ final class AppViewModel {
     func didLogin(user: UserDTO) {
         currentUser = user
         currentView = .home
+        // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
+        // across auth transitions now that selectedTab lives on the view model.
+        selectedTab = 0
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         Task {
@@ -292,6 +295,7 @@ final class AppViewModel {
 
     func returnHome() async {
         currentView = .home
+        selectedTab = 0
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }
