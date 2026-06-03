@@ -5,6 +5,7 @@ struct HomeView: View {
     let appVM: AppViewModel
 
     @State private var breatheAnimation = false
+    @State private var showAppGateOnboarding = false
 
     var body: some View {
         ScrollView {
@@ -37,6 +38,8 @@ struct HomeView: View {
                     .font(SPFont.mono(14, weight: .light))
                     .foregroundStyle(Color(SPColor.fg3))
                     .tracking(2)
+
+                appGatePill
 
                 Spacer().frame(height: SPSpacing.s4)
 
@@ -114,6 +117,55 @@ struct HomeView: View {
             .safeAreaPadding(.bottom, SPSpacing.s4)
         }
         .stillPointBackground()
+        .onAppear {
+            maybePresentAppGateOnboarding()
+        }
+        .sheet(isPresented: $showAppGateOnboarding) {
+            AppGateOnboardingSheet(appVM: appVM, isPresented: $showAppGateOnboarding)
+        }
+    }
+
+    /// Persistent app-gate status indicator. Hidden until the user has picked apps
+    /// to block; tapping jumps to the Settings tab where the gate is configured.
+    @ViewBuilder
+    private var appGatePill: some View {
+        let manager = appVM.appBlockingManager
+        if manager.hasSelection {
+            Button {
+                appVM.selectedTab = 4
+            } label: {
+                HStack(spacing: SPSpacing.s2) {
+                    Image(systemName: manager.isUnlocked ? "lock.open" : "lock")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(manager.isUnlocked ? "Apps unlocked until midnight" : "Apps locked — meditate to unlock")
+                        .font(SPFont.mono(11, weight: .medium))
+                        .tracking(1)
+                }
+                .foregroundStyle(manager.isUnlocked ? SPColor.greenText : SPColor.amberText)
+                .padding(.horizontal, SPSpacing.s3)
+                .padding(.vertical, SPSpacing.s2)
+                .background(manager.isUnlocked ? SPColor.greenBgFaint : SPColor.amberBgFaint)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(manager.isUnlocked ? SPColor.greenBorderSubtle : SPColor.amberBorderSubtle)
+                )
+            }
+            .accessibilityIdentifier("home.appGatePill")
+            .accessibilityLabel(manager.isUnlocked ? "Apps unlocked until midnight" : "Apps locked, meditate to unlock")
+        }
+    }
+
+    /// First-run prompt asking whether to set up the app gate. Shown at most once,
+    /// and never during UI tests (it would block the home screen).
+    private func maybePresentAppGateOnboarding() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+        let key = "appBlocking.onboardingShown.v1"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
+        if !appVM.appBlockingManager.hasSelection {
+            showAppGateOnboarding = true
+        }
     }
 
     private var faqSection: some View {
@@ -132,7 +184,7 @@ struct HomeView: View {
             )
             faqItem(
                 q: "How does the app gate work?",
-                a: "In Settings, choose apps for Still Point to hold. They stay blocked until you complete the timer, then open for two hours. Ending early keeps them blocked."
+                a: "In Settings, choose apps for Still Point to hold. They stay blocked until you complete today's session, then open for the rest of the day and re-lock at midnight. Ending early keeps them blocked."
             )
             faqItem(
                 q: "This app is incredibly boring. What's the point?",
@@ -150,5 +202,58 @@ struct HomeView: View {
                 .font(SPFont.serif(15, weight: .light))
                 .foregroundStyle(Color(SPColor.fg3))
         }
+    }
+}
+
+private struct AppGateOnboardingSheet: View {
+    let appVM: AppViewModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        VStack(spacing: SPSpacing.s4) {
+            Spacer()
+            Image(systemName: "lock.shield")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(SPColor.greenText)
+            Text("Block distracting apps until you meditate?")
+                .font(SPFont.serifItalic(24, weight: .light))
+                .foregroundStyle(Color(SPColor.fg))
+                .multilineTextAlignment(.center)
+            Text("Pick a few apps for Still Point to hold. They stay blocked until you complete today's session, then open for the rest of the day and re-lock at midnight.")
+                .font(SPFont.serif(15, weight: .light))
+                .foregroundStyle(Color(SPColor.fg3))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SPSpacing.s4)
+            Spacer()
+            VStack(spacing: SPSpacing.s2) {
+                Button {
+                    isPresented = false
+                    appVM.selectedTab = 4
+                } label: {
+                    Text("Choose apps")
+                        .font(SPFont.mono(13, weight: .medium))
+                        .foregroundStyle(Color(SPColor.bg))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, SPSpacing.s3)
+                        .background(SPColor.green)
+                        .clipShape(Capsule())
+                }
+                .accessibilityIdentifier("onboarding.appGate.chooseApps")
+
+                Button {
+                    isPresented = false
+                } label: {
+                    Text("Not now")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(Color(SPColor.fg3))
+                        .padding(.vertical, SPSpacing.s2)
+                }
+                .accessibilityIdentifier("onboarding.appGate.notNow")
+            }
+            .padding(.horizontal, SPSpacing.s4)
+            .padding(.bottom, SPSpacing.s4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .stillPointBackground()
     }
 }

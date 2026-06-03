@@ -26,7 +26,7 @@ struct AppBlockingSettingsView: View {
                     .foregroundStyle(Color(SPColor.fg2))
                     .accessibilityIdentifier("appBlocking.statusText")
 
-                Text("A completed timer unlocks them for \(manager.unlockWindowText). Ending early keeps the gate closed.")
+                Text("A completed session unlocks them for the rest of the day; they re-lock at midnight. Ending early keeps the gate closed.")
                     .font(SPFont.serif(13, weight: .light))
                     .foregroundStyle(Color(SPColor.fg4))
             }

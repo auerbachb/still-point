@@ -165,7 +165,7 @@ struct SessionView: View {
                     sessionType: vm.sessionType,
                     duration: vm.plannedSeconds,
                     bonusSeconds: vm.bonusSeconds,
-                    unlockAppGate: vm.completedNaturally && vm.sessionType == .standard
+                    unlockAppGate: vm.completedNaturally
                 )
             }
         } message: {
@@ -552,7 +552,7 @@ struct SessionView: View {
                 sessionType: session.sessionType,
                 duration: vm.plannedSeconds,
                 bonusSeconds: vm.bonusSeconds,
-                unlockAppGate: vm.completedNaturally && session.sessionType == .standard
+                unlockAppGate: vm.completedNaturally
             )
         }
     }

@@ -57,6 +57,9 @@ final class AppViewModel {
     private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
 
     var currentView: AppView = .auth
+    /// Selected tab in `MainTabView`, lifted here so non-tab views (e.g. the Home
+    /// app-gate pill) can navigate to a tab. 0 = Home … 4 = Settings.
+    var selectedTab: Int = AppViewModel.defaultSelectedTab()
     var currentUser: UserDTO?
     var isLoading = true
     var authStatusMessage: String?
@@ -167,9 +170,17 @@ final class AppViewModel {
         return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
+    /// Initial tab index. Honors SP_UI_TEST_FORCE_PROGRESS_TAB (Progress = 1).
+    private static func defaultSelectedTab() -> Int {
+        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_PROGRESS_TAB"]) ? 1 : 0
+    }
+
     func didLogin(user: UserDTO) {
         currentUser = user
         currentView = .home
+        // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
+        // across auth transitions now that selectedTab lives on the view model.
+        selectedTab = 0
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         Task {
@@ -263,7 +274,9 @@ final class AppViewModel {
         bonusSeconds: Int = 0,
         unlockAppGate: Bool
     ) {
-        if unlockAppGate && sessionType == .standard {
+        // Daily-lock model (#348): any naturally-completed session — quick-minute
+        // or standard — unlocks the gated apps for the rest of the day.
+        if unlockAppGate {
             appBlockingManager.unlockAfterCompletedSession()
         } else {
             appBlockingManager.prepareForSession()
@@ -282,6 +295,7 @@ final class AppViewModel {
 
     func returnHome() async {
         currentView = .home
+        selectedTab = 0
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }

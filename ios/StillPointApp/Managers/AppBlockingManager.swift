@@ -5,104 +5,111 @@ import Foundation
 @Observable
 @MainActor
 final class AppBlockingManager {
-    static let unlockWindow: TimeInterval = 2 * 60 * 60
-
-    var unlockUntil: Date?
+    var unlockedForDate: Date?
     var lastErrorMessage: String?
     var isApplyingShield = false
     private(set) var didUnlockFromLastCompletedSession = false
 
     private let defaults: UserDefaults
-    private let unlockUntilKey = "appBlocking.unlockUntil.v1"
+    private let unlockedForDateKey = "appBlocking.unlockedForDate.v1"
     private let uiTestSelectionEnabled: Bool
-    private var unlockTimer: Timer?
+    private var midnightTimer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.unlockUntil = defaults.object(forKey: unlockUntilKey) as? Date
+        self.unlockedForDate = defaults.object(forKey: unlockedForDateKey) as? Date
         self.uiTestSelectionEnabled = ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
-        scheduleUnlockExpiryTimer()
+        refreshShielding()
     }
 
     var isAuthorizationApproved: Bool { uiTestSelectionEnabled }
     var hasSelection: Bool { uiTestSelectionEnabled }
     var selectedItemCount: Int { uiTestSelectionEnabled ? 1 : 0 }
 
+    /// Unlocked when a qualifying session was completed earlier *today* (local calendar day).
     var isUnlocked: Bool {
-        guard let unlockUntil else { return false }
-        return unlockUntil > Date()
+        guard let unlockedForDate else { return false }
+        return Calendar.current.isDateInToday(unlockedForDate)
     }
 
     var statusText: String {
         guard hasSelection else {
             return "Choose the apps you want Still Point to hold during practice."
         }
-        if isUnlocked, let unlockUntil {
-            return "Unlocked until \(Self.timeFormatter.string(from: unlockUntil))."
+        if isUnlocked {
+            return "Unlocked for the rest of today."
         }
-        return "Selected apps stay blocked until you complete a session."
+        return "Blocked until you complete today's sit."
     }
-
-    var unlockWindowText: String { "2 hours" }
 
     func requestAuthorizationIfNeeded() async {}
     func persistSelectionAndRefreshShielding() {}
+
+    /// Called when a session ends *without* a qualifying completion (e.g. ended early).
+    /// In the daily-lock model this neither grants nor revokes today's unlock — if a
+    /// qualifying session was already completed today the apps stay unlocked until
+    /// midnight; otherwise they remain blocked.
     func prepareForSession() {
         didUnlockFromLastCompletedSession = false
-        unlockUntil = nil
-        defaults.removeObject(forKey: unlockUntilKey)
-        scheduleUnlockExpiryTimer()
+        refreshShielding()
     }
 
     func unlockAfterCompletedSession() {
         didUnlockFromLastCompletedSession = false
         guard hasSelection else { return }
-        unlockUntil = Date().addingTimeInterval(Self.unlockWindow)
+        unlockedForDate = Date()
         didUnlockFromLastCompletedSession = true
-        defaults.set(unlockUntil, forKey: unlockUntilKey)
-        scheduleUnlockExpiryTimer()
+        defaults.set(unlockedForDate, forKey: unlockedForDateKey)
+        scheduleMidnightResetTimer()
     }
 
     func lockNow() {
         didUnlockFromLastCompletedSession = false
-        unlockUntil = nil
-        defaults.removeObject(forKey: unlockUntilKey)
-        scheduleUnlockExpiryTimer()
+        unlockedForDate = nil
+        defaults.removeObject(forKey: unlockedForDateKey)
+        scheduleMidnightResetTimer()
     }
 
     func refreshShielding() {
-        guard hasSelection else {
-            unlockUntil = nil
+        // Daily reset: an unlock only counts for the calendar day it was earned.
+        // When the app foregrounds (or the midnight timer fires) on a new day, the
+        // stale date is cleared and the apps re-lock.
+        if let unlockedForDate, !Calendar.current.isDateInToday(unlockedForDate) {
+            self.unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockUntilKey)
-            scheduleUnlockExpiryTimer()
-            return
+            defaults.removeObject(forKey: unlockedForDateKey)
         }
 
-        if let unlockUntil, unlockUntil <= Date() {
-            self.unlockUntil = nil
+        if !hasSelection {
+            unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockUntilKey)
+            defaults.removeObject(forKey: unlockedForDateKey)
         }
-        scheduleUnlockExpiryTimer()
+        scheduleMidnightResetTimer()
     }
 
-    private func scheduleUnlockExpiryTimer() {
-        unlockTimer?.invalidate()
-        guard let unlockUntil, unlockUntil > Date() else { return }
-        unlockTimer = Timer.scheduledTimer(withTimeInterval: unlockUntil.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+    /// Schedule a one-shot timer for the next local midnight so apps re-lock even
+    /// if the app stays foregrounded across the day boundary. Only needed while unlocked.
+    private func scheduleMidnightResetTimer() {
+        midnightTimer?.invalidate()
+        midnightTimer = nil
+        guard isUnlocked, let nextMidnight = Self.nextLocalMidnight() else { return }
+        let interval = nextMidnight.timeIntervalSinceNow
+        guard interval > 0 else { return }
+        midnightTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshShielding()
             }
         }
     }
 
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.dateStyle = .none
-        return formatter
-    }()
+    private static func nextLocalMidnight() -> Date? {
+        Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        )
+    }
 }
 
 #else
@@ -113,11 +120,9 @@ import ManagedSettings
 @Observable
 @MainActor
 final class AppBlockingManager {
-    static let unlockWindow: TimeInterval = 2 * 60 * 60
-
     var selection: FamilyActivitySelection
     var authorizationStatus: AuthorizationStatus
-    var unlockUntil: Date?
+    var unlockedForDate: Date?
     var lastErrorMessage: String?
     var isApplyingShield = false
     private(set) var didUnlockFromLastCompletedSession = false
@@ -125,10 +130,10 @@ final class AppBlockingManager {
     private let defaults: UserDefaults
     private let store: ManagedSettingsStore?
     private let selectionKey = "appBlocking.selection.v1"
-    private let unlockUntilKey = "appBlocking.unlockUntil.v1"
+    private let unlockedForDateKey = "appBlocking.unlockedForDate.v1"
     private let uiTestMode: Bool
     private let uiTestSelectionEnabled: Bool
-    private var unlockTimer: Timer?
+    private var midnightTimer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         let environment = ProcessInfo.processInfo.environment
@@ -136,7 +141,7 @@ final class AppBlockingManager {
         let uiTestSelectionEnabled = environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
         self.defaults = defaults
         self.selection = Self.loadSelection(defaults: defaults, key: selectionKey)
-        self.unlockUntil = defaults.object(forKey: unlockUntilKey) as? Date
+        self.unlockedForDate = defaults.object(forKey: unlockedForDateKey) as? Date
         self.authorizationStatus = uiTestMode ? .notDetermined : AuthorizationCenter.shared.authorizationStatus
         self.uiTestMode = uiTestMode
         self.uiTestSelectionEnabled = uiTestSelectionEnabled
@@ -161,23 +166,20 @@ final class AppBlockingManager {
         return realSelectedItemCount
     }
 
+    /// Unlocked when a qualifying session was completed earlier *today* (local calendar day).
     var isUnlocked: Bool {
-        guard let unlockUntil else { return false }
-        return unlockUntil > Date()
+        guard let unlockedForDate else { return false }
+        return Calendar.current.isDateInToday(unlockedForDate)
     }
 
     var statusText: String {
         guard hasSelection else {
             return "Choose the apps you want Still Point to hold during practice."
         }
-        if isUnlocked, let unlockUntil {
-            return "Unlocked until \(Self.timeFormatter.string(from: unlockUntil))."
+        if isUnlocked {
+            return "Unlocked for the rest of today."
         }
-        return "Selected apps stay blocked until you complete a session."
-    }
-
-    var unlockWindowText: String {
-        "2 hours"
+        return "Blocked until you complete today's sit."
     }
 
     func requestAuthorizationIfNeeded() async {
@@ -195,33 +197,36 @@ final class AppBlockingManager {
 
     func persistSelectionAndRefreshShielding() {
         saveSelection()
+        // Note: if the user has already unlocked for today, refreshShielding() leaves
+        // newly added apps unshielded — they "earned" today already and only start
+        // blocking tomorrow. Adding apps while still blocked shields them immediately.
         refreshShielding()
     }
 
+    /// Called when a session ends *without* a qualifying completion (e.g. ended early).
+    /// In the daily-lock model this neither grants nor revokes today's unlock — if a
+    /// qualifying session was already completed today the apps stay unlocked until
+    /// midnight; otherwise they remain blocked.
     func prepareForSession() {
         didUnlockFromLastCompletedSession = false
-        unlockUntil = nil
-        defaults.removeObject(forKey: unlockUntilKey)
-        scheduleUnlockExpiryTimer()
         refreshShielding()
     }
 
     func unlockAfterCompletedSession() {
         didUnlockFromLastCompletedSession = false
         guard hasSelection else { return }
-        unlockUntil = Date().addingTimeInterval(Self.unlockWindow)
+        unlockedForDate = Date()
         didUnlockFromLastCompletedSession = true
-        defaults.set(unlockUntil, forKey: unlockUntilKey)
+        defaults.set(unlockedForDate, forKey: unlockedForDateKey)
         lastErrorMessage = nil
         clearShielding()
-        scheduleUnlockExpiryTimer()
+        scheduleMidnightResetTimer()
     }
 
     func lockNow() {
         didUnlockFromLastCompletedSession = false
-        unlockUntil = nil
-        defaults.removeObject(forKey: unlockUntilKey)
-        scheduleUnlockExpiryTimer()
+        unlockedForDate = nil
+        defaults.removeObject(forKey: unlockedForDateKey)
         refreshShielding()
     }
 
@@ -230,23 +235,26 @@ final class AppBlockingManager {
             authorizationStatus = AuthorizationCenter.shared.authorizationStatus
         }
 
-        if let unlockUntil, unlockUntil <= Date() {
-            self.unlockUntil = nil
+        // Daily reset: an unlock only counts for the calendar day it was earned.
+        // When the app foregrounds (or the midnight timer fires) on a new day, the
+        // stale date is cleared and the apps re-lock.
+        if let unlockedForDate, !Calendar.current.isDateInToday(unlockedForDate) {
+            self.unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockUntilKey)
+            defaults.removeObject(forKey: unlockedForDateKey)
         }
 
         if !hasSelection {
-            unlockUntil = nil
+            unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockUntilKey)
-            scheduleUnlockExpiryTimer()
+            defaults.removeObject(forKey: unlockedForDateKey)
+            scheduleMidnightResetTimer()
             clearShielding()
             return
         }
 
         guard !isUnlocked else {
-            scheduleUnlockExpiryTimer()
+            scheduleMidnightResetTimer()
             clearShielding()
             return
         }
@@ -257,7 +265,7 @@ final class AppBlockingManager {
         }
 
         applyShielding()
-        scheduleUnlockExpiryTimer()
+        scheduleMidnightResetTimer()
     }
 
     private var realSelectedItemCount: Int {
@@ -293,14 +301,27 @@ final class AppBlockingManager {
         store?.clearAllSettings()
     }
 
-    private func scheduleUnlockExpiryTimer() {
-        unlockTimer?.invalidate()
-        guard let unlockUntil, unlockUntil > Date() else { return }
-        unlockTimer = Timer.scheduledTimer(withTimeInterval: unlockUntil.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+    /// Schedule a one-shot timer for the next local midnight so apps re-lock even
+    /// if the app stays foregrounded across the day boundary. Only needed while unlocked.
+    private func scheduleMidnightResetTimer() {
+        midnightTimer?.invalidate()
+        midnightTimer = nil
+        guard isUnlocked, let nextMidnight = Self.nextLocalMidnight() else { return }
+        let interval = nextMidnight.timeIntervalSinceNow
+        guard interval > 0 else { return }
+        midnightTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshShielding()
             }
         }
+    }
+
+    private static func nextLocalMidnight() -> Date? {
+        Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        )
     }
 
     private func saveSelection() {
@@ -321,13 +342,6 @@ final class AppBlockingManager {
         }
         return decoded
     }
-
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.dateStyle = .none
-        return formatter
-    }()
 }
 
 #endif
