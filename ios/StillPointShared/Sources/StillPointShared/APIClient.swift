@@ -389,6 +389,51 @@ public actor APIClient {
         return response.session
     }
 
+    /// Unified multi-buddy calendar (`GET /api/buddy/sessions/calendar`).
+    public func getBuddyCalendar(
+        from: String? = nil,
+        to: String? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> BuddyCalendarListResponse {
+        try await get(buddyCalendarPath("/api/buddy/sessions/calendar", from: from, to: to, limit: limit, offset: offset))
+    }
+
+    /// Per-buddy shared calendar (`GET /api/buddy/sessions/calendar/{buddyId}`).
+    public func getBuddyCalendarForBuddy(
+        buddyId: String,
+        from: String? = nil,
+        to: String? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> BuddyCalendarListResponse {
+        try await get(
+            buddyCalendarPath(
+                "/api/buddy/sessions/calendar/\(buddyId)",
+                from: from,
+                to: to,
+                limit: limit,
+                offset: offset
+            )
+        )
+    }
+
+    private func buddyCalendarPath(
+        _ base: String,
+        from: String?,
+        to: String?,
+        limit: Int?,
+        offset: Int?
+    ) -> String {
+        var parts: [String] = []
+        if let from { parts.append("from=\(from.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? from)") }
+        if let to { parts.append("to=\(to.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? to)") }
+        if let limit { parts.append("limit=\(limit)") }
+        if let offset { parts.append("offset=\(offset)") }
+        guard !parts.isEmpty else { return base }
+        return "\(base)?\(parts.joined(separator: "&"))"
+    }
+
     // MARK: - HTTP Helpers
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

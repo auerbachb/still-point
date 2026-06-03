@@ -193,6 +193,31 @@ public struct BuddyParticipantDTO: Codable, Sendable {
     public let participantCompletedAt: String?
 }
 
+// MARK: - Buddy Calendar API Types (#350 / #358)
+
+public struct BuddyCalendarParticipant: Codable, Sendable {
+    public let userId: String
+    public let username: String
+}
+
+public struct BuddyCalendarSession: Codable, Sendable {
+    public let id: String
+    public let state: String
+    public let durationSeconds: Int
+    public let calendarDate: String
+    public let scheduledStartAt: String?
+    public let startedAt: String?
+    public let participants: [BuddyCalendarParticipant]
+    public let buddyIds: [String]
+}
+
+public struct BuddyCalendarListResponse: Codable, Sendable {
+    public let sessions: [BuddyCalendarSession]
+    public let fromDate: String
+    public let toDate: String
+    public let hasMore: Bool
+}
+
 public struct BuddySnapshotDTO: Codable, Sendable {
     public let id: String
     public let state: String

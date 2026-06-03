@@ -46,6 +46,10 @@
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
 		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
 		F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EAF998E3470CBB4056699F /* BlockGridView.swift */; };
+		17A346000000000000000001 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000011 /* BuddyCalendarViewModel.swift */; };
+		17A346000000000000000002 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000012 /* BuddyCalendarView.swift */; };
+		17A346000000000000000003 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000013 /* SessionStateBadge.swift */; };
+		17A346000000000000000004 /* BuddyFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000014 /* BuddyFilterChips.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -91,6 +95,10 @@
 		DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
 		FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
 		09E9BBE4830753E3B8FCC1C0 /* BuddyActiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyActiveSessionView.swift; sourceTree = "<group>"; };
+		17A346000000000000000011 /* BuddyCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarViewModel.swift; sourceTree = "<group>"; };
+		17A346000000000000000012 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
+		17A346000000000000000013 /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
+		17A346000000000000000014 /* BuddyFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyFilterChips.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +118,7 @@
 			children = (
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
 				9AEB18D5D4C55CB98F814D43 /* BuddySession */,
+				17A346000000000000000010 /* BuddyCalendar */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
@@ -209,6 +218,16 @@
 			path = BuddySession;
 			sourceTree = "<group>";
 		};
+		17A346000000000000000010 /* BuddyCalendar */ = {
+			isa = PBXGroup;
+			children = (
+				17A346000000000000000012 /* BuddyCalendarView.swift */,
+				17A346000000000000000014 /* BuddyFilterChips.swift */,
+				17A346000000000000000013 /* SessionStateBadge.swift */,
+			);
+			path = BuddyCalendar;
+			sourceTree = "<group>";
+		};
 		70234ED5699E0294984184EC = {
 			isa = PBXGroup;
 			children = (
@@ -242,6 +261,7 @@
 				DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */,
 				0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
+				17A346000000000000000011 /* BuddyCalendarViewModel.swift */,
 				FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */,
 				42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */,
 				17A345000000000000000001 /* NotificationPreferencesViewModel.swift */,
@@ -349,6 +369,10 @@
 				760C4A2F57E6B207F729ABEA /* BuddyActiveSessionView.swift in Sources */,
 				25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */,
 				3F95AB4ED8A3AB01D8D2B042 /* BuddySessionHubView.swift in Sources */,
+				17A346000000000000000001 /* BuddyCalendarViewModel.swift in Sources */,
+				17A346000000000000000002 /* BuddyCalendarView.swift in Sources */,
+				17A346000000000000000003 /* SessionStateBadge.swift in Sources */,
+				17A346000000000000000004 /* BuddyFilterChips.swift in Sources */,
 				42BF1908A778629F7C747264 /* BuddySessionViewModel.swift in Sources */,
 				16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */,
 				4FF6F665DB343AF63E7E1718 /* BuddyWaitingRoomView.swift in Sources */,
