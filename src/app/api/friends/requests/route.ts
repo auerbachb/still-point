@@ -1,12 +1,9 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { friendRequests, friendships, users } from "@/db/schema";
+import { friendRequests, friendships, notificationPreferences, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { orderedUserPair, isUuid } from "@/lib/friends";
-import {
-  friendRequestNotificationsAllowed,
-  getOrCreateNotificationPreferences,
-} from "@/lib/notification-preferences";
+import { friendRequestNotificationsAllowed } from "@/lib/notification-preferences";
 import { sendFriendRequestNotification } from "@/lib/notifications";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, or } from "drizzle-orm";
@@ -133,8 +130,16 @@ export async function POST(request: NextRequest) {
 
       after(async () => {
         try {
-          const prefs = await getOrCreateNotificationPreferences(created.toUserId);
-          if (!friendRequestNotificationsAllowed(prefs)) {
+          const [prefs] = await db
+            .select({
+              pushEnabled: notificationPreferences.pushEnabled,
+              friendRequestNotificationsEnabled: notificationPreferences.friendRequestNotificationsEnabled,
+            })
+            .from(notificationPreferences)
+            .where(eq(notificationPreferences.userId, created.toUserId))
+            .limit(1);
+          // Only gate if a prefs row exists — no row means user hasn't configured preferences yet
+          if (prefs && !friendRequestNotificationsAllowed(prefs)) {
             return;
           }
           await sendFriendRequestNotification({

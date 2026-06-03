@@ -71,7 +71,10 @@ export async function subscribeBrowserPush(publicKey: string): Promise<PushSubsc
 }
 
 export async function unsubscribeBrowserPush(): Promise<PushSubscription | null> {
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  if (!registration) {
+    return null;
+  }
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
     return null;

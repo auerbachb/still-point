@@ -13,7 +13,7 @@ const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic",
 const PUSH_SEND_CONCURRENCY = 3;
 
 export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
-export const FRIEND_REQUEST_DEEP_LINK = "stillpoint://friends";
+export const FRIEND_REQUEST_DEEP_LINK = "stillpoint://home";
 export const FRIEND_REQUEST_WEB_URL = "/app?view=friends";
 
 function toApnsEnvironment(value: string): ApnsEnvironment {
@@ -85,9 +85,9 @@ async function fanOutChannels(
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
   streak?: number;
-}): Promise<void> {
+}): Promise<{ delivered: boolean }> {
   const streak = params.streak ?? 0;
-  await fanOutChannels([
+  const delivered = await fanOutChannels([
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: buildDailyReminderPayload(streak),
@@ -97,6 +97,7 @@ export async function sendDailyReminderNotification(params: {
       payload: buildDailyReminderWebPushPayload(streak),
     }),
   ]);
+  return { delivered };
 }
 
 export async function sendMissADayNotification(params: {

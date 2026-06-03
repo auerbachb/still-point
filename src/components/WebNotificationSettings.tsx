@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   detectedTimezone,
   fetchNotificationPreferences,
@@ -31,6 +31,7 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [pushEndpoint, setPushEndpoint] = useState<string | null>(null);
   const [tzDraft, setTzDraft] = useState("");
 
@@ -64,7 +65,8 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
   }, [load]);
 
   const runBusy = async (fn: () => Promise<void>) => {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -72,6 +74,7 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save notification settings");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -99,19 +102,22 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
     setPushEndpoint(subscription.endpoint);
     await persist({
       pushEnabled: true,
-      tz: detectedTimezone(),
+      ...(prefs?.tz?.trim() ? {} : { tz: detectedTimezone() }),
     });
   };
 
   const disablePush = async () => {
-    const subscription = await unsubscribeBrowserPush();
-    if (subscription?.endpoint) {
-      await unregisterWebPushEndpoint(subscription.endpoint);
-    } else if (pushEndpoint) {
-      await unregisterWebPushEndpoint(pushEndpoint);
-    }
-    setPushEndpoint(null);
+    // Persist first so server-side state is authoritative even if browser cleanup fails
     await persist({ pushEnabled: false });
+    setPushEndpoint(null);
+    // Best-effort browser-side cleanup — failure here is non-fatal
+    try {
+      const subscription = await unsubscribeBrowserPush();
+      const ep = subscription?.endpoint ?? pushEndpoint;
+      if (ep) await unregisterWebPushEndpoint(ep);
+    } catch {
+      // ignore — preference already saved as disabled
+    }
   };
 
   const quietHoursOn = Boolean(prefs?.quietHoursStart && prefs?.quietHoursEnd);
@@ -121,18 +127,6 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
       <div style={pageMode ? pageWrapStyle : cardStyle}>
         {!pageMode && <div style={labelStyle}>NOTIFICATIONS</div>}
         <div style={hintStyle}>Loading…</div>
-      </div>
-    );
-  }
-
-  if (!supported) {
-    return (
-      <div style={pageMode ? pageWrapStyle : cardStyle}>
-        {!pageMode && <div style={labelStyle}>NOTIFICATIONS</div>}
-        <div style={hintStyle}>
-          This browser does not support web push. Use Chrome, Firefox, or Safari on desktop, Chrome on Android,
-          or add Still Point to your iPhone Home Screen (iOS 16.4+).
-        </div>
       </div>
     );
   }
@@ -148,11 +142,17 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
       )}
 
       <SectionLabel>Push on this device</SectionLabel>
+      {!supported && (
+        <div style={hintStyle}>
+          This browser does not support web push. Use Chrome, Firefox, or Safari on desktop, Chrome on Android,
+          or add Still Point to your iPhone Home Screen (iOS 16.4+).
+        </div>
+      )}
       <ToggleRow
         title="Push notifications"
         description="Reminders and updates in this browser"
         pressed={pushOn}
-        disabled={busy}
+        disabled={!supported || busy}
         onToggle={() => { void runBusy(async () => {
           if (pushOn) await disablePush();
           else await enablePush();

@@ -10,7 +10,7 @@ struct NotificationsSettingsView: View {
                 sectionHeader("Push on this device")
                 pushToggle
 
-                if notificationPrefs.pushEnabled {
+                Group {
                     sectionHeader("Daily practice reminder")
                     dailyReminderSection
 
@@ -23,6 +23,7 @@ struct NotificationsSettingsView: View {
                     sectionHeader("Friend activity")
                     friendRequestToggle
                 }
+                .disabled(!notificationPrefs.pushEnabled || notificationPrefs.isSaving)
 
                 if let error = notificationPrefs.errorMessage {
                     Text(error)

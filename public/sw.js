@@ -25,8 +25,13 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetPath = event.notification.data?.url || "/app";
-  const targetUrl = new URL(targetPath, self.location.origin).href;
+  const rawTarget = typeof event.notification.data?.url === "string"
+    ? event.notification.data.url
+    : "/app";
+  const parsedTarget = new URL(rawTarget, self.location.origin);
+  const targetUrl = parsedTarget.origin === self.location.origin
+    ? parsedTarget.href
+    : new URL("/app", self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {

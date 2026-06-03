@@ -42,6 +42,7 @@ export function isValidPushSubscriptionInput(value: unknown): value is PushSubsc
     if (url.protocol !== "https:") return false;
     const h = url.hostname;
     if (
+      // IPv4 private / loopback / link-local
       h === "localhost" ||
       h === "127.0.0.1" ||
       h === "0.0.0.0" ||
@@ -52,7 +53,12 @@ export function isValidPushSubscriptionInput(value: unknown): value is PushSubsc
       /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
       h.endsWith(".local") ||
       h.endsWith(".internal") ||
-      h.endsWith(".localhost")
+      h.endsWith(".localhost") ||
+      // IPv6 loopback, link-local (fe80::/10), ULA (fc00::/7), IPv4-mapped
+      h === "::1" ||
+      /^fe[89ab][0-9a-f]/i.test(h) ||
+      /^f[cd][0-9a-f]{2}:/i.test(h) ||
+      /^::ffff:/i.test(h)
     ) {
       return false;
     }

@@ -62,7 +62,7 @@ Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or 
 |------|-------|---------------------|-----------------|-----------------|
 | Miss a day | #247 | `miss_a_day` | `stillpoint://session/quick` | `pushEnabled` + `missADayEnabled` |
 | Daily practice reminder | #346 | `daily_reminder` | `stillpoint://home` | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency |
-| Friend request | #359 | `friend_request` | `stillpoint://friends` | `pushEnabled` + `friendRequestNotificationsEnabled` |
+| Friend request | #359 | `friend_request` | `stillpoint://home` | `pushEnabled` + `friendRequestNotificationsEnabled` |
 
 Miss-a-day wins over daily reminder when both would fire in the same cron window (user missed yesterday and has not sat today).
 

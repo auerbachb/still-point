@@ -258,8 +258,21 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
       try {
         const streak = await loadUserStreak(prefs.userId, local.dateKey);
-        await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
-        sent += 1;
+        const { delivered } = await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
+        if (delivered) {
+          sent += 1;
+        } else {
+          await db
+            .delete(notificationDispatches)
+            .where(
+              and(
+                eq(notificationDispatches.userId, prefs.userId),
+                eq(notificationDispatches.notificationType, "daily_reminder"),
+                eq(notificationDispatches.windowKey, windowKey),
+              ),
+            );
+          skipped += 1;
+        }
       } catch (sendError) {
         console.error(`Failed to send daily reminder to user ${prefs.userId}:`, sendError);
         await db
