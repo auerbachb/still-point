@@ -51,6 +51,23 @@ struct BuddySessionHubView: View {
 
                 Button {
                     withAnimation {
+                        appVM.openBuddyCalendar()
+                    }
+                } label: {
+                    Text("View buddy calendar")
+                        .font(SPFont.mono(12, weight: .medium))
+                        .foregroundStyle(Color(SPColor.fg))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, SPSpacing.s2)
+                        .background(SPColor.surface1)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(SPColor.border2))
+                }
+                .accessibilityIdentifier("buddy.viewCalendarButton")
+                .padding(.top, SPSpacing.s2)
+
+                Button {
+                    withAnimation {
                         appVM.leaveBuddySession()
                     }
                 } label: {

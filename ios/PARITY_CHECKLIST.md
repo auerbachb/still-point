@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-04-24  
+Last updated: 2026-06-03  
 Release owner: iOS release DRI
 
 ## Core product parity
@@ -16,6 +16,7 @@ Release owner: iOS release DRI
 | Thought journal | Implemented | Implemented | ✅ Complete | iOS `ThoughtJournalView` maps to web `ThoughtJournal`. |
 | Public board + visibility toggle | Implemented | Implemented | ✅ Complete | iOS `SettingsView` includes `isPublic` toggle and board read. |
 | Buddy session create/join/wait/start/leave/complete | Implemented | Implemented | ✅ Complete | iOS uses same buddy session API contract as web. |
+| Buddy calendar (unified + per-buddy, filters, pagination) | Implemented | Implemented | ✅ Complete | iOS `BuddyCalendarView` mirrors web `BuddyCalendarView`; entry via `BuddySessionHubView` until Friends tab ships. |
 | Buddy invite deep links | Implemented | Implemented | ✅ Complete | iOS handles `stillpoint://buddy` and web invite URL forms. |
 | Account deletion flow | Implemented | Implemented | ✅ Complete | iOS Settings includes two-step destructive confirmation. |
 

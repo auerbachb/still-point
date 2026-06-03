@@ -8,6 +8,8 @@ enum AppView: Equatable {
     case home
     case session(type: SessionType)
     case buddyHub
+    case buddyCalendar
+    case buddyCalendarWithBuddy(buddyId: String, buddyUsername: String)
     case buddySession(sessionId: String)
     case completion(
         sessionId: String,
@@ -28,6 +30,7 @@ enum AppView: Equatable {
         switch (lhs, rhs) {
         case (.auth, .auth), (.home, .home),
              (.buddyHub, .buddyHub),
+             (.buddyCalendar, .buddyCalendar),
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
@@ -35,6 +38,8 @@ enum AppView: Equatable {
             return lhsType == rhsType
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
             return lhsSessionId == rhsSessionId
+        case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):
+            return lhsId == rhsId && lhsName == rhsName
         case (.completion, .completion):
             return true
         default:
@@ -156,6 +161,8 @@ final class AppViewModel {
         case .home: return "home"
         case .session: return "session"
         case .buddyHub: return "buddyHub"
+        case .buddyCalendar: return "buddyCalendar"
+        case .buddyCalendarWithBuddy: return "buddyCalendarWithBuddy"
         case .buddySession: return "buddySession"
         case .completion: return "completion"
         case .history: return "history"
@@ -209,6 +216,18 @@ final class AppViewModel {
 
     func beginBuddySession() {
         buddyInviteError = nil
+        currentView = .buddyHub
+    }
+
+    func openBuddyCalendar() {
+        currentView = .buddyCalendar
+    }
+
+    func openBuddyCalendarForBuddy(buddyId: String, username: String) {
+        currentView = .buddyCalendarWithBuddy(buddyId: buddyId, buddyUsername: username)
+    }
+
+    func closeBuddyCalendar() {
         currentView = .buddyHub
     }
 

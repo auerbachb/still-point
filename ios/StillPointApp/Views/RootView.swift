@@ -27,6 +27,17 @@ struct RootView: View {
                 BuddySessionHubView(appVM: appVM)
                     .transition(.opacity)
 
+            case .buddyCalendar:
+                BuddyCalendarView(appVM: appVM, mode: .unified)
+                    .transition(.opacity)
+
+            case .buddyCalendarWithBuddy(let buddyId, let buddyUsername):
+                BuddyCalendarView(
+                    appVM: appVM,
+                    mode: .perBuddy(buddyId: buddyId, buddyUsername: buddyUsername)
+                )
+                .transition(.opacity)
+
             case .buddySession(let sessionId):
                 BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
                     .id(sessionId)
@@ -143,6 +154,10 @@ struct RootView: View {
             return "session"
         case .buddyHub:
             return "buddyHub"
+        case .buddyCalendar:
+            return "buddyCalendar"
+        case .buddyCalendarWithBuddy:
+            return "buddyCalendarWithBuddy"
         case .buddySession:
             return "buddySession"
         case .completion:
