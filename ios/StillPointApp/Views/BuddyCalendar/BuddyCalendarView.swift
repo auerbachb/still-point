@@ -165,6 +165,13 @@ struct BuddyCalendarView: View {
                 .foregroundStyle(SPColor.green)
             }
 
+            if let loadMoreError = vm.loadMoreErrorMessage {
+                Text(loadMoreError)
+                    .font(SPFont.mono(11))
+                    .foregroundStyle(SPColor.dangerMuted)
+                    .multilineTextAlignment(.center)
+            }
+
             Text("More sessions available in this range.")
                 .font(SPFont.mono(10))
                 .foregroundStyle(Color(SPColor.fg4))

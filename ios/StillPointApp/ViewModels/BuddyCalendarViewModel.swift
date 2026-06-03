@@ -13,6 +13,7 @@ final class BuddyCalendarViewModel {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+    var loadMoreErrorMessage: String?
     var fromDate = ""
     var toDate = ""
     var hasMore = false
@@ -67,6 +68,7 @@ final class BuddyCalendarViewModel {
         currentMode = mode
         isLoading = true
         errorMessage = nil
+        loadMoreErrorMessage = nil
         sessions = []
         hasMore = false
         defer { isLoading = false }
@@ -88,6 +90,7 @@ final class BuddyCalendarViewModel {
     func loadMore(mode: BuddyCalendarMode) async {
         guard hasMore, !isLoading, !isLoadingMore else { return }
         isLoadingMore = true
+        loadMoreErrorMessage = nil
         defer { isLoadingMore = false }
 
         do {
@@ -97,9 +100,9 @@ final class BuddyCalendarViewModel {
             toDate = response.toDate
             hasMore = response.hasMore
         } catch let error as APIError {
-            errorMessage = message(for: error)
+            loadMoreErrorMessage = message(for: error)
         } catch {
-            errorMessage = "Could not load more sessions. Try again."
+            loadMoreErrorMessage = "Could not load more sessions. Try again."
         }
     }
 
