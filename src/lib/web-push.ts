@@ -44,7 +44,7 @@ export function isValidPushSubscriptionInput(value: unknown): value is PushSubsc
     if (
       // IPv4 private / loopback / link-local
       h === "localhost" ||
-      h === "127.0.0.1" ||
+      /^127\./.test(h) ||
       h === "0.0.0.0" ||
       h === "169.254.169.254" ||
       h === "metadata.google.internal" ||

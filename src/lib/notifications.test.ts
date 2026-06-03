@@ -86,7 +86,7 @@ describe("sendFriendRequestNotification", () => {
       },
       type: "friend_request",
       requestId: "request-id",
-      deepLink: "stillpoint://friends",
+      deepLink: "stillpoint://home",
     });
     expect(dbUpdate).toHaveBeenCalledTimes(2);
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ lastUsedAt: expect.any(Date) }));
