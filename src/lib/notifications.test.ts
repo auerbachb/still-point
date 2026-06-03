@@ -49,7 +49,7 @@ describe("sendFriendRequestNotification", () => {
     tokenRows.length = 0;
     selectWhere.mockResolvedValue(tokenRows);
     sendApnsNotification.mockResolvedValue({ ok: true, status: 200 });
-    sendWebPushToUser.mockResolvedValue(undefined);
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
   });
 
   test("sends the friend request APNs payload to each enabled device token", async () => {
@@ -72,7 +72,7 @@ describe("sendFriendRequestNotification", () => {
         title: "New friend request",
         body: "maya wants to connect on Still Point.",
         type: "friend_request",
-        url: "/app",
+        url: "/app?view=friends",
       },
     });
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
@@ -145,6 +145,48 @@ describe("sendFriendRequestNotification", () => {
       type: "daily_reminder",
       deepLink: "stillpoint://home",
     });
+  });
+
+  test("sends the miss-a-day APNs payload with quick session deep link", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "Missed yesterday — try a quick 1-min sit to get back.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "miss_a_day",
+      deepLink: "stillpoint://session/quick",
+    });
+  });
+
+  test("miss-a-day is not delivered when APNs and Web Push both fail", async () => {
+    sendApnsNotification.mockResolvedValue({ ok: false, status: 500 });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(false);
+  });
+
+  test("miss-a-day is delivered when only Web Push succeeds", async () => {
+    sendWebPushToUser.mockResolvedValue({ delivered: true });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).not.toHaveBeenCalled();
   });
 
   test("limits APNs sends to bounded batches", async () => {

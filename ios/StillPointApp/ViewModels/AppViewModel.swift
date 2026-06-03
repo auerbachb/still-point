@@ -72,6 +72,7 @@ final class AppViewModel {
         return manager
     }
     private var pendingBuddyInviteToken: String?
+    private var pendingSessionDeepLink: SessionType?
 
     /// Persisted: keep device screen awake during an active sit when enabled.
     var keepScreenAwakeDuringSession: Bool {
@@ -127,6 +128,7 @@ final class AppViewModel {
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
                 await consumePendingBuddyInviteIfNeeded()
+                await consumePendingSessionDeepLinkIfNeeded()
                 return
             } else {
                 currentView = .auth
@@ -170,7 +172,10 @@ final class AppViewModel {
         currentView = .home
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
-        Task { await consumePendingBuddyInviteIfNeeded() }
+        Task {
+            await consumePendingBuddyInviteIfNeeded()
+            await consumePendingSessionDeepLinkIfNeeded()
+        }
     }
 
     func applySettingsUser(_ user: UserDTO) {
@@ -181,6 +186,7 @@ final class AppViewModel {
     func didLogout() {
         currentUser = nil
         pendingBuddyInviteToken = nil
+        pendingSessionDeepLink = nil
         buddyInviteError = nil
         authStatusMessage = nil
         currentView = .auth
@@ -206,6 +212,10 @@ final class AppViewModel {
     }
 
     func handleIncomingURL(_ url: URL) {
+        if let sessionType = SessionDeepLinkParser.sessionType(from: url) {
+            openSessionDeepLink(sessionType)
+            return
+        }
         if handleNotificationDeepLink(url) {
             return
         }
@@ -220,6 +230,26 @@ final class AppViewModel {
             return
         }
         Task { await joinBuddySession(token: token) }
+    }
+
+    func handlePushDeepLink(_ url: URL) {
+        handleIncomingURL(url)
+    }
+
+    private func openSessionDeepLink(_ sessionType: SessionType) {
+        if currentUser == nil {
+            pendingSessionDeepLink = sessionType
+            return
+        }
+        if isInSession { return }
+        beginSession(type: sessionType)
+    }
+
+    private func consumePendingSessionDeepLinkIfNeeded() async {
+        guard currentUser != nil, let sessionType = pendingSessionDeepLink else { return }
+        pendingSessionDeepLink = nil
+        guard !isInSession else { return }
+        beginSession(type: sessionType)
     }
 
     func completeSession(
@@ -286,14 +316,39 @@ final class AppViewModel {
 
     private func handleNotificationDeepLink(_ url: URL) -> Bool {
         let scheme = (url.scheme ?? "").lowercased()
+        guard scheme == "stillpoint" else { return false }
         let host = (url.host ?? "").lowercased()
-        guard scheme == "stillpoint", host == "home" else { return false }
-        openHomeFromNotification()
-        return true
+        if host == "home" {
+            openHomeFromNotification()
+            return true
+        }
+        if host == "friends" {
+            // Friends management UI is web-only today; land on home until an iOS friends tab ships.
+            openHomeFromNotification()
+            return true
+        }
+        return false
     }
 
     private func extractBuddyToken(from url: URL) -> String? {
         BuddyInviteTokenParser.token(from: url)
+    }
+}
+
+enum SessionDeepLinkParser {
+    static func sessionType(from url: URL) -> SessionType? {
+        let scheme = (url.scheme ?? "").lowercased()
+        guard scheme == "stillpoint" else { return nil }
+        let host = (url.host ?? "").lowercased()
+        guard host == "session" else { return nil }
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        if path == "quick" || path == "quick-minute" {
+            return .quick
+        }
+        if path.isEmpty {
+            return .standard
+        }
+        return nil
     }
 }
 

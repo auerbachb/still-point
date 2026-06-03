@@ -58,21 +58,40 @@ Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or 
 
 ## Notification types
 
-| Type | `notification_type` | Trigger | Preference gate |
-|------|----------------------|---------|-----------------|
-| Daily practice reminder | `daily_reminder` | Cron | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency + tz |
-| Miss a day | `miss_a_day` | Cron (at daily reminder window) | `pushEnabled` + `missADayEnabled` |
-| Friend request | `friend_request` | `POST /api/friends/requests` | `pushEnabled` + `friendRequestNotificationsEnabled` |
+| Type | Issue | `notification_type` | Deep link (iOS) | Preference gate |
+|------|-------|---------------------|-----------------|-----------------|
+| Miss a day | #247 | `miss_a_day` | `stillpoint://session/quick` | `pushEnabled` + `missADayEnabled` |
+| Daily practice reminder | #346 | `daily_reminder` | `stillpoint://home` | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency |
+| Friend request | #359 | `friend_request` | `stillpoint://friends` | `pushEnabled` + `friendRequestNotificationsEnabled` |
+
+Miss-a-day wins over daily reminder when both would fire in the same cron window (user missed yesterday and has not sat today).
+
+### Miss-a-day (#247)
+
+- Fires in the user's daily reminder window when they have **not** completed a session today and **did not** complete one yesterday (local dates)
+- Uses `window_key` = local `YYYY-MM-DD` and type `miss_a_day`
+- Helper: `sendMissADayNotification` (APNs + Web Push)
+
+### Daily reminder (#346)
+
+- Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
+- Helper: `sendDailyReminderNotification` (streak-aware copy + APNs/Web Push)
+- Skipped when user already completed a session today, or a `miss_a_day` dispatch exists for the same local date
+
+### Friend request (#359)
+
+- Event-driven on `POST /api/friends/requests`
+- Helper: `sendFriendRequestNotification` (APNs + Web Push)
 
 ## Scheduler
 
 - **Route:** `GET|POST /api/cron/dispatch-notifications`
 - **Schedule:** every 5 minutes (`vercel.json` crons)
 - **Auth:** `Authorization: Bearer $CRON_SECRET` (required in production)
-- **Window:** matches users whose local reminder time falls within the last 5 minutes
+- **Window:** matches users whose local reminder time falls within the last 5 minutes (including windows that cross local midnight)
 - **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
-- **Miss a day:** at most one per local day when the user did not complete a session yesterday or today; uses the same cron window as the daily reminder
 - **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
+- **Dedup:** `claimNotificationDispatch` is the source of truth per `(user_id, notification_type, window_key)`
 
 ## Settings UI (#359)
 
@@ -81,14 +100,21 @@ Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or 
 
 Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Miss a day → Friend activity.
 
-Master push off disables dependent controls in the UI and persists `pushEnabled: false` (and unsubscribes web push / disables iOS token as before).
+Master push off disables dependent controls in the UI and persists `pushEnabled: false` (and unsubscribes web push / disables iOS token as before). Other preference toggles are preserved while push is off.
+
+## iOS tap handling
+
+- `PushNotificationCoordinator` stores pending deep links until `RootView` wires handlers
+- `stillpoint://home` → home
+- `stillpoint://session` / `stillpoint://session/quick` → `AppViewModel.consumePendingSessionDeepLinkIfNeeded()`
+- `stillpoint://friends` → friends surface (via notification deep-link handler)
 
 ## Adding a notification type
 
 1. **Preference flag** — Add a boolean column on `notification_preferences` (migration + schema + PATCH validation).
 2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` (APNs + `sendWebPushToUser` where applicable).
-3. **Scheduler branch** — In `src/lib/notification-scheduler.ts` for scheduled types, or event handler for instant types.
-4. **iOS + web** — Expose the flag on the Notifications screen; handle payload `type` on tap.
+3. **Scheduler branch** — In `src/lib/notification-scheduler.ts` for scheduled types, or event handler for instant types. Roll back the dispatch row if delivery fails.
+4. **iOS + web** — Expose the flag on the Notifications screen; handle payload `type` / `deepLink` on tap.
 5. **Tests** — Preference validation, scheduler gating, idempotent `claimNotificationDispatch`.
 
 ## Security
@@ -99,7 +125,8 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 ## Related issues
 
 - #203 — APNs + `device_tokens`
-- #345 — Preferences foundation
+- #345 — Notification preferences foundation
 - #346 — Daily reminder
 - #347 — Web Push channel
+- #247 — Miss-a-day notifications
 - #359 — Unified Notifications settings screen

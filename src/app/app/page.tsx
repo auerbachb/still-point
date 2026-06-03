@@ -117,6 +117,21 @@ export default function StillPoint() {
   }, [authRetryKey]);
 
   useEffect(() => {
+    if (!user || !authChecked) return;
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get("view");
+    if (viewParam === "settings") {
+      setView("settings");
+      window.history.replaceState({}, "", "/app");
+      return;
+    }
+    if (viewParam === "friends") {
+      setView("friends");
+      window.history.replaceState({}, "", "/app");
+    }
+  }, [user, authChecked]);
+
+  useEffect(() => {
     if (!user || !authChecked || buddyInviteInFlight.current) return;
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("buddy")?.trim();

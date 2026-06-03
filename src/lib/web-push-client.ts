@@ -25,7 +25,8 @@ export function needsPwaInstallForWebPush(): boolean {
     return false;
   }
   const ua = navigator.userAgent;
-  const isIos = /iphone|ipad|ipod/i.test(ua);
+  const isIos = /iphone|ipad|ipod/i.test(ua)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (!isIos) {
     return false;
   }
@@ -101,11 +102,15 @@ export async function registerWebPushSubscription(subscription: PushSubscription
 }
 
 export async function unregisterWebPushEndpoint(endpoint: string): Promise<void> {
-  await fetch("/api/notifications/push/subscription", {
+  const res = await fetch("/api/notifications/push/subscription", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint }),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? `Could not unregister push subscription (${res.status})`);
+  }
 }
 
 export async function patchNotificationPreferences(

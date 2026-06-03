@@ -80,9 +80,9 @@ function isExpiredSubscriptionError(error: unknown): boolean {
 export async function sendWebPushToUser(params: {
   recipientUserId: string;
   payload: WebPushPayload;
-}): Promise<void> {
+}): Promise<{ delivered: boolean }> {
   if (!ensureVapidConfigured()) {
-    return;
+    return { delivered: false };
   }
 
   const subscriptions = await db
@@ -97,6 +97,12 @@ export async function sendWebPushToUser(params: {
       eq(webPushSubscriptions.userId, params.recipientUserId),
       eq(webPushSubscriptions.enabled, true),
     ));
+
+  if (subscriptions.length === 0) {
+    return { delivered: false };
+  }
+
+  let delivered = false;
 
   const body = JSON.stringify({
     title: params.payload.title,
@@ -121,6 +127,7 @@ export async function sendWebPushToUser(params: {
           .update(webPushSubscriptions)
           .set({ lastUsedAt: now, updatedAt: now })
           .where(eq(webPushSubscriptions.id, row.id));
+        delivered = true;
       } catch (error) {
         if (isExpiredSubscriptionError(error)) {
           await db
@@ -129,8 +136,14 @@ export async function sendWebPushToUser(params: {
             .where(eq(webPushSubscriptions.id, row.id));
           return;
         }
-        console.warn("Web Push notification failed", { subscriptionId: row.id, error });
+        const status = typeof error === "object" && error !== null && "statusCode" in error
+          ? (error as { statusCode?: number }).statusCode
+          : undefined;
+        const message = error instanceof Error ? error.message : "unknown error";
+        console.warn("Web Push notification failed", { subscriptionId: row.id, status, message });
       }
     }));
   }
+
+  return { delivered };
 }

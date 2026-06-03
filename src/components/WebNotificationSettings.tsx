@@ -46,7 +46,7 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
       setPrefs(next);
       setTzDraft(next.tz);
       if (supported && next.pushEnabled) {
-        const registration = await navigator.serviceWorker.ready.catch(() => null);
+        const registration = await navigator.serviceWorker.getRegistration("/").catch(() => undefined);
         const sub = registration ? await registration.pushManager.getSubscription() : null;
         setPushEndpoint(sub?.endpoint ?? null);
       } else {
@@ -111,7 +111,7 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
       await unregisterWebPushEndpoint(pushEndpoint);
     }
     setPushEndpoint(null);
-    await persist({ pushEnabled: false, dailyReminderEnabled: false });
+    await persist({ pushEnabled: false });
   };
 
   const quietHoursOn = Boolean(prefs?.quietHoursStart && prefs?.quietHoursEnd);

@@ -153,20 +153,6 @@ function addCalendarDays(dateKey: string, deltaDays: number): string {
   return utc.toISOString().slice(0, 10);
 }
 
-async function hasDispatchForLocalDate(userId: string, dateKey: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: notificationDispatches.id })
-    .from(notificationDispatches)
-    .where(
-      and(
-        eq(notificationDispatches.userId, userId),
-        eq(notificationDispatches.windowKey, dateKey),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
-}
-
 export async function dispatchDueNotifications(now: Date = new Date()): Promise<{
   scanned: number;
   sent: number;
@@ -201,11 +187,6 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
-        skipped += 1;
-        continue;
-      }
-
-      if (await hasDispatchForLocalDate(prefs.userId, local.dateKey)) {
         skipped += 1;
         continue;
       }

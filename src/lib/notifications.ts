@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { deviceTokens, webPushSubscriptions } from "@/db/schema";
+import { deviceTokens } from "@/db/schema";
 import { type ApnsEnvironment, type ApnsPayload, sendApnsNotification } from "@/lib/apns";
 import {
   buildDailyReminderPayload,
@@ -14,7 +14,7 @@ const PUSH_SEND_CONCURRENCY = 3;
 
 export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
 export const FRIEND_REQUEST_DEEP_LINK = "stillpoint://friends";
-export const FRIEND_REQUEST_WEB_URL = "/app";
+export const FRIEND_REQUEST_WEB_URL = "/app?view=friends";
 
 function toApnsEnvironment(value: string): ApnsEnvironment {
   return value === "production" ? "production" : "development";
@@ -69,30 +69,34 @@ export async function sendPushNotificationToUser(params: {
   return { delivered };
 }
 
+async function fanOutChannels(
+  tasks: Array<() => Promise<{ delivered: boolean } | void>>,
+): Promise<boolean> {
+  const results = await Promise.allSettled(tasks.map((task) => task()));
+  return results.some((result) => {
+    if (result.status !== "fulfilled") {
+      return false;
+    }
+    const value = result.value;
+    return typeof value === "object" && value !== null && "delivered" in value && value.delivered === true;
+  });
+}
+
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
   streak?: number;
 }): Promise<void> {
   const streak = params.streak ?? 0;
-  await Promise.all([
-    sendPushNotificationToUser({
+  await fanOutChannels([
+    () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: buildDailyReminderPayload(streak),
     }),
-    sendWebPushToUser({
+    () => sendWebPushToUser({
       recipientUserId: params.recipientUserId,
       payload: buildDailyReminderWebPushPayload(streak),
     }),
   ]);
-}
-
-async function userHasEnabledWebPush(userId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: webPushSubscriptions.id })
-    .from(webPushSubscriptions)
-    .where(and(eq(webPushSubscriptions.userId, userId), eq(webPushSubscriptions.enabled, true)))
-    .limit(1);
-  return !!row;
 }
 
 export async function sendMissADayNotification(params: {
@@ -101,8 +105,8 @@ export async function sendMissADayNotification(params: {
   const title = "Still Point";
   const body = "Missed yesterday — try a quick 1-min sit to get back.";
 
-  const [apnsResult] = await Promise.all([
-    sendPushNotificationToUser({
+  const delivered = await fanOutChannels([
+    () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {
         aps: {
@@ -114,7 +118,7 @@ export async function sendMissADayNotification(params: {
         deepLink: MISS_A_DAY_DEEP_LINK,
       },
     }),
-    sendWebPushToUser({
+    () => sendWebPushToUser({
       recipientUserId: params.recipientUserId,
       payload: {
         title,
@@ -125,10 +129,7 @@ export async function sendMissADayNotification(params: {
     }),
   ]);
 
-  if (apnsResult.delivered) {
-    return { delivered: true };
-  }
-  return { delivered: await userHasEnabledWebPush(params.recipientUserId) };
+  return { delivered };
 }
 
 export async function sendFriendRequestNotification(params: {
@@ -139,8 +140,8 @@ export async function sendFriendRequestNotification(params: {
   const title = "New friend request";
   const body = `${params.senderUsername} wants to connect on Still Point.`;
 
-  await Promise.all([
-    sendPushNotificationToUser({
+  await fanOutChannels([
+    () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {
         aps: {
@@ -153,7 +154,7 @@ export async function sendFriendRequestNotification(params: {
         deepLink: FRIEND_REQUEST_DEEP_LINK,
       },
     }),
-    sendWebPushToUser({
+    () => sendWebPushToUser({
       recipientUserId: params.recipientUserId,
       payload: {
         title,

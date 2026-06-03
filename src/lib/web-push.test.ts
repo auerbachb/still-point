@@ -67,7 +67,7 @@ describe("sendWebPushToUser", () => {
     });
     const { sendWebPushToUser } = await import("./web-push");
 
-    await sendWebPushToUser({
+    const result = await sendWebPushToUser({
       recipientUserId: "user-1",
       payload: {
         title: "Time for your sit",
@@ -77,6 +77,7 @@ describe("sendWebPushToUser", () => {
       },
     });
 
+    expect(result).toEqual({ delivered: true });
     expect(sendNotification).toHaveBeenCalledWith(
       { endpoint: "https://push.example/1", keys: { p256dh: "p256", auth: "auth" } },
       JSON.stringify({
@@ -99,11 +100,12 @@ describe("sendWebPushToUser", () => {
     sendNotification.mockRejectedValue({ statusCode: 410 });
     const { sendWebPushToUser } = await import("./web-push");
 
-    await sendWebPushToUser({
+    const result = await sendWebPushToUser({
       recipientUserId: "user-1",
       payload: { title: "T", body: "B", type: "daily_reminder" },
     });
 
+    expect(result).toEqual({ delivered: false });
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
@@ -117,11 +119,12 @@ describe("sendWebPushToUser", () => {
     });
     const { sendWebPushToUser } = await import("./web-push");
 
-    await sendWebPushToUser({
+    const result = await sendWebPushToUser({
       recipientUserId: "user-1",
       payload: { title: "T", body: "B", type: "daily_reminder" },
     });
 
+    expect(result).toEqual({ delivered: false });
     expect(sendNotification).not.toHaveBeenCalled();
   });
 });

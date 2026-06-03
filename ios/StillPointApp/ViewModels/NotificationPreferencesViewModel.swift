@@ -51,6 +51,11 @@ final class NotificationPreferencesViewModel {
         await persist(patch: NotificationPreferencesPatch(dailyReminderEnabled: enabled))
     }
 
+    func persistMissADayEnabled(_ enabled: Bool) async {
+        missADayEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(missADayEnabled: enabled))
+    }
+
     func persistReminderTime() async {
         await persist(patch: NotificationPreferencesPatch(dailyReminderTime: formatHHMM(reminderTime)))
     }
@@ -88,11 +93,6 @@ final class NotificationPreferencesViewModel {
         )
     }
 
-    func persistMissADayEnabled(_ enabled: Bool) async {
-        missADayEnabled = enabled
-        await persist(patch: NotificationPreferencesPatch(missADayEnabled: enabled))
-    }
-
     func persistFriendRequestNotificationsEnabled(_ enabled: Bool) async {
         friendRequestNotificationsEnabled = enabled
         await persist(patch: NotificationPreferencesPatch(friendRequestNotificationsEnabled: enabled))
@@ -123,8 +123,6 @@ final class NotificationPreferencesViewModel {
             apply(updated)
         } catch {
             errorMessage = "Could not save notification settings."
-            // Clear isSaving before reload; keeping it set would deadlock because
-            // load() → syncTimezoneIfNeeded() → persist() would spin forever.
             isSaving = false
             await load()
         }

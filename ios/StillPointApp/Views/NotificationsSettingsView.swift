@@ -175,6 +175,7 @@ struct NotificationsSettingsView: View {
             .onChange(of: notificationPrefs.quietStartTime) { _, _ in
                 Task { await notificationPrefs.persistQuietHoursTimes() }
             }
+            .accessibilityIdentifier("notifications.quietHoursStartPicker")
 
             DatePicker(
                 "Quiet until",
@@ -189,6 +190,7 @@ struct NotificationsSettingsView: View {
             .onChange(of: notificationPrefs.quietEndTime) { _, _ in
                 Task { await notificationPrefs.persistQuietHoursTimes() }
             }
+            .accessibilityIdentifier("notifications.quietHoursEndPicker")
         }
     }
 
