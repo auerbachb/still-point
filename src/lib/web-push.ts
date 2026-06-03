@@ -33,7 +33,30 @@ export function isValidPushSubscriptionInput(value: unknown): value is PushSubsc
     return false;
   }
   const record = value as Record<string, unknown>;
-  if (typeof record.endpoint !== "string" || record.endpoint.length < 8) {
+  if (typeof record.endpoint !== "string") {
+    return false;
+  }
+  // Require a public HTTPS URL to prevent SSRF via web-push fan-out
+  try {
+    const url = new URL(record.endpoint);
+    if (url.protocol !== "https:") return false;
+    const h = url.hostname;
+    if (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h === "0.0.0.0" ||
+      h === "169.254.169.254" ||
+      h === "metadata.google.internal" ||
+      /^10\./.test(h) ||
+      /^192\.168\./.test(h) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+      h.endsWith(".local") ||
+      h.endsWith(".internal") ||
+      h.endsWith(".localhost")
+    ) {
+      return false;
+    }
+  } catch {
     return false;
   }
   if (!record.keys || typeof record.keys !== "object") {
