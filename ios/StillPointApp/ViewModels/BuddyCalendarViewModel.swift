@@ -80,6 +80,8 @@ final class BuddyCalendarViewModel {
             toDate = response.toDate
             hasMore = response.hasMore
             _ = viewerUserId
+        } catch is CancellationError {
+            // SwiftUI cancelled this task (e.g. mode change or view dismissal) — not a user-facing error
         } catch let error as APIError {
             errorMessage = message(for: error)
         } catch {
@@ -95,10 +97,13 @@ final class BuddyCalendarViewModel {
 
         do {
             let response = try await fetchCalendar(mode: mode, offset: sessions.count)
+            guard currentMode == mode else { return }
             sessions.append(contentsOf: response.sessions)
             fromDate = response.fromDate
             toDate = response.toDate
             hasMore = response.hasMore
+        } catch is CancellationError {
+            // SwiftUI cancelled this task — not a user-facing error
         } catch let error as APIError {
             loadMoreErrorMessage = message(for: error)
         } catch {

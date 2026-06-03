@@ -12,14 +12,18 @@ public let BUDDY_CALENDAR_PALETTE: [String] = [
     "#5B8C8C",
 ]
 
-/// Deterministic accent color from buddy user id (stable across unified + per-buddy views).
-public func buddyColorFromUserId(_ userId: String) -> Color {
+/// Deterministic palette index from buddy user id.
+func buddyColorIndexFromUserId(_ userId: String) -> Int {
     var hash: UInt32 = 0
     for byte in userId.utf8 {
         hash = hash &* 31 &+ UInt32(byte)
     }
-    let index = Int(hash % UInt32(BUDDY_CALENDAR_PALETTE.count))
-    return colorFromHex(BUDDY_CALENDAR_PALETTE[index])
+    return Int(hash % UInt32(BUDDY_CALENDAR_PALETTE.count))
+}
+
+/// Deterministic accent color from buddy user id (stable across unified + per-buddy views).
+public func buddyColorFromUserId(_ userId: String) -> Color {
+    return colorFromHex(BUDDY_CALENDAR_PALETTE[buddyColorIndexFromUserId(userId)])
 }
 
 private func colorFromHex(_ hex: String) -> Color {

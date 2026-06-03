@@ -129,7 +129,7 @@ struct BuddyCalendarView: View {
             }
             .padding(.top, SPSpacing.s6)
         } else if vm.visibleSessions.isEmpty {
-            Text(emptyMessage)
+            Text(vm.showBuddyFilters && !vm.hiddenBuddyIds.isEmpty ? "All buddies are hidden — tap a chip above to show sessions." : emptyMessage)
                 .font(SPFont.serifItalic(15))
                 .foregroundStyle(Color(SPColor.fg4))
                 .multilineTextAlignment(.center)
@@ -208,7 +208,7 @@ struct BuddyCalendarView: View {
         let accent = primaryId.map { buddyColorFromUserId($0) } ?? Color(SPColor.fg3)
         let label = buddyLabel(session: session, focusBuddyId: focusBuddyId)
         let time = formatTime(session.startedAt) ?? formatTime(session.scheduledStartAt)
-        let durationMin = max(1, Int((Double(session.durationSeconds) / 60.0).rounded()))
+        let durationMin = session.durationSeconds > 0 ? max(1, Int((Double(session.durationSeconds) / 60.0).rounded())) : nil
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
@@ -221,7 +221,7 @@ struct BuddyCalendarView: View {
                 SessionStateBadge(state: session.state)
             }
 
-            Text("\(durationMin) min\(time.map { " · \($0)" } ?? "")")
+            Text([durationMin.map { "\($0) min" }, time].compactMap { $0 }.joined(separator: " · "))
                 .font(SPFont.mono(11))
                 .foregroundStyle(Color(SPColor.fg3))
 
@@ -282,20 +282,31 @@ struct BuddyCalendarView: View {
         return session.buddyIds.first(where: { $0 != viewerId }) ?? session.buddyIds.first
     }
 
+    private static let isoTimeFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoTimeFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let displayTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
     private func formatTime(_ iso: String?) -> String? {
         guard let iso, !iso.isEmpty else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = formatter.date(from: iso)
-        if date == nil {
-            formatter.formatOptions = [.withInternetDateTime]
-            date = formatter.date(from: iso)
-        }
+        let date = Self.isoTimeFormatterFractional.date(from: iso)
+            ?? Self.isoTimeFormatter.date(from: iso)
         guard let date else { return nil }
-        let display = DateFormatter()
-        display.timeStyle = .short
-        display.dateStyle = .none
-        return display.string(from: date)
+        return Self.displayTimeFormatter.string(from: date)
     }
 
     private static let isoDateFormatter: DateFormatter = {

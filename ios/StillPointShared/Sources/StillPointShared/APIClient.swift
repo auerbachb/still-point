@@ -492,7 +492,9 @@ public actor APIClient {
     }
 
     private func makeRequest(method: String, path: String) -> URLRequest {
-        let url = baseURL.appendingPathComponent(path)
+        // Use URL(string:relativeTo:) instead of appendingPathComponent so query strings
+        // in `path` (e.g. "/api/foo?offset=0") are preserved rather than percent-encoded.
+        let url = URL(string: path, relativeTo: baseURL)?.absoluteURL ?? baseURL.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
