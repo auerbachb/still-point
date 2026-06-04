@@ -102,7 +102,7 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
     setPushEndpoint(subscription.endpoint);
     await persist({
       pushEnabled: true,
-      ...(prefs?.tz?.trim() ? {} : { tz: detectedTimezone() }),
+      ...(prefs?.tz && prefs.tz.trim() !== "UTC" ? {} : { tz: detectedTimezone() }),
     });
   };
 
