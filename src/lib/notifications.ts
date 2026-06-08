@@ -2,10 +2,19 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deviceTokens } from "@/db/schema";
 import { type ApnsEnvironment, type ApnsPayload, sendApnsNotification } from "@/lib/apns";
-import { buildDailyReminderPayload } from "@/lib/notifications/daily-reminder";
+import {
+  buildDailyReminderPayload,
+  buildDailyReminderWebPushPayload,
+  MISS_A_DAY_NOTIFICATION_TYPE,
+} from "@/lib/notifications/daily-reminder";
+import { sendWebPushToUser } from "@/lib/web-push";
 
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
 const PUSH_SEND_CONCURRENCY = 3;
+
+export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
+export const FRIEND_REQUEST_DEEP_LINK = "stillpoint://home";
+export const FRIEND_REQUEST_WEB_URL = "/app?view=friends";
 
 function toApnsEnvironment(value: string): ApnsEnvironment {
   return value === "production" ? "production" : "development";
@@ -60,36 +69,68 @@ export async function sendPushNotificationToUser(params: {
   return { delivered };
 }
 
-export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
+async function fanOutChannels(
+  tasks: Array<() => Promise<{ delivered: boolean } | void>>,
+): Promise<boolean> {
+  const results = await Promise.allSettled(tasks.map((task) => task()));
+  return results.some((result) => {
+    if (result.status !== "fulfilled") {
+      return false;
+    }
+    const value = result.value;
+    return typeof value === "object" && value !== null && "delivered" in value && value.delivered === true;
+  });
+}
 
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
   streak?: number;
-}): Promise<void> {
-  await sendPushNotificationToUser({
-    recipientUserId: params.recipientUserId,
-    payload: buildDailyReminderPayload(params.streak ?? 0),
-  });
+}): Promise<{ delivered: boolean }> {
+  const streak = params.streak ?? 0;
+  const delivered = await fanOutChannels([
+    () => sendPushNotificationToUser({
+      recipientUserId: params.recipientUserId,
+      payload: buildDailyReminderPayload(streak),
+    }),
+    () => sendWebPushToUser({
+      recipientUserId: params.recipientUserId,
+      payload: buildDailyReminderWebPushPayload(streak),
+    }),
+  ]);
+  return { delivered };
 }
 
 export async function sendMissADayNotification(params: {
   recipientUserId: string;
 }): Promise<{ delivered: boolean }> {
-  return sendPushNotificationToUser({
-    recipientUserId: params.recipientUserId,
-    payload: {
-      aps: {
-        alert: {
-          title: "Still Point",
-          body: "Missed yesterday — try a quick 1-min sit to get back.",
+  const title = "Still Point";
+  const body = "Missed yesterday — try a quick 1-min sit to get back.";
+
+  const delivered = await fanOutChannels([
+    () => sendPushNotificationToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: "default",
+          "thread-id": "meditation-reminders",
         },
-        sound: "default",
-        "thread-id": "meditation-reminders",
+        type: MISS_A_DAY_NOTIFICATION_TYPE,
+        deepLink: MISS_A_DAY_DEEP_LINK,
       },
-      type: "miss_a_day",
-      deepLink: MISS_A_DAY_DEEP_LINK,
-    },
-  });
+    }),
+    () => sendWebPushToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        title,
+        body,
+        type: MISS_A_DAY_NOTIFICATION_TYPE,
+        url: "/app",
+      },
+    }),
+  ]);
+
+  return { delivered };
 }
 
 export async function sendFriendRequestNotification(params: {
@@ -97,19 +138,31 @@ export async function sendFriendRequestNotification(params: {
   senderUsername: string;
   requestId: string;
 }): Promise<void> {
-  await sendPushNotificationToUser({
-    recipientUserId: params.recipientUserId,
-    payload: {
-      aps: {
-        alert: {
-          title: "New friend request",
-          body: `${params.senderUsername} wants to connect on Still Point.`,
+  const title = "New friend request";
+  const body = `${params.senderUsername} wants to connect on Still Point.`;
+
+  await fanOutChannels([
+    () => sendPushNotificationToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: "default",
+          "thread-id": "friend-requests",
         },
-        sound: "default",
-        "thread-id": "friend-requests",
+        type: "friend_request",
+        requestId: params.requestId,
+        deepLink: FRIEND_REQUEST_DEEP_LINK,
       },
-      type: "friend_request",
-      requestId: params.requestId,
-    },
-  });
+    }),
+    () => sendWebPushToUser({
+      recipientUserId: params.recipientUserId,
+      payload: {
+        title,
+        body,
+        type: "friend_request",
+        url: FRIEND_REQUEST_WEB_URL,
+      },
+    }),
+  ]);
 }

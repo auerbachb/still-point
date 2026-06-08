@@ -1,29 +1,34 @@
 # Notifications
 
-Still Point delivers remote push notifications via APNs. User-facing schedules and opt-in live in `notification_preferences`; the server dispatches on a cron and records sends in `notification_dispatches` for idempotency.
+Still Point delivers remote push notifications via **APNs** (iOS) and **Web Push** (browser). User-facing schedules and opt-in live in `notification_preferences`; the server dispatches scheduled types on a cron and records sends in `notification_dispatches` for idempotency.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  iOS[Settings UI] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
+  iOS[Notifications screen] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
+  Web[Notifications screen] -->|GET/PATCH| PrefsAPI
   PrefsAPI --> NP[(notification_preferences)]
   Cron["/api/cron/dispatch-notifications"] --> Scheduler[notification-scheduler]
   Scheduler --> NP
   Scheduler --> Ledger[(notification_dispatches)]
   Scheduler --> Send[notifications.ts]
   Send --> APNs[apns.ts]
+  Send --> WebPush[web-push.ts]
   Send --> DT[(device_tokens)]
+  Send --> WPS[(web_push_subscriptions)]
+  Friends[POST /api/friends/requests] --> Send
 ```
 
 ## Database
 
 | Table | Purpose |
 |-------|---------|
-| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz` |
+| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz`, `friend_request_notifications_enabled` |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
+| `web_push_subscriptions` | Browser push endpoints (#347) |
 
-Apply schema with `npm run db:migrate` (incremental SQL: `drizzle/notification_preferences_345_incremental.sql`).
+Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`.
 
 ## API
 
@@ -35,10 +40,48 @@ Returns defaults (created on first read) for the authenticated user.
 
 Partial update. Supported fields:
 
-- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled` (boolean)
+- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled`, `friendRequestNotificationsEnabled` (boolean)
 - `dailyReminderTime`, `quietHoursStart`, `quietHoursEnd` (`HH:MM` 24h; quiet hours nullable)
 - `dailyReminderFrequency`: `daily` | `every_other` | `weekly`
 - `tz`: IANA timezone string
+
+Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or both set to `null`).
+
+### Web Push device registration
+
+- `GET /api/notifications/push/subscription` — VAPID public key
+- `POST|DELETE /api/notifications/push/subscription` — register/unregister browser subscription
+
+### iOS device registration
+
+`POST|DELETE /api/device-token` (unchanged from #203).
+
+## Notification types
+
+| Type | Issue | `notification_type` | Deep link (iOS) | Preference gate |
+|------|-------|---------------------|-----------------|-----------------|
+| Miss a day | #247 | `miss_a_day` | `stillpoint://session/quick` | `pushEnabled` + `missADayEnabled` |
+| Daily practice reminder | #346 | `daily_reminder` | `stillpoint://home` | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency |
+| Friend request | #359 | `friend_request` | `stillpoint://home` | `pushEnabled` + `friendRequestNotificationsEnabled` |
+
+Miss-a-day wins over daily reminder when both would fire in the same cron window (user missed yesterday and has not sat today).
+
+### Miss-a-day (#247)
+
+- Fires in the user's daily reminder window when they have **not** completed a session today and **did not** complete one yesterday (local dates)
+- Uses `window_key` = local `YYYY-MM-DD` and type `miss_a_day`
+- Helper: `sendMissADayNotification` (APNs + Web Push)
+
+### Daily reminder (#346)
+
+- Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
+- Helper: `sendDailyReminderNotification` (streak-aware copy + APNs/Web Push)
+- Skipped when user already completed a session today, or a `miss_a_day` dispatch exists for the same local date
+
+### Friend request (#359)
+
+- Event-driven on `POST /api/friends/requests`
+- Helper: `sendFriendRequestNotification` (APNs + Web Push)
 
 ## Scheduler
 
@@ -48,48 +91,35 @@ Partial update. Supported fields:
 - **Window:** matches users whose local reminder time falls within the last 5 minutes (including windows that cross local midnight)
 - **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
 - **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
-- **One push per local calendar day:** before sending, the scheduler checks `notification_dispatches` for any row with `window_key` equal to the user's local `YYYY-MM-DD`. Miss-a-day and daily reminder share this cap when frequency is `daily`.
+- **Dedup:** `claimNotificationDispatch` is the source of truth per `(user_id, notification_type, window_key)`
 
-## Notification types
+## Settings UI (#359)
 
-| Type | Issue | Deep link | Precedence |
-|------|-------|-----------|------------|
-| `miss_a_day` | #247 | `stillpoint://session/quick` | Wins over daily reminder when yesterday was missed |
-| `daily_reminder` | #346 | `stillpoint://home` | Default when miss-a-day does not apply |
+- **iOS:** Settings → **Notifications** (`NavigationLink` → `NotificationsSettingsView`)
+- **Web:** Settings → **Notifications** → `/app/settings/notifications`
 
-### Miss-a-day (#247)
+Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Miss a day → Friend activity.
 
-- Gated by: `push_enabled` && `miss_a_day_enabled`
-- Fires in the user's daily reminder window when they have **not** completed a session today and **did not** complete one yesterday (local dates)
-- Uses `window_key` = local `YYYY-MM-DD` and type `miss_a_day`
-- Helper: `sendMissADayNotification`
+Master push off disables dependent controls in the UI and persists `pushEnabled: false` (and unsubscribes web push / disables iOS token as before). Other preference toggles are preserved while push is off.
 
-### Daily reminder (#346)
+## iOS tap handling
 
-- Type: `daily_reminder`
-- Window key: local `YYYY-MM-DD` (or `YYYY-Www` for weekly frequency)
-- Helper: `sendDailyReminderNotification` (streak-aware copy + `deepLink: stillpoint://home`)
-- Gated by: `push_enabled` && `daily_reminder_enabled`, not in quiet hours, frequency rule, no completed session today, no `miss_a_day` dispatch for the same local date
-- iOS: `PushNotificationCoordinator` queues cold-start deep links until `RootView` wires `deepLinkHandler`
+- `PushNotificationCoordinator` stores pending deep links until `RootView` wires handlers
+- `stillpoint://home` → home
+- `stillpoint://session` / `stillpoint://session/quick` → `AppViewModel.consumePendingSessionDeepLinkIfNeeded()`
+- `stillpoint://friends` → friends surface (via notification deep-link handler)
 
 ## Adding a notification type
 
 1. **Preference flag** — Add a boolean column on `notification_preferences` (migration + schema + PATCH validation).
-2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` using `sendPushNotificationToUser` with a distinct `type` in the payload.
-3. **Scheduler branch** — In `src/lib/notification-scheduler.ts`, select eligible users, compute a stable `window_key`, call `claimNotificationDispatch`, then the send helper. Roll back the dispatch row if APNs delivery fails.
-4. **iOS** — Expose the flag in Settings (PATCH preferences) and handle the payload `type` / `deepLink` when the user taps the notification.
-5. **Tests** — Unit tests for preference validation, scheduler gating, and idempotent `claimNotificationDispatch`.
-
-## iOS
-
-- Settings → **NOTIFICATIONS**: master push toggle (triggers system permission on first opt-in), daily reminder toggle, miss-a-day toggle, time picker, frequency picker, quiet hours.
-- `PushNotificationCoordinator.requestAuthorizationAndRegister()` runs when the user enables push; login only re-registers the device token if permission was already granted.
-- Tap handling: `PushNotificationCoordinator` stores pending deep links; `AppViewModel.consumePendingSessionDeepLinkIfNeeded()` opens `stillpoint://session` or `stillpoint://session/quick`.
-- Device tokens: `POST|DELETE /api/device-token` (unchanged from #203).
+2. **Send helper** — Add `sendXNotification()` in `src/lib/notifications.ts` (APNs + `sendWebPushToUser` where applicable).
+3. **Scheduler branch** — In `src/lib/notification-scheduler.ts` for scheduled types, or event handler for instant types. Roll back the dispatch row if delivery fails.
+4. **iOS + web** — Expose the flag on the Notifications screen; handle payload `type` / `deepLink` on tap.
+5. **Tests** — Preference validation, scheduler gating, idempotent `claimNotificationDispatch`.
 
 ## Security
 
-- Never log raw APNs device tokens.
+- Never log raw APNs device tokens or Web Push subscription keys.
 - Cron endpoint must not be callable without `CRON_SECRET` in production.
 
 ## Related issues
@@ -97,4 +127,6 @@ Partial update. Supported fields:
 - #203 — APNs + `device_tokens`
 - #345 — Notification preferences foundation
 - #346 — Daily reminder
+- #347 — Web Push channel
 - #247 — Miss-a-day notifications
+- #359 — Unified Notifications settings screen

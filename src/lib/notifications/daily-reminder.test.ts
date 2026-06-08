@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { buildDailyReminderPayload, streakFromSessions } from "./daily-reminder";
+import {
+  buildDailyReminderPayload,
+  streakFromSessions,
+} from "./daily-reminder";
 
 describe("daily reminder helpers", () => {
   test("buildDailyReminderPayload uses default copy for short streaks", () => {

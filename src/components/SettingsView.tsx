@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { api } from "@/lib/api";
@@ -258,6 +259,49 @@ export function SettingsView({
             {user.email}
           </div>
         </div>
+
+        <Link
+          href="/app/settings/notifications"
+          style={{
+            padding: "16px 20px",
+            background: "var(--surface-1)",
+            borderRadius: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <div>
+            <div style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "12px",
+              color: "var(--fg)",
+              marginBottom: "4px",
+            }}
+            >
+              Notifications
+            </div>
+            <div style={{
+              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontSize: "13px",
+              fontStyle: "italic",
+              color: "var(--fg-3)",
+            }}
+            >
+              Push, reminders, quiet hours, and social alerts
+            </div>
+          </div>
+          <span style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "14px",
+            color: "var(--fg-4)",
+          }}
+          >
+            →
+          </span>
+        </Link>
 
         {/* Public board toggle */}
         <div style={{

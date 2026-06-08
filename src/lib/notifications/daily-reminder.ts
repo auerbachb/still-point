@@ -11,6 +11,30 @@ export const DAILY_REMINDER_DEEP_LINK = "stillpoint://home";
 
 const STREAK_LOOKBACK_DAYS = 90;
 
+export type DailyReminderWebPushPayload = {
+  title: string;
+  body: string;
+  type: typeof DAILY_REMINDER_NOTIFICATION_TYPE;
+  url: string;
+};
+
+export function buildDailyReminderWebPushPayload(streak: number): DailyReminderWebPushPayload {
+  const apns = buildDailyReminderPayload(streak);
+  const alert = apns.aps?.alert;
+  const title = typeof alert === "object" && alert !== null && "title" in alert
+    ? String(alert.title)
+    : "Still Point";
+  const body = typeof alert === "object" && alert !== null && "body" in alert
+    ? String(alert.body)
+    : "";
+  return {
+    title,
+    body,
+    type: DAILY_REMINDER_NOTIFICATION_TYPE,
+    url: "/app",
+  };
+}
+
 export function buildDailyReminderPayload(streak: number): ApnsPayload {
   const body = streak > 3
     ? `Day ${streak} of your streak — keep it going.`

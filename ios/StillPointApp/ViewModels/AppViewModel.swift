@@ -349,10 +349,18 @@ final class AppViewModel {
 
     private func handleNotificationDeepLink(_ url: URL) -> Bool {
         let scheme = (url.scheme ?? "").lowercased()
+        guard scheme == "stillpoint" else { return false }
         let host = (url.host ?? "").lowercased()
-        guard scheme == "stillpoint", host == "home" else { return false }
-        openHomeFromNotification()
-        return true
+        if host == "home" {
+            openHomeFromNotification()
+            return true
+        }
+        if host == "friends" {
+            // Friends management UI is web-only today; land on home until an iOS friends tab ships.
+            openHomeFromNotification()
+            return true
+        }
+        return false
     }
 
     private func extractBuddyToken(from url: URL) -> String? {

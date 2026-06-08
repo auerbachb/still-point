@@ -115,7 +115,7 @@ function frequencyAllowsSend(
     return true;
   }
   if (frequency === "every_other") {
-    const anchor = new Date(`${local.dateKey}T00:00:00Z`).getTime();
+    const anchor = new Date(`${local.dateKey}T00:00:00.000Z`).getTime();
     const days = Math.floor(anchor / 86_400_000);
     return days % 2 === 0;
   }
@@ -153,20 +153,6 @@ function addCalendarDays(dateKey: string, deltaDays: number): string {
   return utc.toISOString().slice(0, 10);
 }
 
-async function hasDispatchForLocalDate(userId: string, dateKey: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: notificationDispatches.id })
-    .from(notificationDispatches)
-    .where(
-      and(
-        eq(notificationDispatches.userId, userId),
-        eq(notificationDispatches.windowKey, dateKey),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
-}
-
 export async function dispatchDueNotifications(now: Date = new Date()): Promise<{
   scanned: number;
   sent: number;
@@ -201,11 +187,6 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
-        skipped += 1;
-        continue;
-      }
-
-      if (await hasDispatchForLocalDate(prefs.userId, local.dateKey)) {
         skipped += 1;
         continue;
       }
@@ -277,8 +258,21 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
       try {
         const streak = await loadUserStreak(prefs.userId, local.dateKey);
-        await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
-        sent += 1;
+        const { delivered } = await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
+        if (delivered) {
+          sent += 1;
+        } else {
+          await db
+            .delete(notificationDispatches)
+            .where(
+              and(
+                eq(notificationDispatches.userId, prefs.userId),
+                eq(notificationDispatches.notificationType, "daily_reminder"),
+                eq(notificationDispatches.windowKey, windowKey),
+              ),
+            );
+          skipped += 1;
+        }
       } catch (sendError) {
         console.error(`Failed to send daily reminder to user ${prefs.userId}:`, sendError);
         await db

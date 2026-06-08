@@ -7,8 +7,10 @@ final class NotificationPreferencesViewModel {
     var pushEnabled = false
     var dailyReminderEnabled = false
     var missADayEnabled = false
+    var friendRequestNotificationsEnabled = true
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
+    var timezoneDisplay = "UTC"
 
     var isLoading = false
     var isSaving = false
@@ -91,6 +93,16 @@ final class NotificationPreferencesViewModel {
         )
     }
 
+    func persistFriendRequestNotificationsEnabled(_ enabled: Bool) async {
+        friendRequestNotificationsEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(friendRequestNotificationsEnabled: enabled))
+    }
+
+    func persistTimezone(_ tz: String) async {
+        timezoneDisplay = tz
+        await persist(patch: NotificationPreferencesPatch(tz: tz))
+    }
+
     private func syncTimezoneIfNeeded(_ prefs: NotificationPreferencesDTO) async {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
         let deviceTz = TimeZone.current.identifier
@@ -111,8 +123,6 @@ final class NotificationPreferencesViewModel {
             apply(updated)
         } catch {
             errorMessage = "Could not save notification settings."
-            // Clear isSaving before reload; keeping it set would deadlock because
-            // load() → syncTimezoneIfNeeded() → persist() would spin forever.
             isSaving = false
             await load()
         }
@@ -122,6 +132,8 @@ final class NotificationPreferencesViewModel {
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
+        friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
+        timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil
         if let parsed = parseHHMM(dto.dailyReminderTime) {

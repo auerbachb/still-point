@@ -40,6 +40,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   pushEnabled: boolean("push_enabled").default(false).notNull(),
   dailyReminderEnabled: boolean("daily_reminder_enabled").default(false).notNull(),
   missADayEnabled: boolean("miss_a_day_enabled").default(false).notNull(),
+  friendRequestNotificationsEnabled: boolean("friend_request_notifications_enabled").default(true).notNull(),
   /** Local reminder time as HH:MM (24h). */
   dailyReminderTime: varchar("daily_reminder_time", { length: 5 }).default("09:00").notNull(),
   /** daily | every_other | weekly */
@@ -76,6 +77,24 @@ export const notificationDispatches = pgTable("notification_dispatches", {
     table.notificationType,
     table.windowKey,
   ),
+}));
+
+/** Browser Web Push subscriptions (#347). One row per Push API endpoint. */
+export const webPushSubscriptions = pgTable("web_push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  endpoint: text("endpoint").notNull(),
+  endpointHash: varchar("endpoint_hash", { length: 64 }).notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: varchar("user_agent", { length: 512 }),
+  enabled: boolean("enabled").default(true).notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  endpointHashUnique: uniqueIndex("web_push_subscriptions_endpoint_hash_unique").on(table.endpointHash),
+  userEnabledIdx: index("idx_web_push_subscriptions_user_enabled").on(table.userId, table.enabled),
 }));
 
 export const deviceTokens = pgTable("device_tokens", {
@@ -322,6 +341,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   thoughts: many(thoughts),
   passwordResetTokens: many(passwordResetTokens),
   deviceTokens: many(deviceTokens),
+  webPushSubscriptions: many(webPushSubscriptions),
   notificationPreferences: one(notificationPreferences, {
     fields: [users.id],
     references: [notificationPreferences.userId],
@@ -349,6 +369,10 @@ export const notificationDispatchesRelations = relations(notificationDispatches,
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
   user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
+}));
+
+export const webPushSubscriptionsRelations = relations(webPushSubscriptions, ({ one }) => ({
+  user: one(users, { fields: [webPushSubscriptions.userId], references: [users.id] }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({

@@ -32,6 +32,12 @@ vi.mock("@/lib/apns", () => ({
   sendApnsNotification,
 }));
 
+const sendWebPushToUser = vi.fn();
+
+vi.mock("@/lib/web-push", () => ({
+  sendWebPushToUser,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -43,6 +49,7 @@ describe("sendFriendRequestNotification", () => {
     tokenRows.length = 0;
     selectWhere.mockResolvedValue(tokenRows);
     sendApnsNotification.mockResolvedValue({ ok: true, status: 200 });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
   });
 
   test("sends the friend request APNs payload to each enabled device token", async () => {
@@ -59,6 +66,15 @@ describe("sendFriendRequestNotification", () => {
     });
 
     expect(sendApnsNotification).toHaveBeenCalledTimes(2);
+    expect(sendWebPushToUser).toHaveBeenCalledWith({
+      recipientUserId: "recipient-id",
+      payload: {
+        title: "New friend request",
+        body: "maya wants to connect on Still Point.",
+        type: "friend_request",
+        url: "/app?view=friends",
+      },
+    });
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
       aps: {
         alert: {
@@ -70,6 +86,7 @@ describe("sendFriendRequestNotification", () => {
       },
       type: "friend_request",
       requestId: "request-id",
+      deepLink: "stillpoint://home",
     });
     expect(dbUpdate).toHaveBeenCalledTimes(2);
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ lastUsedAt: expect.any(Date) }));
@@ -101,12 +118,21 @@ describe("sendFriendRequestNotification", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 
-  test("sends the daily reminder APNs payload", async () => {
+  test("sends the daily reminder to APNs and Web Push", async () => {
     tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
     const { sendDailyReminderNotification } = await import("./notifications");
 
     await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
 
+    expect(sendWebPushToUser).toHaveBeenCalledWith({
+      recipientUserId: "recipient-id",
+      payload: {
+        title: "Still Point",
+        body: "Time for a moment of stillness. Tap to begin.",
+        type: "daily_reminder",
+        url: "/app",
+      },
+    });
     expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
       aps: {
         alert: {
@@ -123,6 +149,7 @@ describe("sendFriendRequestNotification", () => {
 
   test("sends the miss-a-day APNs payload with quick session deep link", async () => {
     tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
     const { sendMissADayNotification } = await import("./notifications");
 
     const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
@@ -140,6 +167,28 @@ describe("sendFriendRequestNotification", () => {
       type: "miss_a_day",
       deepLink: "stillpoint://session/quick",
     });
+  });
+
+  test("miss-a-day is not delivered when APNs and Web Push both fail", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    sendApnsNotification.mockResolvedValue({ ok: false, status: 500 });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(false);
+    expect(sendApnsNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("miss-a-day is delivered when only Web Push succeeds", async () => {
+    sendWebPushToUser.mockResolvedValue({ delivered: true });
+    const { sendMissADayNotification } = await import("./notifications");
+
+    const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).not.toHaveBeenCalled();
   });
 
   test("limits APNs sends to bounded batches", async () => {
