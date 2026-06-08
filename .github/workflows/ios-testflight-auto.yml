@@ -1,0 +1,121 @@
+name: Auto TestFlight on merge
+
+# Auto-cut a TestFlight build when a PR is merged to main carrying the
+# `release:ios` label. Mirrors auerbachb/skingod's mobile-testflight.yml,
+# adapted for Still Point's self-hosted xcodebuild pipeline (skingod uses EAS).
+#
+# Flow:
+#   1. Read CURRENT_PROJECT_VERSION from ios/project.yml at the merge commit.
+#   2. Increment it (build-number source of truth: the committed project.yml).
+#   3. Commit the bump back to main with [skip ci].
+#   4. Cut an ios-v<marketing>-build<n> tag on that commit.
+#   5. Call the shared reusable workflow to build + upload from that commit.
+#
+# The bump commit and tag are pushed with the default GITHUB_TOKEN. GitHub does
+# NOT start new workflow runs for GITHUB_TOKEN-authored pushes, so:
+#   * push-on-main CI (e2e-mobile, web-build) does not fire on the bump — the
+#     [skip ci] is belt-and-suspenders for that, plus clarity for humans;
+#   * the new ios-v*-build* tag does NOT re-trigger ios-testflight.yml, so there
+#     is no double build. The reusable build is invoked directly below instead.
+#     If this is ever switched to a PAT, add a guard so the manual workflow does
+#     not also fire on the bot-cut tag.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+# Share the ios-testflight concurrency group with the manual tag workflow so
+# build-number bumps and TestFlight uploads never run two at a time.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Bump build number and cut TestFlight tag
+    if: >-
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release:ios')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.bump.outputs.sha }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Bump build number, commit, and tag
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT="ios/project.yml"
+
+          MARKETING="$(grep -E '^[[:space:]]+MARKETING_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*MARKETING_VERSION:[[:space:]]*"?([^"#]+)"?.*/\1/' | xargs)"
+          CURRENT="$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' | xargs)"
+
+          if [[ -z "$MARKETING" || -z "$CURRENT" ]]; then
+            echo "::error::Could not read MARKETING_VERSION ('$MARKETING') or CURRENT_PROJECT_VERSION ('$CURRENT') from $PROJECT"
+            exit 1
+          fi
+
+          NEW=$((CURRENT + 1))
+          TAG="ios-v${MARKETING}-build${NEW}"
+
+          echo "Marketing version: $MARKETING"
+          echo "Build number: $CURRENT -> $NEW"
+          echo "Tag: $TAG"
+
+          # Fail fast if the tag already exists locally or on origin. Forces a
+          # human to reconcile project.yml if the build-number state has drifted.
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
+             || git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            echo "::error::Tag ${TAG} already exists. Bump CURRENT_PROJECT_VERSION in ios/project.yml before merging release:ios PRs."
+            exit 1
+          fi
+
+          # Increment CURRENT_PROJECT_VERSION in place (only the StillPoint target
+          # defines this key, so a single substitution is unambiguous).
+          sed -i.bak -E "s/^([[:space:]]+CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+.*/\1${NEW}/" "$PROJECT"
+          rm -f "${PROJECT}.bak"
+
+          APPLIED="$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' | xargs)"
+          if [[ "$APPLIED" != "$NEW" ]]; then
+            echo "::error::Failed to update CURRENT_PROJECT_VERSION to ${NEW} (got '${APPLIED}')."
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "$PROJECT"
+          git commit -m "chore(ios): bump build to ${NEW} for TestFlight [skip ci]"
+          git tag -a "${TAG}" -m "Automated TestFlight release ${TAG}"
+
+          # Push the bump to main, then the tag. main is a fast-forward from the
+          # merge commit; if another commit landed first the push is rejected and
+          # the job fails before the tag is pushed (no orphan tag, no double bump).
+          git push origin HEAD:main
+          git push origin "refs/tags/${TAG}"
+
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "tag=${TAG}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: tag
+    # Build the freshly tagged bump commit so the binary's CFBundleVersion
+    # matches the just-incremented CURRENT_PROJECT_VERSION.
+    uses: ./.github/workflows/ios-testflight-build.yml
+    with:
+      ref: ${{ needs.tag.outputs.sha }}
+    secrets: inherit
