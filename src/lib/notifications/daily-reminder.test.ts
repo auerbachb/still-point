@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   buildDailyReminderPayload,
-  buildDailyReminderWebPushPayload,
   streakFromSessions,
 } from "./daily-reminder";
 

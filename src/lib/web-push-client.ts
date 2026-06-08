@@ -59,7 +59,11 @@ export async function fetchVapidPublicKey(): Promise<string> {
 }
 
 export async function subscribeBrowserPush(publicKey: string): Promise<PushSubscription> {
-  const registration = await registerServiceWorker();
+  await registerServiceWorker();
+  // Wait for the service worker to become active before subscribing; on first
+  // install the registration returned by register() may still be in the
+  // "installing" state and pushManager.subscribe() would fail intermittently.
+  const registration = await navigator.serviceWorker.ready;
   const existing = await registration.pushManager.getSubscription();
   if (existing) {
     return existing;

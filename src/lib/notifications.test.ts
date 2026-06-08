@@ -170,6 +170,7 @@ describe("sendFriendRequestNotification", () => {
   });
 
   test("miss-a-day is not delivered when APNs and Web Push both fail", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
     sendApnsNotification.mockResolvedValue({ ok: false, status: 500 });
     sendWebPushToUser.mockResolvedValue({ delivered: false });
     const { sendMissADayNotification } = await import("./notifications");
@@ -177,6 +178,7 @@ describe("sendFriendRequestNotification", () => {
     const result = await sendMissADayNotification({ recipientUserId: "recipient-id" });
 
     expect(result.delivered).toBe(false);
+    expect(sendApnsNotification).toHaveBeenCalledTimes(1);
   });
 
   test("miss-a-day is delivered when only Web Push succeeds", async () => {

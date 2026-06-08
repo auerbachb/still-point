@@ -19,6 +19,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conname = 'web_push_subscriptions_user_id_users_id_fk'
+      AND conrelid = 'public.web_push_subscriptions'::regclass
   ) THEN
     ALTER TABLE "web_push_subscriptions"
       ADD CONSTRAINT "web_push_subscriptions_user_id_users_id_fk"
