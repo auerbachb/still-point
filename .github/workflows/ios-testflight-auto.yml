@@ -38,6 +38,7 @@ jobs:
     name: Bump build number and cut TestFlight tag
     if: >-
       github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
       contains(github.event.pull_request.labels.*.name, 'release:ios')
     runs-on: ubuntu-latest
     permissions:
@@ -100,11 +101,12 @@ jobs:
           git commit -m "chore(ios): bump build to ${NEW} for TestFlight [skip ci]"
           git tag -a "${TAG}" -m "Automated TestFlight release ${TAG}"
 
-          # Push the bump to main, then the tag. main is a fast-forward from the
-          # merge commit; if another commit landed first the push is rejected and
-          # the job fails before the tag is pushed (no orphan tag, no double bump).
-          git push origin HEAD:main
-          git push origin "refs/tags/${TAG}"
+          # Push the bump commit and the tag together atomically: with --atomic
+          # both refs update or neither does, so main can never gain a higher
+          # CURRENT_PROJECT_VERSION without the matching tag. main is a
+          # fast-forward from the merge commit; if another commit landed first the
+          # whole push is rejected and the job fails (no partial state, no double bump).
+          git push --atomic origin HEAD:main "refs/tags/${TAG}"
 
           {
             echo "sha=$(git rev-parse HEAD)"
