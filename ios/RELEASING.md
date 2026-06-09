@@ -2,10 +2,25 @@
 
 ## Release-readiness artifacts (Issue #210)
 
-Treat these files as required merge artifacts for iOS release candidates:
+Treat these files as required merge artifacts for iOS release candidates. They gate the **App Store release** path (`ios-app-store-release.yml`); the TestFlight paths below do **not** enforce them, because TestFlight is itself the testing surface.
 
 - `ios/PARITY_CHECKLIST.md` - feature parity status vs web, including deferred gaps with owner/date.
 - `ios/QA_CHECKLIST.md` - regression/QA sign-off, release metadata completion, and submission evidence.
+
+## Release paths
+
+Still Point has three iOS release paths. Pick by intent:
+
+| Path | Trigger | Workflow | Use when |
+|------|---------|----------|----------|
+| **Auto TestFlight** (recommended) | Merge a PR to `main` carrying the **`release:ios`** label | [`ios-testflight-auto.yml`](../.github/workflows/ios-testflight-auto.yml) → [`ios-testflight-build.yml`](../.github/workflows/ios-testflight-build.yml) | You want the merged code on TestFlight. Label the PR, merge it — the build number auto-increments. |
+| **Manual TestFlight tag** (escape hatch) | Push an `ios-v<marketing>-build<n>` tag | [`ios-testflight.yml`](../.github/workflows/ios-testflight.yml) → [`ios-testflight-build.yml`](../.github/workflows/ios-testflight-build.yml) | You need to cut a specific commit/build by hand, or replay a build without merging a PR. |
+| **App Store release** | Push a strict semver `ios-vMAJOR.MINOR.PATCH` tag (no `-build`) | [`ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml) | You're shipping metadata + binary to the App Store for the version in `ios/project.yml`. |
+
+Both TestFlight paths share the reusable build/upload workflow and run only the
+**Release-config UI smoke gate**; the parity/QA-checklist and App Store dry-run gates
+are reserved for the App Store release path. The `release:ios` label gate keeps
+auto-builds intentional, so doc-only or translation PRs don't burn a TestFlight slot.
 
 ## Prerequisites
 
@@ -34,26 +49,47 @@ Before your first TestFlight release, configure a tester group and handle encryp
 
 ## Releasing to TestFlight
 
-1. Complete and commit `ios/PARITY_CHECKLIST.md` and `ios/QA_CHECKLIST.md`.
-2. Update the version in `ios/project.yml`:
+### Automatic: label a PR (recommended)
+
+1. Add the **`release:ios`** label to the PR you want to ship.
+2. Merge the PR to `main`. [`ios-testflight-auto.yml`](../.github/workflows/ios-testflight-auto.yml) fires on the merge and:
+   - reads `CURRENT_PROJECT_VERSION` from `ios/project.yml` and increments it by 1,
+   - commits the bump back to `main` with `[skip ci]`,
+   - cuts an `ios-v<MARKETING_VERSION>-build<new>` tag on that commit,
+   - calls the reusable workflow to build (Release config) and upload to TestFlight.
+3. The build appears in TestFlight ~15–30 min after the run finishes.
+
+`MARKETING_VERSION` is **never** auto-bumped — that's a human decision. Bump it in
+`ios/project.yml` in an ordinary PR when you want a new marketing version; the next
+labeled merge tags against it. If the computed `ios-v<marketing>-build<n>` tag already
+exists (build-number state drifted), the run **fails fast** — bump
+`CURRENT_PROJECT_VERSION` in `ios/project.yml` and re-merge. Unlabeled PR merges do
+nothing (no quota burn).
+
+### Manual tag (escape hatch)
+
+Cut a build by hand without a labeled-PR merge. TestFlight does not require the
+parity/QA checklists — those gate the App Store release path.
+
+1. Bump `CURRENT_PROJECT_VERSION` in `ios/project.yml` so it is strictly greater than the last uploaded build:
    ```yaml
    MARKETING_VERSION: "1.0.3"
-   CURRENT_PROJECT_VERSION: 10
+   CURRENT_PROJECT_VERSION: 11
    ```
-3. Commit release artifacts + version bump:
+2. Commit the build-number bump:
    ```bash
-   git add ios/project.yml ios/PARITY_CHECKLIST.md ios/QA_CHECKLIST.md ios/RELEASING.md
-   git commit -m "Finalize iOS 1.0.3 (build 10) release readiness"
+   git add ios/project.yml
+   git commit -m "Bump iOS to 1.0.3 (build 11) for TestFlight"
    ```
-4. Tag and push using the **TestFlight** tag pattern (`ios-v{version}-build{number}`):
+3. Tag and push using the **TestFlight** tag pattern (`ios-v{version}-build{number}`):
    ```bash
-   git tag ios-v1.0.3-build10
-   git push origin ios-v1.0.3-build10
+   git tag ios-v1.0.3-build11
+   git push origin ios-v1.0.3-build11
    ```
-5. The [Build & Upload to TestFlight](../.github/workflows/ios-testflight.yml) workflow (`ios-v*-build*` tags) builds and uploads to TestFlight automatically.
-6. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
-7. Record the processed build number and processing timestamp in `ios/QA_CHECKLIST.md`.
-8. Before App Store submission, run the automation dry run and save its artifact:
+4. The [Build & Upload to TestFlight](../.github/workflows/ios-testflight.yml) workflow (`ios-v*-build*` tags) builds and uploads to TestFlight automatically.
+5. After Apple processes the build (~15 minutes), it appears in the TestFlight app.
+6. Record the processed build number and processing timestamp in `ios/QA_CHECKLIST.md`.
+7. Before App Store submission, run the automation dry run and save its artifact:
    ```bash
    npm run ios:app-store:dry-run
    ```
@@ -102,9 +138,10 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 
 ## Version numbering
 
-- `MARKETING_VERSION` - user-facing version (e.g., `1.0.0`, `1.0.3`).
-- `CURRENT_PROJECT_VERSION` - build number; increment every upload (`1`, `2`, `3`, ...).
-- **TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build10`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
+- `MARKETING_VERSION` - user-facing version (e.g., `1.0.0`, `1.0.3`). Human-bumped only.
+- `CURRENT_PROJECT_VERSION` - build number; must be strictly increasing per marketing version. The **Auto TestFlight** path increments this for you and commits it back to `main`; on the manual paths you bump it yourself.
+- **Auto TestFlight:** merge a PR labeled **`release:ios`** to trigger [`.github/workflows/ios-testflight-auto.yml`](../.github/workflows/ios-testflight-auto.yml), which bumps the build number, tags `ios-v<marketing>-build<n>`, and calls [`.github/workflows/ios-testflight-build.yml`](../.github/workflows/ios-testflight-build.yml).
+- **Manual TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build11`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
 - **App Store automation:** push a strict semver tag `ios-vMAJOR.MINOR.PATCH` that **equals** `MARKETING_VERSION` to trigger [`.github/workflows/ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml).
 - Uploaded app version is controlled by `ios/project.yml`, not the tag string (except the App Store workflow enforces tag ↔ `MARKETING_VERSION` match).
 - Re-uploads for the same marketing version require a new TestFlight tag and incremented build number, e.g. `ios-v<marketing-version>-build<next-build>`.
