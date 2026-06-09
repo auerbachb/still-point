@@ -1,0 +1,47 @@
+name: Reset Preview DB Branch
+
+# Keeps the shared Neon `preview` branch in sync with `production` so its
+# schema_migrations ledger cannot drift far enough to break PR preview deploys
+# (see drizzle/README.md and issue #372). The preview branch is a disposable
+# mirror of production, so resetting it nightly is safe; any preview-only data
+# is discarded and new migrations simply re-apply on the next preview deploy.
+#
+# Requires the repo secret NEON_API_KEY (a Neon API key with access to the
+# project). Until that secret is added the job no-ops (passes) rather than
+# failing every night.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC nightly (~02:00-03:00 ET), low-traffic
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Never let two resets overlap.
+concurrency:
+  group: neon-preview-reset
+  cancel-in-progress: false
+
+jobs:
+  reset-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Reset preview branch from production
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: noisy-cell-87641627
+          PREVIEW_BRANCH: preview
+        run: |
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "::notice::NEON_API_KEY secret not set - skipping preview reset. Add the secret to enable nightly resets."
+            exit 0
+          fi
+          # neonctl reads NEON_API_KEY from the environment. --parent resets the
+          # branch to production's current state; we intentionally do NOT pass
+          # --preserve-under-name so nightly runs don't accumulate backup branches.
+          npx -y neonctl@2.22.0 branches reset "$PREVIEW_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --parent
+          echo "Preview branch '$PREVIEW_BRANCH' reset from production."
