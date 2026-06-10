@@ -50,6 +50,14 @@ and then edited before it reaches another, the branches disagree:
 > first saw the file with the new content (so it was fine), but `preview` still
 > held the old checksum and every PR preview deploy failed.
 
+**Safety net:** the shared `preview` branch is automatically reset from
+`production` every night by
+[`.github/workflows/neon-preview-reset.yml`](../.github/workflows/neon-preview-reset.yml)
+(issue #372), so most preview drift self-heals within a day. This requires the
+`NEON_API_KEY` repo secret; until it is set the workflow no-ops. `production` is
+never auto-reset, so an intentionally edited applied migration there still needs
+a manual reconcile (below).
+
 ## If you must change an already-applied migration
 
 Only do this when the new content is **schema-equivalent** to what was applied
@@ -72,11 +80,13 @@ file instead.
    The helper updates the **ledger only** - it never runs DDL. It shares the
    migrator's advisory lock, so it cannot race a concurrent deploy.
 
-3. **Preview shortcut.** Because `preview` is a disposable mirror of
-   `production`, you can instead reset it from its parent in the Neon console (or
-   via the API: `reset_from_parent`), which brings its ledger and data back in
-   line with `production` in one step. (This discards preview-only data - use the
-   "preserve under name" option if you might need it back.)
+3. **Preview shortcut.** The nightly workflow above usually heals preview on its
+   own, but to fix it immediately: because `preview` is a disposable mirror of
+   `production`, you can reset it from its parent in the Neon console (or via the
+   API: `reset_from_parent`, or `neonctl branches reset preview --parent`), which
+   brings its ledger and data back in line with `production` in one step. (This
+   discards preview-only data - use the "preserve under name" option if you might
+   need it back.)
 
 ## `db:reconcile` helper
 
