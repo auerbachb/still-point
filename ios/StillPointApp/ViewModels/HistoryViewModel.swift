@@ -8,14 +8,14 @@ final class HistoryViewModel {
     var stats: StatsDTO?
     var isLoading = false
     var errorMessage: String?
-    /// Expanded standard session (by row id).
+    /// Expanded session (by row id).
     var expandedSessionId: String?
     var sessionThoughts: [String: [ThoughtDTO]] = [:]
 
-    /// Standard sits only, ordered for the Journey list (missed gaps + per-day session indices).
+    /// All sits (standard + quick), ordered for the Journey list with collapsed missed-day gaps.
     var journeyRows: [HistoryJourneyListRow] = []
 
-    /// Longest actualTime across standard sessions in the journey (floor 60).
+    /// Longest actualTime across sessions in the journey (floor 60).
     var maxDuration: Int = 60
 
     func load() async {
@@ -57,10 +57,20 @@ final class HistoryViewModel {
     // MARK: - Private
 
     private func buildJourney() {
-        let standard = sessions.filter { $0.sessionType == .standard }
-        journeyRows = HistoryJourney.buildRows(fromStandardSessions: standard)
+        // Today in device-local time, matching how `sessionDate` is stamped at creation,
+        // so the gap between the last session and today renders (#379).
+        let today = Self.localIsoDateFormatter.string(from: Date())
+        journeyRows = HistoryJourney.buildRows(fromSessions: sessions, todayIsoDate: today)
 
-        let sessionTimes = standard.map { $0.actualTime ?? $0.duration }
+        let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
         maxDuration = max(sessionTimes.max() ?? 60, 60)
     }
+
+    private static let localIsoDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.calendar = Calendar(identifier: .gregorian)
+        return df
+    }()
 }
