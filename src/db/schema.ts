@@ -150,6 +150,8 @@ export const appleNotificationLog = pgTable("apple_notification_log", {
   jti: varchar("jti", { length: 255 }),
   /** Affected app user when the Apple `sub` resolved to one. */
   userId: uuid("user_id"),
+  /** Two-phase: rows start as "received", then are finalized with the handler
+   *  outcome (account_deleted, apple_link_removed, noop_*, processing_failed, …). */
   actionTaken: varchar("action_taken", { length: 64 }).notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

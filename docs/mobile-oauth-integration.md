@@ -81,7 +81,9 @@ Requests that fail JWT verification return **401** and are not processed — the
 
 **Idempotency:** every handler tolerates already-processed state (user already deleted, link already removed, flag already set), so the same notification posted twice produces the same end state. Apple does **not** document retry or delivery-guarantee semantics for these notifications — processing failures therefore return 500 **and** are logged (`console.error` → Vercel logs) for manual follow-up; if Apple or an operator redelivers, the idempotent handlers make that safe.
 
-**Audit log:** every verified notification — including duplicates and unknown types — appends a row to `apple_notification_log` (event type, Apple `sub`, Apple event time, JWT `jti`, affected user id, action taken, received time).
+**Audit log:** every verified notification — including duplicates and unknown types — appends a row to `apple_notification_log` (event type, Apple `sub`, Apple event time, JWT `jti`, affected user id, action taken, received time). Logging is two-phase: the row is written as `received` **before** the handler runs, then finalized with the outcome (`account_deleted`, `noop_*`, `processing_failed`, …), so a mid-handling crash can never lose the receipt.
+
+**Event ordering:** Apple commonly sends `consent-revoked` immediately before `account-delete`. Since `consent-revoked` removes the `oauth_accounts` link, user resolution falls back to the most recent `apple_notification_log` row for the same `sub`, so the follow-up `account-delete` still finds and deletes the account. Events are otherwise applied last-write-wins — a deliberate tradeoff for these low-stakes flags (no per-subject ordering ledger); `event_time` is kept in the audit log for forensic reconstruction.
 
 ### Operator setup (one-time, Apple Developer console)
 

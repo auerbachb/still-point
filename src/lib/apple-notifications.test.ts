@@ -1,32 +1,58 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const {
-  selectLimit,
+  linkLimit,
+  fallbackLimit,
   deleteReturning,
   updateSet,
   updateWhere,
+  updateReturning,
   insertValues,
+  insertReturning,
   deleteUserAccount,
 } = vi.hoisted(() => ({
-  selectLimit: vi.fn(),
+  /** select().from().where().limit() — oauth_accounts link lookup */
+  linkLimit: vi.fn(),
+  /** select().from().where().orderBy().limit() — audit-log fallback lookup */
+  fallbackLimit: vi.fn(),
   deleteReturning: vi.fn(),
   updateSet: vi.fn(),
   updateWhere: vi.fn(),
+  updateReturning: vi.fn(),
   insertValues: vi.fn(),
+  insertReturning: vi.fn(),
   deleteUserAccount: vi.fn(),
 }));
 
 vi.mock("@/db", () => ({
   db: {
-    select: () => ({ from: () => ({ where: () => ({ limit: selectLimit }) }) }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: linkLimit,
+          orderBy: () => ({ limit: fallbackLimit }),
+        }),
+      }),
+    }),
     delete: () => ({ where: () => ({ returning: deleteReturning }) }),
     update: () => ({
       set: (values: unknown) => {
         updateSet(values);
-        return { where: updateWhere };
+        return {
+          where: (...args: unknown[]) => {
+            updateWhere(...args);
+            const result = Promise.resolve(undefined);
+            return Object.assign(result, { returning: updateReturning });
+          },
+        };
       },
     }),
-    insert: () => ({ values: insertValues }),
+    insert: () => ({
+      values: (values: unknown) => {
+        insertValues(values);
+        return { returning: insertReturning };
+      },
+    }),
   },
 }));
 
@@ -35,17 +61,19 @@ vi.mock("@/lib/accountDeletion", () => ({
 }));
 
 import {
+  finalizeAppleNotificationLog,
   handleAppleNotificationEvent,
-  logAppleNotification,
   parseAppleEventsClaim,
+  recordAppleNotificationReceipt,
 } from "./apple-notifications";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  selectLimit.mockResolvedValue([{ userId: "user-uuid-1" }]);
+  linkLimit.mockResolvedValue([{ userId: "user-uuid-1" }]);
+  fallbackLimit.mockResolvedValue([]);
   deleteReturning.mockResolvedValue([{ id: "link-1" }]);
-  updateWhere.mockResolvedValue(undefined);
-  insertValues.mockResolvedValue(undefined);
+  updateReturning.mockResolvedValue([{ id: "user-uuid-1" }]);
+  insertReturning.mockResolvedValue([{ id: "log-uuid-1" }]);
   deleteUserAccount.mockResolvedValue(true);
 });
 
@@ -93,6 +121,17 @@ describe("handleAppleNotificationEvent", () => {
     expect(result).toEqual({ actionTaken: "account_deleted", userId: "user-uuid-1" });
   });
 
+  test("account-delete after consent-revoked still deletes via the audit-log fallback", async () => {
+    // consent-revoked removed the oauth link; the audit log still maps sub -> user.
+    linkLimit.mockResolvedValue([]);
+    fallbackLimit.mockResolvedValue([{ userId: "user-uuid-1" }]);
+
+    const result = await handleAppleNotificationEvent({ type: "account-delete", sub: "apple-sub-1" });
+
+    expect(deleteUserAccount).toHaveBeenCalledWith("user-uuid-1");
+    expect(result).toEqual({ actionTaken: "account_deleted", userId: "user-uuid-1" });
+  });
+
   test("account-delete is a noop when deleteUserAccount finds nothing", async () => {
     deleteUserAccount.mockResolvedValue(false);
     const result = await handleAppleNotificationEvent({ type: "account-delete", sub: "apple-sub-1" });
@@ -100,8 +139,9 @@ describe("handleAppleNotificationEvent", () => {
     expect(result).toEqual({ actionTaken: "noop_already_deleted", userId: "user-uuid-1" });
   });
 
-  test("account-delete with unknown sub does not call deleteUserAccount (idempotent repeat)", async () => {
-    selectLimit.mockResolvedValue([]);
+  test("account-delete with a never-seen sub does not call deleteUserAccount", async () => {
+    linkLimit.mockResolvedValue([]);
+    fallbackLimit.mockResolvedValue([]);
     const result = await handleAppleNotificationEvent({ type: "account-delete", sub: "gone-sub" });
 
     expect(deleteUserAccount).not.toHaveBeenCalled();
@@ -115,7 +155,7 @@ describe("handleAppleNotificationEvent", () => {
     expect(result).toEqual({ actionTaken: "apple_link_removed", userId: "user-uuid-1" });
   });
 
-  test("consent-revoked reports noop when the link is already gone (race)", async () => {
+  test("consent-revoked reports noop when the link is already gone", async () => {
     deleteReturning.mockResolvedValue([]);
     const result = await handleAppleNotificationEvent({ type: "consent-revoked", sub: "apple-sub-1" });
 
@@ -125,19 +165,25 @@ describe("handleAppleNotificationEvent", () => {
   test("email-disabled marks the user undeliverable", async () => {
     const result = await handleAppleNotificationEvent({ type: "email-disabled", sub: "apple-sub-1" });
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({ emailDeliverable: false }),
-    );
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ emailDeliverable: false }));
     expect(result).toEqual({ actionTaken: "email_marked_undeliverable", userId: "user-uuid-1" });
   });
 
   test("email-enabled marks the user deliverable again", async () => {
     const result = await handleAppleNotificationEvent({ type: "email-enabled", sub: "apple-sub-1" });
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({ emailDeliverable: true }),
-    );
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ emailDeliverable: true }));
     expect(result).toEqual({ actionTaken: "email_marked_deliverable", userId: "user-uuid-1" });
+  });
+
+  test("email-enabled for a fallback-resolved but deleted user is a noop", async () => {
+    linkLimit.mockResolvedValue([]);
+    fallbackLimit.mockResolvedValue([{ userId: "user-uuid-1" }]);
+    updateReturning.mockResolvedValue([]);
+
+    const result = await handleAppleNotificationEvent({ type: "email-enabled", sub: "apple-sub-1" });
+
+    expect(result).toEqual({ actionTaken: "noop_user_not_found", userId: "user-uuid-1" });
   });
 
   test("repeat email-disabled deliveries converge on the same state", async () => {
@@ -160,39 +206,64 @@ describe("handleAppleNotificationEvent", () => {
   });
 });
 
-describe("logAppleNotification", () => {
-  test("writes one audit row with event metadata", async () => {
-    await logAppleNotification({
+describe("recordAppleNotificationReceipt", () => {
+  test("inserts a received row and returns its id", async () => {
+    const id = await recordAppleNotificationReceipt({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
       eventTime: 1_718_000_000_000,
       jti: "jti-abc",
-      userId: "user-uuid-1",
-      actionTaken: "apple_link_removed",
     });
 
+    expect(id).toBe("log-uuid-1");
     expect(insertValues).toHaveBeenCalledWith({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
       eventTime: new Date(1_718_000_000_000),
       jti: "jti-abc",
-      userId: "user-uuid-1",
-      actionTaken: "apple_link_removed",
+      actionTaken: "received",
     });
   });
 
   test("tolerates missing event_time and jti", async () => {
-    await logAppleNotification({
+    await recordAppleNotificationReceipt({
       eventType: "email-enabled",
       subject: "apple-sub-1",
       eventTime: undefined,
       jti: undefined,
-      userId: null,
-      actionTaken: "noop_user_not_found",
     });
 
     expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ eventTime: null, jti: null, userId: null }),
+      expect.objectContaining({ eventTime: null, jti: null }),
     );
+  });
+
+  test("truncates an oversized external event type instead of failing the insert", async () => {
+    const longType = "x".repeat(80);
+    await recordAppleNotificationReceipt({
+      eventType: longType,
+      subject: "apple-sub-1",
+      eventTime: undefined,
+      jti: undefined,
+    });
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "x".repeat(50) }),
+    );
+  });
+});
+
+describe("finalizeAppleNotificationLog", () => {
+  test("updates the receipt row with the handler outcome", async () => {
+    await finalizeAppleNotificationLog("log-uuid-1", {
+      actionTaken: "apple_link_removed",
+      userId: "user-uuid-1",
+    });
+
+    expect(updateSet).toHaveBeenCalledWith({
+      actionTaken: "apple_link_removed",
+      userId: "user-uuid-1",
+    });
+    expect(updateWhere).toHaveBeenCalled();
   });
 });

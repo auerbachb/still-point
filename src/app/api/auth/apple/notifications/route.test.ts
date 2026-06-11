@@ -1,10 +1,16 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const { verifyAppleJwt, handleAppleNotificationEvent, logAppleNotification } = vi.hoisted(() => ({
+const {
+  verifyAppleJwt,
+  handleAppleNotificationEvent,
+  recordAppleNotificationReceipt,
+  finalizeAppleNotificationLog,
+} = vi.hoisted(() => ({
   verifyAppleJwt: vi.fn(),
   handleAppleNotificationEvent: vi.fn(),
-  logAppleNotification: vi.fn(),
+  recordAppleNotificationReceipt: vi.fn(),
+  finalizeAppleNotificationLog: vi.fn(),
 }));
 
 vi.mock("@/lib/apple-auth", () => ({
@@ -16,7 +22,8 @@ vi.mock("@/lib/apple-notifications", async (importOriginal) => {
   return {
     ...actual,
     handleAppleNotificationEvent,
-    logAppleNotification,
+    recordAppleNotificationReceipt,
+    finalizeAppleNotificationLog,
   };
 });
 
@@ -42,29 +49,32 @@ beforeEach(() => {
     actionTaken: "account_deleted",
     userId: "user-uuid-1",
   });
-  logAppleNotification.mockResolvedValue(undefined);
+  recordAppleNotificationReceipt.mockResolvedValue("log-uuid-1");
+  finalizeAppleNotificationLog.mockResolvedValue(undefined);
 });
 
 describe("POST /api/auth/apple/notifications", () => {
-  test("processes a verified notification and writes the audit log", async () => {
+  test("records a receipt, handles the event, and finalizes the audit row", async () => {
     const { POST } = await import("./route");
 
     const res = await POST(requestWithBody({ payload: "header.payload.sig" }));
 
     expect(res.status).toBe(200);
     expect(verifyAppleJwt).toHaveBeenCalledWith("header.payload.sig");
+    expect(recordAppleNotificationReceipt).toHaveBeenCalledWith({
+      eventType: "account-delete",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-abc",
+    });
     expect(handleAppleNotificationEvent).toHaveBeenCalledWith({
       type: "account-delete",
       sub: "apple-sub-1",
       event_time: 1_718_000_000_000,
     });
-    expect(logAppleNotification).toHaveBeenCalledWith({
-      eventType: "account-delete",
-      subject: "apple-sub-1",
-      eventTime: 1_718_000_000_000,
-      jti: "jti-abc",
-      userId: "user-uuid-1",
+    expect(finalizeAppleNotificationLog).toHaveBeenCalledWith("log-uuid-1", {
       actionTaken: "account_deleted",
+      userId: "user-uuid-1",
     });
   });
 
@@ -89,15 +99,15 @@ describe("POST /api/auth/apple/notifications", () => {
     expect(verifyAppleJwt).not.toHaveBeenCalled();
   });
 
-  test("returns 401 when JWT verification fails and never touches handlers", async () => {
+  test("returns 401 when JWT verification fails and never touches handlers or the log", async () => {
     verifyAppleJwt.mockRejectedValue(new Error("signature verification failed"));
     const { POST } = await import("./route");
 
     const res = await POST(requestWithBody({ payload: "forged.jwt.token" }));
 
     expect(res.status).toBe(401);
+    expect(recordAppleNotificationReceipt).not.toHaveBeenCalled();
     expect(handleAppleNotificationEvent).not.toHaveBeenCalled();
-    expect(logAppleNotification).not.toHaveBeenCalled();
   });
 
   test("returns 400 when the events claim is malformed", async () => {
@@ -107,17 +117,32 @@ describe("POST /api/auth/apple/notifications", () => {
     const res = await POST(requestWithBody({ payload: "tok" }));
 
     expect(res.status).toBe(400);
+    expect(recordAppleNotificationReceipt).not.toHaveBeenCalled();
     expect(handleAppleNotificationEvent).not.toHaveBeenCalled();
   });
 
-  test("returns 500 when handling fails so Apple retries", async () => {
+  test("returns 500 before side effects when the audit receipt cannot be written", async () => {
+    recordAppleNotificationReceipt.mockRejectedValue(new Error("db down"));
+    const { POST } = await import("./route");
+
+    const res = await POST(requestWithBody({ payload: "tok" }));
+
+    expect(res.status).toBe(500);
+    expect(handleAppleNotificationEvent).not.toHaveBeenCalled();
+    expect(finalizeAppleNotificationLog).not.toHaveBeenCalled();
+  });
+
+  test("returns 500 and finalizes the row as processing_failed when handling fails", async () => {
     handleAppleNotificationEvent.mockRejectedValue(new Error("db down"));
     const { POST } = await import("./route");
 
     const res = await POST(requestWithBody({ payload: "tok" }));
 
     expect(res.status).toBe(500);
-    expect(logAppleNotification).not.toHaveBeenCalled();
+    expect(finalizeAppleNotificationLog).toHaveBeenCalledWith("log-uuid-1", {
+      actionTaken: "processing_failed",
+      userId: null,
+    });
   });
 
   test("duplicate deliveries still return 200 and are audited", async () => {
@@ -130,7 +155,9 @@ describe("POST /api/auth/apple/notifications", () => {
     const res = await POST(requestWithBody({ payload: "tok" }));
 
     expect(res.status).toBe(200);
-    expect(logAppleNotification).toHaveBeenCalledWith(
+    expect(recordAppleNotificationReceipt).toHaveBeenCalled();
+    expect(finalizeAppleNotificationLog).toHaveBeenCalledWith(
+      "log-uuid-1",
       expect.objectContaining({ actionTaken: "noop_user_not_found", userId: null }),
     );
   });

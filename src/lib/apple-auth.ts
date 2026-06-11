@@ -18,8 +18,11 @@ function getAppleJwks(): JWTVerifyGetKey {
  *  (server-to-server notifications are configured on the App ID) plus the web
  *  Services ID (`AUTH_APPLE_ID`) when configured. */
 export function appleAudiences(): string[] {
-  const audiences = [process.env.AUTH_APPLE_IOS_AUDIENCE ?? "com.brettonauerbach.stillpoint"];
-  const servicesId = process.env.AUTH_APPLE_ID;
+  // Blank env values count as unset — `AUTH_APPLE_IOS_AUDIENCE=` in an env file
+  // must not make "" the only accepted audience and reject every notification.
+  const iosAudience = process.env.AUTH_APPLE_IOS_AUDIENCE?.trim();
+  const audiences = [iosAudience || "com.brettonauerbach.stillpoint"];
+  const servicesId = process.env.AUTH_APPLE_ID?.trim();
   if (servicesId && !audiences.includes(servicesId)) {
     audiences.push(servicesId);
   }

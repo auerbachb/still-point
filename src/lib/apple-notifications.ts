@@ -1,7 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { appleNotificationLog, oauthAccounts, users } from "@/db/schema";
 import { deleteUserAccount } from "@/lib/accountDeletion";
+
+/** Column widths from schema.ts — externally sourced strings are truncated to
+ *  fit so a pathological value can never turn an audit insert into a 500. */
+const EVENT_TYPE_MAX = 50;
+const SUBJECT_MAX = 255;
+const JTI_MAX = 255;
 
 /** One event from the JWT `events` claim of an Apple server-to-server notification. */
 export type AppleNotificationEvent = {
@@ -49,7 +55,20 @@ async function findUserIdForAppleSub(sub: string): Promise<string | null> {
     .from(oauthAccounts)
     .where(and(eq(oauthAccounts.provider, "apple"), eq(oauthAccounts.providerAccountId, sub)))
     .limit(1);
-  return link?.userId ?? null;
+  if (link) return link.userId;
+
+  // consent-revoked deletes the oauth link while the user remains, and Apple
+  // commonly sends consent-revoked before account-delete. Fall back to the most
+  // recent audit row that resolved this subject so later events still find the
+  // user; handlers verify current state (returning()/deleteUserAccount) so a
+  // stale row degrades to a noop_* action, never a wrong mutation.
+  const [prior] = await db
+    .select({ userId: appleNotificationLog.userId })
+    .from(appleNotificationLog)
+    .where(and(eq(appleNotificationLog.subject, sub), isNotNull(appleNotificationLog.userId)))
+    .orderBy(desc(appleNotificationLog.receivedAt))
+    .limit(1);
+  return prior?.userId ?? null;
 }
 
 /** Apply one Apple notification event. Every branch is idempotent: a repeat
@@ -92,10 +111,13 @@ export async function handleAppleNotificationEvent(
     case "email-enabled": {
       if (!userId) return { actionTaken: "noop_user_not_found", userId: null };
       const deliverable = event.type === "email-enabled";
-      await db
+      const updated = await db
         .update(users)
         .set({ emailDeliverable: deliverable, updatedAt: new Date() })
-        .where(eq(users.id, userId));
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+      // A fallback-resolved user may have been deleted since — 0 rows is a noop.
+      if (updated.length === 0) return { actionTaken: "noop_user_not_found", userId };
       return {
         actionTaken: deliverable ? "email_marked_deliverable" : "email_marked_undeliverable",
         userId,
@@ -107,21 +129,35 @@ export async function handleAppleNotificationEvent(
   }
 }
 
-/** Append one row to the apple_notification_log audit table. */
-export async function logAppleNotification(params: {
+/** Append the audit row for a verified notification BEFORE it is handled, with
+ *  `action_taken = "received"`. Two-phase logging means a crash mid-handling can
+ *  never lose the receipt — the row is finalized with the real action afterwards. */
+export async function recordAppleNotificationReceipt(params: {
   eventType: string;
   subject: string;
   eventTime: number | undefined;
   jti: string | undefined;
-  userId: string | null;
-  actionTaken: string;
-}): Promise<void> {
-  await db.insert(appleNotificationLog).values({
-    eventType: params.eventType,
-    subject: params.subject,
-    eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
-    jti: params.jti ?? null,
-    userId: params.userId,
-    actionTaken: params.actionTaken,
-  });
+}): Promise<string> {
+  const [row] = await db
+    .insert(appleNotificationLog)
+    .values({
+      eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
+      subject: params.subject.slice(0, SUBJECT_MAX),
+      eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
+      jti: params.jti !== undefined ? params.jti.slice(0, JTI_MAX) : null,
+      actionTaken: "received",
+    })
+    .returning({ id: appleNotificationLog.id });
+  return row.id;
+}
+
+/** Finalize the receipt row with the handler outcome (or `processing_failed`). */
+export async function finalizeAppleNotificationLog(
+  logId: string,
+  result: AppleNotificationResult,
+): Promise<void> {
+  await db
+    .update(appleNotificationLog)
+    .set({ actionTaken: result.actionTaken.slice(0, 64), userId: result.userId })
+    .where(eq(appleNotificationLog.id, logId));
 }

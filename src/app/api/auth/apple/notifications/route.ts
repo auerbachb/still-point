@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAppleJwt } from "@/lib/apple-auth";
 import {
+  finalizeAppleNotificationLog,
   handleAppleNotificationEvent,
-  logAppleNotification,
   parseAppleEventsClaim,
+  recordAppleNotificationReceipt,
 } from "@/lib/apple-notifications";
 
 /**
@@ -39,22 +40,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid events claim" }, { status: 400 });
   }
 
+  // Receipt first: the audit row exists before any side effect runs, so a
+  // mid-handling crash can never lose the record of a received notification.
+  let logId: string;
   try {
-    const result = await handleAppleNotificationEvent(event);
-    await logAppleNotification({
+    logId = await recordAppleNotificationReceipt({
       eventType: event.type,
       subject: event.sub,
       eventTime: event.event_time,
       jti: typeof claims.jti === "string" ? claims.jti : undefined,
-      userId: result.userId,
-      actionTaken: result.actionTaken,
     });
+  } catch (error) {
+    // Nothing has been applied yet — a redelivery starts clean.
+    console.error("apple notifications: audit receipt failed:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+
+  try {
+    const result = await handleAppleNotificationEvent(event);
+    await finalizeAppleNotificationLog(logId, result);
     return NextResponse.json({ received: true });
   } catch (error) {
     // Apple does not document retry semantics for these notifications, so the
     // 500 may be final — log loudly for manual follow-up. If Apple (or an
     // operator) redelivers, the idempotent handlers make that safe.
     console.error("apple notifications: processing failed:", error);
+    await finalizeAppleNotificationLog(logId, {
+      actionTaken: "processing_failed",
+      userId: null,
+    }).catch((finalizeError) => {
+      console.error("apple notifications: failed to finalize audit row:", finalizeError);
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
