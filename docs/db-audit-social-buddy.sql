@@ -142,11 +142,15 @@ ORDER BY t.relname, con.conname;
 -- ----------------------------------------------------------------------------
 -- Section 8: Redundant prefix-duplicate index detection
 -- Flags a plain (non-unique, non-primary, non-partial, non-expression) index
--- whose key columns are an exact positional prefix of another non-partial,
--- non-expression index on the same table. Such an index adds write cost with
--- no read benefit. Caveats: (a) two identical plain duplicates flag each
--- other (two rows); (b) this is an equality/prefix heuristic — confirm
--- against app query patterns before dropping anything.
+-- whose key columns are an exact positional prefix of another VALID index of
+-- the same access method on the same table. The prefix comparison matches
+-- column numbers AND per-column operator class, collation, and sort options
+-- (indclass / indcollation / indoption), so a specialized index (e.g.
+-- text_pattern_ops or DESC) is never mistaken for a duplicate, and an
+-- invalid/aborted index can never pose as the covering index. Such a
+-- redundant index adds write cost with no read benefit. Caveats: (a) two
+-- identical plain duplicates flag each other (two rows); (b) this remains a
+-- heuristic — confirm against app query patterns before dropping anything.
 -- ----------------------------------------------------------------------------
 SELECT t.relname AS table_name,
        i2.relname AS redundant_index,
@@ -161,12 +165,18 @@ JOIN pg_class t ON t.oid = x1.indrelid
 JOIN pg_namespace n ON n.oid = t.relnamespace
 WHERE n.nspname = 'public'
   AND t.relname IN ('friend_requests','friendships','buddy_sessions','buddy_session_participants','buddy_session_calendar_events','sessions','users')
+  AND x1.indisvalid AND x2.indisvalid
+  AND i1.relam = i2.relam
   AND x1.indpred IS NULL AND x2.indpred IS NULL
   AND x1.indexprs IS NULL AND x2.indexprs IS NULL
   AND NOT x2.indisunique
   AND NOT x2.indisprimary
   AND x2.indnkeyatts <= x1.indnkeyatts
-  AND (SELECT bool_and(x1.indkey[g.i] = x2.indkey[g.i])
+  AND (SELECT bool_and(
+         x1.indkey[g.i] = x2.indkey[g.i]
+         AND x1.indclass[g.i] = x2.indclass[g.i]
+         AND x1.indcollation[g.i] = x2.indcollation[g.i]
+         AND x1.indoption[g.i] = x2.indoption[g.i])
        FROM generate_series(0, x2.indnkeyatts - 1) AS g(i))
 ORDER BY t.relname, i2.relname;
 
