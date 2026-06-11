@@ -25,6 +25,9 @@ export const users = pgTable("users", {
   /** Nullable: OAuth-only accounts (#136) never have a password. */
   passwordHash: varchar("password_hash", { length: 255 }),
   isPublic: boolean("is_public").default(false).notNull(),
+  /** #338: flipped by Apple `email-disabled` / `email-enabled` relay notifications.
+   *  False means mail to this address (private relay) will bounce. */
+  emailDeliverable: boolean("email_deliverable").default(true).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -130,6 +133,28 @@ export const accountDeletionLog = pgTable("account_deletion_log", {
 }, (table) => ({
   emailHashIdx: index("idx_account_deletion_log_email_hash").on(table.emailHash),
   userIdx: index("idx_account_deletion_log_user").on(table.userId),
+}));
+
+/** #338: Audit log for Sign in with Apple server-to-server notifications.
+ *  One row per verified notification received, including repeat deliveries.
+ *  `user_id` has no FK so rows survive account deletion (same as account_deletion_log). */
+export const appleNotificationLog = pgTable("apple_notification_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** account-delete(d) | consent-revoked | email-disabled | email-enabled; unknown types are logged too. */
+  eventType: varchar("event_type", { length: 50 }).notNull(),
+  /** Apple `sub` of the affected Apple ID. */
+  subject: varchar("subject", { length: 255 }).notNull(),
+  /** Apple-reported event time (`events.event_time`, ms epoch). */
+  eventTime: timestamp("event_time", { withTimezone: true }),
+  /** JWT `jti` claim — correlates retried deliveries of the same notification. */
+  jti: varchar("jti", { length: 255 }),
+  /** Affected app user when the Apple `sub` resolved to one. */
+  userId: uuid("user_id"),
+  actionTaken: varchar("action_taken", { length: 64 }).notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  subjectIdx: index("idx_apple_notification_log_subject").on(table.subject),
+  userIdx: index("idx_apple_notification_log_user").on(table.userId),
 }));
 
 /** OAuth provider identities linked to a user (#136).

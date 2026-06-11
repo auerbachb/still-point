@@ -49,9 +49,58 @@ The native client targets `https://still-point.me` by default (`APIClient`). Poi
 
 ---
 
+## Apple server-to-server notifications (#338)
+
+Apple notifies us when a user's relationship with Sign in with Apple changes outside the app: Apple ID deleted, consent revoked, or Hide My Email forwarding toggled.
+
+### Endpoint
+
+`POST /api/auth/apple/notifications`
+
+Public route — Apple's servers post here with no `sp_token`; middleware allows the path and the route authenticates the request by verifying the Apple-signed JWT itself.
+
+### Request body and verification
+
+Apple sends `{"payload": "<JWS>"}`. The route verifies the JWT via `src/lib/apple-auth.ts`:
+
+1. Signature against Apple's JWKS (`https://appleid.apple.com/auth/keys`, `jose` remote key set).
+2. Issuer `https://appleid.apple.com`.
+3. Audience must be one of our client IDs: the App ID bundle identifier (`AUTH_APPLE_IOS_AUDIENCE`, default `com.brettonauerbach.stillpoint` — notifications are configured on the App ID) or the web Services ID (`AUTH_APPLE_ID`).
+
+Requests that fail JWT verification return **401** and are not processed — they are not from Apple (or the audience is misconfigured, which should fail loudly rather than be silently swallowed). The JWT's `events` claim is a JSON string holding one event: `{ "type", "sub", "event_time", … }`.
+
+### Event handling (`src/lib/apple-notifications.ts`)
+
+| `events.type` | Action |
+| --- | --- |
+| `account-delete` / `account-deleted` | Deletes the app account via the **same transactional path as in-app deletion (#158)** — `deleteUserAccount()` cascades user data and writes `account_deletion_log`. (Apple's reference documents `account-deleted`; both spellings are accepted.) |
+| `consent-revoked` | Deletes the `oauth_accounts` Apple link so the next sign-in requires fresh consent. Active sessions are stateless `sp_token` JWTs that age out at the 7-day expiry; a token blocklist is explicitly out of scope. |
+| `email-disabled` | Sets `users.email_deliverable = false` — outbound mail to the (relay) address will bounce. |
+| `email-enabled` | Sets `users.email_deliverable = true`. |
+| anything else | Logged with `action_taken = ignored_unknown_event_type`, no state change. |
+
+**Idempotency:** every handler tolerates already-processed state (user already deleted, link already removed, flag already set), so the same notification posted twice produces the same end state. Apple does **not** document retry or delivery-guarantee semantics for these notifications — processing failures therefore return 500 **and** are logged (`console.error` → Vercel logs) for manual follow-up; if Apple or an operator redelivers, the idempotent handlers make that safe.
+
+**Audit log:** every verified notification — including duplicates and unknown types — appends a row to `apple_notification_log` (event type, Apple `sub`, Apple event time, JWT `jti`, affected user id, action taken, received time).
+
+### Operator setup (one-time, Apple Developer console)
+
+1. [developer.apple.com](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles → Identifiers** → App ID `com.brettonauerbach.stillpoint`.
+2. **Sign in with Apple → Edit** → set **Server-to-Server Notification Endpoint** to `https://still-point.me/api/auth/apple/notifications` → Save.
+
+Notifications for the whole App ID group (including the web Services ID flow) are delivered to this endpoint.
+
+### End-to-end verification
+
+On a device signed in with Apple: **Settings → [your name] → Sign-In & Security → Sign in with Apple → Still Point → Stop Using Apple ID** (or [account.apple.com](https://account.apple.com) → Sign-In and Security). Within ~30s expect:
+
+- a `consent-revoked` row in `apple_notification_log` with `action_taken = apple_link_removed`, and the user's `oauth_accounts` Apple row gone;
+- for an Apple ID **account deletion**, an `account-delete`/`account-deleted` row with `action_taken = account_deleted`, the `users` row gone, and an `account_deletion_log` entry.
+
+---
+
 ## Follow-up work (not shipped here)
 
-- **#338** — Server-to-server Apple notifications (account deleted, consent revoked, email disabled).
 - **#339** — Register outbound email sources for Apple Private Email Relay deliverability.
 
 ---
