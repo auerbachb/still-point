@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 let preferenceRows: Array<Record<string, unknown>> = [];
-let limitQueryResults: Array<Array<{ id: string }>> = [];
-let limitQueryIndex = 0;
-let dbSelectCall = 0;
 
 const insertReturning = vi.fn();
 const insertOnConflict = vi.fn(() => ({ returning: insertReturning }));
@@ -14,23 +11,11 @@ const dbDelete = vi.fn(() => ({ where: deleteWhere }));
 const sendDailyReminderNotification = vi.fn();
 const sendMissADayNotification = vi.fn();
 
-const dbSelect = vi.fn(() => {
-  dbSelectCall += 1;
-  if (dbSelectCall === 1) {
-    return {
-      from: vi.fn(() => ({
-        where: vi.fn(() => Promise.resolve(preferenceRows)),
-      })),
-    };
-  }
-  return {
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve(nextLimitResult())),
-      })),
-    })),
-  };
-});
+const dbSelect = vi.fn(() => ({
+  from: vi.fn(() => ({
+    where: vi.fn(() => Promise.resolve(preferenceRows)),
+  })),
+}));
 
 vi.mock("@/db", () => ({
   db: {
@@ -78,27 +63,14 @@ const basePrefs = {
   missADayEnabled: false,
 };
 
-function queueLimitResults(...results: Array<Array<{ id: string }>>) {
-  limitQueryResults = results;
-  limitQueryIndex = 0;
-}
-
-function nextLimitResult(): Array<{ id: string }> {
-  const result = limitQueryResults[limitQueryIndex] ?? [];
-  limitQueryIndex += 1;
-  return result;
-}
-
 describe("notification scheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    dbSelectCall = 0;
     preferenceRows = [basePrefs];
-    queueLimitResults([]);
     sendDailyReminderNotification.mockReset();
     sendMissADayNotification.mockReset();
-    sendDailyReminderNotification.mockResolvedValue(undefined);
+    sendDailyReminderNotification.mockResolvedValue({ delivered: true });
     sendMissADayNotification.mockResolvedValue({ delivered: true });
     insertReturning.mockReset();
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
@@ -128,14 +100,10 @@ describe("notification scheduler", () => {
   });
 
   test("dispatchDueNotifications sends daily reminder when window matches", async () => {
-    queueLimitResults([]);
-
     const { dispatchDueNotifications } = await import("./notification-scheduler");
     const now = new Date("2026-05-29T09:02:00.000Z");
 
     const first = await dispatchDueNotifications(now);
-    dbSelectCall = 0;
-    queueLimitResults([{ id: "existing-dispatch" }]);
     insertReturning.mockResolvedValueOnce([]);
     const second = await dispatchDueNotifications(now);
 
@@ -146,7 +114,6 @@ describe("notification scheduler", () => {
 
   test("dispatchDueNotifications sends miss-a-day when yesterday was missed", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
-    queueLimitResults([]);
     userCompletedSessionOnDate.mockResolvedValue(false);
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
@@ -159,7 +126,6 @@ describe("notification scheduler", () => {
 
   test("dispatchDueNotifications skips miss-a-day when user meditated today", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
-    queueLimitResults([]);
     userCompletedSessionOnDate.mockImplementation(async (_userId, date) => date === "2026-05-29");
 
     const { dispatchDueNotifications } = await import("./notification-scheduler");
