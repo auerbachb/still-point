@@ -1,5 +1,6 @@
 import Foundation
 import StillPointShared
+import UserNotifications
 
 @MainActor
 @Observable
@@ -15,6 +16,10 @@ final class NotificationPreferencesViewModel {
     var isLoading = false
     var isSaving = false
     var errorMessage: String?
+
+    /// True when the user enabled push server-side but OS-level notification
+    /// permission is denied. Drives the "Open Settings" alert (issue #363).
+    var showPushPermissionDeniedAlert = false
 
     var reminderTime = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
     var quietStartTime = Calendar.current.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
@@ -38,7 +43,16 @@ final class NotificationPreferencesViewModel {
     func persistPushEnabledChange(wasEnabled: Bool, isEnabled: Bool) async {
         pushEnabled = isEnabled
         if isEnabled && !wasEnabled {
-            PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
+            // iOS never re-prompts once the user denied notification
+            // permission, so requesting authorization again is a silent
+            // no-op. Detect the denied state up front and route the user to
+            // the system Settings app instead (issue #363).
+            let status = await PushNotificationCoordinator.shared.getAuthorizationStatus()
+            if status == .denied {
+                showPushPermissionDeniedAlert = true
+            } else {
+                PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
+            }
         }
         await persist(patch: NotificationPreferencesPatch(
             pushEnabled: isEnabled,
