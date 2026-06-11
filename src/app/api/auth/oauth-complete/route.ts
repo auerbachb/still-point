@@ -5,6 +5,7 @@ import { clearAuthJsCookies } from "@/lib/authJsCookies";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, setAuthCookie } from "@/lib/auth";
+import { isOAuthProvider } from "@/lib/lastAuthProvider";
 
 /** Sanitize a `?return=` param into a same-origin path. Anything other
  *  than a leading single `/` (no protocol-relative `//`, no full URL) is
@@ -28,10 +29,12 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const successTarget = sanitizeReturnTarget(requestUrl.searchParams.get("return"));
   let errorPath: string | null = null;
+  let completedProvider: string | null = null;
 
   try {
     const session = await auth();
     const userId = session?.userId;
+    completedProvider = session?.authProvider ?? null;
 
     if (!userId) {
       errorPath = "/app?error=oauth_session_missing";
@@ -60,6 +63,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const finalPath = errorPath ?? successTarget;
-  return NextResponse.redirect(new URL(finalPath, request.url));
+  const finalUrl = new URL(errorPath ?? successTarget, request.url);
+  // Only on success: tell the client which provider just completed so it
+  // can record the "last used" login method (#337). Allowlisted so an
+  // unexpected provider string never lands in the redirect URL.
+  if (!errorPath && isOAuthProvider(completedProvider)) {
+    finalUrl.searchParams.set("auth_provider", completedProvider);
+  }
+  return NextResponse.redirect(finalUrl);
 }

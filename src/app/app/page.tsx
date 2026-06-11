@@ -14,6 +14,7 @@ import { FriendsView } from "@/components/FriendsView";
 import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { isOAuthProvider, saveLastAuthProvider } from "@/lib/lastAuthProvider";
 import { api, ApiError } from "@/lib/api";
 import type { SessionType } from "@/lib/constants";
 
@@ -115,6 +116,21 @@ export default function StillPoint() {
       cancelled = true;
     };
   }, [authRetryKey]);
+
+  // The oauth-complete bridge appends ?auth_provider=... only after a
+  // successful OAuth login (#337). Persist it as the "last used" method
+  // and strip the param so reloads/shared links don't carry it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get("auth_provider");
+    if (provider === null) return;
+    if (isOAuthProvider(provider)) {
+      saveLastAuthProvider(provider);
+    }
+    params.delete("auth_provider");
+    const next = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+  }, []);
 
   useEffect(() => {
     if (!user || !authChecked) return;
