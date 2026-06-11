@@ -81,7 +81,9 @@ struct HistoryView: View {
                             switch row {
                             case .missed(let date):
                                 missedRow(date: date)
-                            case .standardSession(let session, let sessionIndex):
+                            case .missedRange(let startDate, _, let dayCount):
+                                missedRangeRow(startDate: startDate, dayCount: dayCount)
+                            case .session(let session, let sessionIndex):
                                 let showDate = prevDate.map { $0 != session.sessionDate } ?? true
                                 sessionRow(session: session, sessionIndexInDay: sessionIndex, showDateColumn: showDate)
                             }
@@ -107,7 +109,9 @@ struct HistoryView: View {
             switch vm.journeyRows[i] {
             case .missed(let date):
                 return date
-            case .standardSession(let session, _):
+            case .missedRange(_, let endDate, _):
+                return endDate
+            case .session(let session, _):
                 return session.sessionDate
             }
             i -= 1
@@ -146,10 +150,10 @@ struct HistoryView: View {
                         .frame(width: 56, alignment: .trailing)
                         .lineLimit(1)
 
-                    // Session label within the day
-                    Text("Session \(sessionIndexInDay)")
+                    // Session label within the day (quick sits visually distinct)
+                    Text(session.sessionType == .quick ? "Quick \(sessionIndexInDay)" : "Session \(sessionIndexInDay)")
                         .font(SPFont.mono(11, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
+                        .foregroundStyle(session.sessionType == .quick ? SPColor.amberText : SPColor.fg3)
                         .frame(width: 72, alignment: .trailing)
 
                     // Proportional bar
@@ -266,6 +270,46 @@ struct HistoryView: View {
         }
         .padding(.vertical, 2)
         .opacity(0.35)
+    }
+
+    // MARK: - Missed Range Row
+
+    /// Compact summary for a collapsed run of consecutive missed days (#379).
+    private func missedRangeRow(startDate: String, dayCount: Int) -> some View {
+        HStack(spacing: 8) {
+            // Date label (first missed day of the range)
+            Text(shortDateLabel(startDate))
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(width: 56, alignment: .trailing)
+                .lineLimit(1)
+
+            // Em-dash instead of session label
+            Text("\u{2014}")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg3))
+                .frame(width: 72, alignment: .trailing)
+
+            // Dashed border container
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(SPColor.border2, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                .frame(height: 16)
+                .overlay(alignment: .leading) {
+                    Text(dayCount == 1 ? "1 day missed" : "\(dayCount) days missed")
+                        .font(SPFont.mono(10))
+                        .foregroundStyle(Color(SPColor.fg4))
+                        .italic()
+                        .padding(.leading, 8)
+                        .lineLimit(1)
+                }
+
+            // Empty metadata spacer
+            Color.clear
+                .frame(width: 100)
+        }
+        .padding(.vertical, 2)
+        .opacity(0.35)
+        .accessibilityIdentifier("history.missedRange.\(startDate)")
     }
 
     // MARK: - Today Preview

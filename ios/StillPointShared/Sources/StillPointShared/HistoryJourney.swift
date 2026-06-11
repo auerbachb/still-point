@@ -55,6 +55,14 @@ public enum SessionCalendar {
 // MARK: - Streak / aggregate stats (matches web `calculateSessionStats`)
 
 public enum SessionStatistics {
+    /// Aggregates standard sessions only — quick sits are intentionally excluded (#379).
+    ///
+    /// Streak and the per-session averages measure the progressive daily practice:
+    /// quick sits never advance `currentDay` (see `StillPoint.shouldAdvanceDay`) and
+    /// run a fixed 60s, so counting them would extend streaks without the daily sit
+    /// and skew averages calibrated to the growing durations. This matches the web
+    /// app's `calculateSessionStats`. Quick sits still appear in the history journey
+    /// (`HistoryJourney.buildRows`).
     public static func calculateStats(for sessions: [SessionDTO]) -> StatsDTO {
         let standard = sessions.filter { $0.sessionType == .standard }
         guard !standard.isEmpty else {
@@ -119,19 +127,29 @@ public enum SessionStatistics {
     }
 }
 
-// MARK: - History journey rows (standard sessions; quick excluded by caller)
+// MARK: - History journey rows (all session types)
 
 public enum HistoryJourneyListRow: Sendable {
     case missed(date: String)
-    case standardSession(session: SessionDTO, sessionIndexInDay: Int)
+    /// Collapsed run of `dayCount` consecutive missed days, `startDate`...`endDate` inclusive.
+    case missedRange(startDate: String, endDate: String, dayCount: Int)
+    case session(session: SessionDTO, sessionIndexInDay: Int)
 }
 
-/// Max consecutive missed-day rows between two sessions (matches web `MAX_MISSED_GAP_ROWS`).
 public enum HistoryJourney {
-    public static let maxMissedGapRows = 366
+    /// Gaps of this many consecutive missed days or more collapse into one `.missedRange`
+    /// row; shorter gaps keep per-day `.missed` rows (#379). The web journey still emits
+    /// per-day rows — see the issue for the parity follow-up.
+    public static let collapseGapThresholdDays = 3
 
-    /// `sessions` should be standard-only; sorted by `sessionDate` then `createdAt` / `id`.
-    public static func buildRows(fromStandardSessions sessions: [SessionDTO]) -> [HistoryJourneyListRow] {
+    /// Builds journey rows from all sessions (standard and quick), sorted by
+    /// `sessionDate` then `createdAt` / `id`.
+    ///
+    /// `sessionIndexInDay` counts per session type within a calendar day, so standard
+    /// numbering is unaffected by interleaved quick sits. Pass `todayIsoDate` (caller's
+    /// local calendar day, same convention used to stamp `sessionDate`) to also emit
+    /// gap rows between the last session and today; today itself is never missed.
+    public static func buildRows(fromSessions sessions: [SessionDTO], todayIsoDate: String? = nil) -> [HistoryJourneyListRow] {
         let sorted = sessions.sorted {
             if $0.sessionDate != $1.sessionDate { return $0.sessionDate < $1.sessionDate }
             let a = $0.createdAt ?? ""
@@ -140,26 +158,41 @@ public enum HistoryJourney {
             return $0.id < $1.id
         }
         var rows: [HistoryJourneyListRow] = []
-        var perDayIndex: [String: Int] = [:]
+        var perDayTypeIndex: [String: Int] = [:]
 
         for i in sorted.indices {
             if i > 0 {
-                let prev = sorted[i - 1]
-                let daysBetween = SessionCalendar.daysBetweenInclusive(fromIso: prev.sessionDate, toIso: sorted[i].sessionDate)
-                let missedCount = max(0, daysBetween - 1)
-                let toEmit = min(missedCount, maxMissedGapRows)
-                if toEmit > 0 {
-                    for gap in 1...toEmit {
-                        let missedDate = SessionCalendar.addDays(toIsoDate: prev.sessionDate, deltaDays: gap)
-                        rows.append(.missed(date: missedDate))
-                    }
-                }
+                appendGapRows(after: sorted[i - 1].sessionDate, before: sorted[i].sessionDate, into: &rows)
             }
             let cur = sorted[i]
-            let n = (perDayIndex[cur.sessionDate] ?? 0) + 1
-            perDayIndex[cur.sessionDate] = n
-            rows.append(.standardSession(session: cur, sessionIndexInDay: n))
+            let key = "\(cur.sessionDate)|\(cur.sessionType.rawValue)"
+            let n = (perDayTypeIndex[key] ?? 0) + 1
+            perDayTypeIndex[key] = n
+            rows.append(.session(session: cur, sessionIndexInDay: n))
+        }
+
+        if let todayIsoDate, let last = sorted.last {
+            appendGapRows(after: last.sessionDate, before: todayIsoDate, into: &rows)
         }
         return rows
+    }
+
+    /// Emits rows for the missed days strictly between `fromIso` and `toIso`: per-day
+    /// `.missed` rows for short gaps, a single `.missedRange` at the collapse threshold.
+    private static func appendGapRows(after fromIso: String, before toIso: String, into rows: inout [HistoryJourneyListRow]) {
+        let daysBetween = SessionCalendar.daysBetweenInclusive(fromIso: fromIso, toIso: toIso)
+        let missedCount = max(0, daysBetween - 1)
+        guard missedCount > 0 else { return }
+        if missedCount >= collapseGapThresholdDays {
+            rows.append(.missedRange(
+                startDate: SessionCalendar.addDays(toIsoDate: fromIso, deltaDays: 1),
+                endDate: SessionCalendar.addDays(toIsoDate: fromIso, deltaDays: missedCount),
+                dayCount: missedCount
+            ))
+        } else {
+            for gap in 1...missedCount {
+                rows.append(.missed(date: SessionCalendar.addDays(toIsoDate: fromIso, deltaDays: gap)))
+            }
+        }
     }
 }
