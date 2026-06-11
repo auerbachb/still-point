@@ -5,11 +5,13 @@ import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import {
   buddySessionCalendarEvents,
+  buddySessionParticipants,
   buddySessions,
   googleOAuthTokens,
   users,
 } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { projectedCalendarDurationSeconds } from "@/lib/buddySessionDuration";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -367,12 +369,13 @@ async function insertCalendarEvent(
   userId: string,
   session: typeof buddySessions.$inferSelect,
   accessToken: string,
+  durationSeconds: number,
 ): Promise<GoogleCalendarEventResponse> {
   if (!session.scheduledStartAt) {
     throw new GoogleCalendarUnavailableError("Cannot create a calendar event without scheduledStartAt.");
   }
   const start = session.scheduledStartAt;
-  const end = new Date(start.getTime() + session.durationSeconds * 1000);
+  const end = new Date(start.getTime() + durationSeconds * 1000);
   const eventId = googleCalendarEventId(session.id, userId);
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -413,6 +416,7 @@ export async function syncBuddySessionCalendarForUser(
   if (!session.scheduledStartAt) {
     return { status: "skipped", userId, reason: "not_scheduled" };
   }
+  const scheduledStartAt = session.scheduledStartAt;
   try {
     return await poolDb.transaction(async (tx) => {
       await tx.execute(
@@ -443,7 +447,25 @@ export async function syncBuddySessionCalendarForUser(
       }
       const accessToken = await getValidAccessToken(userId);
       if (!accessToken) return { status: "skipped", userId, reason: "not_connected" };
-      const event = await insertCalendarEvent(userId, session, accessToken);
+      // #361: project the invite duration from the shortest active participant at sync time
+      // (+10s/day until the session) so a future scheduled sit shows the length we expect it to
+      // reach, not today's length. The in-app timer is still normalized live at start (#349).
+      const participantDays = await tx
+        .select({ currentDay: users.currentDay })
+        .from(buddySessionParticipants)
+        .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
+        .where(
+          and(
+            eq(buddySessionParticipants.buddySessionId, session.id),
+            isNull(buddySessionParticipants.leftAt),
+          ),
+        );
+      const calendarDurationSeconds = projectedCalendarDurationSeconds(
+        participantDays.map((row) => row.currentDay),
+        new Date(),
+        scheduledStartAt,
+      );
+      const event = await insertCalendarEvent(userId, session, accessToken, calendarDurationSeconds);
       if (!event.id) {
         throw new GoogleCalendarApiError("Google Calendar event response was incomplete", 200, event);
       }
