@@ -12,6 +12,8 @@ import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
+import { useWakeLock } from "@/lib/useWakeLock";
+import { loadWakeLockPrefs } from "@/lib/wakeLockPrefs";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -161,6 +163,10 @@ export function BuddySessionRoom({
   }, [finalizeActiveBuddyHold]);
 
   const buddyHoldActive = snap?.state === "active";
+
+  /** Opt-in Settings pref read once per room mount; leaving `active` (complete/abandon/exit) releases the lock. */
+  const [keepScreenAwakePref] = useState(() => loadWakeLockPrefs().keepScreenAwakeDuringSession);
+  useWakeLock(keepScreenAwakePref && buddyHoldActive);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
     enabled: buddyHoldActive,

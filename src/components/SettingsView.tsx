@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { api } from "@/lib/api";
 import {
@@ -9,6 +9,11 @@ import {
   USERNAME_ERROR,
   isValidUsername,
 } from "@/lib/username";
+import {
+  isWakeLockSupported,
+  loadWakeLockPrefs,
+  saveWakeLockPrefs,
+} from "@/lib/wakeLockPrefs";
 
 type User = {
   id: string;
@@ -32,6 +37,10 @@ export function SettingsView({
   onLogout,
 }: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
+  // Both stay false during SSR/hydration; the Session card only appears after
+  // mount when the browser actually supports the Screen Wake Lock API (#317).
+  const [wakeLockSupported, setWakeLockSupported] = useState(false);
+  const [keepScreenAwake, setKeepScreenAwake] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState(user.username);
   const [savingUsername, setSavingUsername] = useState(false);
@@ -105,6 +114,17 @@ export function SettingsView({
     } finally {
       setToggling(false);
     }
+  };
+
+  useEffect(() => {
+    setWakeLockSupported(isWakeLockSupported());
+    setKeepScreenAwake(loadWakeLockPrefs().keepScreenAwakeDuringSession);
+  }, []);
+
+  const handleKeepScreenAwakeToggle = () => {
+    const next = !keepScreenAwake;
+    setKeepScreenAwake(next);
+    saveWakeLockPrefs({ keepScreenAwakeDuringSession: next });
   };
 
   const handleLogout = async () => {
@@ -302,6 +322,61 @@ export function SettingsView({
             →
           </span>
         </Link>
+
+        {/* Session: keep screen awake (hidden when the Wake Lock API is unsupported) */}
+        {wakeLockSupported && (
+          <div style={{
+            padding: "16px 20px",
+            background: "var(--surface-1)",
+            borderRadius: "10px",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <div>
+              <div style={{
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
+              }}>
+                Keep screen on during session
+              </div>
+              <div style={{
+                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontSize: "13px", fontStyle: "italic",
+                color: "var(--fg-3)",
+              }}>
+                Prevents the screen from sleeping while a sit timer is running
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label={
+                keepScreenAwake
+                  ? "Disable keeping screen on during session"
+                  : "Enable keeping screen on during session"
+              }
+              aria-pressed={keepScreenAwake}
+              onClick={handleKeepScreenAwakeToggle}
+              style={{
+                width: "48px", height: "26px",
+                borderRadius: "13px", border: "none",
+                background: keepScreenAwake
+                  ? "var(--accent-green-bg)"
+                  : "var(--surface-3)",
+                position: "relative", cursor: "pointer",
+                transition: "background 0.3s",
+                flexShrink: 0, marginLeft: "16px",
+              }}
+            >
+              <div style={{
+                width: "20px", height: "20px",
+                borderRadius: "10px",
+                background: keepScreenAwake ? "var(--accent-green)" : "var(--border-3)",
+                position: "absolute", top: "3px",
+                left: keepScreenAwake ? "25px" : "3px",
+                transition: "all 0.3s",
+              }} />
+            </button>
+          </div>
+        )}
 
         {/* Public board toggle */}
         <div style={{

@@ -7,6 +7,8 @@ import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
+import { useWakeLock } from "@/lib/useWakeLock";
+import { loadWakeLockPrefs } from "@/lib/wakeLockPrefs";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -70,6 +72,9 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
+  /** Opt-in Settings pref read once per sit; pause/complete/abandon drop `isActive` and release the lock. */
+  const [keepScreenAwakePref] = useState(() => loadWakeLockPrefs().keepScreenAwakeDuringSession);
+  useWakeLock(keepScreenAwakePref && isActive);
 
   useEffect(() => {
     const resetTimer = () => {
