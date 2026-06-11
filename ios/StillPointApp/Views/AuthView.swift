@@ -52,43 +52,6 @@ struct AuthView: View {
                         .textInputAutocapitalization(.never)
                         .accessibilityIdentifier("auth.emailField")
 
-                    // `SignInWithAppleButton` sits in a UIKit bridge that can steal hit-testing /
-                    // layout from sibling fields on CI simulators. XCTest targets stable ids on the
-                    // email/password path — hide OAuth chrome under UI test mode only (#286 / CI).
-                    if !isUiTestMode {
-                        SignInWithAppleButton(.signIn) { request in
-                            request.requestedScopes = [.fullName, .email]
-                        } onCompletion: { result in
-                            switch result {
-                            case .success(let authorization):
-                                guard
-                                    let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                                    let body = AppleSignInController.nativeSignInRequest(from: credential)
-                                else {
-                                    vm.error = "Could not read Sign in with Apple credentials."
-                                    return
-                                }
-                                Task {
-                                    if let user = await vm.signInWithApple(using: body) {
-                                        appVM.didLogin(user: user)
-                                    }
-                                }
-                            case .failure(let error):
-                                if let authError = error as? ASAuthorizationError,
-                                   authError.code == .canceled {
-                                    return
-                                }
-                                vm.error = "Sign in with Apple failed. Please try again."
-                            }
-                        }
-                        .signInWithAppleButtonStyle(.black)
-                        .frame(height: 44)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border2))
-                        .disabled(vm.isAuthInFlight)
-                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
-                    }
-
                     if vm.isSignUp {
                         styledField("Username", text: $vm.username)
                             .textContentType(.username)
@@ -156,6 +119,57 @@ struct AuthView: View {
                         .accessibilityIdentifier("auth.forgotPasswordButton")
                         .disabled(vm.isRequestingPasswordReset)
                         .padding(.top, SPSpacing.s1)
+                    }
+
+                    // OAuth chrome lives at the bottom of the form so it never splits the
+                    // email/username/password fields. `SignInWithAppleButton` sits in a UIKit bridge
+                    // that can steal hit-testing / layout from sibling fields on CI simulators, so the
+                    // divider and button stay hidden under UI test mode — XCTest targets stable ids on
+                    // the email/password path (#286 / CI).
+                    if !isUiTestMode {
+                        HStack(spacing: SPSpacing.s3) {
+                            Rectangle()
+                                .fill(SPColor.border1)
+                                .frame(height: 1)
+                            Text("or")
+                                .font(SPFont.mono(12))
+                                .foregroundStyle(Color(SPColor.fg4))
+                            Rectangle()
+                                .fill(SPColor.border1)
+                                .frame(height: 1)
+                        }
+
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let authorization):
+                                guard
+                                    let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                                    let body = AppleSignInController.nativeSignInRequest(from: credential)
+                                else {
+                                    vm.error = "Could not read Sign in with Apple credentials."
+                                    return
+                                }
+                                Task {
+                                    if let user = await vm.signInWithApple(using: body) {
+                                        appVM.didLogin(user: user)
+                                    }
+                                }
+                            case .failure(let error):
+                                if let authError = error as? ASAuthorizationError,
+                                   authError.code == .canceled {
+                                    return
+                                }
+                                vm.error = "Sign in with Apple failed. Please try again."
+                            }
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 44)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SPColor.border2))
+                        .disabled(vm.isAuthInFlight)
+                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
                     }
                 }
                 .padding(.horizontal, SPSpacing.s4)
