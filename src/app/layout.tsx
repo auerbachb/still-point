@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Newsreader, JetBrains_Mono } from "next/font/google";
+import { LastAuthProviderCapture } from "@/components/LastAuthProviderCapture";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -45,6 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${newsreader.variable} ${jetbrainsMono.variable}`}>
+        <LastAuthProviderCapture />
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <main style={{ flex: 1 }}>{children}</main>
           <footer
