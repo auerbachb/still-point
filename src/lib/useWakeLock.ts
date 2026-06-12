@@ -1,7 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { isWakeLockSupported } from "@/lib/wakeLockPrefs";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import {
+  isWakeLockSupported,
+  loadWakeLockPrefs,
+  subscribeWakeLockPrefs,
+} from "@/lib/wakeLockPrefs";
+
+/**
+ * Live view of the opt-in "keep screen awake" preference. Re-renders when the
+ * Settings toggle saves (same tab) or another tab writes the pref (`storage`
+ * event), so an already-mounted session releases its lock on toggle-off.
+ */
+export function useKeepScreenAwakePref(): boolean {
+  return useSyncExternalStore(
+    subscribeWakeLockPrefs,
+    () => loadWakeLockPrefs().keepScreenAwakeDuringSession,
+    () => false,
+  );
+}
 
 /**
  * Holds a Screen Wake Lock (`navigator.wakeLock.request("screen")`) while
@@ -23,13 +40,20 @@ export function useWakeLock(enabled: boolean): void {
     if (!enabled || !isWakeLockSupported()) return;
 
     let cancelled = false;
+    // Serializes overlapping acquire() calls (e.g. mount + a quick
+    // visibilitychange): without this, a slow request resolving late could
+    // overwrite or orphan an already-stored sentinel.
+    let acquireInFlight = false;
 
     const acquire = async () => {
-      if (cancelled || document.visibilityState !== "visible") return;
+      if (cancelled || acquireInFlight || document.visibilityState !== "visible") return;
       if (sentinelRef.current && !sentinelRef.current.released) return;
+      acquireInFlight = true;
       try {
         const sentinel = await navigator.wakeLock.request("screen");
-        if (cancelled) {
+        if (cancelled || (sentinelRef.current && !sentinelRef.current.released)) {
+          // Effect torn down (or another sentinel won) while the request was
+          // in flight — release immediately so no lock is orphaned.
           void sentinel.release().catch(() => {});
           return;
         }
@@ -37,6 +61,8 @@ export function useWakeLock(enabled: boolean): void {
       } catch {
         // Best-effort: the browser can refuse (e.g. battery saver). The sit
         // continues without a wake lock, matching iOS opt-in semantics.
+      } finally {
+        acquireInFlight = false;
       }
     };
 

@@ -3,6 +3,7 @@ import {
   isWakeLockSupported,
   loadWakeLockPrefs,
   saveWakeLockPrefs,
+  subscribeWakeLockPrefs,
 } from "./wakeLockPrefs";
 
 const STORAGE_KEY = "stillpoint_wake_lock_prefs";
@@ -15,7 +16,11 @@ function stubBrowserStorage(initial: Record<string, string> = {}) {
       store.set(key, value);
     },
   };
-  vi.stubGlobal("window", { localStorage: localStorageMock });
+  vi.stubGlobal("window", {
+    localStorage: localStorageMock,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
   vi.stubGlobal("localStorage", localStorageMock);
   return store;
 }
@@ -45,6 +50,17 @@ describe("loadWakeLockPrefs", () => {
     stubBrowserStorage({ [STORAGE_KEY]: "{not json" });
     expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
   });
+
+  it.each([
+    ["non-object JSON", JSON.stringify("true")],
+    ["null", JSON.stringify(null)],
+    ["string instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: "true" })],
+    ["number instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: 1 })],
+    ["missing field", JSON.stringify({ other: true })],
+  ])("falls back to defaults for %s", (_label, raw) => {
+    stubBrowserStorage({ [STORAGE_KEY]: raw });
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
+  });
 });
 
 describe("saveWakeLockPrefs", () => {
@@ -61,6 +77,33 @@ describe("saveWakeLockPrefs", () => {
       keepScreenAwakeDuringSession: true,
     });
     expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
+  });
+});
+
+describe("subscribeWakeLockPrefs", () => {
+  it("notifies subscribers on save and stops after unsubscribe", () => {
+    stubBrowserStorage();
+    const listener = vi.fn();
+    const unsubscribe = subscribeWakeLockPrefs(listener);
+
+    saveWakeLockPrefs({ keepScreenAwakeDuringSession: true });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    saveWakeLockPrefs({ keepScreenAwakeDuringSession: false });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers a cross-tab storage listener while subscribed", () => {
+    stubBrowserStorage();
+    const win = window as unknown as {
+      addEventListener: ReturnType<typeof vi.fn>;
+      removeEventListener: ReturnType<typeof vi.fn>;
+    };
+    const unsubscribe = subscribeWakeLockPrefs(() => {});
+    expect(win.addEventListener).toHaveBeenCalledWith("storage", expect.any(Function));
+    unsubscribe();
+    expect(win.removeEventListener).toHaveBeenCalledWith("storage", expect.any(Function));
   });
 });
 
