@@ -25,8 +25,9 @@ let client: PGlite | null = null;
 export function getTestDb(): Promise<TestDb> {
   if (!instancePromise) {
     instancePromise = (async () => {
+      let pglite: PGlite | null = null;
       try {
-        const pglite = new PGlite();
+        pglite = new PGlite();
         const db = drizzle(pglite, { schema });
         const { pushSchema } = await import("drizzle-kit/api");
         const { apply } = await pushSchema(
@@ -37,7 +38,9 @@ export function getTestDb(): Promise<TestDb> {
         client = pglite;
         return db;
       } catch (error) {
-        // Don't cache a rejected promise — let the next call retry.
+        // Free the in-memory database if schema setup failed after creation,
+        // and don't cache a rejected promise — let the next call retry.
+        await pglite?.close().catch(() => {});
         instancePromise = null;
         throw error;
       }
