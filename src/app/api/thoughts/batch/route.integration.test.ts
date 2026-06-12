@@ -9,10 +9,10 @@
  * regression that breaks iOS note saving fails here.
  */
 import { NextRequest } from "next/server";
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { sessions, thoughts, users } from "@/db/schema";
-import { getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb";
+import { closeTestDb, getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb";
 
 const { getCurrentUser } = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
@@ -76,6 +76,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   getCurrentUser.mockResolvedValue({ userId, email: "ios227@test.local" });
   await db.delete(thoughts).where(eq(thoughts.sessionId, sessionId));
+});
+
+afterAll(async () => {
+  await closeTestDb();
 });
 
 describe("POST /api/thoughts/batch — iOS payloads persist", () => {

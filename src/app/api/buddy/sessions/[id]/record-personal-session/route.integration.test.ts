@@ -9,7 +9,7 @@
  * regression that drops buddy in-sit thoughts fails here.
  */
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   buddySessionParticipants,
@@ -18,7 +18,7 @@ import {
   thoughts,
   users,
 } from "@/db/schema";
-import { getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb";
+import { closeTestDb, getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb";
 
 const { getCurrentUser } = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
@@ -95,6 +95,10 @@ beforeEach(async () => {
   ]);
 
   getCurrentUser.mockResolvedValue({ userId, email: `buddy227-${seq}@test.local` });
+});
+
+afterAll(async () => {
+  await closeTestDb();
 });
 
 describe("POST /api/buddy/sessions/[id]/record-personal-session — iOS payloads persist", () => {

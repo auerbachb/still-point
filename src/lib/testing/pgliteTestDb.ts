@@ -5,6 +5,7 @@ import * as schema from "@/db/schema";
 export type TestDb = PgliteDatabase<typeof schema>;
 
 let instancePromise: Promise<TestDb> | null = null;
+let client: PGlite | null = null;
 
 /**
  * In-process Postgres (PGlite) wired to the app's Drizzle schema, for
@@ -16,20 +17,46 @@ let instancePromise: Promise<TestDb> | null = null;
  * Test files mock both `@/db` and `@/db/pool` with the same instance, which
  * matches production behavior closely enough for these tests: both drivers
  * point at one database, and PGlite supports real transactions.
+ *
+ * The instance is cached per module registry (one per Vitest test file under
+ * the default isolation). Call `closeTestDb()` in `afterAll` so reruns in the
+ * same worker never see leftover rows.
  */
 export function getTestDb(): Promise<TestDb> {
   if (!instancePromise) {
     instancePromise = (async () => {
-      const client = new PGlite();
-      const db = drizzle(client, { schema });
-      const { pushSchema } = await import("drizzle-kit/api");
-      const { apply } = await pushSchema(
-        schema,
-        db as unknown as Parameters<typeof pushSchema>[1],
-      );
-      await apply();
-      return db;
+      try {
+        const pglite = new PGlite();
+        const db = drizzle(pglite, { schema });
+        const { pushSchema } = await import("drizzle-kit/api");
+        const { apply } = await pushSchema(
+          schema,
+          db as unknown as Parameters<typeof pushSchema>[1],
+        );
+        await apply();
+        client = pglite;
+        return db;
+      } catch (error) {
+        // Don't cache a rejected promise — let the next call retry.
+        instancePromise = null;
+        throw error;
+      }
     })();
   }
   return instancePromise;
+}
+
+/** Tear down the cached database so the next `getTestDb()` starts fresh. */
+export async function closeTestDb(): Promise<void> {
+  const pending = instancePromise;
+  instancePromise = null;
+  if (pending) {
+    try {
+      await pending;
+    } catch {
+      // Initialization failed; there is nothing to close.
+    }
+  }
+  await client?.close();
+  client = null;
 }
