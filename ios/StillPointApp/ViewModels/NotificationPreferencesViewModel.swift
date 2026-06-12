@@ -42,6 +42,7 @@ final class NotificationPreferencesViewModel {
 
     func persistPushEnabledChange(wasEnabled: Bool, isEnabled: Bool) async {
         pushEnabled = isEnabled
+        var osPermissionDenied = false
         if isEnabled && !wasEnabled {
             // iOS never re-prompts once the user denied notification
             // permission, so requesting authorization again is a silent
@@ -49,7 +50,7 @@ final class NotificationPreferencesViewModel {
             // the system Settings app instead (issue #363).
             let status = await PushNotificationCoordinator.shared.getAuthorizationStatus()
             if status == .denied {
-                showPushPermissionDeniedAlert = true
+                osPermissionDenied = true
             } else {
                 PushNotificationCoordinator.shared.requestAuthorizationAndRegister()
             }
@@ -58,6 +59,13 @@ final class NotificationPreferencesViewModel {
             pushEnabled: isEnabled,
             tz: TimeZone.current.identifier
         ))
+        // Surface the Settings alert only after the server save succeeded.
+        // On failure, `persist` reverts the toggle and shows its own error,
+        // which the alert's "push is enabled for your account" wording
+        // would contradict.
+        if osPermissionDenied && errorMessage == nil && pushEnabled {
+            showPushPermissionDeniedAlert = true
+        }
     }
 
     func persistDailyReminderEnabled(_ enabled: Bool) async {
