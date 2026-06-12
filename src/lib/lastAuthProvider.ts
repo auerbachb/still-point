@@ -2,7 +2,7 @@ export const OAUTH_PROVIDERS = ["google", "apple"] as const;
 
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
-const STORAGE_KEY = "stillpoint_last_auth_provider";
+export const STORAGE_KEY = "stillpoint_last_auth_provider";
 
 export function isOAuthProvider(value: unknown): value is OAuthProvider {
   return typeof value === "string" && (OAUTH_PROVIDERS as readonly string[]).includes(value);

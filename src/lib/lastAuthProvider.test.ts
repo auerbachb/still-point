@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isOAuthProvider, loadLastAuthProvider, saveLastAuthProvider } from "./lastAuthProvider";
-
-const STORAGE_KEY = "stillpoint_last_auth_provider";
+import { isOAuthProvider, loadLastAuthProvider, saveLastAuthProvider, STORAGE_KEY } from "./lastAuthProvider";
 
 function stubBrowserStorage(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
