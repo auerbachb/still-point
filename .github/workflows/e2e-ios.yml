@@ -96,3 +96,46 @@ jobs:
           path: ~/Library/Logs/DiagnosticReports/**
           if-no-files-found: ignore
           retention-days: 14
+
+  # Guards against project.yml <-> Info.plist drift. CI regenerates Info.plist via
+  # `xcodegen generate` before every build, so any key that lives only in the committed
+  # Info.plist (and not in project.yml's info.properties) is silently dropped from
+  # shipped builds. This job fails the PR if regeneration would change the committed
+  # Info.plist, forcing project.yml to stay the single source of truth. See issue #432.
+  infoplist-sync:
+    name: Info.plist in sync with project.yml
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Verify committed Info.plist matches XcodeGen output
+        run: |
+          if ! git diff --exit-code -- ios/StillPointApp/Info.plist; then
+            echo "::error::ios/StillPointApp/Info.plist is out of sync with ios/project.yml."
+            echo "CI regenerates Info.plist via 'xcodegen generate' before every build, so any key that"
+            echo "exists only in the committed Info.plist (not in project.yml info.properties) is DROPPED"
+            echo "from shipped builds. Fix: add the key(s) to ios/project.yml -> targets.StillPoint.info.properties,"
+            echo "then run 'cd ios && xcodegen generate' and commit the regenerated ios/StillPointApp/Info.plist."
+            exit 1
+          fi
