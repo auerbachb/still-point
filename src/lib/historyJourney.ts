@@ -1,7 +1,7 @@
 import { addDaysToIsoDate, daysBetweenIsoDatesInclusive } from "./sessionCalendar";
 
 /** Max consecutive missed-day rows between two sessions (then remaining gap is collapsed). */
-export const MAX_MISSED_GAP_ROWS = 366;
+const MAX_MISSED_GAP_ROWS = 366;
 
 export type HistoryJourneySession<T> = {
   sessionDate: string;

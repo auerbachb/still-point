@@ -78,7 +78,7 @@ export function getWebPushPublicKey(): string | null {
   return key.length > 0 ? key : null;
 }
 
-export function getWebPushVapidSubject(): string | null {
+function getWebPushVapidSubject(): string | null {
   const subject = (process.env.WEB_PUSH_VAPID_SUBJECT ?? "").trim();
   return subject.length > 0 ? subject : null;
 }

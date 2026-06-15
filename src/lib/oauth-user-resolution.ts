@@ -44,7 +44,7 @@ async function generateUniqueUsername(seed: string): Promise<string> {
 
 /** Insert a (provider, providerAccountId) -> userId link, returning the
  *  userId that ends up owning the link. */
-export async function linkProviderToUser(
+async function linkProviderToUser(
   provider: string,
   providerAccountId: string,
   userId: string,

@@ -240,14 +240,6 @@ public actor APIClient {
         return response.session
     }
 
-    public func getSession(dayNumber: Int) async throws -> (session: SessionDTO, thoughts: [ThoughtDTO]) {
-        if let uiTestResult = try uiTestGetSession(dayNumber: dayNumber) {
-            return uiTestResult
-        }
-        let response: SessionDetailResponse = try await get("/api/sessions/\(dayNumber)")
-        return (response.session, response.thoughts)
-    }
-
     public func getSessionBySessionId(_ sessionId: String) async throws -> (session: SessionDTO, thoughts: [ThoughtDTO]) {
         if let uiTestResult = try uiTestGetSession(sessionId: sessionId) {
             return uiTestResult
@@ -665,22 +657,6 @@ public actor APIClient {
         try ensureUITestAuthenticated(store: store)
 
         guard let session = store.sessions.first(where: { $0.id == sessionId }) else {
-            throw APIError(status: 404, message: "Session not found")
-        }
-
-        let thoughts = store.thoughts.filter { $0.sessionId == session.id }
-            .sorted { $0.timeInSession < $1.timeInSession }
-        return (session, thoughts)
-    }
-
-    private func uiTestGetSession(dayNumber: Int) throws -> (session: SessionDTO, thoughts: [ThoughtDTO])? {
-        guard uiTestConfig != nil else { return nil }
-        guard let store = uiTestStore else {
-            throw APIError(status: 0, message: "UI test store is unavailable")
-        }
-        try ensureUITestAuthenticated(store: store)
-
-        guard let session = store.sessions.last(where: { $0.dayNumber == dayNumber }) else {
             throw APIError(status: 404, message: "Session not found")
         }
 

@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } 
 
 /** Issuer for every Sign in with Apple JWT (identity tokens and server-to-server notifications). */
 export const APPLE_ISSUER = "https://appleid.apple.com";
-export const APPLE_JWKS_URL = `${APPLE_ISSUER}/auth/keys`;
+const APPLE_JWKS_URL = `${APPLE_ISSUER}/auth/keys`;
 
 let remoteJwks: JWTVerifyGetKey | null = null;
 

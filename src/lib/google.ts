@@ -34,7 +34,7 @@ export class GoogleCalendarUnavailableError extends Error {
   }
 }
 
-export class GoogleCalendarApiError extends Error {
+class GoogleCalendarApiError extends Error {
   readonly status: number;
   readonly body: unknown;
 
@@ -66,7 +66,7 @@ export type CalendarSyncResult =
 
 export const GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE = "Could not sync Google Calendar";
 
-export type GoogleCalendarStatus = {
+type GoogleCalendarStatus = {
   connected: boolean;
   email: string | null;
 };
@@ -302,7 +302,7 @@ export async function exchangeGoogleCodeForTokens(
     });
 }
 
-export async function getGoogleOAuthToken(userId: string) {
+async function getGoogleOAuthToken(userId: string) {
   const [token] = await db
     .select()
     .from(googleOAuthTokens)

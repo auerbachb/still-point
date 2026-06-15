@@ -1,13 +1,13 @@
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDispatches, sessions } from "@/db/schema";
 import type { ApnsPayload } from "@/lib/apns";
 import { calculateSessionStats, type SessionStatsInput } from "@/lib/constants";
 import { addDaysToIsoDate } from "@/lib/sessionCalendar";
 
-export const DAILY_REMINDER_NOTIFICATION_TYPE = "daily_reminder";
+const DAILY_REMINDER_NOTIFICATION_TYPE = "daily_reminder";
 export const MISS_A_DAY_NOTIFICATION_TYPE = "miss_a_day";
-export const DAILY_REMINDER_DEEP_LINK = "stillpoint://home";
+const DAILY_REMINDER_DEEP_LINK = "stillpoint://home";
 
 const STREAK_LOOKBACK_DAYS = 90;
 
@@ -124,27 +124,4 @@ export async function hasMissADayDispatchForDate(
     .limit(1);
 
   return !!row;
-}
-
-export async function loadCompletedSessionDates(
-  userIds: string[],
-  sessionDates: string[],
-): Promise<Set<string>> {
-  if (userIds.length === 0 || sessionDates.length === 0) return new Set();
-
-  const rows = await db
-    .select({
-      userId: sessions.userId,
-      sessionDate: sessions.sessionDate,
-    })
-    .from(sessions)
-    .where(
-      and(
-        eq(sessions.completed, true),
-        inArray(sessions.userId, userIds),
-        inArray(sessions.sessionDate, sessionDates),
-      ),
-    );
-
-  return new Set(rows.map((row) => `${row.userId}:${row.sessionDate}`));
 }

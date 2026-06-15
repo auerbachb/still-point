@@ -34,7 +34,7 @@ export function needsPwaInstallForWebPush(): boolean {
   return nav.standalone !== true;
 }
 
-export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = window.atob(base64);
@@ -45,7 +45,7 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuf
   return output;
 }
 
-export async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
+async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register("/sw.js", { scope: "/" });
 }
 
