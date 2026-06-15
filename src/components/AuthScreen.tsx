@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { loadLastAuthProvider, type OAuthProvider } from "@/lib/lastAuthProvider";
 
 type AuthScreenProps = {
   onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
@@ -19,6 +20,33 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   Configuration: "Sign-in is temporarily unavailable.",
 };
 
+function LastUsedTag({ onDark }: { onDark: boolean }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: "50%",
+        right: "12px",
+        transform: "translateY(-50%)",
+        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontSize: "8px",
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        lineHeight: 1,
+        padding: "4px 7px",
+        borderRadius: "10px",
+        whiteSpace: "nowrap",
+        pointerEvents: "none",
+        color: onDark ? "rgba(255, 255, 255, 0.65)" : "var(--fg-3)",
+        border: onDark ? "1px solid rgba(255, 255, 255, 0.25)" : "1px solid var(--border-2)",
+        background: onDark ? "rgba(255, 255, 255, 0.08)" : "var(--overlay-bg)",
+      }}
+    >
+      last used
+    </span>
+  );
+}
+
 export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -26,6 +54,13 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Read in an effect (not the initializer) so server and first client
+  // render agree — localStorage is only available after hydration.
+  const [lastProvider, setLastProvider] = useState<OAuthProvider | null>(null);
+
+  useEffect(() => {
+    setLastProvider(loadLastAuthProvider());
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -145,6 +180,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             alignItems: "center",
             justifyContent: "center",
             gap: "10px",
+            position: "relative",
           }}
           onMouseEnter={e => {
             e.currentTarget.style.borderColor = "var(--border-3)";
@@ -154,7 +190,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             e.currentTarget.style.borderColor = "var(--border-2)";
             e.currentTarget.style.background = "var(--surface-1)";
           }}
-          aria-label="Continue with Google"
+          aria-label={lastProvider === "google" ? "Continue with Google (last used)" : "Continue with Google"}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
             <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
@@ -163,6 +199,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/>
           </svg>
           Continue with Google
+          {lastProvider === "google" && <LastUsedTag onDark={false} />}
         </button>
 
         <button
@@ -188,6 +225,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             alignItems: "center",
             justifyContent: "center",
             gap: "10px",
+            position: "relative",
           }}
           onMouseEnter={e => {
             e.currentTarget.style.background = "#1a1a1a";
@@ -197,12 +235,13 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             e.currentTarget.style.background = "#000000";
             e.currentTarget.style.borderColor = "#000000";
           }}
-          aria-label="Continue with Apple"
+          aria-label={lastProvider === "apple" ? "Continue with Apple (last used)" : "Continue with Apple"}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
             <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
           </svg>
           Continue with Apple
+          {lastProvider === "apple" && <LastUsedTag onDark />}
         </button>
 
         <p style={{

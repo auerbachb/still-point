@@ -7,6 +7,10 @@ import { resolveOAuthUserId } from "@/lib/oauth-user-resolution";
 declare module "next-auth" {
   interface Session {
     userId?: string;
+    /** OAuth provider used for this sign-in (e.g. "google", "apple");
+     *  threaded through the JWT so oauth-complete can tell the client
+     *  which provider just succeeded (#337). */
+    authProvider?: string;
   }
 }
 
@@ -86,14 +90,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       user.id = userId;
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user?.id) token.userId = user.id;
+      // `account` is only defined on the sign-in invocation, which is
+      // exactly when we want to record which provider completed login.
+      if (account?.provider) token.authProvider = account.provider;
       return token;
     },
     async session({ session, token }) {
       const tokenUserId = (token as { userId?: unknown }).userId;
       if (typeof tokenUserId === "string") {
         session.userId = tokenUserId;
+      }
+      const tokenAuthProvider = (token as { authProvider?: unknown }).authProvider;
+      if (typeof tokenAuthProvider === "string") {
+        session.authProvider = tokenAuthProvider;
       }
       return session;
     },
