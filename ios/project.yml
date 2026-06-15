@@ -32,6 +32,25 @@ targets:
           - Fonts/JetBrainsMono-Variable.ttf
         CFBundleIconName: AppIcon
         ITSAppUsesNonExemptEncryption: false
+        # Custom URL scheme (stillpoint://) for deep links: daily-reminder push taps,
+        # buddy invites (stillpoint://buddy/...), and session links. See AppViewModel /
+        # RootView.onOpenURL / PushNotificationCoordinator.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.brettonauerbach.stillpoint
+            CFBundleURLSchemes:
+              - stillpoint
+        # Privacy purpose strings — REQUIRED by iOS for the buddy video web view
+        # (BuddyVideoWebView: WKWebView -> Daily.co getUserMedia). A missing key is a
+        # hard crash the moment camera/mic is requested, not a graceful denial.
+        NSCameraUsageDescription: Still Point needs camera access for partner video sessions.
+        NSMicrophoneUsageDescription: Still Point needs microphone access for partner video sessions.
+        # NSFamilyControlsUsageDescription is intentionally NOT declared: it is not a
+        # recognized iOS key. FamilyControls / Screen Time authorization is gated by the
+        # com.apple.developer.family-controls entitlement (StillPointApp/StillPoint.entitlements),
+        # and the authorization dialog text cannot be customized via Info.plist. See #432.
+        # Keep audio alive when the app is backgrounded mid-session.
+        UIBackgroundModes:
+          - audio
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
