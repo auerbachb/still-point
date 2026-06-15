@@ -25,12 +25,7 @@ public enum SPColor {
     // Green / Clear Mind
     static let green = Color(red: 74/255, green: 222/255, blue: 128/255)
     static let greenEnd = Color(red: 34/255, green: 197/255, blue: 94/255)
-    static let greenStrong = green.opacity(0.7)
     static let greenText = green.opacity(0.6)
-    static let greenDim = green.opacity(0.5)
-    static let greenBg = green.opacity(0.4)
-    static let greenGlow = green.opacity(0.3)
-    static let greenMuted = green.opacity(0.25)
     static let greenBorder = green.opacity(0.2)
     static let greenBorderSubtle = green.opacity(0.15)
     static let greenBgSubtle = green.opacity(0.08)
@@ -42,8 +37,6 @@ public enum SPColor {
     static let amberText = amber.opacity(0.6)
     static let amberDim = amber.opacity(0.5)
     static let amberBorder = amber.opacity(0.4)
-    static let amberHint = amber.opacity(0.3)
-    static let amberMuted = amber.opacity(0.25)
     static let amberBorderSubtle = amber.opacity(0.2)
     static let amberBg = amber.opacity(0.15)
     static let amberBgFaint = amber.opacity(0.06)
@@ -51,12 +44,10 @@ public enum SPColor {
     // Red / Danger
     static let danger = Color.red.opacity(0.7)
     static let dangerMuted = Color.red.opacity(0.5)
-    static let dangerBorder = Color.red.opacity(0.2)
     static let dangerBorderSubtle = Color.red.opacity(0.15)
 
     // Overlay
     static let overlayText = Color.black.opacity(0.5)
-    static let overlayBg = Color.black.opacity(0.3)
 }
 
 // MARK: - Spacing (matching globals.css scale)
@@ -119,9 +110,6 @@ public enum SPFont {
     static let timerDisplay = mono(80, weight: .ultraLight)
     static let statValue = mono(28, weight: .light)
     static let statLabel = mono(11, weight: .regular)
-    static let navLabel = mono(11, weight: .medium)
-    static let bodyText = serif(17, weight: .light)
-    static let caption = mono(14, weight: .regular)
 }
 
 // MARK: - View Extensions
@@ -130,11 +118,6 @@ extension View {
     /// Apply the Still Point dark background
     func stillPointBackground() -> some View {
         self.background(SPColor.bg.ignoresSafeArea().allowsHitTesting(false))
-    }
-
-    /// Fade-in animation matching web app's fadeIn keyframe
-    func fadeIn() -> some View {
-        self.transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 }
 

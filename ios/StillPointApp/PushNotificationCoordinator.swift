@@ -42,27 +42,6 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         }
     }
 
-    func requestAuthorizationAndRegisterAsync() async {
-        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-                if let error {
-                    print("Push notification authorization failed: \(error.localizedDescription)")
-                    continuation.resume()
-                    return
-                }
-
-                if granted {
-                    DispatchQueue.main.async {
-                        UIApplication.shared.registerForRemoteNotifications()
-                    }
-                }
-                continuation.resume()
-            }
-        }
-    }
-
     /// Re-uploads the device token when the user already granted permission (e.g. after login).
     func registerIfAlreadyAuthorized() {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
@@ -112,11 +91,6 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         didReceive response: UNNotificationResponse
     ) async {
         queueOrDeliverDeepLink(from: response.notification.request.content.userInfo)
-    }
-
-    func getAuthorizationStatus() async -> UNAuthorizationStatus {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        return settings.authorizationStatus
     }
 
     private func queueOrDeliverDeepLink(from userInfo: [AnyHashable: Any]) {
