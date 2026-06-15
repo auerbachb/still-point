@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const selectLimit = vi.fn();
-const selectWhere = vi.fn(() => ({ limit: selectLimit }));
+const selectWhere = vi.fn((_predicate: unknown) => ({ limit: selectLimit }));
 const selectFrom = vi.fn(() => ({ where: selectWhere }));
 const dbSelect = vi.fn(() => ({ from: selectFrom }));
 
