@@ -26,3 +26,28 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+  # Full-project type gate. `next build` only typechecks app code, so test-only
+  # type errors (bad mock signatures, NODE_ENV assignment, etc.) used to land on
+  # main undetected (#396). `tsc --noEmit` honors tsconfig's `include`
+  # (**/*.ts, **/*.tsx), so *.test.ts files are typechecked too. Runs in parallel
+  # with unit-tests as its own required-able check.
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit, includes test files)
+        run: npm run typecheck

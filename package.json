@@ -10,6 +10,7 @@
     "db:migrate": "tsx scripts/apply-migrations.ts",
     "db:reconcile": "tsx scripts/reconcile-migration-checksum.ts",
     "test:unit": "vitest run src",
+    "typecheck": "tsc --noEmit",
     "start": "next start",
     "db:seed": "tsx scripts/seed.ts",
     "test:e2e": "playwright test",
