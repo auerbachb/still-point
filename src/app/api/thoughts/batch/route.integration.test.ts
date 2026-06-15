@@ -125,11 +125,12 @@ describe("POST /api/thoughts/batch — iOS payloads persist", () => {
   });
 
   test("re-saving an edited completion note replaces the prior one (no duplicates)", async () => {
-    await POST(
+    const firstRes = await POST(
       batchRequest(
         `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[{"timeInSession":-1,"text":"first draft"}]}`,
       ),
     );
+    expect(firstRes.status).toBe(200);
     const res = await POST(
       batchRequest(
         `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[{"timeInSession":-1,"text":"edited note"}]}`,
@@ -171,6 +172,11 @@ describe("POST /api/thoughts/batch — iOS payloads persist", () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("Day number mismatch");
+    const rows = await db
+      .select()
+      .from(thoughts)
+      .where(eq(thoughts.sessionId, sessionId));
+    expect(rows).toHaveLength(0);
   });
 
   test("another user's session id returns 404 and persists nothing", async () => {
