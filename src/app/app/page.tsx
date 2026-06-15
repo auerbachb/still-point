@@ -16,6 +16,7 @@ import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/
 import { useIsMobile } from "@/lib/useIsMobile";
 import { api, ApiError } from "@/lib/api";
 import type { SessionType } from "@/lib/constants";
+import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
 type View =
   | "home"
@@ -38,14 +39,6 @@ type CompletionData = {
   thoughtCount: number;
   thoughts: Array<{ timeInSession: number; text: string }>;
 };
-
-function getLocalIsoDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
   const item = sync?.[0];
@@ -239,7 +232,7 @@ export default function StillPoint() {
           clearPercent: data.clearPercent,
           thoughtCount: data.thoughtCount,
           mindStateLog: data.mindStateLog,
-          sessionDate: getLocalIsoDate(),
+          sessionDate: todayLocalIsoDate(),
         }),
       });
 
@@ -311,7 +304,7 @@ export default function StillPoint() {
           clearPercent: data.clearPercent,
           thoughtCount: data.thoughtCount,
           mindStateLog: data.mindStateLog,
-          sessionDate: getLocalIsoDate(),
+          sessionDate: todayLocalIsoDate(),
         }),
       });
 

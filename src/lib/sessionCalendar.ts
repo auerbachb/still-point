@@ -31,3 +31,17 @@ export function daysBetweenIsoDatesInclusive(fromIso: string, toIso: string): nu
   const toMs = Date.UTC(ty, tm - 1, td);
   return Math.round((toMs - fromMs) / (1000 * 60 * 60 * 24));
 }
+
+/**
+ * Today's calendar day as `YYYY-MM-DD` in the client's LOCAL timezone — the same
+ * convention used to stamp `session_date` on the write path (solo + buddy session
+ * saves). History/journey gap math must use this rather than a UTC day so the
+ * trailing gap to "today" lines up with locally-dated sessions for non-UTC users.
+ */
+export function todayLocalIsoDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}

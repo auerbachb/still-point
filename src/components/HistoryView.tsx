@@ -5,7 +5,7 @@ import { durationForDay } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
-import { todayIsoDateUtc } from "@/lib/buddyCalendarRange";
+import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
 type HistoryEntry = {
   sessionId?: string;
@@ -73,7 +73,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   const [loading, setLoading] = useState(true);
   // UTC calendar day for the trailing gap-to-today, refreshed on day rollover so the
   // journey stays correct if the view is left open past midnight (PR #426 review).
-  const [todayDate, setTodayDate] = useState<string>(() => todayIsoDateUtc());
+  const [todayDate, setTodayDate] = useState<string>(() => todayLocalIsoDate());
   const isMobile = useIsMobile();
   const sessionLabelColWidth = isMobile ? "88px" : "100px";
 
@@ -99,7 +99,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   // changes, keeping the trailing gap fresh across midnight without a refetch.
   useEffect(() => {
     const id = setInterval(() => {
-      const d = todayIsoDateUtc();
+      const d = todayLocalIsoDate();
       setTodayDate(prev => (prev === d ? prev : d));
     }, 60_000);
     return () => clearInterval(id);
