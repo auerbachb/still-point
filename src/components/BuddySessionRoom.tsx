@@ -13,6 +13,7 @@ import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } f
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
+import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -32,14 +33,6 @@ type BuddySessionRoomProps = {
   /** When set, a finished shared timer saves a personal session row then opens the normal completion flow. */
   onPersonalRecordComplete?: (data: BuddyPersonalRecordPayload) => void;
 };
-
-function getLocalIsoDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 type BuddyMindState = "clear" | "thinking" | "hyperfocus";
 type FinalizeAttemptResult = "started" | "already-saving" | "not-ready";
@@ -451,7 +444,7 @@ export function BuddySessionRoom({
         thoughtCount: thoughtsSnapshot.length,
         mindStateLog: mindStateLogRef.current,
         actualTime: durationSeconds,
-        sessionDate: getLocalIsoDate(),
+        sessionDate: todayLocalIsoDate(),
         thoughts: thoughtsSnapshot,
       });
       try {
