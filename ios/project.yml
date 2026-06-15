@@ -16,11 +16,13 @@ targets:
     platform: iOS
     sources:
       - StillPointApp
+      - AppBlockingShared
     resources:
       - path: StillPointApp/Resources
         buildPhase: resources
     dependencies:
       - package: StillPointShared
+      - target: StillPointMonitor
     info:
       path: StillPointApp/Info.plist
       properties:
@@ -55,6 +57,28 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_ENTITLEMENTS: StillPointApp/StillPointApp.entitlements
+
+  StillPointMonitor:
+    type: app-extension
+    platform: iOS
+    sources:
+      - StillPointMonitor
+      - AppBlockingShared
+    info:
+      path: StillPointMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Still Point Monitor
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).StillPointMonitorExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint.monitor
+        DEVELOPMENT_TEAM: T5UU4BP6AV
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: StillPointMonitor/StillPointMonitor.entitlements
+        SWIFT_VERSION: "5.9"
+        SKIP_INSTALL: YES
 
   StillPointAppUITests:
     type: bundle.ui-testing

@@ -7,100 +7,152 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
-		17A359000000000000000002 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A359000000000000000001 /* NotificationsSettingsView.swift */; };
-		16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */; };
-		17A248000000000000000008 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000007 /* AppleSignInController.swift */; };
-		17A248000000000000000001 /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000002 /* AppBlockingManager.swift */; };
-		17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000004 /* AppBlockingSettingsView.swift */; };
-		17A248000000000000000012 /* PushNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000013 /* PushNotificationCoordinator.swift */; };
-		17A248000000000000000014 /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000015 /* DeviceTokenStore.swift */; };
-		17A248000000000000000016 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A248000000000000000017 /* SessionIdleTimerController.swift */; };
+		1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
-		25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
+		39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF304356E66657666901E4F /* SessionStateBadge.swift */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
-		17A345000000000000000002 /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A345000000000000000001 /* NotificationPreferencesViewModel.swift */; };
-		3F95AB4ED8A3AB01D8D2B042 /* BuddySessionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E4D291539A7556C58555EC6 /* BuddySessionHubView.swift */; };
-		42BF1908A778629F7C747264 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
+		47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */; };
 		4BC69FCAE79FAF2487A6E152 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */; };
 		4D652980F04840078B8FC938 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F95E6E47148AEF494393FDB /* SessionView.swift */; };
-		4FF6F665DB343AF63E7E1718 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D903EE2C350B6705F6917952 /* BuddyWaitingRoomView.swift */; };
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
+		5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
 		5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */; };
+		5E1134CA9CA16D2589A0FDDE /* BuddySessionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */; };
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
+		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
+		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
+		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
-		760C4A2F57E6B207F729ABEA /* BuddyActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E9BBE4830753E3B8FCC1C0 /* BuddyActiveSessionView.swift */; };
+		750987110FAE532744F6571E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 45BC84AB51307C865EF7257A /* README.md */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
 		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
+		840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */; };
 		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
 		977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */; };
 		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
+		9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */; };
+		A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
+		A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */; };
+		A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */; };
+		AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
+		B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */; };
 		B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */; };
+		B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */; };
+		C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */; };
 		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
+		D3744C3003DA233DC0B74C99 /* BuddyFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */; };
+		D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */; };
+		D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */; };
+		DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
 		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
+		E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */; };
+		E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */; };
+		EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */; };
+		EE8F0D07AFA655F960F274F8 /* StillPointMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */; };
 		F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EAF998E3470CBB4056699F /* BlockGridView.swift */; };
-		17A346000000000000000001 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000011 /* BuddyCalendarViewModel.swift */; };
-		17A346000000000000000002 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000012 /* BuddyCalendarView.swift */; };
-		17A346000000000000000003 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000013 /* SessionStateBadge.swift */; };
-		17A346000000000000000004 /* BuddyFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A346000000000000000014 /* BuddyFilterChips.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		540585E1D78B21D6A3B5B30D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 17E69AC4DBE973C4774D38B6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1EC3D1ED76F9038154716BEC;
+			remoteInfo = StillPoint;
+		};
+		7D96BF3D0EE2B0569179B9CB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 17E69AC4DBE973C4774D38B6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EC97B0CE4FB530B3C2368458;
+			remoteInfo = StillPointMonitor;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F78D861A536366A248BE993E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyActiveSessionView.swift; sourceTree = "<group>"; };
 		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
 		0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardViewModel.swift; sourceTree = "<group>"; };
+		0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyFilterChips.swift; sourceTree = "<group>"; };
+		0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarViewModel.swift; sourceTree = "<group>"; };
+		107CCEB76752E572D0D142EF /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
+		14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
-		17A248000000000000000002 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
-		17A248000000000000000004 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
-		17A248000000000000000013 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
-		17A248000000000000000015 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
-		17A248000000000000000017 /* SessionIdleTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIdleTimerController.swift; sourceTree = "<group>"; };
-		17A248000000000000000005 /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
-		17A248000000000000000007 /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
+		1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIdleTimerController.swift; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
-		17A345000000000000000001 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
+		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
+		3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionHubView.swift; sourceTree = "<group>"; };
+		3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIElement+TapAndType.swift"; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
+		4448B4F081A909461B669A8B /* StillPointApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointApp.entitlements; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
+		45BC84AB51307C865EF7257A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
 		4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Italic-Variable.ttf"; sourceTree = "<group>"; };
+		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Variable.ttf"; sourceTree = "<group>"; };
+		69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
+		6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
 		797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
 		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
-		7E4D291539A7556C58555EC6 /* BuddySessionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionHubView.swift; sourceTree = "<group>"; };
+		7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
+		8807A08DBDE8A121951350FD /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
+		92F0B6135A30B315B9962460 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyVideoWebView.swift; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
+		A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyVideoWebView.swift; sourceTree = "<group>"; };
 		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointAppUITests.swift; sourceTree = "<group>"; };
+		AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
+		B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
+		B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointMonitorExtension.swift; sourceTree = "<group>"; };
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
+		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
+		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
 		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		17A359000000000000000001 /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
-		D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
-		D903EE2C350B6705F6917952 /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
-		DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
+		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
+		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
 		FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
-		09E9BBE4830753E3B8FCC1C0 /* BuddyActiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyActiveSessionView.swift; sourceTree = "<group>"; };
-		17A346000000000000000011 /* BuddyCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarViewModel.swift; sourceTree = "<group>"; };
-		17A346000000000000000012 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
-		17A346000000000000000013 /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
-		17A346000000000000000014 /* BuddyFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyFilterChips.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,22 +167,33 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		00907B112AF3AFED14FA0192 /* StillPointAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				45BC84AB51307C865EF7257A /* README.md */,
+				AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */,
+				54D40F602F07E94E9BD6CF37 /* Helpers */,
+				F0FD78DD2EB1220358FB4672 /* Snapshots */,
+			);
+			path = StillPointAppUITests;
+			sourceTree = "<group>";
+		};
 		0125A97693D46BCCED4DC74E /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */,
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
-				9AEB18D5D4C55CB98F814D43 /* BuddySession */,
-				17A346000000000000000010 /* BuddyCalendar */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
-				17A248000000000000000004 /* AppBlockingSettingsView.swift */,
+				A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */,
 				0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */,
 				C683A9F0586D58020E60DD87 /* RootView.swift */,
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
 				D356465C1B0F69C57FE47A80 /* SettingsView.swift */,
-				17A359000000000000000001 /* NotificationsSettingsView.swift */,
 				44912B427658554F984CCC3A /* ThoughtJournalView.swift */,
+				3CF33E14AFF118C76854F60A /* BuddyCalendar */,
+				8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -154,19 +217,38 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
+		379B38AC4868912EF44556DF /* AppBlockingShared */ = {
+			isa = PBXGroup;
+			children = (
+				DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */,
+			);
+			path = AppBlockingShared;
+			sourceTree = "<group>";
+		};
+		3CF33E14AFF118C76854F60A /* BuddyCalendar */ = {
+			isa = PBXGroup;
+			children = (
+				69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */,
+				0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */,
+				2FF304356E66657666901E4F /* SessionStateBadge.swift */,
+			);
+			path = BuddyCalendar;
+			sourceTree = "<group>";
+		};
 		489EB05EBE530B8F6E4F1C7F /* StillPointApp */ = {
 			isa = PBXGroup;
 			children = (
+				AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */,
 				AB8762D63FDB945A01DEA97F /* Info.plist */,
-				17A248000000000000000005 /* StillPoint.entitlements */,
+				7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */,
+				107CCEB76752E572D0D142EF /* StillPoint.entitlements */,
+				4448B4F081A909461B669A8B /* StillPointApp.entitlements */,
 				14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */,
-				17A248000000000000000015 /* DeviceTokenStore.swift */,
-				17A248000000000000000013 /* PushNotificationCoordinator.swift */,
 				4DB1C67E76477BADB30F0F77 /* Components */,
-				17A248000000000000000006 /* Managers */,
-				17A248000000000000000009 /* Services */,
+				6F81A1DEB3C67EC2415E179A /* Managers */,
 				551003AC2B5AD8A7B3C3D426 /* Navigation */,
 				09EA4336C05552F95AE85178 /* Resources */,
+				9A1FCA572FDAB69F4F6E75EB /* Services */,
 				AC788F412B1414C8C2BDB3CB /* Theme */,
 				B5DCE12E19F7C00786209F0E /* ViewModels */,
 				0125A97693D46BCCED4DC74E /* Views */,
@@ -184,6 +266,14 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
+		54D40F602F07E94E9BD6CF37 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
 		551003AC2B5AD8A7B3C3D426 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
@@ -192,52 +282,35 @@
 			path = Navigation;
 			sourceTree = "<group>";
 		};
-		17A248000000000000000006 /* Managers */ = {
+		6F81A1DEB3C67EC2415E179A /* Managers */ = {
 			isa = PBXGroup;
 			children = (
-				17A248000000000000000002 /* AppBlockingManager.swift */,
-				17A248000000000000000017 /* SessionIdleTimerController.swift */,
+				92F0B6135A30B315B9962460 /* AppBlockingManager.swift */,
+				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
 			);
 			path = Managers;
-			sourceTree = "<group>";
-		};
-		17A248000000000000000009 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				17A248000000000000000007 /* AppleSignInController.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		9AEB18D5D4C55CB98F814D43 /* BuddySession */ = {
-			isa = PBXGroup;
-			children = (
-				7E4D291539A7556C58555EC6 /* BuddySessionHubView.swift */,
-				D903EE2C350B6705F6917952 /* BuddyWaitingRoomView.swift */,
-				09E9BBE4830753E3B8FCC1C0 /* BuddyActiveSessionView.swift */,
-				D6D8D4FA0580148DEAB74CC3 /* BuddySessionContainerView.swift */,
-				9A0F8BA13F32BC68EEA0198C /* BuddyVideoWebView.swift */,
-			);
-			path = BuddySession;
-			sourceTree = "<group>";
-		};
-		17A346000000000000000010 /* BuddyCalendar */ = {
-			isa = PBXGroup;
-			children = (
-				17A346000000000000000012 /* BuddyCalendarView.swift */,
-				17A346000000000000000014 /* BuddyFilterChips.swift */,
-				17A346000000000000000013 /* SessionStateBadge.swift */,
-			);
-			path = BuddyCalendar;
 			sourceTree = "<group>";
 		};
 		70234ED5699E0294984184EC = {
 			isa = PBXGroup;
 			children = (
+				379B38AC4868912EF44556DF /* AppBlockingShared */,
 				72C36256C4A12941449D9B2F /* Packages */,
 				489EB05EBE530B8F6E4F1C7F /* StillPointApp */,
+				00907B112AF3AFED14FA0192 /* StillPointAppUITests */,
+				71B26AFC0A48AD3E9373C0DA /* StillPointMonitor */,
 				D6729D98E36CD4883502F855 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		71B26AFC0A48AD3E9373C0DA /* StillPointMonitor */ = {
+			isa = PBXGroup;
+			children = (
+				503A6D41F27BA9646DA35192 /* Info.plist */,
+				C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */,
+				B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */,
+			);
+			path = StillPointMonitor;
 			sourceTree = "<group>";
 		};
 		72C36256C4A12941449D9B2F /* Packages */ = {
@@ -246,6 +319,26 @@
 				A67F64CE400EF98ED2925FF9 /* StillPointShared */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */ = {
+			isa = PBXGroup;
+			children = (
+				007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */,
+				B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */,
+				3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */,
+				A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */,
+				F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */,
+			);
+			path = BuddySession;
+			sourceTree = "<group>";
+		};
+		9A1FCA572FDAB69F4F6E75EB /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				8807A08DBDE8A121951350FD /* AppleSignInController.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		AC788F412B1414C8C2BDB3CB /* Theme */ = {
@@ -261,13 +354,13 @@
 			children = (
 				218693B76FDAF56B6E0321DE /* AppViewModel.swift */,
 				B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */,
-				DAAF68030111C6FA73098D17 /* BuddySessionViewModel.swift */,
 				0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */,
+				0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */,
+				48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
-				17A346000000000000000011 /* BuddyCalendarViewModel.swift */,
+				6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */,
 				FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */,
 				42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */,
-				17A345000000000000000001 /* NotificationPreferencesViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -276,8 +369,19 @@
 			isa = PBXGroup;
 			children = (
 				D15A7FF17302B1E2FD147920 /* StillPoint.app */,
+				E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */,
+				58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F0FD78DD2EB1220358FB4672 /* Snapshots */ = {
+			isa = PBXGroup;
+			children = (
+				14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */,
+				C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */,
+			);
+			path = Snapshots;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -290,10 +394,12 @@
 				788E99323C1F4CDCA2A903FC /* Sources */,
 				0B31A9FD8CF7CD832FD44715 /* Resources */,
 				60417DAC61CFEF1804125570 /* Frameworks */,
+				F78D861A536366A248BE993E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				14A922200F707D6C907444EF /* PBXTargetDependency */,
 			);
 			name = StillPoint;
 			packageProductDependencies = (
@@ -302,6 +408,42 @@
 			productName = StillPoint;
 			productReference = D15A7FF17302B1E2FD147920 /* StillPoint.app */;
 			productType = "com.apple.product-type.application";
+		};
+		C9202FF3B9BAEE265E1F8CFA /* StillPointAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DF601809504D3DDE725AD63F /* Build configuration list for PBXNativeTarget "StillPointAppUITests" */;
+			buildPhases = (
+				5CE9F26962BE7AC20278243F /* Sources */,
+				3FEBF3FCE3B4B802D71336AF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8F3F65CA0C6B88D39F210112 /* PBXTargetDependency */,
+			);
+			name = StillPointAppUITests;
+			packageProductDependencies = (
+			);
+			productName = StillPointAppUITests;
+			productReference = E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		EC97B0CE4FB530B3C2368458 /* StillPointMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A153FA2CF4C9856BDAB8FA0 /* Build configuration list for PBXNativeTarget "StillPointMonitor" */;
+			buildPhases = (
+				E5417D311AE5DE6660B91CC0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StillPointMonitor;
+			packageProductDependencies = (
+			);
+			productName = StillPointMonitor;
+			productReference = 58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -313,6 +455,13 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					1EC3D1ED76F9038154716BEC = {
+						DevelopmentTeam = T5UU4BP6AV;
+						ProvisioningStyle = Automatic;
+					};
+					C9202FF3B9BAEE265E1F8CFA = {
+						TestTargetID = 1EC3D1ED76F9038154716BEC;
+					};
+					EC97B0CE4FB530B3C2368458 = {
 						DevelopmentTeam = T5UU4BP6AV;
 						ProvisioningStyle = Automatic;
 					};
@@ -336,6 +485,8 @@
 			projectRoot = "";
 			targets = (
 				1EC3D1ED76F9038154716BEC /* StillPoint */,
+				C9202FF3B9BAEE265E1F8CFA /* StillPointAppUITests */,
+				EC97B0CE4FB530B3C2368458 /* StillPointMonitor */,
 			);
 		};
 /* End PBXProject section */
@@ -352,56 +503,98 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3FEBF3FCE3B4B802D71336AF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				750987110FAE532744F6571E /* README.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5CE9F26962BE7AC20278243F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
+				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
+				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
+				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		788E99323C1F4CDCA2A903FC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */,
+				B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */,
+				A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */,
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
-				17A248000000000000000008 /* AppleSignInController.swift in Sources */,
-				17A248000000000000000001 /* AppBlockingManager.swift in Sources */,
-				17A248000000000000000003 /* AppBlockingSettingsView.swift in Sources */,
-				17A248000000000000000012 /* PushNotificationCoordinator.swift in Sources */,
-				17A248000000000000000014 /* DeviceTokenStore.swift in Sources */,
-				17A248000000000000000016 /* SessionIdleTimerController.swift in Sources */,
+				6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
-				760C4A2F57E6B207F729ABEA /* BuddyActiveSessionView.swift in Sources */,
-				25295F15540B9986B15EB839 /* BuddySessionContainerView.swift in Sources */,
-				3F95AB4ED8A3AB01D8D2B042 /* BuddySessionHubView.swift in Sources */,
-				17A346000000000000000001 /* BuddyCalendarViewModel.swift in Sources */,
-				17A346000000000000000002 /* BuddyCalendarView.swift in Sources */,
-				17A346000000000000000003 /* SessionStateBadge.swift in Sources */,
-				17A346000000000000000004 /* BuddyFilterChips.swift in Sources */,
-				42BF1908A778629F7C747264 /* BuddySessionViewModel.swift in Sources */,
-				16697A0A2D8E95D300EEA791 /* BuddyVideoWebView.swift in Sources */,
-				4FF6F665DB343AF63E7E1718 /* BuddyWaitingRoomView.swift in Sources */,
 				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
+				47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */,
+				A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */,
+				D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */,
+				D3744C3003DA233DC0B74C99 /* BuddyFilterChips.swift in Sources */,
+				9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */,
+				5E1134CA9CA16D2589A0FDDE /* BuddySessionHubView.swift in Sources */,
+				D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */,
+				B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */,
+				840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */,
 				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
 				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
+				5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */,
 				74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */,
 				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,
 				1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */,
 				B106890588723F191CC4AEAA /* MainTabView.swift in Sources */,
 				80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */,
+				13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */,
+				C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */,
 				DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */,
+				EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */,
 				15177B86F124B5A10AB03456 /* RootView.swift in Sources */,
+				E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */,
+				39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */,
 				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
 				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
-				17A359000000000000000002 /* NotificationsSettingsView.swift in Sources */,
 				E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */,
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
-				17A345000000000000000002 /* NotificationPreferencesViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5417D311AE5DE6660B91CC0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */,
+				EE8F0D07AFA655F960F274F8 /* StillPointMonitorExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		14A922200F707D6C907444EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EC97B0CE4FB530B3C2368458 /* StillPointMonitor */;
+			targetProxy = 7D96BF3D0EE2B0569179B9CB /* PBXContainerItemProxy */;
+		};
+		8F3F65CA0C6B88D39F210112 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1EC3D1ED76F9038154716BEC /* StillPoint */;
+			targetProxy = 540585E1D78B21D6A3B5B30D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		11E27EB55EEE0D1829FD2125 /* Release */ = {
@@ -409,21 +602,40 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPointApp.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointApp/StillPoint.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*] = StillPointApp/StillPoint.entitlements;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		328D322BE7FCBDB8F927A164 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StillPoint;
 			};
 			name = Release;
 		};
@@ -432,19 +644,58 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPointApp.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointApp/StillPoint.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*] = StillPointApp/StillPoint.entitlements;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint;
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		87297D64E18D4BDBB2D81F1C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StillPoint;
+			};
+			name = Debug;
+		};
+		A826A78862E645F34283BFE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointMonitor/StillPointMonitor.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				INFOPLIST_FILE = StillPointMonitor/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.monitor;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -569,9 +820,38 @@
 			};
 			name = Release;
 		};
+		F67C139DC441092F7DBC53D2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointMonitor/StillPointMonitor.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				INFOPLIST_FILE = StillPointMonitor/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.monitor;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0A153FA2CF4C9856BDAB8FA0 /* Build configuration list for PBXNativeTarget "StillPointMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A826A78862E645F34283BFE2 /* Debug */,
+				F67C139DC441092F7DBC53D2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A869842DC3454C47D11359A9 /* Build configuration list for PBXProject "StillPoint" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -586,6 +866,15 @@
 			buildConfigurations = (
 				79085E6777D72FCC1A887CA8 /* Debug */,
 				11E27EB55EEE0D1829FD2125 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DF601809504D3DDE725AD63F /* Build configuration list for PBXNativeTarget "StillPointAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				87297D64E18D4BDBB2D81F1C /* Debug */,
+				328D322BE7FCBDB8F927A164 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
