@@ -110,9 +110,6 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
         .onAppear {
-            PushNotificationCoordinator.shared.deepLinkHandler = { url in
-                appVM.handleIncomingURL(url)
-            }
             SessionIdleTimerController.syncSceneForegroundActive(
                 appVM: appVM,
                 isForegroundActive: scenePhase == .active
@@ -137,6 +134,22 @@ struct RootView: View {
         .onOpenURL { url in
             appVM.handleIncomingURL(url)
         }
+        // Single authoritative wiring point for push-notification deep links
+        // (issue #363). Do not assign `deepLinkHandler` anywhere else: the
+        // coordinator is a shared singleton, so a second assignment is
+        // last-writer-wins and fragile under multiple WindowGroup scenes.
+        //
+        // - Warm routing: a tapped push reaches the coordinator's
+        //   `userNotificationCenter(_:didReceive:)`, which invokes this
+        //   handler directly.
+        // - Cold-start routing: a launch push arrives in
+        //   `didFinishLaunchingWithOptions` before this `.task` runs; the
+        //   coordinator queues it and its `deepLinkHandler.didSet` delivers
+        //   the pending URL as soon as the handler is assigned here.
+        //
+        // `handlePushDeepLink` currently forwards to `handleIncomingURL`
+        // (the same path `onOpenURL` uses) but stays a distinct entry point
+        // for future push-specific logic (analytics, badge clearing).
         .task {
             PushNotificationCoordinator.shared.deepLinkHandler = { url in
                 appVM.handlePushDeepLink(url)

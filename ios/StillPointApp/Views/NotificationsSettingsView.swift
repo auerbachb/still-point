@@ -1,8 +1,10 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct NotificationsSettingsView: View {
     @Bindable var notificationPrefs: NotificationPreferencesViewModel
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -71,6 +73,19 @@ struct NotificationsSettingsView: View {
         .tint(SPColor.green)
         .disabled(notificationPrefs.isSaving)
         .accessibilityIdentifier("notifications.pushToggle")
+        .alert(
+            "Notifications are off in iOS Settings",
+            isPresented: $notificationPrefs.showPushPermissionDeniedAlert
+        ) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    openURL(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Push is enabled for your account, but iOS notification permission for Still Point is turned off. Allow notifications in Settings to receive them on this device.")
+        }
     }
 
     @ViewBuilder
