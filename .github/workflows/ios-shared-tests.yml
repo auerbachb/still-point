@@ -1,0 +1,27 @@
+name: iOS Shared Unit Tests
+
+on:
+  pull_request:
+    paths:
+      - "ios/StillPointShared/**"
+      - ".github/workflows/ios-shared-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  swift-test:
+    name: StillPointShared swift test
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # StillPointShared is a pure SwiftPM package, so `swift test` builds and runs
+      # the suite without xcodegen/xcodebuild (the same path agents use locally,
+      # where the app's Xcode project can't be parsed). The ~50 tests are
+      # sub-second; wall-clock is dominated by macOS runner spin-up + the package
+      # build. Path-filtered to the package (and this workflow) so web-only PRs
+      # don't burn macOS minutes.
+      - name: Run StillPointShared unit tests
+        working-directory: ios/StillPointShared
+        run: swift test
