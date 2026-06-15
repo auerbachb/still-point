@@ -88,7 +88,7 @@ Requests that fail JWT verification return **401** and are not processed — the
 ### Operator setup (one-time, Apple Developer console)
 
 1. [developer.apple.com](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles → Identifiers** → App ID `com.brettonauerbach.stillpoint`.
-2. **Sign in with Apple → Edit** → set **Server-to-Server Notification Endpoint** to `https://still-point.me/api/auth/apple/notifications` → Save.
+2. **Sign in with Apple → Edit** → set **Server-to-Server Notification Endpoint** to `https://www.still-point.me/api/auth/apple/notifications` → Save. Use the `www.` host: the apex `still-point.me` 307-redirects to `www`, and Apple's notification sender expects a direct 2xx and does not reliably follow redirects.
 
 Notifications for the whole App ID group (including the web Services ID flow) are delivered to this endpoint.
 
