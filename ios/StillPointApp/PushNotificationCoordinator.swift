@@ -93,6 +93,11 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         queueOrDeliverDeepLink(from: response.notification.request.content.userInfo)
     }
 
+    func getAuthorizationStatus() async -> UNAuthorizationStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus
+    }
+
     private func queueOrDeliverDeepLink(from userInfo: [AnyHashable: Any]) {
         guard let url = deepLinkURL(from: userInfo) else { return }
         DispatchQueue.main.async { [weak self] in
