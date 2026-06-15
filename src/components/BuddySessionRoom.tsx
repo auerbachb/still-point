@@ -12,6 +12,7 @@ import { ThoughtCapture } from "./ThoughtCapture";
 import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
+import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
 export type BuddyPersonalRecordPayload = {
@@ -162,6 +163,16 @@ export function BuddySessionRoom({
 
   const buddyHoldActive = snap?.state === "active";
 
+  /** Flipped at the start of leave() so the wake lock releases before the async exit finishes. */
+  const [exitingRoom, setExitingRoom] = useState(false);
+  /**
+   * Live opt-in Settings pref (toggle-off releases). Local terminal transitions
+   * (own timer finished, leaving the room) release immediately instead of
+   * waiting for the next polled snapshot to stop being `active`.
+   */
+  const keepScreenAwakePref = useKeepScreenAwakePref();
+  useWakeLock(keepScreenAwakePref && buddyHoldActive && !localTimerCompleted && !exitingRoom);
+
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
     enabled: buddyHoldActive,
     beginDistraction: beginBuddyDistraction,
@@ -205,6 +216,7 @@ export function BuddySessionRoom({
     setIsSavingPersonalRecord(false);
     setLocalTimerCompleted(false);
     localTimerCompletedRef.current = false;
+    setExitingRoom(false);
     setAudioBlocked(false);
     setPersonalRecordError(null);
     setDailyMeetingToken(null);
@@ -403,6 +415,7 @@ export function BuddySessionRoom({
 
   const leave = async (opts?: { ignoreLeaveApiErrors?: boolean }) => {
     const ignoreLeaveApiErrors = opts?.ignoreLeaveApiErrors !== false;
+    setExitingRoom(true);
     try {
       await api.leaveBuddySession(sessionId);
       onExit();
@@ -411,6 +424,7 @@ export function BuddySessionRoom({
         onExit();
         return;
       }
+      setExitingRoom(false);
       throw err;
     }
   };
