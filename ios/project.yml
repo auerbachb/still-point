@@ -48,6 +48,7 @@ targets:
         # recognized iOS key. FamilyControls / Screen Time authorization is gated by the
         # com.apple.developer.family-controls entitlement (StillPointApp/StillPoint.entitlements),
         # and the authorization dialog text cannot be customized via Info.plist. See #432.
+
         # Keep audio alive when the app is backgrounded mid-session.
         UIBackgroundModes:
           - audio
