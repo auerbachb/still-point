@@ -5,6 +5,7 @@ import { durationForDay } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
+import { todayIsoDateUtc } from "@/lib/buddyCalendarRange";
 
 type HistoryEntry = {
   sessionId?: string;
@@ -18,7 +19,12 @@ type HistoryEntry = {
   thoughtCount: number;
   sessionType?: Session["sessionType"];
   missed?: boolean;
-  /** 1-based index among standard sessions on the same calendar day */
+  /** Collapsed run of 3+ consecutive missed days (single "N days missed" row). */
+  collapsed?: boolean;
+  collapsedDayCount?: number;
+  /** Inclusive end of the collapsed range (`date` holds the start). */
+  collapsedEndDate?: string;
+  /** 1-based index among same-type sessions on the same calendar day */
   sessionIndexInDay?: number;
 };
 
@@ -36,6 +42,12 @@ function formatFullDateLabel(isoDate: string): string {
 function formatShortDateLabel(isoDate: string): string {
   const d = new Date(isoDate + "T12:00:00");
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+/** Month + day only (e.g. "Jun 10") — used for the collapsed-gap date range. */
+function formatCompactDateLabel(isoDate: string): string {
+  const d = new Date(isoDate + "T12:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function sessionSortKey(s: Session): string {
@@ -81,13 +93,17 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   }, []);
 
   const journeyRows = useMemo(() => {
-    const standard = sessions.filter(s => s.sessionType !== "quick");
+    // Include all session types (quick + standard) — quick sits are rendered with
+    // visual distinction rather than filtered out (#381). Pass today so the gap
+    // between the last session and now is also collapsed.
     return buildHistoryJourneyRows(
-      standard.map(s => ({
+      sessions.map(s => ({
         sessionDate: s.sessionDate,
+        sessionType: s.sessionType,
         sortKey: sessionSortKey(s),
         data: s,
       })),
+      todayIsoDateUtc(),
     );
   }, [sessions]);
 
@@ -105,6 +121,22 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             clearPercent: 0,
             thoughtCount: 0,
             missed: true,
+          };
+        }
+        if (row.kind === "collapsedGap") {
+          return {
+            day: null,
+            duration: 0,
+            bonusSeconds: 0,
+            actualTime: 0,
+            completed: false,
+            date: row.startDate,
+            clearPercent: 0,
+            thoughtCount: 0,
+            missed: true,
+            collapsed: true,
+            collapsedDayCount: row.dayCount,
+            collapsedEndDate: row.endDate,
           };
         }
         const s = row.data;
@@ -209,6 +241,45 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
               ? true
               : !prev || prev.missed || prev.date !== entry.date;
 
+            if (entry.collapsed) {
+              const rangeLabel = `${formatCompactDateLabel(entry.date)} – ${formatCompactDateLabel(entry.collapsedEndDate ?? entry.date)}`;
+              return (
+                <div key={`collapsed-${idx}`} style={{
+                  display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px",
+                  padding: "2px 0", opacity: 0.35,
+                }}>
+                  <div style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: isMobile ? "10px" : "11px", color: "var(--fg-4)",
+                    width: isMobile ? undefined : "160px", minWidth: isMobile ? "72px" : undefined,
+                    textAlign: "right", whiteSpace: "nowrap",
+                  }}>
+                    {rangeLabel}
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", color: "var(--fg-3)",
+                    width: sessionLabelColWidth, textAlign: "right",
+                  }}>
+                    &mdash;
+                  </div>
+                  <div style={{
+                    flex: 1, height: "24px", borderRadius: "3px",
+                    border: "1px dashed var(--border-1)",
+                    display: "flex", alignItems: "center", paddingLeft: "10px",
+                  }}>
+                    <span style={{
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontSize: "11px", color: "var(--fg-4)", fontStyle: "italic",
+                    }}>
+                      {entry.collapsedDayCount} days missed
+                    </span>
+                  </div>
+                  <div style={{ width: isMobile ? "80px" : "120px" }} />
+                </div>
+              );
+            }
+
             if (entry.missed) {
               const dateLabel = formatFullDateLabel(entry.date);
               return (
@@ -259,8 +330,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
             const dateLabelFull = formatFullDateLabel(entry.date);
             const dateLabelShort = formatShortDateLabel(entry.date);
+            const isQuick = entry.sessionType === "quick";
             const sessionOrdinal = entry.sessionIndexInDay ?? 1;
-            const sessionLabel = `Session ${sessionOrdinal}`;
+            const sessionLabel = isQuick ? "Quick" : `Session ${sessionOrdinal}`;
 
             const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;
             const isExpanded = expandedEntryId === entryId;
@@ -322,7 +394,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                   )}
                   <div style={{
                     fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px", color: "var(--fg-3)",
+                    fontSize: "11px", color: isQuick ? "var(--fg-4)" : "var(--fg-3)",
                     width: sessionLabelColWidth, textAlign: "right",
                   }}>
                     {sessionLabel}
@@ -335,6 +407,7 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
                       height: "100%",
                       width: `${(entry.actualTime / maxDuration) * 100}%`,
                       borderRadius: "3px", overflow: "hidden", display: "flex",
+                      opacity: isQuick ? 0.55 : 1,
                     }}>
                       <div style={{
                         width: `${entry.clearPercent}%`, height: "100%",
