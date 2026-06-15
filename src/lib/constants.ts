@@ -4,7 +4,7 @@ export const BASE_DURATION = 60;
 export const QUICK_DURATION = 60;
 export const INCREMENT = 10;
 export const BLOCK_DURATION = 10;
-const SESSION_TYPES = ["standard", "quick"] as const;
+const SESSION_TYPES = ["standard", "quick", "breath"] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
 
 export type SessionStatsInput = {

@@ -57,6 +57,10 @@ struct RootView: View {
                 )
                 .transition(.opacity)
 
+            case .breathCounting:
+                BreathCountingView(appVM: appVM)
+                    .transition(.opacity)
+
             default:
                 MainTabView(appVM: appVM)
                     .transition(.opacity)
@@ -175,6 +179,8 @@ struct RootView: View {
             return "buddySession"
         case .completion:
             return "completion"
+        case .breathCounting:
+            return "breathCounting"
         case .history:
             return "history"
         case .journal:

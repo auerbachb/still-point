@@ -3,6 +3,8 @@ import Foundation
 public enum SessionType: String, Codable, Sendable {
     case standard
     case quick
+    /// Open-ended breath-counting sit. Does not advance the day counter.
+    case breath
 }
 
 public enum StillPoint {
@@ -30,7 +32,15 @@ public enum StillPoint {
     }
 
     public static func duration(for sessionType: SessionType, day: Int) -> Int {
-        sessionType == .quick ? quickDuration : duration(forDay: day)
+        switch sessionType {
+        case .quick:
+            return quickDuration
+        case .breath:
+            // Breath sessions are open-ended; 0 is a sentinel (value unused during session).
+            return 0
+        case .standard:
+            return duration(forDay: day)
+        }
     }
 
     public static func shouldAdvanceDay(sessionType: SessionType, completed: Bool) -> Bool {

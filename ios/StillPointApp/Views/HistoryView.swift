@@ -150,10 +150,10 @@ struct HistoryView: View {
                         .frame(width: 56, alignment: .trailing)
                         .lineLimit(1)
 
-                    // Session label within the day (quick sits visually distinct)
-                    Text(session.sessionType == .quick ? "Quick \(sessionIndexInDay)" : "Session \(sessionIndexInDay)")
+                    // Session label within the day (quick / breath sits visually distinct)
+                    Text(sessionLabel(session: session, index: sessionIndexInDay))
                         .font(SPFont.mono(11, weight: .medium))
-                        .foregroundStyle(session.sessionType == .quick ? SPColor.amberText : SPColor.fg3)
+                        .foregroundStyle(sessionLabelColor(session: session))
                         .frame(width: 72, alignment: .trailing)
 
                     // Proportional bar
@@ -232,6 +232,36 @@ struct HistoryView: View {
                 .padding(.leading, 44)
                 .padding(.vertical, 4)
             }
+        }
+    }
+
+    // MARK: - Session Label Helpers
+
+    private func sessionLabel(session: SessionDTO, index: Int) -> String {
+        switch session.sessionType {
+        case .quick:
+            return "Quick \(index)"
+        case .breath:
+            // Optionally surface breath count when available
+            if let count = session.breathCount, count > 0 {
+                return "Breath \(count)b"
+            }
+            return "Breath \(index)"
+        case .standard:
+            return "Session \(index)"
+        }
+    }
+
+    private func sessionLabelColor(session: SessionDTO) -> Color {
+        switch session.sessionType {
+        case .quick:
+            return SPColor.amberText
+        case .breath:
+            // Muted green, matching the breath-count accent in BreathCountingView and
+            // distinct from quick (amber) and standard (fg3).
+            return SPColor.greenText
+        case .standard:
+            return Color(SPColor.fg3)
         }
     }
 
