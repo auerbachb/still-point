@@ -1,4 +1,4 @@
-export type ThoughtInput = {
+type ThoughtInput = {
   timeInSession: number;
   text: string;
 };

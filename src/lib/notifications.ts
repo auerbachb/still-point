@@ -12,9 +12,9 @@ import { sendWebPushToUser } from "@/lib/web-push";
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
 const PUSH_SEND_CONCURRENCY = 3;
 
-export const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
-export const FRIEND_REQUEST_DEEP_LINK = "stillpoint://home";
-export const FRIEND_REQUEST_WEB_URL = "/app?view=friends";
+const MISS_A_DAY_DEEP_LINK = "stillpoint://session/quick";
+const FRIEND_REQUEST_DEEP_LINK = "stillpoint://home";
+const FRIEND_REQUEST_WEB_URL = "/app?view=friends";
 
 function toApnsEnvironment(value: string): ApnsEnvironment {
   return value === "production" ? "production" : "development";

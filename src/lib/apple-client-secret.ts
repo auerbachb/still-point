@@ -30,7 +30,7 @@ function normalizePem(raw: string): string {
 }
 
 /** Mint the ES256 client secret JWT Apple expects for the web/Services ID flow. */
-export async function mintAppleClientSecret(): Promise<string> {
+async function mintAppleClientSecret(): Promise<string> {
   const { teamId, clientId, keyId, rawKey } = requireAppleSigningEnv();
   const pem = normalizePem(rawKey);
   const key = await importPKCS8(pem, "ES256");

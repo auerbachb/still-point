@@ -27,7 +27,7 @@ export async function createToken(payload: { userId: string; email: string }): P
     .sign(getSecret());
 }
 
-export async function verifyToken(token: string): Promise<{ userId: string; email: string } | null> {
+async function verifyToken(token: string): Promise<{ userId: string; email: string } | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     return payload as { userId: string; email: string };
