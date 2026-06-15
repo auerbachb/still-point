@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDispatches, sessions } from "@/db/schema";
 import type { ApnsPayload } from "@/lib/apns";
@@ -124,27 +124,4 @@ export async function hasMissADayDispatchForDate(
     .limit(1);
 
   return !!row;
-}
-
-async function loadCompletedSessionDates(
-  userIds: string[],
-  sessionDates: string[],
-): Promise<Set<string>> {
-  if (userIds.length === 0 || sessionDates.length === 0) return new Set();
-
-  const rows = await db
-    .select({
-      userId: sessions.userId,
-      sessionDate: sessions.sessionDate,
-    })
-    .from(sessions)
-    .where(
-      and(
-        eq(sessions.completed, true),
-        inArray(sessions.userId, userIds),
-        inArray(sessions.sessionDate, sessionDates),
-      ),
-    );
-
-  return new Set(rows.map((row) => `${row.userId}:${row.sessionDate}`));
 }
