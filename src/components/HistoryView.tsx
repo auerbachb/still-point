@@ -71,6 +71,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
   });
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // UTC calendar day for the trailing gap-to-today, refreshed on day rollover so the
+  // journey stays correct if the view is left open past midnight (PR #426 review).
+  const [todayDate, setTodayDate] = useState<string>(() => todayIsoDateUtc());
   const isMobile = useIsMobile();
   const sessionLabelColWidth = isMobile ? "88px" : "100px";
 
@@ -92,6 +95,16 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
     }).catch(() => setLoading(false));
   }, []);
 
+  // Re-evaluate "today" once a minute; only re-renders when the UTC day actually
+  // changes, keeping the trailing gap fresh across midnight without a refetch.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const d = todayIsoDateUtc();
+      setTodayDate(prev => (prev === d ? prev : d));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const journeyRows = useMemo(() => {
     // Include all session types (quick + standard) — quick sits are rendered with
     // visual distinction rather than filtered out (#381). Pass today so the gap
@@ -103,9 +116,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
         sortKey: sessionSortKey(s),
         data: s,
       })),
-      todayIsoDateUtc(),
+      todayDate,
     );
-  }, [sessions]);
+  }, [sessions, todayDate]);
 
   const history: HistoryEntry[] = useMemo(
     () =>
