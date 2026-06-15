@@ -195,4 +195,22 @@ describe("POST /api/thoughts/batch — iOS payloads persist", () => {
       .where(eq(thoughts.sessionId, sessionId));
     expect(rows).toHaveLength(0);
   });
+
+  test("multiple completion notes fail visibly with 400", async () => {
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[` +
+          `{"timeInSession":-1,"text":"first note"},` +
+          `{"timeInSession":-1,"text":"second note"}]}`,
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid thoughts payload");
+    const rows = await db
+      .select()
+      .from(thoughts)
+      .where(eq(thoughts.sessionId, sessionId));
+    expect(rows).toHaveLength(0);
+  });
 });
