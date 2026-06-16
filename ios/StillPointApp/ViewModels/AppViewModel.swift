@@ -21,6 +21,7 @@ enum AppView: Equatable {
         duration: Int,
         bonusSeconds: Int
     )
+    case breathCounting
     case history
     case journal
     case board
@@ -31,6 +32,7 @@ enum AppView: Equatable {
         case (.auth, .auth), (.home, .home),
              (.buddyHub, .buddyHub),
              (.buddyCalendar, .buddyCalendar),
+             (.breathCounting, .breathCounting),
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
@@ -70,6 +72,8 @@ final class AppViewModel {
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
+    /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
+    private var isSavingBreathSession = false
     private var appBlockingManagerStorage: AppBlockingManager?
     var appBlockingManager: AppBlockingManager {
         if let appBlockingManagerStorage {
@@ -105,6 +109,7 @@ final class AppViewModel {
         if case .session = currentView { return true }
         if case .buddySession = currentView { return true }
         if case .completion = currentView { return true }
+        if case .breathCounting = currentView { return true }
         return false
     }
 
@@ -165,6 +170,7 @@ final class AppViewModel {
         case .buddyCalendarWithBuddy: return "buddyCalendarWithBuddy"
         case .buddySession: return "buddySession"
         case .completion: return "completion"
+        case .breathCounting: return "breathCounting"
         case .history: return "history"
         case .journal: return "journal"
         case .board: return "board"
@@ -212,6 +218,56 @@ final class AppViewModel {
 
     func beginSession(type: SessionType = .standard) {
         currentView = .session(type: type)
+    }
+
+    func beginBreathCounting() {
+        currentView = .breathCounting
+    }
+
+    /// Save a completed breath session and return to home.
+    ///
+    /// Mirrors SessionViewModel.saveSession / AppViewModel.completeSession field construction exactly.
+    /// On API failure the error is logged and the user returns home anyway — we never trap them on the breath screen.
+    func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
+        // Skip empty sessions (entered then ended with no taps) — nothing to log.
+        guard elapsedSeconds > 0 || breathCount > 0 else {
+            currentView = .home
+            return
+        }
+        // Re-entrancy guard: a second End tap during the await must not create a
+        // duplicate row. Cleared explicitly after the await rather than via defer,
+        // which would not fire at the @MainActor suspension point.
+        guard !isSavingBreathSession else { return }
+        isSavingBreathSession = true
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+
+        let request = CreateSessionRequest(
+            dayNumber: currentDay,
+            sessionType: .breath,
+            duration: max(elapsedSeconds, 1),
+            bonusSeconds: 0,
+            completed: true,
+            actualTime: elapsedSeconds,
+            clearPercent: 0,
+            thoughtCount: 0,
+            mindStateLog: [],
+            sessionDate: dateFormatter.string(from: Date()),
+            breathCount: breathCount
+        )
+
+        do {
+            _ = try await APIClient.shared.createSession(request)
+        } catch {
+            // Non-fatal: session save failure is logged but does not block navigation home.
+            print("Failed to save breath session: \(error)")
+        }
+
+        isSavingBreathSession = false
+        currentView = .home
     }
 
     func beginBuddySession() {

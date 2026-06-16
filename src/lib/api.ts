@@ -35,7 +35,7 @@ export type Session = {
   duration: number;
   /** Seconds added via +1/+5 extensions beyond planned duration (#90). */
   bonusSeconds?: number;
-  sessionType: "standard" | "quick";
+  sessionType: "standard" | "quick" | "breath";
   completed: boolean;
   actualTime: number | null;
   clearPercent: number;
@@ -183,7 +183,7 @@ export const api = {
     dayNumber: number;
     duration: number;
     bonusSeconds?: number;
-    sessionType?: "standard" | "quick";
+    sessionType?: "standard" | "quick" | "breath";
     completed: boolean;
     actualTime: number;
     clearPercent: number;

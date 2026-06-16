@@ -82,6 +82,24 @@ struct HomeView: View {
 
                     Button {
                         withAnimation {
+                            appVM.beginBreathCounting()
+                        }
+                    } label: {
+                        Text("Breath counting")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .tracking(1.4)
+                            .foregroundStyle(Color(SPColor.fg3))
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, SPSpacing.s2)
+                            .background(SPColor.surface1)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.border1))
+                    }
+                    .accessibilityIdentifier("home.breathCountingButton")
+                    .accessibilityLabel("Start breath counting")
+
+                    Button {
+                        withAnimation {
                             appVM.beginBuddySession()
                         }
                     } label: {

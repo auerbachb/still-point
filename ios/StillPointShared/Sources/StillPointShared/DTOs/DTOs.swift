@@ -34,6 +34,8 @@ public struct SessionDTO: Codable, Sendable {
     /// ISO-8601 from API when present; used for same-day ordering (matches web `sessionSortKey`).
     public let createdAt: String?
     public let buddySessionId: String?
+    /// Number of full breaths counted during a breath session (nil for non-breath sessions).
+    public let breathCount: Int?
 
     public init(
         id: String,
@@ -48,7 +50,8 @@ public struct SessionDTO: Codable, Sendable {
         mindStateLog: [MindStateEntry]?,
         sessionDate: String,
         createdAt: String? = nil,
-        buddySessionId: String?
+        buddySessionId: String?,
+        breathCount: Int? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -63,6 +66,7 @@ public struct SessionDTO: Codable, Sendable {
         self.sessionDate = sessionDate
         self.createdAt = createdAt
         self.buddySessionId = buddySessionId
+        self.breathCount = breathCount
     }
 }
 
@@ -125,6 +129,8 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let thoughtCount: Int
     public let mindStateLog: [MindStateEntry]
     public let sessionDate: String
+    /// Number of full breaths counted. Only sent for `.breath` sessions; nil otherwise.
+    public let breathCount: Int?
 
     public init(
         dayNumber: Int,
@@ -136,7 +142,8 @@ public struct CreateSessionRequest: Codable, Sendable {
         clearPercent: Int,
         thoughtCount: Int,
         mindStateLog: [MindStateEntry],
-        sessionDate: String
+        sessionDate: String,
+        breathCount: Int? = nil
     ) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
@@ -148,6 +155,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.thoughtCount = thoughtCount
         self.mindStateLog = mindStateLog
         self.sessionDate = sessionDate
+        self.breathCount = breathCount
     }
 }
 
