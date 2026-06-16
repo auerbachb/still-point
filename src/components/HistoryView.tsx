@@ -344,8 +344,9 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
             const dateLabelFull = formatFullDateLabel(entry.date);
             const dateLabelShort = formatShortDateLabel(entry.date);
             const isQuick = entry.sessionType === "quick";
+            const isBreath = entry.sessionType === "breath";
             const sessionOrdinal = entry.sessionIndexInDay ?? 1;
-            const sessionLabel = isQuick ? "Quick" : `Session ${sessionOrdinal}`;
+            const sessionLabel = isQuick ? "Quick" : isBreath ? "Breath" : `Session ${sessionOrdinal}`;
 
             const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;
             const isExpanded = expandedEntryId === entryId;

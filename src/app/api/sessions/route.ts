@@ -42,6 +42,15 @@ export async function POST(request: NextRequest) {
     const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
     const completed = parseCompleted(body.completed);
     const sessionType = parseOptionalSessionType(body.sessionType);
+    // #374: taps-per-breath count. Only persisted for breath sessions (so a stray
+    // breathCount on a standard/quick payload can't violate the data contract), and
+    // clamped to the Postgres integer range so an out-of-range value can't turn into
+    // a 500 at insert time.
+    const breathCountRaw = body.breathCount;
+    const breathCount =
+      sessionType === "breath" && typeof breathCountRaw === "number" && Number.isFinite(breathCountRaw)
+        ? Math.min(2_147_483_647, Math.max(0, Math.floor(breathCountRaw)))
+        : null;
     const bonusSecondsRaw = body.bonusSeconds;
     const bonusSeconds =
       typeof bonusSecondsRaw === "number" && Number.isFinite(bonusSecondsRaw)
@@ -68,6 +77,7 @@ export async function POST(request: NextRequest) {
       actualTime: actualTime ?? duration,
       clearPercent,
       thoughtCount: thoughtCount ?? 0,
+      breathCount,
       mindStateLog: mindStateLog ?? [],
       sessionDate,
     }).returning();

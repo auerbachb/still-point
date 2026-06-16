@@ -294,6 +294,8 @@ export const sessions = pgTable("sessions", {
   actualTime: integer("actual_time"),
   clearPercent: integer("clear_percent").notNull(),
   thoughtCount: integer("thought_count").default(0).notNull(),
+  /** #374: taps-per-breath count for breath-counting sessions; null for other types. */
+  breathCount: integer("breath_count"),
   mindStateLog: jsonb("mind_state_log").$type<Array<{ time: number; state: string }>>(),
   sessionDate: date("session_date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -302,7 +304,7 @@ export const sessions = pgTable("sessions", {
   buddyIdx: index("idx_sessions_buddy_session").on(table.buddySessionId),
   sessionTypeCheck: check(
     "sessions_session_type_allowed",
-    sql`${table.sessionType} in ('standard', 'quick')`,
+    sql`${table.sessionType} in ('standard', 'quick', 'breath')`,
   ),
   /** At most one personal session row per user per shared buddy sit. */
   userBuddyUnique: uniqueIndex("sessions_user_buddy_session_unique").on(
