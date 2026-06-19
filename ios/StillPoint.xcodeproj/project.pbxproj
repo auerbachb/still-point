@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4976183C8621BCA485D0B82D /* BreathCountingView.swift */; };
 		13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
@@ -38,6 +39,7 @@
 		977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */; };
 		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
 		9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */; };
+		9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */; };
 		A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */; };
 		A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */; };
@@ -115,6 +117,7 @@
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
 		45BC84AB51307C865EF7257A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
+		4976183C8621BCA485D0B82D /* BreathCountingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingView.swift; sourceTree = "<group>"; };
 		4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Italic-Variable.ttf"; sourceTree = "<group>"; };
 		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -135,6 +138,7 @@
 		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
 		A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyVideoWebView.swift; sourceTree = "<group>"; };
 		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingViewModel.swift; sourceTree = "<group>"; };
 		AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointAppUITests.swift; sourceTree = "<group>"; };
 		AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
@@ -183,6 +187,7 @@
 			children = (
 				B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */,
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
+				4976183C8621BCA485D0B82D /* BreathCountingView.swift */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
@@ -355,6 +360,7 @@
 				218693B76FDAF56B6E0321DE /* AppViewModel.swift */,
 				B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */,
 				0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */,
+				ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */,
 				0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */,
 				48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
@@ -538,6 +544,8 @@
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
 				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
+				101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */,
+				9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */,
 				47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */,
 				A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */,
 				D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */,
@@ -605,7 +613,9 @@
 				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPointApp.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointApp/StillPoint.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
 				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
@@ -615,6 +625,7 @@
 				);
 				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint App Store";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -647,7 +658,9 @@
 				CODE_SIGN_ENTITLEMENTS = StillPointApp/StillPointApp.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointApp/StillPoint.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
 				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointApp/Info.plist;
@@ -657,6 +670,7 @@
 				);
 				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint App Store";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -685,7 +699,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointMonitor/StillPointMonitor.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -694,6 +710,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.monitor;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint Monitor App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.9;
@@ -824,7 +841,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointMonitor/StillPointMonitor.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -833,6 +852,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.monitor;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint Monitor App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.9;

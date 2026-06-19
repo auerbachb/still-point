@@ -25,6 +25,8 @@ on:
         required: true
       BUILD_PROVISION_PROFILE_BASE64:
         required: true
+      BUILD_PROVISION_PROFILE_EXTENSION_BASE64:
+        required: true
       P12_PASSWORD:
         required: true
       APPSTORE_API_KEY_ID:
@@ -147,21 +149,24 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
-      - name: Install Apple certificate and provisioning profile
+      - name: Install Apple certificate and provisioning profiles
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          BUILD_PROVISION_PROFILE_EXTENSION_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_EXTENSION_BASE64 }}
         run: |
           # Create variables
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          EXT_PP_PATH="$RUNNER_TEMP/build_pp_ext.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
 
-          # Import certificate and provisioning profile from secrets
+          # Import certificate and both provisioning profiles (app + monitor extension)
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_EXTENSION_BASE64" | base64 --decode -o "$EXT_PP_PATH"
 
           # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -177,24 +182,27 @@ jobs:
           # shellcheck disable=SC2046
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
 
-          # Apply provisioning profile and extract UUID for manual signing
+          # Install BOTH provisioning profiles by UUID. The app and the embedded
+          # StillPointMonitor extension each sign with their own profile, selected
+          # per-target via PROVISIONING_PROFILE_SPECIFIER in ios/project.yml.
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$PP_PATH")")
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${PP_UUID}".mobileprovision
-          # Export the installed profile's UUID so the always()-cleanup step can
-          # remove the actual UUID-named file (not the raw build_pp name).
+          EXT_PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$EXT_PP_PATH")")
+          cp "$EXT_PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${EXT_PP_UUID}".mobileprovision
+          # Export the installed UUIDs so the always()-cleanup step removes the
+          # actual UUID-named files (not the raw build_pp names).
           echo "PP_UUID=${PP_UUID}" >> "$GITHUB_ENV"
+          echo "EXT_PP_UUID=${EXT_PP_UUID}" >> "$GITHUB_ENV"
 
       - name: Build archive
         working-directory: ios
-        env:
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
         run: |
-          # Extract provisioning profile UUID for manual signing
-          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
-          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$PP_PATH")")
-
+          # The app and the embedded StillPointMonitor extension each sign manually
+          # with their own profile, selected per-target via PROVISIONING_PROFILE_SPECIFIER
+          # in project.yml; both profiles were installed in the previous step. We do NOT
+          # pass a single global PROVISIONING_PROFILE_SPECIFIER here — that would force the
+          # app's profile onto the extension and fail signing (bundle-id mismatch).
           xcodebuild archive \
             -project StillPoint.xcodeproj \
             -scheme StillPoint \
@@ -203,7 +211,6 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=T5UU4BP6AV \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
             CODE_SIGN_IDENTITY="Apple Distribution"
 
       - name: Upload to App Store Connect
@@ -234,7 +241,11 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/build_certificate.p12" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/build_pp.mobileprovision" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/build_pp_ext.mobileprovision" 2>/dev/null || true
           if [[ -n "${PP_UUID:-}" ]]; then
             rm -f ~/Library/MobileDevice/Provisioning\ Profiles/"${PP_UUID}".mobileprovision 2>/dev/null || true
+          fi
+          if [[ -n "${EXT_PP_UUID:-}" ]]; then
+            rm -f ~/Library/MobileDevice/Provisioning\ Profiles/"${EXT_PP_UUID}".mobileprovision 2>/dev/null || true
           fi
           rm -rf ~/.private_keys 2>/dev/null || true
