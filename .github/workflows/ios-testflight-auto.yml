@@ -84,14 +84,21 @@ jobs:
             exit 1
           fi
 
-          # Increment CURRENT_PROJECT_VERSION in place (only the StillPoint target
-          # defines this key, so a single substitution is unambiguous).
-          sed -i.bak -E "s/^([[:space:]]+CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+.*/\1${NEW}/" "$PROJECT"
+          # Bump CURRENT_PROJECT_VERSION for every target that defines it — the app
+          # and the StillPointMonitor extension (#446) — so their build numbers stay
+          # in lockstep. sed runs per line, so each target entry is rewritten; the
+          # optional quotes keep it working even if a value is ever written as "13".
+          sed -i.bak -E "s/^([[:space:]]+CURRENT_PROJECT_VERSION:[[:space:]]*)\"?[0-9]+\"?.*/\1${NEW}/" "$PROJECT"
           rm -f "${PROJECT}.bak"
 
-          APPLIED="$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' | xargs)"
-          if [[ "$APPLIED" != "$NEW" ]]; then
-            echo "::error::Failed to update CURRENT_PROJECT_VERSION to ${NEW} (got '${APPLIED}')."
+          # Verify EVERY entry reached ${NEW}, not just the first match. A partial
+          # update would silently break app/extension version lockstep and get
+          # rejected at upload, so fail loudly here instead.
+          if grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" \
+             | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' \
+             | grep -qv "^${NEW}$"; then
+            echo "::error::Not all CURRENT_PROJECT_VERSION entries were updated to ${NEW}."
+            grep -nE '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" >&2
             exit 1
           fi
 
