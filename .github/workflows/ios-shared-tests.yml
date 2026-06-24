@@ -14,7 +14,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       # StillPointShared is a pure SwiftPM package, so `swift test` builds and runs
       # the suite without xcodegen/xcodebuild (the same path agents use locally,
