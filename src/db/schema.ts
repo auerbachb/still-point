@@ -279,11 +279,13 @@ export const buddySessionCalendarEvents = pgTable("buddy_session_calendar_events
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
+  /** #384: also serves standalone `buddy_session_id` predicates as a left-prefix,
+   *  which is why the separate `idx_buddy_session_calendar_events_session` was
+   *  dropped as redundant. */
   sessionUserUnique: uniqueIndex("buddy_session_calendar_events_session_user").on(
     table.buddySessionId,
     table.userId,
   ),
-  sessionIdx: index("idx_buddy_session_calendar_events_session").on(table.buddySessionId),
   userIdx: index("idx_buddy_session_calendar_events_user").on(table.userId),
   statusCheck: check(
     "buddy_session_calendar_events_status_allowed",
