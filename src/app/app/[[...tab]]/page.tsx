@@ -169,6 +169,17 @@ export default function StillPoint() {
     }
   }, [user, authChecked, rawTab, router]);
 
+  // Deep link to auto-start a sit, e.g. /app?session=quick from the failure-reason
+  // log page's post-save CTA (#441). Consume the param so a refresh won't re-trigger.
+  useEffect(() => {
+    if (!user || !authChecked) return;
+    const sessionParam = new URLSearchParams(window.location.search).get("session");
+    if (sessionParam !== "quick" && sessionParam !== "standard") return;
+    setActiveSessionType(sessionParam);
+    setOverlay("session");
+    router.replace(rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB));
+  }, [user, authChecked, rawTab, router]);
+
   useEffect(() => {
     if (!user || !authChecked || buddyInviteInFlight.current) return;
     const params = new URLSearchParams(window.location.search);

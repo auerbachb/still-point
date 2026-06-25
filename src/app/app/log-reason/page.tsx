@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState, type CSSProperties } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppSubpageShell } from "@/components/AppSubpageShell";
@@ -64,6 +64,7 @@ function LogReasonForm({
   const [loadingExisting, setLoadingExisting] = useState(true);
   const [hadExisting, setHadExisting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -101,7 +102,10 @@ function LogReasonForm({
 
   const submit = useCallback(async () => {
     const trimmed = text.trim();
-    if (trimmed.length === 0 || submitting) return;
+    // Guard on a ref, not the async `submitting` state, so rapid double-clicks in the
+    // same tick can't fire two POSTs before the disabled state has re-rendered.
+    if (trimmed.length === 0 || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -118,9 +122,10 @@ function LogReasonForm({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your note. Please try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [text, targetDate, submitting]);
+  }, [text, targetDate]);
 
   if (saved) {
     return (
@@ -132,13 +137,13 @@ function LogReasonForm({
             <Link href={`/app/log-reason?date=${today}`} style={primaryCtaStyle}>
               Now: why not today?
             </Link>
-            <Link href="/app" style={secondaryLinkStyle}>
+            <Link href="/app?session=quick" style={secondaryLinkStyle}>
               Or start a quick 60-second session
             </Link>
           </>
         ) : (
           <>
-            <Link href="/app" style={primaryCtaStyle}>
+            <Link href="/app?session=quick" style={primaryCtaStyle}>
               Start a quick 60-second session
             </Link>
             <Link href="/app" style={secondaryLinkStyle}>
