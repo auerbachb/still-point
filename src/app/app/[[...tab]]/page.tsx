@@ -6,6 +6,7 @@ import type { CalendarSyncResult, User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
+import { BreathCountView, type BreathSessionResult } from "@/components/BreathCountView";
 import { CompletionScreen } from "@/components/CompletionScreen";
 import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
@@ -60,7 +61,9 @@ function pathForTab(tab: Tab): string {
 }
 
 // Transient flows that overlay the active tab without changing the URL.
-type Overlay = "session" | "complete";
+// "breath" hides nav/header and renders BreathCountView full-screen, matching
+// the iOS breath-counting mode (#376).
+type Overlay = "session" | "breath" | "complete";
 
 type CompletionData = {
   sessionId: string | null;
@@ -400,8 +403,53 @@ export default function StillPoint() {
     setOverlay(null);
   }, []);
 
+  // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
+  // (#374). Empty sessions (entered then ended with no taps) are not logged.
+  // Breath sits do not advance the daily progression, and there is no
+  // completion screen — End returns straight to the Progress tab.
+  const breathSavingRef = useRef(false);
+  const handleBreathEnd = useCallback(async (result: BreathSessionResult) => {
+    // A session is empty only when no tap was ever recorded. Using tapCount
+    // (not the derived elapsedSeconds/breathCount) avoids dropping a real
+    // session where End was pressed within the first second of the first tap,
+    // which produces elapsedSeconds=0 and breathCount=0 but tapCount>0.
+    if (result.tapCount <= 0) {
+      setOverlay(null);
+      return;
+    }
+    if (breathSavingRef.current) return;
+    breathSavingRef.current = true;
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dayNumber: user?.currentDay ?? 1,
+          sessionType: "breath",
+          duration: Math.max(result.elapsedSeconds, 1),
+          bonusSeconds: 0,
+          completed: true,
+          actualTime: result.elapsedSeconds,
+          clearPercent: 0,
+          thoughtCount: 0,
+          breathCount: result.breathCount,
+          mindStateLog: [],
+          sessionDate: todayLocalIsoDate(),
+        }),
+      });
+      if (!res.ok) {
+        console.error("Failed to save breath session: HTTP", res.status);
+      }
+    } catch (error) {
+      console.error("Failed to save breath session:", error);
+    } finally {
+      breathSavingRef.current = false;
+      setOverlay(null);
+    }
+  }, [user]);
+
   const inBuddyRoom = tab === "buddy" && !!buddySessionId;
-  const isImmersive = overlay === "session" || inBuddyRoom;
+  const isImmersive = overlay === "session" || overlay === "breath" || inBuddyRoom;
 
   // Loading state
   if (!authChecked) {
@@ -604,6 +652,10 @@ export default function StillPoint() {
         />
       )}
 
+      {overlay === "breath" && (
+        <BreathCountView onEnd={handleBreathEnd} />
+      )}
+
       {overlay === "complete" && completionData && (
         <CompletionScreen
           dayNumber={completionData.dayNumber}
@@ -644,6 +696,7 @@ export default function StillPoint() {
           currentDay={user.currentDay}
           onBegin={() => handleBegin("standard")}
           onQuickBegin={() => handleBegin("quick")}
+          onBreath={() => setOverlay("breath")}
           onBuddy={() => {
             setBuddySessionId(null);
             setBuddyCalendarMessage(null);

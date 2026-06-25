@@ -1,5 +1,5 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
-import { calculateSessionStats } from "../../src/lib/constants";
+import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
 import { tap } from "../utils/mobile-helpers";
 
 type UserRecord = {
@@ -13,12 +13,13 @@ type UserRecord = {
 type SessionRecord = {
   id: string;
   dayNumber: number;
-  sessionType: "standard" | "quick";
+  sessionType: SessionType;
   duration: number;
   completed: boolean;
   actualTime: number;
   clearPercent: number;
   thoughtCount: number;
+  breathCount?: number;
   mindStateLog: Array<{ time: number; state: string }>;
   sessionDate: string;
 };
@@ -173,12 +174,16 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const session: SessionRecord = {
         id: `session-${state.ids.session++}`,
         dayNumber: Number(body.dayNumber ?? state.user.currentDay),
-        sessionType: body.sessionType === "quick" ? "quick" : "standard",
+        sessionType:
+          body.sessionType === "quick" || body.sessionType === "breath"
+            ? body.sessionType
+            : "standard",
         duration: Number(body.duration ?? 60),
         completed: Boolean(body.completed ?? true),
         actualTime: Number(body.actualTime ?? body.duration ?? 60),
         clearPercent: Number(body.clearPercent ?? 100),
         thoughtCount: Number(body.thoughtCount ?? 0),
+        breathCount: typeof body.breathCount === "number" ? body.breathCount : undefined,
         mindStateLog: Array.isArray(body.mindStateLog) ? body.mindStateLog : [],
         sessionDate: String(body.sessionDate ?? getLocalIsoDate()),
       };

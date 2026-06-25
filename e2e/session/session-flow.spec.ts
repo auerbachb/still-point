@@ -82,6 +82,30 @@ test.describe("mobile session flow", () => {
     expect(mockApiState.sessions[0]?.sessionType, "quick minute should be persisted as quick").toBe("quick");
   });
 
+  test("single-tap breath session ending within first second is persisted", async ({
+    page,
+    ensureLoggedIn,
+    mockApiState,
+  }) => {
+    await page.addInitScript(() => {
+      Date.now = () => 1_700_000_000_000;
+    });
+    await ensureLoggedIn();
+
+    await tap(page.getByRole("button", { name: "Breath counting" }));
+    await expect(page.getByTestId("breath-elapsed")).toHaveText("0:00");
+
+    await page.keyboard.press("Space");
+    await tap(page.getByRole("button", { name: "End breath counting session" }));
+
+    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    expect(mockApiState.sessions.length, "one-tap breath session should be saved").toBe(1);
+    expect(mockApiState.sessions[0]?.sessionType, "session should be persisted as breath").toBe("breath");
+    expect(mockApiState.sessions[0]?.duration, "stored duration should meet API minimum").toBe(1);
+    expect(mockApiState.sessions[0]?.actualTime, "raw elapsed time should remain sub-second").toBe(0);
+    expect(mockApiState.sessions[0]?.breathCount, "one tap is not yet a full breath").toBe(0);
+  });
+
   test("pull-to-refresh style overscroll does not break active session", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await tap(page.getByRole("button", { name: "Begin" }));
