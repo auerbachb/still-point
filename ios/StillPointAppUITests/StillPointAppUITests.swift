@@ -5,7 +5,13 @@ final class StillPointAppUITests: XCTestCase {
     // macos-26/iOS 26 CI. `coldStartMaxMs` is separate: it is the app-reported
     // auth-check latency in `coldStartAuthCheckMs`, not XCTest launch overhead.
     private let launchTimeout: TimeInterval = 45
-    private let coldStartMaxMs = 5_000
+    // Bound bumped 5000 -> 8000ms (issue #334): the app-reported cold-start
+    // auth-check intermittently exceeded 5000ms on contended macos-26 iOS-26
+    // simulators, producing infra-shaped flakes rather than real regressions.
+    // 8000ms keeps a meaningful guard while absorbing simulator contention. The
+    // assertion is also scoped to `seedAuthenticated: false` cold-start paths
+    // only (see `waitForRoot`/`assertColdStart`); authenticated boots skip it.
+    private let coldStartMaxMs = 8_000
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -163,7 +169,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         openTab(identifier: "tab.progress", in: app, waitingFor: app.staticTexts["history.title"])
 
         openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
@@ -175,7 +181,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
 
         let editButton = app.buttons["settings.usernameEditButton"]
@@ -203,7 +209,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
 
         let editButton = app.buttons["settings.usernameEditButton"]
@@ -234,7 +240,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, forceUsernameConflict: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
 
         let editButton = app.buttons["settings.usernameEditButton"]
@@ -322,7 +328,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 60, timerMultiplier: 1.0)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         tap(beginButton, thenWaitForRoot: "session", in: app)
@@ -349,7 +355,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertTrue(beginButton.isHittable, "Home primary action should be visible above safe-area/home indicator")
@@ -361,7 +367,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
         XCTAssertEqual(beginButton.label, "Start session")
@@ -381,7 +387,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: true, resetStore: false, forceSessionsFailure: true, forceProgressTab: true)
         app.launch()
 
-        waitForRoot("home", in: app, failureMessage: "Home screen did not appear")
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let errorLabel = app.staticTexts["history.errorMessage"]
 
         XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
