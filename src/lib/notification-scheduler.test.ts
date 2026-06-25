@@ -270,6 +270,29 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).not.toHaveBeenCalled();
   });
 
+  test("failure-reason send is not also counted as skipped when daily window is not due (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: true,
+      dailyReminderTime: "09:00",
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(result.failureReasonSent).toBe(1);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledWith({
+      recipientUserId: "user-1",
+      targetDate: "2026-05-28",
+      isYesterday: true,
+    });
+    expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+  });
+
   test("failure-reason reminder falls back to today when yesterday is handled (#441)", async () => {
     preferenceRows = [{
       ...basePrefs,
