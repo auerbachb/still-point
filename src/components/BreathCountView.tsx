@@ -21,6 +21,10 @@ export type BreathSessionResult = {
   elapsedSeconds: number;
   /** Complete breaths (2 taps = 1 breath). */
   breathCount: number;
+  /** Raw tap count — lets callers distinguish a started-but-short session
+   *  (tapCount > 0) from End pressed before any tap (tapCount = 0), since
+   *  both can produce elapsedSeconds=0 and breathCount=0. */
+  tapCount: number;
 };
 
 type BreathCountViewProps = {
@@ -80,6 +84,7 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
     onEnd({
       elapsedSeconds: finalElapsed,
       breathCount: breathCountForTaps(tapCountRef.current),
+      tapCount: tapCountRef.current,
     });
   }, [onEnd]);
 
@@ -112,6 +117,7 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keyBinding, recordTap]);
 
+  const [focusVisible, setFocusVisible] = useState(false);
   const running = startMs !== null;
   const phase = phaseForTaps(tapCount);
   const breaths = breathCountForTaps(tapCount);
@@ -123,6 +129,12 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
       tabIndex={0}
       aria-label="Breath counting. Tap anywhere to register a breath."
       onClick={recordTap}
+      onFocus={(e) => {
+        // Only show focus ring for keyboard navigation, not mouse clicks.
+        if (e.target === e.currentTarget) setFocusVisible(true);
+      }}
+      onBlur={() => setFocusVisible(false)}
+      onMouseDown={() => setFocusVisible(false)}
       onKeyDown={(e) => {
         // Enter triggers a tap from keyboard focus; the configured key binding
         // is handled by the global listener above.
@@ -144,7 +156,8 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
         cursor: "pointer",
         userSelect: "none",
         WebkitUserSelect: "none",
-        outline: "none",
+        outline: focusVisible ? "2px solid var(--accent-green-text)" : "none",
+        outlineOffset: focusVisible ? "-2px" : undefined,
         fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
         padding: "var(--s4)",
         animation: "fadeIn 0.6s ease",
@@ -208,10 +221,14 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
           handleEnd();
         }}
         onKeyDown={(e) => {
-          // Keep Enter/Space on the button from bubbling to the container tap
-          // handler. The configured breath key still records via the global
-          // listener (preventDefault there stops button activation).
-          e.stopPropagation();
+          // Always stop propagation so the container tap handler never fires
+          // from a button keypress. But allow the configured breath key to
+          // reach the window-level listener by NOT stopping propagation for it.
+          // (React 17+ delegates to the root element, which is below window, so
+          // stopPropagation() would prevent the window listener from seeing it.)
+          if (!eventMatchesBreathKeyBinding(e.nativeEvent, keyBinding)) {
+            e.stopPropagation();
+          }
         }}
         style={{
           position: "absolute",
