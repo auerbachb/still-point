@@ -57,7 +57,10 @@ enum SessionNotificationSuppressionController {
 
     private static func registration(for appVM: AppViewModel) -> Registration {
         let id = ObjectIdentifier(appVM)
-        if let existing = registrations[id] {
+        // A deallocated AppViewModel can free its ObjectIdentifier for reuse by a
+        // new instance; the weak `appViewModel === appVM` check discards that
+        // stale entry instead of resurrecting another window's session state.
+        if let existing = registrations[id], existing.appViewModel === appVM {
             return existing
         }
         let reg = Registration(appViewModel: appVM)

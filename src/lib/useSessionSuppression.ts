@@ -5,6 +5,7 @@ import {
   broadcastSessionSuppression,
   loadSuppressDuringSessionPref,
   subscribeSuppressDuringSessionPref,
+  SUPPRESS_HEARTBEAT_MS,
 } from "@/lib/sessionSuppressionPrefs";
 
 /**
@@ -27,6 +28,10 @@ export function useSuppressDuringSessionPref(): boolean {
  * either input changes, and always posts `suppress: false` on unmount so a push
  * arriving after the sit ends is shown normally.
  *
+ * While suppressing it re-broadcasts on a heartbeat so the worker's persisted
+ * state (which carries a TTL) never lapses mid-sit, while a hard tab kill still
+ * self-heals once the TTL passes.
+ *
  * Web parity with the iOS `willPresent` suppression in `PushNotificationCoordinator`.
  */
 export function useSessionSuppressionRelay(sessionActive: boolean): void {
@@ -35,7 +40,10 @@ export function useSessionSuppressionRelay(sessionActive: boolean): void {
 
   useEffect(() => {
     broadcastSessionSuppression(suppress);
+    if (!suppress) return;
+    const heartbeat = setInterval(() => broadcastSessionSuppression(true), SUPPRESS_HEARTBEAT_MS);
     return () => {
+      clearInterval(heartbeat);
       // Releasing on unmount avoids a stale "suppress" outliving the sit (e.g.
       // navigating away mid-session without a clean complete/abandon).
       broadcastSessionSuppression(false);

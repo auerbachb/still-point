@@ -19,6 +19,14 @@ const STORAGE_KEY = "stillpoint_suppress_during_session";
  */
 export const SESSION_SUPPRESSION_CHANNEL = "stillpoint-session-suppression";
 
+/**
+ * How often the page re-broadcasts an active "suppress" so the service worker's
+ * persisted state never expires mid-sit. Must be shorter than `SUPPRESS_TTL_MS`
+ * in `public/sw.js` (10 min) so a long sit stays covered while a killed tab
+ * still self-heals within the TTL.
+ */
+export const SUPPRESS_HEARTBEAT_MS = 60 * 1000;
+
 /** Message posted page→service worker over {@link SESSION_SUPPRESSION_CHANNEL}. */
 export type SessionSuppressionMessage = {
   type: "session-suppression-state";
