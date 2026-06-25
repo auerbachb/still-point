@@ -104,6 +104,18 @@ a {
   50% { transform: scale(1.02); opacity: 1; }
 }
 
+/* Current pathway node — gentle amber glow (#336) */
+@keyframes pathwayPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--accent-amber-muted);
+    border-color: var(--accent-amber-border);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+    border-color: var(--accent-amber);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

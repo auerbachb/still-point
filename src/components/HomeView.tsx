@@ -1,6 +1,7 @@
 "use client";
 
 import { BLOCK_DURATION, QUICK_DURATION, durationForDay } from "@/lib/constants";
+import { Pathway } from "@/components/Pathway";
 
 type HomeViewProps = {
   currentDay: number;
@@ -60,6 +61,9 @@ export function HomeView({ currentDay, onBegin, onQuickBegin, onBuddy }: HomeVie
           day &middot; {todayDuration}s &middot; {totalBlocks} blocks
         </div>
       </div>
+
+      {/* Block B2: Lesson pathway (#336) */}
+      <Pathway currentDay={currentDay} />
 
       {/* Block C: CTA */}
       <button
