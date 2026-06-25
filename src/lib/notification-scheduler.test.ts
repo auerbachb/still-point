@@ -137,6 +137,28 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
   });
 
+  test("midnight-boundary: 23:55 reminder does not double-send across the date change (#440)", async () => {
+    // Reproduce the CodeAnt finding: a reminder at 23:55 is covered both by the 23:55
+    // run (delta=0, windowKey="2026-05-29") and by the 00:00 run (delta=5, still <=
+    // CRON_WINDOW_MINUTES). Before the dayOffset fix the 00:00 run used windowKey
+    // "2026-05-30", bypassing the existing claimNotificationDispatch deduplication and
+    // triggering a second send minutes after the first.
+    preferenceRows = [{ ...basePrefs, dailyReminderTime: "23:55" }];
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // 23:55 run — delta=0, intendedDateKey="2026-05-29", claims + sends.
+    const first = await dispatchDueNotifications(new Date("2026-05-29T23:55:00.000Z"));
+
+    // 00:00 next-day run — delta=5, intendedDateKey must still be "2026-05-29" (the
+    // reminder's intended date). The claim row already exists, so no second send.
+    insertReturning.mockResolvedValueOnce([]);
+    const second = await dispatchDueNotifications(new Date("2026-05-30T00:00:00.000Z"));
+
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
   test("miss-a-day send exception releases the claim instead of blocking the user (#440)", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
     userCompletedSessionOnDate.mockResolvedValue(false);
