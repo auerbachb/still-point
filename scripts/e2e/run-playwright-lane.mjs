@@ -81,7 +81,11 @@ function runAttempt(logPath) {
       logStream.end();
       reject(error);
     });
-    child.on("exit", (code) => {
+    // Resolve on `close`, not `exit`: `exit` can fire while stdout/stderr still
+    // have buffered `data` to deliver, so the tee'd log could miss the failure
+    // line (e.g. `Error: expect(`) and the classifier would mislabel a real
+    // assertion as retriable infra. `close` fires only after both pipes drain.
+    child.on("close", (code) => {
       logStream.end(() => resolve(code ?? 1));
     });
   });
