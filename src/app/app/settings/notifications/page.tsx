@@ -29,7 +29,7 @@ export default function NotificationSettingsPage() {
             }}
           >
             <Link
-              href="/app?view=settings"
+              href="/app/settings"
               style={{
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: "11px",

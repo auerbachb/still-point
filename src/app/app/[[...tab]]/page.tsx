@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
 import type { CalendarSyncResult, User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
@@ -18,16 +19,35 @@ import { api, ApiError } from "@/lib/api";
 import type { SessionType } from "@/lib/constants";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
-type View =
-  | "home"
-  | "session"
-  | "buddy"
-  | "complete"
+// URL-driven tabs. The first path segment of /app/[[...tab]] selects the tab;
+// `/app` (no segment) resolves to the Progress tab.
+type Tab =
+  | "progress"
   | "history"
   | "journal"
   | "board"
   | "friends"
-  | "settings";
+  | "settings"
+  | "buddy";
+
+// Tabs that appear in the persistent nav, in display order. `buddy` is reached
+// from the Progress screen rather than the nav, so it is intentionally omitted.
+const NAV_TABS: Tab[] = ["progress", "history", "journal", "board", "friends", "settings"];
+
+const ALL_TABS: Tab[] = [...NAV_TABS, "buddy"];
+
+const DEFAULT_TAB: Tab = "progress";
+
+function isTab(value: string | undefined): value is Tab {
+  return value !== undefined && (ALL_TABS as string[]).includes(value);
+}
+
+function pathForTab(tab: Tab): string {
+  return `/app/${tab}`;
+}
+
+// Transient flows that overlay the active tab without changing the URL.
+type Overlay = "session" | "complete";
 
 type CompletionData = {
   sessionId: string | null;
@@ -49,8 +69,13 @@ function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): 
 }
 
 export default function StillPoint() {
+  const router = useRouter();
+  const params = useParams<{ tab?: string[] }>();
+  const rawTab = Array.isArray(params.tab) ? params.tab[0] : undefined;
+  const tab: Tab = isTab(rawTab) ? rawTab : DEFAULT_TAB;
+
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<View>("home");
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authRetryKey, setAuthRetryKey] = useState(0);
@@ -109,20 +134,24 @@ export default function StillPoint() {
     };
   }, [authRetryKey]);
 
+  // Redirect legacy `?view=` deep links and unknown tab slugs to their routes.
   useEffect(() => {
     if (!user || !authChecked) return;
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get("view");
     if (viewParam === "settings") {
-      setView("settings");
-      window.history.replaceState({}, "", "/app");
+      router.replace(pathForTab("settings"));
       return;
     }
     if (viewParam === "friends") {
-      setView("friends");
-      window.history.replaceState({}, "", "/app");
+      router.replace(pathForTab("friends"));
+      return;
     }
-  }, [user, authChecked]);
+    // Unknown slug (e.g. /app/garbage) falls back to Progress.
+    if (rawTab !== undefined && !isTab(rawTab)) {
+      router.replace(pathForTab(DEFAULT_TAB));
+    }
+  }, [user, authChecked, rawTab, router]);
 
   useEffect(() => {
     if (!user || !authChecked || buddyInviteInFlight.current) return;
@@ -140,15 +169,16 @@ export default function StillPoint() {
         setBuddyInviteError(null);
         setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync));
         setBuddySessionId(sessionId);
-        setView("buddy");
-        window.history.replaceState({}, "", "/app");
+        setOverlay(null);
+        router.replace(pathForTab("buddy"));
       } catch (e) {
         if (!cancelled) {
           buddyInviteInFlight.current = false;
           setBuddyInviteError(
             e instanceof ApiError ? e.message : "Could not open that buddy invite.",
           );
-          window.history.replaceState({}, "", "/app");
+          // Strip the consumed invite token from whatever tab URL we are on.
+          router.replace(rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB));
         }
       }
     })();
@@ -156,32 +186,43 @@ export default function StillPoint() {
     return () => {
       cancelled = true;
     };
-  }, [user, authChecked]);
+  }, [user, authChecked, rawTab, router]);
+
+  const goToTab = useCallback(
+    (next: Tab) => {
+      setOverlay(null);
+      router.push(pathForTab(next));
+    },
+    [router],
+  );
 
   const handleLogin = (userData: User) => {
     setUser(userData);
-    setView("home");
+    setOverlay(null);
+    router.replace(pathForTab(DEFAULT_TAB));
   };
 
   const handleLogout = () => {
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
+    setOverlay(null);
     setUser(null);
-    setView("home");
+    router.replace(pathForTab(DEFAULT_TAB));
   };
 
   const handleBegin = (sessionType: SessionType = "standard") => {
     setActiveSessionType(sessionType);
-    setView("session");
+    setOverlay("session");
   };
 
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
     setBuddyInviteError(null);
-    setView("home");
-  }, []);
+    setOverlay(null);
+    router.push(pathForTab(DEFAULT_TAB));
+  }, [router]);
 
   const handleBuddyPersonalRecordComplete = useCallback((data: BuddyPersonalRecordPayload) => {
     setBuddySessionId(null);
@@ -196,7 +237,7 @@ export default function StillPoint() {
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
     });
-    setView("complete");
+    setOverlay("complete");
     void api
       .me()
       .then(({ user: u }) => setUser(u))
@@ -274,7 +315,7 @@ export default function StillPoint() {
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
     });
-    setView("complete");
+    setOverlay("complete");
   }, [user]);
 
   const handleSessionAbandon = useCallback(async (data: {
@@ -327,10 +368,11 @@ export default function StillPoint() {
       console.error("Failed to save abandoned session:", error);
     }
 
-    setView("home");
+    setOverlay(null);
   }, []);
 
-  const navItems: View[] = ["home", "history", "journal", "board", "friends", "settings"];
+  const inBuddyRoom = tab === "buddy" && !!buddySessionId;
+  const isImmersive = overlay === "session" || inBuddyRoom;
 
   // Loading state
   if (!authChecked) {
@@ -410,10 +452,7 @@ export default function StillPoint() {
     <div style={{
       minHeight: "100%",
       display: "grid",
-      gridTemplateRows:
-        view === "session" || (view === "buddy" && buddySessionId)
-          ? "1fr"
-          : "auto 1fr auto",
+      gridTemplateRows: isImmersive ? "1fr" : "auto 1fr auto",
       alignItems: "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
@@ -421,7 +460,7 @@ export default function StillPoint() {
         : "var(--s4) var(--s4)",
     }}>
       {/* Nav */}
-      {view !== "session" && !(view === "buddy" && buddySessionId) && (
+      {!isImmersive && (
         <div style={isMobile ? {
           position: "fixed", bottom: 0, left: 0, right: 0,
           display: "flex", justifyContent: "space-around",
@@ -434,14 +473,14 @@ export default function StillPoint() {
           display: "flex", gap: "var(--s3)",
           zIndex: 100,
         }}>
-          {navItems.map(v => (
+          {NAV_TABS.map(t => (
             <button
               type="button"
-              key={v}
-              onClick={() => setView(v)}
+              key={t}
+              onClick={() => goToTab(t)}
               style={{
                 background: "none", border: "none",
-                color: view === v ? "var(--fg)" : "var(--fg-2)",
+                color: !overlay && tab === t ? "var(--fg)" : "var(--fg-2)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                 fontSize: isMobile ? "13px" : "11px",
                 letterSpacing: "0.1em",
@@ -456,8 +495,8 @@ export default function StillPoint() {
                 position: "relative",
               }}
             >
-              {v}
-              {view === v && isMobile && (
+              {t}
+              {!overlay && tab === t && isMobile && (
                 <span style={{
                   position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)",
                   width: "16px", height: "2px", borderRadius: "1px",
@@ -470,7 +509,7 @@ export default function StillPoint() {
       )}
 
       {/* Welcome header */}
-      {view !== "session" && !(view === "buddy" && buddySessionId) && (
+      {!isImmersive && (
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "12px", color: "var(--fg-3)",
@@ -484,7 +523,7 @@ export default function StillPoint() {
         </div>
       )}
 
-      {buddyInviteError && view !== "session" && (
+      {buddyInviteError && overlay !== "session" && (
         <div
           role="alert"
           style={{
@@ -526,42 +565,8 @@ export default function StillPoint() {
         </div>
       )}
 
-      {/* Views */}
-      {view === "home" && (
-        <HomeView
-          currentDay={user.currentDay}
-          onBegin={() => handleBegin("standard")}
-          onQuickBegin={() => handleBegin("quick")}
-          onBuddy={() => {
-            setBuddySessionId(null);
-            setBuddyCalendarMessage(null);
-            setBuddyInviteError(null);
-            setView("buddy");
-          }}
-        />
-      )}
-
-      {view === "buddy" && !buddySessionId && (
-        <BuddySessionHub
-          onEnterSession={(id, calendarSync) => {
-            setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync ?? undefined));
-            setBuddySessionId(id);
-          }}
-          onBack={handleBuddyExit}
-        />
-      )}
-
-      {view === "buddy" && buddySessionId && (
-        <BuddySessionRoom
-          sessionId={buddySessionId}
-          currentUserId={user.id}
-          calendarMessage={buddyCalendarMessage}
-          onExit={handleBuddyExit}
-          onPersonalRecordComplete={handleBuddyPersonalRecordComplete}
-        />
-      )}
-
-      {view === "session" && (
+      {/* Transient overlays take precedence over the active tab. */}
+      {overlay === "session" && (
         <SessionView
           currentDay={user.currentDay}
           sessionType={activeSessionType}
@@ -570,7 +575,7 @@ export default function StillPoint() {
         />
       )}
 
-      {view === "complete" && completionData && (
+      {overlay === "complete" && completionData && (
         <CompletionScreen
           dayNumber={completionData.dayNumber}
           sessionType={completionData.sessionType}
@@ -580,7 +585,8 @@ export default function StillPoint() {
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
           onReturn={() => {
-            setView("home");
+            setOverlay(null);
+            router.push(pathForTab(DEFAULT_TAB));
             void api
               .me()
               .then(({ user: u }) => setUser(u))
@@ -603,21 +609,56 @@ export default function StillPoint() {
         />
       )}
 
-      {view === "history" && (
+      {/* Tab content (rendered when no transient overlay is active). */}
+      {!overlay && tab === "progress" && (
+        <HomeView
+          currentDay={user.currentDay}
+          onBegin={() => handleBegin("standard")}
+          onQuickBegin={() => handleBegin("quick")}
+          onBuddy={() => {
+            setBuddySessionId(null);
+            setBuddyCalendarMessage(null);
+            setBuddyInviteError(null);
+            goToTab("buddy");
+          }}
+        />
+      )}
+
+      {!overlay && tab === "buddy" && !buddySessionId && (
+        <BuddySessionHub
+          onEnterSession={(id, calendarSync) => {
+            setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync ?? undefined));
+            setBuddySessionId(id);
+          }}
+          onBack={handleBuddyExit}
+        />
+      )}
+
+      {!overlay && tab === "buddy" && buddySessionId && (
+        <BuddySessionRoom
+          sessionId={buddySessionId}
+          currentUserId={user.id}
+          calendarMessage={buddyCalendarMessage}
+          onExit={handleBuddyExit}
+          onPersonalRecordComplete={handleBuddyPersonalRecordComplete}
+        />
+      )}
+
+      {!overlay && tab === "history" && (
         <HistoryView currentDay={user.currentDay} username={user.username} />
       )}
 
-      {view === "journal" && (
+      {!overlay && tab === "journal" && (
         <ThoughtJournal username={user.username} />
       )}
 
-      {view === "board" && (
+      {!overlay && tab === "board" && (
         <PublicBoard currentUsername={user.username} />
       )}
 
-      {view === "friends" && <FriendsView />}
+      {!overlay && tab === "friends" && <FriendsView />}
 
-      {view === "settings" && (
+      {!overlay && tab === "settings" && (
         <SettingsView
           user={user}
           onTogglePublic={(isPublic) =>
