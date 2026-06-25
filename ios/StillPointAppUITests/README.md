@@ -22,7 +22,7 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - Token expiry re-auth path (`testTokenExpiryRoutesToReauthMessage`)
 - Failed sessions API displays visible error (no silent hang) (`testSessionsFailureShowsVisibleRetryMessage`)
 
-Cold-start acceptance guard used by tests: **auth check must complete within 5,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`).
+Cold-start acceptance guard used by tests: **auth check must complete within 8,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`). Raised from 5,000 ms in [#334](https://github.com/auerbachb/still-point/issues/334) to absorb macos-26/iOS-26 simulator contention. The guard is asserted only on `seedAuthenticated: false` cold-start paths (boot to auth); authenticated boots and seeded relaunches pass `assertColdStart: false`.
 
 ## Environment knobs used by tests
 
