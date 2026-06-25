@@ -68,6 +68,11 @@ function LogReasonForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Always-current target date, so an in-flight save that resolves after the user
+  // navigated to another date can detect the change and skip stale state updates.
+  const activeDateRef = useRef(targetDate);
+  activeDateRef.current = targetDate;
+
   useEffect(() => {
     let cancelled = false;
     // Reset per-date state so navigating between dates (e.g. two different deep links
@@ -76,6 +81,8 @@ function LogReasonForm({
     setError(null);
     setText("");
     setHadExisting(false);
+    submittingRef.current = false;
+    setSubmitting(false);
     setLoadingExisting(true);
     (async () => {
       try {
@@ -83,6 +90,9 @@ function LogReasonForm({
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
+          // Re-check after the awaited parse: the date may have changed (or the
+          // component unmounted) while JSON was streaming in.
+          if (cancelled) return;
           const existingText = typeof data?.failureReason?.text === "string"
             ? data.failureReason.text
             : null;
@@ -105,6 +115,7 @@ function LogReasonForm({
     // Guard on a ref, not the async `submitting` state, so rapid double-clicks in the
     // same tick can't fire two POSTs before the disabled state has re-rendered.
     if (trimmed.length === 0 || submittingRef.current) return;
+    const submittedDate = targetDate;
     submittingRef.current = true;
     setSubmitting(true);
     setError(null);
@@ -112,18 +123,24 @@ function LogReasonForm({
       const res = await fetch("/api/failure-reasons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reasonDate: targetDate, text: trimmed }),
+        body: JSON.stringify({ reasonDate: submittedDate, text: trimmed }),
       });
+      // Drop the result if the user navigated to a different date mid-save, so a stale
+      // success/error can't land on the new date's view.
+      if (activeDateRef.current !== submittedDate) return;
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Could not save your note. Please try again.");
       }
       setSaved(true);
     } catch (err) {
+      if (activeDateRef.current !== submittedDate) return;
       setError(err instanceof Error ? err.message : "Could not save your note. Please try again.");
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if (activeDateRef.current === submittedDate) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   }, [text, targetDate]);
 

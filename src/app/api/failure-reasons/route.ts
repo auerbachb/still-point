@@ -4,9 +4,19 @@ import { db } from "@/db";
 import { failureReasons } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { readJsonObject } from "@/lib/readJsonObject";
-import { isValidSessionCalendarDate } from "@/lib/sessionCalendar";
+import { addDaysToIsoDate, isValidSessionCalendarDate } from "@/lib/sessionCalendar";
 
 const MAX_REASON_LENGTH = 1000;
+
+/**
+ * Latest date a reason may be logged for. The server doesn't know the caller's
+ * timezone, so allow UTC-today + 1 day to cover users ahead of UTC. This blocks
+ * pre-logging genuinely future days, which would otherwise make the scheduler
+ * treat them as "already logged" and suppress the reminder (#441 review).
+ */
+function maxReasonDate(): string {
+  return addDaysToIsoDate(new Date().toISOString().slice(0, 10), 1);
+}
 
 function serializeFailureReason(row: typeof failureReasons.$inferSelect) {
   return {
@@ -62,6 +72,9 @@ export async function POST(request: NextRequest) {
 
     if (typeof reasonDate !== "string" || !isValidSessionCalendarDate(reasonDate)) {
       return NextResponse.json({ error: "reasonDate must be YYYY-MM-DD" }, { status: 400 });
+    }
+    if (reasonDate > maxReasonDate()) {
+      return NextResponse.json({ error: "reasonDate cannot be in the future" }, { status: 400 });
     }
 
     if (typeof text !== "string") {

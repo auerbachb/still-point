@@ -161,6 +161,20 @@ describe("/api/failure-reasons", () => {
     expect(dbInsert).not.toHaveBeenCalled();
   });
 
+  test("POST rejects a future reasonDate", async () => {
+    const future = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("http://test.local/api/failure-reasons", {
+        method: "POST",
+        body: JSON.stringify({ reasonDate: future, text: "planning ahead" }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(400);
+    expect(dbInsert).not.toHaveBeenCalled();
+  });
+
   test("POST rejects text over the length cap", async () => {
     const { POST } = await import("./route");
     const response = await POST(
