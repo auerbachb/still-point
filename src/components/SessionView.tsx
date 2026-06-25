@@ -8,6 +8,7 @@ import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
+import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -74,6 +75,10 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   useWakeLock(keepScreenAwakePref && isActive);
+  // Relay sit state to the service worker so it can suppress push display while
+  // a sit is in progress when the opt-in pref is on (#431). Treat a paused sit
+  // as still "in session" so reminders stay suppressed until it truly ends.
+  useSessionSuppressionRelay(!sessionFinished);
 
   useEffect(() => {
     const resetTimer = () => {

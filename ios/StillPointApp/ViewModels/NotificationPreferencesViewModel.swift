@@ -9,6 +9,7 @@ final class NotificationPreferencesViewModel {
     var dailyReminderEnabled = false
     var missADayEnabled = false
     var friendRequestNotificationsEnabled = true
+    var suppressDuringSession = false
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
     var timezoneDisplay = "UTC"
@@ -120,6 +121,14 @@ final class NotificationPreferencesViewModel {
         await persist(patch: NotificationPreferencesPatch(friendRequestNotificationsEnabled: enabled))
     }
 
+    func persistSuppressDuringSessionEnabled(_ enabled: Bool) async {
+        suppressDuringSession = enabled
+        // Cache immediately so push suppression reflects the toggle even before
+        // the next prefs reload (#431).
+        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(enabled)
+        await persist(patch: NotificationPreferencesPatch(suppressDuringSession: enabled))
+    }
+
     func persistTimezone(_ tz: String) async {
         timezoneDisplay = tz
         await persist(patch: NotificationPreferencesPatch(tz: tz))
@@ -155,6 +164,9 @@ final class NotificationPreferencesViewModel {
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
         friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
+        suppressDuringSession = dto.suppressDuringSession
+        // Keep the cached opt-in (read by willPresent) in sync with the server row.
+        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(dto.suppressDuringSession)
         timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil

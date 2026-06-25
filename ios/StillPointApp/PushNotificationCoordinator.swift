@@ -83,7 +83,12 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .badge]
+        // Suppress foreground presentation while a sit is in progress when the
+        // opt-in is on (#431). Returning empty options drops the banner/sound.
+        if await SessionNotificationSuppressionController.shouldSuppressPresentation {
+            return []
+        }
+        return [.banner, .sound, .badge]
     }
 
     func userNotificationCenter(

@@ -61,6 +61,10 @@ export async function PATCH(request: NextRequest) {
       updates.friendRequestNotificationsEnabled = body.friendRequestNotificationsEnabled;
       hasUpdate = true;
     }
+    if (typeof body.suppressDuringSession === "boolean") {
+      updates.suppressDuringSession = body.suppressDuringSession;
+      hasUpdate = true;
+    }
     if (typeof body.dailyReminderTime === "string") {
       if (!isValidReminderTime(body.dailyReminderTime)) {
         return NextResponse.json({ error: "dailyReminderTime must be HH:MM (24h)" }, { status: 400 });

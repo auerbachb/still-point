@@ -24,6 +24,9 @@ struct NotificationsSettingsView: View {
 
                     sectionHeader("Friend activity")
                     friendRequestToggle
+
+                    sectionHeader("During sessions")
+                    suppressDuringSessionToggle
                 }
                 .disabled(!notificationPrefs.pushEnabled || notificationPrefs.isSaving)
 
@@ -250,5 +253,26 @@ struct NotificationsSettingsView: View {
         .tint(SPColor.green)
         .disabled(notificationPrefs.isSaving)
         .accessibilityIdentifier("notifications.friendRequestToggle")
+    }
+
+    private var suppressDuringSessionToggle: some View {
+        Toggle(isOn: Binding(
+            get: { notificationPrefs.suppressDuringSession },
+            set: { newValue in
+                Task { await notificationPrefs.persistSuppressDuringSessionEnabled(newValue) }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Silence during sessions")
+                    .font(SPFont.mono(13))
+                    .foregroundStyle(Color(SPColor.fg))
+                Text("Hold notifications while a sit is in progress")
+                    .font(SPFont.serif(13, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg4))
+            }
+        }
+        .tint(SPColor.green)
+        .disabled(notificationPrefs.isSaving)
+        .accessibilityIdentifier("notifications.suppressDuringSessionToggle")
     }
 }

@@ -26,3 +26,9 @@ describe("friendRequestNotificationsAllowed", () => {
     expect(DEFAULT_NOTIFICATION_PREFERENCES.friendRequestNotificationsEnabled).toBe(true);
   });
 });
+
+describe("suppressDuringSession default", () => {
+  test("is opt-in (off by default)", () => {
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.suppressDuringSession).toBe(false);
+  });
+});

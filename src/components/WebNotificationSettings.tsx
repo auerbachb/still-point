@@ -14,6 +14,7 @@ import {
   unsubscribeBrowserPush,
   unregisterWebPushEndpoint,
 } from "@/lib/web-push-client";
+import { saveSuppressDuringSessionPref } from "@/lib/sessionSuppressionPrefs";
 
 const frequencyOptions = [
   { value: "daily", label: "Daily" },
@@ -63,6 +64,13 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Mirror the server-synced suppress-during-session pref into localStorage so
+  // an in-progress SessionView can read it synchronously to drive the service
+  // worker relay (#431).
+  useEffect(() => {
+    if (prefs) saveSuppressDuringSessionPref(prefs.suppressDuringSession);
+  }, [prefs]);
 
   const runBusy = async (fn: () => Promise<void>) => {
     if (busyRef.current) return;
@@ -293,6 +301,17 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
             disabled={busy}
             onToggle={() => { void runBusy(async () => {
               await persist({ friendRequestNotificationsEnabled: !prefs.friendRequestNotificationsEnabled });
+            }); }}
+          />
+
+          <SectionLabel>During sessions</SectionLabel>
+          <ToggleRow
+            title="Silence during sessions"
+            description="Hold notifications while a sit is in progress"
+            pressed={prefs.suppressDuringSession}
+            disabled={busy}
+            onToggle={() => { void runBusy(async () => {
+              await persist({ suppressDuringSession: !prefs.suppressDuringSession });
             }); }}
           />
         </>

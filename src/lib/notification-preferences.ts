@@ -10,6 +10,7 @@ export type NotificationPreferencesRow = {
   dailyReminderEnabled: boolean;
   missADayEnabled: boolean;
   friendRequestNotificationsEnabled: boolean;
+  suppressDuringSession: boolean;
   dailyReminderTime: string;
   dailyReminderFrequency: DailyReminderFrequency;
   quietHoursStart: string | null;
@@ -27,6 +28,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   dailyReminderEnabled: false,
   missADayEnabled: false,
   friendRequestNotificationsEnabled: true,
+  suppressDuringSession: false,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as DailyReminderFrequency,
   quietHoursStart: null as string | null,
@@ -67,6 +69,7 @@ export function serializeNotificationPreferences(row: NotificationPreferencesRow
     dailyReminderEnabled: row.dailyReminderEnabled,
     missADayEnabled: row.missADayEnabled,
     friendRequestNotificationsEnabled: row.friendRequestNotificationsEnabled,
+    suppressDuringSession: row.suppressDuringSession,
     dailyReminderTime: row.dailyReminderTime,
     dailyReminderFrequency: row.dailyReminderFrequency,
     quietHoursStart: row.quietHoursStart,
