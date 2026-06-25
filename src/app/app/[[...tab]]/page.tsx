@@ -183,6 +183,7 @@ export default function StillPoint() {
         setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync));
         setBuddySessionId(sessionId);
         setOverlay(null);
+        buddyInviteInFlight.current = false;
         router.replace(pathForTab("buddy"));
       } catch (e) {
         if (!cancelled) {
@@ -198,6 +199,7 @@ export default function StillPoint() {
 
     return () => {
       cancelled = true;
+      buddyInviteInFlight.current = false;
     };
   }, [user, authChecked, rawTab, router]);
 
