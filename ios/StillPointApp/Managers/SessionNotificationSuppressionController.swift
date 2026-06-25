@@ -36,20 +36,28 @@ enum SessionNotificationSuppressionController {
         UserDefaults.standard.set(enabled, forKey: preferenceDefaultsKey)
     }
 
+    /// Clear the cached opt-in at an auth boundary (logout) so one account's
+    /// preference never leaks into the next account on a shared device.
+    static func clearSuppressPreference() {
+        UserDefaults.standard.removeObject(forKey: preferenceDefaultsKey)
+    }
+
     /// Call when local `SessionView` appears/disappears or its in-progress state changes.
     static func syncLocalSession(appVM: AppViewModel, inProgress: Bool) {
+        pruneDeadRegistrations()
         registration(for: appVM).localSessionRunning = inProgress
     }
 
     /// Call when a buddy shared sit enters/leaves the `active` server state.
     static func syncBuddySessionActive(appVM: AppViewModel, active: Bool) {
+        pruneDeadRegistrations()
         registration(for: appVM).buddySessionActive = active
     }
 
     /// True when the opt-in is on AND any live scene has a sit in progress.
     static var shouldSuppressPresentation: Bool {
-        guard suppressPreferenceEnabled else { return false }
         pruneDeadRegistrations()
+        guard suppressPreferenceEnabled else { return false }
         return registrations.values.contains { reg in
             reg.appViewModel != nil && (reg.localSessionRunning || reg.buddySessionActive)
         }

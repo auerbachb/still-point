@@ -4,9 +4,11 @@ import { useEffect, useSyncExternalStore } from "react";
 import {
   broadcastSessionSuppression,
   loadSuppressDuringSessionPref,
+  saveSuppressDuringSessionPref,
   subscribeSuppressDuringSessionPref,
   SUPPRESS_HEARTBEAT_MS,
 } from "@/lib/sessionSuppressionPrefs";
+import { fetchNotificationPreferences } from "@/lib/web-push-client";
 
 /**
  * Live view of the opt-in `suppressDuringSession` preference (mirrored from the
@@ -37,6 +39,24 @@ export function useSuppressDuringSessionPref(): boolean {
 export function useSessionSuppressionRelay(sessionActive: boolean): void {
   const prefOn = useSuppressDuringSessionPref();
   const suppress = prefOn && sessionActive;
+
+  // Refresh the localStorage mirror from the server when a sit starts so
+  // suppression honors the server-synced pref even in a browser that never
+  // opened Notification settings (and picks up cross-device toggles). The
+  // mirror update re-renders this hook via useSyncExternalStore.
+  useEffect(() => {
+    if (!sessionActive) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const prefs = await fetchNotificationPreferences();
+        if (!cancelled) saveSuppressDuringSessionPref(prefs.suppressDuringSession);
+      } catch {
+        // Best-effort: keep the mirrored/default value on failure.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionActive]);
 
   useEffect(() => {
     broadcastSessionSuppression(suppress);

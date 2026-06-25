@@ -123,9 +123,9 @@ final class NotificationPreferencesViewModel {
 
     func persistSuppressDuringSessionEnabled(_ enabled: Bool) async {
         suppressDuringSession = enabled
-        // Cache immediately so push suppression reflects the toggle even before
-        // the next prefs reload (#431).
-        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(enabled)
+        // The cached opt-in (read by willPresent) is updated only in `apply()`
+        // after the server confirms the save, so a failed PATCH can't strand the
+        // cache out of sync with server truth (#431).
         await persist(patch: NotificationPreferencesPatch(suppressDuringSession: enabled))
     }
 

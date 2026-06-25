@@ -140,6 +140,7 @@ final class AppViewModel {
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
+                hydrateNotificationSuppressionPreference()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
                 return
@@ -196,9 +197,21 @@ final class AppViewModel {
         selectedTab = 0
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
+        hydrateNotificationSuppressionPreference()
         Task {
             await consumePendingBuddyInviteIfNeeded()
             await consumePendingSessionDeepLinkIfNeeded()
+        }
+    }
+
+    /// Fetch the server-synced suppress-during-session opt-in at an auth point so
+    /// `PushNotificationCoordinator.willPresent` reflects current server truth
+    /// even before the Notifications screen is opened this launch (#431).
+    private func hydrateNotificationSuppressionPreference() {
+        Task {
+            if let prefs = try? await APIClient.shared.getNotificationPreferences() {
+                SessionNotificationSuppressionController.setSuppressPreferenceEnabled(prefs.suppressDuringSession)
+            }
         }
     }
 
@@ -214,6 +227,8 @@ final class AppViewModel {
         buddyInviteError = nil
         authStatusMessage = nil
         currentView = .auth
+        // Drop the cached suppress opt-in so it can't leak into the next account.
+        SessionNotificationSuppressionController.clearSuppressPreference()
     }
 
     func beginSession(type: SessionType = .standard) {
