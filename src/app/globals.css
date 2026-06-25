@@ -105,7 +105,7 @@ a {
 }
 
 /* Current pathway node — gentle amber glow (#336) */
-@keyframes pathwayPulse {
+@keyframes pathway-pulse {
   0%, 100% {
     box-shadow: 0 0 0 0 var(--accent-amber-muted);
     border-color: var(--accent-amber-border);

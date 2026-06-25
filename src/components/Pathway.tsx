@@ -16,9 +16,13 @@ function levelLabelColor(state: NodeState): string {
 
 function Node({ node }: { node: PathwayNode }) {
   const base = {
-    width: "30px",
-    height: "30px",
-    flex: "0 0 auto",
+    // Shrink-to-fit so ten nodes never overflow narrow phone widths (#336 review):
+    // grow 0 / shrink 1 / basis 30px, with aspect-ratio keeping the node circular
+    // as it shrinks. minWidth:0 lets the flex item shrink below its content box.
+    flex: "0 1 30px",
+    maxWidth: "30px",
+    minWidth: 0,
+    aspectRatio: "1 / 1",
     borderRadius: "50%",
     display: "flex",
     alignItems: "center",
@@ -59,7 +63,7 @@ function Node({ node }: { node: PathwayNode }) {
           background: "var(--accent-amber-bg)",
           color: "var(--accent-amber)",
           fontWeight: 600,
-          animation: "pathwayPulse 2.4s ease-in-out infinite",
+          animation: "pathway-pulse 2.4s ease-in-out infinite",
         }}
       >
         {node.day}
@@ -151,8 +155,11 @@ export function Pathway({ currentDay }: PathwayProps) {
                       flex: 1,
                       height: "1px",
                       minWidth: "4px",
+                      // Green when the *preceding* node is finished, so the
+                      // traversed path reaches all the way into the current
+                      // (amber) node rather than stopping one step short (#336 review).
                       background:
-                        node.state === "completed"
+                        level.nodes[i - 1]?.state === "completed"
                           ? "var(--accent-green-border)"
                           : "var(--border-1)",
                     }}
