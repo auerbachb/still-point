@@ -38,6 +38,19 @@ const ALL_TABS: Tab[] = [...NAV_TABS, "buddy"];
 
 const DEFAULT_TAB: Tab = "progress";
 
+// Visible nav labels are decoupled from the route slug: the Progress tab keeps
+// its existing "home" label (shorter, so the 6-item mobile nav row stays
+// readable) while living at /app/progress.
+const TAB_LABELS: Record<Tab, string> = {
+  progress: "home",
+  history: "history",
+  journal: "journal",
+  board: "board",
+  friends: "friends",
+  settings: "settings",
+  buddy: "buddy",
+};
+
 function isTab(value: string | undefined): value is Tab {
   return value !== undefined && (ALL_TABS as string[]).includes(value);
 }
@@ -495,7 +508,7 @@ export default function StillPoint() {
                 position: "relative",
               }}
             >
-              {t}
+              {TAB_LABELS[t]}
               {!overlay && tab === t && isMobile && (
                 <span style={{
                   position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)",
