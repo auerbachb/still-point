@@ -37,7 +37,13 @@ Rules:
 
 Note: detecting "same stack across attempts" (a stricter, repeated-crash signal) is intentionally out-of-scope — it would require diffing per-attempt diagnostic reports across runs (see [#324](https://github.com/auerbachb/still-point/issues/324)). Repeated identical simulator crashes will currently consume the full retry budget, then fail through the default branch; if cross-attempt stack-identity detection becomes important, file a follow-up.
 
-Web lanes still rely on Playwright's own retry handling.
+**Enforcement (web lanes):** `scripts/e2e/run-playwright-lane.mjs` runs Playwright with `--retries 0` and owns retries itself at the **whole-lane** level (not Playwright's per-test reporter), so a single non-retriable failure fails the lane fast instead of silently re-running. Each attempt tees its output to `artifacts/e2e/web/<lane>/attempt-<N>.log` and creates a start-of-attempt sentinel `artifacts/e2e/web/<lane>/attempt-<N>.start` (its mtime is fixed at attempt start — crash dumps are compared against it, never against the tee'd log whose mtime keeps advancing). After a failed attempt the runner consults `scripts/e2e/classify-web-failure.mjs`, which mirrors the iOS precedence:
+
+1. **Crash / browser-loss first** — if `$E2E_WEB_CRASH_DIR` (when set) holds a crash dump newer than the attempt-start sentinel, **or** the log shows a browser-process loss signature (`Target ... has been closed/crashed`, `Page crashed`, `Browser closed unexpectedly`, `browserType.launch:` failures, `Executable doesn't exist`), the failure is treated as infra and consumes a retry **regardless of any concurrent `expect(...)` line** — a crashed browser commonly surfaces as a failed assertion.
+2. **Non-retriable assertion / contract check second** — Playwright `expect(...)` failures (assertion mismatches **and** selector-contract drift both surface as `expect(locator).toBeVisible() failed`), visual/snapshot mismatches (`Screenshot comparison failed`, `toMatchSnapshot`/`toHaveScreenshot`), and schema/data-contract violations (`ZodError`, `…SchemaError`) exit the lane without consuming the retry budget.
+3. **Default** — any other failure (network timeouts such as `net::ERR_*`/`ECONNREFUSED`, dev-server boot stalls, runner disconnects, unknown crashes) is retriable up to the table value.
+
+Web intentionally diverges from iOS in one place: iOS treats timeout-shaped UI waits as auto-retriable, but web does **not**, because selector-contract drift is non-retriable here and presents as an `expect(...)` failure. Action/navigation `TimeoutError`s that are not `expect(...)` failures still fall through to the retriable default.
 
 ## 2) Test data isolation policy
 

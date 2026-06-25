@@ -1,10 +1,12 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, open, utimes } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { classifyWebFailure } from "./classify-web-failure.mjs";
 
-function parseNonNegativeInt(raw, fallback) {
+function parsePositiveInt(raw, fallback) {
   const parsed = Number.parseInt(raw ?? "", 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!Number.isFinite(parsed) || parsed < 1) {
     return fallback;
   }
   return parsed;
@@ -12,20 +14,26 @@ function parseNonNegativeInt(raw, fallback) {
 
 const lane = process.argv[2] ?? "smoke";
 const tag = process.argv[3] ?? "@smoke";
-const maxRetries = parseNonNegativeInt(process.argv[4], 1);
-const repeatEach = parseNonNegativeInt(process.env.E2E_REPEAT_EACH, 1);
-const workers = parseNonNegativeInt(process.env.E2E_WORKERS, 1);
+// `maxRetries` is the number of ADDITIONAL attempts after the first, matching
+// the "Max retries" column in docs/testing/e2e-policy.md (smoke=1, critical=2).
+// Total attempts = maxRetries + 1.
+const maxRetries = parsePositiveInt(process.argv[4], 1);
+const repeatEach = parsePositiveInt(process.env.E2E_REPEAT_EACH, 1);
+const workers = parsePositiveInt(process.env.E2E_WORKERS, 1);
 
 const artifactsRoot = path.resolve(process.cwd(), "artifacts", "e2e", "web", lane);
 await mkdir(artifactsRoot, { recursive: true });
 
-const args = [
+// Playwright keeps its own per-test retries OFF: this runner owns retries at the
+// whole-lane level so a single non-retriable failure fails the lane fast,
+// consulting the classifier between attempts (CR plan for #335).
+const baseArgs = [
   "playwright",
   "test",
   "--grep",
   tag,
   "--retries",
-  String(maxRetries),
+  "0",
   "--workers",
   String(workers),
   "--repeat-each",
@@ -33,18 +41,100 @@ const args = [
 ];
 
 if (process.env.PW_OUTPUT_DIR) {
-  args.push("--output", process.env.PW_OUTPUT_DIR);
+  baseArgs.push("--output", process.env.PW_OUTPUT_DIR);
 }
 
-const child = spawn("npx", args, {
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    E2E_ARTIFACTS_DIR: artifactsRoot,
-    E2E_LANE: lane,
-  },
-});
+/**
+ * Create a start-of-attempt sentinel whose mtime is fixed at attempt start.
+ * The classifier compares crash dumps against this, NOT against the tee'd log
+ * (whose mtime keeps advancing until the browser exits).
+ */
+async function createAttemptMarker(markerPath) {
+  const handle = await open(markerPath, "w");
+  await handle.close();
+  const now = new Date();
+  await utimes(markerPath, now, now);
+}
 
-child.on("exit", (code) => {
-  process.exit(code ?? 1);
-});
+function runAttempt(logPath) {
+  return new Promise((resolve) => {
+    const logStream = createWriteStream(logPath, { flags: "w" });
+    let settled = false;
+    const settle = (code) => {
+      if (settled) return;
+      settled = true;
+      logStream.end(() => resolve(code));
+    };
+
+    const child = spawn("npx", baseArgs, {
+      stdio: ["inherit", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        E2E_ARTIFACTS_DIR: artifactsRoot,
+        E2E_LANE: lane,
+      },
+    });
+
+    const tee = (source, sink) => {
+      child[source].on("data", (chunk) => {
+        sink.write(chunk);
+        logStream.write(chunk);
+      });
+    };
+    tee("stdout", process.stdout);
+    tee("stderr", process.stderr);
+
+    // Settle with a nonzero code on spawn error (e.g. missing npx/Playwright
+    // binary) so the failure flows through classifyWebFailure() and the lane
+    // retry loop rather than aborting with an unhandled rejection.
+    child.on("error", (error) => {
+      process.stderr.write(`spawn error: ${error.message}\n`);
+      settle(1);
+    });
+    // Resolve on `close`, not `exit`: `exit` can fire while stdout/stderr still
+    // have buffered `data` to deliver, so the tee'd log could miss the failure
+    // line (e.g. `Error: expect(`) and the classifier would mislabel a real
+    // assertion as retriable infra. `close` fires only after both pipes drain.
+    child.on("close", (code) => {
+      settle(code ?? 1);
+    });
+  });
+}
+
+let exitCode = 1;
+for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
+  const logPath = path.join(artifactsRoot, `attempt-${attempt}.log`);
+  const markerPath = path.join(artifactsRoot, `attempt-${attempt}.start`);
+  await createAttemptMarker(markerPath);
+
+  console.log(`Running web ${lane} lane attempt ${attempt}/${maxRetries + 1} (tag ${tag})`);
+  exitCode = await runAttempt(logPath);
+
+  if (exitCode === 0) {
+    console.log(`Web ${lane} lane passed on attempt ${attempt}.`);
+    process.exit(0);
+  }
+
+  const { retriable, reason } = await classifyWebFailure({
+    logPath,
+    attemptMarker: markerPath,
+  });
+
+  if (!retriable) {
+    console.error(
+      `Web ${lane} lane failed with non-retriable signature; skipping retry. Classifier: ${reason}`,
+    );
+    process.exit(exitCode || 1);
+  }
+
+  if (attempt >= maxRetries + 1) {
+    console.error(
+      `Web ${lane} lane failed after ${maxRetries + 1} attempt(s). Last classifier verdict: ${reason}`,
+    );
+    process.exit(exitCode || 1);
+  }
+
+  console.warn(`Web ${lane} lane failed with retriable signature; retrying. Classifier: ${reason}`);
+}
+
+process.exit(exitCode || 1);
