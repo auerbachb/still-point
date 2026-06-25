@@ -116,6 +116,13 @@ a {
   }
 }
 
+/* Keyboard-accessible pathway scroll region — visible focus ring (#336) */
+section[aria-label="Lesson pathway"]:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

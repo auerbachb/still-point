@@ -93,6 +93,10 @@ export function Pathway({ currentDay }: PathwayProps) {
   return (
     <section
       aria-label="Lesson pathway"
+      // tabIndex={0} makes this overflow region keyboard-accessible: once
+      // focused, arrow keys / Page Down scroll the content so keyboard-only
+      // users can reach lower levels that are hidden below the height cap.
+      tabIndex={0}
       style={{
         width: "100%",
         maxWidth: "min(420px, calc(100vw - 40px))",
@@ -104,6 +108,9 @@ export function Pathway({ currentDay }: PathwayProps) {
         display: "flex",
         flexDirection: "column",
         gap: "var(--s4)",
+        // focus-visible outline supplied via :focus-visible in globals.css;
+        // suppress the default browser outline here to avoid double ring.
+        outline: "none",
       }}
     >
       <div
