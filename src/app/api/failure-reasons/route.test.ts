@@ -1,22 +1,38 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const getCurrentUser = vi.fn();
+// vi.mock factories are hoisted above module-level declarations, so the shared mock
+// handles they reference are created in vi.hoisted (runs alongside the hoisted mocks).
+const h = vi.hoisted(() => {
+  const selectLimit = vi.fn();
+  const selectWhere = vi.fn(() => ({ limit: selectLimit }));
+  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const dbSelect = vi.fn(() => ({ from: selectFrom }));
 
-const selectLimit = vi.fn();
-const selectWhere = vi.fn(() => ({ limit: selectLimit }));
-const selectFrom = vi.fn(() => ({ where: selectWhere }));
-const dbSelect = vi.fn(() => ({ from: selectFrom }));
+  const insertReturning = vi.fn();
+  const onConflictDoUpdate = vi.fn(() => ({ returning: insertReturning }));
+  const insertValues = vi.fn(() => ({ onConflictDoUpdate }));
+  const dbInsert = vi.fn(() => ({ values: insertValues }));
 
-const insertReturning = vi.fn();
-const onConflictDoUpdate = vi.fn(() => ({ returning: insertReturning }));
-const insertValues = vi.fn(() => ({ onConflictDoUpdate }));
-const dbInsert = vi.fn(() => ({ values: insertValues }));
+  const getCurrentUser = vi.fn();
+
+  return {
+    selectLimit,
+    dbSelect,
+    insertReturning,
+    onConflictDoUpdate,
+    insertValues,
+    dbInsert,
+    getCurrentUser,
+  };
+});
+
+const { getCurrentUser, selectLimit, insertReturning, onConflictDoUpdate, insertValues, dbInsert } = h;
 
 vi.mock("@/db", () => ({
   db: {
-    select: dbSelect,
-    insert: dbInsert,
+    select: h.dbSelect,
+    insert: h.dbInsert,
   },
 }));
 
@@ -31,7 +47,7 @@ vi.mock("@/db/schema", () => ({
   },
 }));
 
-vi.mock("@/lib/auth", () => ({ getCurrentUser }));
+vi.mock("@/lib/auth", () => ({ getCurrentUser: h.getCurrentUser }));
 
 vi.mock("@/lib/readJsonObject", () => ({
   readJsonObject: async (request: Request) => ({ ok: true, body: await request.json() }),

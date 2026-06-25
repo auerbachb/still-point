@@ -30,20 +30,36 @@ function LogReasonContent() {
 
   const today = todayLocalIsoDate();
   const yesterday = addDaysToIsoDate(today, -1);
-  const dayLabel = targetDate === yesterday ? "yesterday" : targetDate === today ? "today" : "that day";
+  const isYesterday = targetDate === yesterday;
+  const dayLabel = isYesterday ? "yesterday" : targetDate === today ? "today" : "that day";
 
   return (
     <BuddyCalendarAuthGate>
       {() => (
         <AppSubpageShell title="A gentle check-in" backHref="/app" backLabel="Back to app">
-          <LogReasonForm targetDate={targetDate} dayLabel={dayLabel} />
+          <LogReasonForm
+            targetDate={targetDate}
+            dayLabel={dayLabel}
+            isYesterday={isYesterday}
+            today={today}
+          />
         </AppSubpageShell>
       )}
     </BuddyCalendarAuthGate>
   );
 }
 
-function LogReasonForm({ targetDate, dayLabel }: { targetDate: string; dayLabel: string }) {
+function LogReasonForm({
+  targetDate,
+  dayLabel,
+  isYesterday,
+  today,
+}: {
+  targetDate: string;
+  dayLabel: string;
+  isYesterday: boolean;
+  today: string;
+}) {
   const [text, setText] = useState("");
   const [loadingExisting, setLoadingExisting] = useState(true);
   const [hadExisting, setHadExisting] = useState(false);
@@ -110,23 +126,40 @@ function LogReasonForm({ targetDate, dayLabel }: { targetDate: string; dayLabel:
     return (
       <div style={confirmWrapStyle}>
         <p style={confirmLeadStyle}>Thanks for logging. Every day is a fresh start.</p>
-        <Link href="/app" style={primaryCtaStyle}>
-          Start a quick 60-second session
-        </Link>
-        <Link href="/app" style={secondaryLinkStyle}>
-          Back to home
-        </Link>
+        {isYesterday ? (
+          <>
+            {/* They just logged yesterday — guide them to today next, per #441. */}
+            <Link href={`/app/log-reason?date=${today}`} style={primaryCtaStyle}>
+              Now: why not today?
+            </Link>
+            <Link href="/app" style={secondaryLinkStyle}>
+              Or start a quick 60-second session
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link href="/app" style={primaryCtaStyle}>
+              Start a quick 60-second session
+            </Link>
+            <Link href="/app" style={secondaryLinkStyle}>
+              Back to home
+            </Link>
+          </>
+        )}
       </div>
     );
   }
 
   return (
     <div style={formWrapStyle}>
-      <p style={promptStyle}>Why couldn&apos;t you meditate {dayLabel}?</p>
+      <label htmlFor="failure-reason-text" style={promptStyle}>
+        Why couldn&apos;t you meditate {dayLabel}?
+      </label>
       <p style={hintStyle}>
         No judgment — even a sentence helps you notice the patterns that get in the way.
       </p>
       <textarea
+        id="failure-reason-text"
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={4}

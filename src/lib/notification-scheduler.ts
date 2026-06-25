@@ -359,7 +359,11 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
       const { within, dayOffset } = isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes);
       if (!within) {
-        skipped += 1;
+        // Don't count a candidate that already sent its failure-reason reminder this run
+        // as skipped — the daily/miss-a-day window simply isn't due (they share this gate).
+        if (!sentForCandidate) {
+          skipped += 1;
+        }
         continue;
       }
 

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       failureReason: row ? serializeFailureReason(row) : null,
     });
   } catch (error) {
-    console.error("Failure reasons GET error:", error);
+    console.error("Failure reasons GET error:", error instanceof Error ? error.message : "unknown error");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
