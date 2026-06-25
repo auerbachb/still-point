@@ -49,6 +49,48 @@ The native client targets `https://still-point.me` by default (`APIClient`). Poi
 
 ---
 
+## Sign in with Google (native, #344)
+
+### Endpoint
+
+`POST /api/auth/google-native`
+
+Public route (no prior `sp_token`). Middleware allows this path without JWT verification.
+
+### Request body (JSON)
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `idToken` | Yes | UTF-8 string of the Google ID token (`GIDSignInResult.user.idToken.tokenString`). |
+| `serverAuthCode` | No | Optional opaque server auth code from Google (included for parity / future server-side exchange). Not used for account linking today. |
+
+Unlike Apple, Google includes `email`, `email_verified`, and `name` in **every** ID token (we request the `email`/`profile` scopes), so there is no separate first-sign-in `user` object.
+
+### Server validation
+
+1. Verifies `idToken` with Google's JWKS (`https://www.googleapis.com/oauth2/v3/certs`) via `jose` (`jwtVerify` + `createRemoteJWKSet`).
+2. Validates issuer (`https://accounts.google.com` or `accounts.google.com` — Google emits both forms).
+3. Validates **audience** against the configured Google client IDs: the iOS OAuth client ID (**`AUTH_GOOGLE_IOS_CLIENT_ID`**) and the web client ID (**`AUTH_GOOGLE_ID`**). The native ID token's `aud` is the iOS client ID, unless the app sets a `serverClientID` (then `aud` is the web client ID) — accepting both covers either setup. If neither env var is set the route returns **500** (fails loudly rather than silently accepting unverified tokens).
+4. When the JWT includes `email`, treats it as verified unless `email_verified` is explicitly `false`/`"false"` — matching the web Google parity check in `src/lib/auth-config.ts`.
+5. Uses **`sub`** as the stable Google account identifier. Lookup order matches web OAuth (`src/lib/oauth-user-resolution.ts`): existing `(provider='google', provider_account_id=sub)` wins first; otherwise email match or new user creation.
+
+Google's `sub` is stable for a Google account across OAuth clients in the same Cloud project, so a user who first signed in on **web** with Google resolves to the **same** app account when they sign in natively on iOS (acceptance criterion for #344). Register the iOS OAuth client in the same project as `AUTH_GOOGLE_ID`.
+
+### Response
+
+- JSON `{ user, token }` — same shape as email/password login when `X-Still-Point-Client: ios` is used.
+- Sets HTTP-only cookie **`sp_token`** for parity with web sessions.
+
+### iOS app configuration
+
+- **SDK:** `GoogleSignIn` product from `https://github.com/google/GoogleSignIn-iOS` (added via SPM in `ios/project.yml`).
+- **Info.plist:** `GIDClientID` (iOS OAuth client ID), optional `GIDServerClientID` (web client ID for a server auth code), and a `CFBundleURLTypes` entry for the **reversed** iOS client ID scheme. These are wired through XcodeGen build settings `GID_CLIENT_ID`, `GID_SERVER_CLIENT_ID`, and `GID_REVERSED_CLIENT_ID` in `ios/project.yml` (default empty) — set them per environment / in CI signing config; never hardcode them in the committed plist.
+- **Flow:** `GoogleSignInController.signIn()` presents the Google sheet, reads `idToken`, and `APIClient.signInWithGoogle` POSTs to `/api/auth/google-native` (mirrors the `AppleSignInController` → `APIClient` → `AuthViewModel` → SwiftUI button pattern).
+
+In **UI test mode** (`SP_UI_TEST_MODE=1`) the app does **not** render the Continue with Google button (same as Sign in with Apple), keeping XCUITest hit-testing on the email/password path stable.
+
+---
+
 ## Apple server-to-server notifications (#338)
 
 Apple notifies us when a user's relationship with Sign in with Apple changes outside the app: Apple ID deleted, consent revoked, or Hide My Email forwarding toggled.
@@ -109,4 +151,4 @@ On a device signed in with Apple: **Settings → [your name] → Sign-In & Secur
 
 ## Other providers
 
-Google / Microsoft / Facebook on mobile would follow the same **pattern**: native SDK obtains tokens → server route verifies tokens / exchanges codes → `resolveOAuthUserId`-style linking → `sp_token`. Only Apple is implemented in this shape today.
+Microsoft / Facebook on mobile would follow the same **pattern**: native SDK obtains tokens → server route verifies tokens / exchanges codes → `resolveOAuthUserId`-style linking → `sp_token`. Apple (#286) and Google (#344) are implemented in this shape today.
