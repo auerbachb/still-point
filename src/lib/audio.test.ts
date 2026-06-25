@@ -185,9 +185,13 @@ describe("unlockAudioContext — autoplay policy", () => {
         throw new Error("createBufferSource not implemented");
       }
     };
-    const { unlockAudioContext } = await loadAudio({ ctor: throwingCtor });
+    const { unlockAudioContext, playTick } = await loadAudio({ ctor: throwingCtor });
 
     policy = "lenient";
+    // Create the suspended context outside a gesture so unlock takes the
+    // prime + resume() path where createBufferSource throws.
+    expect(playTick()).toBe(false);
+
     gesture.active = true;
     const result = await unlockAudioContext();
     gesture.active = false;

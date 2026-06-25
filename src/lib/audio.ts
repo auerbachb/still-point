@@ -50,10 +50,11 @@ function primeAudioContext(ctx: AudioContext): void {
 export async function unlockAudioContext(): Promise<AudioUnlockResult> {
   const ctx = getAudioContext();
   if (!ctx) return "unavailable";
-  // Prime within the user gesture first — this is what actually unlocks audio
-  // for a buddy whose context never received a sound-producing gesture.
-  primeAudioContext(ctx);
   if (ctx.state !== "running") {
+    // Prime within the user gesture before resuming — starting a node is what
+    // actually unlocks audio for a buddy whose context never received a
+    // sound-producing gesture. Skipped once the context is already running.
+    primeAudioContext(ctx);
     try {
       await ctx.resume();
     } catch {
