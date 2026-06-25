@@ -181,6 +181,29 @@ describe("sendFriendRequestNotification", () => {
     expect(sendApnsNotification).toHaveBeenCalledTimes(1);
   });
 
+  test("logs rejected channel promises and failed deliveries (#440)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    sendWebPushToUser.mockRejectedValue(new Error("web push blew up"));
+    // No device tokens -> APNs reports not delivered, web push promise rejects.
+    const { sendDailyReminderNotification } = await import("./notifications");
+
+    const result = await sendDailyReminderNotification({ recipientUserId: "recipient-id" });
+
+    expect(result.delivered).toBe(false);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "daily_reminder channel promise rejected",
+      expect.objectContaining({ reason: expect.any(Error) }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "daily_reminder not delivered on any channel",
+      expect.objectContaining({ outcomes: expect.any(Array) }),
+    );
+
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   test("miss-a-day is delivered when only Web Push succeeds", async () => {
     sendWebPushToUser.mockResolvedValue({ delivered: true });
     const { sendMissADayNotification } = await import("./notifications");

@@ -112,6 +112,45 @@ describe("notification scheduler", () => {
     expect(second.sent).toBe(0);
   });
 
+  test("sends a due reminder at the cron window boundary minute (#440 off-by-one)", async () => {
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    // reminder 09:00, run at 09:05 => delta === CRON_WINDOW_MINUTES (the boundary that
+    // was previously dropped by the exclusive `<` comparison).
+    const result = await dispatchDueNotifications(new Date("2026-05-29T09:05:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("idempotency still prevents double-sends across overlapping boundary runs (#440)", async () => {
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // First run at delta 0 claims and sends.
+    const first = await dispatchDueNotifications(new Date("2026-05-29T09:00:00.000Z"));
+    // Adjacent run that now also matches the same reminder at the boundary minute. The
+    // claim row already exists, so onConflictDoNothing returns no row -> no second send.
+    insertReturning.mockResolvedValueOnce([]);
+    const second = await dispatchDueNotifications(new Date("2026-05-29T09:05:00.000Z"));
+
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("miss-a-day send exception releases the claim instead of blocking the user (#440)", async () => {
+    preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
+    userCompletedSessionOnDate.mockResolvedValue(false);
+    sendMissADayNotification.mockRejectedValueOnce(new Error("APNs exploded"));
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));
+
+    // The run completes without throwing and nothing was marked sent...
+    expect(result.missADaySent).toBe(0);
+    // ...but the claim is rolled back so a later run can retry.
+    expect(dbDelete).toHaveBeenCalled();
+  });
+
   test("dispatchDueNotifications sends miss-a-day when yesterday was missed", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
     userCompletedSessionOnDate.mockResolvedValue(false);

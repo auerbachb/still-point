@@ -85,7 +85,12 @@ function parseReminderMinutes(time: string): number {
 function isWithinCronWindow(localMinutes: number, reminderMinutes: number): boolean {
   const dayMinutes = 24 * 60;
   const delta = (localMinutes - reminderMinutes + dayMinutes) % dayMinutes;
-  return delta < CRON_WINDOW_MINUTES;
+  // Inclusive upper bound: the cron runs every CRON_WINDOW_MINUTES, but Vercel cron
+  // invocations can drift by up to a minute. With an exclusive bound a reminder whose
+  // only covering run landed exactly CRON_WINDOW_MINUTES late (delta === window) was
+  // dropped, leaving enabled users with no notification for days. The 1-minute overlap
+  // this creates between adjacent runs is de-duplicated by claimNotificationDispatch.
+  return delta <= CRON_WINDOW_MINUTES;
 }
 
 function isInQuietHours(
@@ -147,6 +152,18 @@ export async function claimNotificationDispatch(params: {
   return inserted.length > 0;
 }
 
+async function releaseMissADayClaim(userId: string, windowKey: string): Promise<void> {
+  await db
+    .delete(notificationDispatches)
+    .where(
+      and(
+        eq(notificationDispatches.userId, userId),
+        eq(notificationDispatches.notificationType, "miss_a_day"),
+        eq(notificationDispatches.windowKey, windowKey),
+      ),
+    );
+}
+
 function addCalendarDays(dateKey: string, deltaDays: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const utc = new Date(Date.UTC(y, m - 1, d + deltaDays));
@@ -204,21 +221,21 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
           });
 
           if (claimed) {
-            const { delivered } = await sendMissADayNotification({ recipientUserId: prefs.userId });
-            if (delivered) {
-              missADaySent += 1;
-              sent += 1;
-              continue;
+            try {
+              const { delivered } = await sendMissADayNotification({ recipientUserId: prefs.userId });
+              if (delivered) {
+                missADaySent += 1;
+                sent += 1;
+                continue;
+              }
+              await releaseMissADayClaim(prefs.userId, local.dateKey);
+            } catch (sendError) {
+              // Without this catch, a thrown send would leave the claim row in place,
+              // permanently blocking both miss_a_day and (via hasMissADayDispatchForDate)
+              // the daily reminder for this user/date. Release the claim so the next run retries.
+              console.error(`Failed to send miss-a-day to user ${prefs.userId}:`, sendError);
+              await releaseMissADayClaim(prefs.userId, local.dateKey);
             }
-            await db
-              .delete(notificationDispatches)
-              .where(
-                and(
-                  eq(notificationDispatches.userId, prefs.userId),
-                  eq(notificationDispatches.notificationType, "miss_a_day"),
-                  eq(notificationDispatches.windowKey, local.dateKey),
-                ),
-              );
           }
         }
       }

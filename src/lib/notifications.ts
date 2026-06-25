@@ -70,16 +70,29 @@ export async function sendPushNotificationToUser(params: {
 }
 
 async function fanOutChannels(
+  channel: string,
   tasks: Array<() => Promise<{ delivered: boolean } | void>>,
 ): Promise<boolean> {
   const results = await Promise.allSettled(tasks.map((task) => task()));
-  return results.some((result) => {
-    if (result.status !== "fulfilled") {
+  const delivered = results.some((result) => {
+    if (result.status === "rejected") {
+      // Surface rejected channel promises so silent send failures are debuggable.
+      console.error(`${channel} channel promise rejected`, { reason: result.reason });
       return false;
     }
     const value = result.value;
     return typeof value === "object" && value !== null && "delivered" in value && value.delivered === true;
   });
+
+  if (!delivered) {
+    console.warn(`${channel} not delivered on any channel`, {
+      outcomes: results.map((result) =>
+        result.status === "fulfilled" ? "fulfilled" : "rejected",
+      ),
+    });
+  }
+
+  return delivered;
 }
 
 export async function sendDailyReminderNotification(params: {
@@ -87,7 +100,7 @@ export async function sendDailyReminderNotification(params: {
   streak?: number;
 }): Promise<{ delivered: boolean }> {
   const streak = params.streak ?? 0;
-  const delivered = await fanOutChannels([
+  const delivered = await fanOutChannels("daily_reminder", [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: buildDailyReminderPayload(streak),
@@ -106,7 +119,7 @@ export async function sendMissADayNotification(params: {
   const title = "Still Point";
   const body = "Missed yesterday — try a quick 1-min sit to get back.";
 
-  const delivered = await fanOutChannels([
+  const delivered = await fanOutChannels("miss_a_day", [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {
@@ -141,7 +154,7 @@ export async function sendFriendRequestNotification(params: {
   const title = "New friend request";
   const body = `${params.senderUsername} wants to connect on Still Point.`;
 
-  await fanOutChannels([
+  await fanOutChannels("friend_request", [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {
