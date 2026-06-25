@@ -325,6 +325,19 @@ public struct AppleNativeSignInRequest: Encodable, Sendable {
     }
 }
 
+/// Body for `POST /api/auth/google-native`. The server verifies `idToken` against
+/// Google's JWKS and resolves the user via `resolveOAuthUserId`. `serverAuthCode`
+/// is sent for parity with Google's API and is not used for linking today.
+public struct GoogleNativeSignInRequest: Encodable, Sendable {
+    public let idToken: String
+    public let serverAuthCode: String?
+
+    public init(idToken: String, serverAuthCode: String? = nil) {
+        self.idToken = idToken
+        self.serverAuthCode = serverAuthCode
+    }
+}
+
 public struct UserResponse: Codable, Sendable {
     public let user: UserDTO
     public let token: String?
