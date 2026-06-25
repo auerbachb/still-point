@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 import StillPointShared
 
 @Observable
@@ -67,6 +68,35 @@ final class AuthViewModel {
             return nil
         } catch {
             self.error = "Connection failed. Please try again."
+            return nil
+        }
+    }
+
+    func signInWithGoogle() async -> UserDTO? {
+        guard !isAuthInFlight else { return nil }
+        isAuthInFlight = true
+        error = nil
+        resetMessage = nil
+        defer { isAuthInFlight = false }
+
+        do {
+            let request = try await GoogleSignInController.signIn()
+            return try await APIClient.shared.signInWithGoogle(request)
+        } catch is CancellationError {
+            // The surrounding Task was cancelled (e.g. the view went away) — not a real error.
+            return nil
+        } catch let apiError as APIError {
+            error = apiError.message
+            return nil
+        } catch {
+            // User dismissed the Google sheet — treat cancellation as a no-op, not a failure.
+            let nsError = error as NSError
+            if nsError.domain == kGIDSignInErrorDomain,
+               nsError.code == GIDSignInErrorCode.canceled.rawValue {
+                return nil
+            }
+            print("Google sign-in failed: \(error.localizedDescription)")
+            self.error = "Google sign-in failed. Please try again."
             return nil
         }
     }

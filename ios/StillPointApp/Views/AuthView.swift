@@ -139,6 +139,30 @@ struct AuthView: View {
                                 .frame(height: 1)
                         }
 
+                        Button {
+                            Task {
+                                if let user = await vm.signInWithGoogle() {
+                                    appVM.didLogin(user: user)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: SPSpacing.s2) {
+                                GoogleGlyph()
+                                    .frame(width: 18, height: 18)
+                                Text("Continue with Google")
+                                    .font(SPFont.serif(17))
+                                    .foregroundStyle(Color(SPColor.fg))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(SPColor.surface1)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(SPColor.border2))
+                        }
+                        .accessibilityIdentifier("auth.googleButton")
+                        .disabled(vm.isAuthInFlight)
+                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
+
                         SignInWithAppleButton(.signIn) { request in
                             request.requestedScopes = [.fullName, .email]
                         } onCompletion: { result in
@@ -207,5 +231,38 @@ struct AuthView: View {
                     .stroke(SPColor.border2)
             )
             .foregroundStyle(Color(SPColor.fg))
+    }
+}
+
+/// A lightweight rendering of the multi-color Google "G" mark, drawn with ring
+/// segments plus the blue crossbar so it scales crisply without bundling an asset.
+private struct GoogleGlyph: View {
+    private let googleBlue = Color(red: 0.259, green: 0.522, blue: 0.957)
+    private let googleRed = Color(red: 0.918, green: 0.263, blue: 0.208)
+    private let googleYellow = Color(red: 0.984, green: 0.737, blue: 0.020)
+    private let googleGreen = Color(red: 0.204, green: 0.659, blue: 0.325)
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let lineWidth = size * 0.28
+            ZStack {
+                // Ring segments: trim 0 is at 3 o'clock, increasing clockwise.
+                Circle().trim(from: 0.0, to: 0.25)
+                    .stroke(googleGreen, style: StrokeStyle(lineWidth: lineWidth))
+                Circle().trim(from: 0.25, to: 0.5)
+                    .stroke(googleYellow, style: StrokeStyle(lineWidth: lineWidth))
+                Circle().trim(from: 0.5, to: 0.78)
+                    .stroke(googleRed, style: StrokeStyle(lineWidth: lineWidth))
+                Circle().trim(from: 0.78, to: 0.95)
+                    .stroke(googleBlue, style: StrokeStyle(lineWidth: lineWidth))
+                // Crossbar of the "G" reaching in from the right edge to the center.
+                googleBlue
+                    .frame(width: size * 0.5, height: lineWidth)
+                    .offset(x: size * 0.25)
+            }
+            .frame(width: size, height: size)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
     }
 }
