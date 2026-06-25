@@ -61,8 +61,17 @@ enum GoogleSignInController {
     }
 
     private static func infoPlistString(_ key: String) -> String? {
-        (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+            return nil
+        }
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Treat an empty value or an unresolved `$(GID_…)` build-setting placeholder
+        // (a build config that never set the setting) as "not configured" so callers
+        // surface `.notConfigured` instead of handing the SDK a bogus client ID.
+        guard !value.isEmpty, !(value.hasPrefix("$(") && value.hasSuffix(")")) else {
+            return nil
+        }
+        return value
     }
 
     @MainActor
