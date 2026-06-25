@@ -156,14 +156,31 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
     "utf8",
   );
 
+  // The precheck documented in the migration header (and specified by the issue):
+  // scans participant rows only, so it catches sessions with >1 host and sessions
+  // that have participant rows but 0 hosts.
   const PRECHECK_SQL = `SELECT buddy_session_id, count(*) FILTER (WHERE is_host) AS hosts
     FROM buddy_session_participants
     GROUP BY 1
     HAVING count(*) FILTER (WHERE is_host) <> 1`;
 
+  // The complete audit (PR operator runbook): starts from buddy_sessions with a
+  // LEFT JOIN so it additionally flags sessions with *zero* participant rows
+  // (0 hosts). Those are possible because POST /api/buddy/sessions inserts the
+  // session and its host participant in two separate, non-transactional steps.
+  const COMPLETE_AUDIT_SQL = `SELECT s.id AS buddy_session_id,
+      count(*) FILTER (WHERE p.is_host) AS hosts
+    FROM buddy_sessions s
+    LEFT JOIN buddy_session_participants p ON p.buddy_session_id = s.id
+    GROUP BY s.id
+    HAVING count(*) FILTER (WHERE p.is_host) <> 1`;
+
   async function freshTable(): Promise<PGlite> {
     const pg = new PGlite();
     await pg.exec(`
+      CREATE TABLE buddy_sessions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+      );
       CREATE TABLE buddy_session_participants (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         buddy_session_id uuid NOT NULL,
@@ -178,6 +195,7 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
     const pg = await freshTable();
     try {
       const s = "11111111-1111-1111-1111-111111111111";
+      await pg.exec(`INSERT INTO buddy_sessions (id) VALUES ('${s}');`);
       await pg.exec(
         `INSERT INTO buddy_session_participants (buddy_session_id, user_id, is_host) VALUES
           ('${s}', gen_random_uuid(), true),
@@ -191,6 +209,32 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
     }
   });
 
+  test("complete audit also flags a zero-participant session the participant-only precheck misses", async () => {
+    const pg = await freshTable();
+    try {
+      const empty = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+      const healthy = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+      await pg.exec(`INSERT INTO buddy_sessions (id) VALUES ('${empty}'), ('${healthy}');`);
+      // Healthy session: exactly one host. Empty session: no participant rows at all.
+      await pg.exec(
+        `INSERT INTO buddy_session_participants (buddy_session_id, user_id, is_host)
+         VALUES ('${healthy}', gen_random_uuid(), true);`,
+      );
+
+      // Participant-only precheck never sees the empty session (it has no rows to group).
+      const precheck = await pg.query<{ buddy_session_id: string }>(PRECHECK_SQL);
+      expect(precheck.rows).toHaveLength(0);
+
+      // Complete audit catches the empty (0-host) session, leaves the healthy one alone.
+      const audit = await pg.query<{ buddy_session_id: string; hosts: number }>(COMPLETE_AUDIT_SQL);
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0]!.buddy_session_id).toBe(empty);
+      expect(Number(audit.rows[0]!.hosts)).toBe(0);
+    } finally {
+      await pg.close();
+    }
+  });
+
   test("migration builds the index, is idempotent, and rejects a second host", async () => {
     const pg = await freshTable();
     try {
@@ -199,6 +243,7 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
       await pg.exec(migrationSql);
 
       const s = "22222222-2222-2222-2222-222222222222";
+      await pg.exec(`INSERT INTO buddy_sessions (id) VALUES ('${s}');`);
       await pg.exec(
         `INSERT INTO buddy_session_participants (buddy_session_id, user_id, is_host)
          VALUES ('${s}', gen_random_uuid(), true);`,
@@ -216,9 +261,11 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
         ),
       ).rejects.toThrow(/buddy_session_participants_one_host_per_session/);
 
-      // With the index in place the precheck now reports the lone-host session as clean.
-      const res = await pg.query<{ buddy_session_id: string }>(PRECHECK_SQL);
-      expect(res.rows).toHaveLength(0);
+      // With the index in place both audits report the lone-host session as clean.
+      const precheck = await pg.query<{ buddy_session_id: string }>(PRECHECK_SQL);
+      expect(precheck.rows).toHaveLength(0);
+      const audit = await pg.query<{ buddy_session_id: string }>(COMPLETE_AUDIT_SQL);
+      expect(audit.rows).toHaveLength(0);
     } finally {
       await pg.close();
     }
@@ -228,6 +275,7 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
     const pg = await freshTable();
     try {
       const s = "33333333-3333-3333-3333-333333333333";
+      await pg.exec(`INSERT INTO buddy_sessions (id) VALUES ('${s}');`);
       await pg.exec(
         `INSERT INTO buddy_session_participants (buddy_session_id, user_id, is_host) VALUES
           ('${s}', gen_random_uuid(), true),
