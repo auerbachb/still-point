@@ -238,6 +238,12 @@ export const buddySessionParticipants = pgTable("buddy_session_participants", {
     table.buddySessionId,
     table.userId,
   ),
+  /** #147: Partial unique index — at most one `is_host` row per session. Joins always
+   *  insert `is_host = false` and host-leave abandons rather than reassigning, so this
+   *  guards the one-host invariant against a future bug or concurrent insert race. */
+  oneHostPerSessionIdx: uniqueIndex("buddy_session_participants_one_host_per_session")
+    .on(table.buddySessionId)
+    .where(sql`${table.isHost}`),
 }));
 
 /** Google Calendar OAuth connection per app user (#204). Tokens are encrypted server-side. */

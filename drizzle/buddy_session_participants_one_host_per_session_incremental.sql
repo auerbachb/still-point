@@ -1,0 +1,39 @@
+-- Issue #147: enforce at most one host row per buddy session.
+-- Preferred: apply schema with `npx drizzle-kit push` (see README).
+-- This file is the manual-apply reference for existing databases (prod / preview branches)
+-- and is what `scripts/apply-migrations.ts` runs automatically on every deploy.
+--
+-- Invariant: each buddy_session_participants set has exactly one is_host = true row.
+--   * It is created with one host (POST /api/buddy/sessions inserts is_host = true).
+--   * Joiners always insert is_host = false (POST /api/buddy/sessions/join).
+--   * Host leave abandons the session rather than reassigning the host, so no flow
+--     ever promotes a second participant to host.
+-- A partial unique index can only enforce the "at most one" half (uniqueness); the
+-- "exactly one" half is an application invariant. This index closes the door on a
+-- duplicate host appearing via a future bug or a concurrent insert race.
+--
+-- Pre-flight (RUN FIRST against the target DB, read-only; must return 0 rows):
+--   SELECT buddy_session_id, count(*) FILTER (WHERE is_host) AS hosts
+--   FROM buddy_session_participants
+--   GROUP BY 1
+--   HAVING count(*) FILTER (WHERE is_host) <> 1;
+-- Sessions with > 1 host MUST be deduped before this migration reaches the branch,
+-- or the unique index build below fails and rolls back the transaction. Sessions
+-- with 0 hosts do not block the build (the partial index only constrains is_host
+-- rows) but should be backfilled out-of-band so the application invariant holds.
+--
+-- This script is idempotent (IF NOT EXISTS) and is wrapped in a transaction by the
+-- migration runner, so a failure mid-flight rolls back cleanly.
+--
+-- Lock note: CREATE UNIQUE INDEX (non-CONCURRENTLY) takes ACCESS EXCLUSIVE on
+-- buddy_session_participants for the duration of the build, blocking concurrent
+-- writes. This is fine on the current small table (sub-second build). The runner
+-- executes inside a transaction, so CONCURRENTLY is not an option here; for a large
+-- table, build it out-of-band with:
+--   CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
+--     "buddy_session_participants_one_host_per_session"
+--     ON "buddy_session_participants" ("buddy_session_id") WHERE "is_host";
+
+CREATE UNIQUE INDEX IF NOT EXISTS "buddy_session_participants_one_host_per_session"
+  ON "buddy_session_participants" ("buddy_session_id")
+  WHERE "is_host";
