@@ -13,14 +13,18 @@
 -- duplicate host appearing via a future bug or a concurrent insert race.
 --
 -- Pre-flight (RUN FIRST against the target DB, read-only; must return 0 rows):
---   SELECT buddy_session_id, count(*) FILTER (WHERE is_host) AS hosts
---   FROM buddy_session_participants
+--   SELECT s.id AS buddy_session_id, count(p.id) FILTER (WHERE p.is_host) AS hosts
+--   FROM buddy_sessions s
+--   LEFT JOIN buddy_session_participants p
+--     ON p.buddy_session_id = s.id
 --   GROUP BY 1
---   HAVING count(*) FILTER (WHERE is_host) <> 1;
+--   HAVING count(p.id) FILTER (WHERE p.is_host) <> 1;
 -- Sessions with > 1 host MUST be deduped before this migration reaches the branch,
 -- or the unique index build below fails and rolls back the transaction. Sessions
 -- with 0 hosts do not block the build (the partial index only constrains is_host
 -- rows) but should be backfilled out-of-band so the application invariant holds.
+-- Note: driving the query from buddy_sessions with a LEFT JOIN ensures sessions
+-- with zero participant rows are also surfaced (participant-only GROUP BY misses them).
 --
 -- This script is idempotent (IF NOT EXISTS) and is wrapped in a transaction by the
 -- migration runner, so a failure mid-flight rolls back cleanly.

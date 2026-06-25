@@ -157,23 +157,17 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
   );
 
   // The precheck documented in the migration header (and specified by the issue):
-  // scans participant rows only, so it catches sessions with >1 host and sessions
-  // that have participant rows but 0 hosts.
-  const PRECHECK_SQL = `SELECT buddy_session_id, count(*) FILTER (WHERE is_host) AS hosts
-    FROM buddy_session_participants
-    GROUP BY 1
-    HAVING count(*) FILTER (WHERE is_host) <> 1`;
-
-  // The complete audit (PR operator runbook): starts from buddy_sessions with a
-  // LEFT JOIN so it additionally flags sessions with *zero* participant rows
-  // (0 hosts). Those are possible because POST /api/buddy/sessions inserts the
-  // session and its host participant in two separate, non-transactional steps.
-  const COMPLETE_AUDIT_SQL = `SELECT s.id AS buddy_session_id,
-      count(*) FILTER (WHERE p.is_host) AS hosts
+  // drives from buddy_sessions with a LEFT JOIN so sessions with zero participant
+  // rows are also surfaced (a participant-only GROUP BY would miss them).
+  const PRECHECK_SQL = `SELECT s.id AS buddy_session_id,
+      count(p.id) FILTER (WHERE p.is_host) AS hosts
     FROM buddy_sessions s
     LEFT JOIN buddy_session_participants p ON p.buddy_session_id = s.id
     GROUP BY s.id
-    HAVING count(*) FILTER (WHERE p.is_host) <> 1`;
+    HAVING count(p.id) FILTER (WHERE p.is_host) <> 1`;
+
+  // Alias kept for test readability: both queries are now equivalent (same LEFT JOIN shape).
+  const COMPLETE_AUDIT_SQL = PRECHECK_SQL;
 
   async function freshTable(): Promise<PGlite> {
     const pg = new PGlite();
@@ -209,7 +203,7 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
     }
   });
 
-  test("complete audit also flags a zero-participant session the participant-only precheck misses", async () => {
+  test("precheck (LEFT JOIN) flags a zero-participant session that a participant-only query would miss", async () => {
     const pg = await freshTable();
     try {
       const empty = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -221,11 +215,13 @@ describe("migration artifact — buddy_session_participants_one_host_per_session
          VALUES ('${healthy}', gen_random_uuid(), true);`,
       );
 
-      // Participant-only precheck never sees the empty session (it has no rows to group).
-      const precheck = await pg.query<{ buddy_session_id: string }>(PRECHECK_SQL);
-      expect(precheck.rows).toHaveLength(0);
+      // The LEFT JOIN precheck catches the empty (0-host) session, leaves the healthy one alone.
+      const precheck = await pg.query<{ buddy_session_id: string; hosts: number }>(PRECHECK_SQL);
+      expect(precheck.rows).toHaveLength(1);
+      expect(precheck.rows[0]!.buddy_session_id).toBe(empty);
+      expect(Number(precheck.rows[0]!.hosts)).toBe(0);
 
-      // Complete audit catches the empty (0-host) session, leaves the healthy one alone.
+      // COMPLETE_AUDIT_SQL is now the same shape; same result.
       const audit = await pg.query<{ buddy_session_id: string; hosts: number }>(COMPLETE_AUDIT_SQL);
       expect(audit.rows).toHaveLength(1);
       expect(audit.rows[0]!.buddy_session_id).toBe(empty);
