@@ -4,9 +4,9 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { classifyWebFailure } from "./classify-web-failure.mjs";
 
-function parseNonNegativeInt(raw, fallback) {
+function parsePositiveInt(raw, fallback) {
   const parsed = Number.parseInt(raw ?? "", 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!Number.isFinite(parsed) || parsed < 1) {
     return fallback;
   }
   return parsed;
@@ -17,9 +17,9 @@ const tag = process.argv[3] ?? "@smoke";
 // `maxRetries` is the number of ADDITIONAL attempts after the first, matching
 // the "Max retries" column in docs/testing/e2e-policy.md (smoke=1, critical=2).
 // Total attempts = maxRetries + 1.
-const maxRetries = parseNonNegativeInt(process.argv[4], 1);
-const repeatEach = parseNonNegativeInt(process.env.E2E_REPEAT_EACH, 1);
-const workers = parseNonNegativeInt(process.env.E2E_WORKERS, 1);
+const maxRetries = parsePositiveInt(process.argv[4], 1);
+const repeatEach = parsePositiveInt(process.env.E2E_REPEAT_EACH, 1);
+const workers = parsePositiveInt(process.env.E2E_WORKERS, 1);
 
 const artifactsRoot = path.resolve(process.cwd(), "artifacts", "e2e", "web", lane);
 await mkdir(artifactsRoot, { recursive: true });
@@ -57,8 +57,15 @@ async function createAttemptMarker(markerPath) {
 }
 
 function runAttempt(logPath) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const logStream = createWriteStream(logPath, { flags: "w" });
+    let settled = false;
+    const settle = (code) => {
+      if (settled) return;
+      settled = true;
+      logStream.end(() => resolve(code));
+    };
+
     const child = spawn("npx", baseArgs, {
       stdio: ["inherit", "pipe", "pipe"],
       env: {
@@ -77,16 +84,19 @@ function runAttempt(logPath) {
     tee("stdout", process.stdout);
     tee("stderr", process.stderr);
 
+    // Settle with a nonzero code on spawn error (e.g. missing npx/Playwright
+    // binary) so the failure flows through classifyWebFailure() and the lane
+    // retry loop rather than aborting with an unhandled rejection.
     child.on("error", (error) => {
-      logStream.end();
-      reject(error);
+      process.stderr.write(`spawn error: ${error.message}\n`);
+      settle(1);
     });
     // Resolve on `close`, not `exit`: `exit` can fire while stdout/stderr still
     // have buffered `data` to deliver, so the tee'd log could miss the failure
     // line (e.g. `Error: expect(`) and the classifier would mislabel a real
     // assertion as retriable infra. `close` fires only after both pipes drain.
     child.on("close", (code) => {
-      logStream.end(() => resolve(code ?? 1));
+      settle(code ?? 1);
     });
   });
 }
