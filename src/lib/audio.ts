@@ -29,14 +29,36 @@ function readAudioContextState(ctx: AudioContext): AudioContextState {
   return ctx.state;
 }
 
+/**
+ * Starts an inaudible 1-sample buffer on the context. On iOS Safari and other
+ * strict-autoplay browsers, calling `resume()` alone resolves but leaves the
+ * context unable to produce sound — a node must actually be started from inside
+ * the user gesture for playback to unlock. This must run synchronously within
+ * the gesture (before any `await`) to count as gesture-initiated.
+ */
+function primeAudioContext(ctx: AudioContext): void {
+  try {
+    const source = ctx.createBufferSource();
+    source.buffer = ctx.createBuffer(1, 1, 22050);
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch {
+    // Best-effort: priming failures shouldn't block the resume() path.
+  }
+}
+
 export async function unlockAudioContext(): Promise<AudioUnlockResult> {
   const ctx = getAudioContext();
   if (!ctx) return "unavailable";
-  if (ctx.state === "running") return "unlocked";
-  try {
-    await ctx.resume();
-  } catch {
-    return "blocked";
+  // Prime within the user gesture first — this is what actually unlocks audio
+  // for a buddy whose context never received a sound-producing gesture.
+  primeAudioContext(ctx);
+  if (ctx.state !== "running") {
+    try {
+      await ctx.resume();
+    } catch {
+      return "blocked";
+    }
   }
   return readAudioContextState(ctx) === "running" ? "unlocked" : "blocked";
 }
