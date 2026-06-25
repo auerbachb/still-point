@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 import StillPointShared
 import UIKit
 
@@ -136,6 +137,9 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in
+            // Let Google Sign-In claim its OAuth callback (reversed client-ID scheme)
+            // before falling through to app deep-link routing.
+            if GIDSignIn.sharedInstance.handle(url) { return }
             appVM.handleIncomingURL(url)
         }
         // Single authoritative wiring point for push-notification deep links

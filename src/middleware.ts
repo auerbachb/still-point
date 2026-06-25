@@ -9,6 +9,7 @@ const publicExactPaths = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/apple-native",
+  "/api/auth/google-native",
   // #338: Apple posts server-to-server notifications with no sp_token; the
   // route authenticates the Apple-signed JWT itself (JWKS + iss + aud).
   "/api/auth/apple/notifications",
