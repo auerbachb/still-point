@@ -4,6 +4,10 @@ updates:
   # opens weekly PRs that bump each pinned commit SHA (and its trailing # vX.Y.Z
   # comment) to the latest release, so pinning for supply-chain safety does not
   # mean the actions silently rot. Scoped to github-actions only by design.
+  #
+  # As of the v7/v6/v9 bumps (PRs #447-450) every actions/* ref in
+  # .github/workflows/ already sits on its current major, so the manual
+  # "upgrade remaining @v4" sweep tracked by issue #435 has nothing left to do.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
