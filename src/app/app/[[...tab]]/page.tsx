@@ -201,6 +201,19 @@ export default function StillPoint() {
     };
   }, [user, authChecked, rawTab, router]);
 
+  // Keep transient state in sync with the URL. Browser back/forward (and any
+  // other navigation) changes the active tab via useParams without touching
+  // React state, so clear the session/completion overlay and drop any stale
+  // buddy room when we land on a different tab. This runs only when `tab`
+  // actually changes, so it never interferes with starting a session/overlay
+  // on the current tab.
+  useEffect(() => {
+    setOverlay(null);
+    if (tab !== "buddy") {
+      setBuddySessionId(null);
+    }
+  }, [tab]);
+
   const goToTab = useCallback(
     (next: Tab) => {
       setOverlay(null);
@@ -210,9 +223,11 @@ export default function StillPoint() {
   );
 
   const handleLogin = (userData: User) => {
+    // Intentionally do not navigate: keep the current URL so deep-link state
+    // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
+    // buddy-invite / ?view= effects below can still consume it.
     setUser(userData);
     setOverlay(null);
-    router.replace(pathForTab(DEFAULT_TAB));
   };
 
   const handleLogout = () => {
@@ -221,7 +236,6 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setOverlay(null);
     setUser(null);
-    router.replace(pathForTab(DEFAULT_TAB));
   };
 
   const handleBegin = (sessionType: SessionType = "standard") => {
