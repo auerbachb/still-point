@@ -253,6 +253,23 @@ describe("notification scheduler", () => {
     });
   });
 
+  test("failure-reason send short-circuits daily accounting for the same candidate (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderTime: "20:00",
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(result.failureReasonSent).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledTimes(1);
+    expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+  });
+
   test("failure-reason reminder falls back to today when yesterday is handled (#441)", async () => {
     preferenceRows = [{
       ...basePrefs,

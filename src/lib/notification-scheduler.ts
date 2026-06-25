@@ -326,10 +326,8 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       const local = getLocalParts(now, prefs.tz);
 
       // Failure-reason reminder fires at a fixed 8 PM local time, independent of the
-      // user's daily reminder time. Handle it first, then fall through only when daily /
-      // miss-a-day are also enabled (their gates below `continue` out of this iteration
-      // when their own window — the daily reminder time — does not match this run).
-      let sentForCandidate = false;
+      // user's daily reminder time. A successful send completes this candidate for
+      // metrics purposes, so it must not also fall through into daily / miss-a-day work.
       if (prefs.failureReasonReminderEnabled) {
         const frWindow = isWithinCronWindow(local.minutesSinceMidnight, FAILURE_REASON_REMINDER_MINUTES);
         if (
@@ -341,7 +339,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
           if (outcome === "sent") {
             failureReasonSent += 1;
             sent += 1;
-            sentForCandidate = true;
+            continue;
           }
         }
       }
@@ -349,9 +347,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       // A failure-reason-only candidate has no further work; don't let it fall through
       // into the daily flow where it would be double-counted as skipped.
       if (!prefs.dailyReminderEnabled && !prefs.missADayEnabled) {
-        if (!sentForCandidate) {
-          skipped += 1;
-        }
+        skipped += 1;
         continue;
       }
 
@@ -359,11 +355,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
       const { within, dayOffset } = isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes);
       if (!within) {
-        // Don't count a candidate that already sent its failure-reason reminder this run
-        // as skipped — the daily/miss-a-day window simply isn't due (they share this gate).
-        if (!sentForCandidate) {
-          skipped += 1;
-        }
+        skipped += 1;
         continue;
       }
 
