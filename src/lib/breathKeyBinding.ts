@@ -53,8 +53,9 @@ export function saveBreathKeyBinding(binding: BreathKeyBinding): void {
 
 /**
  * True when `event` matches `binding`. Compares `KeyboardEvent.code` first
- * (layout-independent), and also accepts the legacy `" "` / "Spacebar"
- * `event.key` values for Space so older browsers still register.
+ * (layout-independent), and also accepts legacy `event.key` values for Space
+ * (`" "` / `"Spacebar"`) and ArrowRight (`"Right"`) so older browsers that
+ * don't populate `event.code` still register taps.
  */
 export function eventMatchesBreathKeyBinding(
   event: Pick<KeyboardEvent, "code" | "key">,
@@ -62,7 +63,7 @@ export function eventMatchesBreathKeyBinding(
 ): boolean {
   if (event.code === binding) return true;
   if (binding === "Space") return event.key === " " || event.key === "Spacebar";
-  if (binding === "ArrowRight") return event.key === "ArrowRight";
+  if (binding === "ArrowRight") return event.key === "ArrowRight" || event.key === "Right";
   return false;
 }
 

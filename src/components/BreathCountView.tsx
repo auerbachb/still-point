@@ -102,7 +102,11 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
   // Global key handler: the bound key registers a breath and is prevented from
   // its default action (Space scrolling the page / activating a focused button)
   // while the breath view is active. Auto-repeat (held key) is ignored so a tap
-  // stays discrete.
+  // stays discrete. When the End button has focus the breath key is intentionally
+  // allowed to bubble to this handler (the button's onKeyDown does not
+  // stopPropagation for it), but we skip tap recording in that case so the End
+  // button's own click handler can fire normally via the browser's default
+  // button-activation behaviour.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!eventMatchesBreathKeyBinding(event, keyBinding)) return;
@@ -110,6 +114,9 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
         event.preventDefault();
         return;
       }
+      // If focus is on the End button, don't record a tap — let the button
+      // handle the key activation itself (e.g. Space triggers onClick).
+      if (event.target instanceof HTMLButtonElement) return;
       event.preventDefault();
       recordTap();
     };
