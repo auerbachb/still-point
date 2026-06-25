@@ -25,6 +25,7 @@ vi.mock("@/db/schema", () => ({
     dailyReminderEnabled: "dailyReminderEnabled",
     missADayEnabled: "missADayEnabled",
     friendRequestNotificationsEnabled: "friendRequestNotificationsEnabled",
+    suppressDuringSession: "suppressDuringSession",
     dailyReminderTime: "dailyReminderTime",
     dailyReminderFrequency: "dailyReminderFrequency",
     quietHoursStart: "quietHoursStart",
@@ -61,6 +62,7 @@ const samplePrefs = {
   dailyReminderEnabled: true,
   missADayEnabled: false,
   friendRequestNotificationsEnabled: true,
+  suppressDuringSession: false,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as const,
   quietHoursStart: null,
@@ -144,6 +146,22 @@ describe("/api/notifications/preferences", () => {
     expect(response.status).toBe(200);
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ friendRequestNotificationsEnabled: false }),
+    );
+  });
+
+  test("PATCH updates suppress-during-session preference", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ suppressDuringSession: true }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ suppressDuringSession: true }),
     );
   });
 

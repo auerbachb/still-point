@@ -112,11 +112,19 @@ struct SessionView: View {
                 appVM: appVM,
                 isRunning: sessionTimerRunning
             )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: sessionInProgress
+            )
         }
         .onDisappear {
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: false
+            )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: false
             )
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
@@ -130,11 +138,19 @@ struct SessionView: View {
                 appVM: appVM,
                 isRunning: sessionTimerRunning
             )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: sessionInProgress
+            )
         }
         .onChange(of: vm.isPaused) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
+            )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: sessionInProgress
             )
         }
         .onChange(of: vm.isAbandoned) { _, _ in
@@ -142,11 +158,19 @@ struct SessionView: View {
                 appVM: appVM,
                 isRunning: sessionTimerRunning
             )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: sessionInProgress
+            )
         }
         .onChange(of: vm.isComplete) { _, isComplete in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
+            )
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: sessionInProgress
             )
             if isComplete && !vm.isAbandoned {
                 handleCompletion()

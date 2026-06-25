@@ -13,6 +13,7 @@ import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } f
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
+import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
 /** Payload for the shared `/app` completion screen after a buddy sit (#119). */
@@ -165,6 +166,9 @@ export function BuddySessionRoom({
    */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   useWakeLock(keepScreenAwakePref && buddyHoldActive && !localTimerCompleted && !exitingRoom);
+  // Suppress push display during an active shared sit too (#431) — web parity
+  // with the solo SessionView relay and the iOS buddy suppression wiring.
+  useSessionSuppressionRelay(buddyHoldActive && !localTimerCompleted && !exitingRoom);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
     enabled: buddyHoldActive,

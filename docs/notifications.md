@@ -24,11 +24,11 @@ flowchart LR
 
 | Table | Purpose |
 |-------|---------|
-| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz`, `friend_request_notifications_enabled` |
+| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session` |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 | `web_push_subscriptions` | Browser push endpoints (#347) |
 
-Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`.
+Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`.
 
 ## API
 
@@ -40,7 +40,7 @@ Returns defaults (created on first read) for the authenticated user.
 
 Partial update. Supported fields:
 
-- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled`, `friendRequestNotificationsEnabled` (boolean)
+- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled`, `friendRequestNotificationsEnabled`, `suppressDuringSession` (boolean)
 - `dailyReminderTime`, `quietHoursStart`, `quietHoursEnd` (`HH:MM` 24h; quiet hours nullable)
 - `dailyReminderFrequency`: `daily` | `every_other` | `weekly`
 - `tz`: IANA timezone string
@@ -83,6 +83,35 @@ Miss-a-day wins over daily reminder when both would fire in the same cron window
 - Event-driven on `POST /api/friends/requests`
 - Helper: `sendFriendRequestNotification` (APNs + Web Push)
 
+## Suppress during session (#431)
+
+Opt-in (`suppress_during_session`, default false) that holds push **display** on
+the user's devices while a sit is in progress. The server still *sends* pushes
+normally; suppression happens client-side per platform, and the pref is synced so
+the choice carries across devices.
+
+- **Web:** `SessionView` relays the desired state (`prefOn && sessionActive`) to
+  the service worker over a `BroadcastChannel`
+  (`stillpoint-session-suppression`). `public/sw.js` keeps the latest flag
+  (also persisted in Cache Storage so a push that cold-starts the worker still
+  honors it) and skips `showNotification` while suppression is active. The pref
+  is mirrored from the server row into `localStorage`
+  (`src/lib/sessionSuppressionPrefs.ts`) so the in-progress page can read it
+  without a network round-trip — the same pattern as the wake-lock pref (#317).
+  - *Tradeoff:* the Push API mandates `userVisibleOnly`, so a browser may
+    eventually show a generic background notice or trim the push budget if many
+    pushes are dropped silently. Suppression is opt-in and scoped to the short
+    window of an active sit, keeping that risk low.
+- **iOS:** `SessionNotificationSuppressionController` tracks the cached opt-in
+  plus local/buddy session-active state (parity with `SessionIdleTimerController`).
+  `PushNotificationCoordinator.willPresent` returns empty presentation options
+  (no banner/sound) when a sit is in progress and the opt-in is on. The opt-in is
+  cached in `UserDefaults` so `willPresent` works before the Notifications screen
+  is opened.
+
+A paused sit still counts as "in session" on both platforms, so reminders stay
+held until the sit truly completes or is abandoned.
+
 ## Scheduler
 
 - **Route:** `GET|POST /api/cron/dispatch-notifications`
@@ -98,7 +127,7 @@ Miss-a-day wins over daily reminder when both would fire in the same cron window
 - **iOS:** Settings → **Notifications** (`NavigationLink` → `NotificationsSettingsView`)
 - **Web:** Settings → **Notifications** → `/app/settings/notifications`
 
-Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Miss a day → Friend activity.
+Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Miss a day → Friend activity → During sessions.
 
 Master push off disables dependent controls in the UI and persists `pushEnabled: false` (and unsubscribes web push / disables iOS token as before). Other preference toggles are preserved while push is off.
 
@@ -130,3 +159,4 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - #347 — Web Push channel
 - #247 — Miss-a-day notifications
 - #359 — Unified Notifications settings screen
+- #431 — Suppress notifications during a meditation session

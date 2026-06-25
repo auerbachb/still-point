@@ -1,5 +1,82 @@
 /* Still Point Web Push service worker (#347). Served from site root. */
 
+/*
+ * Suppress-during-session (#431). The app page relays the desired suppression
+ * state over a BroadcastChannel; while suppression is active we skip
+ * showNotification so reminders do not interrupt a sit. The flag is also
+ * persisted in Cache Storage so a push that spins up a fresh service worker
+ * (in-memory state lost) still honors the most recent state.
+ *
+ * Keep SW_SUPPRESSION_CHANNEL / SUPPRESS_TTL_MS in sync with
+ * SESSION_SUPPRESSION_CHANNEL / SUPPRESS_HEARTBEAT_MS in
+ * src/lib/sessionSuppressionPrefs.ts.
+ *
+ * The persisted state carries an expiry so a missed "off" relay (e.g. the tab
+ * was killed mid-sit) self-heals: a stale "suppress" lapses after the TTL
+ * instead of silencing notifications forever. The page re-broadcasts on a
+ * heartbeat (shorter than the TTL) so an in-progress sit stays covered.
+ *
+ * Tradeoff: the Push API mandates `userVisibleOnly`, so browsers may eventually
+ * show a generic "site updated in background" notice or revoke the push budget
+ * if many pushes are silently dropped. Suppression is opt-in and scoped to the
+ * brief duration of an active sit, which keeps that risk low.
+ */
+const SW_SUPPRESSION_CHANNEL = "stillpoint-session-suppression";
+const STATE_CACHE = "stillpoint-state-v1";
+const SUPPRESSION_STATE_URL = "https://still-point.internal/__session_suppression__";
+/** A suppress flag older than this is treated as inactive (self-heals a missed reset). */
+const SUPPRESS_TTL_MS = 10 * 60 * 1000;
+
+/** In-memory mirror: { suppress: boolean, expiresAt: number } | null. */
+let suppressState = null;
+
+function isSuppressing(state, now) {
+  return state?.suppress === true && typeof state.expiresAt === "number" && now < state.expiresAt;
+}
+
+async function persistSuppressState(state) {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    await cache.put(
+      SUPPRESSION_STATE_URL,
+      new Response(JSON.stringify(state), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  } catch {
+    // Best-effort: fall back to in-memory state only.
+  }
+}
+
+async function shouldSuppressDisplay() {
+  const now = Date.now();
+  if (suppressState) {
+    return isSuppressing(suppressState, now);
+  }
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const cached = await cache.match(SUPPRESSION_STATE_URL);
+    if (!cached) return false;
+    suppressState = await cached.json();
+    return isSuppressing(suppressState, Date.now());
+  } catch {
+    return false;
+  }
+}
+
+try {
+  const suppressionChannel = new BroadcastChannel(SW_SUPPRESSION_CHANNEL);
+  suppressionChannel.onmessage = (event) => {
+    if (event.data?.type !== "session-suppression-state") return;
+    const suppress = event.data.suppress === true;
+    suppressState = { suppress, expiresAt: suppress ? Date.now() + SUPPRESS_TTL_MS : 0 };
+    // Fire-and-forget persistence; in-memory state is updated synchronously above.
+    void persistSuppressState(suppressState);
+  };
+} catch {
+  // BroadcastChannel unsupported: suppression simply never engages.
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -13,12 +90,18 @@ self.addEventListener("push", (event) => {
   const url = typeof data.url === "string" ? data.url : "/app";
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: "/og.png",
-      badge: "/og.png",
-      data: { url },
-      tag: typeof data.type === "string" ? data.type : "still-point",
+    shouldSuppressDisplay().then((suppress) => {
+      if (suppress) {
+        // In-session + opt-in: drop the notification display (#431).
+        return undefined;
+      }
+      return self.registration.showNotification(title, {
+        body,
+        icon: "/og.png",
+        badge: "/og.png",
+        data: { url },
+        tag: typeof data.type === "string" ? data.type : "still-point",
+      });
     }),
   );
 });
