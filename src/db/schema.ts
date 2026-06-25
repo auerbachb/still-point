@@ -43,6 +43,8 @@ export const notificationPreferences = pgTable("notification_preferences", {
   pushEnabled: boolean("push_enabled").default(false).notNull(),
   dailyReminderEnabled: boolean("daily_reminder_enabled").default(false).notNull(),
   missADayEnabled: boolean("miss_a_day_enabled").default(false).notNull(),
+  /** #441: opt-in for the fixed 8 PM "log why you couldn't meditate" reminder. */
+  failureReasonReminderEnabled: boolean("failure_reason_reminder_enabled").default(false).notNull(),
   friendRequestNotificationsEnabled: boolean("friend_request_notifications_enabled").default(true).notNull(),
   /** Opt-in (#431): suppress push display on this user's devices while a sit is in progress. */
   suppressDuringSession: boolean("suppress_during_session").default(false).notNull(),
@@ -81,6 +83,23 @@ export const notificationDispatches = pgTable("notification_dispatches", {
     table.userId,
     table.notificationType,
     table.windowKey,
+  ),
+}));
+
+/** #441: user-logged reason for not meditating on a given local calendar day.
+ *  At most one reason per user per day (revisable via upsert). */
+export const failureReasons = pgTable("failure_reasons", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  /** Local calendar date the reason is about, `YYYY-MM-DD` (matches sessions.session_date). */
+  reasonDate: date("reason_date").notNull(),
+  text: varchar("text", { length: 1000 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userDateUnique: uniqueIndex("failure_reasons_user_date_unique").on(
+    table.userId,
+    table.reasonDate,
   ),
 }));
 
@@ -391,6 +410,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [notificationPreferences.userId],
   }),
   notificationDispatches: many(notificationDispatches),
+  failureReasons: many(failureReasons),
   oauthAccounts: many(oauthAccounts),
   googleOAuthToken: one(googleOAuthTokens, {
     fields: [users.id],
@@ -413,6 +433,10 @@ export const notificationDispatchesRelations = relations(notificationDispatches,
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
   user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
+}));
+
+export const failureReasonsRelations = relations(failureReasons, ({ one }) => ({
+  user: one(users, { fields: [failureReasons.userId], references: [users.id] }),
 }));
 
 export const webPushSubscriptionsRelations = relations(webPushSubscriptions, ({ one }) => ({

@@ -24,6 +24,7 @@ vi.mock("@/db/schema", () => ({
     pushEnabled: "pushEnabled",
     dailyReminderEnabled: "dailyReminderEnabled",
     missADayEnabled: "missADayEnabled",
+    failureReasonReminderEnabled: "failureReasonReminderEnabled",
     friendRequestNotificationsEnabled: "friendRequestNotificationsEnabled",
     suppressDuringSession: "suppressDuringSession",
     dailyReminderTime: "dailyReminderTime",
@@ -61,6 +62,7 @@ const samplePrefs = {
   pushEnabled: true,
   dailyReminderEnabled: true,
   missADayEnabled: false,
+  failureReasonReminderEnabled: false,
   friendRequestNotificationsEnabled: true,
   suppressDuringSession: false,
   dailyReminderTime: "09:00",
@@ -162,6 +164,22 @@ describe("/api/notifications/preferences", () => {
     expect(response.status).toBe(200);
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ suppressDuringSession: true }),
+    );
+  });
+
+  test("PATCH updates failure reason reminder preference", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ failureReasonReminderEnabled: true }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ failureReasonReminderEnabled: true }),
     );
   });
 

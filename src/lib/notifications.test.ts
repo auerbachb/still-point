@@ -169,6 +169,41 @@ describe("sendFriendRequestNotification", () => {
     });
   });
 
+  test("sends the failure-reason reminder to APNs and Web Push with the dated deep link", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+    sendWebPushToUser.mockResolvedValue({ delivered: false });
+    const { sendFailureReasonReminderNotification } = await import("./notifications");
+
+    const result = await sendFailureReasonReminderNotification({
+      recipientUserId: "recipient-id",
+      targetDate: "2026-05-28",
+      isYesterday: true,
+    });
+
+    expect(result.delivered).toBe(true);
+    expect(sendApnsNotification).toHaveBeenCalledWith("a".repeat(64), "development", {
+      aps: {
+        alert: {
+          title: "Still Point",
+          body: "You didn't meditate yesterday. Take a moment to log why.",
+        },
+        sound: "default",
+        "thread-id": "meditation-reminders",
+      },
+      type: "failure_reason_reminder",
+      deepLink: "stillpoint://log-reason?date=2026-05-28",
+    });
+    expect(sendWebPushToUser).toHaveBeenCalledWith({
+      recipientUserId: "recipient-id",
+      payload: {
+        title: "Still Point",
+        body: "You didn't meditate yesterday. Take a moment to log why.",
+        type: "failure_reason_reminder",
+        url: "/app/log-reason?date=2026-05-28",
+      },
+    });
+  });
+
   test("miss-a-day is not delivered when APNs and Web Push both fail", async () => {
     tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
     sendApnsNotification.mockResolvedValue({ ok: false, status: 500 });

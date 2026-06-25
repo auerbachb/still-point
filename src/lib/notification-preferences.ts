@@ -9,6 +9,7 @@ export type NotificationPreferencesRow = {
   pushEnabled: boolean;
   dailyReminderEnabled: boolean;
   missADayEnabled: boolean;
+  failureReasonReminderEnabled: boolean;
   friendRequestNotificationsEnabled: boolean;
   suppressDuringSession: boolean;
   dailyReminderTime: string;
@@ -27,6 +28,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   pushEnabled: false,
   dailyReminderEnabled: false,
   missADayEnabled: false,
+  failureReasonReminderEnabled: false,
   friendRequestNotificationsEnabled: true,
   suppressDuringSession: false,
   dailyReminderTime: "09:00",
@@ -68,6 +70,7 @@ export function serializeNotificationPreferences(row: NotificationPreferencesRow
     pushEnabled: row.pushEnabled,
     dailyReminderEnabled: row.dailyReminderEnabled,
     missADayEnabled: row.missADayEnabled,
+    failureReasonReminderEnabled: row.failureReasonReminderEnabled,
     friendRequestNotificationsEnabled: row.friendRequestNotificationsEnabled,
     suppressDuringSession: row.suppressDuringSession,
     dailyReminderTime: row.dailyReminderTime,
