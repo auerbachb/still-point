@@ -1398,7 +1398,8 @@ export function BuddySessionRoom({
                       textAlign: "center",
                     }}
                   >
-                    The timer is shared. Tick, chime, and end sounds are local to this device.
+                    The timer is shared. Tick, chime, and end sounds play only on this device — if
+                    your buddy turns them on too, they stay naturally aligned by the shared timer.
                   </p>
                   {audioBlocked && (
                     <p
