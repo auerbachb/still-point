@@ -52,29 +52,31 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
   // Re-entrancy guard so a second End (button + key in the same frame) can't
   // double-report. Mirrors iOS `isSavingBreathSession`.
   const endedRef = useRef(false);
-  // Latest values for the End handler / unmount path without re-binding listeners.
+  // Refs are the source of truth for tap count and start time: they are mutated
+  // synchronously inside `recordTap` (not assigned during render) so `handleEnd`
+  // always sees the latest values even when End fires in the same tick as a tap,
+  // before React has re-rendered. State mirrors the refs only to drive the UI.
   const startMsRef = useRef<number | null>(null);
   const tapCountRef = useRef(0);
-  const secondsRef = useRef(0);
-  startMsRef.current = startMs;
-  tapCountRef.current = tapCount;
-  secondsRef.current = seconds;
 
   const recordTap = useCallback(() => {
     if (endedRef.current) return;
-    setTapCount((prev) => prev + 1);
-    setStartMs((prev) => (prev === null ? Date.now() : prev));
+    tapCountRef.current += 1;
+    setTapCount(tapCountRef.current);
+    if (startMsRef.current === null) {
+      startMsRef.current = Date.now();
+      setStartMs(startMsRef.current);
+    }
   }, []);
 
   const handleEnd = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
     // Recompute elapsed from the wall clock so ending between 1-second ticks
-    // (or right after the first tap) doesn't under-report the duration.
+    // (or right after the first tap) doesn't under-report the duration. When
+    // no tap was recorded, startMsRef is null and the session is empty (0s).
     const finalElapsed =
-      startMsRef.current !== null
-        ? elapsedSeconds(startMsRef.current, Date.now())
-        : secondsRef.current;
+      startMsRef.current !== null ? elapsedSeconds(startMsRef.current, Date.now()) : 0;
     onEnd({
       elapsedSeconds: finalElapsed,
       breathCount: breathCountForTaps(tapCountRef.current),
