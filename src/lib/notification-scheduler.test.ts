@@ -112,6 +112,67 @@ describe("notification scheduler", () => {
     expect(second.sent).toBe(0);
   });
 
+  test("sends a due reminder at the cron window boundary minute (#440 off-by-one)", async () => {
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    // reminder 09:00, run at 09:05 => delta === CRON_WINDOW_MINUTES (the boundary that
+    // was previously dropped by the exclusive `<` comparison).
+    const result = await dispatchDueNotifications(new Date("2026-05-29T09:05:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("idempotency still prevents double-sends across overlapping boundary runs (#440)", async () => {
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // First run at delta 0 claims and sends.
+    const first = await dispatchDueNotifications(new Date("2026-05-29T09:00:00.000Z"));
+    // Adjacent run that now also matches the same reminder at the boundary minute. The
+    // claim row already exists, so onConflictDoNothing returns no row -> no second send.
+    insertReturning.mockResolvedValueOnce([]);
+    const second = await dispatchDueNotifications(new Date("2026-05-29T09:05:00.000Z"));
+
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("midnight-boundary: 23:55 reminder does not double-send across the date change (#440)", async () => {
+    // Reproduce the CodeAnt finding: a reminder at 23:55 is covered both by the 23:55
+    // run (delta=0, windowKey="2026-05-29") and by the 00:00 run (delta=5, still <=
+    // CRON_WINDOW_MINUTES). Before the dayOffset fix the 00:00 run used windowKey
+    // "2026-05-30", bypassing the existing claimNotificationDispatch deduplication and
+    // triggering a second send minutes after the first.
+    preferenceRows = [{ ...basePrefs, dailyReminderTime: "23:55" }];
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // 23:55 run — delta=0, intendedDateKey="2026-05-29", claims + sends.
+    const first = await dispatchDueNotifications(new Date("2026-05-29T23:55:00.000Z"));
+
+    // 00:00 next-day run — delta=5, intendedDateKey must still be "2026-05-29" (the
+    // reminder's intended date). The claim row already exists, so no second send.
+    insertReturning.mockResolvedValueOnce([]);
+    const second = await dispatchDueNotifications(new Date("2026-05-30T00:00:00.000Z"));
+
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("miss-a-day send exception releases the claim instead of blocking the user (#440)", async () => {
+    preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
+    userCompletedSessionOnDate.mockResolvedValue(false);
+    sendMissADayNotification.mockRejectedValueOnce(new Error("APNs exploded"));
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));
+
+    // The run completes without throwing and nothing was marked sent...
+    expect(result.missADaySent).toBe(0);
+    // ...but the claim is rolled back so a later run can retry.
+    expect(dbDelete).toHaveBeenCalled();
+  });
+
   test("dispatchDueNotifications sends miss-a-day when yesterday was missed", async () => {
     preferenceRows = [{ ...basePrefs, missADayEnabled: true, dailyReminderEnabled: false }];
     userCompletedSessionOnDate.mockResolvedValue(false);
@@ -158,4 +219,20 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).not.toHaveBeenCalled();
     expect(sendMissADayNotification).not.toHaveBeenCalled();
   });
+  test("weekly 23:55 reminder sends on cross-midnight 00:00 run (#440 frequency gate)", async () => {
+    // 2026-05-25 is a Monday (dayIndex 1). A weekly reminder at 23:55 is covered by
+    // both the 23:55 run (delta=0) and the next-day 00:00 run (delta=5). Before this fix
+    // frequencyAllowsSend used local (Tuesday's dayIndex=2) instead of intendedDateKey
+    // (Monday), causing the midnight catch-up run to skip the send entirely.
+    preferenceRows = [{ ...basePrefs, dailyReminderTime: "23:55", dailyReminderFrequency: "weekly" }];
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // Simulate only the midnight catch-up run (23:55 run missed / no claim yet).
+    const result = await dispatchDueNotifications(new Date("2026-05-26T00:00:00.000Z")); // Tuesday 00:00 UTC
+
+    expect(result.sent).toBe(1);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+
 });

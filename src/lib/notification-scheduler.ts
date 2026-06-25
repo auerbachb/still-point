@@ -82,10 +82,39 @@ function parseReminderMinutes(time: string): number {
   return h * 60 + m;
 }
 
-function isWithinCronWindow(localMinutes: number, reminderMinutes: number): boolean {
+/**
+ * Returns whether the current cron run covers a due reminder, and the calendar-day
+ * offset of the reminder's *intended* date relative to the run's local date.
+ *
+ * dayOffset is 0 when the reminder was due today, -1 when the run crossed midnight
+ * and is catching a reminder that was due yesterday (e.g. a 23:55 reminder covered
+ * by the 00:00 run). Callers must use `addCalendarDays(local.dateKey, dayOffset)` as
+ * the dispatch windowKey so that the existing claimNotificationDispatch idempotency
+ * anchors each send to the reminder's *intended* date rather than the run's date.
+ *
+ * Without the dayOffset correction a 23:55 reminder could be sent twice in five minutes:
+ * - 23:55 run: delta=0, windowKey="2026-05-29" → claims and sends ✓
+ * - 00:00 run: delta=5 (still within window), windowKey="2026-05-30" → new key, sends again ✗
+ */
+function isWithinCronWindow(
+  localMinutes: number,
+  reminderMinutes: number,
+): { within: boolean; dayOffset: 0 | -1 } {
   const dayMinutes = 24 * 60;
   const delta = (localMinutes - reminderMinutes + dayMinutes) % dayMinutes;
-  return delta < CRON_WINDOW_MINUTES;
+  // Inclusive upper bound: the cron runs every CRON_WINDOW_MINUTES, but Vercel cron
+  // invocations can drift by up to a minute. With an exclusive bound a reminder whose
+  // only covering run landed exactly CRON_WINDOW_MINUTES late (delta === window) was
+  // dropped, leaving enabled users with no notification for days. The 1-minute overlap
+  // between adjacent runs is de-duplicated by claimNotificationDispatch — but only when
+  // both runs use the same windowKey (see dayOffset below).
+  if (delta > CRON_WINDOW_MINUTES) {
+    return { within: false, dayOffset: 0 };
+  }
+  // When localMinutes < reminderMinutes the modular arithmetic wrapped: the run is just
+  // past midnight and the reminder was due on the *previous* calendar day.
+  const dayOffset: 0 | -1 = delta > 0 && localMinutes < reminderMinutes ? -1 : 0;
+  return { within: true, dayOffset };
 }
 
 function isInQuietHours(
@@ -109,24 +138,38 @@ function isInQuietHours(
 
 function frequencyAllowsSend(
   frequency: DailyReminderFrequency,
-  local: LocalParts,
+  intendedDateKey: string,
 ): boolean {
   if (frequency === "daily") {
     return true;
   }
   if (frequency === "every_other") {
-    const anchor = new Date(`${local.dateKey}T00:00:00.000Z`).getTime();
+    // Use the reminder's intended date, not the run's local date. A cross-midnight run
+    // (e.g. 00:00 covering a 23:55 reminder) must evaluate parity on the intended day
+    // or the send is incorrectly skipped.
+    const anchor = new Date(`${intendedDateKey}T00:00:00.000Z`).getTime();
     const days = Math.floor(anchor / 86_400_000);
     return days % 2 === 0;
   }
-  return local.dayIndex === 1;
+  // weekly: reminder is due on Monday (dayIndex 1). Derive the day-of-week from the
+  // intended date so a cross-midnight run doesn't apply Tuesday's index to a Monday
+  // reminder.
+  const [y, m, d] = intendedDateKey.split("-").map(Number);
+  const intendedDayIndex = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return intendedDayIndex === 1;
 }
 
-function windowKeyForFrequency(frequency: DailyReminderFrequency, local: LocalParts): string {
+function windowKeyForFrequency(
+  frequency: DailyReminderFrequency,
+  local: LocalParts,
+  intendedDateKey: string,
+): string {
   if (frequency === "weekly") {
-    return local.weekKey;
+    // For weekly cadence use the ISO week of the intended date, not the run date.
+    const { isoYear, week } = isoWeekPartsFromDateKey(intendedDateKey);
+    return `${isoYear}-W${week}`;
   }
-  return local.dateKey;
+  return intendedDateKey;
 }
 
 export async function claimNotificationDispatch(params: {
@@ -145,6 +188,18 @@ export async function claimNotificationDispatch(params: {
     .returning({ id: notificationDispatches.id });
 
   return inserted.length > 0;
+}
+
+async function releaseMissADayClaim(userId: string, windowKey: string): Promise<void> {
+  await db
+    .delete(notificationDispatches)
+    .where(
+      and(
+        eq(notificationDispatches.userId, userId),
+        eq(notificationDispatches.notificationType, "miss_a_day"),
+        eq(notificationDispatches.windowKey, windowKey),
+      ),
+    );
 }
 
 function addCalendarDays(dateKey: string, deltaDays: number): string {
@@ -181,10 +236,17 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       const local = getLocalParts(now, prefs.tz);
       const reminderMinutes = parseReminderMinutes(prefs.dailyReminderTime);
 
-      if (!isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes)) {
+      const { within, dayOffset } = isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes);
+      if (!within) {
         skipped += 1;
         continue;
       }
+
+      // intendedDateKey is the calendar date the reminder was *due* — today for normal runs,
+      // yesterday when the cron just crossed midnight catching a late-evening reminder.
+      // Using it as the dispatch windowKey anchors deduplication to the reminder's intended
+      // date rather than the run's date, preventing duplicate sends at midnight boundaries.
+      const intendedDateKey = addCalendarDays(local.dateKey, dayOffset);
 
       if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
         skipped += 1;
@@ -192,33 +254,33 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       if (prefs.missADayEnabled) {
-        const yesterday = addCalendarDays(local.dateKey, -1);
-        const meditatedToday = await userCompletedSessionOnDate(prefs.userId, local.dateKey);
+        const yesterday = addCalendarDays(intendedDateKey, -1);
+        const meditatedToday = await userCompletedSessionOnDate(prefs.userId, intendedDateKey);
         const completedYesterday = await userCompletedSessionOnDate(prefs.userId, yesterday);
 
         if (!meditatedToday && !completedYesterday) {
           const claimed = await claimNotificationDispatch({
             userId: prefs.userId,
             notificationType: "miss_a_day",
-            windowKey: local.dateKey,
+            windowKey: intendedDateKey,
           });
 
           if (claimed) {
-            const { delivered } = await sendMissADayNotification({ recipientUserId: prefs.userId });
-            if (delivered) {
-              missADaySent += 1;
-              sent += 1;
-              continue;
+            try {
+              const { delivered } = await sendMissADayNotification({ recipientUserId: prefs.userId });
+              if (delivered) {
+                missADaySent += 1;
+                sent += 1;
+                continue;
+              }
+              await releaseMissADayClaim(prefs.userId, intendedDateKey);
+            } catch (sendError) {
+              // Without this catch, a thrown send would leave the claim row in place,
+              // permanently blocking both miss_a_day and (via hasMissADayDispatchForDate)
+              // the daily reminder for this user/date. Release the claim so the next run retries.
+              console.error("Failed to send miss-a-day notification:", sendError);
+              await releaseMissADayClaim(prefs.userId, intendedDateKey);
             }
-            await db
-              .delete(notificationDispatches)
-              .where(
-                and(
-                  eq(notificationDispatches.userId, prefs.userId),
-                  eq(notificationDispatches.notificationType, "miss_a_day"),
-                  eq(notificationDispatches.windowKey, local.dateKey),
-                ),
-              );
           }
         }
       }
@@ -229,22 +291,22 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       const frequency = prefs.dailyReminderFrequency as DailyReminderFrequency;
-      if (!frequencyAllowsSend(frequency, local)) {
+      if (!frequencyAllowsSend(frequency, intendedDateKey)) {
         skipped += 1;
         continue;
       }
 
-      if (await userCompletedSessionOnDate(prefs.userId, local.dateKey)) {
+      if (await userCompletedSessionOnDate(prefs.userId, intendedDateKey)) {
         skipped += 1;
         continue;
       }
 
-      if (await hasMissADayDispatchForDate(prefs.userId, local.dateKey)) {
+      if (await hasMissADayDispatchForDate(prefs.userId, intendedDateKey)) {
         skipped += 1;
         continue;
       }
 
-      const windowKey = windowKeyForFrequency(frequency, local);
+      const windowKey = windowKeyForFrequency(frequency, local, intendedDateKey);
       const claimed = await claimNotificationDispatch({
         userId: prefs.userId,
         notificationType: "daily_reminder",
@@ -257,7 +319,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       try {
-        const streak = await loadUserStreak(prefs.userId, local.dateKey);
+        const streak = await loadUserStreak(prefs.userId, intendedDateKey);
         const { delivered } = await sendDailyReminderNotification({ recipientUserId: prefs.userId, streak });
         if (delivered) {
           sent += 1;
