@@ -2,6 +2,7 @@ import SwiftUI
 import GoogleSignIn
 import StillPointShared
 
+@MainActor
 @Observable
 final class AuthViewModel {
     var isSignUp = false
