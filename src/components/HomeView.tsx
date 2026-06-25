@@ -7,10 +7,11 @@ type HomeViewProps = {
   currentDay: number;
   onBegin: () => void;
   onQuickBegin: () => void;
+  onBreath?: () => void;
   onBuddy?: () => void;
 };
 
-export function HomeView({ currentDay, onBegin, onQuickBegin, onBuddy }: HomeViewProps) {
+export function HomeView({ currentDay, onBegin, onQuickBegin, onBreath, onBuddy }: HomeViewProps) {
   const todayDuration = durationForDay(currentDay);
   const totalBlocks = Math.ceil(todayDuration / BLOCK_DURATION);
 
@@ -117,6 +118,27 @@ export function HomeView({ currentDay, onBegin, onQuickBegin, onBuddy }: HomeVie
       >
         Quick minute &middot; {QUICK_DURATION}s
       </button>
+
+      {onBreath && (
+        <button
+          type="button"
+          onClick={onBreath}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg-2)",
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "11px",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            padding: "12px 24px",
+            borderRadius: "40px",
+            cursor: "pointer",
+          }}
+        >
+          Breath counting
+        </button>
+      )}
 
       {onBuddy && (
         <button

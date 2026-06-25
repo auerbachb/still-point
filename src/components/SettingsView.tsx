@@ -14,6 +14,13 @@ import {
   loadWakeLockPrefs,
   saveWakeLockPrefs,
 } from "@/lib/wakeLockPrefs";
+import {
+  BREATH_KEY_BINDINGS,
+  breathKeyBindingLabel,
+  loadBreathKeyBinding,
+  saveBreathKeyBinding,
+  type BreathKeyBinding,
+} from "@/lib/breathKeyBinding";
 
 type User = {
   id: string;
@@ -41,6 +48,7 @@ export function SettingsView({
   // mount when the browser actually supports the Screen Wake Lock API (#317).
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
   const [keepScreenAwake, setKeepScreenAwake] = useState(false);
+  const [breathKeyBinding, setBreathKeyBinding] = useState<BreathKeyBinding>("Space");
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState(user.username);
   const [savingUsername, setSavingUsername] = useState(false);
@@ -119,12 +127,18 @@ export function SettingsView({
   useEffect(() => {
     setWakeLockSupported(isWakeLockSupported());
     setKeepScreenAwake(loadWakeLockPrefs().keepScreenAwakeDuringSession);
+    setBreathKeyBinding(loadBreathKeyBinding());
   }, []);
 
   const handleKeepScreenAwakeToggle = () => {
     const next = !keepScreenAwake;
     setKeepScreenAwake(next);
     saveWakeLockPrefs({ keepScreenAwakeDuringSession: next });
+  };
+
+  const handleBreathKeyBindingChange = (binding: BreathKeyBinding) => {
+    setBreathKeyBinding(binding);
+    saveBreathKeyBinding(binding);
   };
 
   const handleLogout = async () => {
@@ -377,6 +391,66 @@ export function SettingsView({
             </button>
           </div>
         )}
+
+        {/* Breath counting: key binding (#376) */}
+        <div style={{
+          padding: "16px 20px",
+          background: "var(--surface-1)",
+          borderRadius: "10px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: "16px",
+        }}>
+          <div>
+            <div style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
+            }}>
+              Breath counting key
+            </div>
+            <div style={{
+              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontSize: "13px", fontStyle: "italic",
+              color: "var(--fg-3)",
+            }}>
+              Key that registers a breath during a breath-counting session
+            </div>
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Breath counting key binding"
+            style={{ display: "flex", gap: "8px", flexShrink: 0 }}
+          >
+            {BREATH_KEY_BINDINGS.map((binding) => {
+              const selected = breathKeyBinding === binding;
+              return (
+                <button
+                  key={binding}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => handleBreathKeyBindingChange(binding)}
+                  style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    letterSpacing: "0.08em",
+                    padding: "8px 14px",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    border: selected
+                      ? "1px solid var(--accent-green-border)"
+                      : "1px solid var(--border-2)",
+                    background: selected ? "var(--accent-green-bg-subtle)" : "transparent",
+                    color: selected ? "var(--accent-green-text)" : "var(--fg-2)",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {breathKeyBindingLabel(binding)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Public board toggle */}
         <div style={{
