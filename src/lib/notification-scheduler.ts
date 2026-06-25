@@ -138,17 +138,25 @@ function isInQuietHours(
 
 function frequencyAllowsSend(
   frequency: DailyReminderFrequency,
-  local: LocalParts,
+  intendedDateKey: string,
 ): boolean {
   if (frequency === "daily") {
     return true;
   }
   if (frequency === "every_other") {
-    const anchor = new Date(`${local.dateKey}T00:00:00.000Z`).getTime();
+    // Use the reminder's intended date, not the run's local date. A cross-midnight run
+    // (e.g. 00:00 covering a 23:55 reminder) must evaluate parity on the intended day
+    // or the send is incorrectly skipped.
+    const anchor = new Date(`${intendedDateKey}T00:00:00.000Z`).getTime();
     const days = Math.floor(anchor / 86_400_000);
     return days % 2 === 0;
   }
-  return local.dayIndex === 1;
+  // weekly: reminder is due on Monday (dayIndex 1). Derive the day-of-week from the
+  // intended date so a cross-midnight run doesn't apply Tuesday's index to a Monday
+  // reminder.
+  const [y, m, d] = intendedDateKey.split("-").map(Number);
+  const intendedDayIndex = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return intendedDayIndex === 1;
 }
 
 function windowKeyForFrequency(
@@ -270,7 +278,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
               // Without this catch, a thrown send would leave the claim row in place,
               // permanently blocking both miss_a_day and (via hasMissADayDispatchForDate)
               // the daily reminder for this user/date. Release the claim so the next run retries.
-              console.error(`Failed to send miss-a-day to user ${prefs.userId}:`, sendError);
+              console.error("Failed to send miss-a-day notification:", sendError);
               await releaseMissADayClaim(prefs.userId, intendedDateKey);
             }
           }
@@ -283,7 +291,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       const frequency = prefs.dailyReminderFrequency as DailyReminderFrequency;
-      if (!frequencyAllowsSend(frequency, local)) {
+      if (!frequencyAllowsSend(frequency, intendedDateKey)) {
         skipped += 1;
         continue;
       }

@@ -219,4 +219,20 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).not.toHaveBeenCalled();
     expect(sendMissADayNotification).not.toHaveBeenCalled();
   });
+  test("weekly 23:55 reminder sends on cross-midnight 00:00 run (#440 frequency gate)", async () => {
+    // 2026-05-25 is a Monday (dayIndex 1). A weekly reminder at 23:55 is covered by
+    // both the 23:55 run (delta=0) and the next-day 00:00 run (delta=5). Before this fix
+    // frequencyAllowsSend used local (Tuesday's dayIndex=2) instead of intendedDateKey
+    // (Monday), causing the midnight catch-up run to skip the send entirely.
+    preferenceRows = [{ ...basePrefs, dailyReminderTime: "23:55", dailyReminderFrequency: "weekly" }];
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+    // Simulate only the midnight catch-up run (23:55 run missed / no claim yet).
+    const result = await dispatchDueNotifications(new Date("2026-05-26T00:00:00.000Z")); // Tuesday 00:00 UTC
+
+    expect(result.sent).toBe(1);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+
 });

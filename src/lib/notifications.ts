@@ -74,12 +74,17 @@ async function fanOutChannels(
   tasks: Array<() => Promise<{ delivered: boolean } | void>>,
 ): Promise<boolean> {
   const results = await Promise.allSettled(tasks.map((task) => task()));
-  const delivered = results.some((result) => {
+  // Log every rejection independently before computing delivery status.
+  // Using a side effect inside some() would skip later rejections after an earlier
+  // result short-circuits the iteration with a truthy return.
+  for (const result of results) {
     if (result.status === "rejected") {
       // Surface rejected channel promises so silent send failures are debuggable.
       console.error(`${channel} channel promise rejected`, { reason: result.reason });
-      return false;
     }
+  }
+  const delivered = results.some((result) => {
+    if (result.status !== "fulfilled") return false;
     const value = result.value;
     return typeof value === "object" && value !== null && "delivered" in value && value.delivered === true;
   });
