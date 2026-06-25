@@ -108,9 +108,6 @@ export function Pathway({ currentDay }: PathwayProps) {
         display: "flex",
         flexDirection: "column",
         gap: "var(--s4)",
-        // focus-visible outline supplied via :focus-visible in globals.css;
-        // suppress the default browser outline here to avoid double ring.
-        outline: "none",
       }}
     >
       <div
