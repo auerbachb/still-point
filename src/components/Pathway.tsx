@@ -96,6 +96,11 @@ export function Pathway({ currentDay }: PathwayProps) {
       style={{
         width: "100%",
         maxWidth: "min(420px, calc(100vw - 40px))",
+        // Cap height so the section scrolls internally rather than pushing
+        // the Begin CTA into the fixed bottom nav on narrow/short viewports
+        // (e.g. iPhone SE 375×667). clamp: 160px floor, 30vh mid, 240px ceiling.
+        maxHeight: "clamp(160px, 30vh, 240px)",
+        overflowY: "auto",
         display: "flex",
         flexDirection: "column",
         gap: "var(--s4)",
