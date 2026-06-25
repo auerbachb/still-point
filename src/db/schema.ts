@@ -244,6 +244,11 @@ export const buddySessionParticipants = pgTable("buddy_session_participants", {
   oneHostPerSessionIdx: uniqueIndex("buddy_session_participants_one_host_per_session")
     .on(table.buddySessionId)
     .where(sql`${table.isHost}`),
+  /** #383: backs `WHERE user_id = ?` calendar lookups and the on-delete-cascade
+   *  fan-out from `users` on account deletion. The unique
+   *  `(buddy_session_id, user_id)` index can't serve a standalone `user_id`
+   *  predicate (wrong leading column). */
+  userIdx: index("idx_buddy_session_participants_user").on(table.userId),
 }));
 
 /** Google Calendar OAuth connection per app user (#204). Tokens are encrypted server-side. */
