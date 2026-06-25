@@ -1,19 +1,58 @@
 name: iOS Shared Unit Tests
 
+# The `StillPointShared swift test` job is a REQUIRED status check on `main`, so it
+# must report a result on every PR. Previously this workflow was path-filtered to the
+# package, so PRs that didn't touch `ios/StillPointShared/**` never ran it and sat at
+# mergeStateStatus=BLOCKED forever (needing an --admin override). Instead we now run
+# the job on every PR but only execute the real `swift test` (on macOS) when the
+# package — or this workflow — actually changed; otherwise it's a cheap ubuntu no-op
+# that still satisfies the required check. See issue #463.
+
 on:
   pull_request:
-    paths:
-      - "ios/StillPointShared/**"
-      - ".github/workflows/ios-shared-tests.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
+  changes:
+    name: detect StillPointShared changes
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - name: Detect changed paths
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Fail safe toward MORE coverage: if we can't determine the diff
+          # (workflow_dispatch, or a transient API error), run the real suite.
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path' 2>/dev/null || true)"
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/StillPointShared/|\.github/workflows/ios-shared-tests\.yml$)'; then
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "shared=false" >> "$GITHUB_OUTPUT"
+          fi
+
   swift-test:
     name: StillPointShared swift test
-    runs-on: macos-26
+    needs: changes
+    # macOS only when we actually run the suite; a cheap ubuntu runner for the
+    # no-op pass so web-only PRs don't burn macOS minutes.
+    runs-on: ${{ needs.changes.outputs.shared == 'true' && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - name: Checkout
+        if: needs.changes.outputs.shared == 'true'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -22,8 +61,14 @@ jobs:
       # the suite without xcodegen/xcodebuild (the same path agents use locally,
       # where the app's Xcode project can't be parsed). The ~50 tests are
       # sub-second; wall-clock is dominated by macOS runner spin-up + the package
-      # build. Path-filtered to the package (and this workflow) so web-only PRs
-      # don't burn macOS minutes.
+      # build. Runs only when the package (or this workflow) changed.
       - name: Run StillPointShared unit tests
+        if: needs.changes.outputs.shared == 'true'
         working-directory: ios/StillPointShared
         run: swift test
+
+      # No-op pass for PRs that don't touch the package: keeps the required
+      # "StillPointShared swift test" check green without macOS minutes (issue #463).
+      - name: Skip (StillPointShared unchanged)
+        if: needs.changes.outputs.shared != 'true'
+        run: echo "StillPointShared unchanged on this PR — required check satisfied without running swift test (issue #463)."
