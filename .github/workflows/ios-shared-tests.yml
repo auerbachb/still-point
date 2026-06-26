@@ -36,7 +36,10 @@ jobs:
             echo "shared=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path' 2>/dev/null || true)"
+          # Use the paginated files API — `gh pr view --json files` caps the list
+          # (~100 files), which on a large PR could miss StillPointShared changes
+          # and skip the real test via the no-op. `--paginate` returns every file.
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].path' 2>/dev/null || true)"
           if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/StillPointShared/|\.github/workflows/ios-shared-tests\.yml$)'; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
