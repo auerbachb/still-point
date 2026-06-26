@@ -7,6 +7,11 @@ import {
   buildDailyReminderWebPushPayload,
   MISS_A_DAY_NOTIFICATION_TYPE,
 } from "@/lib/notifications/daily-reminder";
+import {
+  buildFailureReasonReminderPayload,
+  buildFailureReasonReminderWebPushPayload,
+  FAILURE_REASON_NOTIFICATION_TYPE,
+} from "@/lib/notifications/failure-reason";
 import { sendWebPushToUser } from "@/lib/web-push";
 
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
@@ -145,6 +150,25 @@ export async function sendMissADayNotification(params: {
         type: MISS_A_DAY_NOTIFICATION_TYPE,
         url: "/app",
       },
+    }),
+  ]);
+
+  return { delivered };
+}
+
+export async function sendFailureReasonReminderNotification(params: {
+  recipientUserId: string;
+  targetDate: string;
+  isYesterday: boolean;
+}): Promise<{ delivered: boolean }> {
+  const delivered = await fanOutChannels(FAILURE_REASON_NOTIFICATION_TYPE, [
+    () => sendPushNotificationToUser({
+      recipientUserId: params.recipientUserId,
+      payload: buildFailureReasonReminderPayload(params.targetDate, params.isYesterday),
+    }),
+    () => sendWebPushToUser({
+      recipientUserId: params.recipientUserId,
+      payload: buildFailureReasonReminderWebPushPayload(params.targetDate, params.isYesterday),
     }),
   ]);
 

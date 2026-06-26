@@ -293,6 +293,17 @@ export function WebNotificationSettings({ pageMode = false }: WebNotificationSet
             }); }}
           />
 
+          <SectionLabel>Reflect on a missed day</SectionLabel>
+          <ToggleRow
+            title="Log why you missed"
+            description="At 8 PM, if you haven't sat, a nudge to jot down what got in the way"
+            pressed={prefs.failureReasonReminderEnabled}
+            disabled={busy}
+            onToggle={() => { void runBusy(async () => {
+              await persist({ failureReasonReminderEnabled: !prefs.failureReasonReminderEnabled });
+            }); }}
+          />
+
           <SectionLabel>Friend activity</SectionLabel>
           <ToggleRow
             title="Friend requests"

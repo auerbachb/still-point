@@ -10,6 +10,7 @@ const deleteWhere = vi.fn().mockResolvedValue(undefined);
 const dbDelete = vi.fn(() => ({ where: deleteWhere }));
 const sendDailyReminderNotification = vi.fn();
 const sendMissADayNotification = vi.fn();
+const sendFailureReasonReminderNotification = vi.fn();
 
 const dbSelect = vi.fn(() => ({
   from: vi.fn(() => ({
@@ -29,11 +30,13 @@ vi.mock("@/db/schema", () => ({
   notificationPreferences: { table: "notification_preferences" },
   notificationDispatches: { table: "notification_dispatches" },
   sessions: { table: "sessions" },
+  failureReasons: { table: "failure_reasons" },
 }));
 
 vi.mock("@/lib/notifications", () => ({
   sendDailyReminderNotification,
   sendMissADayNotification,
+  sendFailureReasonReminderNotification,
 }));
 
 const hasMissADayDispatchForDate = vi.fn();
@@ -44,6 +47,14 @@ vi.mock("@/lib/notifications/daily-reminder", () => ({
   hasMissADayDispatchForDate,
   userCompletedSessionOnDate,
   loadUserStreak,
+}));
+
+const hasFailureReasonForDate = vi.fn();
+
+vi.mock("@/lib/notifications/failure-reason", () => ({
+  FAILURE_REASON_NOTIFICATION_TYPE: "failure_reason_reminder",
+  FAILURE_REASON_REMINDER_MINUTES: 20 * 60,
+  hasFailureReasonForDate,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -61,6 +72,7 @@ const basePrefs = {
   quietHoursEnd: null,
   dailyReminderEnabled: true,
   missADayEnabled: false,
+  failureReasonReminderEnabled: false,
 };
 
 describe("notification scheduler", () => {
@@ -70,12 +82,15 @@ describe("notification scheduler", () => {
     preferenceRows = [basePrefs];
     sendDailyReminderNotification.mockReset();
     sendMissADayNotification.mockReset();
+    sendFailureReasonReminderNotification.mockReset();
     sendDailyReminderNotification.mockResolvedValue({ delivered: true });
     sendMissADayNotification.mockResolvedValue({ delivered: true });
+    sendFailureReasonReminderNotification.mockResolvedValue({ delivered: true });
     insertReturning.mockReset();
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
     hasMissADayDispatchForDate.mockResolvedValue(false);
     userCompletedSessionOnDate.mockResolvedValue(false);
+    hasFailureReasonForDate.mockResolvedValue(false);
     loadUserStreak.mockResolvedValue(0);
   });
 
@@ -219,6 +234,152 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).not.toHaveBeenCalled();
     expect(sendMissADayNotification).not.toHaveBeenCalled();
   });
+  test("failure-reason reminder asks about yesterday first at 8 PM local (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.failureReasonSent).toBe(1);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledWith({
+      recipientUserId: "user-1",
+      targetDate: "2026-05-28",
+      isYesterday: true,
+    });
+  });
+
+  test("failure-reason send short-circuits daily accounting for the same candidate (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderTime: "20:00",
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(result.failureReasonSent).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledTimes(1);
+    expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+  });
+
+  test("failure-reason send is not also counted as skipped when daily window is not due (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: true,
+      dailyReminderTime: "09:00",
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.sent).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(result.failureReasonSent).toBe(1);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledWith({
+      recipientUserId: "user-1",
+      targetDate: "2026-05-28",
+      isYesterday: true,
+    });
+    expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+  });
+
+  test("failure-reason reminder falls back to today when yesterday is handled (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+    // Sat yesterday, nothing today.
+    userCompletedSessionOnDate.mockImplementation(async (_userId, date) => date === "2026-05-28");
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.failureReasonSent).toBe(1);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledWith({
+      recipientUserId: "user-1",
+      targetDate: "2026-05-29",
+      isYesterday: false,
+    });
+  });
+
+  test("failure-reason reminder is skipped when both days are already covered (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+    userCompletedSessionOnDate.mockResolvedValue(true);
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.failureReasonSent).toBe(0);
+    expect(sendFailureReasonReminderNotification).not.toHaveBeenCalled();
+  });
+
+  test("failure-reason reminder does not fire outside the fixed 8 PM window (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T09:02:00.000Z"));
+
+    expect(result.failureReasonSent).toBe(0);
+    expect(sendFailureReasonReminderNotification).not.toHaveBeenCalled();
+  });
+
+  test("failure-reason reminder is idempotent for the firing day (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const first = await dispatchDueNotifications(new Date("2026-05-29T20:00:00.000Z"));
+    // Adjacent boundary run: the claim already exists -> no second send.
+    insertReturning.mockResolvedValueOnce([]);
+    const second = await dispatchDueNotifications(new Date("2026-05-29T20:05:00.000Z"));
+
+    expect(first.failureReasonSent).toBe(1);
+    expect(second.failureReasonSent).toBe(0);
+    expect(sendFailureReasonReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("failure-reason send exception releases the claim instead of blocking the day (#441)", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      dailyReminderEnabled: false,
+      missADayEnabled: false,
+      failureReasonReminderEnabled: true,
+    }];
+    sendFailureReasonReminderNotification.mockRejectedValueOnce(new Error("APNs exploded"));
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T20:02:00.000Z"));
+
+    expect(result.failureReasonSent).toBe(0);
+    expect(dbDelete).toHaveBeenCalled();
+  });
+
   test("weekly 23:55 reminder sends on cross-midnight 00:00 run (#440 frequency gate)", async () => {
     // 2026-05-25 is a Monday (dayIndex 1). A weekly reminder at 23:55 is covered by
     // both the 23:55 run (delta=0) and the next-day 00:00 run (delta=5). Before this fix

@@ -431,6 +431,11 @@ final class AppViewModel {
             openHomeFromNotification()
             return true
         }
+        if host == "log-reason" {
+            // Failure-reason log UI is web-only; land on home so the notification tap is not silently dropped.
+            openHomeFromNotification()
+            return true
+        }
         return false
     }
 

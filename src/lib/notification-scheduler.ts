@@ -7,7 +7,16 @@ import {
   loadUserStreak,
   userCompletedSessionOnDate,
 } from "@/lib/notifications/daily-reminder";
-import { sendDailyReminderNotification, sendMissADayNotification } from "@/lib/notifications";
+import {
+  FAILURE_REASON_NOTIFICATION_TYPE,
+  FAILURE_REASON_REMINDER_MINUTES,
+  hasFailureReasonForDate,
+} from "@/lib/notifications/failure-reason";
+import {
+  sendDailyReminderNotification,
+  sendFailureReasonReminderNotification,
+  sendMissADayNotification,
+} from "@/lib/notifications";
 
 const CRON_WINDOW_MINUTES = 5;
 
@@ -202,6 +211,84 @@ async function releaseMissADayClaim(userId: string, windowKey: string): Promise<
     );
 }
 
+async function releaseFailureReasonClaim(userId: string, windowKey: string): Promise<void> {
+  await db
+    .delete(notificationDispatches)
+    .where(
+      and(
+        eq(notificationDispatches.userId, userId),
+        eq(notificationDispatches.notificationType, FAILURE_REASON_NOTIFICATION_TYPE),
+        eq(notificationDispatches.windowKey, windowKey),
+      ),
+    );
+}
+
+/**
+ * Failure-reason reminder (#441): fixed 8 PM local nudge to log why the user could
+ * not meditate. Yesterday's missed day takes priority over today, so the morning-after
+ * "you missed yesterday" framing wins when both are open.
+ *
+ * Idempotency is anchored to `triggerDate` (the local date the 8 PM run fires on), NOT
+ * the day being asked about. A day the user never logs is therefore surfaced twice — once
+ * that evening ("today" framing) and once the next evening ("yesterday" framing) — which
+ * is the behavior the ticket asks for, while still capping sends to one per user per day.
+ * Returns "sent" only when a push was actually delivered on some channel.
+ */
+async function dispatchFailureReasonReminder(
+  userId: string,
+  triggerDate: string,
+): Promise<"sent" | "skipped"> {
+  const yesterday = addCalendarDays(triggerDate, -1);
+
+  let targetDate: string | null = null;
+  let isYesterday = false;
+
+  const satYesterday = await userCompletedSessionOnDate(userId, yesterday);
+  const loggedYesterday = satYesterday || (await hasFailureReasonForDate(userId, yesterday));
+  if (!loggedYesterday) {
+    targetDate = yesterday;
+    isYesterday = true;
+  } else {
+    const satToday = await userCompletedSessionOnDate(userId, triggerDate);
+    const loggedToday = satToday || (await hasFailureReasonForDate(userId, triggerDate));
+    if (!loggedToday) {
+      targetDate = triggerDate;
+      isYesterday = false;
+    }
+  }
+
+  if (!targetDate) {
+    return "skipped";
+  }
+
+  const claimed = await claimNotificationDispatch({
+    userId,
+    notificationType: FAILURE_REASON_NOTIFICATION_TYPE,
+    windowKey: triggerDate,
+  });
+  if (!claimed) {
+    return "skipped";
+  }
+
+  try {
+    const { delivered } = await sendFailureReasonReminderNotification({
+      recipientUserId: userId,
+      targetDate,
+      isYesterday,
+    });
+    if (delivered) {
+      return "sent";
+    }
+    await releaseFailureReasonClaim(userId, triggerDate);
+    return "skipped";
+  } catch (sendError) {
+    // Release the claim so a later run can retry rather than permanently blocking this date.
+    console.error(`Failed to send failure-reason reminder to user ${userId}:`, sendError);
+    await releaseFailureReasonClaim(userId, triggerDate);
+    return "skipped";
+  }
+}
+
 function addCalendarDays(dateKey: string, deltaDays: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const utc = new Date(Date.UTC(y, m - 1, d + deltaDays));
@@ -213,6 +300,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   sent: number;
   skipped: number;
   missADaySent: number;
+  failureReasonSent: number;
 }> {
   const candidates = await db
     .select()
@@ -223,6 +311,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
         or(
           eq(notificationPreferences.dailyReminderEnabled, true),
           eq(notificationPreferences.missADayEnabled, true),
+          eq(notificationPreferences.failureReasonReminderEnabled, true),
         ),
       ),
     );
@@ -230,10 +319,38 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   let sent = 0;
   let skipped = 0;
   let missADaySent = 0;
+  let failureReasonSent = 0;
 
   for (const prefs of candidates) {
     try {
       const local = getLocalParts(now, prefs.tz);
+
+      // Failure-reason reminder fires at a fixed 8 PM local time, independent of the
+      // user's daily reminder time. A successful send completes this candidate for
+      // metrics purposes, so it must not also fall through into daily / miss-a-day work.
+      if (prefs.failureReasonReminderEnabled) {
+        const frWindow = isWithinCronWindow(local.minutesSinceMidnight, FAILURE_REASON_REMINDER_MINUTES);
+        if (
+          frWindow.within &&
+          !isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)
+        ) {
+          const triggerDate = addCalendarDays(local.dateKey, frWindow.dayOffset);
+          const outcome = await dispatchFailureReasonReminder(prefs.userId, triggerDate);
+          if (outcome === "sent") {
+            failureReasonSent += 1;
+            sent += 1;
+            continue;
+          }
+        }
+      }
+
+      // A failure-reason-only candidate has no further work; don't let it fall through
+      // into the daily flow where it would be double-counted as skipped.
+      if (!prefs.dailyReminderEnabled && !prefs.missADayEnabled) {
+        skipped += 1;
+        continue;
+      }
+
       const reminderMinutes = parseReminderMinutes(prefs.dailyReminderTime);
 
       const { within, dayOffset } = isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes);
@@ -354,5 +471,5 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
     }
   }
 
-  return { scanned: candidates.length, sent, skipped, missADaySent };
+  return { scanned: candidates.length, sent, skipped, missADaySent, failureReasonSent };
 }

@@ -57,6 +57,10 @@ export async function PATCH(request: NextRequest) {
       updates.missADayEnabled = body.missADayEnabled;
       hasUpdate = true;
     }
+    if (typeof body.failureReasonReminderEnabled === "boolean") {
+      updates.failureReasonReminderEnabled = body.failureReasonReminderEnabled;
+      hasUpdate = true;
+    }
     if (typeof body.friendRequestNotificationsEnabled === "boolean") {
       updates.friendRequestNotificationsEnabled = body.friendRequestNotificationsEnabled;
       hasUpdate = true;
