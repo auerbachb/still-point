@@ -102,10 +102,11 @@ export const failureReasons = pgTable("failure_reasons", {
     table.reasonDate,
   ),
   /** A blank/whitespace-only row would make hasFailureReasonForDate() suppress the
-   *  reminder for that day despite no real note. Enforce non-empty at the DB layer. */
+   *  reminder for that day despite no real note. Reject text with no non-whitespace
+   *  character (covers spaces, tabs, and newlines) at the DB layer. */
   textNotBlank: check(
     "failure_reasons_text_not_blank",
-    sql`char_length(btrim(${table.text})) > 0`,
+    sql`${table.text} ~ '[^[:space:]]'`,
   ),
 }));
 
