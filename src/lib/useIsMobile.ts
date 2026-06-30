@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from "react";
 
+function getIsMobile() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 600px)").matches;
+}
+
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(getIsMobile);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 600px)");

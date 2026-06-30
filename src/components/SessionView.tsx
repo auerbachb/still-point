@@ -418,7 +418,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
               type="button"
               disabled={!isActive}
               aria-pressed={mindState === "thinking"}
-              aria-label="Hold for light distraction, or hold Space. Release when aware again."
+              aria-label={isMobile ? "Hold for light distraction. Release when aware again." : "Hold for light distraction, or hold Space. Release when aware again."}
               onMouseDown={e => {
                 e.preventDefault();
                 handlePointerDistractionDown();
@@ -456,7 +456,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
               type="button"
               disabled={!isActive}
               aria-pressed={mindState === "hyperfocus"}
-              aria-label="Hold for hyperfocus, or hold Comma. Release to return to aware."
+              aria-label={isMobile ? "Hold for hyperfocus. Release to return to aware." : "Hold for hyperfocus, or hold Comma. Release to return to aware."}
               onMouseDown={e => {
                 e.preventDefault();
                 handlePointerHyperfocusDown();

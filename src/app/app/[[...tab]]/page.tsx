@@ -292,11 +292,18 @@ export default function StillPoint() {
   // opening a session/overlay from a scrolled tab (e.g. the long Home page)
   // inherits the old scroll offset and lands mid-screen, hiding the timer at
   // the top of the session view (#473 P2).
+  // Only scroll when an overlay OPENS (becomes non-null); closing an overlay
+  // should restore the underlying tab's scroll position, not reset it.
+  useEffect(() => {
+    if (typeof window !== "undefined" && overlay !== null) {
+      window.scrollTo(0, 0);
+    }
+  }, [overlay]);
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo(0, 0);
     }
-  }, [overlay, tab, buddySessionId]);
+  }, [tab, buddySessionId]);
 
   // Keep transient state in sync with the URL. Browser back/forward (and any
   // other navigation) changes the active tab via useParams without touching
