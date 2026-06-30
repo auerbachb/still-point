@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Thought } from "@/lib/api";
+import { FlashHint } from "./FlashHint";
 
 type ThoughtJournalProps = {
   username: string;
@@ -71,13 +72,15 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
       </div>
 
       <div style={{ width: "100%", maxWidth: "min(500px, calc(100vw - 40px))" }}>
-        <p style={{
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-          fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
-          marginBottom: "24px", lineHeight: 1.6,
-        }}>
-          Every thought that felt urgent in the moment. Looking back &mdash; how many actually needed your attention right then?
-        </p>
+        <FlashHint>
+          <p style={{
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
+            marginBottom: "24px", lineHeight: 1.6,
+          }}>
+            Every thought that felt urgent in the moment. Looking back &mdash; how many actually needed your attention right then?
+          </p>
+        </FlashHint>
 
         {Object.entries(grouped).reverse().map(([day, dayThoughts]) => (
           <div key={day} style={{ marginBottom: "20px" }}>
