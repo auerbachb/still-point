@@ -790,6 +790,7 @@ export default function StillPoint() {
               throw new Error("Failed to save note");
             }
           } : undefined}
+          compact={isMobile}
         />
       )}
 

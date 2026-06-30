@@ -13,6 +13,8 @@ type CompletionScreenProps = {
   thoughts: Array<{ timeInSession: number; text: string }>;
   onReturn: () => void;
   onSaveNote?: (text: string) => Promise<void>;
+  /** Tighten vertical spacing for narrow-viewport mobile layouts (#473). */
+  compact?: boolean;
 };
 
 export function CompletionScreen({
@@ -25,6 +27,7 @@ export function CompletionScreen({
   thoughts,
   onReturn,
   onSaveNote,
+  compact = false,
 }: CompletionScreenProps) {
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
@@ -43,7 +46,7 @@ export function CompletionScreen({
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: "32px", animation: "fadeIn 0.8s ease",
+      gap: compact ? "16px" : "32px", animation: "fadeIn 0.8s ease",
     }}>
       <div style={{ fontSize: "64px", opacity: 0.8 }}>&#x25C9;</div>
 
