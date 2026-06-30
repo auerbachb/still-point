@@ -541,20 +541,26 @@ export default function StillPoint() {
       minHeight: "100%",
       display: "grid",
       gridTemplateRows: isImmersive ? "1fr" : "auto 1fr auto",
-      alignItems: "center",
+      // Immersive flows (session/breath/buddy) can exceed the viewport on short
+      // mobile screens; anchor to the top there so the timer stays reachable and
+      // the page scrolls naturally instead of clipping the top when centered.
+      // Desktop keeps the original vertical centering.
+      alignItems: isImmersive && isMobile ? "start" : "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
-        ? "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
+        ? isImmersive
+          ? "var(--s3) var(--s3) calc(var(--s4) + env(safe-area-inset-bottom, 0px))"
+          : "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
         : "var(--s4) var(--s4)",
     }}>
       {/* Nav */}
       {!isImmersive && (
         <div style={isMobile ? {
           position: "fixed", bottom: 0, left: 0, right: 0,
-          display: "flex", justifyContent: "space-around",
+          display: "flex", justifyContent: "space-between",
           background: "rgba(var(--bg-rgb), 0.92)", backdropFilter: "blur(10px)",
           borderTop: "1px solid var(--border-1)",
-          padding: "10px 0 env(safe-area-inset-bottom, 8px)",
+          padding: "8px 4px env(safe-area-inset-bottom, 8px)",
           zIndex: 100,
         } : {
           position: "fixed", top: "var(--s4)", right: "var(--s4)",
@@ -570,13 +576,19 @@ export default function StillPoint() {
                 background: "none", border: "none",
                 color: !overlay && tab === t ? "var(--fg)" : "var(--fg-2)",
                 fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                fontSize: isMobile ? "13px" : "11px",
-                letterSpacing: "0.1em",
+                // 6 uppercase labels must coexist on a 320px row: scale the font with
+                // viewport width and drop the wide tracking so SETTINGS never clips.
+                fontSize: isMobile ? "clamp(9px, 2.7vw, 12px)" : "11px",
+                letterSpacing: isMobile ? "0.01em" : "0.1em",
                 textTransform: "uppercase",
                 cursor: "pointer",
-                padding: isMobile ? "12px 14px" : "8px",
-                minWidth: isMobile ? "44px" : undefined,
+                padding: isMobile ? "12px 2px 16px" : "8px",
+                // flex:1 + minWidth:0 gives every tab an equal share of the row and
+                // lets the label center within its cell without pushing neighbors.
+                flex: isMobile ? "1 1 0" : undefined,
+                minWidth: isMobile ? 0 : undefined,
                 minHeight: isMobile ? "44px" : undefined,
+                whiteSpace: isMobile ? "nowrap" : undefined,
                 lineHeight: 1.2,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 transition: "color 0.3s",
@@ -586,7 +598,7 @@ export default function StillPoint() {
               {TAB_LABELS[t]}
               {!overlay && tab === t && isMobile && (
                 <span style={{
-                  position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)",
+                  position: "absolute", bottom: "6px", left: "50%", transform: "translateX(-50%)",
                   width: "16px", height: "2px", borderRadius: "1px",
                   background: "var(--fg)",
                 }} />

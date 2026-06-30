@@ -9,6 +9,7 @@ import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -46,6 +47,7 @@ const mono: CSSProperties = {
 };
 
 export function SessionView({ currentDay, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
+  const isMobile = useIsMobile();
   const plannedSeconds = durationForSession(sessionType, currentDay);
   const [bonusSeconds, setBonusSeconds] = useState(0);
   const totalSeconds = plannedSeconds + bonusSeconds;
@@ -315,16 +317,18 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
 
   const holdButtonBase: CSSProperties = {
     ...mono,
-    fontSize: "12px",
+    fontSize: isMobile ? "11px" : "12px",
     letterSpacing: "0.12em",
     textTransform: "uppercase",
-    padding: "12px 16px",
+    padding: isMobile ? "10px 10px" : "12px 16px",
     borderRadius: "16px",
     cursor: isActive ? "pointer" : "default",
     transition: "all 0.25s",
-    flex: "1 1 140px",
-    minWidth: "min(160px, 42vw)",
-    maxWidth: "200px",
+    // On mobile let the two hold buttons share a single row instead of stacking,
+    // which reclaims vertical space on short screens (#473).
+    flex: isMobile ? "1 1 0" : "1 1 140px",
+    minWidth: isMobile ? 0 : "min(160px, 42vw)",
+    maxWidth: isMobile ? "none" : "200px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -405,7 +409,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
               flexWrap: "wrap",
               justifyContent: "center",
               gap: "12px",
-              marginTop: "16px",
+              marginTop: isMobile ? "10px" : "16px",
               width: "100%",
             }}
           >
@@ -482,23 +486,27 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
             </button>
           </div>
 
-          <p
-            style={{
-              margin: "12px 0 0",
-              textAlign: "center",
-              ...mono,
-              fontSize: "10px",
-              color: "var(--fg-4)",
-              letterSpacing: "0.05em",
-              lineHeight: 1.45,
-            }}
-          >
-            Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
-          </p>
+          {/* Persistent helper copy is hidden on mobile (#473): it consumes scarce
+              vertical space during a sit. The button labels already convey the action. */}
+          {!isMobile && (
+            <p
+              style={{
+                margin: "12px 0 0",
+                textAlign: "center",
+                ...mono,
+                fontSize: "10px",
+                color: "var(--fg-4)",
+                letterSpacing: "0.05em",
+                lineHeight: 1.45,
+              }}
+            >
+              Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
+            </p>
+          )}
 
           <div
             style={{
-              marginTop: "12px",
+              marginTop: isMobile ? "10px" : "12px",
               ...mono,
               fontSize: "10px",
               color: "var(--fg-4)",
@@ -512,7 +520,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
           </div>
 
           {!showPostDistractionCapture && (
-            <div style={{ marginTop: "18px", display: "flex", justifyContent: "center", width: "100%" }}>
+            <div style={{ marginTop: isMobile ? "12px" : "18px", display: "flex", justifyContent: "center", width: "100%" }}>
               <button
                 type="button"
                 onClick={handleOpenThoughtCapture}
@@ -539,7 +547,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
       )}
 
       {!sessionFinished && !showPostDistractionCapture && (
-        <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: isMobile ? "12px" : "20px", flexWrap: "wrap" }}>
           <button
             type="button"
             disabled={sessionFinished || showPostDistractionCapture || !isActive}
@@ -597,7 +605,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
         }}
       >
         {!showPostDistractionCapture && (
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: isMobile ? "16px" : "32px", flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={togglePause}
@@ -663,7 +671,7 @@ export function SessionView({ currentDay, sessionType = "standard", onComplete, 
             display: "flex",
             justifyContent: "center",
             gap: "16px",
-            marginTop: "24px",
+            marginTop: isMobile ? "14px" : "24px",
             ...mono,
             fontSize: "11px",
             letterSpacing: "0.1em",

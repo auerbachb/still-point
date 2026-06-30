@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Thought } from "@/lib/api";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type ThoughtJournalProps = {
   username: string;
@@ -10,6 +11,7 @@ type ThoughtJournalProps = {
 export function ThoughtJournal({ username }: ThoughtJournalProps) {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetch("/api/thoughts")
@@ -71,13 +73,17 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
       </div>
 
       <div style={{ width: "100%", maxWidth: "min(500px, calc(100vw - 40px))" }}>
-        <p style={{
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
-          fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
-          marginBottom: "24px", lineHeight: 1.6,
-        }}>
-          Every thought that felt urgent in the moment. Looking back &mdash; how many actually needed your attention right then?
-        </p>
+        {/* Reflective prompt is hidden on mobile (#473) to keep the captured-thought
+            list above the fold; the journal's intent is clear from its title + counter. */}
+        {!isMobile && (
+          <p style={{
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
+            marginBottom: "24px", lineHeight: 1.6,
+          }}>
+            Every thought that felt urgent in the moment. Looking back &mdash; how many actually needed your attention right then?
+          </p>
+        )}
 
         {Object.entries(grouped).reverse().map(([day, dayThoughts]) => (
           <div key={day} style={{ marginBottom: "20px" }}>

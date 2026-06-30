@@ -380,7 +380,7 @@ export function BlockTimer({
   const boxesAreaWidth = `min(${boxesAreaMaxPx}px, calc(100vw - ${boxesAreaViewportInset}px))`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? "18px" : "32px" }}>
       <div
         style={{
           width: "min(560px, calc(100vw - 24px))",
@@ -435,7 +435,7 @@ export function BlockTimer({
         </button>
       </div>
 
-      <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+      <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "10px" : "14px" }}>
         <MindStateBar
           elapsed={elapsed}
           totalSeconds={totalSeconds}
@@ -463,7 +463,7 @@ export function BlockTimer({
       </div>
 
       {useMinuteBlocks ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? "10px" : "16px" }}>
           <div style={{
             display: "flex", flexWrap: "wrap", gap: blockGap,
             justifyContent: "center", maxWidth: boxesAreaWidth,
