@@ -89,6 +89,43 @@ Google's `sub` is stable for a Google account across OAuth clients in the same C
 
 In **UI test mode** (`SP_UI_TEST_MODE=1`) the app does **not** render the Continue with Google button (same as Sign in with Apple), keeping XCUITest hit-testing on the email/password path stable.
 
+### CI credential injection (required for TestFlight / App Store builds)
+
+The `GID_*` build settings default to **empty** in `ios/project.yml` so no real client ID is committed. A build that ships with them empty resolves `GIDClientID` to `""`, and `GoogleSignInController.signIn()` throws `.notConfigured` **before** presenting the Google sheet or POSTing any token — Google sign-in is silently disabled.
+
+They are therefore injected from CI secrets at archive time:
+
+- **TestFlight** (`.github/workflows/ios-testflight-build.yml`): the `Build archive` step passes `GID_CLIENT_ID`, `GID_REVERSED_CLIENT_ID`, and `GID_SERVER_CLIENT_ID` to `xcodebuild archive` as build settings (and warns in the log if `GID_CLIENT_ID` / `GID_REVERSED_CLIENT_ID` are empty).
+- **App Store** (`.github/workflows/ios-app-store-release.yml` → `ios/fastlane/Fastfile`): the `build` lane feeds the same values into `gym`'s `xcargs` via `google_signin_xcargs`.
+
+Set these as repository (or org) **GitHub Actions secrets** — they flow into the reusable build workflow through `secrets: inherit`:
+
+| Secret | Value |
+| --- | --- |
+| `GID_CLIENT_ID` | iOS OAuth client ID — `<NUMBER>-<HASH>.apps.googleusercontent.com` |
+| `GID_REVERSED_CLIENT_ID` | Reversed iOS client ID URL scheme — `com.googleusercontent.apps.<NUMBER>-<HASH>` |
+| `GID_SERVER_CLIENT_ID` | Web/server OAuth client ID (`= AUTH_GOOGLE_ID`), optional |
+
+> **#471 root cause:** TestFlight build 14 was produced without these secrets wired into the archive step, so the shipped binary had no iOS Google client ID. The native flow failed in-app at `.notConfigured`, which is why Vercel showed near-zero traffic to `/api/auth/google-native`. The instrumentation below surfaces that exact cause on the next build.
+
+### Failure instrumentation (#471)
+
+The native flow surfaces the **real** underlying error instead of a generic "try again", because the original TestFlight failure was non-reproducible and discarded by a catch-all:
+
+- `GoogleSignInController.userFacingError(_:)` logs the full `NSError` (domain, code, `localizedDescription`, and any `NSUnderlyingErrorKey`) via `os.Logger(subsystem: "com.brettonauerbach.stillpoint", category: "google-signin")`, then returns a short, screenshot-friendly message — `Google sign-in failed (<domain> <code>). Please try again.` — that is displayed on the auth screen. A `.notConfigured` pre-flight error surfaces verbatim (`Google sign-in is not configured.`).
+- `CancellationError` (surrounding `Task` cancelled) and `GIDSignInError.canceled` (user dismissed the sheet) stay a **silent no-op**, never a displayed failure.
+- Backend rejections (`APIError`, e.g. an `aud` mismatch → 401) are logged distinctly via `logBackendFailure(_:)` (status + code + message) so a Track A (backend) failure is separable from a Track B (iOS client / Google Cloud) failure, while the user still sees the server's friendly message.
+- Pure message/log formatting lives in `StillPointShared.GoogleSignInDiagnostics` so it is unit-tested (`GoogleSignInDiagnosticsTests`).
+
+### External verification checklist (Google Cloud + Vercel)
+
+These are config checks outside the codebase; confirm them against the failing build before cutting the next one:
+
+- [ ] An **iOS-type** OAuth client exists in the same Google Cloud project as `AUTH_GOOGLE_ID`, and its **bundle ID == `com.brettonauerbach.stillpoint`**.
+- [ ] `GID_CLIENT_ID` secret == that iOS client's client ID; `GID_REVERSED_CLIENT_ID` secret == that client's reversed ID (so `RootView.onOpenURL` → `GIDSignIn.handle(url)` receives the OAuth callback).
+- [ ] The token-verification audience matches: prod **Vercel** env has `AUTH_GOOGLE_IOS_CLIENT_ID` (and `AUTH_GOOGLE_ID`) set in the **Production** environment (mind the `VERCEL_ENV` prod-vs-preview distinction).
+- [ ] **OAuth consent screen** is either **Published** or the failing Google account is a listed **test user**; requested scopes are `email` + `profile`.
+
 ---
 
 ## Apple server-to-server notifications (#338)

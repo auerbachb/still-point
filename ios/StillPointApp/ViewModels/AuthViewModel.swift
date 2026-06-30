@@ -1,5 +1,4 @@
 import SwiftUI
-import GoogleSignIn
 import StillPointShared
 
 @MainActor
@@ -83,18 +82,21 @@ final class AuthViewModel {
         do {
             let request = try await GoogleSignInController.signIn()
             return try await APIClient.shared.signInWithGoogle(request)
-        } catch is CancellationError {
-            // The surrounding Task was cancelled (e.g. the view went away) — not a real error.
-            return nil
-        } catch let signInError as GIDSignInError where signInError.code == .canceled {
-            // User dismissed the Google sheet — treat cancellation as a no-op, not a failure.
-            return nil
         } catch let apiError as APIError {
+            // The token was obtained but the backend rejected it (e.g. aud mismatch → 401).
+            // Log status/code distinctly so a backend failure is separable from an in-app
+            // SDK failure, then show the server's friendly message.
+            GoogleSignInController.logBackendFailure(apiError)
             error = apiError.message
             return nil
         } catch {
-            print("Google sign-in failed: \(error.localizedDescription)")
-            self.error = "Google sign-in failed. Please try again."
+            // Surface the real underlying error (GIDSignInError / NSError) rather than a
+            // generic "try again" so the next on-device occurrence is diagnosable (#471).
+            // `userFacingError` returns nil for benign cancellations (Task cancelled or the
+            // user dismissed the sheet), which stay a silent no-op.
+            if let message = GoogleSignInController.userFacingError(for: error) {
+                self.error = message
+            }
             return nil
         }
     }

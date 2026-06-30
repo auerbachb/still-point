@@ -1,5 +1,6 @@
 import Foundation
 import GoogleSignIn
+import os
 import StillPointShared
 import UIKit
 
@@ -8,6 +9,12 @@ import UIKit
 /// system button that performs the flow, so this controller both presents the sheet and
 /// produces the request.
 enum GoogleSignInController {
+    /// Diagnostic logger for the native Google flow. Mirrors `APIClient.diagLog`
+    /// (os.Logger) so failure detail reaches the device Console / xcresult — `print()`
+    /// from the app process is not captured there, and the real `GIDSignInError` string
+    /// is the decisive artifact for the non-reproducible #471 failure.
+    static let log = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "google-signin")
+
     enum GoogleSignInControllerError: LocalizedError {
         /// `GIDClientID` is missing from Info.plist (the iOS OAuth client ID is not configured).
         case notConfigured
@@ -58,6 +65,50 @@ enum GoogleSignInController {
             idToken: idToken,
             serverAuthCode: result.serverAuthCode
         )
+    }
+
+    /// Classifies a thrown sign-in error for the UI layer and surfaces the *real*
+    /// underlying error instead of a generic "try again" (#471).
+    ///
+    /// - Returns `nil` when the error is a benign cancellation (the surrounding `Task`
+    ///   was cancelled, or the user dismissed the Google sheet) — the caller should
+    ///   treat that as a silent no-op, never a failure.
+    /// - Otherwise logs the full underlying `NSError` (domain, code, description, and any
+    ///   `NSUnderlyingErrorKey`) to the device Console and returns a short, screenshot-
+    ///   friendly message (domain + code) to display on the auth screen.
+    static func userFacingError(for error: Error) -> String? {
+        // Benign cancellations: surrounding Task cancelled, or the user dismissed the
+        // Google sheet. Catch `CancellationError` explicitly so a user-cancel is never
+        // reported as a failure.
+        if error is CancellationError {
+            return nil
+        }
+        if let signInError = error as? GIDSignInError, signInError.code == .canceled {
+            return nil
+        }
+
+        // Our own pre-flight failures (missing GIDClientID, no presenter, missing token)
+        // already carry a clear description — log + surface it verbatim. A `.notConfigured`
+        // here means the build shipped without the `GID_*` client IDs injected, which is the
+        // prime non-repro suspect (the SDK never presents, so the backend is never hit).
+        if let controllerError = error as? GoogleSignInControllerError {
+            log.error("google-signin pre-flight failure: \(String(describing: controllerError), privacy: .public)")
+            return controllerError.errorDescription ?? "Google sign-in failed. Please try again."
+        }
+
+        let nsError = error as NSError
+        let underlying = (nsError.userInfo[NSUnderlyingErrorKey] as? NSError).map { underlyingError in
+            "\(underlyingError.domain) \(underlyingError.code) \(underlyingError.localizedDescription)"
+        }
+        log.error("\(GoogleSignInDiagnostics.logLine(domain: nsError.domain, code: nsError.code, description: nsError.localizedDescription, underlying: underlying), privacy: .public)")
+        return GoogleSignInDiagnostics.userFacingMessage(domain: nsError.domain, code: nsError.code)
+    }
+
+    /// Logs a backend rejection of an already-obtained Google token distinctly from an
+    /// in-app SDK failure, so Track A (backend) vs Track B (iOS client / Google Cloud)
+    /// is separable in the device log (#471).
+    static func logBackendFailure(_ error: APIError) {
+        log.error("google-signin backend rejected token: status=\(error.status, privacy: .public) code=\(error.code ?? "none", privacy: .public) message=\(error.message, privacy: .public)")
     }
 
     private static func infoPlistString(_ key: String) -> String? {

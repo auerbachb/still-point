@@ -225,6 +225,12 @@ jobs:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          # Native Google Sign-In client IDs (#344 / #471). The Fastfile `build` lane
+          # feeds these into gym's xcargs so the App Store IPA also ships a working iOS
+          # Google client ID + reversed-client-ID URL scheme. Empty/unset → no-op.
+          GID_CLIENT_ID: ${{ secrets.GID_CLIENT_ID }}
+          GID_REVERSED_CLIENT_ID: ${{ secrets.GID_REVERSED_CLIENT_ID }}
+          GID_SERVER_CLIENT_ID: ${{ secrets.GID_SERVER_CLIENT_ID }}
           RELEASE_OWNER: ${{ github.actor }}
           SKIP_PREFLIGHT: "1"
           # Harness default: upload binary + metadata only — omit SUBMIT_FOR_REVIEW (deliver uses submit_for_review: false).

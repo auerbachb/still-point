@@ -26,6 +26,22 @@ def stillpoint_api_key
   )
 end
 
+# Build settings that inject the native Google Sign-In client IDs (#344 / #471) into
+# the archive so the IPA's Info.plist (GIDClientID, GIDServerClientID, and the reversed-
+# client-ID URL scheme) is populated from CI secrets instead of the empty committed
+# defaults in project.yml. Returns nil when unset so non-Google builds are unaffected —
+# the same gap shipped TestFlight build 14 with Google sign-in disabled (#471).
+def google_signin_xcargs
+  pairs = {
+    "GID_CLIENT_ID" => ENV["GID_CLIENT_ID"],
+    "GID_REVERSED_CLIENT_ID" => ENV["GID_REVERSED_CLIENT_ID"],
+    "GID_SERVER_CLIENT_ID" => ENV["GID_SERVER_CLIENT_ID"]
+  }.reject { |_, value| value.nil? || value.empty? }
+  return nil if pairs.empty?
+
+  pairs.map { |key, value| "#{key}=#{value.shellescape}" }.join(" ")
+end
+
 platform :ios do
   desc "Regenerate App Store screenshot candidates (15–20 per device via SnapshotTests)"
   lane :screenshots do
@@ -131,7 +147,8 @@ platform :ios do
       export_options: "ExportOptionsFastlane.plist",
       output_directory: ENV["GYM_OUTPUT_DIRECTORY"] || "build",
       output_name: "StillPoint.ipa",
-      clean: !ENV["GYM_NO_CLEAN"]
+      clean: !ENV["GYM_NO_CLEAN"],
+      xcargs: google_signin_xcargs
     )
   end
 
