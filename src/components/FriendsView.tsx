@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { api, ApiError, type FriendPublicUser, type FriendRequestRow } from "@/lib/api";
+import { FlashHint } from "./FlashHint";
 
 const labelStyle: React.CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
@@ -164,18 +165,20 @@ export function FriendsView() {
         Friends
       </h2>
 
-      <p
-        style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-          fontSize: "11px",
-          color: "var(--fg-3)",
-          textAlign: "center",
-          margin: 0,
-          lineHeight: 1.5,
-        }}
-      >
-        Search finds public profiles only. Usernames never expose email.
-      </p>
+      <FlashHint style={{ textAlign: "center" }}>
+        <p
+          style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "11px",
+            color: "var(--fg-3)",
+            textAlign: "center",
+            margin: 0,
+            lineHeight: 1.5,
+          }}
+        >
+          Search finds public profiles only. Usernames never expose email.
+        </p>
+      </FlashHint>
 
       {banner && (
         <div

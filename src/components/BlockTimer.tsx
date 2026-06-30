@@ -380,7 +380,7 @@ export function BlockTimer({
   const boxesAreaWidth = `min(${boxesAreaMaxPx}px, calc(100vw - ${boxesAreaViewportInset}px))`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? "18px" : "32px" }}>
       <div
         style={{
           width: "min(560px, calc(100vw - 24px))",
@@ -394,7 +394,7 @@ export function BlockTimer({
           aria-hidden={!showTimer}
           style={{
             fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
-            fontSize: "min(120px, 18vw)",
+            fontSize: isMobile ? "min(72px, 19vw)" : "min(120px, 18vw)",
             fontWeight: 200,
             letterSpacing: "0.05em",
             color: elapsed >= totalSeconds ? "var(--accent-green)" : "var(--fg)",
@@ -426,7 +426,9 @@ export function BlockTimer({
             fontSize: "11px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            padding: "8px 12px",
+            padding: "12px 16px",
+            minHeight: "44px",
+            minWidth: "44px",
             transition: "opacity 0.2s, border-color 0.2s, color 0.2s",
             opacity: showTimer ? 0.9 : 1,
           }}
