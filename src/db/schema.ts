@@ -32,12 +32,26 @@ export const users = pgTable("users", {
    *  pre-session inspiration on the Home view. Defaults off. */
   aphorismsEnabled: boolean("aphorisms_enabled").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
+  /** #238: miss-a-day recovery ramp. Nullable trio — all three are set together when a
+   *  2+ day gap is detected (`/api/auth/me`) and cleared together once the ramp finishes.
+   *  `recoveryTargetDay` freezes the pre-miss `currentDay` (the level to ramp back to);
+   *  `currentDay` itself is left untouched during recovery so the first fully-recovered
+   *  session naturally lands back on that level via `durationForDay(currentDay)`. */
+  recoveryTargetDay: integer("recovery_target_day"),
+  recoveryCurrentStep: integer("recovery_current_step"),
+  recoveryTotalSteps: integer("recovery_total_steps"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   publicIdx: index("idx_users_public").on(table.isPublic),
   /** #8: Case-insensitive uniqueness for username; display case preserved in column. */
   usernameLowerUnique: uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`),
+  /** All three recovery columns are null together, or set together — never a partial state. */
+  recoveryAllOrNone: check(
+    "users_recovery_all_or_none",
+    sql`(${table.recoveryTargetDay} is null) = (${table.recoveryCurrentStep} is null)
+      and (${table.recoveryCurrentStep} is null) = (${table.recoveryTotalSteps} is null)`,
+  ),
 }));
 
 /** Per-user notification opt-in and schedule (#345). One row per user. */
