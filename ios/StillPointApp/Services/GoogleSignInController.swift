@@ -86,6 +86,13 @@ enum GoogleSignInController {
         if let signInError = error as? GIDSignInError, signInError.code == .canceled {
             return nil
         }
+        // Some GoogleSignIn/bridging paths surface the user-cancel as a plain NSError in
+        // the GIDSignInError domain that does not cast to GIDSignInError above; match the
+        // bridged domain/code too so dismissing the sheet stays a silent no-op.
+        let nsError = error as NSError
+        if nsError.domain == GIDSignInError.errorDomain, nsError.code == GIDSignInError.Code.canceled.rawValue {
+            return nil
+        }
 
         // Our own pre-flight failures (missing GIDClientID, no presenter, missing token)
         // already carry a clear description — log + surface it verbatim. A `.notConfigured`

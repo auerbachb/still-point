@@ -235,7 +235,16 @@ jobs:
           SKIP_PREFLIGHT: "1"
           # Harness default: upload binary + metadata only — omit SUBMIT_FOR_REVIEW (deliver uses submit_for_review: false).
           # Issue #296+: set SUBMIT_FOR_REVIEW=1 (and optionally AUTOMATIC_RELEASE=1) when a release owner approves submission.
-        run: bundle exec fastlane release
+        run: |
+          # An App Store production build MUST ship native Google sign-in configured — a
+          # build with these unset would recreate #471 (build 14 shipped with Google off).
+          # Hard-fail here rather than deliver a broken binary to users (mirrors the
+          # TestFlight archive gate). GID_* are already in this step's env above.
+          if [[ -z "${GID_CLIENT_ID}" || -z "${GID_REVERSED_CLIENT_ID}" ]]; then
+            echo "::error::GID_CLIENT_ID and GID_REVERSED_CLIENT_ID must both be set for an App Store release — refusing to ship a build with native Google sign-in disabled (see #471)."
+            exit 1
+          fi
+          bundle exec fastlane release
 
       - name: Clean up keychain and provisioning profile
         if: always()
