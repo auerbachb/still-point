@@ -42,6 +42,8 @@ export function CompletionScreen({
   const [saveError, setSaveError] = useState(false);
   const [focusRating, setFocusRating] = useState(DEFAULT_RATING);
   const [happinessRating, setHappinessRating] = useState(DEFAULT_RATING);
+  const [focusTouched, setFocusTouched] = useState(false);
+  const [happinessTouched, setHappinessTouched] = useState(false);
   const [ratingsSaved, setRatingsSaved] = useState(false);
   const [savingRatings, setSavingRatings] = useState(false);
   const [ratingsSaveError, setRatingsSaveError] = useState(false);
@@ -59,6 +61,8 @@ export function CompletionScreen({
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       gap: compact ? "16px" : "32px", animation: "fadeIn 0.8s ease",
+      // Ensure the Return button clears the fixed bottom nav on mobile (#479).
+      paddingBottom: compact ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))" : undefined,
     }}>
       <div style={{ fontSize: "64px", opacity: 0.8 }}>&#x25C9;</div>
 
@@ -254,8 +258,8 @@ export function CompletionScreen({
             </div>
           ) : (
             <>
-              <RatingSlider label="Focus" value={focusRating} onChange={setFocusRating} disabled={savingRatings} />
-              <RatingSlider label="Happiness" value={happinessRating} onChange={setHappinessRating} disabled={savingRatings} />
+              <RatingSlider label="Focus" value={focusRating} onChange={(v) => { setFocusRating(v); setFocusTouched(true); }} disabled={savingRatings} />
+              <RatingSlider label="Happiness" value={happinessRating} onChange={(v) => { setHappinessRating(v); setHappinessTouched(true); }} disabled={savingRatings} />
               {ratingsSaveError && (
                 <div
                   role="alert"
@@ -269,39 +273,41 @@ export function CompletionScreen({
                   failed to save — tap to retry
                 </div>
               )}
-              <button
-                type="button"
-                onClick={async () => {
-                  setSavingRatings(true);
-                  try {
-                    setRatingsSaveError(false);
-                    await onSaveRatings({ focusRating, happinessRating });
-                    setRatingsSaved(true);
-                  } catch (err) {
-                    console.error("Failed to save ratings:", err);
-                    setRatingsSaveError(true);
-                  } finally {
-                    setSavingRatings(false);
-                  }
-                }}
-                disabled={savingRatings}
-                style={{
-                  background: "none",
-                  border: ratingsSaveError
-                    ? "1px solid var(--accent-danger-border)"
-                    : "1px solid var(--accent-green-border)",
-                  color: ratingsSaveError
-                    ? "var(--accent-danger)"
-                    : "var(--accent-green-text)",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                  fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "8px 24px", borderRadius: "20px",
-                  cursor: savingRatings ? "default" : "pointer",
-                  opacity: savingRatings ? 0.5 : 1,
-                }}
-              >
-                {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
-              </button>
+              {(focusTouched || happinessTouched || ratingsSaveError) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSavingRatings(true);
+                    try {
+                      setRatingsSaveError(false);
+                      await onSaveRatings({ focusRating, happinessRating });
+                      setRatingsSaved(true);
+                    } catch (err) {
+                      console.error("Failed to save ratings:", err);
+                      setRatingsSaveError(true);
+                    } finally {
+                      setSavingRatings(false);
+                    }
+                  }}
+                  disabled={savingRatings}
+                  style={{
+                    background: "none",
+                    border: ratingsSaveError
+                      ? "1px solid var(--accent-danger-border)"
+                      : "1px solid var(--accent-green-border)",
+                    color: ratingsSaveError
+                      ? "var(--accent-danger)"
+                      : "var(--accent-green-text)",
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
+                    padding: "8px 24px", borderRadius: "20px",
+                    cursor: savingRatings ? "default" : "pointer",
+                    opacity: savingRatings ? 0.5 : 1,
+                  }}
+                >
+                  {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
+                </button>
+              )}
             </>
           )}
         </div>
