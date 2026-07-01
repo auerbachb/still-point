@@ -632,7 +632,11 @@ export default function StillPoint() {
       // Immersive flows (session/breath/buddy) can exceed the viewport on small
       // phones; centering would clip the timer off the top with no way to scroll
       // up to it. Pin them to the top so the timer is always visible (#473 P2).
-      alignItems: isImmersive ? "start" : "center",
+      // The completion overlay can also overflow on mobile now that it includes
+      // survey sliders; centering would clip content above the viewport and push
+      // the Return button behind the fixed bottom nav (#479). Use "start" on
+      // mobile so the bottom padding reliably clears the nav.
+      alignItems: (isImmersive || (overlay === "complete" && isMobile)) ? "start" : "center",
       fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
       padding: isMobile
         ? "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
@@ -695,8 +699,9 @@ export default function StillPoint() {
         </div>
       )}
 
-      {/* Welcome header */}
-      {!isImmersive && (
+      {/* Welcome header — hidden during the completion overlay on mobile to
+          keep the CompletionScreen content above the fixed bottom nav (#479). */}
+      {!isImmersive && !(overlay === "complete" && isMobile) && (
         <div style={{
           fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
           fontSize: "12px", color: "var(--fg-3)",

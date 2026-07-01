@@ -61,9 +61,9 @@ export function CompletionScreen({
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: compact ? "16px" : "32px", animation: "fadeIn 0.8s ease",
+      gap: compact ? "12px" : "32px", animation: "fadeIn 0.8s ease",
     }}>
-      <div style={{ fontSize: "64px", opacity: 0.8 }}>&#x25C9;</div>
+      <div style={{ fontSize: compact ? "48px" : "64px", opacity: 0.8 }}>&#x25C9;</div>
 
       <div style={{ textAlign: "center" }}>
         <h2 style={{
