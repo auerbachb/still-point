@@ -207,6 +207,7 @@ export default function StillPoint() {
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
+  const loginRefreshCancelled = useRef(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -365,18 +366,22 @@ export default function StillPoint() {
     // Intentionally do not navigate: keep the current URL so deep-link state
     // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
     // buddy-invite / ?view= effects below can still consume it.
+    loginRefreshCancelled.current = false;
     setUser(userData);
     setOverlay(null);
     // #238: login returns raw DB fields; missed-day gap detection only runs in
     // GET /api/auth/me. Re-fetch silently so a returning user with a 2+ day gap
     // enters the recovery ramp before their first sit of this session.
+    // Guard with loginRefreshCancelled so a slow response can't repopulate user
+    // state after an explicit logout before the /api/auth/me response arrives.
     void fetch(`/api/auth/me?date=${todayLocalIsoDate()}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.user) setUser(data.user); })
+      .then((data) => { if (!loginRefreshCancelled.current && data?.user) setUser(data.user); })
       .catch(() => {});
   };
 
   const handleLogout = () => {
+    loginRefreshCancelled.current = true;
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);

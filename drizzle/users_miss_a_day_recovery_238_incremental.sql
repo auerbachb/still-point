@@ -10,7 +10,9 @@ ALTER TABLE "users"
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'users_recovery_all_or_none'
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'users_recovery_all_or_none'
+      AND conrelid = 'users'::regclass
   ) THEN
     ALTER TABLE "users"
       ADD CONSTRAINT "users_recovery_all_or_none" CHECK (

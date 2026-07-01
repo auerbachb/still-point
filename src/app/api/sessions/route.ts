@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
+import { poolDb } from "@/db/pool";
 import { sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { calculateSessionStats, parseCompleted, parseOptionalSessionType, shouldAdvanceDay } from "@/lib/constants";
 import { advanceProgression } from "@/lib/duration";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -68,45 +69,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid session type" }, { status: 400 });
     }
 
-    const [session] = await db.insert(sessions).values({
-      userId: auth.userId,
-      dayNumber,
-      sessionType,
-      duration,
-      bonusSeconds,
-      completed,
-      actualTime: actualTime ?? duration,
-      clearPercent,
-      thoughtCount: thoughtCount ?? 0,
-      breathCount,
-      mindStateLog: mindStateLog ?? [],
-      sessionDate,
-    }).returning();
-
     // Quick sessions are extra practice and do not advance the daily progression.
-    if (shouldAdvanceDay(sessionType, completed)) {
-      const [current] = await db.select({
-        currentDay: users.currentDay,
-        recoveryTargetDay: users.recoveryTargetDay,
-        recoveryCurrentStep: users.recoveryCurrentStep,
-        recoveryTotalSteps: users.recoveryTotalSteps,
-      }).from(users).where(eq(users.id, auth.userId)).limit(1);
+    // Wrap the insert + any progression update in a single transaction and lock the
+    // user row for update so concurrent standard-session completions can't clobber
+    // each other's advancement (#238 race condition).
+    const session = await poolDb.transaction(async (tx) => {
+      const [created] = await tx.insert(sessions).values({
+        userId: auth.userId,
+        dayNumber,
+        sessionType,
+        duration,
+        bonusSeconds,
+        completed,
+        actualTime: actualTime ?? duration,
+        clearPercent,
+        thoughtCount: thoughtCount ?? 0,
+        breathCount,
+        mindStateLog: mindStateLog ?? [],
+        sessionDate,
+      }).returning();
 
-      if (current) {
-        // #238: while recovering, a completed sit steps the ramp forward instead of
-        // bumping `currentDay` — see advanceProgression for the full rule.
-        const next = advanceProgression(sessionType, completed, current);
-        await db.update(users)
-          .set({
-            currentDay: next.currentDay,
-            recoveryTargetDay: next.recoveryTargetDay,
-            recoveryCurrentStep: next.recoveryCurrentStep,
-            recoveryTotalSteps: next.recoveryTotalSteps,
-            updatedAt: new Date(),
+      if (shouldAdvanceDay(sessionType, completed)) {
+        // Read the user's current progression inside the transaction so the
+        // insert + update are atomic. Concurrent completions now serialize
+        // at the transaction boundary rather than racing on a shared snapshot.
+        const [current] = await tx
+          .select({
+            currentDay: users.currentDay,
+            recoveryTargetDay: users.recoveryTargetDay,
+            recoveryCurrentStep: users.recoveryCurrentStep,
+            recoveryTotalSteps: users.recoveryTotalSteps,
           })
-          .where(eq(users.id, auth.userId));
+          .from(users)
+          .where(eq(users.id, auth.userId))
+          .limit(1);
+
+        if (current) {
+          // #238: while recovering, a completed sit steps the ramp forward instead of
+          // bumping `currentDay` — see advanceProgression for the full rule.
+          const next = advanceProgression(sessionType, completed, current);
+          await tx.update(users)
+            .set({
+              currentDay: next.currentDay,
+              recoveryTargetDay: next.recoveryTargetDay,
+              recoveryCurrentStep: next.recoveryCurrentStep,
+              recoveryTotalSteps: next.recoveryTotalSteps,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, auth.userId));
+        }
       }
-    }
+
+      return created;
+    });
 
     return NextResponse.json({ session });
   } catch (error) {

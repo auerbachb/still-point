@@ -70,15 +70,16 @@ describe("recoveryStepDuration", () => {
   });
 
   test("handles a difference not evenly divisible by totalSteps without float drift", () => {
-    // currentDay=4 -> priorDuration=90, difference=30, totalSteps=3, ramp=10 (exact) —
-    // pick a case with a genuinely non-terminating ramp instead: currentDay=8, capped at 5 steps.
-    // priorDuration=130, difference=70, totalSteps=5, ramp=14 (exact too); use totalSteps=3 forced
-    // via a fractional case: difference=25 over totalSteps=3 -> ramp=8.333...
-    const results = [1, 2, 3].map((s) => recoveryStepDuration(4, 3, s));
+    // currentDay=3 -> priorDuration=80, difference=20, totalSteps=3, ramp=6.666...
+    // All output durations must be integers even though the ramp is non-terminating.
+    // step 1 = Math.round(60 + 6.666*0) = 60
+    // step 2 = Math.round(60 + 6.666*1) = Math.round(66.666) = 67
+    // step 3 = Math.round(60 + 6.666*2) = Math.round(73.333) = 73
+    const results = [1, 2, 3].map((s) => recoveryStepDuration(3, 3, s));
     for (const r of results) {
       expect(Number.isInteger(r)).toBe(true);
     }
-    expect(results[0]).toBe(60);
+    expect(results).toEqual([60, 67, 73]);
   });
 
   test("totalSteps=0 always returns BASE_DURATION", () => {
