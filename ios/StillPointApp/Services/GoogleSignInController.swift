@@ -111,6 +111,13 @@ enum GoogleSignInController {
         log.error("google-signin backend rejected token: status=\(error.status, privacy: .public) code=\(error.code ?? "none", privacy: .public) message=\(error.message, privacy: .public)")
     }
 
+    /// Logs a client-side `APIError` (status 0) — e.g. a keychain save failure after the
+    /// backend already accepted the token, or a pre-flight network error — on the iOS
+    /// client track (Track B) so it is not mistaken for a backend rejection (#471).
+    static func logClientFailure(_ error: APIError) {
+        log.error("google-signin client-side failure (backend not the cause): status=\(error.status, privacy: .public) code=\(error.code ?? "none", privacy: .public) message=\(error.message, privacy: .public)")
+    }
+
     private static func infoPlistString(_ key: String) -> String? {
         guard let rawValue = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
             return nil

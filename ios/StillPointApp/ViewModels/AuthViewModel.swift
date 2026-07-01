@@ -83,10 +83,16 @@ final class AuthViewModel {
             let request = try await GoogleSignInController.signIn()
             return try await APIClient.shared.signInWithGoogle(request)
         } catch let apiError as APIError {
-            // The token was obtained but the backend rejected it (e.g. aud mismatch → 401).
-            // Log status/code distinctly so a backend failure is separable from an in-app
-            // SDK failure, then show the server's friendly message.
-            GoogleSignInController.logBackendFailure(apiError)
+            // Only a non-zero status is a backend rejection of an already-obtained token
+            // (e.g. aud mismatch → 401). A status-0 APIError is client-side — thrown after
+            // the backend already accepted the token (e.g. "Unable to securely save auth
+            // token") or before it was reached (no connection) — so logging it as a backend
+            // rejection is misleading. Route each to its own track, then show the message.
+            if apiError.status != 0 {
+                GoogleSignInController.logBackendFailure(apiError)
+            } else {
+                GoogleSignInController.logClientFailure(apiError)
+            }
             error = apiError.message
             return nil
         } catch {
