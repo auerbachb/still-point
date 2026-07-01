@@ -66,6 +66,9 @@ export type BoardEntry = {
 export type FriendPublicUser = {
   id: string;
   username: string;
+  /** #343: aggregated over shared, completed buddy sits. Omitted for search results. */
+  sessionCount?: number;
+  totalDurationSeconds?: number;
 };
 
 export type FriendRequestRow = {

@@ -23,6 +23,14 @@ const cardStyle: React.CSSProperties = {
   width: "100%",
 };
 
+function formatMeditatedDuration(totalDurationSeconds: number): string {
+  const totalMinutes = Math.floor(totalDurationSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
 const btnOutline: React.CSSProperties = {
   border: "1px solid var(--border-2)",
   background: "transparent",
@@ -346,42 +354,56 @@ export function FriendsView() {
           <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>No friends yet.</span>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
-            {friends.map((f) => (
-              <li
-                key={f.id}
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                }}
-              >
-                <span style={{ color: "var(--fg)", flex: "1 1 120px" }}>{f.username}</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  <Link
-                    href={`/app/buddies/${f.id}/calendar`}
-                    style={{
-                      ...btnOutline,
-                      textDecoration: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      fontSize: "10px",
-                    }}
-                  >
-                    View calendar
-                  </Link>
-                  <button
-                    type="button"
-                    disabled={actionId === f.id}
-                    onClick={() => unfriend(f.id)}
-                    style={{ ...btnOutline, fontSize: "10px" }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
+            {friends.map((f, i) => {
+              const sessionCount = f.sessionCount ?? 0;
+              const rank = sessionCount > 0 ? i + 1 : null;
+              return (
+                <li
+                  key={f.id}
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 160px" }}>
+                    <span style={{ color: "var(--fg)" }}>
+                      {rank && <span style={{ ...labelStyle, marginRight: "6px" }}>#{rank}</span>}
+                      {f.username}
+                    </span>
+                    <span style={{ ...labelStyle, textTransform: "none", letterSpacing: "0.04em" }}>
+                      {sessionCount > 0
+                        ? `${sessionCount} session${sessionCount === 1 ? "" : "s"} together · ${formatMeditatedDuration(f.totalDurationSeconds ?? 0)}`
+                        : "No shared sessions yet"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    <Link
+                      href={`/app/buddies/${f.id}/calendar`}
+                      style={{
+                        ...btnOutline,
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        fontSize: "10px",
+                      }}
+                    >
+                      View calendar
+                    </Link>
+                    <button
+                      type="button"
+                      disabled={actionId === f.id}
+                      onClick={() => unfriend(f.id)}
+                      style={{ ...btnOutline, fontSize: "10px" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
