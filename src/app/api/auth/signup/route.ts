@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
         isPublic: newUser.isPublic,
         currentDay: newUser.currentDay,
         aphorismsEnabled: newUser.aphorismsEnabled,
+        recoveryTargetDay: newUser.recoveryTargetDay,
+        recoveryCurrentStep: newUser.recoveryCurrentStep,
+        recoveryTotalSteps: newUser.recoveryTotalSteps,
       },
       ...(includeToken ? { token } : {}),
     });

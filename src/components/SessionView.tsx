@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
-import { durationForSession, type SessionType } from "@/lib/constants";
+import { type SessionType } from "@/lib/constants";
+import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { FlashHint } from "./FlashHint";
@@ -14,8 +15,15 @@ import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
+const NO_RECOVERY: RecoveryFields = {
+  recoveryTargetDay: null,
+  recoveryCurrentStep: null,
+  recoveryTotalSteps: null,
+};
+
 type SessionViewProps = {
   currentDay: number;
+  recovery?: RecoveryFields;
   sessionType?: SessionType;
   onComplete: (data: {
     dayNumber: number;
@@ -47,9 +55,9 @@ const mono: CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
 };
 
-export function SessionView({ currentDay, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
+export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
   const isMobile = useIsMobile();
-  const plannedSeconds = durationForSession(sessionType, currentDay);
+  const plannedSeconds = sessionDurationForUser(sessionType, currentDay, recovery);
   const [bonusSeconds, setBonusSeconds] = useState(0);
   const totalSeconds = plannedSeconds + bonusSeconds;
   const [sessionFinished, setSessionFinished] = useState(false);

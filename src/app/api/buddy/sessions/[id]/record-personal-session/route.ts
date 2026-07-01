@@ -17,6 +17,7 @@ import {
 } from "@/lib/buddySessionControlsPolicy";
 import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
 import { isUniqueViolation } from "@/lib/dbErrors";
+import { advanceProgression } from "@/lib/duration";
 import { and, eq, sql } from "drizzle-orm";
 
 type Params = { params: Promise<{ id: string }> };
@@ -149,7 +150,12 @@ export async function POST(request: NextRequest, context: Params) {
     try {
       const row = await poolDb.transaction(async (tx) => {
         const [u] = await tx
-          .select({ currentDay: users.currentDay })
+          .select({
+            currentDay: users.currentDay,
+            recoveryTargetDay: users.recoveryTargetDay,
+            recoveryCurrentStep: users.recoveryCurrentStep,
+            recoveryTotalSteps: users.recoveryTotalSteps,
+          })
           .from(users)
           .where(eq(users.id, auth.userId))
           .limit(1);
@@ -157,6 +163,10 @@ export async function POST(request: NextRequest, context: Params) {
           throw new Error("USER_NOT_FOUND");
         }
         const dayNumber = u.currentDay;
+        // #238: a completed shared sit advances progression the same way a solo
+        // standard sit does — step the recovery ramp instead of `currentDay` while
+        // recovering.
+        const nextProgress = advanceProgression("standard", true, u);
 
         const [created] = await tx
           .insert(sessions)
@@ -182,7 +192,10 @@ export async function POST(request: NextRequest, context: Params) {
         await tx
           .update(users)
           .set({
-            currentDay: sql`${users.currentDay} + 1`,
+            currentDay: nextProgress.currentDay,
+            recoveryTargetDay: nextProgress.recoveryTargetDay,
+            recoveryCurrentStep: nextProgress.recoveryCurrentStep,
+            recoveryTotalSteps: nextProgress.recoveryTotalSteps,
             updatedAt: new Date(),
           })
           .where(eq(users.id, auth.userId));

@@ -18,7 +18,38 @@ import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/
 import { useIsMobile } from "@/lib/useIsMobile";
 import { api, ApiError } from "@/lib/api";
 import type { SessionType } from "@/lib/constants";
+import { advanceProgression, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+
+/** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
+ *  into the non-optional shape `@/lib/duration` helpers expect. */
+function recoveryFieldsOf(user: Pick<User, "recoveryTargetDay" | "recoveryCurrentStep" | "recoveryTotalSteps">): RecoveryFields {
+  return {
+    recoveryTargetDay: user.recoveryTargetDay ?? null,
+    recoveryCurrentStep: user.recoveryCurrentStep ?? null,
+    recoveryTotalSteps: user.recoveryTotalSteps ?? null,
+  };
+}
+
+/**
+ * Planned duration of the *next* standard sit, previewed client-side from the
+ * pre-save user state using the same `advanceProgression` / `sessionDurationForUser`
+ * the server applies (#238) — so the completion screen's "tomorrow" preview stays
+ * correct whether this sit advanced `currentDay` normally, stepped a recovery ramp,
+ * or just completed the final recovery step.
+ */
+function previewNextStandardDuration(
+  sessionType: SessionType,
+  completed: boolean,
+  user: User | null,
+): number {
+  if (!user) return 60;
+  const next = advanceProgression(sessionType, completed, {
+    currentDay: user.currentDay,
+    ...recoveryFieldsOf(user),
+  });
+  return sessionDurationForUser("standard", next.currentDay, next);
+}
 
 // URL-driven tabs. The first path segment of /app/[[...tab]] selects the tab;
 // `/app` (no segment) resolves to the Progress tab.
@@ -145,6 +176,10 @@ type CompletionData = {
   clearPercent: number;
   thoughtCount: number;
   thoughts: Array<{ timeInSession: number; text: string }>;
+  /** Planned duration of the *next* standard sit, accounting for recovery-ramp
+   *  advancement (#238) — computed with the same `advanceProgression` /
+   *  `sessionDurationForUser` the server uses, from the pre-save user state. */
+  nextDuration: number;
 };
 
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
@@ -172,6 +207,7 @@ export default function StillPoint() {
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
+  const loginRefreshCancelled = useRef(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -179,7 +215,7 @@ export default function StillPoint() {
 
     async function checkAuth() {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch(`/api/auth/me?date=${todayLocalIsoDate()}`);
         if (cancelled) return;
 
         if (res.ok) {
@@ -330,11 +366,22 @@ export default function StillPoint() {
     // Intentionally do not navigate: keep the current URL so deep-link state
     // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
     // buddy-invite / ?view= effects below can still consume it.
+    loginRefreshCancelled.current = false;
     setUser(userData);
     setOverlay(null);
+    // #238: login returns raw DB fields; missed-day gap detection only runs in
+    // GET /api/auth/me. Re-fetch silently so a returning user with a 2+ day gap
+    // enters the recovery ramp before their first sit of this session.
+    // Guard with loginRefreshCancelled so a slow response can't repopulate user
+    // state after an explicit logout before the /api/auth/me response arrives.
+    void fetch(`/api/auth/me?date=${todayLocalIsoDate()}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (!loginRefreshCancelled.current && data?.user) setUser(data.user); })
+      .catch(() => {});
   };
 
   const handleLogout = () => {
+    loginRefreshCancelled.current = true;
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
@@ -367,13 +414,14 @@ export default function StillPoint() {
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
+      nextDuration: previewNextStandardDuration("standard", true, user),
     });
     setOverlay("complete");
     void api
       .me()
       .then(({ user: u }) => setUser(u))
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   const handleSessionComplete = useCallback(async (data: {
     dayNumber: number;
@@ -427,9 +475,15 @@ export default function StillPoint() {
           });
         }
 
-        // Update local user state
-        if (data.completed && data.sessionType === "standard" && user) {
-          setUser({ ...user, currentDay: user.currentDay + 1 });
+        // Refresh local user state from the server (#238): whether this completed
+        // standard sit advances `currentDay` or steps a recovery ramp instead is
+        // decided server-side in POST /api/sessions, so re-fetch rather than
+        // optimistically guessing which one happened.
+        if (data.completed && data.sessionType === "standard") {
+          void api
+            .me()
+            .then(({ user: u }) => setUser(u))
+            .catch(() => {});
         }
       }
     } catch (error) {
@@ -445,6 +499,7 @@ export default function StillPoint() {
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
+      nextDuration: previewNextStandardDuration(data.sessionType, data.completed, user),
     });
     setOverlay("complete");
   }, [user]);
@@ -623,6 +678,8 @@ export default function StillPoint() {
     );
   }
 
+  const userRecovery = recoveryFieldsOf(user);
+
   // Logged in
   return (
     <div style={{
@@ -761,6 +818,7 @@ export default function StillPoint() {
       {overlay === "session" && (
         <SessionView
           currentDay={user.currentDay}
+          recovery={userRecovery}
           sessionType={activeSessionType}
           onComplete={handleSessionComplete}
           onAbandon={handleSessionAbandon}
@@ -780,6 +838,7 @@ export default function StillPoint() {
           clearPercent={completionData.clearPercent}
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
+          nextDuration={completionData.nextDuration}
           onReturn={() => {
             setOverlay(null);
             router.push(pathForTab(DEFAULT_TAB));
@@ -814,6 +873,7 @@ export default function StillPoint() {
         <HomeView
           currentDay={user.currentDay}
           aphorismsEnabled={user.aphorismsEnabled}
+          recovery={userRecovery}
           onBegin={() => handleBegin("standard")}
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
@@ -847,7 +907,7 @@ export default function StillPoint() {
       )}
 
       {!overlay && tab === "history" && (
-        <HistoryView currentDay={user.currentDay} username={user.username} />
+        <HistoryView currentDay={user.currentDay} recovery={userRecovery} username={user.username} />
       )}
 
       {!overlay && tab === "journal" && (

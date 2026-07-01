@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BLOCK_DURATION, durationForDay, type SessionType } from "@/lib/constants";
+import { BLOCK_DURATION, type SessionType } from "@/lib/constants";
 import { RatingSlider } from "@/components/RatingSlider";
 
 type CompletionScreenProps = {
@@ -12,6 +12,9 @@ type CompletionScreenProps = {
   clearPercent: number;
   thoughtCount: number;
   thoughts: Array<{ timeInSession: number; text: string }>;
+  /** Planned duration of the next standard sit (#238: recovery-ramp aware — see
+   *  `previewNextStandardDuration` / `@/lib/duration`). */
+  nextDuration: number;
   onReturn: () => void;
   onSaveNote?: (text: string) => Promise<void>;
   /** #109: post-session self-report; omitted (no sliders rendered) when there is
@@ -32,6 +35,7 @@ export function CompletionScreen({
   clearPercent,
   thoughtCount,
   thoughts,
+  nextDuration,
   onReturn,
   onSaveNote,
   onSaveRatings,
@@ -49,7 +53,6 @@ export function CompletionScreen({
   const [savingRatings, setSavingRatings] = useState(false);
   const [ratingsSaveError, setRatingsSaveError] = useState(false);
   const isQuick = sessionType === "quick";
-  const nextDuration = durationForDay(dayNumber + 1);
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
   const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
   const totalDurationSeconds = plannedDuration + bonusSeconds;
