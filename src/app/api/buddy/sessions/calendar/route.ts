@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import {
-  listBuddyCalendarSessions,
-  parseBuddyCalendarRange,
-} from "@/lib/buddyCalendar";
+import { listBuddyCalendarSessions } from "@/lib/buddyCalendar";
+import { parseBuddyCalendarRange } from "@/lib/buddyCalendarRange";
 
 /**
  * Unified multi-buddy calendar session list (#350).

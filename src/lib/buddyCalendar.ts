@@ -25,17 +25,6 @@ import {
 } from "@/lib/buddyCalendarRange";
 import { and, desc, eq, exists, inArray, ne, sql } from "drizzle-orm";
 
-export {
-  BUDDY_CALENDAR_DEFAULT_DAYS,
-  BUDDY_CALENDAR_MAX_LIMIT,
-  type BuddyCalendarListResult,
-  type BuddyCalendarParticipant,
-  type BuddyCalendarSession,
-  buddySessionCalendarDate,
-  parseBuddyCalendarRange,
-  todayIsoDateUtc,
-} from "@/lib/buddyCalendarRange";
-
 async function assertFriendship(userId: string, buddyId: string): Promise<boolean> {
   if (!isUuid(buddyId) || buddyId === userId) return false;
   const [u1, u2] = orderedUserPair(userId, buddyId);

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import {
-  listBuddyCalendarSessionsForBuddy,
-  parseBuddyCalendarRange,
-} from "@/lib/buddyCalendar";
+import { listBuddyCalendarSessionsForBuddy } from "@/lib/buddyCalendar";
+import { parseBuddyCalendarRange } from "@/lib/buddyCalendarRange";
 import { isUuid } from "@/lib/friends";
 
 type Params = { params: Promise<{ buddyId: string }> };
