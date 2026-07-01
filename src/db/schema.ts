@@ -28,6 +28,9 @@ export const users = pgTable("users", {
   /** #338: flipped by Apple `email-disabled` / `email-enabled` relay notifications.
    *  False means mail to this address (private relay) will bounce. */
   emailDeliverable: boolean("email_deliverable").default(true).notNull(),
+  /** #88: opt-in for a short meditation / digital-minimalism aphorism shown as
+   *  pre-session inspiration on the Home view. Defaults off. */
+  aphorismsEnabled: boolean("aphorisms_enabled").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
