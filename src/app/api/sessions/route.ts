@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { calculateSessionStats, parseCompleted, parseOptionalSessionType, shouldAdvanceDay } from "@/lib/constants";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { advanceProgression } from "@/lib/duration";
+import { eq, desc, and } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -84,12 +85,27 @@ export async function POST(request: NextRequest) {
 
     // Quick sessions are extra practice and do not advance the daily progression.
     if (shouldAdvanceDay(sessionType, completed)) {
-      await db.update(users)
-        .set({
-          currentDay: sql`${users.currentDay} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, auth.userId));
+      const [current] = await db.select({
+        currentDay: users.currentDay,
+        recoveryTargetDay: users.recoveryTargetDay,
+        recoveryCurrentStep: users.recoveryCurrentStep,
+        recoveryTotalSteps: users.recoveryTotalSteps,
+      }).from(users).where(eq(users.id, auth.userId)).limit(1);
+
+      if (current) {
+        // #238: while recovering, a completed sit steps the ramp forward instead of
+        // bumping `currentDay` — see advanceProgression for the full rule.
+        const next = advanceProgression(sessionType, completed, current);
+        await db.update(users)
+          .set({
+            currentDay: next.currentDay,
+            recoveryTargetDay: next.recoveryTargetDay,
+            recoveryCurrentStep: next.recoveryCurrentStep,
+            recoveryTotalSteps: next.recoveryTotalSteps,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, auth.userId));
+      }
     }
 
     return NextResponse.json({ session });
