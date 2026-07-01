@@ -8,13 +8,39 @@ public struct UserDTO: Codable, Sendable {
     public let username: String
     public let isPublic: Bool
     public let currentDay: Int
+    /// #88: opt-in pre-session aphorism shown on Home. Decoded permissively so
+    /// responses from a server that predates this field (or cached fixtures)
+    /// still decode, defaulting to off.
+    public let aphorismsEnabled: Bool
 
-    public init(id: String, email: String, username: String, isPublic: Bool, currentDay: Int) {
+    public init(
+        id: String,
+        email: String,
+        username: String,
+        isPublic: Bool,
+        currentDay: Int,
+        aphorismsEnabled: Bool = false
+    ) {
         self.id = id
         self.email = email
         self.username = username
         self.isPublic = isPublic
         self.currentDay = currentDay
+        self.aphorismsEnabled = aphorismsEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        email = try c.decode(String.self, forKey: .email)
+        username = try c.decode(String.self, forKey: .username)
+        isPublic = try c.decode(Bool.self, forKey: .isPublic)
+        currentDay = try c.decode(Int.self, forKey: .currentDay)
+        aphorismsEnabled = try c.decodeIfPresent(Bool.self, forKey: .aphorismsEnabled) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, email, username, isPublic, currentDay, aphorismsEnabled
     }
 }
 

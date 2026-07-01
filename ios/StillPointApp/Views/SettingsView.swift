@@ -5,7 +5,9 @@ struct SettingsView: View {
     let appVM: AppViewModel
     @State private var notificationPrefs = NotificationPreferencesViewModel()
     @State private var isPublic: Bool = false
+    @State private var aphorismsEnabled: Bool = false
     @State private var isUpdating = false
+    @State private var isUpdatingAphorisms = false
     @State private var editingUsername = false
     @State private var usernameDraft = ""
     @State private var savingUsername = false
@@ -17,7 +19,7 @@ struct SettingsView: View {
     @State private var deleteAccountError = ""
     @State private var showDeleteAccountError = false
 
-    private var isSavingSettings: Bool { isUpdating || savingUsername }
+    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || savingUsername }
 
     var body: some View {
         NavigationStack {
@@ -126,6 +128,45 @@ struct SettingsView: View {
                             } catch {
                                 // Revert on failure
                                 isPublic = !newValue
+                            }
+                        }
+                    }
+                }
+                .padding(SPSpacing.s3)
+                .background(SPColor.surface1)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(SPColor.border1)
+                )
+
+                // Aphorisms toggle (#88)
+                VStack(alignment: .leading, spacing: SPSpacing.s2) {
+                    Toggle(isOn: $aphorismsEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aphorisms")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Show a short meditation quote before each session")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .disabled(isSavingSettings)
+                    .accessibilityIdentifier("settings.aphorismsToggle")
+                    .onChange(of: aphorismsEnabled) { _, newValue in
+                        guard !isUpdatingAphorisms else { return }
+                        guard appVM.currentUser?.aphorismsEnabled != newValue else { return }
+                        isUpdatingAphorisms = true
+                        Task {
+                            defer { isUpdatingAphorisms = false }
+                            do {
+                                let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
+                                appVM.applySettingsUser(updated)
+                            } catch {
+                                // Revert on failure
+                                aphorismsEnabled = !newValue
                             }
                         }
                     }
@@ -339,6 +380,7 @@ struct SettingsView: View {
 
     private func syncFromCurrentUser() {
         isPublic = appVM.currentUser?.isPublic ?? false
+        aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
         if !editingUsername, let u = appVM.currentUser {
             usernameDraft = u.username
         }

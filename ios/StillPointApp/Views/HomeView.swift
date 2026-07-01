@@ -41,6 +41,8 @@ struct HomeView: View {
 
                 appGatePill
 
+                aphorismSection
+
                 Spacer().frame(height: SPSpacing.s4)
 
                 // Begin button
@@ -170,6 +172,29 @@ struct HomeView: View {
             }
             .accessibilityIdentifier("home.appGatePill")
             .accessibilityLabel(manager.isUnlocked ? "Apps unlocked until midnight" : "Apps locked, meditate to unlock")
+        }
+    }
+
+    /// Opt-in pre-session inspiration quote (#88). Hidden unless the user has
+    /// enabled aphorisms in Settings.
+    @ViewBuilder
+    private var aphorismSection: some View {
+        if appVM.currentUser?.aphorismsEnabled == true {
+            let aphorism = Aphorisms.forDay(appVM.currentDay)
+            VStack(spacing: SPSpacing.s2) {
+                Text("\u{201C}\(aphorism.text)\u{201D}")
+                    .font(SPFont.serifItalic(15, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg2))
+                    .multilineTextAlignment(.center)
+                Text("— \(aphorism.author)")
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg4))
+                    .tracking(1.5)
+                    .textCase(.uppercase)
+            }
+            .padding(.horizontal, SPSpacing.s4)
+            .accessibilityIdentifier("home.aphorism")
+            .accessibilityElement(children: .combine)
         }
     }
 
