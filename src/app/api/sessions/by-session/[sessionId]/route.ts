@@ -83,15 +83,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+    }
     const updates: Partial<Record<(typeof RATING_FIELDS)[number], number>> = {};
+    const bodyObj = body as Record<string, unknown>;
 
     for (const field of RATING_FIELDS) {
-      if (body[field] === undefined) continue;
-      if (!isValidRating(body[field])) {
+      if (bodyObj[field] === undefined) continue;
+      if (!isValidRating(bodyObj[field])) {
         return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 });
       }
-      updates[field] = body[field];
+      updates[field] = bodyObj[field] as number;
     }
 
     if (Object.keys(updates).length === 0) {

@@ -15,8 +15,9 @@ type CompletionScreenProps = {
   onReturn: () => void;
   onSaveNote?: (text: string) => Promise<void>;
   /** #109: post-session self-report; omitted (no sliders rendered) when there is
-   *  no persisted session to attach ratings to. */
-  onSaveRatings?: (ratings: { focusRating: number; happinessRating: number }) => Promise<void>;
+   *  no persisted session to attach ratings to. Only touched slider values are
+   *  included in the payload; untouched ones are omitted for partial-update. */
+  onSaveRatings?: (ratings: { focusRating?: number; happinessRating?: number }) => Promise<void>;
   /** Tighten vertical spacing for narrow-viewport mobile layouts (#473). */
   compact?: boolean;
 };
@@ -61,8 +62,6 @@ export function CompletionScreen({
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       gap: compact ? "16px" : "32px", animation: "fadeIn 0.8s ease",
-      // Ensure the Return button clears the fixed bottom nav on mobile (#479).
-      paddingBottom: compact ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))" : undefined,
     }}>
       <div style={{ fontSize: "64px", opacity: 0.8 }}>&#x25C9;</div>
 
@@ -273,41 +272,52 @@ export function CompletionScreen({
                   failed to save — tap to retry
                 </div>
               )}
-              {(focusTouched || happinessTouched || ratingsSaveError) && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSavingRatings(true);
-                    try {
-                      setRatingsSaveError(false);
-                      await onSaveRatings({ focusRating, happinessRating });
-                      setRatingsSaved(true);
-                    } catch (err) {
-                      console.error("Failed to save ratings:", err);
-                      setRatingsSaveError(true);
-                    } finally {
-                      setSavingRatings(false);
+              <button
+                type="button"
+                onClick={async () => {
+                  setSavingRatings(true);
+                  try {
+                    setRatingsSaveError(false);
+                    // Only send ratings the user explicitly touched; untouched
+                    // sliders stay at their default and are omitted from the
+                    // payload so the server-side partial-update logic is used
+                    // correctly and no unintended default-5 overwrites occur.
+                    const payload: { focusRating?: number; happinessRating?: number } = {};
+                    if (focusTouched) payload.focusRating = focusRating;
+                    if (happinessTouched) payload.happinessRating = happinessRating;
+                    // If neither was touched, send both (user explicitly clicked
+                    // save with the visible defaults — treat as intentional).
+                    if (!focusTouched && !happinessTouched) {
+                      payload.focusRating = focusRating;
+                      payload.happinessRating = happinessRating;
                     }
-                  }}
-                  disabled={savingRatings}
-                  style={{
-                    background: "none",
-                    border: ratingsSaveError
-                      ? "1px solid var(--accent-danger-border)"
-                      : "1px solid var(--accent-green-border)",
-                    color: ratingsSaveError
-                      ? "var(--accent-danger)"
-                      : "var(--accent-green-text)",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
-                    fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
-                    padding: "8px 24px", borderRadius: "20px",
-                    cursor: savingRatings ? "default" : "pointer",
-                    opacity: savingRatings ? 0.5 : 1,
-                  }}
-                >
-                  {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
-                </button>
-              )}
+                    await onSaveRatings(payload);
+                    setRatingsSaved(true);
+                  } catch (err) {
+                    console.error("Failed to save ratings:", err);
+                    setRatingsSaveError(true);
+                  } finally {
+                    setSavingRatings(false);
+                  }
+                }}
+                disabled={savingRatings}
+                style={{
+                  background: "none",
+                  border: ratingsSaveError
+                    ? "1px solid var(--accent-danger-border)"
+                    : "1px solid var(--accent-green-border)",
+                  color: ratingsSaveError
+                    ? "var(--accent-danger)"
+                    : "var(--accent-green-text)",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
+                  padding: "8px 24px", borderRadius: "20px",
+                  cursor: savingRatings ? "default" : "pointer",
+                  opacity: savingRatings ? 0.5 : 1,
+                }}
+              >
+                {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
+              </button>
             </>
           )}
         </div>
@@ -325,6 +335,11 @@ export function CompletionScreen({
           padding: "12px 36px", borderRadius: "30px",
           minHeight: "44px",
           cursor: "pointer", marginTop: "8px",
+          // scrollMarginBottom ensures scrollIntoViewIfNeeded respects the fixed
+          // bottom nav so the Return button never lands behind it on mobile (#479).
+          scrollMarginBottom: compact
+            ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
+            : undefined,
         }}
       >
         Return
