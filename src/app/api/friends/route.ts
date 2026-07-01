@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessionParticipants, friendships, sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne, or, sql } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -32,6 +32,10 @@ export async function GET() {
     // record-personal-session/route.ts) against `buddy_session_participants`
     // on the same `buddy_session_id` to find the other participant, then
     // aggregates per friend.
+    //
+    // The friendships table enforces user1Id < user2Id, so a friend can appear
+    // in either column. We join against friendships to restrict aggregation to
+    // actual friends, avoiding work for non-friend participants.
     const meditatedWithSelect = db
       .select({
         friendId: buddySessionParticipants.userId,
@@ -42,6 +46,13 @@ export async function GET() {
       .innerJoin(
         buddySessionParticipants,
         eq(buddySessionParticipants.buddySessionId, sessions.buddySessionId),
+      )
+      .innerJoin(
+        friendships,
+        or(
+          and(eq(friendships.user1Id, uid), eq(friendships.user2Id, buddySessionParticipants.userId)),
+          and(eq(friendships.user2Id, uid), eq(friendships.user1Id, buddySessionParticipants.userId)),
+        ),
       )
       .where(
         and(

@@ -24,7 +24,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 function formatMeditatedDuration(totalDurationSeconds: number): string {
-  const totalMinutes = Math.round(totalDurationSeconds / 60);
+  const totalMinutes = Math.floor(totalDurationSeconds / 60);
   if (totalMinutes < 60) return `${totalMinutes}m`;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
