@@ -5,7 +5,7 @@ import { buddySessions, buddySessionParticipants, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { normalizedBuddySessionDurationSeconds } from "@/lib/buddySession";
 import { readBuddySessionCreateBody } from "@/lib/buddySessionCreateBody";
-import { GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE, syncBuddySessionCalendarForUser } from "@/lib/google";
+import { GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE, syncBuddySessionCalendarForUser } from "@/lib/googleCalendar";
 import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {

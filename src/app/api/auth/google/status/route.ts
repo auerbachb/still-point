@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { loadGoogleCalendarStatus } from "@/lib/google";
+import { loadGoogleCalendarStatus } from "@/lib/googleOAuth";
 
 export async function GET() {
   try {
