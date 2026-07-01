@@ -103,7 +103,7 @@ enum GoogleSignInController {
             return controllerError.errorDescription ?? "Google sign-in failed. Please try again."
         }
 
-        let nsError = error as NSError
+        // Reuses `nsError` bound above (the user-cancel NSError check).
         let underlying = (nsError.userInfo[NSUnderlyingErrorKey] as? NSError).map { underlyingError in
             "\(underlyingError.domain) \(underlyingError.code) \(underlyingError.localizedDescription)"
         }
