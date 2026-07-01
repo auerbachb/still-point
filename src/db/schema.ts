@@ -342,6 +342,10 @@ export const sessions = pgTable("sessions", {
   breathCount: integer("breath_count"),
   mindStateLog: jsonb("mind_state_log").$type<Array<{ time: number; state: string }>>(),
   sessionDate: date("session_date").notNull(),
+  /** #109: post-session self-report ratings (1-10), null until set via the
+   *  by-session PATCH route from the CompletionScreen sliders. */
+  focusRating: integer("focus_rating"),
+  happinessRating: integer("happiness_rating"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdx: index("idx_sessions_user").on(table.userId, table.dayNumber),
@@ -355,6 +359,14 @@ export const sessions = pgTable("sessions", {
     table.userId,
     table.buddySessionId,
   ).where(sql`${table.buddySessionId} is not null`),
+  focusRatingCheck: check(
+    "sessions_focus_rating_range",
+    sql`${table.focusRating} is null or (${table.focusRating} between 1 and 10)`,
+  ),
+  happinessRatingCheck: check(
+    "sessions_happiness_rating_range",
+    sql`${table.happinessRating} is null or (${table.happinessRating} between 1 and 10)`,
+  ),
 }));
 
 export const thoughts = pgTable("thoughts", {

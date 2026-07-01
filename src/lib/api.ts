@@ -47,6 +47,9 @@ export type Session = {
   createdAt: string;
   /** Present when this row was created from a completed buddy sit (#119). */
   buddySessionId?: string | null;
+  /** #109: post-session self-report ratings (1-10), null until rated. */
+  focusRating?: number | null;
+  happinessRating?: number | null;
 };
 
 export type Thought = {
@@ -200,6 +203,16 @@ export const api = {
 
   getSession: (dayNumber: number) =>
     request<{ session: Session; thoughts: Thought[] }>(`/api/sessions/${dayNumber}`),
+
+  /** #109: post-hoc ratings update from the CompletionScreen sliders. */
+  updateSessionRatings: (
+    sessionId: string,
+    data: { focusRating?: number; happinessRating?: number },
+  ) =>
+    request<{ session: Session }>(`/api/sessions/by-session/${sessionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 
   getThoughts: () =>
     request<{ thoughts: Thought[] }>("/api/thoughts"),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BLOCK_DURATION, durationForDay, type SessionType } from "@/lib/constants";
+import { RatingSlider } from "@/components/RatingSlider";
 
 type CompletionScreenProps = {
   dayNumber: number;
@@ -13,9 +14,15 @@ type CompletionScreenProps = {
   thoughts: Array<{ timeInSession: number; text: string }>;
   onReturn: () => void;
   onSaveNote?: (text: string) => Promise<void>;
+  /** #109: post-session self-report; omitted (no sliders rendered) when there is
+   *  no persisted session to attach ratings to. Only touched slider values are
+   *  included in the payload; untouched ones are omitted for partial-update. */
+  onSaveRatings?: (ratings: { focusRating?: number; happinessRating?: number }) => Promise<void>;
   /** Tighten vertical spacing for narrow-viewport mobile layouts (#473). */
   compact?: boolean;
 };
+
+const DEFAULT_RATING = 5;
 
 export function CompletionScreen({
   dayNumber,
@@ -27,12 +34,20 @@ export function CompletionScreen({
   thoughts,
   onReturn,
   onSaveNote,
+  onSaveRatings,
   compact = false,
 }: CompletionScreenProps) {
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [focusRating, setFocusRating] = useState(DEFAULT_RATING);
+  const [happinessRating, setHappinessRating] = useState(DEFAULT_RATING);
+  const [focusTouched, setFocusTouched] = useState(false);
+  const [happinessTouched, setHappinessTouched] = useState(false);
+  const [ratingsSaved, setRatingsSaved] = useState(false);
+  const [savingRatings, setSavingRatings] = useState(false);
+  const [ratingsSaveError, setRatingsSaveError] = useState(false);
   const isQuick = sessionType === "quick";
   const nextDuration = durationForDay(dayNumber + 1);
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
@@ -46,9 +61,9 @@ export function CompletionScreen({
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: compact ? "16px" : "32px", animation: "fadeIn 0.8s ease",
+      gap: compact ? "12px" : "32px", animation: "fadeIn 0.8s ease",
     }}>
-      <div style={{ fontSize: "64px", opacity: 0.8 }}>&#x25C9;</div>
+      <div style={{ fontSize: compact ? "48px" : "64px", opacity: 0.8 }}>&#x25C9;</div>
 
       <div style={{ textAlign: "center" }}>
         <h2 style={{
@@ -226,6 +241,88 @@ export function CompletionScreen({
         </div>
       )}
 
+      {/* Post-session ratings (#109) */}
+      {onSaveRatings && (
+        <div style={{
+          width: "100%", maxWidth: "min(380px, calc(100vw - 40px))",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: "14px",
+        }}>
+          {ratingsSaved ? (
+            <div style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "11px", color: "var(--accent-green-dim)",
+              letterSpacing: "0.09em",
+            }}>
+              ratings saved
+            </div>
+          ) : (
+            <>
+              <RatingSlider label="Focus" value={focusRating} onChange={(v) => { setFocusRating(v); setFocusTouched(true); }} disabled={savingRatings} />
+              <RatingSlider label="Happiness" value={happinessRating} onChange={(v) => { setHappinessRating(v); setHappinessTouched(true); }} disabled={savingRatings} />
+              {ratingsSaveError && (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  style={{
+                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontSize: "11px", color: "var(--accent-danger)",
+                    letterSpacing: "0.09em",
+                  }}
+                >
+                  failed to save — tap to retry
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  setSavingRatings(true);
+                  try {
+                    setRatingsSaveError(false);
+                    // Only send ratings the user explicitly touched; untouched
+                    // sliders stay at their default and are omitted from the
+                    // payload so the server-side partial-update logic is used
+                    // correctly and no unintended default-5 overwrites occur.
+                    const payload: { focusRating?: number; happinessRating?: number } = {};
+                    if (focusTouched) payload.focusRating = focusRating;
+                    if (happinessTouched) payload.happinessRating = happinessRating;
+                    // If neither was touched, send both (user explicitly clicked
+                    // save with the visible defaults — treat as intentional).
+                    if (!focusTouched && !happinessTouched) {
+                      payload.focusRating = focusRating;
+                      payload.happinessRating = happinessRating;
+                    }
+                    await onSaveRatings(payload);
+                    setRatingsSaved(true);
+                  } catch (err) {
+                    console.error("Failed to save ratings:", err);
+                    setRatingsSaveError(true);
+                  } finally {
+                    setSavingRatings(false);
+                  }
+                }}
+                disabled={savingRatings}
+                style={{
+                  background: "none",
+                  border: ratingsSaveError
+                    ? "1px solid var(--accent-danger-border)"
+                    : "1px solid var(--accent-green-border)",
+                  color: ratingsSaveError
+                    ? "var(--accent-danger)"
+                    : "var(--accent-green-text)",
+                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
+                  padding: "8px 24px", borderRadius: "20px",
+                  cursor: savingRatings ? "default" : "pointer",
+                  opacity: savingRatings ? 0.5 : 1,
+                }}
+              >
+                {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={onReturn}
@@ -238,6 +335,11 @@ export function CompletionScreen({
           padding: "12px 36px", borderRadius: "30px",
           minHeight: "44px",
           cursor: "pointer", marginTop: "8px",
+          // scrollMarginBottom ensures scrollIntoViewIfNeeded respects the fixed
+          // bottom nav so the Return button never lands behind it on mobile (#479).
+          scrollMarginBottom: compact
+            ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
+            : undefined,
         }}
       >
         Return
