@@ -1,5 +1,6 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
+import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
 import { tap } from "../utils/mobile-helpers";
 
 type UserRecord = {
@@ -61,15 +62,6 @@ function uniqueIdentity(): AuthedContext {
     username: `mobile_${suffix.replace(/[^a-z0-9]/gi, "")}`,
     password: "password123",
   };
-}
-
-function getLocalIsoDate(offsetDays = 0) {
-  const now = new Date();
-  now.setDate(now.getDate() + offsetDays);
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function computeStats(sessions: SessionRecord[]) {
