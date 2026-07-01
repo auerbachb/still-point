@@ -797,6 +797,9 @@ export default function StillPoint() {
               throw new Error("Failed to save note");
             }
           } : undefined}
+          onSaveRatings={completionData.sessionId ? async (ratings) => {
+            await api.updateSessionRatings(completionData.sessionId!, ratings);
+          } : undefined}
           compact={isMobile}
         />
       )}
