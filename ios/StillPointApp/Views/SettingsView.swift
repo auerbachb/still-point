@@ -268,6 +268,12 @@ struct SettingsView: View {
                 syncFromCurrentUser()
             }
         }
+        .onChange(of: appVM.currentUser?.isPublic) { _, _ in
+            syncFromCurrentUser()
+        }
+        .onChange(of: appVM.currentUser?.aphorismsEnabled) { _, _ in
+            syncFromCurrentUser()
+        }
     }
 
     private var notificationsLinkSection: some View {
