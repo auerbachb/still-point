@@ -46,6 +46,8 @@
 		AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
+		A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */; };
+		B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */; };
 		B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */; };
 		B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */; };
 		B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */; };
@@ -153,6 +155,8 @@
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
+		B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
@@ -282,7 +286,9 @@
 		551003AC2B5AD8A7B3C3D426 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
+				B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */,
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
+				A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */,
 			);
 			path = Navigation;
 			sourceTree = "<group>";
@@ -562,6 +568,8 @@
 				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,
 				1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */,
 				B106890588723F191CC4AEAA /* MainTabView.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */,
+				B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */,
 				80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */,
 				13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */,
 				C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */,
