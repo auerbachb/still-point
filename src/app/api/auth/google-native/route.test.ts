@@ -120,6 +120,32 @@ describe("POST /api/auth/google-native", () => {
     expect(json.user.username).toBe("webpat");
   });
 
+  test("returns 401 'Invalid identity token' when the token audience does not match", async () => {
+    // jose's jwtVerify throws JWTClaimValidationFailed (claim === "aud") when the
+    // ID token's `aud` is not one of the configured Google client IDs — the classic
+    // native-flow break where the app mints a token for a client the server does not
+    // accept. The route's verification catch maps any such failure to a 401.
+    const audError = Object.assign(new Error("unexpected \"aud\" claim value"), {
+      code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+      claim: "aud",
+      reason: "check_failed",
+    });
+    jwtVerify.mockRejectedValueOnce(audError);
+
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({ idToken: "header.payload.sig" }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error).toBe("Invalid identity token");
+    // A rejected audience must never resolve or link an account.
+    expect(resolveOAuthUserId).not.toHaveBeenCalled();
+    expect(res.cookies.get("sp_token")).toBeUndefined();
+  });
+
   test("returns 401 when email is present but not verified", async () => {
     jwtVerify.mockResolvedValue({
       payload: {

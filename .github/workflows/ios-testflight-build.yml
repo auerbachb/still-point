@@ -35,6 +35,20 @@ on:
         required: true
       APPSTORE_API_PRIVATE_KEY:
         required: true
+      # Native Google Sign-In client IDs (#344 / #471). Optional so the build still
+      # runs without them, but TestFlight build 14 shipped with these UNSET, leaving
+      # the iOS Google client IDs empty in the archive — `GoogleSignInController.signIn()`
+      # then threw `.notConfigured` before any token reached `/api/auth/google-native`
+      # (matching the near-zero backend traffic in the #471 diagnostic). They are injected
+      # into the archive build below so the shipped binary actually has the iOS OAuth
+      # client ID + reversed-client-ID URL scheme. The empty defaults in ios/project.yml
+      # stay unchanged so no real client ID is committed.
+      GID_CLIENT_ID:
+        required: false
+      GID_REVERSED_CLIENT_ID:
+        required: false
+      GID_SERVER_CLIENT_ID:
+        required: false
 
 permissions:
   contents: read
@@ -199,12 +213,34 @@ jobs:
 
       - name: Build archive
         working-directory: ios
+        env:
+          # Native Google Sign-In client IDs (#344 / #471). Injected from CI secrets so
+          # the archive's Info.plist (GIDClientID, GIDServerClientID, and the reversed-
+          # client-ID URL scheme) is populated; the committed ios/project.yml keeps these
+          # empty so no real client ID is checked in. A TestFlight archive REQUIRES both
+          # GID_CLIENT_ID and GID_REVERSED_CLIENT_ID — the step below hard-fails when either
+          # is missing rather than reship the #471 regression (build 14 had Google off).
+          GID_CLIENT_ID: ${{ secrets.GID_CLIENT_ID }}
+          GID_REVERSED_CLIENT_ID: ${{ secrets.GID_REVERSED_CLIENT_ID }}
+          GID_SERVER_CLIENT_ID: ${{ secrets.GID_SERVER_CLIENT_ID }}
         run: |
+          # Hard-fail the misconfiguration that caused #471 (build 14 shipped with no iOS
+          # Google client ID) without printing the value itself — the client IDs are
+          # registered secrets and masked in logs anyway.
+          if [[ -z "${GID_CLIENT_ID}" || -z "${GID_REVERSED_CLIENT_ID}" ]]; then
+            echo "::error::GID_CLIENT_ID and GID_REVERSED_CLIENT_ID must both be set for a TestFlight archive — refusing to ship a build with native Google sign-in disabled (see #471)."
+            exit 1
+          fi
+
           # The app and the embedded StillPointMonitor extension each sign manually
           # with their own profile, selected per-target via PROVISIONING_PROFILE_SPECIFIER
           # in project.yml; both profiles were installed in the previous step. We do NOT
           # pass a single global PROVISIONING_PROFILE_SPECIFIER here — that would force the
           # app's profile onto the extension and fail signing (bundle-id mismatch).
+          #
+          # GID_* are passed as build settings so xcodebuild substitutes them into the
+          # Info.plist's $(GID_…) placeholders at build time, overriding project.yml's
+          # empty defaults.
           xcodebuild archive \
             -project StillPoint.xcodeproj \
             -scheme StillPoint \
@@ -213,7 +249,10 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=T5UU4BP6AV \
-            CODE_SIGN_IDENTITY="Apple Distribution"
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            GID_CLIENT_ID="${GID_CLIENT_ID}" \
+            GID_REVERSED_CLIENT_ID="${GID_REVERSED_CLIENT_ID}" \
+            GID_SERVER_CLIENT_ID="${GID_SERVER_CLIENT_ID}"
 
       - name: Upload to App Store Connect
         env:

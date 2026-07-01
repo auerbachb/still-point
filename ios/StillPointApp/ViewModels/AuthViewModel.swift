@@ -1,5 +1,4 @@
 import SwiftUI
-import GoogleSignIn
 import StillPointShared
 
 @MainActor
@@ -83,18 +82,27 @@ final class AuthViewModel {
         do {
             let request = try await GoogleSignInController.signIn()
             return try await APIClient.shared.signInWithGoogle(request)
-        } catch is CancellationError {
-            // The surrounding Task was cancelled (e.g. the view went away) — not a real error.
-            return nil
-        } catch let signInError as GIDSignInError where signInError.code == .canceled {
-            // User dismissed the Google sheet — treat cancellation as a no-op, not a failure.
-            return nil
         } catch let apiError as APIError {
+            // Only a non-zero status is a backend rejection of an already-obtained token
+            // (e.g. aud mismatch → 401). A status-0 APIError is client-side — thrown after
+            // the backend already accepted the token (e.g. "Unable to securely save auth
+            // token") or before it was reached (no connection) — so logging it as a backend
+            // rejection is misleading. Route each to its own track, then show the message.
+            if apiError.status != 0 {
+                GoogleSignInController.logBackendFailure(apiError)
+            } else {
+                GoogleSignInController.logClientFailure(apiError)
+            }
             error = apiError.message
             return nil
         } catch {
-            print("Google sign-in failed: \(error.localizedDescription)")
-            self.error = "Google sign-in failed. Please try again."
+            // Surface the real underlying error (GIDSignInError / NSError) rather than a
+            // generic "try again" so the next on-device occurrence is diagnosable (#471).
+            // `userFacingError` returns nil for benign cancellations (Task cancelled or the
+            // user dismissed the sheet), which stay a silent no-op.
+            if let message = GoogleSignInController.userFacingError(for: error) {
+                self.error = message
+            }
             return nil
         }
     }
