@@ -17,7 +17,7 @@ public struct Aphorism: Equatable, Sendable {
 }
 
 public enum Aphorisms {
-    /// Ordered so `aphorismForDay(_:)` can pick a stable, slowly-rotating quote
+    /// Ordered so `forDay(_:)` can pick a stable, slowly-rotating quote
     /// per user without any extra state. Order is otherwise not meaningful.
     public static let all: [Aphorism] = [
         Aphorism(text: "You can't stop the waves, but you can learn to surf.", author: "Jon Kabat-Zinn"),

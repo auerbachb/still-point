@@ -269,9 +269,11 @@ struct SettingsView: View {
             }
         }
         .onChange(of: appVM.currentUser?.isPublic) { _, _ in
+            guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
         .onChange(of: appVM.currentUser?.aphorismsEnabled) { _, _ in
+            guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
     }

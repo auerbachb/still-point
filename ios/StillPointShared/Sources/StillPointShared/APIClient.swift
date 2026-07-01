@@ -558,8 +558,8 @@ public actor APIClient {
             email: email,
             username: username,
             isPublic: store.user.isPublic,
-            currentDay: max(store.user.currentDay, 1),
-            aphorismsEnabled: store.user.aphorismsEnabled
+            currentDay: 1,
+            aphorismsEnabled: false
         )
         store.loginEmail = email
         store.loginPassword = password
