@@ -27,6 +27,8 @@ export type User = {
   username: string;
   isPublic: boolean;
   currentDay: number;
+  /** #88: opt-in pre-session aphorism shown on Home. */
+  aphorismsEnabled: boolean;
 };
 
 export type Session = {
@@ -212,7 +214,7 @@ export const api = {
   getBoard: () =>
     request<{ board: BoardEntry[] }>("/api/board"),
 
-  updateSettings: (data: { isPublic?: boolean }) =>
+  updateSettings: (data: { isPublic?: boolean; aphorismsEnabled?: boolean }) =>
     request<{ user: User }>("/api/settings", { method: "PATCH", body: JSON.stringify(data) }),
 
   getFriends: () => request<{ friends: FriendPublicUser[] }>("/api/friends"),

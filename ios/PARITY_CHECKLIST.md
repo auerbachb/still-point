@@ -19,6 +19,7 @@ Release owner: iOS release DRI
 | Buddy calendar (unified + per-buddy, filters, pagination) | Implemented | Implemented | ✅ Complete | iOS `BuddyCalendarView` mirrors web `BuddyCalendarView`; entry via `BuddySessionHubView` until Friends tab ships. |
 | Buddy invite deep links | Implemented | Implemented | ✅ Complete | iOS handles `stillpoint://buddy` and web invite URL forms. |
 | Account deletion flow | Implemented | Implemented | ✅ Complete | iOS Settings includes two-step destructive confirmation. |
+| Aphorisms pre-session inspiration toggle (#88) | Implemented | Implemented | ✅ Complete | Shared quote list in `StillPointShared/Aphorisms.swift` mirrors `src/lib/aphorisms.ts`; both clients toggle via `PATCH /api/settings`. |
 
 ## Known parity gaps (critical + non-critical)
 

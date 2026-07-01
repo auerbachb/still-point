@@ -35,6 +35,7 @@ vi.mock("@/db/schema", () => ({
     username: "username",
     isPublic: "isPublic",
     currentDay: "currentDay",
+    aphorismsEnabled: "aphorismsEnabled",
   },
 }));
 
@@ -195,5 +196,38 @@ describe("PATCH /api/settings", () => {
     const updates = dbUpdateSet.mock.calls[0]![0];
     expect(updates.isPublic).toBe(true);
     expect(updates).not.toHaveProperty("username");
+  });
+
+  test("aphorismsEnabled-only updates skip the transaction and use the HTTP driver", async () => {
+    dbUpdateReturning.mockResolvedValue([
+      {
+        id: userId,
+        email: "user@example.com",
+        username: "existing",
+        isPublic: true,
+        currentDay: 1,
+        aphorismsEnabled: true,
+      },
+    ]);
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ aphorismsEnabled: true }));
+
+    expect(res.status).toBe(200);
+    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(dbUpdate).toHaveBeenCalledTimes(1);
+    const updates = dbUpdateSet.mock.calls[0]![0];
+    expect(updates.aphorismsEnabled).toBe(true);
+    expect(updates).not.toHaveProperty("username");
+    await expect(res.json()).resolves.toEqual({
+      user: {
+        id: userId,
+        email: "user@example.com",
+        username: "existing",
+        isPublic: true,
+        currentDay: 1,
+        aphorismsEnabled: true,
+      },
+    });
   });
 });

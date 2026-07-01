@@ -28,11 +28,14 @@ type User = {
   username: string;
   isPublic: boolean;
   currentDay: number;
+  /** #88: opt-in pre-session aphorism shown on Home. */
+  aphorismsEnabled: boolean;
 };
 
 type SettingsViewProps = {
   user: User;
   onTogglePublic: (isPublic: boolean) => void;
+  onToggleAphorisms: (aphorismsEnabled: boolean) => void;
   onUsernameChange: (username: string) => void;
   onLogout: () => void;
 };
@@ -40,10 +43,12 @@ type SettingsViewProps = {
 export function SettingsView({
   user,
   onTogglePublic,
+  onToggleAphorisms,
   onUsernameChange,
   onLogout,
 }: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
+  const [togglingAphorisms, setTogglingAphorisms] = useState(false);
   // Both stay false during SSR/hydration; the Session card only appears after
   // mount when the browser actually supports the Screen Wake Lock API (#317).
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
@@ -121,6 +126,24 @@ export function SettingsView({
       // silent fail
     } finally {
       setToggling(false);
+    }
+  };
+
+  const handleAphorismsToggle = async () => {
+    setTogglingAphorisms(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aphorismsEnabled: !user.aphorismsEnabled }),
+      });
+      if (res.ok) {
+        onToggleAphorisms(!user.aphorismsEnabled);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setTogglingAphorisms(false);
     }
   };
 
@@ -497,6 +520,56 @@ export function SettingsView({
               background: user.isPublic ? "var(--accent-green)" : "var(--border-3)",
               position: "absolute", top: "3px",
               left: user.isPublic ? "25px" : "3px",
+              transition: "all 0.3s",
+            }} />
+          </button>
+        </div>
+
+        {/* Aphorisms toggle (#88) */}
+        <div style={{
+          padding: "16px 20px",
+          background: "var(--surface-1)",
+          borderRadius: "10px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div>
+            <div style={{
+              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
+            }}>
+              Aphorisms
+            </div>
+            <div style={{
+              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontSize: "13px", fontStyle: "italic",
+              color: "var(--fg-3)",
+            }}>
+              Show a short meditation quote before each session
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label={user.aphorismsEnabled ? "Disable aphorisms" : "Enable aphorisms"}
+            aria-pressed={user.aphorismsEnabled}
+            onClick={handleAphorismsToggle}
+            disabled={togglingAphorisms}
+            style={{
+              width: "48px", height: "26px",
+              borderRadius: "13px", border: "none",
+              background: user.aphorismsEnabled
+                ? "var(--accent-green-bg)"
+                : "var(--surface-3)",
+              position: "relative", cursor: "pointer",
+              transition: "background 0.3s",
+              flexShrink: 0, marginLeft: "16px",
+            }}
+          >
+            <div style={{
+              width: "20px", height: "20px",
+              borderRadius: "10px",
+              background: user.aphorismsEnabled ? "var(--accent-green)" : "var(--border-3)",
+              position: "absolute", top: "3px",
+              left: user.aphorismsEnabled ? "25px" : "3px",
               transition: "all 0.3s",
             }} />
           </button>

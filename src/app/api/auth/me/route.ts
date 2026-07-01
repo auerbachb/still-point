@@ -17,6 +17,7 @@ export async function GET() {
       username: users.username,
       isPublic: users.isPublic,
       currentDay: users.currentDay,
+      aphorismsEnabled: users.aphorismsEnabled,
     }).from(users).where(eq(users.id, auth.userId)).limit(1);
 
     if (!user) {

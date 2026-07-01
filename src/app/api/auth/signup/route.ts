@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         username: newUser.username,
         isPublic: newUser.isPublic,
         currentDay: newUser.currentDay,
+        aphorismsEnabled: newUser.aphorismsEnabled,
       },
       ...(includeToken ? { token } : {}),
     });

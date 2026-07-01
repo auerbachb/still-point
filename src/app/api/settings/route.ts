@@ -14,6 +14,7 @@ const RETURN_FIELDS = {
   username: users.username,
   isPublic: users.isPublic,
   currentDay: users.currentDay,
+  aphorismsEnabled: users.aphorismsEnabled,
 };
 
 export async function PATCH(request: NextRequest) {
@@ -29,6 +30,11 @@ export async function PATCH(request: NextRequest) {
 
     if (typeof body.isPublic === "boolean") {
       updates.isPublic = body.isPublic;
+      hasSupportedUpdate = true;
+    }
+
+    if (typeof body.aphorismsEnabled === "boolean") {
+      updates.aphorismsEnabled = body.aphorismsEnabled;
       hasSupportedUpdate = true;
     }
 

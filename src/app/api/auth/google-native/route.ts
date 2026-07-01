@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       username: user.username,
       isPublic: user.isPublic,
       currentDay: user.currentDay,
+      aphorismsEnabled: user.aphorismsEnabled,
     },
     token,
   });

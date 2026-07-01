@@ -805,6 +805,7 @@ export default function StillPoint() {
       {!overlay && tab === "progress" && (
         <HomeView
           currentDay={user.currentDay}
+          aphorismsEnabled={user.aphorismsEnabled}
           onBegin={() => handleBegin("standard")}
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
@@ -856,6 +857,9 @@ export default function StillPoint() {
           user={user}
           onTogglePublic={(isPublic) =>
             setUser((prev) => (prev ? { ...prev, isPublic } : prev))
+          }
+          onToggleAphorisms={(aphorismsEnabled) =>
+            setUser((prev) => (prev ? { ...prev, aphorismsEnabled } : prev))
           }
           onUsernameChange={(username) =>
             setUser((prev) => (prev ? { ...prev, username } : prev))

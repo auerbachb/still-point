@@ -296,11 +296,16 @@ public actor APIClient {
     // MARK: - Settings
 
     public func updateSettings(isPublic: Bool) async throws -> UserDTO {
-        try await updateSettings(body: SettingsPatchBody(isPublic: isPublic, username: nil))
+        try await updateSettings(body: SettingsPatchBody(isPublic: isPublic))
     }
 
     public func updateSettings(username: String) async throws -> UserDTO {
-        try await updateSettings(body: SettingsPatchBody(isPublic: nil, username: username))
+        try await updateSettings(body: SettingsPatchBody(username: username))
+    }
+
+    /// #88: opt-in pre-session aphorism toggle.
+    public func updateSettings(aphorismsEnabled: Bool) async throws -> UserDTO {
+        try await updateSettings(body: SettingsPatchBody(aphorismsEnabled: aphorismsEnabled))
     }
 
     private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
@@ -553,7 +558,8 @@ public actor APIClient {
             email: email,
             username: username,
             isPublic: store.user.isPublic,
-            currentDay: max(store.user.currentDay, 1)
+            currentDay: 1,
+            aphorismsEnabled: false
         )
         store.loginEmail = email
         store.loginPassword = password
@@ -657,7 +663,8 @@ public actor APIClient {
                 email: store.user.email,
                 username: store.user.username,
                 isPublic: store.user.isPublic,
-                currentDay: max(store.user.currentDay, data.dayNumber + 1)
+                currentDay: max(store.user.currentDay, data.dayNumber + 1),
+                aphorismsEnabled: store.user.aphorismsEnabled
             )
         }
 
@@ -743,6 +750,7 @@ public actor APIClient {
 
         var nextUsername = store.user.username
         var nextIsPublic = store.user.isPublic
+        var nextAphorismsEnabled = store.user.aphorismsEnabled
 
         if let usernamePatch = body.username {
             let trimmed = usernamePatch.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -759,12 +767,17 @@ public actor APIClient {
             nextIsPublic = isPublicPatch
         }
 
+        if let aphorismsEnabledPatch = body.aphorismsEnabled {
+            nextAphorismsEnabled = aphorismsEnabledPatch
+        }
+
         store.user = UserDTO(
             id: store.user.id,
             email: store.user.email,
             username: nextUsername,
             isPublic: nextIsPublic,
-            currentDay: store.user.currentDay
+            currentDay: store.user.currentDay,
+            aphorismsEnabled: nextAphorismsEnabled
         )
         uiTestStore = store
         persistUITestStore()
@@ -837,16 +850,25 @@ public actor APIClient {
 private struct SettingsPatchBody: Encodable {
     let isPublic: Bool?
     let username: String?
+    let aphorismsEnabled: Bool?
+
+    init(isPublic: Bool? = nil, username: String? = nil, aphorismsEnabled: Bool? = nil) {
+        self.isPublic = isPublic
+        self.username = username
+        self.aphorismsEnabled = aphorismsEnabled
+    }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         if let isPublic { try c.encode(isPublic, forKey: .isPublic) }
         if let username { try c.encode(username, forKey: .username) }
+        if let aphorismsEnabled { try c.encode(aphorismsEnabled, forKey: .aphorismsEnabled) }
     }
 
     private enum CodingKeys: String, CodingKey {
         case isPublic
         case username
+        case aphorismsEnabled
     }
 }
 
@@ -917,7 +939,8 @@ private struct UITestStore: Codable, Sendable {
             email: "snapshot@stillpoint.test",
             username: "still_snapshot",
             isPublic: true,
-            currentDay: 9
+            currentDay: 9,
+            aphorismsEnabled: true
         )
 
         let sessions: [SessionDTO] = [
