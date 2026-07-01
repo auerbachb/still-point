@@ -32,27 +32,25 @@ end
 # defaults in project.yml. Returns nil when unset so non-Google builds are unaffected —
 # the same gap shipped TestFlight build 14 with Google sign-in disabled (#471).
 def google_signin_xcargs
-  # GID_CLIENT_ID and GID_REVERSED_CLIENT_ID are required as a SET: a partial config
-  # yields an IPA with a GIDClientID but no reversed-client URL scheme (or vice-versa),
-  # so native Google sign-in silently breaks at runtime — the exact class of bug that
-  # shipped build 14 (#471). "None set" is a legitimate non-Google build (returns nil, so
-  # gym is unaffected); "some but not all required set" is a hard error, never a bad IPA.
-  required = {
+  # GID_CLIENT_ID and GID_REVERSED_CLIENT_ID are required as a SET, and ANY GID_* value
+  # signals intent to configure native Google sign-in. A partial config yields an IPA with
+  # e.g. a GIDClientID but no reversed-client URL scheme, so sign-in silently breaks at
+  # runtime — the exact bug that shipped build 14 (#471). "Nothing set at all" is a
+  # legitimate non-Google build (returns nil, gym unaffected); any GID_* present with the
+  # required pair incomplete (e.g. only GID_SERVER_CLIENT_ID) is a hard error, never a bad IPA.
+  provided = {
     "GID_CLIENT_ID" => ENV["GID_CLIENT_ID"],
-    "GID_REVERSED_CLIENT_ID" => ENV["GID_REVERSED_CLIENT_ID"]
-  }
-  present = required.reject { |_, value| value.nil? || value.empty? }
-  return nil if present.empty?
-  if present.size < required.size
-    missing = (required.keys - present.keys).join(", ")
-    UI.user_error!("Partial Google Sign-In configuration: missing #{missing}. Set all of #{required.keys.join(', ')} (GID_SERVER_CLIENT_ID optional), or none.")
+    "GID_REVERSED_CLIENT_ID" => ENV["GID_REVERSED_CLIENT_ID"],
+    "GID_SERVER_CLIENT_ID" => ENV["GID_SERVER_CLIENT_ID"]
+  }.reject { |_, value| value.nil? || value.empty? }
+  return nil if provided.empty?
+
+  missing = %w[GID_CLIENT_ID GID_REVERSED_CLIENT_ID].reject { |key| provided.key?(key) }
+  unless missing.empty?
+    UI.user_error!("Partial Google Sign-In configuration: missing #{missing.join(', ')}. Set both GID_CLIENT_ID and GID_REVERSED_CLIENT_ID (GID_SERVER_CLIENT_ID optional), or none.")
   end
 
-  # Optional server client ID is appended only when provided.
-  pairs = present
-  server = ENV["GID_SERVER_CLIENT_ID"]
-  pairs["GID_SERVER_CLIENT_ID"] = server unless server.nil? || server.empty?
-  pairs.map { |key, value| "#{key}=#{value.shellescape}" }.join(" ")
+  provided.map { |key, value| "#{key}=#{value.shellescape}" }.join(" ")
 end
 
 platform :ios do
