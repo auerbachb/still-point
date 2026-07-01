@@ -53,7 +53,7 @@ test.describe("mobile auth and shell", () => {
   });
 
   test("401 on auth check falls back to login on narrow viewport", async ({ page }) => {
-    await page.route("**/api/auth/me", async (route) => {
+    await page.route("**/api/auth/me**", async (route) => {
       await route.fulfill({
         status: 401,
         contentType: "application/json",
@@ -88,7 +88,7 @@ test.describe("mobile auth and shell", () => {
   });
 
   test("network failure on auth check shows retry contract", async ({ page }) => {
-    await page.route("**/api/auth/me", async (route) => {
+    await page.route("**/api/auth/me**", async (route) => {
       await route.abort("failed");
     });
 

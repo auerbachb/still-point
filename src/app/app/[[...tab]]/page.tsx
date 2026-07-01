@@ -367,6 +367,13 @@ export default function StillPoint() {
     // buddy-invite / ?view= effects below can still consume it.
     setUser(userData);
     setOverlay(null);
+    // #238: login returns raw DB fields; missed-day gap detection only runs in
+    // GET /api/auth/me. Re-fetch silently so a returning user with a 2+ day gap
+    // enters the recovery ramp before their first sit of this session.
+    void fetch(`/api/auth/me?date=${todayLocalIsoDate()}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.user) setUser(data.user); })
+      .catch(() => {});
   };
 
   const handleLogout = () => {
