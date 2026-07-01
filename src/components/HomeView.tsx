@@ -2,18 +2,29 @@
 
 import { BLOCK_DURATION, QUICK_DURATION, durationForDay } from "@/lib/constants";
 import { Pathway } from "@/components/Pathway";
+import { aphorismForDay } from "@/lib/aphorisms";
 
 type HomeViewProps = {
   currentDay: number;
+  /** #88: opt-in pre-session inspiration quote. */
+  aphorismsEnabled?: boolean;
   onBegin: () => void;
   onQuickBegin: () => void;
   onBreath?: () => void;
   onBuddy?: () => void;
 };
 
-export function HomeView({ currentDay, onBegin, onQuickBegin, onBreath, onBuddy }: HomeViewProps) {
+export function HomeView({
+  currentDay,
+  aphorismsEnabled,
+  onBegin,
+  onQuickBegin,
+  onBreath,
+  onBuddy,
+}: HomeViewProps) {
   const todayDuration = durationForDay(currentDay);
   const totalBlocks = Math.ceil(todayDuration / BLOCK_DURATION);
+  const aphorism = aphorismsEnabled ? aphorismForDay(currentDay) : null;
 
   return (
     <div style={{
@@ -65,6 +76,31 @@ export function HomeView({ currentDay, onBegin, onQuickBegin, onBreath, onBuddy 
 
       {/* Block B2: Lesson pathway (#336) */}
       <Pathway currentDay={currentDay} />
+
+      {/* Block B3: pre-session aphorism, opt-in (#88) */}
+      {aphorism && (
+        <div style={{
+          textAlign: "center",
+          maxWidth: "min(360px, calc(100vw - 40px))",
+          padding: "0 var(--s2)",
+        }}>
+          <p style={{
+            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontSize: "15px", fontStyle: "italic", fontWeight: 300,
+            color: "var(--fg-2)", margin: 0, lineHeight: 1.5,
+          }}>
+            &ldquo;{aphorism.text}&rdquo;
+          </p>
+          <p style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "11px", color: "var(--fg-4)",
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            marginTop: "var(--s2)",
+          }}>
+            &mdash; {aphorism.author}
+          </p>
+        </div>
+      )}
 
       {/* Block C: CTA */}
       <button

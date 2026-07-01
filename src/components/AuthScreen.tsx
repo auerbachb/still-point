@@ -5,7 +5,14 @@ import { signIn } from "next-auth/react";
 import { loadLastAuthProvider, type OAuthProvider } from "@/lib/lastAuthProvider";
 
 type AuthScreenProps = {
-  onLogin: (user: { id: string; email: string; username: string; isPublic: boolean; currentDay: number }) => void;
+  onLogin: (user: {
+    id: string;
+    email: string;
+    username: string;
+    isPublic: boolean;
+    currentDay: number;
+    aphorismsEnabled: boolean;
+  }) => void;
 };
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
