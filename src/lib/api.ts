@@ -29,6 +29,10 @@ export type User = {
   currentDay: number;
   /** #88: opt-in pre-session aphorism shown on Home. */
   aphorismsEnabled: boolean;
+  /** #238: miss-a-day recovery ramp state, nullable trio (see src/lib/duration.ts). */
+  recoveryTargetDay?: number | null;
+  recoveryCurrentStep?: number | null;
+  recoveryTotalSteps?: number | null;
 };
 
 export type Session = {

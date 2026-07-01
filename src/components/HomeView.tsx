@@ -1,6 +1,7 @@
 "use client";
 
-import { BLOCK_DURATION, QUICK_DURATION, durationForDay } from "@/lib/constants";
+import { BLOCK_DURATION, QUICK_DURATION } from "@/lib/constants";
+import { activeRecovery, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { Pathway } from "@/components/Pathway";
 import { aphorismForDay } from "@/lib/aphorisms";
 
@@ -8,22 +9,23 @@ type HomeViewProps = {
   currentDay: number;
   /** #88: opt-in pre-session inspiration quote. */
   aphorismsEnabled?: boolean;
+  recovery?: RecoveryFields;
   onBegin: () => void;
   onQuickBegin: () => void;
   onBreath?: () => void;
   onBuddy?: () => void;
 };
 
-export function HomeView({
-  currentDay,
-  aphorismsEnabled,
-  onBegin,
-  onQuickBegin,
-  onBreath,
-  onBuddy,
-}: HomeViewProps) {
-  const todayDuration = durationForDay(currentDay);
+const NO_RECOVERY: RecoveryFields = {
+  recoveryTargetDay: null,
+  recoveryCurrentStep: null,
+  recoveryTotalSteps: null,
+};
+
+export function HomeView({ currentDay, aphorismsEnabled, recovery = NO_RECOVERY, onBegin, onQuickBegin, onBreath, onBuddy }: HomeViewProps) {
+  const todayDuration = sessionDurationForUser("standard", currentDay, recovery);
   const totalBlocks = Math.ceil(todayDuration / BLOCK_DURATION);
+  const inRecovery = activeRecovery(recovery);
   const aphorism = aphorismsEnabled ? aphorismForDay(currentDay) : null;
 
   return (
@@ -72,6 +74,15 @@ export function HomeView({
         }}>
           day &middot; {todayDuration}s &middot; {totalBlocks} blocks
         </div>
+        {inRecovery && (
+          <div style={{
+            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontSize: "10px", color: "var(--accent-amber-text)",
+            letterSpacing: "0.1em", textTransform: "uppercase",
+          }}>
+            recovery {inRecovery.recoveryCurrentStep}/{inRecovery.recoveryTotalSteps} &middot; ramping back to day {inRecovery.recoveryTargetDay}
+          </div>
+        )}
       </div>
 
       {/* Block B2: Lesson pathway (#336) */}

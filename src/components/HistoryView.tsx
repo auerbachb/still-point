@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { durationForDay } from "@/lib/constants";
 import type { Session, Thought } from "@/lib/api";
+import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+
+const NO_RECOVERY: RecoveryFields = {
+  recoveryTargetDay: null,
+  recoveryCurrentStep: null,
+  recoveryTotalSteps: null,
+};
 
 type HistoryEntry = {
   sessionId?: string;
@@ -56,10 +62,11 @@ function sessionSortKey(s: Session): string {
 
 type HistoryViewProps = {
   currentDay: number;
+  recovery?: RecoveryFields;
   username: string;
 };
 
-export function HistoryView({ currentDay, username }: HistoryViewProps) {
+export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [stats, setStats] = useState({
@@ -172,11 +179,11 @@ export function HistoryView({ currentDay, username }: HistoryViewProps) {
 
   const maxDuration = Math.max(
     ...history.filter(h => !h.missed).map(h => h.actualTime),
-    durationForDay(currentDay),
+    sessionDurationForUser("standard", currentDay, recovery),
     60,
   );
 
-  const todayDuration = durationForDay(currentDay);
+  const todayDuration = sessionDurationForUser("standard", currentDay, recovery);
   const thoughtsBySession = useMemo(() => {
     const grouped: Record<string, Thought[]> = {};
     for (const t of thoughts) {
