@@ -27,10 +27,20 @@ public enum GoogleSignInDiagnostics {
         description: String,
         underlying: String? = nil
     ) -> String {
-        var line = "google-signin failure domain=\(domain) code=\(code) description=\(description)"
+        // Collapse embedded newlines so a multi-line localizedDescription can't break the
+        // single-line / grep-friendly contract this helper advertises.
+        var line = "google-signin failure domain=\(domain) code=\(code) description=\(Self.singleLine(description))"
         if let underlying, !underlying.isEmpty {
-            line += " underlying=\(underlying)"
+            line += " underlying=\(Self.singleLine(underlying))"
         }
         return line
+    }
+
+    /// Flattens CR/LF into single spaces so a composed log line stays on one line.
+    private static func singleLine(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
     }
 }
