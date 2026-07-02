@@ -37,10 +37,10 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
         gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+          fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
           Thought Journal
         </h2>
-        <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        <div style={{ fontFamily: "var(--font-mono)",
           fontSize: "12px", color: "var(--fg-3)" }}>
           Loading...
         </div>
@@ -54,12 +54,12 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
       gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(560px, calc(100vw - 24px))",
     }}>
       <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+        fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
         Thought Journal
       </h2>
 
       <div style={{
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         textAlign: "center",
       }}>
         <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-amber)" }}>{totalCount}</div>
@@ -74,7 +74,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
       <div style={{ width: "100%", maxWidth: "min(500px, calc(100vw - 40px))" }}>
         <FlashHint>
           <p style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
             marginBottom: "24px", lineHeight: 1.6,
           }}>
@@ -85,7 +85,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
         {Object.entries(grouped).reverse().map(([day, dayThoughts]) => (
           <div key={day} style={{ marginBottom: "20px" }}>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "12px", color: "var(--fg-3)",
               letterSpacing: "0.12em", marginBottom: "8px",
             }}>
@@ -97,7 +97,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
                 padding: "5px 0", borderBottom: "1px solid var(--border-1)",
               }}>
                 <span style={{
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-mono)",
                   fontSize: "11px",
                   color: t.timeInSession === -1 ? "var(--accent-green-muted)" : "var(--accent-amber-muted)",
                   whiteSpace: "nowrap", minWidth: "32px",
@@ -105,7 +105,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
                   {t.timeInSession === -1 ? "note" : `@${t.timeInSession}s`}
                 </span>
                 <span style={{
-                  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  fontFamily: "var(--font-serif)",
                   fontSize: "14px", fontStyle: "italic",
                   color: "var(--fg-2)", lineHeight: 1.4,
                 }}>
@@ -118,7 +118,7 @@ export function ThoughtJournal({ username }: ThoughtJournalProps) {
 
         {totalCount === 0 && (
           <p style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
             textAlign: "center", marginTop: "40px",
           }}>

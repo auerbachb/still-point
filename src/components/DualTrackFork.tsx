@@ -58,7 +58,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             color: "var(--accent-green-text)",
             letterSpacing: "0.15em",
@@ -75,7 +75,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
             fontStyle: "italic",
             margin: 0,
             color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
           }}
         >
           Add a second daily track?
@@ -128,7 +128,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
       >
         <div
           style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "16px",
             fontStyle: "italic",
             color: "var(--fg)",
@@ -149,7 +149,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
             background: "transparent",
             border: "1px solid var(--accent-green-border)",
             color: "var(--accent-green-text)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
@@ -177,7 +177,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
       >
         <div
           style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "16px",
             fontStyle: "italic",
             color: "var(--fg)",
@@ -197,7 +197,7 @@ export function DualTrackFork({ onEnable, onDismiss }: DualTrackForkProps) {
             background: "transparent",
             border: "1px solid var(--border-2)",
             color: "var(--fg-2)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.12em",
             textTransform: "uppercase",

@@ -6,7 +6,7 @@ import { api, ApiError, type FriendPublicUser, type FriendRequestRow } from "@/l
 import { FlashHint } from "./FlashHint";
 
 const labelStyle: React.CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--fg-4)",
   letterSpacing: "0.12em",
@@ -38,7 +38,7 @@ const btnOutline: React.CSSProperties = {
   borderRadius: "999px",
   padding: "8px 14px",
   cursor: "pointer",
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -166,7 +166,7 @@ export function FriendsView() {
           fontWeight: 300,
           fontStyle: "italic",
           margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           color: "var(--fg)",
         }}
       >
@@ -176,7 +176,7 @@ export function FriendsView() {
       <FlashHint style={{ textAlign: "center" }}>
         <p
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             color: "var(--fg-3)",
             textAlign: "center",
@@ -219,7 +219,7 @@ export function FriendsView() {
               border: "1px solid var(--border-2)",
               background: "var(--bg)",
               color: "var(--fg)",
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "16px",
             }}
           />

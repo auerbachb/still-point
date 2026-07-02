@@ -59,7 +59,7 @@ export function MindStateBar({
       </div>
       <div style={{
         display: "flex", justifyContent: "space-between", marginTop: "6px",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: "11px", color: "var(--fg-4)",
       }}>
         <span>0s</span>

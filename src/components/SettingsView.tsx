@@ -177,7 +177,7 @@ export function SettingsView({
     }}>
       <h2 style={{
         fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         color: "var(--fg)",
       }}>
         Settings
@@ -192,7 +192,7 @@ export function SettingsView({
           display: "flex", flexDirection: "column", gap: "8px",
         }}>
           <div style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px", color: "var(--fg-4)",
             letterSpacing: "0.12em", textTransform: "uppercase",
           }}>
@@ -210,7 +210,7 @@ export function SettingsView({
                 aria-invalid={usernameError !== null}
                 maxLength={MAX_USERNAME_LENGTH}
                 style={{
-                  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  fontFamily: "var(--font-serif)",
                   fontSize: "16px", color: "var(--fg)",
                   background: "var(--surface-2)",
                   border: "1px solid var(--border-3)",
@@ -228,7 +228,7 @@ export function SettingsView({
                     background: "none",
                     border: "1px solid var(--border-3)",
                     color: "var(--fg)",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", letterSpacing: "0.12em",
                     textTransform: "uppercase", padding: "6px 12px",
                     borderRadius: "6px",
@@ -245,7 +245,7 @@ export function SettingsView({
                     background: "none",
                     border: "1px solid var(--border-3)",
                     color: "var(--fg-3)",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", letterSpacing: "0.12em",
                     textTransform: "uppercase", padding: "6px 12px",
                     borderRadius: "6px",
@@ -259,7 +259,7 @@ export function SettingsView({
                 <div
                   role="alert"
                   style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     color: "var(--accent-danger-muted)",
                   }}
@@ -274,7 +274,7 @@ export function SettingsView({
               gap: "12px",
             }}>
               <div style={{
-                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontFamily: "var(--font-serif)",
                 fontSize: "16px", color: "var(--fg)",
               }}>
                 {user.username}
@@ -287,7 +287,7 @@ export function SettingsView({
                   background: "none",
                   border: "1px solid var(--border-3)",
                   color: "var(--fg-3)",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-mono)",
                   fontSize: "10px", letterSpacing: "0.12em",
                   textTransform: "uppercase", padding: "4px 10px",
                   borderRadius: "6px", cursor: "pointer",
@@ -301,7 +301,7 @@ export function SettingsView({
             <div
               role="status"
               style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "11px",
                 color: "var(--accent-green)",
               }}
@@ -310,7 +310,7 @@ export function SettingsView({
             </div>
           )}
           <div style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "12px", color: "var(--fg-3)",
           }}>
             {user.email}
@@ -332,7 +332,7 @@ export function SettingsView({
         >
           <div>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "12px",
               color: "var(--fg)",
               marginBottom: "4px",
@@ -341,7 +341,7 @@ export function SettingsView({
               Notifications
             </div>
             <div style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "13px",
               fontStyle: "italic",
               color: "var(--fg-3)",
@@ -351,7 +351,7 @@ export function SettingsView({
             </div>
           </div>
           <span style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "14px",
             color: "var(--fg-4)",
           }}
@@ -370,13 +370,13 @@ export function SettingsView({
           }}>
             <div>
               <div style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
               }}>
                 Keep screen on during session
               </div>
               <div style={{
-                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontFamily: "var(--font-serif)",
                 fontSize: "13px", fontStyle: "italic",
                 color: "var(--fg-3)",
               }}>
@@ -425,13 +425,13 @@ export function SettingsView({
         }}>
           <div>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
             }}>
               Breath counting key
             </div>
             <div style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "13px", fontStyle: "italic",
               color: "var(--fg-3)",
             }}>
@@ -453,7 +453,7 @@ export function SettingsView({
                   aria-checked={selected}
                   onClick={() => handleBreathKeyBindingChange(binding)}
                   style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     letterSpacing: "0.08em",
                     padding: "8px 14px",
@@ -484,13 +484,13 @@ export function SettingsView({
         }}>
           <div>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
             }}>
               Public Board
             </div>
             <div style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "13px", fontStyle: "italic",
               color: "var(--fg-3)",
             }}>
@@ -534,13 +534,13 @@ export function SettingsView({
         }}>
           <div>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
             }}>
               Aphorisms
             </div>
             <div style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "13px", fontStyle: "italic",
               color: "var(--fg-3)",
             }}>
@@ -583,7 +583,7 @@ export function SettingsView({
             background: "none",
             border: "1px solid var(--accent-danger-border-subtle)",
             color: "var(--accent-danger-muted)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px", letterSpacing: "0.12em",
             textTransform: "uppercase", padding: "12px",
             borderRadius: "8px", cursor: "pointer",
@@ -628,7 +628,7 @@ function AppVersionFooter() {
         margin: "24px 0 0",
         padding: 0,
         textAlign: "center",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: "10px",
         letterSpacing: "0.04em",
         color: "var(--fg-4)",

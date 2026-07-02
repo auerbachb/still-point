@@ -53,7 +53,7 @@ export function BuddyCalendarAuthGate({ children }: BuddyCalendarAuthGateProps) 
             borderRadius: "999px",
             padding: "10px 16px",
             cursor: "pointer",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",

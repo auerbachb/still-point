@@ -202,10 +202,10 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
         gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
       }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+          fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
           Progress
         </h2>
-        <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        <div style={{ fontFamily: "var(--font-mono)",
           fontSize: "12px", color: "var(--fg-3)" }}>
           Loading...
         </div>
@@ -219,14 +219,14 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
       gap: "32px", animation: "fadeIn 0.6s ease", width: "100%", maxWidth: "min(720px, calc(100vw - 24px))",
     }}>
       <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+        fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
         Progress
       </h2>
 
       {/* Stats */}
       <div style={{
         display: "flex", gap: isMobile ? "16px" : "28px", flexWrap: "wrap", justifyContent: "center",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
       }}>
         {[
           { label: "streak", value: String(stats.streak) },
@@ -247,7 +247,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
       {/* Journey */}
       <div style={{ width: "100%", maxWidth: "660px" }}>
         <div style={{
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "14px", color: "var(--fg-2)",
           marginBottom: "20px", letterSpacing: "0.07em", textTransform: "uppercase",
         }}>
@@ -269,7 +269,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                   padding: "2px 0", opacity: 0.35,
                 }}>
                   <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: isMobile ? "10px" : "11px", color: "var(--fg-4)",
                     width: isMobile ? undefined : "160px", minWidth: isMobile ? "72px" : undefined,
                     textAlign: "right", whiteSpace: "nowrap",
@@ -277,7 +277,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     {rangeLabel}
                   </div>
                   <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", color: "var(--fg-3)",
                     width: sessionLabelColWidth, textAlign: "right",
                   }}>
@@ -289,7 +289,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     display: "flex", alignItems: "center", paddingLeft: "10px",
                   }}>
                     <span style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "11px", color: "var(--fg-4)", fontStyle: "italic",
                     }}>
                       {entry.collapsedDayCount} days missed
@@ -309,7 +309,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                 }}>
                   {!isMobile ? (
                     <div style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
@@ -317,7 +317,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     </div>
                   ) : (
                     <div style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "10px", color: "var(--fg-4)",
                       minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
@@ -325,7 +325,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     </div>
                   )}
                   <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", color: "var(--fg-3)",
                     width: sessionLabelColWidth, textAlign: "right",
                   }}>
@@ -337,7 +337,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     display: "flex", alignItems: "center", paddingLeft: "10px",
                   }}>
                     <span style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "11px", color: "var(--fg-4)", fontStyle: "italic",
                     }}>
                       missed
@@ -397,7 +397,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                 >
                   {!isMobile && (
                     <div style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "11px", color: "var(--fg-4)",
                       width: "160px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
@@ -406,7 +406,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                   )}
                   {isMobile && (
                     <div style={{
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "10px", color: "var(--fg-4)",
                       minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
                     }}>
@@ -414,7 +414,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     </div>
                   )}
                   <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", color: isQuick ? "var(--fg-4)" : "var(--fg-3)",
                     width: sessionLabelColWidth, textAlign: "right",
                   }}>
@@ -443,7 +443,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     </div>
                   </div>
                   <div style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     color: entry.completed ? "var(--accent-green-dim)" : "var(--accent-danger-muted)",
                     width: isMobile ? "80px" : "120px", display: "flex", gap: "6px", flexWrap: "wrap",
@@ -476,13 +476,13 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                     {entryThoughts.map((t) => (
                       <div key={t.id} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "3px 0" }}>
                         <span style={{
-                          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                          fontFamily: "var(--font-mono)",
                           fontSize: "11px", color: "var(--accent-amber-hint)", whiteSpace: "nowrap",
                         }}>
                           @{t.timeInSession}s
                         </span>
                         <span style={{
-                          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                          fontFamily: "var(--font-serif)",
                           fontSize: "13px", fontStyle: "italic", color: "var(--fg-2)",
                         }}>
                           {t.text}
@@ -499,7 +499,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "12px" }}>
             {!isMobile && (
               <div style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "11px", color: "var(--fg-4)",
                 width: "160px", textAlign: "right", whiteSpace: "nowrap",
               }}>
@@ -508,13 +508,13 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
             )}
             {isMobile && (
               <div style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "10px", color: "var(--fg-4)",
                 minWidth: "72px", textAlign: "right", whiteSpace: "nowrap",
               }} />
             )}
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-4)",
               width: sessionLabelColWidth, textAlign: "right",
             }}>
@@ -533,7 +533,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
               }} />
             </div>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-4)", width: isMobile ? "80px" : "120px",
             }}>
               {todayDuration}s
@@ -550,7 +550,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
           ].map(l => (
             <div key={l.label} style={{
               display: "flex", alignItems: "center", gap: "6px",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-3)",
             }}>
               <div style={{
@@ -564,7 +564,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
       </div>
 
       <p style={{
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: "11px", color: "var(--fg-4)", textAlign: "center",
       }}>
         click any session row to see captured thoughts

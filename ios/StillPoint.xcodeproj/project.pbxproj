@@ -20,12 +20,10 @@
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
 		47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */; };
-		4BC69FCAE79FAF2487A6E152 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */; };
 		4D652980F04840078B8FC938 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F95E6E47148AEF494393FDB /* SessionView.swift */; };
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
-		5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */; };
 		5E1134CA9CA16D2589A0FDDE /* BuddySessionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */; };
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
 		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
@@ -38,7 +36,6 @@
 		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
 		840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */; };
 		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
-		977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */; };
 		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
 		9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */; };
 		9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */; };
@@ -124,14 +121,11 @@
 		45BC84AB51307C865EF7257A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
 		4976183C8621BCA485D0B82D /* BreathCountingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingView.swift; sourceTree = "<group>"; };
-		4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Italic-Variable.ttf"; sourceTree = "<group>"; };
 		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Variable.ttf"; sourceTree = "<group>"; };
 		69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
 		6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
-		797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
 		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
 		7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
@@ -218,19 +212,8 @@
 			isa = PBXGroup;
 			children = (
 				9311B0CBDED4DF207E799ACC /* Assets.xcassets */,
-				2FCF8A365AA13FD0F3338059 /* Fonts */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		2FCF8A365AA13FD0F3338059 /* Fonts */ = {
-			isa = PBXGroup;
-			children = (
-				797A65A5FC78734F7733B1BD /* JetBrainsMono-Variable.ttf */,
-				4F0CE80470C4C3CE0D9B4C00 /* Newsreader-Italic-Variable.ttf */,
-				59BC4CFFEEC93BECAACE1111 /* Newsreader-Variable.ttf */,
-			);
-			path = Fonts;
 			sourceTree = "<group>";
 		};
 		379B38AC4868912EF44556DF /* AppBlockingShared */ = {
@@ -518,9 +501,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */,
-				4BC69FCAE79FAF2487A6E152 /* JetBrainsMono-Variable.ttf in Resources */,
-				5CD3F9D38AB8369BA65DD128 /* Newsreader-Italic-Variable.ttf in Resources */,
-				977B64DE4C6FCAE7ADDD898B /* Newsreader-Variable.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 const sectionTitle: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "12px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -40,7 +40,7 @@ export default function PrivacyPolicyPage() {
     <div
       style={{
         minHeight: "100%",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         padding: "var(--s4)",
         paddingBottom: "var(--s6)",
       }}
@@ -69,7 +69,7 @@ export default function PrivacyPolicyPage() {
         <Link
           href="/app"
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             fontSize: "12px",

@@ -71,13 +71,13 @@ export function CompletionScreen({
       <div style={{ textAlign: "center" }}>
         <h2 style={{
           fontSize: "32px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           color: "var(--fg)",
         }}>
           {isQuick ? "Quick Minute Complete" : `Day ${dayNumber} Complete`}
         </h2>
         <p style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "13px", color: "var(--accent-green-text)",
           marginTop: "var(--s2)", letterSpacing: "0.07em",
         }}>
@@ -87,7 +87,7 @@ export function CompletionScreen({
         <div style={{
           display: "flex", gap: "var(--s5)", justifyContent: "center",
           marginTop: "var(--s4)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
         }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "28px", fontWeight: 200, color: "var(--accent-green)" }}>{clearPercent}%</div>
@@ -126,7 +126,7 @@ export function CompletionScreen({
             textAlign: "left", maxWidth: "min(350px, calc(100vw - 40px))", margin: "24px auto 0",
           }}>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-4)",
               letterSpacing: "0.12em", marginBottom: "8px",
             }}>
@@ -134,7 +134,7 @@ export function CompletionScreen({
             </div>
             {thoughts.map((t, i) => (
               <div key={i} style={{
-                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontFamily: "var(--font-serif)",
                 fontSize: "13px", fontStyle: "italic",
                 color: "var(--fg-2)", padding: "3px 0",
               }}>
@@ -145,7 +145,7 @@ export function CompletionScreen({
         )}
 
         <p style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px", color: "var(--fg-3)", marginTop: "16px",
         }}>
           {isQuick ? (
@@ -164,7 +164,7 @@ export function CompletionScreen({
         }}>
           {noteSaved ? (
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-green-dim)",
               letterSpacing: "0.09em",
             }}>
@@ -184,7 +184,7 @@ export function CompletionScreen({
                   border: "1px solid var(--border-1)",
                   borderRadius: "10px",
                   color: "var(--fg)",
-                  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                  fontFamily: "var(--font-serif)",
                   fontSize: "14px", fontStyle: "italic",
                   padding: "12px 16px",
                   resize: "vertical",
@@ -196,7 +196,7 @@ export function CompletionScreen({
                   role="alert"
                   aria-live="assertive"
                   style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", color: "var(--accent-danger)",
                     letterSpacing: "0.09em",
                   }}
@@ -229,7 +229,7 @@ export function CompletionScreen({
                     color: saveError
                       ? "var(--accent-danger)"
                       : "var(--accent-green-text)",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
                     padding: "8px 24px", borderRadius: "20px",
                     cursor: saving ? "default" : "pointer",
@@ -252,7 +252,7 @@ export function CompletionScreen({
         }}>
           {ratingsSaved ? (
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-green-dim)",
               letterSpacing: "0.09em",
             }}>
@@ -267,7 +267,7 @@ export function CompletionScreen({
                   role="alert"
                   aria-live="assertive"
                   style={{
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px", color: "var(--accent-danger)",
                     letterSpacing: "0.09em",
                   }}
@@ -312,7 +312,7 @@ export function CompletionScreen({
                   color: ratingsSaveError
                     ? "var(--accent-danger)"
                     : "var(--accent-green-text)",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-mono)",
                   fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
                   padding: "8px 24px", borderRadius: "20px",
                   cursor: savingRatings ? "default" : "pointer",
@@ -333,7 +333,7 @@ export function CompletionScreen({
           background: "none",
           border: "1px solid var(--border-2)",
           color: "var(--fg)",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "14px", fontStyle: "italic",
           padding: "12px 36px", borderRadius: "30px",
           minHeight: "44px",

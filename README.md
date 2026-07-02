@@ -26,7 +26,7 @@ Sessions over 2 minutes use minute-sized blocks with a final minute of 10-second
 | Auth | Custom JWT via [jose](https://github.com/panva/jose) + [bcryptjs](https://github.com/dcodeIO/bcrypt.js) |
 | Hosting | [Vercel](https://vercel.com) |
 | Styling | Inline styles (no CSS framework) |
-| Fonts | Newsreader (serif) + JetBrains Mono (monospace) via `next/font/google` |
+| Fonts | System serif (`Charter, Georgia`) + monospace (`ui-monospace, SF Mono, Menlo`) via CSS custom properties |
 | Audio | Web Audio API (synthesized tick, chime, and completion sounds) |
 
 ## Local development
@@ -284,7 +284,7 @@ Notes:
 src/
   app/
     page.tsx                 # SPA shell — manages views and auth state
-    layout.tsx               # fonts, global styles, metadata
+    layout.tsx               # global styles, metadata
     globals.css              # keyframes (fadeIn, breathe, pulse)
     api/
       auth/                  # signup, login, logout, me

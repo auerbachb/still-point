@@ -61,7 +61,7 @@ function PerBuddyCalendarContent({
             textAlign: "center",
             fontSize: "12px",
             color: "var(--fg-3)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           {buddyLookupError}

@@ -689,7 +689,7 @@ export default function StillPoint() {
     return (
       <div style={{
         minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
       }}>
         <div style={{
           fontSize: "42px", fontWeight: 300, fontStyle: "italic",
@@ -707,7 +707,7 @@ export default function StillPoint() {
         minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: "var(--s3)",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         padding: "40px 20px",
         textAlign: "center",
       }}>
@@ -731,7 +731,7 @@ export default function StillPoint() {
             borderRadius: "999px",
             padding: "10px 16px",
             cursor: "pointer",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -749,7 +749,7 @@ export default function StillPoint() {
       <div style={{
         minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         padding: "40px 20px",
       }}>
         <AuthScreen onLogin={handleLogin} />
@@ -773,7 +773,7 @@ export default function StillPoint() {
       // the Return button behind the fixed bottom nav (#479). Use "start" on
       // mobile so the bottom padding reliably clears the nav.
       alignItems: (isImmersive || (overlay === "complete" && isMobile)) ? "start" : "center",
-      fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+      fontFamily: "var(--font-serif)",
       padding: isMobile
         ? "var(--s4) var(--s3) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
         : "var(--s4) var(--s4)",
@@ -804,7 +804,7 @@ export default function StillPoint() {
               style={{
                 background: "none", border: "none",
                 color: active ? "var(--fg)" : "var(--fg-2)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: isMobile ? "9px" : "11px",
                 letterSpacing: isMobile ? "0.02em" : "0.1em",
                 textTransform: "uppercase",
@@ -839,7 +839,7 @@ export default function StillPoint() {
           keep the CompletionScreen content above the fixed bottom nav (#479). */}
       {!isImmersive && !(overlay === "complete" && isMobile) && (
         <div style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "12px", color: "var(--fg-3)",
           letterSpacing: "0.12em",
           fontWeight: 400,
@@ -882,7 +882,7 @@ export default function StillPoint() {
               color: "var(--fg-3)",
               cursor: "pointer",
               fontSize: "12px",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               textDecoration: "underline",

@@ -44,7 +44,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
     >
       <div
         style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "12px",
           color: "var(--accent-danger)",
           letterSpacing: "0.12em",
@@ -68,7 +68,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
         <div
           role="alert"
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             color: "var(--accent-danger)",
           }}
@@ -90,7 +90,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
             background: "none",
             border: "1px solid var(--accent-danger-border-subtle)",
             color: "var(--accent-danger-muted)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
@@ -112,7 +112,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
               background: "var(--accent-danger-bg)",
               border: "1px solid var(--accent-danger-border-subtle)",
               color: "var(--accent-danger)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
@@ -135,7 +135,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
               background: "none",
               border: "1px solid var(--border-2)",
               color: "var(--fg-3)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.12em",
               textTransform: "uppercase",

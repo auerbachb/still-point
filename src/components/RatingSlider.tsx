@@ -23,7 +23,7 @@ export function RatingSlider({
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "baseline",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
       }}>
         <span style={{
           fontSize: "11px", color: "var(--fg-3)",

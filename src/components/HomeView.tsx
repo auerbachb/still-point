@@ -78,7 +78,7 @@ function TrackCard({
           display: "flex",
           alignItems: "center",
           gap: "var(--s2)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px",
           color: "var(--fg-3)",
           letterSpacing: "0.15em",
@@ -100,7 +100,7 @@ function TrackCard({
         style={{
           fontSize: "min(72px, 16vw)",
           fontWeight: 200,
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           lineHeight: 1,
           color: "var(--fg-4)",
         }}
@@ -109,7 +109,7 @@ function TrackCard({
       </div>
       <div
         style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "12px",
           color: "var(--fg-2)",
           letterSpacing: "0.15em",
@@ -121,7 +121,7 @@ function TrackCard({
       {recovery && (
         <div
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "10px",
             color: "var(--accent-amber-text)",
             letterSpacing: "0.1em",
@@ -140,7 +140,7 @@ function TrackCard({
           background: "var(--surface-2)",
           border: "1px solid var(--border-2)",
           color: "var(--fg)",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "16px",
           fontStyle: "italic",
           padding: "12px 40px",
@@ -192,13 +192,13 @@ export function HomeView({
           fontSize: "42px", fontWeight: 300, margin: 0,
           letterSpacing: "-0.02em", fontStyle: "italic",
           color: "var(--fg)",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
         }}>
           Still Point
         </h1>
         <p style={{
           fontSize: "13px", color: "var(--fg-2)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           letterSpacing: "0.15em", textTransform: "uppercase",
           marginTop: "var(--s1)",
         }}>
@@ -238,13 +238,13 @@ export function HomeView({
         }}>
           <div style={{
             fontSize: "min(120px, 20vw)", fontWeight: 200,
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             lineHeight: 1, color: "var(--fg-4)",
           }}>
             {currentDay}
           </div>
           <div style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "12px", color: "var(--fg-2)",
             letterSpacing: "0.15em", textTransform: "uppercase",
           }}>
@@ -252,7 +252,7 @@ export function HomeView({
           </div>
           {inRecovery && (
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "10px", color: "var(--accent-amber-text)",
               letterSpacing: "0.1em", textTransform: "uppercase",
             }}>
@@ -281,14 +281,14 @@ export function HomeView({
           padding: "0 var(--s2)",
         }}>
           <p style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "15px", fontStyle: "italic", fontWeight: 300,
             color: "var(--fg-2)", margin: 0, lineHeight: 1.5,
           }}>
             &ldquo;{aphorism.text}&rdquo;
           </p>
           <p style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px", color: "var(--fg-4)",
             letterSpacing: "0.1em", textTransform: "uppercase",
             marginTop: "var(--s2)",
@@ -308,7 +308,7 @@ export function HomeView({
             background: "var(--surface-1)",
             border: "1px solid var(--border-2)",
             color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "17px", fontStyle: "italic",
             padding: "16px 52px", borderRadius: "40px",
             cursor: "pointer", transition: "all 0.3s", letterSpacing: "0.04em",
@@ -342,7 +342,7 @@ export function HomeView({
           background: "transparent",
           border: "1px solid var(--accent-green-border)",
           color: "var(--accent-green-text)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px",
           letterSpacing: "0.12em",
           textTransform: "uppercase",
@@ -362,7 +362,7 @@ export function HomeView({
             background: "transparent",
             border: "1px solid var(--border-2)",
             color: "var(--fg-2)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
@@ -383,7 +383,7 @@ export function HomeView({
             background: "transparent",
             border: "1px solid var(--border-2)",
             color: "var(--fg-2)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
@@ -405,7 +405,7 @@ export function HomeView({
           paddingTop: "var(--s4)",
         }}>
           <div style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "12px", color: "var(--fg-3)",
             letterSpacing: "0.15em", textTransform: "uppercase",
             marginBottom: "var(--s3)",
@@ -415,7 +415,7 @@ export function HomeView({
           </div>
           <div style={{ padding: "0 var(--s1)" }}>
             <p style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "14px", fontStyle: "italic",
               color: "var(--fg-2)", margin: "0 0 var(--s1)",
               lineHeight: 1.6, textAlign: "left",
@@ -423,7 +423,7 @@ export function HomeView({
               &ldquo;This app is incredibly boring, what&rsquo;s the point of it?&rdquo;
             </p>
             <p style={{
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "14px",
               color: "var(--fg)", margin: 0,
               lineHeight: 1.6, textAlign: "left",

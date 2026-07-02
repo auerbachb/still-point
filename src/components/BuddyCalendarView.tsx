@@ -12,7 +12,7 @@ import { buddyColorFromUserId } from "@/lib/buddyCalendarColors";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 const labelStyle: React.CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--fg-4)",
   letterSpacing: "0.12em",
@@ -197,7 +197,7 @@ export function BuddyCalendarView({
           style={{
             margin: 0,
             textAlign: "center",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             color: "var(--fg-3)",
             lineHeight: 1.5,
@@ -212,7 +212,7 @@ export function BuddyCalendarView({
           style={{
             margin: 0,
             textAlign: "center",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             color: "var(--fg-3)",
             lineHeight: 1.5,
@@ -229,7 +229,7 @@ export function BuddyCalendarView({
             textAlign: "center",
             fontSize: "12px",
             color: "var(--fg-4)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           {data.fromDate} — {data.toDate}
@@ -257,7 +257,7 @@ export function BuddyCalendarView({
                     borderRadius: "999px",
                     padding: "6px 12px",
                     cursor: "pointer",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     letterSpacing: "0.06em",
                     textDecoration: hidden ? "line-through" : "none",
@@ -309,7 +309,7 @@ export function BuddyCalendarView({
                 style={{
                   width: dateColWidth,
                   flexShrink: 0,
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-mono)",
                   fontSize: isMobile ? "10px" : "11px",
                   color: "var(--fg-3)",
                   lineHeight: 1.35,
@@ -364,7 +364,7 @@ export function BuddyCalendarView({
                       </div>
                       <div
                         style={{
-                          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                          fontFamily: "var(--font-mono)",
                           fontSize: "11px",
                           color: "var(--fg-3)",
                         }}
@@ -376,7 +376,7 @@ export function BuddyCalendarView({
                         <Link
                           href={`/app/buddies/${session.buddyIds[0]}/calendar`}
                           style={{
-                            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                            fontFamily: "var(--font-mono)",
                             fontSize: "10px",
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
@@ -403,7 +403,7 @@ export function BuddyCalendarView({
             textAlign: "center",
             fontSize: "12px",
             color: "var(--fg-4)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
           }}
         >
           More sessions available — narrow the date range or increase limit via API.

@@ -13,34 +13,40 @@ extension XCUIElement {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        tap()
-
         let focusPredicate = NSPredicate(format: "hasKeyboardFocus == true")
-        // Fresh waiter instance so predicate timeouts return `.timedOut` instead of XCTest auto-failing
-        // via the default XCTestCase delegate (allows one descriptive `XCTFail` below).
         let waiter = XCTWaiter()
-        let primaryFocus = XCTNSPredicateExpectation(predicate: focusPredicate, object: self)
-        var outcome = waiter.wait(for: [primaryFocus], timeout: timeout)
 
-        if outcome != .completed {
-            // Keyboard can appear slightly after focus on some simulator builds; optional short wait
-            // then re-check focus without requiring `keyboards` to exist (hardware keyboard).
-            let keyboard = app.keyboards.firstMatch
-            if keyboard.waitForExistence(timeout: min(2.0, timeout)) {
-                let retryFocus = XCTNSPredicateExpectation(predicate: focusPredicate, object: self)
-                outcome = waiter.wait(for: [retryFocus], timeout: min(3.0, timeout))
+        for attempt in 1...2 {
+            tap()
+
+            let primaryFocus = XCTNSPredicateExpectation(predicate: focusPredicate, object: self)
+            var outcome = waiter.wait(for: [primaryFocus], timeout: timeout)
+
+            if outcome != .completed {
+                // Keyboard can appear slightly after focus on some simulator builds; optional short wait
+                // then re-check focus without requiring `keyboards` to exist (hardware keyboard).
+                let keyboard = app.keyboards.firstMatch
+                if keyboard.waitForExistence(timeout: min(2.0, timeout)) {
+                    let retryFocus = XCTNSPredicateExpectation(predicate: focusPredicate, object: self)
+                    outcome = waiter.wait(for: [retryFocus], timeout: min(3.0, timeout))
+                }
+            }
+
+            if outcome == .completed {
+                typeText(text)
+                return
+            }
+
+            if attempt == 1 {
+                // macos-26 simulators can drop the first tap under slow launch/contention; retry once.
+                RunLoop.current.run(until: Date().addingTimeInterval(0.5))
             }
         }
 
-        guard outcome == .completed else {
-            XCTFail(
-                "Field did not become keyboard first responder within \(timeout)s (wait outcome: \(outcome.rawValue))",
-                file: file,
-                line: line
-            )
-            return
-        }
-
-        typeText(text)
+        XCTFail(
+            "Field did not become keyboard first responder within \(timeout)s",
+            file: file,
+            line: line
+        )
     }
 }

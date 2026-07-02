@@ -53,6 +53,8 @@ const SHARED_SPACING_MAP = {
 
 /** Web-only tokens that intentionally have no iOS counterpart. */
 const CSS_ONLY_VARS = new Set([
+  "--font-serif",
+  "--font-mono",
   "--accent-green-strong",
   "--accent-green-dim",
   "--accent-green-bg",

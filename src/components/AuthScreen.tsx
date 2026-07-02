@@ -35,7 +35,7 @@ function LastUsedTag({ onDark }: { onDark: boolean }) {
         top: "50%",
         right: "12px",
         transform: "translateY(-50%)",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: "8px",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
@@ -124,7 +124,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
     borderRadius: "8px",
     padding: "12px 16px",
     color: "var(--fg)",
-    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+    fontFamily: "var(--font-serif)",
     fontSize: "15px",
     outline: "none",
     width: "100%",
@@ -142,13 +142,13 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           fontSize: "42px", fontWeight: 300, margin: 0,
           letterSpacing: "-0.02em", fontStyle: "italic",
           color: "var(--fg)",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
         }}>
           Still Point
         </h1>
         <p style={{
           fontSize: "13px", color: "var(--fg-2)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           letterSpacing: "0.15em", textTransform: "uppercase", marginTop: "var(--s1)",
         }}>
           attention training
@@ -177,7 +177,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             background: "var(--surface-1)",
             border: "1px solid var(--border-2)",
             color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "15px",
             padding: "12px 16px",
             borderRadius: "30px",
@@ -222,7 +222,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             background: "#000000",
             border: "1px solid #000000",
             color: "#ffffff",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "15px",
             padding: "12px 16px",
             borderRadius: "30px",
@@ -252,7 +252,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         </button>
 
         <p style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "10px",
           color: "var(--fg-4)",
           textAlign: "center",
@@ -274,7 +274,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         gap: "12px",
         width: "100%",
         color: "var(--fg-4)",
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: "10px",
         letterSpacing: "0.15em",
         textTransform: "uppercase",
@@ -299,7 +299,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
               background: mode === m ? "var(--surface-3)" : "none",
               border: "none",
               color: mode === m ? "var(--fg)" : "var(--fg-4)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", letterSpacing: "0.15em",
               textTransform: "uppercase", cursor: "pointer",
               padding: "8px 20px", borderRadius: "17px",
@@ -352,7 +352,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             aria-live="assertive"
             aria-atomic="true"
             style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-danger)",
               textAlign: "center",
               lineHeight: 1.5,
@@ -373,7 +373,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             background: "var(--surface-1)",
             border: "1px solid var(--border-2)",
             color: "var(--fg)",
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "16px", fontStyle: "italic",
             padding: "14px", borderRadius: "30px",
             cursor: loading ? "wait" : "pointer",
@@ -400,7 +400,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             style={{
               alignSelf: "center",
               color: "var(--fg-3)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.08em",
               textDecoration: "underline",

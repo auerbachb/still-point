@@ -357,11 +357,11 @@ function ToggleRow(props: {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
       <div>
-        <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace", fontSize: "12px", color: "var(--fg)" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--fg)" }}>
           {props.title}
         </div>
         <div style={{
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "13px",
           fontStyle: "italic",
           color: "var(--fg-3)",
@@ -421,7 +421,7 @@ const pageWrapStyle: CSSProperties = {
 };
 
 const labelStyle: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--fg-4)",
   letterSpacing: "0.12em",
@@ -429,7 +429,7 @@ const labelStyle: CSSProperties = {
 };
 
 const hintStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "13px",
   fontStyle: "italic",
   color: "var(--fg-3)",
@@ -437,7 +437,7 @@ const hintStyle: CSSProperties = {
 };
 
 const errorStyle: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--accent-danger-muted)",
 };
@@ -453,7 +453,7 @@ const fieldLabelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "6px",
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--fg-3)",
   letterSpacing: "0.08em",
@@ -461,7 +461,7 @@ const fieldLabelStyle: CSSProperties = {
 };
 
 const timeInputStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "16px",
   color: "var(--fg)",
   background: "var(--surface-2)",
@@ -472,6 +472,6 @@ const timeInputStyle: CSSProperties = {
 
 const selectStyle: CSSProperties = {
   ...timeInputStyle,
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "13px",
 };

@@ -165,7 +165,7 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
         WebkitUserSelect: "none",
         outline: focusVisible ? "2px solid var(--accent-green-text)" : "none",
         outlineOffset: focusVisible ? "-2px" : undefined,
-        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         padding: "var(--s4)",
         animation: "fadeIn 0.6s ease",
       }}
@@ -247,7 +247,7 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
           color: "var(--fg-3)",
           borderRadius: "999px",
           padding: "12px 32px",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "13px",
           fontWeight: 500,
           letterSpacing: "0.08em",

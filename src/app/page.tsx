@@ -10,7 +10,7 @@ export default function LandingPage() {
         minHeight: "100%",
         display: "flex",
         flexDirection: "column",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         padding: "var(--s4)",
       }}
     >
@@ -34,7 +34,7 @@ export default function LandingPage() {
         <Link
           href="/app"
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             fontSize: "12px",
@@ -97,7 +97,7 @@ export default function LandingPage() {
               border: "none",
               borderRadius: "999px",
               padding: "12px 20px",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               fontSize: "12px",
