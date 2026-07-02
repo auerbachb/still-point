@@ -1,27 +1,29 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import {
   GoogleCalendarUnavailableError,
   buildGoogleAuthUrl,
   makeGoogleOAuthState,
 } from "@/lib/googleOAuth";
 
-export async function GET() {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withApiHandler(
+  "Google OAuth start",
+  async () => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
-    const oauthState = makeGoogleOAuthState(auth.userId);
+    const oauthState = makeGoogleOAuthState(auth.user.userId);
     const response = NextResponse.redirect(buildGoogleAuthUrl(oauthState.state));
     response.cookies.set(oauthState.cookie);
     return response;
-  } catch (error) {
-    if (error instanceof GoogleCalendarUnavailableError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-    console.error("Google OAuth start error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+  {
+    mapError: (error) => {
+      if (error instanceof GoogleCalendarUnavailableError) {
+        return NextResponse.json({ error: error.message }, { status: 503 });
+      }
+      return null;
+    },
+  },
+);

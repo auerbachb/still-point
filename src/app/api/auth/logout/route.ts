@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { clearAuthCookie } from "@/lib/auth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { clearAuthJsCookies } from "@/lib/authJsCookies";
 
-export async function POST() {
+export const POST = withApiHandler("Logout", async () => {
   await clearAuthCookie();
   // Belt-and-suspenders: clear any lingering Auth.js cookies (#136). Most
   // OAuth users only carry sp_token because oauth-complete drops the
@@ -16,4 +17,4 @@ export async function POST() {
     console.error("logout cookie cleanup failed:", err);
   }
   return NextResponse.json({ ok: true });
-}
+});

@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { failureReasons } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { addDaysToIsoDate, isValidSessionCalendarDate } from "@/lib/sessionCalendar";
 
 const MAX_REASON_LENGTH = 1000;
+
+const failureReasonsLogError = (label: string, error: unknown) => {
+  console.error(`${label} error:`, error instanceof Error ? error.message : "unknown error");
+};
 
 /**
  * Latest date a reason may be logged for. The server doesn't know the caller's
@@ -28,12 +33,11 @@ function serializeFailureReason(row: typeof failureReasons.$inferSelect) {
   };
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withApiHandler(
+  "Failure reasons GET",
+  async (request: NextRequest) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const date = new URL(request.url).searchParams.get("date");
     if (!date || !isValidSessionCalendarDate(date)) {
@@ -43,25 +47,22 @@ export async function GET(request: NextRequest) {
     const [row] = await db
       .select()
       .from(failureReasons)
-      .where(and(eq(failureReasons.userId, auth.userId), eq(failureReasons.reasonDate, date)))
+      .where(and(eq(failureReasons.userId, auth.user.userId), eq(failureReasons.reasonDate, date)))
       .limit(1);
 
     return NextResponse.json({
       exists: !!row,
       failureReason: row ? serializeFailureReason(row) : null,
     });
-  } catch (error) {
-    console.error("Failure reasons GET error:", error instanceof Error ? error.message : "unknown error");
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+  { logError: failureReasonsLogError },
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withApiHandler(
+  "Failure reasons POST",
+  async (request: NextRequest) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const json = await readJsonObject(request);
     if (!json.ok) {
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     const [row] = await db
       .insert(failureReasons)
       .values({
-        userId: auth.userId,
+        userId: auth.user.userId,
         reasonDate,
         text: trimmed,
         createdAt: now,
@@ -109,10 +110,6 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json({ failureReason: serializeFailureReason(row) });
-  } catch (error) {
-    // Log only the error message, never the raw error — a DB driver error's `detail`/
-    // `parameters` fields can echo the user's submitted reason text into server logs.
-    console.error("Failure reasons POST error:", error instanceof Error ? error.message : "unknown error");
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+  { logError: failureReasonsLogError },
+);

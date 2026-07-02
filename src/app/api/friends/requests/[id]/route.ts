@@ -2,21 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { friendRequests, friendships } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, ne } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+export const PATCH = withApiHandler(
+  "Friend request patch",
+  async (request: NextRequest, context) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
-export async function PATCH(request: NextRequest, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await context.params;
+    const { id } = await (context as { params: Promise<{ id: string }> }).params;
     if (!isUuid(id)) {
       return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
     }
@@ -48,7 +46,7 @@ export async function PATCH(request: NextRequest, context: Params) {
     }
 
     if (action === "cancel") {
-      if (row.fromUserId !== auth.userId) {
+      if (row.fromUserId !== auth.user.userId) {
         return NextResponse.json({ error: "Only the sender can cancel this request" }, { status: 403 });
       }
       const [updated] = await db
@@ -69,7 +67,7 @@ export async function PATCH(request: NextRequest, context: Params) {
       return NextResponse.json({ request: updated });
     }
 
-    if (row.toUserId !== auth.userId) {
+    if (row.toUserId !== auth.user.userId) {
       return NextResponse.json({ error: "Only the recipient can accept or reject this request" }, { status: 403 });
     }
 
@@ -103,7 +101,7 @@ export async function PATCH(request: NextRequest, context: Params) {
           and(
             eq(friendRequests.id, id),
             eq(friendRequests.status, "pending"),
-            eq(friendRequests.toUserId, auth.userId),
+            eq(friendRequests.toUserId, auth.user.userId),
           ),
         )
         .returning({
@@ -141,8 +139,5 @@ export async function PATCH(request: NextRequest, context: Params) {
     }
 
     return NextResponse.json({ request: updated });
-  } catch (error) {
-    console.error("Friend request patch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

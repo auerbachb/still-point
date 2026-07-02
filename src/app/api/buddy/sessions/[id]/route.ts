@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessionParticipants } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import {
   buildBuddySnapshot,
   loadBuddySnapshotContext,
@@ -11,16 +12,13 @@ import { BUDDY_POLICY_CODES } from "@/lib/buddyPolicyCodes";
 import { isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+export const GET = withApiHandler(
+  "Buddy session GET",
+  async (_request, context) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
-export async function GET(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id: sessionId } = await context.params;
+    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
@@ -31,7 +29,7 @@ export async function GET(_request: Request, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -56,10 +54,7 @@ export async function GET(_request: Request, context: Params) {
     }
 
     return NextResponse.json({
-      snapshot: buildBuddySnapshot(ctx.session, ctx.participants, auth.userId),
+      snapshot: buildBuddySnapshot(ctx.session, ctx.participants, auth.user.userId),
     });
-  } catch (error) {
-    console.error("Buddy session GET error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

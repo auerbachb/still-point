@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { reconcileBuddySession } from "@/lib/buddySession";
 import {
   DailyApiError,
@@ -19,16 +20,13 @@ import {
 import { isUuid } from "@/lib/friends";
 import { and, eq, sql } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+export const POST = withApiHandler(
+  "Buddy start",
+  async (_request, context) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
-export async function POST(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id: sessionId } = await context.params;
+    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
@@ -39,7 +37,7 @@ export async function POST(_request: Request, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -172,8 +170,5 @@ export async function POST(_request: Request, context: Params) {
       .where(eq(buddySessionParticipants.buddySessionId, sessionId));
 
     return NextResponse.json({ ok: true, startedAt: startedAt.toISOString() });
-  } catch (error) {
-    console.error("Buddy start error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { bumpBuddyRevision } from "@/lib/buddySession";
 import {
   requireBuddyActiveParticipant,
@@ -10,20 +11,17 @@ import {
 import { isUuid } from "@/lib/friends";
 import { and, eq, isNull } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
-
 /**
  * #119: Marks this participant as finished with the shared sit (no journaling here).
  * #118: Per-user only; does not mutate shared timer — see `buddySessionControlsPolicy.ts`.
  */
-export async function POST(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withApiHandler(
+  "Buddy participant-complete",
+  async (_request, context) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
-    const { id: sessionId } = await context.params;
+    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
@@ -46,7 +44,7 @@ export async function POST(_request: Request, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -77,9 +75,5 @@ export async function POST(_request: Request, context: Params) {
     await bumpBuddyRevision(sessionId);
 
     return NextResponse.json({ ok: true, participantCompletedAt: now.toISOString() });
-  } catch (error) {
-    console.error("Buddy participant-complete error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
+  },
+);

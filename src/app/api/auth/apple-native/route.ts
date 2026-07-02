@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, SP_TOKEN_COOKIE } from "@/lib/auth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { resolveOAuthUserId, OAuthEmailRequiredError } from "@/lib/oauth-user-resolution";
 
 const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
@@ -31,7 +32,7 @@ function displayNameFromAppleUser(u: AppleUserPayload | undefined): string | nul
   return combined || null;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler("apple-native", async (request: NextRequest) => {
   let body: RequestBody;
   try {
     body = (await request.json()) as RequestBody;
@@ -116,4 +117,4 @@ export async function POST(request: NextRequest) {
     path: "/",
   });
   return res;
-}
+});

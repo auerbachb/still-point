@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { users } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { USERNAME_ERROR, isValidUsername } from "@/lib/username";
 import { and, eq, ne, sql } from "drizzle-orm";
 
@@ -19,12 +20,11 @@ const RETURN_FIELDS = {
   secondTrackDay: users.secondTrackDay,
 };
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const PATCH = withApiHandler(
+  "Settings",
+  async (request: NextRequest) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
     const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest) {
           .where(
             and(
               sql`lower(${users.username}) = lower(${username})`,
-              ne(users.id, auth.userId),
+              ne(users.id, auth.user.userId),
             ),
           )
           .limit(1);
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest) {
         const [updated] = await tx
           .update(users)
           .set(updates)
-          .where(eq(users.id, auth.userId))
+          .where(eq(users.id, auth.user.userId))
           .returning(RETURN_FIELDS);
         return { taken: false as const, user: updated };
       });
@@ -97,23 +97,25 @@ export async function PATCH(request: NextRequest) {
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(eq(users.id, auth.userId))
+      .where(eq(users.id, auth.user.userId))
       .returning(RETURN_FIELDS);
 
     return NextResponse.json({ user: updated });
-  } catch (error) {
-    // Defensive: if a concurrent signup commits the case-EXACT username between
-    // the SELECT inside the transaction and the UPDATE, Postgres' case-sensitive
-    // unique index will raise SQLSTATE 23505. Surface as 409 rather than 500.
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code: unknown }).code === "23505"
-    ) {
-      return NextResponse.json({ error: USERNAME_TAKEN_ERROR }, { status: 409 });
-    }
-    console.error("Settings error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+  {
+    mapError: (error) => {
+      // Defensive: if a concurrent signup commits the case-EXACT username between
+      // the SELECT inside the transaction and the UPDATE, Postgres' case-sensitive
+      // unique index will raise SQLSTATE 23505. Surface as 409 rather than 500.
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code: unknown }).code === "23505"
+      ) {
+        return NextResponse.json({ error: USERNAME_TAKEN_ERROR }, { status: 409 });
+      }
+      return null;
+    },
+  },
+);
