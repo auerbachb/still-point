@@ -167,9 +167,6 @@ struct UsernameEditView: View {
         case 409:
             return error.message
         case 400:
-            if error.message == UsernameValidation.errorMessage {
-                return UsernameValidation.errorMessage
-            }
             return error.message
         default:
             return "Could not update username. Please try again."
