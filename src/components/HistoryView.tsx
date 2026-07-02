@@ -9,6 +9,7 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 import type { MindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { HistoryMindStateTrends } from "@/components/HistoryMindStateTrends";
+import { HistoryYearInReview } from "@/components/HistoryYearInReview";
 
 const NO_RECOVERY: RecoveryFields = {
   recoveryTargetDay: null,
@@ -105,6 +106,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
   const [loading, setLoading] = useState(true);
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [viewMode, setViewMode] = useState<"calendar" | "journey">("calendar");
+  const [calendarSubView, setCalendarSubView] = useState<"default" | "yearInReview">("default");
   const [todayDate, setTodayDate] = useState<string>(() => todayLocalIsoDate());
   const isMobile = useIsMobile();
   const sessionLabelColWidth = isMobile ? "88px" : "100px";
@@ -282,7 +284,10 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
           <button
             key={mode}
             type="button"
-            onClick={() => setViewMode(mode)}
+            onClick={() => {
+              setViewMode(mode);
+              if (mode === "journey") setCalendarSubView("default");
+            }}
             style={{
               padding: "6px 14px",
               borderRadius: "4px",
@@ -300,6 +305,14 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
       </div>
 
       {viewMode === "calendar" ? (
+        calendarSubView === "yearInReview" ? (
+          <HistoryYearInReview
+            sessions={sessions}
+            todayDate={todayDate}
+            isMobile={isMobile}
+            onBack={() => setCalendarSubView("default")}
+          />
+        ) : (
         <>
           {/* Trailing 4-week stats */}
           <div style={{
@@ -390,12 +403,29 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
           {/* Current month grid */}
           <div style={{ width: "100%", maxWidth: "480px" }}>
             <div style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "14px", color: "var(--fg-2)",
-              marginBottom: "12px", letterSpacing: "0.07em", textTransform: "uppercase",
-              textAlign: "center",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              marginBottom: "12px",
             }}>
-              {monthGrid.monthLabel}
+              <div style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: "14px", color: "var(--fg-2)",
+                letterSpacing: "0.07em", textTransform: "uppercase",
+              }}>
+                {monthGrid.monthLabel}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCalendarSubView("yearInReview")}
+                style={{
+                  ...mono, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase",
+                  padding: "12px 14px", borderRadius: "4px",
+                  border: "1px solid var(--border-1)", background: "transparent",
+                  color: "var(--fg-3)", cursor: "pointer",
+                  minHeight: "44px", minWidth: "44px",
+                }}
+              >
+                Year in review
+              </button>
             </div>
 
             <div style={{
@@ -498,6 +528,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
             </div>
           </div>
         </>
+        )
       ) : (
         /* Journey — relative session buildup (gap-collapse per #421) */
         <div style={{ width: "100%", maxWidth: "660px" }}>
