@@ -85,6 +85,13 @@ export function markTrackingControlsUnlocked(): void {
   saveTrackingControlPrefs({ ...current, trackingControlsUnlocked: true });
 }
 
+/** Clear account-scoped unlock on logout so the next sign-in re-qualifies (#188). */
+export function resetTrackingUnlockOnLogout(): void {
+  const current = loadTrackingControlPrefs();
+  if (!current.trackingControlsUnlocked) return;
+  saveTrackingControlPrefs({ ...current, trackingControlsUnlocked: false });
+}
+
 /** Persist unlock when a just-finished sit qualifies (#188). */
 export function markTrackingUnlockIfQualifying(session: {
   duration: number;

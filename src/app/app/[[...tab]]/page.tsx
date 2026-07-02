@@ -20,7 +20,7 @@ import { api, ApiError } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
-import { syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
+import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
  *  into the non-optional shape `@/lib/duration` helpers expect. */
@@ -421,6 +421,7 @@ export default function StillPoint() {
     // this account's "done today" badges or suppressed fork prompt.
     setTracksDoneToday({ primary: false, second: false });
     setForkDismissed(false);
+    resetTrackingUnlockOnLogout();
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
