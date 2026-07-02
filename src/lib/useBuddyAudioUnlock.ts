@@ -38,7 +38,7 @@ export function useBuddyAudioUnlock(sessionId: string) {
     void unlockAudioContext().then((unlockResult) => {
       if (requestId !== audioUnlockRequestRef.current) return;
       const stillHasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
-      setAudioBlocked(stillHasEnabledSound && unlockResult !== "unlocked");
+      setAudioBlocked(stillHasEnabledSound && unlockResult === "blocked");
     });
   }, []);
 
@@ -48,7 +48,7 @@ export function useBuddyAudioUnlock(sessionId: string) {
     if (requestId === audioUnlockRequestRef.current) {
       const hasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
       if (hasEnabledSound) {
-        setAudioBlocked(unlockResult !== "unlocked");
+        setAudioBlocked(unlockResult === "blocked");
       } else {
         setAudioBlocked(false);
       }
