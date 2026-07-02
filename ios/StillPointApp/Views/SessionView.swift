@@ -117,7 +117,6 @@ struct SessionView: View {
         .onAppear {
             vm.start()
             if appVM.currentUser?.attentionTrackingEnabled == true {
-                vm.attentionLog = [AttentionEntry(time: 0, state: "attentive")]
                 attentionManager.start { vm.elapsed }
             }
             SessionIdleTimerController.syncLocalSession(
@@ -186,7 +185,8 @@ struct SessionView: View {
         .onChange(of: vm.isComplete) { _, isComplete in
             if isComplete {
                 attentionManager.stop()
-                if appVM.currentUser?.attentionTrackingEnabled == true {
+                if appVM.currentUser?.attentionTrackingEnabled == true,
+                   attentionManager.didReceiveSample {
                     vm.attentionLog = attentionManager.attentionLog
                 }
             }

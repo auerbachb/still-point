@@ -9,12 +9,14 @@ import StillPointShared
 final class AttentionTrackingManager {
     private(set) var isSupported = false
     private(set) var isRunning = false
+    private(set) var didReceiveSample = false
     private(set) var currentAttentionState = "attentive"
-    private(set) var attentionLog: [AttentionEntry] = [AttentionEntry(time: 0, state: "attentive")]
+    private(set) var attentionLog: [AttentionEntry] = []
 
     func start(elapsedProvider: @escaping () -> Double) {
         _ = elapsedProvider
         isRunning = false
+        didReceiveSample = false
     }
 
     func stop() {
@@ -39,13 +41,16 @@ import StillPointShared
 final class AttentionTrackingManager: NSObject {
     private(set) var isSupported: Bool
     private(set) var isRunning = false
+    private(set) var didReceiveSample = false
     private(set) var currentAttentionState = "attentive"
-    private(set) var attentionLog: [AttentionEntry] = [AttentionEntry(time: 0, state: "attentive")]
+    private(set) var attentionLog: [AttentionEntry] = []
 
     private let session = ARSession()
     private var elapsedProvider: (() -> Double)?
     private var sustained = AttentionTrackingLogic.SustainedState()
     private var isPaused = false
+    private var pendingLookAt: SIMD3<Float>?
+    private var frameDispatchScheduled = false
 
     override init() {
         isSupported = ARFaceTrackingConfiguration.isSupported
@@ -59,7 +64,10 @@ final class AttentionTrackingManager: NSObject {
         sustained = AttentionTrackingLogic.SustainedState()
         currentAttentionState = sustained.loggedState
         attentionLog = sustained.log
+        didReceiveSample = false
         isPaused = false
+        pendingLookAt = nil
+        frameDispatchScheduled = false
 
         let configuration = ARFaceTrackingConfiguration()
         configuration.isLightEstimationEnabled = false
@@ -73,12 +81,18 @@ final class AttentionTrackingManager: NSObject {
         isRunning = false
         isPaused = false
         elapsedProvider = nil
+        pendingLookAt = nil
+        frameDispatchScheduled = false
+        clearPendingDebounce()
     }
 
     func pause() {
         guard isRunning, !isPaused else { return }
         session.pause()
         isPaused = true
+        pendingLookAt = nil
+        frameDispatchScheduled = false
+        clearPendingDebounce()
     }
 
     func resume() {
@@ -89,9 +103,15 @@ final class AttentionTrackingManager: NSObject {
         isPaused = false
     }
 
+    private func clearPendingDebounce() {
+        sustained.pendingState = nil
+        sustained.pendingSince = nil
+    }
+
     fileprivate func handleLookAtPoint(_ lookAtPoint: SIMD3<Float>) {
         guard isRunning, !isPaused, let elapsedProvider else { return }
 
+        didReceiveSample = true
         let rawState = AttentionTrackingLogic.classifyGaze(
             lookAtX: lookAtPoint.x,
             lookAtY: lookAtPoint.y,
@@ -109,6 +129,22 @@ final class AttentionTrackingManager: NSObject {
         currentAttentionState = sustained.loggedState
         attentionLog = sustained.log
     }
+
+    fileprivate func dispatchLatestLookAtPoint() {
+        guard let lookAtPoint = pendingLookAt else { return }
+        pendingLookAt = nil
+        handleLookAtPoint(lookAtPoint)
+    }
+
+    fileprivate func scheduleLookAtDispatch(_ lookAtPoint: SIMD3<Float>) {
+        pendingLookAt = lookAtPoint
+        guard !frameDispatchScheduled else { return }
+        frameDispatchScheduled = true
+        Task { @MainActor in
+            defer { self.frameDispatchScheduled = false }
+            self.dispatchLatestLookAtPoint()
+        }
+    }
 }
 
 extension AttentionTrackingManager: ARSessionDelegate {
@@ -116,7 +152,7 @@ extension AttentionTrackingManager: ARSessionDelegate {
         guard let faceAnchor = anchors.compactMap({ $0 as? ARFaceAnchor }).first else { return }
         let lookAtPoint = faceAnchor.lookAtPoint
         Task { @MainActor in
-            self.handleLookAtPoint(lookAtPoint)
+            self.scheduleLookAtDispatch(lookAtPoint)
         }
     }
 }

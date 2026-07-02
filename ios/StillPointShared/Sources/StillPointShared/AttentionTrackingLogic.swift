@@ -21,7 +21,7 @@ public enum AttentionTrackingLogic {
 
         public init(
             loggedState: String = "attentive",
-            log: [AttentionEntry] = [AttentionEntry(time: 0, state: "attentive")],
+            log: [AttentionEntry] = [],
             pendingState: String? = nil,
             pendingSince: TimeInterval? = nil
         ) {

@@ -29,11 +29,11 @@ final class AttentionTrackingLogicTests: XCTestCase {
 
         state = AttentionTrackingLogic.applyRawSample("away", elapsed: 1.2, now: 0.3, state: state)
         XCTAssertEqual(state.loggedState, "attentive")
-        XCTAssertEqual(state.log.count, 1)
+        XCTAssertEqual(state.log.count, 0)
 
         state = AttentionTrackingLogic.applyRawSample("away", elapsed: 1.6, now: 0.55, state: state)
         XCTAssertEqual(state.loggedState, "away")
-        XCTAssertEqual(state.log.count, 2)
+        XCTAssertEqual(state.log.count, 1)
         XCTAssertEqual(state.log.last?.time, 1.6)
         XCTAssertEqual(state.log.last?.state, "away")
     }
