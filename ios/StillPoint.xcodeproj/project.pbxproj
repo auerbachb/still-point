@@ -31,6 +31,7 @@
 		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
 		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
+		A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
 		750987110FAE532744F6571E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 45BC84AB51307C865EF7257A /* README.md */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
@@ -54,6 +55,7 @@
 		B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */; };
 		C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */; };
 		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
+		F8A2B3C4D5E60718293A4B5E /* SPCapsuleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */; };
 		D3744C3003DA233DC0B74C99 /* BuddyFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */; };
 		D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */; };
 		D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */; };
@@ -115,6 +117,7 @@
 		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
 		3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionHubView.swift; sourceTree = "<group>"; };
 		3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIElement+TapAndType.swift"; sourceTree = "<group>"; };
+		A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIDevice+Portrait.swift"; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		4448B4F081A909461B669A8B /* StillPointApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointApp.entitlements; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
@@ -153,6 +156,7 @@
 		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyle.swift; sourceTree = "<group>"; };
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
@@ -281,6 +285,7 @@
 		54D40F602F07E94E9BD6CF37 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */,
 				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
 			);
 			path = Helpers;
@@ -359,6 +364,7 @@
 			isa = PBXGroup;
 			children = (
 				CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */,
+				F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -536,6 +542,7 @@
 				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
+				A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */,
 				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -566,6 +573,7 @@
 				840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */,
 				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
 				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
+				F8A2B3C4D5E60718293A4B5E /* SPCapsuleButtonStyle.swift in Sources */,
 				5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */,
 				74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */,
 				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,

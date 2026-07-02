@@ -80,17 +80,14 @@ struct BuddyWaitingRoomView: View {
                         } label: {
                             Text("Start for everyone")
                                 .font(SPFont.serifItalic(19, weight: .light))
-                                .foregroundStyle(Color(SPColor.bg))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, SPSpacing.s3)
-                                .background(
-                                    snapshot?.state == "ready_check" ? LinearGradient.greenHorizontal : LinearGradient(
-                                        colors: [SPColor.surface2, SPColor.surface2],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                                .spCapsuleButtonStyle(
+                                    snapshot?.state == "ready_check" ? .greenGradient : .neutral,
+                                    size: .fullWidth,
+                                    prominent: snapshot?.state != "ready_check",
+                                    tall: true,
+                                    stroke: snapshot?.state == "ready_check" ? nil : Color.clear
                                 )
-                                .clipShape(Capsule())
+                                .foregroundStyle(Color(SPColor.bg))
                         }
                         .disabled(snapshot?.state != "ready_check")
                         .opacity(snapshot?.state == "ready_check" ? 1 : 0.45)
@@ -104,12 +101,7 @@ struct BuddyWaitingRoomView: View {
                         } label: {
                             Text("Cancel session")
                                 .font(SPFont.mono(11, weight: .medium))
-                                .foregroundStyle(Color(SPColor.fg3))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, SPSpacing.s2)
-                                .background(SPColor.surface1)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(SPColor.border2))
+                                .spCapsuleButtonStyle(.neutral, size: .fullWidth, stroke: SPColor.border2)
                         }
                     }
                     .padding(.horizontal, SPSpacing.s4)
@@ -130,12 +122,7 @@ struct BuddyWaitingRoomView: View {
                 } label: {
                     Text("Leave")
                         .font(SPFont.mono(11, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border2))
+                        .spCapsuleButtonStyle(.neutral, size: .regular, horizontalPadding: SPSpacing.s3, stroke: SPColor.border2)
                 }
                 .padding(.bottom, SPSpacing.s5)
             }

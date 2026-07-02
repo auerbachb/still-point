@@ -15,13 +15,11 @@ final class StillPointAppUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        XCUIDevice.shared.orientation = .portrait
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        XCUIDevice.shared.ensurePortraitOrientation()
     }
 
     override func tearDownWithError() throws {
-        XCUIDevice.shared.orientation = .portrait
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        XCUIDevice.shared.ensurePortraitOrientation()
     }
 
     @MainActor

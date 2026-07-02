@@ -157,14 +157,12 @@ struct CompletionView: View {
                                 Text(isSaving ? "Saving…" : "Save note")
                             }
                             .font(SPFont.serifItalic(18, weight: .light))
-                            .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(isSaveDisabled ? SPColor.surface2 : SPColor.green)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule().stroke(isSaveDisabled ? SPColor.border2 : Color.clear)
+                            .spCapsuleButtonStyle(
+                                isSaveDisabled ? .neutral : .greenSolid,
+                                size: .fullWidth,
+                                prominent: isSaveDisabled
                             )
+                            .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
                         }
                         .disabled(isSaveDisabled)
                         .accessibilityIdentifier("completion.saveNoteButton")
@@ -228,12 +226,7 @@ struct CompletionView: View {
                 } label: {
                     Text("Return")
                         .font(SPFont.serifItalic(18, weight: .light))
-                        .foregroundStyle(Color(SPColor.fg))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.surface2)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border2))
+                        .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                 }
                 .accessibilityIdentifier("completion.returnButton")
 

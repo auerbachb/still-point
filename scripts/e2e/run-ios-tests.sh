@@ -207,6 +207,11 @@ is_retriable_failure() {
   if grep -qE 'Asynchronous wait failed: Exceeded timeout' "$log"; then
     return 0
   fi
+  # Simulator orientation confirmation timeouts in setUp/tearDown (macos-26
+  # runners can stall on XCUIDevice.shared.orientation even before app launch).
+  if grep -qE 'Failed to set device orientation:' "$log"; then
+    return 0
+  fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
   # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Checked before
   # the terminate-race grep below: `terminateAppReliably` can emit "Failed to

@@ -49,23 +49,14 @@ struct AppBlockingSettingsView: View {
                 } label: {
                     Text(manager.hasSelection ? "Edit blocked apps" : "Choose apps")
                         .font(SPFont.mono(13, weight: .medium))
-                        .foregroundStyle(Color(SPColor.bg))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.green)
-                        .clipShape(Capsule())
+                        .spCapsuleButtonStyle(.greenSolid, size: .fullWidth)
                 }
                 .accessibilityIdentifier("appBlocking.chooseAppsButton")
 
                 if manager.hasSelection && !manager.isUnlocked {
                     Text("\(manager.selectedItemCount)")
                         .font(SPFont.mono(13, weight: .medium))
-                        .foregroundStyle(SPColor.amberText)
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.amberBgFaint)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                        .spCapsuleButtonStyle(.amber, size: .regular, horizontalPadding: SPSpacing.s3)
                         .accessibilityIdentifier("appBlocking.selectedCount")
                 }
             }

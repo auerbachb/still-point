@@ -190,12 +190,7 @@ struct SettingsView: View {
                 } label: {
                     Text("Log Out")
                         .font(SPFont.mono(14, weight: .medium))
-                        .foregroundStyle(SPColor.dangerMuted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
+                        .spCapsuleButtonStyle(.danger, size: .fullWidth)
                 }
                 .accessibilityIdentifier("settings.logoutButton")
                 .disabled(isDeletingAccount)
@@ -213,11 +208,7 @@ struct SettingsView: View {
                                 .foregroundStyle(SPColor.dangerMuted)
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s2)
-                    .background(SPColor.surface1)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
+                    .spCapsuleButtonStyle(.danger, size: .fullWidth)
                 }
                 .disabled(isDeletingAccount)
                 .confirmationDialog(

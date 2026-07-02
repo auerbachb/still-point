@@ -92,12 +92,7 @@ struct HomeView: View {
                         } label: {
                             Text("Begin")
                                 .font(SPFont.serifItalic(22, weight: .light))
-                                .foregroundStyle(Color(SPColor.fg))
-                                .padding(.horizontal, 48)
-                                .padding(.vertical, SPSpacing.s3)
-                                .background(SPColor.surface2)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(SPColor.border2))
+                                .spCapsuleButtonStyle(.neutral, size: .regular, prominent: true, tall: true, horizontalPadding: SPSpacing.s6)
                         }
                         .accessibilityIdentifier("home.beginButton")
                         .accessibilityLabel("Start session")
@@ -111,12 +106,7 @@ struct HomeView: View {
                         Text("Quick minute · \(StillPoint.quickDuration)s")
                             .font(SPFont.mono(11, weight: .medium))
                             .tracking(1.4)
-                            .foregroundStyle(SPColor.greenText)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(SPColor.greenBgFaint)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.greenBorderSubtle))
+                            .spCapsuleButtonStyle(.green, size: .regular)
                     }
                     .accessibilityIdentifier("home.quickMinuteButton")
                     .accessibilityLabel("Start quick minute")
@@ -129,12 +119,7 @@ struct HomeView: View {
                         Text("Breath counting")
                             .font(SPFont.mono(11, weight: .medium))
                             .tracking(1.4)
-                            .foregroundStyle(Color(SPColor.fg3))
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(SPColor.surface1)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border1))
+                            .spCapsuleButtonStyle(.neutral, size: .regular)
                     }
                     .accessibilityIdentifier("home.breathCountingButton")
                     .accessibilityLabel("Start breath counting")
@@ -146,12 +131,8 @@ struct HomeView: View {
                     } label: {
                         Text("Meditate with a friend")
                             .font(SPFont.serifItalic(18, weight: .light))
+                            .spCapsuleButtonStyle(.neutral, size: .regular, horizontalPadding: SPSpacing.s5)
                             .foregroundStyle(Color(SPColor.fg2))
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(SPColor.surface1)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border1))
                     }
                     .accessibilityIdentifier("home.buddySessionButton")
                 }
@@ -200,13 +181,10 @@ struct HomeView: View {
                         .font(SPFont.mono(11, weight: .medium))
                         .tracking(1)
                 }
-                .foregroundStyle(manager.isUnlocked ? SPColor.greenText : SPColor.amberText)
-                .padding(.horizontal, SPSpacing.s3)
-                .padding(.vertical, SPSpacing.s2)
-                .background(manager.isUnlocked ? SPColor.greenBgFaint : SPColor.amberBgFaint)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(manager.isUnlocked ? SPColor.greenBorderSubtle : SPColor.amberBorderSubtle)
+                .spCapsuleButtonStyle(
+                    manager.isUnlocked ? .green : .amber,
+                    size: .regular,
+                    horizontalPadding: SPSpacing.s3
                 )
             }
             .accessibilityIdentifier("home.appGatePill")
@@ -277,12 +255,7 @@ struct HomeView: View {
             } label: {
                 Text(doneToday ? "Sit again" : "Begin")
                     .font(SPFont.serifItalic(20, weight: .light))
-                    .foregroundStyle(Color(SPColor.fg))
-                    .padding(.horizontal, 40)
-                    .padding(.vertical, SPSpacing.s2)
-                    .background(SPColor.surface2)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.border2))
+                    .spCapsuleButtonStyle(.neutral, size: .regular, prominent: true, horizontalPadding: 40)
             }
             .padding(.top, SPSpacing.s1)
             .accessibilityIdentifier("\(identifier).beginButton")
@@ -322,12 +295,7 @@ struct HomeView: View {
                 Text("Add second track")
                     .font(SPFont.mono(12, weight: .medium))
                     .tracking(1.4)
-                    .foregroundStyle(SPColor.greenText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s3)
-                    .background(SPColor.greenBgFaint)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.greenBorderSubtle))
+                    .spCapsuleButtonStyle(.green, size: .fullWidth, tall: true)
             }
             .accessibilityIdentifier("home.addSecondTrackButton")
 
@@ -337,12 +305,7 @@ struct HomeView: View {
                 Text("Keep one track")
                     .font(SPFont.mono(12, weight: .medium))
                     .tracking(1.4)
-                    .foregroundStyle(Color(SPColor.fg3))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s3)
-                    .background(SPColor.surface1)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.border1))
+                    .spCapsuleButtonStyle(.neutral, size: .fullWidth, tall: true)
             }
             .accessibilityIdentifier("home.keepOneTrackButton")
         }
@@ -430,11 +393,7 @@ private struct AppGateOnboardingSheet: View {
                 } label: {
                     Text("Choose apps")
                         .font(SPFont.mono(13, weight: .medium))
-                        .foregroundStyle(Color(SPColor.bg))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s3)
-                        .background(SPColor.green)
-                        .clipShape(Capsule())
+                        .spCapsuleButtonStyle(.greenSolid, size: .fullWidth, tall: true)
                 }
                 .accessibilityIdentifier("onboarding.appGate.chooseApps")
 
