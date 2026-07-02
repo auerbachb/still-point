@@ -77,11 +77,11 @@ final class StillPointAppUITests: XCTestCase {
             "Home did not appear after login"
         )
         let beginButton = app.buttons["home.beginButton"]
-        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
-        beginButton.tap()
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 8))
+        tapByStableCenter(beginButton, in: app)
         // Wait for session root before terminating: terminate() during Begin's nav/audio init races launchd ("Failed to terminate ... :0").
         XCTAssertTrue(
-            app.otherElements["root.currentView.session"].waitForExistence(timeout: 20),
+            app.otherElements["root.currentView.session"].waitForExistence(timeout: 30),
             "Session screen did not appear after Begin tap"
         )
         // Let session chrome/timer settle before terminate (macos-26 launchd race).

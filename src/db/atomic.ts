@@ -360,7 +360,10 @@ export async function atomicIssuePasswordResetToken(params: {
   previousTokenId: string | null;
 } | null> {
   const result = await db.execute(sql`
-    with recent as (
+    with locked as (
+      select pg_advisory_xact_lock(hashtext(${params.userId}::text))
+    ),
+    recent as (
       select id
       from password_reset_tokens
       where user_id = ${params.userId}::uuid
@@ -552,7 +555,10 @@ export async function atomicCreateSessionWithProgression(params: {
   const { session, userId, track } = params;
 
   const result = await db.execute(sql`
-    with inserted as (
+    with locked as (
+      select id from users where id = ${userId}::uuid for update
+    ),
+    inserted as (
       insert into sessions (
         user_id, buddy_session_id, day_number, session_type, track, duration,
         bonus_seconds, completed, actual_time, clear_percent, thought_count,
@@ -579,7 +585,8 @@ export async function atomicCreateSessionWithProgression(params: {
     progressed as (
       update users u
       set ${progressionUpdateSql(shouldAdvance, track)}
-      where u.id = ${userId}::uuid
+      from locked l
+      where u.id = l.id
       returning u.id
     )
     select * from inserted
@@ -663,6 +670,7 @@ export async function atomicRecordBuddyPersonalSession(params: {
       set ${progressionUpdateSql(true, "primary")}
       from user_row ur
       where u.id = ${params.userId}::uuid
+        and exists (select 1 from user_row)
       returning u.id
     ),
     participant as (
@@ -671,12 +679,14 @@ export async function atomicRecordBuddyPersonalSession(params: {
         participant_completed_at = ${params.participantCompletedAt},
         last_seen_at = ${params.now}
       where p.id = ${params.participantId}::uuid
+        and exists (select 1 from user_row)
       returning p.id
     ),
     revision as (
       update buddy_sessions bs
       set revision = bs.revision + 1, updated_at = ${params.now}
       where bs.id = ${params.buddySessionId}::uuid
+        and exists (select 1 from user_row)
       returning bs.id
     ),
     ${thoughtInsertCte}

@@ -8,7 +8,7 @@ import {
   buddySessions,
   users,
 } from "@/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { projectedCalendarDurationSeconds } from "@/lib/buddySessionDuration";
 import {
   GoogleCalendarApiError,
@@ -121,6 +121,11 @@ export async function syncBuddySessionCalendarForUser(
   }
   const scheduledStartAt = session.scheduledStartAt;
   try {
+    // Serialize concurrent syncs for the same session/user so only one caller creates the Google event.
+    await db.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${session.id} || ':' || ${userId}))`,
+    );
+
     const existingEvent = await readCalendarEventRow(session.id, userId);
     if (existingEvent?.googleEventId && existingEvent.status === "created") {
       return {
