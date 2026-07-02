@@ -2,10 +2,17 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 /** #188: unlock distraction/hyperfocus controls for E2E — call before first navigation. */
 export async function seedTrackingControlsUnlocked(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem("stillpoint_hide_distraction_hyperfocus_controls", "false");
-    localStorage.setItem("stillpoint_tracking_controls_unlocked", "true");
-  });
+  await page.addInitScript(applyTrackingControlsUnlockedInPage);
+}
+
+/** Re-apply after auth bootstrap clears account-scoped unlock on initial 401. */
+export async function applyTrackingControlsUnlocked(page: Page) {
+  await page.evaluate(applyTrackingControlsUnlockedInPage);
+}
+
+function applyTrackingControlsUnlockedInPage() {
+  localStorage.setItem("stillpoint_hide_distraction_hyperfocus_controls", "false");
+  localStorage.setItem("stillpoint_tracking_controls_unlocked", "true");
 }
 
 export const MOBILE_SAFE_AREA_TOLERANCE_PX = 6;
