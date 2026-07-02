@@ -1,0 +1,80 @@
+name: Staging Promotion
+
+# After each push to `staging`, open (or refresh) a promotion PR to `main`.
+# Production deploys only when that PR merges — branch protection on `main`
+# remains the gate (Web Build, unit tests, Vercel, review, etc.).
+#
+# One-time setup (see infra/web-staging.json):
+#   1. Create persistent `staging` branch from `main`
+#   2. Vercel custom environment `staging` → git branch `staging`
+#   3. Neon `staging` branch in still-point-nonprod (not noisy-cell-87641627)
+#   4. Wire Neon staging POSTGRES_URL into Vercel staging env vars
+
+on:
+  push:
+    branches:
+      - staging
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: staging-promotion
+  cancel-in-progress: false
+
+jobs:
+  open-promotion-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Open staging → main promotion PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          EXISTING=$(gh pr list \
+            --base main \
+            --head staging \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            echo "Promotion PR #${EXISTING} already open — skipping create."
+            exit 0
+          fi
+
+          SHA="${{ github.sha }}"
+          SHORT_SHA="$(echo "$SHA" | cut -c1-7)"
+          STAGING_URL="https://staging.still-point.me"
+
+          BODY="$(cat <<EOF
+## Staging promotion
+
+Auto-opened after push to \`staging\` (\`${SHORT_SHA}\`).
+
+**Staging URL:** ${STAGING_URL} (or the Vercel-generated staging alias)
+
+Merging this PR deploys to **production** (\`main\` → Vercel Production). Branch protection on \`main\` is the release gate.
+
+Closes #332
+
+## Test plan
+
+- [ ] Staging deploy succeeded (Vercel Staging environment)
+- [ ] Smoke-test auth (sign in / sign out) on staging URL
+- [ ] Verify a core flow (start session, buddy hub, or history) on staging
+- [ ] Confirm staging DB is isolated (no production data changes)
+- [ ] CI checks green on this PR before merge
+EOF
+)"
+
+          gh pr create \
+            --base main \
+            --head staging \
+            --title "promote: staging → main (${SHORT_SHA})" \
+            --body "$BODY"
+
+          echo "Created promotion PR staging → main."
