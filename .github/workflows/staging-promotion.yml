@@ -50,14 +50,14 @@ jobs:
           SHORT_SHA="$(echo "$SHA" | cut -c1-7)"
           STAGING_URL="https://staging.still-point.me"
 
-          BODY="$(cat <<'EOF'
+          BODY="$(cat <<EOF
 ## Staging promotion
 
-Auto-opened after push to `staging` (`'"${SHORT_SHA}"'`).
+Auto-opened after push to \`staging\` (\`${SHORT_SHA}\`).
 
-**Staging URL:** '"${STAGING_URL}"' (or the Vercel-generated staging alias)
+**Staging URL:** ${STAGING_URL} (or the Vercel-generated staging alias)
 
-Merging this PR deploys to **production** (`main` → Vercel Production). Branch protection on `main` is the release gate.
+Merging this PR deploys to **production** (\`main\` → Vercel Production). Branch protection on \`main\` is the release gate.
 
 Closes #332
 
