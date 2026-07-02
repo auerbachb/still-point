@@ -368,6 +368,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let logoutButton = app.buttons["settings.logoutButton"]
         XCTAssertTrue(logoutButton.waitForExistence(timeout: 5))
+        scrollElementIntoVisibleFrame(logoutButton, in: app)
         tapByStableCenter(logoutButton, in: app)
 
         XCTAssertTrue(
@@ -604,6 +605,27 @@ final class StillPointAppUITests: XCTestCase {
         }
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         return true
+    }
+
+    private func isElementInVisibleFrame(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let frame = element.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        return !frame.isEmpty
+            && frame.width > 1
+            && frame.height > 1
+            && app.frame.insetBy(dx: -1, dy: -1).contains(center)
+    }
+
+    private func scrollElementIntoVisibleFrame(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 4
+    ) {
+        for _ in 0..<maxSwipes {
+            if isElementInVisibleFrame(element, in: app) { return }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
     }
 
     private func stableFrame(
