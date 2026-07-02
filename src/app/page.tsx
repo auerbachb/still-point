@@ -80,7 +80,6 @@ export default function LandingPage() {
         >
           Still Point is a meditation timer for people struggling to get started and stay consistent: it begins at one minute, adds ten seconds per day, and shows time as boxes that fill up as you go to make sitting still easier.
         </p>
-        <HomepageDemoVideo />
         <div
           style={{
             display: "flex",
@@ -127,6 +126,8 @@ export default function LandingPage() {
           ) : null}
         </div>
       </section>
+
+      <HomepageDemoVideo />
     </main>
   );
 }

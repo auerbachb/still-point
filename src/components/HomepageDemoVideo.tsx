@@ -1,25 +1,19 @@
-/**
- * Optional homepage embed: set `STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID` to an
- * 11-character YouTube video id. Unset, empty, or invalid id renders nothing
- * (scaffolding only until the asset exists).
- */
-const YOUTUBE_VIDEO_ID = /^[a-zA-Z0-9_-]{11}$/;
+const DEMO_VIDEO = {
+  poster: "/video/still-point-demo-poster.jpg",
+  webm: "/video/still-point-demo.webm",
+  mp4: "/video/still-point-demo.mp4",
+  captions: "/video/still-point-demo.vtt",
+} as const;
 
 export function HomepageDemoVideo() {
-  const raw = process.env.STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID?.trim();
-  if (!raw || !YOUTUBE_VIDEO_ID.test(raw)) {
-    return null;
-  }
-
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(raw)}?rel=0`;
-
   return (
     <section
       aria-labelledby="homepage-demo-heading"
       style={{
+        maxWidth: "780px",
+        margin: "0 auto",
         width: "100%",
-        minWidth: 0,
-        marginTop: "var(--s3)",
+        paddingTop: "var(--s6)",
         display: "grid",
         gap: "var(--s3)",
       }}
@@ -76,26 +70,32 @@ export function HomepageDemoVideo() {
           borderRadius: "12px",
           overflow: "hidden",
           border: "1px solid var(--border-2)",
-          position: "relative",
-          aspectRatio: "16 / 9",
           background: "var(--surface-1)",
         }}
       >
-        <iframe
-          title="How Still Point works"
-          src={src}
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
+        <video
+          controls
+          preload="none"
+          poster={DEMO_VIDEO.poster}
+          playsInline
           style={{
-            position: "absolute",
-            inset: 0,
+            display: "block",
             width: "100%",
-            height: "100%",
-            border: "none",
+            height: "auto",
+            verticalAlign: "middle",
           }}
-        />
+        >
+          <source src={DEMO_VIDEO.webm} type="video/webm" />
+          <source src={DEMO_VIDEO.mp4} type="video/mp4" />
+          <track
+            kind="captions"
+            src={DEMO_VIDEO.captions}
+            srcLang="en"
+            label="English"
+            default
+          />
+          Your browser does not support embedded video.
+        </video>
       </div>
     </section>
   );
