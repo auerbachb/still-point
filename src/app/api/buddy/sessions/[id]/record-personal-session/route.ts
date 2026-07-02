@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
+import { atomicRecordBuddyPersonalSession } from "@/db/atomic";
 import {
   buddySessionParticipants,
   buddySessions,
   sessions,
-  thoughts,
-  users,
 } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
@@ -18,8 +16,7 @@ import {
 } from "@/lib/buddySessionControlsPolicy";
 import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
 import { isUniqueViolation } from "@/lib/dbErrors";
-import { advanceProgression } from "@/lib/duration";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 type RouteContext = RouteParams<{ id: string }>;
 
@@ -146,100 +143,27 @@ export const POST = withApiHandler(
     const participantCompletedAt = p!.participantCompletedAt ?? now;
 
     try {
-      const row = await poolDb.transaction(async (tx) => {
-        const [u] = await tx
-          .select({
-            currentDay: users.currentDay,
-            recoveryTargetDay: users.recoveryTargetDay,
-            recoveryCurrentStep: users.recoveryCurrentStep,
-            recoveryTotalSteps: users.recoveryTotalSteps,
-          })
-          .from(users)
-          .where(eq(users.id, auth.user.userId))
-          .limit(1);
-        if (!u) {
-          throw new Error("USER_NOT_FOUND");
-        }
-        const dayNumber = u.currentDay;
-        // #238: a completed shared sit advances progression the same way a solo
-        // standard sit does — step the recovery ramp instead of `currentDay` while
-        // recovering.
-        const nextProgress = advanceProgression("standard", true, u);
-
-        const [created] = await tx
-          .insert(sessions)
-          .values({
-            userId: auth.user.userId,
-            buddySessionId: sessionId,
-            dayNumber,
-            sessionType: "standard",
-            duration,
-            completed: true,
-            actualTime,
-            clearPercent,
-            thoughtCount,
-            mindStateLog,
-            sessionDate: sessionDateRaw,
-          })
-          .returning();
-
-        if (!created) {
-          throw new Error("SESSION_INSERT_FAILED");
-        }
-
-        await tx
-          .update(users)
-          .set({
-            currentDay: nextProgress.currentDay,
-            recoveryTargetDay: nextProgress.recoveryTargetDay,
-            recoveryCurrentStep: nextProgress.recoveryCurrentStep,
-            recoveryTotalSteps: nextProgress.recoveryTotalSteps,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, auth.user.userId));
-
-        await tx
-          .update(buddySessionParticipants)
-          .set({
-            participantCompletedAt,
-            lastSeenAt: now,
-          })
-          .where(eq(buddySessionParticipants.id, p!.id));
-
-        await tx
-          .update(buddySessions)
-          .set({
-            revision: sql`${buddySessions.revision} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(buddySessions.id, sessionId));
-
-        if (thoughtItems.length > 0) {
-          const insertedThoughts = await tx
-            .insert(thoughts)
-            .values(
-              thoughtItems.map((t) => ({
-                userId: auth.user.userId,
-                sessionId: created.id,
-                dayNumber,
-                timeInSession: t.timeInSession,
-                text: t.text,
-              })),
-            )
-            .returning({ id: thoughts.id });
-          if (insertedThoughts.length !== thoughtItems.length) {
-            throw new Error("THOUGHT_INSERT_MISMATCH");
-          }
-        }
-
-        return created;
+      const row = await atomicRecordBuddyPersonalSession({
+        userId: auth.user.userId,
+        buddySessionId: sessionId,
+        participantId: p!.id,
+        sessionDate: sessionDateRaw,
+        duration,
+        actualTime,
+        clearPercent,
+        thoughtCount,
+        mindStateLog,
+        participantCompletedAt,
+        now,
+        thoughtItems,
       });
+
+      if (row === "USER_NOT_FOUND") {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
 
       return NextResponse.json({ session: row });
     } catch (err) {
-      if ((err as Error)?.message === "USER_NOT_FOUND") {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
       if (isUniqueViolation(err)) {
         const [again] = await db
           .select()

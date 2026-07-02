@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
-import { friendRequests, friendships } from "@/db/schema";
+import { atomicAcceptFriendRequest } from "@/db/atomic";
+import { friendRequests } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 type RouteContext = RouteParams<{ id: string }>;
 
@@ -92,48 +92,15 @@ export const PATCH = withApiHandler(
       return NextResponse.json({ request: updated });
     }
 
-    // accept — single transaction so friendship is not orphaned if insert fails
     const [u1, u2] = orderedUserPair(row.fromUserId, row.toUserId);
 
-    const updated = await poolDb.transaction(async (tx) => {
-      const [u] = await tx
-        .update(friendRequests)
-        .set({ status: "accepted", updatedAt: new Date() })
-        .where(
-          and(
-            eq(friendRequests.id, id),
-            eq(friendRequests.status, "pending"),
-            eq(friendRequests.toUserId, auth.user.userId),
-          ),
-        )
-        .returning({
-          id: friendRequests.id,
-          fromUserId: friendRequests.fromUserId,
-          toUserId: friendRequests.toUserId,
-          status: friendRequests.status,
-          updatedAt: friendRequests.updatedAt,
-        });
-
-      if (!u) {
-        return null;
-      }
-
-      await tx.insert(friendships).values({ user1Id: u1, user2Id: u2 }).onConflictDoNothing();
-
-      // Clear any legacy reverse-direction pending row for the same pair (pre-LEAST/GREATEST index DBs).
-      await tx
-        .update(friendRequests)
-        .set({ status: "cancelled", updatedAt: new Date() })
-        .where(
-          and(
-            ne(friendRequests.id, id),
-            eq(friendRequests.fromUserId, row.toUserId),
-            eq(friendRequests.toUserId, row.fromUserId),
-            eq(friendRequests.status, "pending"),
-          ),
-        );
-
-      return u;
+    const updated = await atomicAcceptFriendRequest({
+      requestId: id,
+      recipientUserId: auth.user.userId,
+      user1Id: u1,
+      user2Id: u2,
+      reverseFromUserId: row.toUserId,
+      reverseToUserId: row.fromUserId,
     });
 
     if (!updated) {

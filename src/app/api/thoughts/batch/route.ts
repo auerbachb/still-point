@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
-import { sessions, thoughts } from "@/db/schema";
+import { atomicReplaceCompletionNoteAndInsertThoughts } from "@/db/atomic";
+import { sessions } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
@@ -66,51 +66,18 @@ export const POST = withApiHandler("Batch thoughts", async (request: NextRequest
     return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
   }
 
-  const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1);
+  const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1) ?? null;
   const rowsToInsert = [
     ...normalized.filter((t) => t.timeInSession !== -1),
     ...(completionNote ? [completionNote] : []),
   ];
 
-  const inserted = await poolDb.transaction(async (tx) => {
-    if (completionNote) {
-      await tx
-        .delete(thoughts)
-        .where(
-          and(
-            eq(thoughts.sessionId, sessionId),
-            eq(thoughts.userId, auth.user.userId),
-            eq(thoughts.timeInSession, -1),
-          ),
-        );
-    }
-
-    if (rowsToInsert.length === 0) {
-      return [];
-    }
-
-    const insertedThoughts = await tx
-      .insert(thoughts)
-      .values(
-        rowsToInsert.map((t) => ({
-          userId: auth.user.userId,
-          sessionId,
-          dayNumber,
-          timeInSession: t.timeInSession,
-          text: t.text,
-        })),
-      )
-      .returning({
-        id: thoughts.id,
-        sessionId: thoughts.sessionId,
-        dayNumber: thoughts.dayNumber,
-        timeInSession: thoughts.timeInSession,
-        text: thoughts.text,
-      });
-    if (insertedThoughts.length !== rowsToInsert.length) {
-      throw new Error("THOUGHT_INSERT_MISMATCH");
-    }
-    return insertedThoughts;
+  const inserted = await atomicReplaceCompletionNoteAndInsertThoughts({
+    userId: auth.user.userId,
+    sessionId,
+    dayNumber,
+    completionNote,
+    rowsToInsert,
   });
 
   return NextResponse.json({ thoughts: inserted });

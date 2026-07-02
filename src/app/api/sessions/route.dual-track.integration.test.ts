@@ -14,7 +14,6 @@ const { getCurrentUser } = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
 vi.mock("@/lib/auth", () => ({ getCurrentUser }));
 vi.mock("@/db", async () => ({ db: await getTestDb() }));
-vi.mock("@/db/pool", async () => ({ poolDb: await getTestDb() }));
 
 import { POST } from "./route";
 

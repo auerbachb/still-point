@@ -10,19 +10,8 @@ function makeSelectChain() {
 }
 
 const dbSelectChain = makeSelectChain();
-const txSelectChain = makeSelectChain();
 const { select: dbSelect, from: selectFrom, where: selectWhere, limit: selectLimit } = dbSelectChain;
-const { select: txSelect, limit: txSelectLimit } = txSelectChain;
-const txInsertValues = vi.fn();
-const txInsert = vi.fn(() => ({ values: txInsertValues }));
-const txDeleteWhere = vi.fn();
-const txDelete = vi.fn(() => ({ where: txDeleteWhere }));
-const tx = {
-  select: txSelect,
-  insert: txInsert,
-  delete: txDelete,
-};
-const transaction = vi.fn(async (callback) => callback(tx));
+const atomicDeleteUserAccount = vi.fn();
 
 vi.mock("@/db", () => ({
   db: {
@@ -30,10 +19,8 @@ vi.mock("@/db", () => ({
   },
 }));
 
-vi.mock("@/db/pool", () => ({
-  poolDb: {
-    transaction,
-  },
+vi.mock("@/db/atomic", () => ({
+  atomicDeleteUserAccount,
 }));
 
 vi.mock("@/db/schema", () => ({
@@ -56,7 +43,7 @@ describe("account deletion tracking", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     selectLimit.mockResolvedValue([]);
-    txSelectLimit.mockResolvedValue([]);
+    atomicDeleteUserAccount.mockResolvedValue(true);
   });
 
   test("hashes normalized emails for deletion lookups", async () => {
@@ -82,36 +69,25 @@ describe("account deletion tracking", () => {
   });
 
   test("records a deletion log before deleting the user", async () => {
-    txSelectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
+    selectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
     const { deleteUserAccount, getAccountDeletionEmailHash } = await import("./accountDeletion");
 
     await expect(deleteUserAccount("user-1")).resolves.toBe(true);
 
-    expect(txInsert).toHaveBeenCalled();
-    expect(txInsertValues).toHaveBeenCalledWith({
+    expect(atomicDeleteUserAccount).toHaveBeenCalledWith({
       userId: "user-1",
       emailHash: getAccountDeletionEmailHash("Deleted@Example.com"),
     });
-    expect(txDelete).toHaveBeenCalled();
-    expect(txDeleteWhere).toHaveBeenCalledWith({
-      left: "userId",
-      right: "user-1",
-    });
-    expect(txInsertValues.mock.invocationCallOrder[0]).toBeLessThan(
-      txDeleteWhere.mock.invocationCallOrder[0],
-    );
   });
 
   test("propagates deletion log write failures without deleting the user", async () => {
     const writeError = new Error("boom");
-    txSelectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
-    txInsertValues.mockRejectedValueOnce(writeError);
+    selectLimit.mockResolvedValue([{ id: "user-1", email: "Deleted@Example.com" }]);
+    atomicDeleteUserAccount.mockRejectedValueOnce(writeError);
     const { deleteUserAccount } = await import("./accountDeletion");
 
     await expect(deleteUserAccount("user-1")).rejects.toThrow(writeError);
-
-    expect(txInsertValues).toHaveBeenCalled();
-    expect(txDelete).not.toHaveBeenCalled();
+    expect(atomicDeleteUserAccount).toHaveBeenCalled();
   });
 
   test("does not log deletion when the user is already gone", async () => {
@@ -119,7 +95,6 @@ describe("account deletion tracking", () => {
 
     await expect(deleteUserAccount("missing-user")).resolves.toBe(false);
 
-    expect(txInsert).not.toHaveBeenCalled();
-    expect(txDelete).not.toHaveBeenCalled();
+    expect(atomicDeleteUserAccount).not.toHaveBeenCalled();
   });
 });

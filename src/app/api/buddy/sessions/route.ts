@@ -1,8 +1,8 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
-import { buddySessions, buddySessionParticipants, users } from "@/db/schema";
+import { atomicCreateBuddySession } from "@/db/atomic";
+import { users } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { normalizedBuddySessionDurationSeconds } from "@/lib/buddySession";
@@ -30,30 +30,11 @@ export const POST = withApiHandler("Buddy create session", async (request: NextR
   const durationSeconds = normalizedBuddySessionDurationSeconds([host.currentDay]);
   const shareToken = randomBytes(24).toString("base64url");
 
-  // Wrap the session + host-participant inserts in one transaction so a failure
-  // on the second insert never leaves an orphaned waiting session without a host.
-  const session = await poolDb.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(buddySessions)
-      .values({
-        shareToken,
-        hostUserId: auth.user.userId,
-        durationSeconds,
-        scheduledStartAt,
-        state: "waiting",
-      })
-      .returning();
-
-    if (!created) return null;
-
-    await tx.insert(buddySessionParticipants).values({
-      buddySessionId: created.id,
-      userId: auth.user.userId,
-      isHost: true,
-      ready: false,
-    });
-
-    return created;
+  const session = await atomicCreateBuddySession({
+    shareToken,
+    hostUserId: auth.user.userId,
+    durationSeconds,
+    scheduledStartAt,
   });
 
   if (!session) {
