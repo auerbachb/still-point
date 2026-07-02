@@ -10,7 +10,7 @@
  * recovery step completes and the recovery columns clear, the very next session
  * naturally lands back on `durationForDay(currentDay)` — the prior level.
  */
-import { BASE_DURATION, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
+import { BASE_DURATION, FORK_DAY, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
 import { daysBetweenIsoDatesInclusive } from "./sessionCalendar";
 
 /** Recovery ramps back to the prior duration level over at most this many sessions. */
@@ -147,4 +147,29 @@ export function advanceProgression(
   }
 
   return { ...state, currentDay: state.currentDay + 1 };
+}
+
+/**
+ * Dual-track fork (#240): once the primary track has passed the 10-minute mark
+ * (`currentDay > FORK_DAY`, i.e. the day-55 ten-minute sit is behind them) the
+ * user may opt into a second daily track. Eligibility is derived from the
+ * primary counter alone so it does not need its own persisted flag.
+ */
+export function isDualTrackEligible(currentDay: number): boolean {
+  return currentDay > FORK_DAY;
+}
+
+/**
+ * Advance the independent second-track counter (#240) after a session save. The
+ * second track has no recovery ramp: a completed standard sit bumps it by one
+ * (its duration is `durationForDay(secondTrackDay)`, which caps at 10 minutes
+ * just like the primary track); anything else leaves it unchanged. Mirrors the
+ * non-recovery branch of `advanceProgression` so both tracks step in lockstep.
+ */
+export function advanceSecondTrackDay(
+  sessionType: SessionType,
+  completed: boolean,
+  secondTrackDay: number,
+): number {
+  return shouldAdvanceDay(sessionType, completed) ? secondTrackDay + 1 : secondTrackDay;
 }

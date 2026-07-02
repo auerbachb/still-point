@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { durationForDay } from "./constants";
+import { FORK_DAY, MAX_DURATION, durationForDay } from "./constants";
 import {
   activeRecovery,
   advanceProgression,
+  advanceSecondTrackDay,
   detectMissedDayGap,
+  isDualTrackEligible,
   recoveryStepDuration,
   recoveryTotalStepsFor,
   sessionDurationForUser,
@@ -11,6 +13,47 @@ import {
 } from "./duration";
 
 const NO_RECOVERY = { recoveryTargetDay: null, recoveryCurrentStep: null, recoveryTotalSteps: null };
+
+describe("durationForDay 10-minute cap (#240)", () => {
+  test("grows 10s/day up to the cap, then holds at 10 minutes", () => {
+    expect(durationForDay(54)).toBe(590);
+    expect(durationForDay(FORK_DAY)).toBe(MAX_DURATION); // day 55 = 600s
+    expect(durationForDay(56)).toBe(MAX_DURATION);
+    expect(durationForDay(200)).toBe(MAX_DURATION);
+  });
+
+  test("FORK_DAY is the first day that reaches the cap", () => {
+    expect(FORK_DAY).toBe(55);
+    expect(durationForDay(FORK_DAY - 1)).toBeLessThan(MAX_DURATION);
+  });
+});
+
+describe("isDualTrackEligible (#240)", () => {
+  test("only eligible after passing the 10-minute (day-55) sit", () => {
+    expect(isDualTrackEligible(1)).toBe(false);
+    expect(isDualTrackEligible(FORK_DAY)).toBe(false); // on day 55, the 10-min sit isn't done yet
+    expect(isDualTrackEligible(FORK_DAY + 1)).toBe(true); // day 56 = after the 10-min sit
+    expect(isDualTrackEligible(120)).toBe(true);
+  });
+});
+
+describe("advanceSecondTrackDay (#240)", () => {
+  test("a completed standard sit bumps the second-track counter by one", () => {
+    expect(advanceSecondTrackDay("standard", true, 1)).toBe(2);
+    expect(advanceSecondTrackDay("standard", true, 12)).toBe(13);
+  });
+
+  test("quick and incomplete sits never advance the second track", () => {
+    expect(advanceSecondTrackDay("quick", true, 3)).toBe(3);
+    expect(advanceSecondTrackDay("standard", false, 3)).toBe(3);
+    expect(advanceSecondTrackDay("breath", true, 3)).toBe(3);
+  });
+
+  test("second-track duration caps at 10 minutes like the primary track", () => {
+    expect(sessionDurationForUser("standard", 1, NO_RECOVERY)).toBe(60);
+    expect(sessionDurationForUser("standard", FORK_DAY + 10, NO_RECOVERY)).toBe(MAX_DURATION);
+  });
+});
 
 describe("recoveryTotalStepsFor", () => {
   test("day 1 (nothing lost) needs zero steps", () => {

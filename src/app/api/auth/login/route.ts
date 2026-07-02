@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
         recoveryTargetDay: user.recoveryTargetDay,
         recoveryCurrentStep: user.recoveryCurrentStep,
         recoveryTotalSteps: user.recoveryTotalSteps,
+        dualTrackEnabled: user.dualTrackEnabled,
+        secondTrackDay: user.secondTrackDay,
       },
       ...(includeToken ? { token } : {}),
     });

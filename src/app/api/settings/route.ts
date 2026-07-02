@@ -15,6 +15,8 @@ const RETURN_FIELDS = {
   isPublic: users.isPublic,
   currentDay: users.currentDay,
   aphorismsEnabled: users.aphorismsEnabled,
+  dualTrackEnabled: users.dualTrackEnabled,
+  secondTrackDay: users.secondTrackDay,
 };
 
 export async function PATCH(request: NextRequest) {

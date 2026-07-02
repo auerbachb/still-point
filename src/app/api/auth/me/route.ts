@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
       recoveryTargetDay: users.recoveryTargetDay,
       recoveryCurrentStep: users.recoveryCurrentStep,
       recoveryTotalSteps: users.recoveryTotalSteps,
+      dualTrackEnabled: users.dualTrackEnabled,
+      secondTrackDay: users.secondTrackDay,
     }).from(users).where(eq(users.id, auth.userId)).limit(1);
 
     if (!user) {

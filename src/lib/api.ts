@@ -33,6 +33,11 @@ export type User = {
   recoveryTargetDay?: number | null;
   recoveryCurrentStep?: number | null;
   recoveryTotalSteps?: number | null;
+  /** #240: dual-track fork. `dualTrackEnabled` gates the opt-in second daily track;
+   *  `secondTrackDay` is its independent day counter. Optional so responses from a
+   *  server that predates #240 still type-check (treated as single-track). */
+  dualTrackEnabled?: boolean;
+  secondTrackDay?: number;
 };
 
 export type Session = {
@@ -42,6 +47,8 @@ export type Session = {
   /** Seconds added via +1/+5 extensions beyond planned duration (#90). */
   bonusSeconds?: number;
   sessionType: "standard" | "quick" | "breath";
+  /** #240: which daily track this sit advanced ("primary" | "second"). */
+  track?: "primary" | "second";
   completed: boolean;
   actualTime: number | null;
   clearPercent: number;
@@ -196,6 +203,8 @@ export const api = {
     duration: number;
     bonusSeconds?: number;
     sessionType?: "standard" | "quick" | "breath";
+    /** #240: which daily track this sit advanced. Defaults to "primary" server-side. */
+    track?: "primary" | "second";
     completed: boolean;
     actualTime: number;
     clearPercent: number;
@@ -204,6 +213,10 @@ export const api = {
     sessionDate: string;
   }) =>
     request<{ session: Session }>("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
+
+  /** #240: opt into the dual-track fork (enable a second daily track). */
+  enableDualTrack: () =>
+    request<{ user: User }>("/api/track", { method: "POST" }),
 
   getSession: (dayNumber: number) =>
     request<{ session: Session; thoughts: Thought[] }>(`/api/sessions/${dayNumber}`),

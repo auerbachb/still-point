@@ -17,8 +17,8 @@ import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { api, ApiError } from "@/lib/api";
-import type { SessionType } from "@/lib/constants";
-import { advanceProgression, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
+import type { SessionType, Track } from "@/lib/constants";
+import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
@@ -31,6 +31,12 @@ function recoveryFieldsOf(user: Pick<User, "recoveryTargetDay" | "recoveryCurren
   };
 }
 
+const NO_RECOVERY: RecoveryFields = {
+  recoveryTargetDay: null,
+  recoveryCurrentStep: null,
+  recoveryTotalSteps: null,
+};
+
 /**
  * Planned duration of the *next* standard sit, previewed client-side from the
  * pre-save user state using the same `advanceProgression` / `sessionDurationForUser`
@@ -41,9 +47,16 @@ function recoveryFieldsOf(user: Pick<User, "recoveryTargetDay" | "recoveryCurren
 function previewNextStandardDuration(
   sessionType: SessionType,
   completed: boolean,
+  track: Track,
   user: User | null,
 ): number {
   if (!user) return 60;
+  // #240: the second track has its own counter and no recovery ramp, so preview
+  // its next length independently from the primary track's progression.
+  if (track === "second") {
+    const nextSecond = advanceSecondTrackDay(sessionType, completed, user.secondTrackDay ?? 1);
+    return sessionDurationForUser("standard", nextSecond, NO_RECOVERY);
+  }
   const next = advanceProgression(sessionType, completed, {
     currentDay: user.currentDay,
     ...recoveryFieldsOf(user),
@@ -171,6 +184,8 @@ type CompletionData = {
   sessionId: string | null;
   dayNumber: number;
   sessionType: SessionType;
+  /** #240: which daily track this completed sit belonged to. */
+  track: Track;
   duration: number;
   bonusSeconds: number;
   clearPercent: number;
@@ -203,6 +218,14 @@ export default function StillPoint() {
   const [authRetryKey, setAuthRetryKey] = useState(0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
+  // #240: which track the in-progress standard sit belongs to, per-track completion
+  // status for today, and whether the fork prompt was dismissed this session.
+  const [activeTrack, setActiveTrack] = useState<Track>("primary");
+  const [tracksDoneToday, setTracksDoneToday] = useState<{ primary: boolean; second: boolean }>({
+    primary: false,
+    second: false,
+  });
+  const [forkDismissed, setForkDismissed] = useState(false);
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
@@ -389,10 +412,44 @@ export default function StillPoint() {
     setUser(null);
   };
 
-  const handleBegin = (sessionType: SessionType = "standard") => {
+  const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
     setActiveSessionType(sessionType);
+    setActiveTrack(track);
     setOverlay("session");
   };
+
+  // #240: derive per-track "completed a standard sit today" from the session list,
+  // to drive HomeView's completion badges. A missing `track` (pre-#240 row) counts
+  // as the primary track.
+  const refreshTodayTracks = useCallback(async () => {
+    try {
+      const { sessions } = await api.getSessions();
+      const today = todayLocalIsoDate();
+      let primary = false;
+      let second = false;
+      for (const s of sessions) {
+        if (s.completed && s.sessionType === "standard" && s.sessionDate === today) {
+          if (s.track === "second") second = true;
+          else primary = true;
+        }
+      }
+      setTracksDoneToday({ primary, second });
+    } catch {
+      /* non-fatal: badges just stay in their last state */
+    }
+  }, []);
+
+  const handleEnableDualTrack = useCallback(async () => {
+    const { user: updated } = await api.enableDualTrack();
+    setUser(updated);
+    void refreshTodayTracks();
+  }, [refreshTodayTracks]);
+
+  // #240: load per-track completion badges once a user is present.
+  useEffect(() => {
+    if (!user || !authChecked) return;
+    void refreshTodayTracks();
+  }, [user?.id, authChecked, refreshTodayTracks]);
 
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
@@ -409,23 +466,27 @@ export default function StillPoint() {
       sessionId: data.sessionId,
       dayNumber: data.dayNumber,
       sessionType: "standard",
+      // Buddy sits always count toward the primary track (#240).
+      track: "primary",
       duration: data.duration,
       bonusSeconds: 0,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
-      nextDuration: previewNextStandardDuration("standard", true, user),
+      nextDuration: previewNextStandardDuration("standard", true, "primary", user),
     });
     setOverlay("complete");
     void api
       .me()
       .then(({ user: u }) => setUser(u))
       .catch(() => {});
-  }, [user]);
+    void refreshTodayTracks();
+  }, [user, refreshTodayTracks]);
 
   const handleSessionComplete = useCallback(async (data: {
     dayNumber: number;
     sessionType: SessionType;
+    track: Track;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -445,6 +506,7 @@ export default function StillPoint() {
         body: JSON.stringify({
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
+          track: data.track,
           duration: data.duration,
           bonusSeconds: data.bonusSeconds,
           completed: data.completed,
@@ -484,6 +546,8 @@ export default function StillPoint() {
             .me()
             .then(({ user: u }) => setUser(u))
             .catch(() => {});
+          // #240: refresh per-track completion badges for today.
+          void refreshTodayTracks();
         }
       }
     } catch (error) {
@@ -494,19 +558,21 @@ export default function StillPoint() {
       sessionId: savedSessionId,
       dayNumber: data.dayNumber,
       sessionType: data.sessionType,
+      track: data.track,
       duration: data.duration,
       bonusSeconds: data.bonusSeconds,
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
-      nextDuration: previewNextStandardDuration(data.sessionType, data.completed, user),
+      nextDuration: previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
     });
     setOverlay("complete");
-  }, [user]);
+  }, [user, refreshTodayTracks]);
 
   const handleSessionAbandon = useCallback(async (data: {
     dayNumber: number;
     sessionType: SessionType;
+    track: Track;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -524,6 +590,7 @@ export default function StillPoint() {
         body: JSON.stringify({
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
+          track: data.track,
           duration: data.duration,
           bonusSeconds: data.bonusSeconds,
           completed: false,
@@ -817,9 +884,11 @@ export default function StillPoint() {
       {/* Transient overlays take precedence over the active tab. */}
       {overlay === "session" && (
         <SessionView
-          currentDay={user.currentDay}
-          recovery={userRecovery}
+          // #240: the second track uses its own day counter and has no recovery ramp.
+          currentDay={activeTrack === "second" ? (user.secondTrackDay ?? 1) : user.currentDay}
+          recovery={activeTrack === "second" ? NO_RECOVERY : userRecovery}
           sessionType={activeSessionType}
+          track={activeTrack}
           onComplete={handleSessionComplete}
           onAbandon={handleSessionAbandon}
         />
@@ -874,7 +943,15 @@ export default function StillPoint() {
           currentDay={user.currentDay}
           aphorismsEnabled={user.aphorismsEnabled}
           recovery={userRecovery}
-          onBegin={() => handleBegin("standard")}
+          dualTrackEnabled={user.dualTrackEnabled ?? false}
+          secondTrackDay={user.secondTrackDay ?? 1}
+          dualTrackEligible={isDualTrackEligible(user.currentDay) && !forkDismissed}
+          primaryDoneToday={tracksDoneToday.primary}
+          secondDoneToday={tracksDoneToday.second}
+          onBegin={() => handleBegin("standard", "primary")}
+          onBeginSecond={() => handleBegin("standard", "second")}
+          onEnableDualTrack={handleEnableDualTrack}
+          onDismissFork={() => setForkDismissed(true)}
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
           onBuddy={() => {
