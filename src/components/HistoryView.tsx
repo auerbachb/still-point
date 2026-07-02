@@ -143,7 +143,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
             missed: true,
           };
         }
-        if (row.kind === "collapsedGap") {
+        if (row.kind === "missedRange") {
           return {
             day: null,
             duration: 0,

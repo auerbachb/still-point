@@ -138,8 +138,9 @@ public enum HistoryJourneyListRow: Sendable {
 
 public enum HistoryJourney {
     /// Gaps of this many consecutive missed days or more collapse into one `.missedRange`
-    /// row; shorter gaps keep per-day `.missed` rows (#379). The web journey still emits
-    /// per-day rows — see the issue for the parity follow-up.
+    /// row; shorter gaps keep per-day `.missed` rows (#379). The web journey mirrors this
+    /// exactly — same threshold and the matching `missedRange` row kind (#421). Shared
+    /// golden fixtures (`shared/test-fixtures/historyJourney.json`) lock both in lockstep.
     public static let collapseGapThresholdDays = 3
 
     /// Builds journey rows from all sessions (standard and quick), sorted by

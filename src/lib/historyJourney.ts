@@ -2,7 +2,7 @@ import { addDaysToIsoDate, daysBetweenIsoDatesInclusive } from "./sessionCalenda
 
 /**
  * Gaps of this many consecutive missed days or more collapse into a single
- * `collapsedGap` row; shorter gaps keep per-day `missed` rows (#379/#381).
+ * `missedRange` row; shorter gaps keep per-day `missed` rows (#379/#381/#421).
  * Mirrors iOS `HistoryJourney.collapseGapThresholdDays`.
  */
 export const COLLAPSE_GAP_THRESHOLD_DAYS = 3;
@@ -16,9 +16,13 @@ export type HistoryJourneySession<T> = {
   data: T;
 };
 
+/**
+ * Row kinds mirror iOS `HistoryJourneyListRow` for cross-platform parity (#421):
+ * `missed` (single day), `missedRange` (collapsed run), and `session`.
+ */
 export type HistoryJourneyRow<T> =
   | { kind: "missed"; date: string }
-  | { kind: "collapsedGap"; startDate: string; endDate: string; dayCount: number }
+  | { kind: "missedRange"; startDate: string; endDate: string; dayCount: number }
   | { kind: "session"; date: string; sessionIndexInDay: number; data: T };
 
 /**
@@ -34,7 +38,7 @@ export function sortSessionsForHistory<T>(sessions: HistoryJourneySession<T>[]):
 
 /**
  * Emits rows for the missed days strictly between `fromIso` and `toIso`: per-day
- * `missed` rows for short gaps, a single `collapsedGap` at/above the collapse
+ * `missed` rows for short gaps, a single `missedRange` at/above the collapse
  * threshold. Mirrors iOS `HistoryJourney.appendGapRows`.
  */
 function appendGapRows<T>(fromIso: string, toIso: string, rows: HistoryJourneyRow<T>[]): void {
@@ -43,7 +47,7 @@ function appendGapRows<T>(fromIso: string, toIso: string, rows: HistoryJourneyRo
   if (missedCount <= 0) return;
   if (missedCount >= COLLAPSE_GAP_THRESHOLD_DAYS) {
     rows.push({
-      kind: "collapsedGap",
+      kind: "missedRange",
       startDate: addDaysToIsoDate(fromIso, 1),
       endDate: addDaysToIsoDate(fromIso, missedCount),
       dayCount: missedCount,
