@@ -61,6 +61,7 @@ export const POST = withApiHandler("Login", async (request: NextRequest) => {
       isPublic: user.isPublic,
       currentDay: user.currentDay,
       aphorismsEnabled: user.aphorismsEnabled,
+      attentionTrackingEnabled: user.attentionTrackingEnabled,
       recoveryTargetDay: user.recoveryTargetDay,
       recoveryCurrentStep: user.recoveryCurrentStep,
       recoveryTotalSteps: user.recoveryTotalSteps,

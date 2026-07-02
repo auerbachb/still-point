@@ -12,6 +12,7 @@ const RETURN_FIELDS = {
   isPublic: users.isPublic,
   currentDay: users.currentDay,
   aphorismsEnabled: users.aphorismsEnabled,
+  attentionTrackingEnabled: users.attentionTrackingEnabled,
   recoveryTargetDay: users.recoveryTargetDay,
   recoveryCurrentStep: users.recoveryCurrentStep,
   recoveryTotalSteps: users.recoveryTotalSteps,

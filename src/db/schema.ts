@@ -31,6 +31,9 @@ export const users = pgTable("users", {
   /** #88: opt-in for a short meditation / digital-minimalism aphorism shown as
    *  pre-session inspiration on the Home view. Defaults off. */
   aphorismsEnabled: boolean("aphorisms_enabled").default(false).notNull(),
+  /** #113: opt-in iOS ARKit gaze attention tracking during sessions. Defaults off
+   *  so the camera is never requested without explicit user consent. */
+  attentionTrackingEnabled: boolean("attention_tracking_enabled").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
   /** #238: miss-a-day recovery ramp. Nullable trio — all three are set together when a
    *  2+ day gap is detected (`/api/auth/me`) and cleared together once the ramp finishes.
@@ -366,6 +369,8 @@ export const sessions = pgTable("sessions", {
   /** #374: taps-per-breath count for breath-counting sessions; null for other types. */
   breathCount: integer("breath_count"),
   mindStateLog: jsonb("mind_state_log").$type<Array<{ time: number; state: string }>>(),
+  /** #113: ARKit gaze attention transitions ({ time, state: "attentive" | "away" }). */
+  attentionLog: jsonb("attention_log").$type<Array<{ time: number; state: string }>>(),
   sessionDate: date("session_date").notNull(),
   /** #109: post-session self-report ratings (1-10), null until set via the
    *  by-session PATCH route from the CompletionScreen sliders. */

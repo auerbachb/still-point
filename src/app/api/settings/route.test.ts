@@ -20,6 +20,9 @@ vi.mock("@/db/schema", () => ({
     isPublic: "isPublic",
     currentDay: "currentDay",
     aphorismsEnabled: "aphorismsEnabled",
+    attentionTrackingEnabled: "attentionTrackingEnabled",
+    dualTrackEnabled: "dualTrackEnabled",
+    secondTrackDay: "secondTrackDay",
   },
 }));
 
@@ -168,6 +171,32 @@ describe("PATCH /api/settings", () => {
     expect(dbUpdate).toHaveBeenCalledTimes(1);
     const updates = dbUpdateSet.mock.calls[0]![0];
     expect(updates.isPublic).toBe(true);
+    expect(updates).not.toHaveProperty("username");
+  });
+
+  test("attentionTrackingEnabled-only updates skip username atomic path and use the HTTP driver", async () => {
+    dbUpdateReturning.mockResolvedValue([
+      {
+        id: userId,
+        email: "user@example.com",
+        username: "existing",
+        isPublic: true,
+        currentDay: 1,
+        aphorismsEnabled: false,
+        attentionTrackingEnabled: true,
+        dualTrackEnabled: false,
+        secondTrackDay: 1,
+      },
+    ]);
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ attentionTrackingEnabled: true }));
+
+    expect(res.status).toBe(200);
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
+    expect(dbUpdate).toHaveBeenCalledTimes(1);
+    const updates = dbUpdateSet.mock.calls[0]![0];
+    expect(updates.attentionTrackingEnabled).toBe(true);
     expect(updates).not.toHaveProperty("username");
   });
 

@@ -46,7 +46,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Still Point needs camera access for partner video sessions.</string>
+	<string>Still Point uses the camera for partner video sessions and, when you opt in, gaze attention tracking during sits.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Still Point needs microphone access for partner video sessions.</string>
 	<key>UIBackgroundModes</key>

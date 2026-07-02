@@ -22,6 +22,7 @@ export const GET = withApiHandler("Auth me", async (request: NextRequest) => {
     isPublic: users.isPublic,
     currentDay: users.currentDay,
     aphorismsEnabled: users.aphorismsEnabled,
+    attentionTrackingEnabled: users.attentionTrackingEnabled,
     recoveryTargetDay: users.recoveryTargetDay,
     recoveryCurrentStep: users.recoveryCurrentStep,
     recoveryTotalSteps: users.recoveryTotalSteps,

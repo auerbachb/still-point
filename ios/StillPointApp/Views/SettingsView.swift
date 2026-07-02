@@ -6,8 +6,10 @@ struct SettingsView: View {
     @State private var notificationPrefs = NotificationPreferencesViewModel()
     @State private var isPublic: Bool = false
     @State private var aphorismsEnabled: Bool = false
+    @State private var attentionTrackingEnabled: Bool = false
     @State private var isUpdating = false
     @State private var isUpdatingAphorisms = false
+    @State private var isUpdatingAttentionTracking = false
     @State private var isSavingUsername = false
     @State private var showDeleteAccountDialog = false
     @State private var showDeleteAccountConfirm = false
@@ -15,7 +17,7 @@ struct SettingsView: View {
     @State private var deleteAccountError = ""
     @State private var showDeleteAccountError = false
 
-    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isSavingUsername }
+    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isSavingUsername }
 
     var body: some View {
         NavigationStack {
@@ -89,6 +91,34 @@ struct SettingsView: View {
                     }
                     .tint(SPColor.green)
                     .accessibilityIdentifier("settings.keepScreenAwakeDuringSessionToggle")
+
+                    Toggle(isOn: $attentionTrackingEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gaze attention tracking")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Uses the front camera during sessions to log when your gaze leaves the screen. Off by default.")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .disabled(isSavingSettings)
+                    .accessibilityIdentifier("settings.attentionTrackingToggle")
+                    .onChange(of: attentionTrackingEnabled) { _, newValue in
+                        guard !isUpdatingAttentionTracking else { return }
+                        guard appVM.currentUser?.attentionTrackingEnabled != newValue else { return }
+                        isUpdatingAttentionTracking = true
+                        Task {
+                            defer { isUpdatingAttentionTracking = false }
+                            do {
+                                let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
+                                appVM.applySettingsUser(updated)
+                            } catch {
+                                attentionTrackingEnabled = !newValue
+                            }
+                        }
+                    }
                 }
                 .padding(SPSpacing.s3)
                 .background(SPColor.surface1)
@@ -263,6 +293,10 @@ struct SettingsView: View {
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
+        .onChange(of: appVM.currentUser?.attentionTrackingEnabled) { _, _ in
+            guard appVM.currentUser != nil else { return }
+            syncFromCurrentUser()
+        }
     }
 
     private var notificationsLinkSection: some View {
@@ -297,6 +331,7 @@ struct SettingsView: View {
     private func syncFromCurrentUser() {
         isPublic = appVM.currentUser?.isPublic ?? false
         aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
+        attentionTrackingEnabled = appVM.currentUser?.attentionTrackingEnabled ?? false
     }
 
     private var appVersionFooter: String {

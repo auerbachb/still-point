@@ -275,12 +275,18 @@ public actor APIClient {
         try await updateSettings(body: SettingsPatchBody(aphorismsEnabled: aphorismsEnabled))
     }
 
+    /// #113: opt-in ARKit gaze attention tracking during sessions.
+    public func updateSettings(attentionTrackingEnabled: Bool) async throws -> UserDTO {
+        try await updateSettings(body: SettingsPatchBody(attentionTrackingEnabled: attentionTrackingEnabled))
+    }
+
     private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.updateSettings(
                 isPublic: body.isPublic,
                 username: body.username,
-                aphorismsEnabled: body.aphorismsEnabled
+                aphorismsEnabled: body.aphorismsEnabled,
+                attentionTrackingEnabled: body.attentionTrackingEnabled
             )
         }
         let response: UserResponse = try await patch("/api/settings", body: body)
@@ -504,11 +510,18 @@ private struct SettingsPatchBody: Encodable {
     let isPublic: Bool?
     let username: String?
     let aphorismsEnabled: Bool?
+    let attentionTrackingEnabled: Bool?
 
-    init(isPublic: Bool? = nil, username: String? = nil, aphorismsEnabled: Bool? = nil) {
+    init(
+        isPublic: Bool? = nil,
+        username: String? = nil,
+        aphorismsEnabled: Bool? = nil,
+        attentionTrackingEnabled: Bool? = nil
+    ) {
         self.isPublic = isPublic
         self.username = username
         self.aphorismsEnabled = aphorismsEnabled
+        self.attentionTrackingEnabled = attentionTrackingEnabled
     }
 
     func encode(to encoder: Encoder) throws {
@@ -516,12 +529,14 @@ private struct SettingsPatchBody: Encodable {
         if let isPublic { try c.encode(isPublic, forKey: .isPublic) }
         if let username { try c.encode(username, forKey: .username) }
         if let aphorismsEnabled { try c.encode(aphorismsEnabled, forKey: .aphorismsEnabled) }
+        if let attentionTrackingEnabled { try c.encode(attentionTrackingEnabled, forKey: .attentionTrackingEnabled) }
     }
 
     private enum CodingKeys: String, CodingKey {
         case isPublic
         case username
         case aphorismsEnabled
+        case attentionTrackingEnabled
     }
 }
 
