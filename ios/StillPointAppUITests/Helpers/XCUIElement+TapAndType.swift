@@ -39,7 +39,7 @@ extension XCUIElement {
 
             if attempt == 1 {
                 // macos-26 simulators can drop the first tap under slow launch/contention; retry once.
-                _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(format: "exists == true", object: self)], timeout: 1)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.5))
             }
         }
 
