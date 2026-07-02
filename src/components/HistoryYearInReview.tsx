@@ -55,9 +55,10 @@ export function HistoryYearInReview({
           onClick={onBack}
           style={{
             ...mono, fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase",
-            padding: "6px 12px", borderRadius: "4px",
+            padding: "12px 16px", borderRadius: "4px",
             border: "1px solid var(--border-1)", background: "transparent",
             color: "var(--fg-3)", cursor: "pointer",
+            minHeight: "44px", minWidth: "44px",
           }}
         >
           &larr; Calendar

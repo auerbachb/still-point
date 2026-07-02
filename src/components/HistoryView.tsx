@@ -418,9 +418,10 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
                 onClick={() => setCalendarSubView("yearInReview")}
                 style={{
                   ...mono, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase",
-                  padding: "4px 10px", borderRadius: "4px",
+                  padding: "12px 14px", borderRadius: "4px",
                   border: "1px solid var(--border-1)", background: "transparent",
                   color: "var(--fg-3)", cursor: "pointer",
+                  minHeight: "44px", minWidth: "44px",
                 }}
               >
                 Year in review
