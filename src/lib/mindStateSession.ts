@@ -141,6 +141,90 @@ function isAwareLikeState(state: string): boolean {
   return state === "clear" || state === "hyperfocus";
 }
 
+export type MindStateCompositionSeconds = {
+  clearSeconds: number;
+  lightDistractionSeconds: number;
+  heavyDistractionSeconds: number;
+  hyperfocusSeconds: number;
+  totalSeconds: number;
+};
+
+function bucketMindStateSeconds(state: string, seconds: number, out: MindStateCompositionSeconds): void {
+  if (seconds <= 0) return;
+  switch (state) {
+    case "thinking":
+      out.lightDistractionSeconds += seconds;
+      break;
+    case "heavy":
+      out.heavyDistractionSeconds += seconds;
+      break;
+    case "hyperfocus":
+      out.hyperfocusSeconds += seconds;
+      break;
+    default:
+      out.clearSeconds += seconds;
+      break;
+  }
+}
+
+function isValidMindStateLogEntry(
+  entry: unknown,
+): entry is { time: number; state: string } {
+  return (
+    entry != null
+    && typeof entry === "object"
+    && typeof (entry as { time?: unknown }).time === "number"
+    && Number.isFinite((entry as { time: number }).time)
+    && typeof (entry as { state?: unknown }).state === "string"
+  );
+}
+
+/**
+ * Replays `mindStateLog` into sit-time seconds for clear, light distraction,
+ * heavy distraction, and hyperfocus. Uses the same segment boundaries as
+ * `computeClearPercentFromLog`.
+ */
+export function computeMindStateCompositionFromLog(
+  log: Array<{ time: number; state: string }>,
+  endTime: number,
+): MindStateCompositionSeconds {
+  const totalSeconds = Math.max(endTime, 0);
+  const out: MindStateCompositionSeconds = {
+    clearSeconds: 0,
+    lightDistractionSeconds: 0,
+    heavyDistractionSeconds: 0,
+    hyperfocusSeconds: 0,
+    totalSeconds,
+  };
+  if (totalSeconds === 0) return out;
+
+  const safeLog = [...log]
+    .flatMap((entry) => {
+      if (!isValidMindStateLogEntry(entry)) return [];
+      return [{
+        time: Math.min(Math.max(entry.time, 0), totalSeconds),
+        state: entry.state,
+      }];
+    })
+    .sort((a, b) => a.time - b.time);
+
+  let lastTime = 0;
+  let lastState = "clear";
+  const full = safeLog.length === 0
+    ? [{ time: totalSeconds, state: "clear" }]
+    : [...safeLog, { time: totalSeconds, state: "clear" }];
+  for (const entry of full) {
+    const clampedTime = Math.min(Math.max(entry.time, lastTime), totalSeconds);
+    if (clampedTime > lastTime) {
+      bucketMindStateSeconds(lastState, clampedTime - lastTime, out);
+    }
+    lastTime = clampedTime;
+    lastState = entry.state;
+  }
+
+  return out;
+}
+
 export function computeClearPercentFromLog(
   log: Array<{ time: number; state: string }>,
   endTime: number,

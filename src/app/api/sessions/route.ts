@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { calculateSessionStats, parseCompleted, parseOptionalSessionType, parseOptionalTrack } from "@/lib/constants";
 import { calculateHistoryPeriodStats } from "@/lib/historyStats";
+import { calculateMindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { isValidSessionCalendarDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { eq, desc } from "drizzle-orm";
 import { sessions } from "@/db/schema";
@@ -24,6 +25,7 @@ export const GET = withApiHandler("Get sessions", async (request: NextRequest) =
     ? todayParam
     : todayLocalIsoDate();
   const periodStats = calculateHistoryPeriodStats(userSessions, todayIso);
+  const mindStateTrends = calculateMindStateTrendStats(userSessions, todayIso);
 
   return NextResponse.json({
     sessions: userSessions,
@@ -31,6 +33,7 @@ export const GET = withApiHandler("Get sessions", async (request: NextRequest) =
       ...stats,
       bonusMinutesTotal: Math.round(stats.bonusSecondsTotal / 60),
       ...periodStats,
+      mindStateTrends,
     },
   });
 });
