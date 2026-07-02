@@ -78,6 +78,7 @@ export function BlockTimer({
 
   useEffect(() => {
     if (!isActive) cancelVoiceCountdownPlayback();
+    return () => cancelVoiceCountdownPlayback();
   }, [isActive]);
 
   const playEnabledSound = (play: () => boolean) => {
