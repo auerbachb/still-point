@@ -310,7 +310,9 @@ final class AppViewModel {
             primaryDoneToday = primary
             secondDoneToday = second
         } catch {
-            // Non-fatal: badges keep their last value.
+            // Non-fatal: fail closed so stale "done today" badges do not leak.
+            primaryDoneToday = false
+            secondDoneToday = false
         }
     }
 
