@@ -1,5 +1,10 @@
 import { isValidSessionCalendarDate } from "./sessionCalendar";
 import { sessionTimeSeconds, type HistorySessionTimeInput } from "./historyStats";
+import {
+  type MonthlySummary,
+} from "./historyMonthlyAggregation";
+
+export { buildPriorMonthSummaries } from "./historyMonthlyAggregation";
 
 export type MonthDayState = "future" | "today" | "meditated" | "missed";
 
@@ -15,13 +20,7 @@ export type MonthGridCell =
   | { kind: "blank" }
   | { kind: "day"; day: MonthGridDay };
 
-export type PriorMonthSummary = {
-  yearMonth: string;
-  label: string;
-  daysActive: number;
-  daysInMonth: number;
-  totalTimeSeconds: number;
-};
+export type PriorMonthSummary = MonthlySummary;
 
 function parseYearMonth(isoDate: string): { year: number; month: number } {
   const [y, m] = isoDate.split("-").map(Number);
@@ -108,68 +107,6 @@ export function buildCurrentMonthGrid(
   }
 
   return { yearMonth: ym, monthLabel: monthLabel(year, month), cells };
-}
-
-/**
- * One compact row per calendar month strictly before the month of `todayIso`.
- * Spans from the earliest session month through the month before current.
- */
-export function buildPriorMonthSummaries(
-  sessions: HistorySessionTimeInput[],
-  todayIso: string,
-): PriorMonthSummary[] {
-  const { year: todayYear, month: todayMonth } = parseYearMonth(todayIso);
-  const currentYm = yearMonthKey(todayYear, todayMonth);
-
-  const validDates = sessions
-    .map(s => s.sessionDate)
-    .filter((d): d is string => isValidSessionCalendarDate(d));
-  if (validDates.length === 0) return [];
-
-  const earliest = validDates.reduce((a, b) => (a < b ? a : b));
-  const { year: startYear, month: startMonth } = parseYearMonth(earliest);
-  const byDate = groupSessionsByDate(sessions);
-
-  const summaries: PriorMonthSummary[] = [];
-  let y = startYear;
-  let m = startMonth;
-
-  while (true) {
-    const ym = yearMonthKey(y, m);
-    if (ym >= currentYm) break;
-
-    const dim = daysInCalendarMonth(y, m);
-    let daysActive = 0;
-    let totalTimeSeconds = 0;
-
-    for (let day = 1; day <= dim; day++) {
-      const dd = String(day).padStart(2, "0");
-      const isoDate = `${ym}-${dd}`;
-      const daySessions = byDate.get(isoDate);
-      if (daySessions && daySessions.length > 0) {
-        daysActive++;
-        for (const s of daySessions) {
-          totalTimeSeconds += sessionTimeSeconds(s);
-        }
-      }
-    }
-
-    summaries.push({
-      yearMonth: ym,
-      label: monthLabel(y, m),
-      daysActive,
-      daysInMonth: dim,
-      totalTimeSeconds,
-    });
-
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-
-  return summaries;
 }
 
 /** Human-readable total time for summary rows. */
