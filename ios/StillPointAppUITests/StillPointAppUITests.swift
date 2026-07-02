@@ -631,37 +631,6 @@ final class StillPointAppUITests: XCTestCase {
         }
     }
 
-    private func stableFrame(
-        for element: XCUIElement,
-        in app: XCUIApplication,
-        timeout: TimeInterval = 8,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> CGRect? {
-        guard element.waitForExistence(timeout: timeout) else {
-            XCTFail("Element did not exist: \(element)", file: file, line: line)
-            return nil
-        }
-
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            let frame = element.frame
-            let center = CGPoint(x: frame.midX, y: frame.midY)
-            if !frame.isEmpty,
-               frame.origin.x >= 0,
-               frame.origin.y >= 0,
-               frame.width > 1,
-               frame.height > 1,
-               app.frame.insetBy(dx: -1, dy: -1).contains(center) {
-                return frame
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-
-        XCTFail("Element existed but never had a stable tappable frame: \(element.debugDescription)", file: file, line: line)
-        return nil
-    }
-
     /// Retries termination since XCTest occasionally reports "Failed to terminate … :0" on loaded CI simulators.
     private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 6) {
         if app.state == .notRunning { return }
