@@ -15,7 +15,7 @@ export type BuddyPersonalRecordPayload = {
   thoughts: Array<{ timeInSession: number; text: string }>;
 };
 
-type FinalizeAttemptResult = "started" | "already-saving" | "not-ready";
+type FinalizeAttemptResult = "started" | "already-saving" | "not-ready" | "failed";
 
 type UseBuddySessionFinalizationOptions = {
   sessionId: string;
@@ -108,20 +108,21 @@ export function useBuddySessionFinalization({
         thoughtCount: session.thoughtCount,
         thoughts: thoughtsSnapshot,
       });
+      return "started";
     } catch (e) {
       setPersonalRecordError(formatBuddyActionError(e, "Could not save your session"));
+      return "failed";
     } finally {
       saveInFlightRef.current = false;
       setIsSavingPersonalRecord(false);
     }
-    return "started";
   }, [sessionId, onPersonalRecordComplete, snapRef, mindStateLogRef, sessionThoughtsRef, elapsedRef, localTimerCompletedRef]);
 
   useEffect(() => {
     if (snap?.state !== "completed" || !onPersonalRecordComplete) return;
     if (serverFinalizeTriggeredRef.current) return;
     void finalizePersonalSession().then((result) => {
-      if (result !== "not-ready") {
+      if (result === "started") {
         serverFinalizeTriggeredRef.current = true;
       }
     });
@@ -131,7 +132,7 @@ export function useBuddySessionFinalization({
     if (!localTimerCompleted || !onPersonalRecordComplete) return;
     if (localTimerFinalizeTriggeredRef.current) return;
     void finalizePersonalSession().then((result) => {
-      if (result !== "not-ready") {
+      if (result === "started") {
         localTimerFinalizeTriggeredRef.current = true;
       }
     });
@@ -141,7 +142,7 @@ export function useBuddySessionFinalization({
     if (!pollStopped || !localTimerCompleted || !onPersonalRecordComplete) return;
     if (pollStoppedFinalizeTriggeredRef.current) return;
     void finalizePersonalSession().then((result) => {
-      if (result !== "not-ready") {
+      if (result === "started") {
         pollStoppedFinalizeTriggeredRef.current = true;
       }
     });

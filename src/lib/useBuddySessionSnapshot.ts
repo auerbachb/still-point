@@ -18,10 +18,15 @@ export function useBuddySessionSnapshot({ sessionId, onExit }: UseBuddySessionSn
 
   const [exitingRoom, setExitingRoom] = useState(false);
 
+  const activeSessionIdRef = useRef(sessionId);
+  activeSessionIdRef.current = sessionId;
+
   const poll = useCallback(async () => {
     if (pollStopped) return;
+    const pollSessionId = sessionId;
     try {
-      const { snapshot } = await api.getBuddySnapshot(sessionId);
+      const { snapshot } = await api.getBuddySnapshot(pollSessionId);
+      if (pollSessionId !== activeSessionIdRef.current) return;
       if (snapshot.revision < lastRevision.current) return;
       lastRevision.current = snapshot.revision;
       setSnap(snapshot);

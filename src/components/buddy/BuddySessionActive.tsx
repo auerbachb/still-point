@@ -417,7 +417,7 @@ export function BuddySessionActive({
             }}
           >
             {sessionThoughts.length} thought{sessionThoughts.length === 1 ? "" : "s"} captured on
-            this device — they are saved to your journal when the shared timer ends.
+            this device — they are saved to your journal when you finish the shared session.
           </p>
         )}
 
