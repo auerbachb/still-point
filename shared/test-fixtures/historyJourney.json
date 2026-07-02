@@ -1,0 +1,171 @@
+{
+  "algorithm": "buildHistoryJourney",
+  "description": "History-journey row builder shared by web buildHistoryJourneyRows(sessions, todayDate?) and iOS HistoryJourney.buildRows(fromSessions:todayIsoDate:). Sessions are sorted by sessionDate then createdAt (web feeds createdAt as its sortKey; every fixture session has a distinct createdAt so the id tiebreaker never applies). Missed days strictly between sessions are emitted per-day (`missed`) below the collapse threshold and as a single `missedRange` at/above it. session rows are identified by `id` plus per-type `sessionIndexInDay`. Optional `todayIsoDate` adds the trailing gap to today (today is never itself missed).",
+  "collapseGapThresholdDays": 3,
+  "cases": [
+    {
+      "name": "sequential sessions on the same calendar day get incrementing indices",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-04-28", "createdAt": "2026-04-28T08:00:00.000Z" },
+        { "id": "b", "sessionType": "standard", "sessionDate": "2026-04-28", "createdAt": "2026-04-28T09:00:00.000Z" },
+        { "id": "c", "sessionType": "standard", "sessionDate": "2026-04-28", "createdAt": "2026-04-28T10:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "session", "id": "b", "sessionIndexInDay": 2 },
+        { "kind": "session", "id": "c", "sessionIndexInDay": 3 }
+      ]
+    },
+    {
+      "name": "same-day sessions are ordered by createdAt",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "later-id", "sessionType": "standard", "sessionDate": "2026-04-28", "createdAt": "2026-04-28T12:00:00.000Z" },
+        { "id": "earlier-id", "sessionType": "standard", "sessionDate": "2026-04-28", "createdAt": "2026-04-28T10:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "earlier-id", "sessionIndexInDay": 1 },
+        { "kind": "session", "id": "later-id", "sessionIndexInDay": 2 }
+      ]
+    },
+    {
+      "name": "a quick-only sit still produces a session row",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "q1", "sessionType": "quick", "sessionDate": "2026-06-10", "createdAt": "2026-06-10T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "q1", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "quick and standard mix uses per-type day indices",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "s1", "sessionType": "standard", "sessionDate": "2026-06-10", "createdAt": "2026-06-10T08:00:00.000Z" },
+        { "id": "q1", "sessionType": "quick", "sessionDate": "2026-06-10", "createdAt": "2026-06-10T09:00:00.000Z" },
+        { "id": "s2", "sessionType": "standard", "sessionDate": "2026-06-10", "createdAt": "2026-06-10T10:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "s1", "sessionIndexInDay": 1 },
+        { "kind": "session", "id": "q1", "sessionIndexInDay": 1 },
+        { "kind": "session", "id": "s2", "sessionIndexInDay": 2 }
+      ]
+    },
+    {
+      "name": "two missed days stay as per-day missed rows",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-06-01", "createdAt": "2026-06-01T08:00:00.000Z" },
+        { "id": "b", "sessionType": "standard", "sessionDate": "2026-06-04", "createdAt": "2026-06-04T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missed", "date": "2026-06-02" },
+        { "kind": "missed", "date": "2026-06-03" },
+        { "kind": "session", "id": "b", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "three missed days collapse to a single range (threshold boundary)",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-06-01", "createdAt": "2026-06-01T08:00:00.000Z" },
+        { "id": "b", "sessionType": "standard", "sessionDate": "2026-06-05", "createdAt": "2026-06-05T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missedRange", "startDate": "2026-06-02", "endDate": "2026-06-04", "dayCount": 3 },
+        { "kind": "session", "id": "b", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "a 30-day gap collapses and keeps the prior session reachable",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-04-01", "createdAt": "2026-04-01T08:00:00.000Z" },
+        { "id": "b", "sessionType": "standard", "sessionDate": "2026-05-01", "createdAt": "2026-05-01T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missedRange", "startDate": "2026-04-02", "endDate": "2026-04-30", "dayCount": 29 },
+        { "kind": "session", "id": "b", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "a gap spanning a standard then quick session still collapses",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "s1", "sessionType": "standard", "sessionDate": "2026-04-01", "createdAt": "2026-04-01T08:00:00.000Z" },
+        { "id": "q1", "sessionType": "quick", "sessionDate": "2026-05-06", "createdAt": "2026-05-06T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "s1", "sessionIndexInDay": 1 },
+        { "kind": "missedRange", "startDate": "2026-04-02", "endDate": "2026-05-05", "dayCount": 34 },
+        { "kind": "session", "id": "q1", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "a long gap between the last session and today collapses",
+      "todayIsoDate": "2026-06-11",
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-05-01", "createdAt": "2026-05-01T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missedRange", "startDate": "2026-05-02", "endDate": "2026-06-10", "dayCount": 40 }
+      ]
+    },
+    {
+      "name": "a short trailing gap emits per-day missed rows",
+      "todayIsoDate": "2026-06-11",
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-06-09", "createdAt": "2026-06-09T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missed", "date": "2026-06-10" }
+      ]
+    },
+    {
+      "name": "no trailing gap when the last session is today",
+      "todayIsoDate": "2026-06-11",
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-06-11", "createdAt": "2026-06-11T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "no trailing gap when the last session was yesterday",
+      "todayIsoDate": "2026-06-11",
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2026-06-10", "createdAt": "2026-06-10T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 }
+      ]
+    },
+    {
+      "name": "no sessions produce no rows",
+      "todayIsoDate": "2026-06-11",
+      "sessions": [],
+      "expectedRows": []
+    },
+    {
+      "name": "a multi-year gap collapses to one range with no per-day rows",
+      "todayIsoDate": null,
+      "sessions": [
+        { "id": "a", "sessionType": "standard", "sessionDate": "2020-01-01", "createdAt": "2020-01-01T08:00:00.000Z" },
+        { "id": "b", "sessionType": "standard", "sessionDate": "2030-01-01", "createdAt": "2030-01-01T08:00:00.000Z" }
+      ],
+      "expectedRows": [
+        { "kind": "session", "id": "a", "sessionIndexInDay": 1 },
+        { "kind": "missedRange", "startDate": "2020-01-02", "endDate": "2029-12-31", "dayCount": 3652 },
+        { "kind": "session", "id": "b", "sessionIndexInDay": 1 }
+      ]
+    }
+  ]
+}

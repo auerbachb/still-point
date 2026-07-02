@@ -1,0 +1,74 @@
+{
+  "algorithm": "calculateClearPercent",
+  "description": "Percentage of [0, endTime] spent in an aware state (`clear` or `hyperfocus`). Web computeClearPercentFromLog(log, endTime) and iOS SessionLogic.calculateClearPercent(mindStateLog:totalElapsed:) both treat time before the first entry as clear and credit each segment to the state that began it, then round to a whole percent. Cases avoid exact .5 boundaries so JS Math.round and Swift rounded() agree, and keep endTime > 0 with a non-empty log so both share the same empty/zero guard.",
+  "cases": [
+    {
+      "name": "empty log is fully clear",
+      "log": [],
+      "endTime": 300,
+      "expected": 100
+    },
+    {
+      "name": "clear for the whole session",
+      "log": [{ "time": 0, "state": "clear" }],
+      "endTime": 300,
+      "expected": 100
+    },
+    {
+      "name": "thinking for the whole session",
+      "log": [{ "time": 0, "state": "thinking" }],
+      "endTime": 200,
+      "expected": 0
+    },
+    {
+      "name": "thinking exactly half the time",
+      "log": [{ "time": 0, "state": "clear" }, { "time": 150, "state": "thinking" }],
+      "endTime": 300,
+      "expected": 50
+    },
+    {
+      "name": "hyperfocus counts as aware",
+      "log": [{ "time": 0, "state": "hyperfocus" }],
+      "endTime": 100,
+      "expected": 100
+    },
+    {
+      "name": "clear, thinking, then clear again",
+      "log": [
+        { "time": 0, "state": "clear" },
+        { "time": 60, "state": "thinking" },
+        { "time": 120, "state": "clear" }
+      ],
+      "endTime": 240,
+      "expected": 75
+    },
+    {
+      "name": "time before the first entry is treated as clear",
+      "log": [{ "time": 50, "state": "thinking" }],
+      "endTime": 100,
+      "expected": 50
+    },
+    {
+      "name": "rounds down (100 of 300 clear)",
+      "log": [{ "time": 0, "state": "clear" }, { "time": 100, "state": "thinking" }],
+      "endTime": 300,
+      "expected": 33
+    },
+    {
+      "name": "rounds up (200 of 300 clear)",
+      "log": [{ "time": 0, "state": "clear" }, { "time": 200, "state": "thinking" }],
+      "endTime": 300,
+      "expected": 67
+    },
+    {
+      "name": "hyperfocus and clear mixed with thinking",
+      "log": [
+        { "time": 0, "state": "hyperfocus" },
+        { "time": 90, "state": "thinking" },
+        { "time": 180, "state": "clear" }
+      ],
+      "endTime": 360,
+      "expected": 75
+    }
+  ]
+}

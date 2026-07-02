@@ -6,6 +6,7 @@ import {
   parseBuddyCalendarRange,
 } from "./buddyCalendarRange";
 import { addDaysToIsoDate } from "./sessionCalendar";
+import { loadSharedFixture, type BuddyCalendarColorsFixture } from "./testing/sharedFixtures";
 
 describe("buddyColorFromUserId", () => {
   test("returns stable color for the same id", () => {
@@ -17,6 +18,21 @@ describe("buddyColorFromUserId", () => {
     const a = "00000000-0000-4000-8000-000000000001";
     const b = "00000000-0000-4000-8000-000000000002";
     expect(buddyColorFromUserId(a)).not.toBe(buddyColorFromUserId(b));
+  });
+});
+
+// Cross-platform parity: the same user-id -> palette index/hex golden set is
+// asserted by iOS buddyColorIndexFromUserId (#421). Web only exposes the hex.
+describe("buddyColorFromUserId — shared fixtures", () => {
+  const fixture = loadSharedFixture<BuddyCalendarColorsFixture>("buddyCalendarColors.json");
+
+  test("palette matches the shared fixture", () => {
+    expect(fixture.palette).toHaveLength(fixture.paletteLength);
+  });
+
+  test.each(fixture.cases)("$userId -> $expectedHex", ({ userId, expectedIndex, expectedHex }) => {
+    expect(fixture.palette[expectedIndex]).toBe(expectedHex);
+    expect(buddyColorFromUserId(userId)).toBe(expectedHex);
   });
 });
 

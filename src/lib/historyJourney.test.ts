@@ -4,6 +4,7 @@ import {
   sortSessionsForHistory,
   COLLAPSE_GAP_THRESHOLD_DAYS,
 } from "./historyJourney";
+import { loadSharedFixture, type HistoryJourneyFixture } from "./testing/sharedFixtures";
 
 describe("buildHistoryJourneyRows", () => {
   test("labels sequential sessions on the same calendar day", () => {
@@ -23,7 +24,7 @@ describe("buildHistoryJourneyRows", () => {
     expect(
       rows.map(r => {
         if (r.kind === "missed") return `missed:${r.date}`;
-        if (r.kind === "collapsedGap") return `gap:${r.startDate}:${r.dayCount}`;
+        if (r.kind === "missedRange") return `gap:${r.startDate}:${r.dayCount}`;
         return `session:${r.date}:${r.sessionIndexInDay}`;
       }),
     ).toEqual([
@@ -83,7 +84,7 @@ describe("buildHistoryJourneyRows", () => {
       { sessionDate: "2026-06-05", sortKey: "b", data: { id: "b" } },
     ]);
     expect(rows).toHaveLength(3);
-    expect(rows[1]).toEqual({ kind: "collapsedGap", startDate: "2026-06-02", endDate: "2026-06-04", dayCount: 3 });
+    expect(rows[1]).toEqual({ kind: "missedRange", startDate: "2026-06-02", endDate: "2026-06-04", dayCount: 3 });
     expect(COLLAPSE_GAP_THRESHOLD_DAYS).toBe(3);
   });
 
@@ -94,7 +95,7 @@ describe("buildHistoryJourneyRows", () => {
     ]);
     expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({ kind: "session", data: { id: "a" } });
-    expect(rows[1]).toEqual({ kind: "collapsedGap", startDate: "2026-04-02", endDate: "2026-04-30", dayCount: 29 });
+    expect(rows[1]).toEqual({ kind: "missedRange", startDate: "2026-04-02", endDate: "2026-04-30", dayCount: 29 });
     expect(rows[2]).toMatchObject({ kind: "session", data: { id: "b" } });
   });
 
@@ -104,7 +105,7 @@ describe("buildHistoryJourneyRows", () => {
       { sessionDate: "2026-05-06", sessionType: "quick", sortKey: "b", data: { id: "q1" } },
     ]);
     expect(rows).toHaveLength(3);
-    expect(rows[1]).toEqual({ kind: "collapsedGap", startDate: "2026-04-02", endDate: "2026-05-05", dayCount: 34 });
+    expect(rows[1]).toEqual({ kind: "missedRange", startDate: "2026-04-02", endDate: "2026-05-05", dayCount: 34 });
     expect(rows[2]).toMatchObject({ kind: "session", data: { id: "q1" } });
   });
 
@@ -117,7 +118,7 @@ describe("buildHistoryJourneyRows", () => {
     );
     expect(rows).toHaveLength(2);
     // today itself is never emitted as missed.
-    expect(rows[1]).toEqual({ kind: "collapsedGap", startDate: "2026-05-02", endDate: "2026-06-10", dayCount: 40 });
+    expect(rows[1]).toEqual({ kind: "missedRange", startDate: "2026-05-02", endDate: "2026-06-10", dayCount: 40 });
   });
 
   test("a short trailing gap emits per-day missed rows", () => {
@@ -157,6 +158,38 @@ describe("buildHistoryJourneyRows", () => {
     ]);
     expect(rows).toHaveLength(3);
     expect(rows.filter(r => r.kind === "missed")).toHaveLength(0);
-    expect(rows[1]).toMatchObject({ kind: "collapsedGap", startDate: "2020-01-02", endDate: "2029-12-31" });
+    expect(rows[1]).toMatchObject({ kind: "missedRange", startDate: "2020-01-02", endDate: "2029-12-31" });
+  });
+});
+
+// Cross-platform parity: the same journey golden set is asserted by iOS
+// HistoryJourney.buildRows (#421). session rows are matched by id + per-type index.
+describe("buildHistoryJourneyRows — shared fixtures", () => {
+  const fixture = loadSharedFixture<HistoryJourneyFixture>("historyJourney.json");
+
+  test("threshold matches the shared fixture", () => {
+    expect(COLLAPSE_GAP_THRESHOLD_DAYS).toBe(fixture.collapseGapThresholdDays);
+  });
+
+  test.each(fixture.cases)("$name", ({ sessions, todayIsoDate, expectedRows }) => {
+    const rows = buildHistoryJourneyRows(
+      sessions.map(s => ({
+        sessionDate: s.sessionDate,
+        sessionType: s.sessionType,
+        sortKey: s.createdAt,
+        data: { id: s.id },
+      })),
+      todayIsoDate ?? undefined,
+    );
+
+    const actual = rows.map(r => {
+      if (r.kind === "missed") return { kind: r.kind, date: r.date };
+      if (r.kind === "missedRange") {
+        return { kind: r.kind, startDate: r.startDate, endDate: r.endDate, dayCount: r.dayCount };
+      }
+      return { kind: r.kind, id: (r.data as { id: string }).id, sessionIndexInDay: r.sessionIndexInDay };
+    });
+
+    expect(actual).toEqual(expectedRows);
   });
 });

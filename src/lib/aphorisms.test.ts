@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { APHORISMS, aphorismForDay } from "./aphorisms";
+import { loadSharedFixture, type AphorismsFixture } from "./testing/sharedFixtures";
 
 describe("APHORISMS", () => {
   test("every entry has non-empty text and author", () => {
@@ -32,5 +33,19 @@ describe("aphorismForDay", () => {
     for (let day = 1; day <= APHORISMS.length * 2; day++) {
       expect(APHORISMS).toContainEqual(aphorismForDay(day));
     }
+  });
+});
+
+// Cross-platform parity: the same day->index golden set is asserted by iOS
+// Aphorisms.forDay (#421). `expectedCount` locks the shared list length.
+describe("aphorismForDay — shared fixtures", () => {
+  const fixture = loadSharedFixture<AphorismsFixture>("aphorisms.json");
+
+  test("list length matches the shared fixture", () => {
+    expect(APHORISMS.length).toBe(fixture.expectedCount);
+  });
+
+  test.each(fixture.cases)("day $day resolves to index $expectedIndex", ({ day, expectedIndex }) => {
+    expect(aphorismForDay(day)).toEqual(APHORISMS[expectedIndex]);
   });
 });

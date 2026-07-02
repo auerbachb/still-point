@@ -228,4 +228,59 @@ final class HistoryJourneyTests: XCTestCase {
         XCTAssertEqual(mixed.streak, 1, "quick sit on a later day must not extend the streak")
         XCTAssertEqual(mixed.avgThoughtsPerSession, 10, "average must count standard sessions only")
     }
+
+    // MARK: - Shared cross-platform fixtures (#421)
+
+    // The same golden set is asserted by web buildHistoryJourneyRows; drift between
+    // the two implementations breaks CI on at least one platform.
+    func testSharedHistoryJourneyFixtures() throws {
+        let fixture = try SharedFixtures.load("historyJourney.json", as: HistoryJourneyFixture.self)
+        XCTAssertEqual(HistoryJourney.collapseGapThresholdDays, fixture.collapseGapThresholdDays)
+
+        for testCase in fixture.cases {
+            let rows = HistoryJourney.buildRows(
+                fromSessions: testCase.sessions.map { $0.toSessionDTO() },
+                todayIsoDate: testCase.todayIsoDate
+            )
+            XCTAssertEqual(rows.count, testCase.expectedRows.count, "\(testCase.name): row count")
+
+            for (row, expected) in zip(rows, testCase.expectedRows) {
+                switch row {
+                case .missed(let date):
+                    XCTAssertEqual(expected.kind, "missed", testCase.name)
+                    XCTAssertEqual(date, try XCTUnwrap(expected.date), testCase.name)
+                case .missedRange(let startDate, let endDate, let dayCount):
+                    XCTAssertEqual(expected.kind, "missedRange", testCase.name)
+                    XCTAssertEqual(startDate, try XCTUnwrap(expected.startDate), testCase.name)
+                    XCTAssertEqual(endDate, try XCTUnwrap(expected.endDate), testCase.name)
+                    XCTAssertEqual(dayCount, try XCTUnwrap(expected.dayCount), testCase.name)
+                case .session(let session, let sessionIndexInDay):
+                    XCTAssertEqual(expected.kind, "session", testCase.name)
+                    XCTAssertEqual(session.id, try XCTUnwrap(expected.id), testCase.name)
+                    XCTAssertEqual(sessionIndexInDay, try XCTUnwrap(expected.sessionIndexInDay), testCase.name)
+                }
+            }
+        }
+    }
+
+    // Web rounds averages to one decimal while iOS returns raw doubles, so the
+    // shared fixtures keep them on clean values and assert with a small tolerance.
+    func testSharedSessionStatsFixtures() throws {
+        let fixture = try SharedFixtures.load("sessionStats.json", as: SessionStatsFixture.self)
+
+        for testCase in fixture.cases {
+            let stats = SessionStatistics.calculateStats(for: testCase.sessions.map { $0.toSessionDTO() })
+            XCTAssertEqual(stats.streak, testCase.expected.streak, "\(testCase.name): streak")
+            XCTAssertEqual(stats.avgClearPercent, testCase.expected.avgClearPercent, "\(testCase.name): avgClearPercent")
+            XCTAssertEqual(
+                stats.avgThoughtsPerSession, testCase.expected.avgThoughtsPerSession,
+                accuracy: 0.05, "\(testCase.name): avgThoughtsPerSession"
+            )
+            XCTAssertEqual(
+                stats.avgThoughtsPerMinute, testCase.expected.avgThoughtsPerMinute,
+                accuracy: 0.05, "\(testCase.name): avgThoughtsPerMinute"
+            )
+            XCTAssertEqual(stats.bonusMinutesTotal ?? 0, testCase.expected.bonusMinutesTotal, "\(testCase.name): bonusMinutesTotal")
+        }
+    }
 }
