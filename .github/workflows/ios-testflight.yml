@@ -6,6 +6,13 @@ name: Build & Upload to TestFlight
 # the shared reusable workflow ios-testflight-build.yml, so the build/upload
 # logic has a single source of truth.
 #
+# Unlike ios-testflight-auto.yml, this path intentionally does NOT run the
+# mobile-web e2e gate (e2e-mobile.yml) — it's the break-glass path for shipping
+# a build by hand when e2e infra itself is down, or for an ad-hoc ref that
+# didn't go through the normal PR-merge flow. Run
+# `gh workflow run e2e-mobile.yml -f ref=<ref>` first if you want the signal
+# without gating on it. See #494.
+#
 # Semver-only tags (ios-v1.0.0) trigger App Store release — see
 # ios-app-store-release.yml.
 

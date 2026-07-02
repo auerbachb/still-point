@@ -1,10 +1,40 @@
 name: E2E Mobile Web
 
+# Reusable mobile-web Playwright suite. As of #494, this NO LONGER runs on
+# `pull_request` — it was the slowest, flakiest per-PR check (3-project matrix,
+# no path filter) and blocked PRs that couldn't affect mobile web at all. It
+# now runs ONLY:
+#   - as part of the release pipeline — `ios-testflight-auto.yml` calls it via
+#     `workflow_call` and gates the build-number bump + TestFlight build on a
+#     green run;
+#   - on demand via `workflow_dispatch` for ad-hoc verification.
+# The manual `ios-v*-build*` tag path (`ios-testflight.yml`) intentionally does
+# NOT call this workflow — it's the break-glass escape hatch for shipping when
+# e2e infra itself is down. Mirrors auerbachb/skingod#1402.
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit ref (SHA, branch, or tag) to check out and test"
+        type: string
+        required: true
+    secrets:
+      POSTGRES_URL:
+        required: true
+      E2E_WEB_EMAIL:
+        required: true
+      E2E_WEB_PASSWORD:
+        required: true
+      E2E_TEST_USER_EMAIL:
+        required: true
+      E2E_TEST_USER_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit ref (SHA, branch, or tag) to check out and test. Defaults to the ref this run was dispatched from."
+        type: string
+        required: false
 
 jobs:
   e2e-mobile:
@@ -28,6 +58,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js

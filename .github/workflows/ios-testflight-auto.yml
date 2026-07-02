@@ -5,16 +5,26 @@ name: Auto TestFlight on merge
 # adapted for Still Point's self-hosted xcodebuild pipeline (skingod uses EAS).
 #
 # Flow:
-#   1. Read CURRENT_PROJECT_VERSION from ios/project.yml at the merge commit.
-#   2. Increment it (build-number source of truth: the committed project.yml).
-#   3. Commit the bump back to main with [skip ci].
-#   4. Cut an ios-v<marketing>-build<n> tag on that commit.
-#   5. Call the shared reusable workflow to build + upload from that commit.
+#   1. Run the mobile-web e2e suite (e2e-mobile.yml) against the merge commit.
+#   2. Only if it's green: read CURRENT_PROJECT_VERSION from ios/project.yml
+#      at the merge commit.
+#   3. Increment it (build-number source of truth: the committed project.yml).
+#   4. Commit the bump back to main with [skip ci].
+#   5. Cut an ios-v<marketing>-build<n> tag on that commit.
+#   6. Call the shared reusable workflow to build + upload from that commit.
+#
+# The e2e gate runs BEFORE the bump/tag step (not just before the build) on
+# purpose (#494): the bump commit + tag push are themselves release side
+# effects, and this workflow only fires once per merged PR (no natural retry
+# trigger), so a failing e2e must prevent them too — not just skip the build
+# after a tag already exists. `tag`'s `if:` checks `needs.e2e.result ==
+# 'success'`; a failed OR skipped e2e run (no release:ios label) leaves `tag`
+# skipped and nothing is committed/tagged/built.
 #
 # The bump commit and tag are pushed with the default GITHUB_TOKEN. GitHub does
 # NOT start new workflow runs for GITHUB_TOKEN-authored pushes, so:
-#   * push-on-main CI (e2e-mobile, web-build) does not fire on the bump — the
-#     [skip ci] is belt-and-suspenders for that, plus clarity for humans;
+#   * push-on-main CI (web-build) does not fire on the bump — the [skip ci] is
+#     belt-and-suspenders for that, plus clarity for humans;
 #   * the new ios-v*-build* tag does NOT re-trigger ios-testflight.yml, so there
 #     is no double build. The reusable build is invoked directly below instead.
 #     If this is ever switched to a PAT, add a guard so the manual workflow does
@@ -34,12 +44,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  tag:
-    name: Bump build number and cut TestFlight tag
+  e2e:
+    name: release e2e (mobile web)
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.base.ref == 'main' &&
       contains(github.event.pull_request.labels.*.name, 'release:ios')
+    uses: ./.github/workflows/e2e-mobile.yml
+    with:
+      ref: ${{ github.event.pull_request.merge_commit_sha }}
+    secrets: inherit
+
+  tag:
+    name: Bump build number and cut TestFlight tag
+    needs: e2e
+    if: needs.e2e.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
