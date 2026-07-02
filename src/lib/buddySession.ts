@@ -4,7 +4,7 @@
  * #119: POST …/record-personal-session creates each participant’s own `sessions` row; notes use `thoughts`.
  */
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
+import { atomicSyncBuddySessionDuration } from "@/db/atomic";
 import {
   buddySessions,
   buddySessionParticipants,
@@ -13,7 +13,7 @@ import {
 } from "@/db/schema";
 import { deleteRoom } from "@/lib/daily";
 import { orderedUserPair } from "@/lib/friends";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 export type BuddySessionState =
   | "waiting"
@@ -36,41 +36,7 @@ import { normalizedBuddySessionDurationSeconds } from "@/lib/buddySessionDuratio
 export async function syncBuddySessionDurationForParticipants(
   sessionId: string,
 ): Promise<number | null> {
-  return poolDb.transaction(async (tx) => {
-    const rows = await tx
-      .select({ currentDay: users.currentDay })
-      .from(buddySessionParticipants)
-      .innerJoin(users, eq(buddySessionParticipants.userId, users.id))
-      .where(
-        and(
-          eq(buddySessionParticipants.buddySessionId, sessionId),
-          isNull(buddySessionParticipants.leftAt),
-        ),
-      );
-
-    if (rows.length === 0) return null;
-
-    const durationSeconds = normalizedBuddySessionDurationSeconds(
-      rows.map((row) => row.currentDay),
-    );
-
-    const updated = await tx
-      .update(buddySessions)
-      .set({
-        durationSeconds,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(buddySessions.id, sessionId),
-          inArray(buddySessions.state, ["waiting", "ready_check"]),
-        ),
-      )
-      .returning({ id: buddySessions.id });
-
-    if (updated.length === 0) return null;
-    return durationSeconds;
-  });
+  return atomicSyncBuddySessionDuration(sessionId);
 }
 
 export async function assertBuddyFriendshipIfRequired(

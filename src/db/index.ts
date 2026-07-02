@@ -27,10 +27,7 @@ function getDb(): AppDb {
   return globalForHttp.__httpDb;
 }
 
-/**
- * Neon **HTTP** driver — avoids WebSocket pool hangs on Vercel / Next.js 15 serverless.
- * For `transaction()`, import `poolDb` from `@/db/pool` instead.
- */
+/** Neon HTTP driver — reliable on Vercel / Next.js 15 serverless. */
 export const db = new Proxy({} as AppDb, {
   get(_, prop) {
     return (getDb() as unknown as Record<string | symbol, unknown>)[prop as string];

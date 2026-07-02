@@ -7,23 +7,16 @@ const selectLimit = vi.fn();
 const selectWhere = vi.fn(() => ({ limit: selectLimit }));
 const selectFrom = vi.fn(() => ({ where: selectWhere }));
 const dbSelect = vi.fn(() => ({ from: selectFrom }));
-const insertReturning = vi.fn();
-const insertValues = vi.fn(() => ({ returning: insertReturning }));
-const dbInsert = vi.fn(() => ({ values: insertValues }));
+const atomicCreateBuddySession = vi.fn();
 
 vi.mock("@/db", () => ({
   db: {
     select: dbSelect,
-    insert: dbInsert,
   },
 }));
 
-const poolDbTransaction = vi.fn((callback: (tx: { insert: typeof dbInsert; select: typeof dbSelect }) => unknown) =>
-  callback({ insert: dbInsert, select: dbSelect }),
-);
-
-vi.mock("@/db/pool", () => ({
-  poolDb: { transaction: poolDbTransaction },
+vi.mock("@/db/atomic", () => ({
+  atomicCreateBuddySession,
 }));
 
 vi.mock("@/db/schema", () => ({
@@ -64,14 +57,12 @@ describe("POST /api/buddy/sessions", () => {
     vi.clearAllMocks();
     getCurrentUser.mockResolvedValue({ userId: "user-1", email: "user@example.com" });
     selectLimit.mockResolvedValue([{ currentDay: 1 }]);
-    insertReturning.mockResolvedValue([
-      {
-        id: "session-1",
-        shareToken: "share-token",
-        durationSeconds: 600,
-        scheduledStartAt: null,
-      },
-    ]);
+    atomicCreateBuddySession.mockResolvedValue({
+      id: "session-1",
+      shareToken: "share-token",
+      durationSeconds: 600,
+      scheduledStartAt: null,
+    });
     syncBuddySessionCalendarForUser.mockResolvedValue({
       status: "skipped",
       userId: "user-1",
@@ -90,29 +81,26 @@ describe("POST /api/buddy/sessions", () => {
       error: "scheduledStartAt must be in the future",
     });
     expect(response.status).toBe(400);
-    expect(dbInsert).not.toHaveBeenCalled();
+    expect(atomicCreateBuddySession).not.toHaveBeenCalled();
   });
 
   test("stores a future scheduled start and syncs the host calendar", async () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    insertReturning.mockResolvedValue([
-      {
-        id: "session-1",
-        shareToken: "share-token",
-        durationSeconds: 600,
-        scheduledStartAt: new Date(future),
-      },
-    ]);
+    atomicCreateBuddySession.mockResolvedValue({
+      id: "session-1",
+      shareToken: "share-token",
+      durationSeconds: 600,
+      scheduledStartAt: new Date(future),
+    });
     const { POST } = await import("./route");
 
     const response = await POST(buddyCreateRequest({ scheduledStartAt: future }));
 
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(insertValues).toHaveBeenCalledWith(
+    expect(atomicCreateBuddySession).toHaveBeenCalledWith(
       expect.objectContaining({
         scheduledStartAt: expect.any(Date),
-        state: "waiting",
       }),
     );
     expect(syncBuddySessionCalendarForUser).toHaveBeenCalledWith(
@@ -134,7 +122,7 @@ describe("POST /api/buddy/sessions", () => {
       error: "Session length is set automatically for buddy sessions",
     });
     expect(response.status).toBe(400);
-    expect(dbInsert).not.toHaveBeenCalled();
+    expect(atomicCreateBuddySession).not.toHaveBeenCalled();
   });
 
   test("creates an immediate session without calendar sync", async () => {
@@ -144,10 +132,9 @@ describe("POST /api/buddy/sessions", () => {
 
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(insertValues).toHaveBeenCalledWith(
+    expect(atomicCreateBuddySession).toHaveBeenCalledWith(
       expect.objectContaining({
         scheduledStartAt: null,
-        state: "waiting",
       }),
     );
     expect(syncBuddySessionCalendarForUser).not.toHaveBeenCalled();
@@ -157,14 +144,12 @@ describe("POST /api/buddy/sessions", () => {
 
   test("keeps scheduled session creation successful when calendar sync throws", async () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    insertReturning.mockResolvedValue([
-      {
-        id: "session-1",
-        shareToken: "share-token",
-        durationSeconds: 600,
-        scheduledStartAt: new Date(future),
-      },
-    ]);
+    atomicCreateBuddySession.mockResolvedValue({
+      id: "session-1",
+      shareToken: "share-token",
+      durationSeconds: 600,
+      scheduledStartAt: new Date(future),
+    });
     syncBuddySessionCalendarForUser.mockRejectedValue(new Error("calendar unavailable"));
     const { POST } = await import("./route");
 
@@ -172,12 +157,7 @@ describe("POST /api/buddy/sessions", () => {
 
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scheduledStartAt: expect.any(Date),
-        state: "waiting",
-      }),
-    );
+    expect(atomicCreateBuddySession).toHaveBeenCalled();
     expect(body.session.calendarSync).toEqual([
       {
         status: "failed",

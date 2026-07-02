@@ -14,9 +14,9 @@ let client: PGlite | null = null;
  * declares (the numbered drizzle/*.sql snapshot can lag behind — see
  * scripts/apply-migrations.ts).
  *
- * Test files mock both `@/db` and `@/db/pool` with the same instance, which
- * matches production behavior closely enough for these tests: both drivers
- * point at one database, and PGlite supports real transactions.
+ * Test files mock `@/db` with the PGlite instance. PGlite supports real
+ * transactions and `db.execute`, so atomic CTE helpers run against the same
+ * schema the app uses in production (via Neon HTTP).
  *
  * The instance is cached per module registry (one per Vitest test file under
  * the default isolation). Call `closeTestDb()` in `afterAll` so reruns in the

@@ -1,9 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import bcrypt from "bcryptjs";
 import { inArray } from "drizzle-orm";
-import type { NeonDatabase } from "drizzle-orm/neon-serverless";
-import { poolDb } from "../src/db/pool";
-import * as schema from "../src/db/schema";
+import { db } from "../src/db";
 import { friendships, sessions, thoughts, users } from "../src/db/schema";
 import { assertNeonHostedPostgresUrl } from "./lib/assert-neon-postgres-url";
 
@@ -48,8 +46,6 @@ function buildSeedUsers(runId: string): SeedUser[] {
   }));
 }
 
-type AppDb = NeonDatabase<typeof schema>;
-
 /** Idempotent non-production seed: replaces fixture users by email, then inserts sessions, thoughts, and friendship. */
 async function main() {
   if (process.env.NODE_ENV === "production") {
@@ -74,31 +70,30 @@ async function main() {
   const seedUsers = buildSeedUsers(runId);
   const seedEmails = seedUsers.map((user) => user.email);
 
-  await poolDb.transaction(async (tx: AppDb) => {
-    const existing = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(inArray(users.email, seedEmails));
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(inArray(users.email, seedEmails));
 
-    if (existing.length > 0) {
-      await tx.delete(users).where(inArray(users.id, existing.map((row) => row.id)));
-    }
+  if (existing.length > 0) {
+    await db.delete(users).where(inArray(users.id, existing.map((row) => row.id)));
+  }
 
-    const passwordHash = await bcrypt.hash("SeedPassword123!", 12);
-    await tx.insert(users).values(
-      seedUsers.map((user) => ({
-        email: user.email,
-        username: user.username,
-        passwordHash,
-        currentDay: user.currentDay,
-        isPublic: user.isPublic,
-      })),
-    );
+  const passwordHash = await bcrypt.hash("SeedPassword123!", 12);
+  await db.insert(users).values(
+    seedUsers.map((user) => ({
+      email: user.email,
+      username: user.username,
+      passwordHash,
+      currentDay: user.currentDay,
+      isPublic: user.isPublic,
+    })),
+  );
 
-    const seededUsers = await tx
-      .select({ id: users.id, email: users.email, day: users.currentDay })
-      .from(users)
-      .where(inArray(users.email, seedEmails));
+  const seededUsers = await db
+    .select({ id: users.id, email: users.email, day: users.currentDay })
+    .from(users)
+    .where(inArray(users.email, seedEmails));
 
     const usersByEmail = new Map(seededUsers.map((user) => [user.email, user]));
     const today = new Date().toISOString().slice(0, 10);
@@ -110,8 +105,8 @@ async function main() {
       throw new Error("Failed to fetch seeded users after insert.");
     }
 
-    const sessionRows = await tx
-      .insert(sessions)
+  const sessionRows = await db
+    .insert(sessions)
       .values([
         {
           userId: ava.id,
@@ -173,7 +168,7 @@ async function main() {
       throw new Error("Failed to create seeded sessions.");
     }
 
-    await tx.insert(thoughts).values([
+  await db.insert(thoughts).values([
       {
         userId: ava.id,
         sessionId: avaSession.id,
@@ -205,15 +200,13 @@ async function main() {
     ]);
 
     const [user1Id, user2Id] = [ava.id, leo.id].sort();
-    await tx.insert(friendships).values({ user1Id, user2Id }).onConflictDoNothing();
+  await db.insert(friendships).values({ user1Id, user2Id }).onConflictDoNothing();
 
-    // Keep output non-sensitive so this can be pasted into issue/PR comments.
-    console.log(
-      `Seed complete: users=${seededUsers.length}, sessions=${sessionRows.length}, thoughts=4, friendship=1, runId=${
-        runId || "default"
-      }`,
-    );
-  });
+  console.log(
+    `Seed complete: users=${seededUsers.length}, sessions=${sessionRows.length}, thoughts=4, friendship=1, runId=${
+      runId || "default"
+    }`,
+  );
 }
 
 main().catch((error) => {

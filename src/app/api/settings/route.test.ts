@@ -1,32 +1,16 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// HTTP-driver path (no username): db.update(...).set(...).where(...).returning(...)
+const atomicUpdateUsername = vi.fn();
 const dbUpdateReturning = vi.fn();
 const dbUpdateWhere = vi.fn(() => ({ returning: dbUpdateReturning }));
 const dbUpdateSet = vi.fn((_values: Record<string, unknown>) => ({ where: dbUpdateWhere }));
 const dbUpdate = vi.fn(() => ({ set: dbUpdateSet }));
 
-// Transactional path (username present): poolDb.transaction(async (tx) => ...)
-const txExecute = vi.fn();
-const txSelectLimit = vi.fn();
-const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
-const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
-const txSelect = vi.fn(() => ({ from: txSelectFrom }));
-const txUpdateReturning = vi.fn();
-const txUpdateWhere = vi.fn(() => ({ returning: txUpdateReturning }));
-const txUpdateSet = vi.fn((_values: Record<string, unknown>) => ({ where: txUpdateWhere }));
-const txUpdate = vi.fn(() => ({ set: txUpdateSet }));
-
-const poolTransaction = vi.fn(
-  async (cb: (tx: { execute: typeof txExecute; select: typeof txSelect; update: typeof txUpdate }) => unknown) =>
-    cb({ execute: txExecute, select: txSelect, update: txUpdate }),
-);
-
 const getCurrentUser = vi.fn();
 
 vi.mock("@/db", () => ({ db: { update: dbUpdate } }));
-vi.mock("@/db/pool", () => ({ poolDb: { transaction: poolTransaction } }));
+vi.mock("@/db/atomic", () => ({ atomicUpdateUsername }));
 
 vi.mock("@/db/schema", () => ({
   users: {
@@ -56,10 +40,6 @@ vi.mock("@/lib/username", () => ({
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),
   eq: (left: unknown, right: unknown) => ({ eq: [left, right] }),
-  ne: (left: unknown, right: unknown) => ({ ne: [left, right] }),
-  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
-    sql: { strings: Array.from(strings), values },
-  }),
 }));
 
 const userId = "user-1";
@@ -74,17 +54,16 @@ describe("PATCH /api/settings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getCurrentUser.mockResolvedValue({ userId, email: "user@example.com" });
-    txSelectLimit.mockResolvedValue([]);
-    txExecute.mockResolvedValue(undefined);
-    txUpdateReturning.mockResolvedValue([
-      {
+    atomicUpdateUsername.mockResolvedValue({
+      ok: true,
+      user: {
         id: userId,
         email: "user@example.com",
         username: "newname",
         isPublic: false,
         currentDay: 1,
       },
-    ]);
+    });
     dbUpdateReturning.mockResolvedValue([
       {
         id: userId,
@@ -103,7 +82,7 @@ describe("PATCH /api/settings", () => {
     const res = await PATCH(buildRequest({ username: "newname" }));
 
     expect(res.status).toBe(401);
-    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
@@ -116,28 +95,23 @@ describe("PATCH /api/settings", () => {
     await expect(res.json()).resolves.toEqual({
       error: "Username must be 3-30 characters (letters, numbers, underscores)",
     });
-    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
-  test("acquires advisory lock and rejects when another user holds the username", async () => {
-    txSelectLimit.mockResolvedValue([{ id: "other-user" }]);
+  test("rejects when another user holds the username", async () => {
+    atomicUpdateUsername.mockResolvedValue({ ok: false, reason: "taken" });
     const { PATCH } = await import("./route");
 
     const res = await PATCH(buildRequest({ username: "Taken" }));
 
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toEqual({ error: "Username already taken" });
-
-    expect(poolTransaction).toHaveBeenCalledTimes(1);
-    expect(txExecute).toHaveBeenCalledTimes(1);
-    const lockArg = txExecute.mock.calls[0]![0] as { sql: { values: unknown[] } };
-    // Lock key is hashtext("username:" + lower(username)) — verify case is folded.
-    expect(lockArg.sql.values).toContain("username:taken");
-    expect(txUpdate).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).toHaveBeenCalledTimes(1);
+    expect(dbUpdate).not.toHaveBeenCalled();
   });
 
-  test("updates the username inside the transaction when valid and unique", async () => {
+  test("updates the username when valid and unique", async () => {
     const { PATCH } = await import("./route");
 
     const res = await PATCH(buildRequest({ username: "  newname  " }));
@@ -152,18 +126,17 @@ describe("PATCH /api/settings", () => {
         currentDay: 1,
       },
     });
-    expect(poolTransaction).toHaveBeenCalledTimes(1);
-    expect(txExecute).toHaveBeenCalledTimes(1);
-    expect(txUpdateSet).toHaveBeenCalledTimes(1);
-    const updates = txUpdateSet.mock.calls[0]![0];
-    expect(updates.username).toBe("newname");
-    expect(updates.updatedAt).toBeInstanceOf(Date);
-    // The HTTP-driver fall-through must not fire when username is being updated.
+    expect(atomicUpdateUsername).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId,
+        username: "newname",
+      }),
+    );
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
   test("translates Postgres unique-violation races into 409", async () => {
-    txUpdateReturning.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+    atomicUpdateUsername.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
     const { PATCH } = await import("./route");
 
     const res = await PATCH(buildRequest({ username: "racy" }));
@@ -181,24 +154,24 @@ describe("PATCH /api/settings", () => {
     await expect(res.json()).resolves.toEqual({
       error: "No supported settings provided",
     });
-    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
-  test("isPublic-only updates skip the transaction and use the HTTP driver", async () => {
+  test("isPublic-only updates skip username atomic path and use the HTTP driver", async () => {
     const { PATCH } = await import("./route");
 
     const res = await PATCH(buildRequest({ isPublic: true }));
 
     expect(res.status).toBe(200);
-    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
     expect(dbUpdate).toHaveBeenCalledTimes(1);
     const updates = dbUpdateSet.mock.calls[0]![0];
     expect(updates.isPublic).toBe(true);
     expect(updates).not.toHaveProperty("username");
   });
 
-  test("aphorismsEnabled-only updates skip the transaction and use the HTTP driver", async () => {
+  test("aphorismsEnabled-only updates skip username atomic path and use the HTTP driver", async () => {
     dbUpdateReturning.mockResolvedValue([
       {
         id: userId,
@@ -214,7 +187,7 @@ describe("PATCH /api/settings", () => {
     const res = await PATCH(buildRequest({ aphorismsEnabled: true }));
 
     expect(res.status).toBe(200);
-    expect(poolTransaction).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
     expect(dbUpdate).toHaveBeenCalledTimes(1);
     const updates = dbUpdateSet.mock.calls[0]![0];
     expect(updates.aphorismsEnabled).toBe(true);

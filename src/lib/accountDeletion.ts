@@ -1,8 +1,8 @@
 import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { poolDb } from "@/db/pool";
-import { accountDeletionLog, users } from "@/db/schema";
+import { atomicDeleteUserAccount } from "@/db/atomic";
+import { accountDeletionLog } from "@/db/schema";
 
 export function getAccountDeletionEmailHash(email: string): string {
   return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
@@ -34,22 +34,5 @@ export async function wasAccountDeleted(email: string): Promise<boolean> {
  * `buddy_session_id` cleared.
  */
 export async function deleteUserAccount(userId: string): Promise<boolean> {
-  return poolDb.transaction(async (tx) => {
-    const [user] = await tx
-      .select({ id: users.id, email: users.email })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-
-    if (!user) return false;
-
-    // Persist only a lookup hash so login can explain deleted accounts without retaining the email.
-    await tx.insert(accountDeletionLog).values({
-      userId: user.id,
-      emailHash: getAccountDeletionEmailHash(user.email),
-    });
-
-    await tx.delete(users).where(eq(users.id, userId));
-    return true;
-  });
+  return atomicDeleteUserAccount({ userId });
 }

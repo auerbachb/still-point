@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, gt, isNull } from "drizzle-orm";
-import { poolDb } from "@/db/pool";
-import { passwordResetTokens, users } from "@/db/schema";
+import { atomicConfirmPasswordReset } from "@/db/atomic";
 import { hashPassword } from "@/lib/auth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { getPasswordResetPayload } from "@/lib/passwordReset";
@@ -30,26 +28,11 @@ export const POST = withApiHandler("Password reset confirm", async (request: Nex
   }
 
   const passwordHash = await hashPassword(password);
-  const updated = await poolDb.transaction(async (tx) => {
-    const [resetToken] = await tx
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(
-        and(
-          eq(passwordResetTokens.userId, resetPayload.userId),
-          eq(passwordResetTokens.tokenHash, resetPayload.tokenHash),
-          isNull(passwordResetTokens.usedAt),
-          gt(passwordResetTokens.expiresAt, new Date()),
-        ),
-      )
-      .returning({ userId: passwordResetTokens.userId });
-    if (!resetToken) {
-      return false;
-    }
-    await tx.update(users)
-      .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(users.id, resetToken.userId));
-    return true;
+  const updated = await atomicConfirmPasswordReset({
+    userId: resetPayload.userId,
+    tokenHash: resetPayload.tokenHash,
+    passwordHash,
+    now: new Date(),
   });
   if (!updated) {
     return NextResponse.json({ error: "Reset link is invalid or expired" }, { status: 400 });
