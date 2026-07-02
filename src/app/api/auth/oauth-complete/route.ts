@@ -5,6 +5,7 @@ import { clearAuthJsCookies } from "@/lib/authJsCookies";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, setAuthCookie } from "@/lib/auth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { isOAuthProvider } from "@/lib/lastAuthProvider";
 
 /** Sanitize a `?return=` param into a same-origin path. Anything other
@@ -25,7 +26,7 @@ function sanitizeReturnTarget(raw: string | null): string {
  *  cookie (set on the request host) is sent on the redirect — using a
  *  fixed canonical APP_URL would cross hosts on previews/localhost and
  *  drop the cookie. */
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler("oauth-complete bridge", async (request: NextRequest) => {
   const requestUrl = new URL(request.url);
   const successTarget = sanitizeReturnTarget(requestUrl.searchParams.get("return"));
   let errorPath: string | null = null;
@@ -71,4 +72,4 @@ export async function GET(request: NextRequest) {
     finalUrl.searchParams.set("auth_provider", completedProvider);
   }
   return NextResponse.redirect(finalUrl);
-}
+});

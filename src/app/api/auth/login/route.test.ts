@@ -108,4 +108,20 @@ describe("POST /api/auth/login", () => {
     expect(createToken).not.toHaveBeenCalled();
     expect(setAuthCookie).not.toHaveBeenCalled();
   });
+
+  test("returns 400 for malformed JSON", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      new Request("http://test.local/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{"email":"user@example.com","password":"pw"',
+      }) as NextRequest,
+    );
+
+    await expect(response.json()).resolves.toEqual({ error: "Invalid JSON body" });
+    expect(response.status).toBe(400);
+    expect(wasAccountDeleted).not.toHaveBeenCalled();
+  });
 });

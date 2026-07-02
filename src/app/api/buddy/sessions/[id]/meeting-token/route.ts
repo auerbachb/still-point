@@ -1,21 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants, users } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { reconcileBuddySession } from "@/lib/buddySession";
 import { BUDDY_POLICY_CODES } from "@/lib/buddyPolicyCodes";
 import { DailyApiError, createMeetingToken } from "@/lib/daily";
 import { isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+type RouteContext = RouteParams<{ id: string }>;
 
-export async function POST(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withApiHandler(
+  "Buddy meeting-token route",
+  async (_request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
@@ -28,7 +28,7 @@ export async function POST(_request: Request, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -61,14 +61,14 @@ export async function POST(_request: Request, context: Params) {
     const [u] = await db
       .select({ username: users.username })
       .from(users)
-      .where(eq(users.id, auth.userId))
+      .where(eq(users.id, auth.user.userId))
       .limit(1);
 
     try {
       const token = await createMeetingToken({
         roomName: session.dailyRoomName,
         userName: u?.username ?? "Participant",
-        userId: auth.userId,
+        userId: auth.user.userId,
       });
       return NextResponse.json({ token });
     } catch (e) {
@@ -81,8 +81,5 @@ export async function POST(_request: Request, context: Params) {
       }
       throw e;
     }
-  } catch (error) {
-    console.error("Buddy meeting-token route error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

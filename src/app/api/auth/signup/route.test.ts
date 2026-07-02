@@ -162,4 +162,32 @@ describe("POST /api/auth/signup uniqueness handling", () => {
     await expect(response.json()).resolves.toEqual({ error: "Internal server error" });
     expect(response.status).toBe(500);
   });
+
+  test("returns 400 for malformed JSON", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      new Request("http://test.local/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      }) as NextRequest,
+    );
+
+    await expect(response.json()).resolves.toEqual({ error: "Invalid JSON body" });
+    expect(response.status).toBe(400);
+    expect(dbInsert).not.toHaveBeenCalled();
+  });
+
+  test("returns 400 when password is not a string", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      makeRequest({ email: "alice@example.com", username: "alice", password: 123456789 }),
+    );
+
+    await expect(response.json()).resolves.toEqual({ error: "All fields required" });
+    expect(response.status).toBe(400);
+    expect(hashPassword).not.toHaveBeenCalled();
+  });
 });

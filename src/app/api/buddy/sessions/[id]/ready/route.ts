@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import {
   bumpBuddyRevision,
   reconcileBuddySession,
@@ -14,14 +15,13 @@ import { isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+type RouteContext = RouteParams<{ id: string }>;
 
-export async function PATCH(request: NextRequest, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const PATCH = withApiHandler(
+  "Buddy ready PATCH",
+  async (request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -69,8 +69,5 @@ export async function PATCH(request: NextRequest, context: Params) {
     await reconcileBuddySession(sessionId);
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Buddy ready PATCH error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { verifyAppleJwt } from "@/lib/apple-auth";
 import {
   finalizeAppleNotificationLog,
@@ -15,7 +16,7 @@ import {
  * middleware public list — the Apple-signed JWT (verified against Apple's JWKS
  * with issuer + audience checks) is the authentication.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler("apple notifications", async (request: NextRequest) => {
   let body: { payload?: unknown };
   try {
     body = (await request.json()) as { payload?: unknown };
@@ -73,4 +74,4 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+});

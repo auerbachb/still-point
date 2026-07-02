@@ -1,21 +1,21 @@
-import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { listBuddyCalendarSessionsForBuddy } from "@/lib/buddyCalendar";
 import { parseBuddyCalendarRange } from "@/lib/buddyCalendarRange";
 import { isUuid } from "@/lib/friends";
 
-type Params = { params: Promise<{ buddyId: string }> };
+type RouteContext = RouteParams<{ buddyId: string }>;
 
 /**
  * Per-buddy shared-session calendar (#350).
  * iOS: mirror `GET /api/buddy/sessions/calendar/[buddyId]` — see `listBuddyCalendarSessionsForBuddy`.
  */
-export async function GET(request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withApiHandler(
+  "Buddy per-buddy calendar GET",
+  async (request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { buddyId } = await context.params;
     if (!isUuid(buddyId)) {
@@ -37,7 +37,7 @@ export async function GET(request: Request, context: Params) {
       throw e;
     }
 
-    const result = await listBuddyCalendarSessionsForBuddy(auth.userId, buddyId, range);
+    const result = await listBuddyCalendarSessionsForBuddy(auth.user.userId, buddyId, range);
     if ("error" in result) {
       if (result.error === "NOT_FRIEND") {
         return NextResponse.json({ error: "Not friends with this user" }, { status: 403 });
@@ -46,8 +46,5 @@ export async function GET(request: Request, context: Params) {
     }
 
     return NextResponse.json(result);
-  } catch (error) {
-    console.error("Buddy per-buddy calendar GET error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

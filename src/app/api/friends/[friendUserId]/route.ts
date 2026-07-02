@@ -1,29 +1,29 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { friendships } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
-type Params = { params: Promise<{ friendUserId: string }> };
+type RouteContext = RouteParams<{ friendUserId: string }>;
 
-export async function DELETE(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const DELETE = withApiHandler(
+  "Unfriend",
+  async (_request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { friendUserId } = await context.params;
 
     if (!isUuid(friendUserId)) {
       return NextResponse.json({ error: "friendUserId must be a valid UUID" }, { status: 400 });
     }
-    if (friendUserId === auth.userId) {
+    if (friendUserId === auth.user.userId) {
       return NextResponse.json({ error: "Invalid friend user id" }, { status: 400 });
     }
 
-    const [u1, u2] = orderedUserPair(auth.userId, friendUserId);
+    const [u1, u2] = orderedUserPair(auth.user.userId, friendUserId);
 
     const removed = await db
       .delete(friendships)
@@ -35,8 +35,5 @@ export async function DELETE(_request: Request, context: Params) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Unfriend error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

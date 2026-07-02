@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, SP_TOKEN_COOKIE } from "@/lib/auth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { resolveOAuthUserId, OAuthEmailRequiredError } from "@/lib/oauth-user-resolution";
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
@@ -30,7 +31,7 @@ type RequestBody = {
   serverAuthCode?: string;
 };
 
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler("google-native", async (request: NextRequest) => {
   let body: RequestBody;
   try {
     body = (await request.json()) as RequestBody;
@@ -124,4 +125,4 @@ export async function POST(request: NextRequest) {
     path: "/",
   });
   return res;
-}
+});

@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { loadGoogleCalendarStatus } from "@/lib/googleOAuth";
 
-export async function GET() {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json({ google: await loadGoogleCalendarStatus(auth.userId) });
-  } catch (error) {
-    console.error("Google status error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+export const GET = withApiHandler("Google status", async () => {
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+
+  return NextResponse.json({ google: await loadGoogleCalendarStatus(auth.user.userId) });
+});

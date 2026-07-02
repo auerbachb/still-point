@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessionParticipants } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import {
   buildBuddySnapshot,
   loadBuddySnapshotContext,
@@ -11,14 +12,13 @@ import { BUDDY_POLICY_CODES } from "@/lib/buddyPolicyCodes";
 import { isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+type RouteContext = RouteParams<{ id: string }>;
 
-export async function GET(_request: Request, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withApiHandler(
+  "Buddy session GET",
+  async (_request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
@@ -31,7 +31,7 @@ export async function GET(_request: Request, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -56,10 +56,7 @@ export async function GET(_request: Request, context: Params) {
     }
 
     return NextResponse.json({
-      snapshot: buildBuddySnapshot(ctx.session, ctx.participants, auth.userId),
+      snapshot: buildBuddySnapshot(ctx.session, ctx.participants, auth.user.userId),
     });
-  } catch (error) {
-    console.error("Buddy session GET error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

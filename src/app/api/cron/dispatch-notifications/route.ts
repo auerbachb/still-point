@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { dispatchDueNotifications } from "@/lib/notification-scheduler";
 
 function isAuthorizedCron(request: NextRequest): boolean {
@@ -10,20 +11,20 @@ function isAuthorizedCron(request: NextRequest): boolean {
   return authHeader === `Bearer ${secret}`;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler("dispatch-notifications cron", async (request: NextRequest) => {
   if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const result = await dispatchDueNotifications();
-    return NextResponse.json({ ok: true, ...result });
-  } catch (error) {
-    console.error("dispatch-notifications cron error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  const result = await dispatchDueNotifications();
+  return NextResponse.json({ ok: true, ...result });
+});
 
-export async function POST(request: NextRequest) {
-  return GET(request);
-}
+export const POST = withApiHandler("dispatch-notifications cron", async (request: NextRequest) => {
+  if (!isAuthorizedCron(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const result = await dispatchDueNotifications();
+  return NextResponse.json({ ok: true, ...result });
+});

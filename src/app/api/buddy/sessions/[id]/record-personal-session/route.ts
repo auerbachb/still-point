@@ -8,7 +8,8 @@ import {
   thoughts,
   users,
 } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
 import { reconcileBuddySession } from "@/lib/buddySession";
 import {
@@ -20,7 +21,7 @@ import { isUniqueViolation } from "@/lib/dbErrors";
 import { advanceProgression } from "@/lib/duration";
 import { and, eq, sql } from "drizzle-orm";
 
-type Params = { params: Promise<{ id: string }> };
+type RouteContext = RouteParams<{ id: string }>;
 
 function parseMindStateLog(raw: unknown): Array<{ time: number; state: string }> {
   if (!Array.isArray(raw)) return [];
@@ -40,15 +41,14 @@ function sessionDateOk(s: string): boolean {
 }
 
 /**
- * #119: After the shared sit completes, create this user’s own `sessions` row (idempotent)
+ * #119: After the shared sit completes, create this user's own `sessions` row (idempotent)
  * and optional in-sit `thoughts`. Journal completion notes use POST /api/thoughts/batch.
  */
-export async function POST(request: NextRequest, context: Params) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withApiHandler(
+  "Buddy record-personal-session",
+  async (request: NextRequest, context: RouteContext) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest, context: Params) {
       .where(
         and(
           eq(buddySessionParticipants.buddySessionId, sessionId),
-          eq(buddySessionParticipants.userId, auth.userId),
+          eq(buddySessionParticipants.userId, auth.user.userId),
         ),
       )
       .limit(1);
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest, context: Params) {
       .select()
       .from(sessions)
       .where(
-        and(eq(sessions.userId, auth.userId), eq(sessions.buddySessionId, sessionId)),
+        and(eq(sessions.userId, auth.user.userId), eq(sessions.buddySessionId, sessionId)),
       )
       .limit(1);
 
@@ -120,7 +120,6 @@ export async function POST(request: NextRequest, context: Params) {
     if (body.thoughts != null && !Array.isArray(body.thoughts)) {
       console.warn("Buddy personal session rejected invalid thoughts payload", {
         buddySessionId: sessionId,
-        userId: auth.userId,
         submittedType: typeof body.thoughts,
       });
       return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
@@ -129,7 +128,6 @@ export async function POST(request: NextRequest, context: Params) {
     if (hasRejectedSubmittedThoughts(normalizedThoughts)) {
       console.warn("Buddy personal session rejected invalid thoughts payload", {
         buddySessionId: sessionId,
-        userId: auth.userId,
         submittedCount: normalizedThoughts.submittedCount,
         invalidCount: normalizedThoughts.invalidCount,
       });
@@ -157,7 +155,7 @@ export async function POST(request: NextRequest, context: Params) {
             recoveryTotalSteps: users.recoveryTotalSteps,
           })
           .from(users)
-          .where(eq(users.id, auth.userId))
+          .where(eq(users.id, auth.user.userId))
           .limit(1);
         if (!u) {
           throw new Error("USER_NOT_FOUND");
@@ -171,7 +169,7 @@ export async function POST(request: NextRequest, context: Params) {
         const [created] = await tx
           .insert(sessions)
           .values({
-            userId: auth.userId,
+            userId: auth.user.userId,
             buddySessionId: sessionId,
             dayNumber,
             sessionType: "standard",
@@ -198,7 +196,7 @@ export async function POST(request: NextRequest, context: Params) {
             recoveryTotalSteps: nextProgress.recoveryTotalSteps,
             updatedAt: new Date(),
           })
-          .where(eq(users.id, auth.userId));
+          .where(eq(users.id, auth.user.userId));
 
         await tx
           .update(buddySessionParticipants)
@@ -221,7 +219,7 @@ export async function POST(request: NextRequest, context: Params) {
             .insert(thoughts)
             .values(
               thoughtItems.map((t) => ({
-                userId: auth.userId,
+                userId: auth.user.userId,
                 sessionId: created.id,
                 dayNumber,
                 timeInSession: t.timeInSession,
@@ -247,7 +245,7 @@ export async function POST(request: NextRequest, context: Params) {
           .select()
           .from(sessions)
           .where(
-            and(eq(sessions.userId, auth.userId), eq(sessions.buddySessionId, sessionId)),
+            and(eq(sessions.userId, auth.user.userId), eq(sessions.buddySessionId, sessionId)),
           )
           .limit(1);
         if (again) {
@@ -256,8 +254,5 @@ export async function POST(request: NextRequest, context: Params) {
       }
       throw err;
     }
-  } catch (error) {
-    console.error("Buddy record-personal-session error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);
