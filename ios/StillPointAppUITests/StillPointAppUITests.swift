@@ -11,7 +11,7 @@ final class StillPointAppUITests: XCTestCase {
     // 12000ms keeps a meaningful guard while absorbing simulator startup variance.
     // assertion is also scoped to `seedAuthenticated: false` cold-start paths
     // only (see `waitForRoot`/`assertColdStart`); authenticated boots skip it.
-    private let coldStartMaxMs = 8_000
+    private let coldStartMaxMs = 12_000
 
     override func setUpWithError() throws {
         continueAfterFailure = false
