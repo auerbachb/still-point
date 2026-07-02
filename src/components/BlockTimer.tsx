@@ -93,16 +93,18 @@ export function BlockTimer({
     const remaining = totalSeconds - newElapsed;
     const voiceMode = Boolean(prefs.voiceCountdown);
     const currentSec = Math.floor(newElapsed);
-    const displayRemainingSec = Math.floor(remaining);
 
     if (voiceMode) {
-      if (
-        displayRemainingSec >= 1 &&
-        displayRemainingSec <= 60 &&
-        displayRemainingSec !== lastVoiceSecRef.current
-      ) {
-        lastVoiceSecRef.current = displayRemainingSec;
-        playEnabledSound(() => playVoiceCountdown(displayRemainingSec));
+      if (remaining > 0 && remaining <= 60) {
+        let announceSec = Math.floor(remaining);
+        if (announceSec < 1) announceSec = 1;
+        if (remaining > 59 && lastVoiceSecRef.current > 60) {
+          announceSec = 60;
+        }
+        if (announceSec !== lastVoiceSecRef.current) {
+          lastVoiceSecRef.current = announceSec;
+          playEnabledSound(() => playVoiceCountdown(announceSec));
+        }
       }
     } else if (prefs.tick && currentSec > lastTickSecRef.current) {
       lastTickSecRef.current = currentSec;
@@ -118,7 +120,7 @@ export function BlockTimer({
       if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
         lastCompletedBlockIndexRef.current = completedBlockIndex;
 
-        if (prefs.chime) {
+        if (prefs.chime && !voiceMode) {
           const blockEnd = (completedBlockIndex + 1) * 60;
           const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
           if (chimeCount >= 1) {
@@ -188,7 +190,10 @@ export function BlockTimer({
 
     if (isResume) {
       lastTickSecRef.current = Math.floor(resumeElapsed);
-      lastVoiceSecRef.current = Math.floor(totalSeconds - resumeElapsed);
+      lastVoiceSecRef.current =
+        totalSeconds - resumeElapsed <= 60
+          ? Math.floor(totalSeconds - resumeElapsed)
+          : 61;
       lastCompletedBlockIndexRef.current = useMinuteBlocks
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
@@ -196,7 +201,7 @@ export function BlockTimer({
       // Fresh session — clear all accumulated state
       lastCompletedBlockIndexRef.current = -1;
       lastTickSecRef.current = -1;
-      lastVoiceSecRef.current = -1;
+      lastVoiceSecRef.current = 61;
       pausedElapsedRef.current = 0;
       setElapsed(0);
     }
@@ -237,7 +242,8 @@ export function BlockTimer({
 
     const seed = Math.min(duration, Math.max(0, (Date.now() + skewRef.current - startedMs) / 1000));
     lastTickSecRef.current = Math.floor(seed);
-    lastVoiceSecRef.current = Math.floor(duration - seed);
+    lastVoiceSecRef.current =
+      duration - seed <= 60 ? Math.floor(duration - seed) : 61;
     lastCompletedBlockIndexRef.current =
       useMinuteBlocks && minuteBlockCount > 0
         ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)

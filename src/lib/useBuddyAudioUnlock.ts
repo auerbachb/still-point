@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadSoundPrefs, saveSoundPrefs, preloadVoiceCountdown, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, preloadVoiceCountdown, cancelVoiceCountdownPlayback, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
 
 export function useBuddyAudioUnlock(sessionId: string) {
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
@@ -16,6 +16,8 @@ export function useBuddyAudioUnlock(sessionId: string) {
   useEffect(() => {
     if (soundPrefs.voiceCountdown) {
       void preloadVoiceCountdown();
+    } else {
+      cancelVoiceCountdownPlayback();
     }
   }, [soundPrefs.voiceCountdown]);
 
