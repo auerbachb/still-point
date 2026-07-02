@@ -70,7 +70,10 @@ struct HomeView: View {
                 appGatePill
 
                 // #240: fork choice once past the 10-minute mark (not yet opted in).
-                if appVM.dualTrackEligible && !appVM.dualTrackEnabled && !forkDismissed {
+                // Suppressed during UI tests (would push the Begin button off-screen
+                // for long-running fixture users, producing an invalid hit point).
+                if appVM.dualTrackEligible && !appVM.dualTrackEnabled && !forkDismissed
+                    && ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
                     dualTrackForkCard
                 }
 
