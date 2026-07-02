@@ -32,7 +32,12 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
   const [stepIndex, setStepIndex] = useState(0);
   const [elapsedInStepMs, setElapsedInStepMs] = useState(0);
   const [paused, setPaused] = useState(false);
-  const reduceMotionRef = useRef(false);
+  const [reduceMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
   const stepIndexRef = useRef(stepIndex);
   const elapsedRef = useRef(elapsedInStepMs);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -97,13 +102,6 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
       resetState();
     }
   }, [open, resetState]);
-
-  useEffect(() => {
-    reduceMotionRef.current =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  }, []);
 
   useEffect(() => {
     if (!open || phase !== "running" || paused || !exercise) return;
@@ -197,7 +195,7 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
     alignItems: "center",
     justifyContent: "center",
     padding: "max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom))",
-    animation: reduceMotionRef.current ? undefined : "fadeIn 0.5s ease",
+    animation: reduceMotion ? undefined : "fadeIn 0.5s ease",
     ...mono,
   };
 
@@ -385,7 +383,7 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
                   height: "100%",
                   width: `${progress * 100}%`,
                   background: "var(--accent-green)",
-                  transition: reduceMotionRef.current ? undefined : "width 0.25s linear",
+                  transition: reduceMotion ? undefined : "width 0.25s linear",
                 }}
               />
             </div>

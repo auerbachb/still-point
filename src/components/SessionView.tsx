@@ -178,6 +178,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     endHoldFromKeyboard,
   });
 
+  const openGuidedExercise = useCallback(() => {
+    finalizeActiveHold(elapsedRef.current);
+    resetHoldTracking();
+    setShowGuidedExercise(true);
+  }, [finalizeActiveHold, resetHoldTracking]);
+
   const calcClearPercent = useCallback(() => {
     const endTime = elapsedRef.current || totalSeconds;
     return computeClearPercentFromLog(mindStateLog, endTime);
@@ -592,7 +598,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
               {isActive && (
                 <button
                   type="button"
-                  onClick={() => setShowGuidedExercise(true)}
+                  onClick={openGuidedExercise}
                   aria-label="Open guided exercise"
                   data-testid="guided-exercise-open"
                   style={{
