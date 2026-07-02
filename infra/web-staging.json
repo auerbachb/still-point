@@ -1,0 +1,30 @@
+{
+  "description": "Persistent web staging environment (issue #332). Vercel custom environment backed by a dedicated Neon branch — isolated from the production Neon project.",
+  "gitBranch": "staging",
+  "vercel": {
+    "customEnvironmentSlug": "staging",
+    "branchMatcher": {
+      "type": "equals",
+      "pattern": "staging"
+    },
+    "suggestedDomain": "staging.still-point.me",
+    "setup": [
+      "Vercel → Project → Settings → Environments → Create Environment → slug staging",
+      "Assign git branch matcher: equals staging",
+      "Copy Preview-scoped env vars into staging; replace POSTGRES_URL with the Neon staging branch connection string",
+      "Set NEXT_PUBLIC_APP_URL to the stable staging domain (or the Vercel-generated staging URL)",
+      "Optional: attach staging.still-point.me (or staging.stillpoint.app) to the staging custom environment"
+    ]
+  },
+  "neon": {
+    "branchName": "staging",
+    "parentBranch": "main",
+    "nonprodProjectIdSecret": "NEON_NONPROD_PROJECT_ID",
+    "forbiddenProdProjectId": "noisy-cell-87641627",
+    "setup": [
+      "Create branch `staging` in the still-point-nonprod Neon project (parent: main)",
+      "Never point staging POSTGRES_URL at the production project (noisy-cell-87641627)",
+      "Run: NEON_API_KEY=… NEON_NONPROD_PROJECT_ID=… node scripts/infra/ensure-neon-staging-branch.mjs"
+    ]
+  }
+}
