@@ -94,6 +94,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
   const [showGuidedExercise, setShowGuidedExercise] = useState(false);
+  const guidedExerciseTriggerRef = useRef<HTMLButtonElement>(null);
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   const trackingControlsUnlocked = useTrackingControlsUnlocked();
@@ -177,6 +178,11 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     beginHyperfocus,
     endHoldFromKeyboard,
   });
+
+  const closeGuidedExercise = useCallback(() => {
+    setShowGuidedExercise(false);
+    requestAnimationFrame(() => guidedExerciseTriggerRef.current?.focus());
+  }, []);
 
   const openGuidedExercise = useCallback(() => {
     finalizeActiveHold(elapsedRef.current);
@@ -381,7 +387,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <GuidedExerciseOverlay open={showGuidedExercise} onClose={() => setShowGuidedExercise(false)} />
+      <GuidedExerciseOverlay open={showGuidedExercise} onClose={closeGuidedExercise} />
       <BlockTimer
         totalSeconds={totalSeconds}
         isActive={isActive}
@@ -597,6 +603,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
             >
               {isActive && (
                 <button
+                  ref={guidedExerciseTriggerRef}
                   type="button"
                   onClick={openGuidedExercise}
                   aria-label="Open guided exercise"
