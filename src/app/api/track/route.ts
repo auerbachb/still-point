@@ -57,6 +57,10 @@ export async function POST() {
       .where(eq(users.id, auth.userId))
       .returning(RETURN_FIELDS);
 
+    if (!updated) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     return NextResponse.json({ user: updated });
   } catch (error) {
     console.error("Enable dual track error:", error);

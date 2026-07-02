@@ -306,6 +306,10 @@ export default function StillPoint() {
     const sessionParam = new URLSearchParams(window.location.search).get("session");
     if (sessionParam !== "quick" && sessionParam !== "standard") return;
     setActiveSessionType(sessionParam);
+    // #240: this deep-link path bypasses handleBegin, which normally sets the
+    // track explicitly — without this, a stale `second` track from an earlier
+    // interaction would incorrectly attribute this auto-started sit.
+    setActiveTrack("primary");
     setOverlay("session");
     router.replace(rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB));
   }, [user, authChecked, rawTab, router]);
@@ -410,6 +414,12 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setOverlay(null);
     setUser(null);
+    // #240: per-track completion badges and the fork-dismissal flag are
+    // account-scoped local state, not tied to the user object itself — clear
+    // them on logout so the next account's Home screen doesn't briefly show
+    // this account's "done today" badges or suppressed fork prompt.
+    setTracksDoneToday({ primary: false, second: false });
+    setForkDismissed(false);
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
