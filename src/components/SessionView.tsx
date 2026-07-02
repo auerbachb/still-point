@@ -17,6 +17,7 @@ import {
   useTrackingControlsUnlocked,
 } from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
+import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -92,6 +93,8 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
+  const [showGuidedExercise, setShowGuidedExercise] = useState(false);
+  const guidedExerciseTriggerRef = useRef<HTMLButtonElement>(null);
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   const trackingControlsUnlocked = useTrackingControlsUnlocked();
@@ -103,6 +106,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   // a sit is in progress when the opt-in pref is on (#431). Treat a paused sit
   // as still "in session" so reminders stay suppressed until it truly ends.
   useSessionSuppressionRelay(!sessionFinished);
+
+  useEffect(() => {
+    if (sessionFinished) {
+      setShowGuidedExercise(false);
+    }
+  }, [sessionFinished]);
 
   useEffect(() => {
     const resetTimer = () => {
@@ -164,11 +173,22 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   }, [finalizeActiveHold]);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
-    enabled: isActive && showDistractionHyperfocusCluster,
+    enabled: isActive && showDistractionHyperfocusCluster && !showGuidedExercise,
     beginDistraction,
     beginHyperfocus,
     endHoldFromKeyboard,
   });
+
+  const closeGuidedExercise = useCallback(() => {
+    setShowGuidedExercise(false);
+    requestAnimationFrame(() => guidedExerciseTriggerRef.current?.focus());
+  }, []);
+
+  const openGuidedExercise = useCallback(() => {
+    finalizeActiveHold(elapsedRef.current);
+    resetHoldTracking();
+    setShowGuidedExercise(true);
+  }, [finalizeActiveHold, resetHoldTracking]);
 
   const calcClearPercent = useCallback(() => {
     const endTime = elapsedRef.current || totalSeconds;
@@ -367,6 +387,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <GuidedExerciseOverlay open={showGuidedExercise} onClose={closeGuidedExercise} />
       <BlockTimer
         totalSeconds={totalSeconds}
         isActive={isActive}
@@ -570,7 +591,33 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           </div>
 
           {!showPostDistractionCapture && (
-            <div style={{ marginTop: isMobile ? "12px" : "18px", display: "flex", justifyContent: "center", width: "100%" }}>
+            <div
+              style={{
+                marginTop: isMobile ? "12px" : "18px",
+                display: "flex",
+                justifyContent: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                width: "100%",
+              }}
+            >
+              {isActive && (
+                <button
+                  ref={guidedExerciseTriggerRef}
+                  type="button"
+                  onClick={openGuidedExercise}
+                  aria-label="Open guided exercise"
+                  data-testid="guided-exercise-open"
+                  style={{
+                    ...captureNoteButtonStyle,
+                    borderColor: "var(--accent-green-border-subtle)",
+                    color: "var(--accent-green-dim)",
+                    opacity: sessionChromeDimmed ? 0.48 : 0.88,
+                  }}
+                >
+                  guided exercise
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleOpenThoughtCapture}
