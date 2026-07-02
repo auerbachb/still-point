@@ -207,6 +207,10 @@ is_retriable_failure() {
   if grep -qE 'Asynchronous wait failed: Exceeded timeout' "$log"; then
     return 0
   fi
+  # Keyboard focus handoff flake on macos-26 simulators (tapAndType helper).
+  if grep -q 'Field did not become keyboard first responder' "$log"; then
+    return 0
+  fi
   # Simulator orientation confirmation timeouts in setUp/tearDown (macos-26
   # runners can stall on XCUIDevice.shared.orientation even before app launch).
   if grep -qE 'Failed to set device orientation:' "$log"; then
