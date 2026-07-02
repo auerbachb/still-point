@@ -207,6 +207,15 @@ public actor APIClient {
         return (response.sessions, response.stats)
     }
 
+    public func getTracksDoneToday(date: String) async throws -> TracksDoneTodayDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.getTracksDoneToday(date: date)
+        }
+        let encodedDate = date.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? date
+        let response: TracksDoneTodayResponse = try await get("/api/track/done-today?date=\(encodedDate)")
+        return response.tracksDoneToday
+    }
+
     public func createSession(_ data: CreateSessionRequest) async throws -> SessionDTO {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.createSession(data)

@@ -402,6 +402,20 @@ public struct SessionsResponse: Codable, Sendable {
     public let stats: StatsDTO
 }
 
+public struct TracksDoneTodayDTO: Codable, Sendable {
+    public let primary: Bool
+    public let second: Bool
+
+    public init(primary: Bool, second: Bool) {
+        self.primary = primary
+        self.second = second
+    }
+}
+
+public struct TracksDoneTodayResponse: Codable, Sendable {
+    public let tracksDoneToday: TracksDoneTodayDTO
+}
+
 public struct SessionDetailResponse: Codable, Sendable {
     public let session: SessionDTO
     public let thoughts: [ThoughtDTO]

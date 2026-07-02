@@ -285,8 +285,8 @@ final class AppViewModel {
         }
     }
 
-    /// #240: derive per-track "completed a standard sit today" from the session
-    /// list (a missing `track` on a legacy row counts as the primary track).
+    /// #240: derive per-track "completed a standard sit today" from a lightweight
+    /// server-side filtered query.
     func refreshTracksDoneToday() async {
         guard currentUser != nil else { return }
         let dateFormatter = DateFormatter()
@@ -295,20 +295,9 @@ final class AppViewModel {
         dateFormatter.calendar = Calendar(identifier: .gregorian)
         let today = dateFormatter.string(from: Date())
         do {
-            let (sessions, _) = try await APIClient.shared.getSessions()
-            var primary = false
-            var second = false
-            for session in sessions where session.completed
-                && session.sessionType == .standard
-                && session.sessionDate == today {
-                if session.track == Track.second {
-                    second = true
-                } else {
-                    primary = true
-                }
-            }
-            primaryDoneToday = primary
-            secondDoneToday = second
+            let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
+            primaryDoneToday = tracksDoneToday.primary
+            secondDoneToday = tracksDoneToday.second
         } catch {
             // Non-fatal: fail closed so stale "done today" badges do not leak.
             primaryDoneToday = false

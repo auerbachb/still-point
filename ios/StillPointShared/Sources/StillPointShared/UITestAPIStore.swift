@@ -193,6 +193,27 @@ actor UITestAPIStore {
         return (sortedSessions, SessionStatistics.calculateStats(for: sortedSessions))
     }
 
+    func getTracksDoneToday(date: String) throws -> TracksDoneTodayDTO {
+        try ensureAuthenticated()
+
+        if config.forceSessionsFailure {
+            throw APIError(status: 503, message: "Failed to load sessions. Check your connection.")
+        }
+
+        var primary = false
+        var second = false
+        for session in store.sessions where session.completed
+            && session.sessionType == .standard
+            && session.sessionDate == date {
+            if session.track == .second {
+                second = true
+            } else {
+                primary = true
+            }
+        }
+        return TracksDoneTodayDTO(primary: primary, second: second)
+    }
+
     func createSession(_ data: CreateSessionRequest) throws -> SessionDTO {
         try ensureAuthenticated()
 
