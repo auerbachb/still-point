@@ -1,0 +1,14 @@
+{
+  "algorithm": "aphorisms",
+  "description": "Deterministic day-driven aphorism rotation. Web aphorismForDay(day) and iOS Aphorisms.forDay(day) both clamp day to >= 1 and return item (safeDay - 1) % count. Golden cases pin the resolved index for a given day so drift in the clamp/rotation math breaks CI. `expectedCount` locks the shared list length.",
+  "expectedCount": 11,
+  "cases": [
+    { "day": 1, "expectedIndex": 0 },
+    { "day": 2, "expectedIndex": 1 },
+    { "day": 11, "expectedIndex": 10 },
+    { "day": 12, "expectedIndex": 0 },
+    { "day": 23, "expectedIndex": 0 },
+    { "day": 0, "expectedIndex": 0 },
+    { "day": -5, "expectedIndex": 0 }
+  ]
+}

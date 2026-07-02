@@ -5,6 +5,7 @@ import {
   shouldAdvanceDay,
   type SessionStatsInput,
 } from "./constants";
+import { loadSharedFixture, type SessionStatsFixture } from "./testing/sharedFixtures";
 
 describe("session progression rules", () => {
   test("only advances the day counter for completed standard sessions", () => {
@@ -208,5 +209,33 @@ describe("session progression rules", () => {
     expect(stats.streak).toBe(1);
     expect(stats.bonusSecondsTotal).toBe(120);
     expect(stats.avgThoughtsPerMinute).toBe(0.9);
+  });
+});
+
+// Cross-platform parity: the same stats golden set is asserted by iOS
+// SessionStatistics.calculateStats (#421). Web exposes bonusSecondsTotal; the
+// fixture also carries bonusMinutesTotal for the iOS side.
+describe("calculateSessionStats — shared fixtures", () => {
+  const fixture = loadSharedFixture<SessionStatsFixture>("sessionStats.json");
+
+  test.each(fixture.cases)("$name", ({ sessions, expected }) => {
+    const input: SessionStatsInput[] = sessions.map(s => ({
+      sessionType: s.sessionType,
+      dayNumber: s.dayNumber,
+      duration: s.duration,
+      bonusSeconds: s.bonusSeconds,
+      completed: s.completed,
+      clearPercent: s.clearPercent,
+      thoughtCount: s.thoughtCount,
+      sessionDate: s.sessionDate,
+    }));
+
+    expect(calculateSessionStats(input)).toEqual({
+      streak: expected.streak,
+      avgClearPercent: expected.avgClearPercent,
+      avgThoughtsPerSession: expected.avgThoughtsPerSession,
+      avgThoughtsPerMinute: expected.avgThoughtsPerMinute,
+      bonusSecondsTotal: expected.bonusSecondsTotal,
+    });
   });
 });

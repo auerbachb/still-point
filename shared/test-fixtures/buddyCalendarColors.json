@@ -1,0 +1,23 @@
+{
+  "algorithm": "buddyCalendarColors",
+  "description": "Deterministic buddy accent color from a user id. Web buddyColorFromUserId(userId) returns the hex string; iOS buddyColorIndexFromUserId(userId) returns the palette index. Both hash with `h = h * 31 + codeUnit` over the id and mod the 8-color palette. Golden indices are pinned so any hash/palette drift breaks CI on either platform.",
+  "paletteLength": 8,
+  "palette": [
+    "#5B8C7A",
+    "#7A6B8C",
+    "#8C7A5B",
+    "#5B6F8C",
+    "#8C5B6B",
+    "#6B8C5B",
+    "#8C6B5B",
+    "#5B8C8C"
+  ],
+  "cases": [
+    { "userId": "00000000-0000-4000-8000-000000000001", "expectedIndex": 5, "expectedHex": "#6B8C5B" },
+    { "userId": "00000000-0000-4000-8000-000000000002", "expectedIndex": 6, "expectedHex": "#8C6B5B" },
+    { "userId": "00000000-0000-4000-8000-000000000003", "expectedIndex": 7, "expectedHex": "#5B8C8C" },
+    { "userId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "expectedIndex": 4, "expectedHex": "#8C5B6B" },
+    { "userId": "11111111-2222-4333-8444-555555555555", "expectedIndex": 3, "expectedHex": "#5B6F8C" },
+    { "userId": "stillpoint", "expectedIndex": 0, "expectedHex": "#5B8C7A" }
+  ]
+}

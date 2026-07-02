@@ -1,0 +1,26 @@
+{
+  "algorithm": "breathCounting",
+  "description": "Pure breath-counting helpers shared by web (breathCountForTaps/phaseForTaps/elapsedDisplay) and iOS (BreathCounting.breathCount/phase/elapsedDisplay). taps clamp negatives to 0; phase is the next expected action (even taps => inhale, odd => exhale); elapsedDisplay formats whole seconds as M:SS. Wall-clock elapsedSeconds is intentionally omitted — its input is a platform-specific timestamp/Date, not a portable scalar.",
+  "breathCount": [
+    { "taps": 0, "expected": 0 },
+    { "taps": 1, "expected": 0 },
+    { "taps": 2, "expected": 1 },
+    { "taps": 5, "expected": 2 },
+    { "taps": 10, "expected": 5 }
+  ],
+  "phase": [
+    { "taps": 0, "expected": "inhale" },
+    { "taps": 1, "expected": "exhale" },
+    { "taps": 2, "expected": "inhale" },
+    { "taps": 3, "expected": "exhale" },
+    { "taps": 8, "expected": "inhale" },
+    { "taps": 9, "expected": "exhale" }
+  ],
+  "elapsedDisplay": [
+    { "seconds": 0, "expected": "0:00" },
+    { "seconds": 9, "expected": "0:09" },
+    { "seconds": 65, "expected": "1:05" },
+    { "seconds": 600, "expected": "10:00" },
+    { "seconds": 3600, "expected": "60:00" }
+  ]
+}

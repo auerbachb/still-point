@@ -5,6 +5,7 @@ import {
   elapsedSeconds,
   phaseForTaps,
 } from "./breathCounting";
+import { loadSharedFixture, type BreathCountingFixture } from "./testing/sharedFixtures";
 
 // Ports ios/StillPointShared/Tests/StillPointSharedTests/BreathCountingLogicTests.swift
 // so the web breath-counting semantics stay locked to iOS (#374 → #376).
@@ -106,5 +107,24 @@ describe("elapsedDisplay", () => {
 
   it("treats negative input as 0", () => {
     expect(elapsedDisplay(-5)).toBe("0:00");
+  });
+});
+
+// Cross-platform parity: the same breath-counting golden set is asserted by iOS
+// BreathCounting (#421). Only non-negative taps are shared (web clamps negatives,
+// iOS does not).
+describe("breath counting — shared fixtures", () => {
+  const fixture = loadSharedFixture<BreathCountingFixture>("breathCounting.json");
+
+  it.each(fixture.breathCount)("breathCountForTaps($taps) === $expected", ({ taps, expected }) => {
+    expect(breathCountForTaps(taps)).toBe(expected);
+  });
+
+  it.each(fixture.phase)("phaseForTaps($taps) === $expected", ({ taps, expected }) => {
+    expect(phaseForTaps(taps)).toBe(expected);
+  });
+
+  it.each(fixture.elapsedDisplay)("elapsedDisplay($seconds) === $expected", ({ seconds, expected }) => {
+    expect(elapsedDisplay(seconds)).toBe(expected);
   });
 });

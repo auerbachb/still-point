@@ -30,4 +30,16 @@ final class AphorismsTests: XCTestCase {
             XCTAssertTrue(Aphorisms.all.contains(Aphorisms.forDay(day)))
         }
     }
+
+    // MARK: - Shared cross-platform fixtures (#421)
+
+    // The same day->index golden set is asserted by web aphorismForDay.
+    func testSharedAphorismsFixtures() throws {
+        let fixture = try SharedFixtures.load("aphorisms.json", as: AphorismsFixture.self)
+        XCTAssertEqual(Aphorisms.all.count, fixture.expectedCount)
+
+        for testCase in fixture.cases {
+            XCTAssertEqual(Aphorisms.forDay(testCase.day), Aphorisms.all[testCase.expectedIndex], "day \(testCase.day)")
+        }
+    }
 }

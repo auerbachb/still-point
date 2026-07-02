@@ -115,4 +115,24 @@ final class BreathCountingLogicTests: XCTestCase {
         // Negative input is treated as 0
         XCTAssertEqual(BreathCounting.elapsedDisplay(-5), "0:00")
     }
+
+    // MARK: - Shared cross-platform fixtures (#421)
+
+    // The same golden set is asserted by web breathCountForTaps / phaseForTaps /
+    // elapsedDisplay. Only non-negative taps are shared (web clamps negatives, iOS
+    // does not), so those stay in the per-suite tests above.
+    func testSharedBreathCountingFixtures() throws {
+        let fixture = try SharedFixtures.load("breathCounting.json", as: BreathCountingFixture.self)
+
+        for testCase in fixture.breathCount {
+            XCTAssertEqual(BreathCounting.breathCount(forTaps: testCase.taps), testCase.expected, "breathCount(\(testCase.taps))")
+        }
+        for testCase in fixture.phase {
+            let expected: BreathPhase = testCase.expected == "inhale" ? .inhale : .exhale
+            XCTAssertEqual(BreathCounting.phase(forTaps: testCase.taps), expected, "phase(\(testCase.taps))")
+        }
+        for testCase in fixture.elapsedDisplay {
+            XCTAssertEqual(BreathCounting.elapsedDisplay(testCase.seconds), testCase.expected, "elapsedDisplay(\(testCase.seconds))")
+        }
+    }
 }
