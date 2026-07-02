@@ -10,9 +10,11 @@ struct SessionView: View {
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
 
-    init(appVM: AppViewModel, sessionType: SessionType = .standard) {
+    init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
-        self._vm = State(initialValue: SessionViewModel(dayNumber: appVM.currentDay, sessionType: sessionType))
+        // #240: the second track uses its own day counter; the primary track uses currentDay.
+        let day = track == .second ? appVM.secondTrackDay : appVM.currentDay
+        self._vm = State(initialValue: SessionViewModel(dayNumber: day, sessionType: sessionType, track: track))
     }
 
     var body: some View {

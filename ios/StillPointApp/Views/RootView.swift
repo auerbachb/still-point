@@ -20,8 +20,8 @@ struct RootView: View {
                 AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
                     .transition(.opacity)
 
-            case .session(let sessionType):
-                SessionView(appVM: appVM, sessionType: sessionType)
+            case .session(let sessionType, let track):
+                SessionView(appVM: appVM, sessionType: sessionType, track: track)
                     .transition(.opacity)
 
             case .buddyHub:

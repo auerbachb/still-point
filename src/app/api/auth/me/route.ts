@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
       recoveryTargetDay: users.recoveryTargetDay,
       recoveryCurrentStep: users.recoveryCurrentStep,
       recoveryTotalSteps: users.recoveryTotalSteps,
+      dualTrackEnabled: users.dualTrackEnabled,
+      secondTrackDay: users.secondTrackDay,
     }).from(users).where(eq(users.id, auth.userId)).limit(1);
 
     if (!user) {
@@ -45,6 +47,9 @@ export async function GET(request: NextRequest) {
           eq(sessions.userId, auth.userId),
           eq(sessions.completed, true),
           eq(sessions.sessionType, "standard"),
+          // #240: recovery tracks the primary track's currentDay, so a recent
+          // second-track sit must not mask a gap since the last primary sit.
+          eq(sessions.track, "primary"),
         ))
         .orderBy(desc(sessions.sessionDate))
         .limit(1);

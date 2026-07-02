@@ -4,8 +4,33 @@ export const BASE_DURATION = 60;
 export const QUICK_DURATION = 60;
 export const INCREMENT = 10;
 export const BLOCK_DURATION = 10;
+/** #240: a standard sit tops out at ten minutes. The primary track reaches this
+ *  cap on `FORK_DAY` and then holds steady — the "10-minute track" the dual-track
+ *  fork keeps while a second track ramps up alongside it. */
+export const MAX_DURATION = 600;
+/** #240: the day a standard sit first reaches the 10-minute cap (60 + 54·10 = 600).
+ *  Derived so it stays correct if the base/increment/cap ever change. */
+export const FORK_DAY = (MAX_DURATION - BASE_DURATION) / INCREMENT + 1;
 const SESSION_TYPES = ["standard", "quick", "breath"] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
+
+/** #240: which daily progression a standard sit belongs to. `primary` is the
+ *  original (now 10-minute-capped) track; `second` is the opt-in track that
+ *  restarts at one minute and ramps +10s/day alongside it. */
+const TRACKS = ["primary", "second"] as const;
+export type Track = (typeof TRACKS)[number];
+
+export function isTrack(value: unknown): value is Track {
+  return typeof value === "string" && TRACKS.includes(value as Track);
+}
+
+/** Missing/absent track defaults to `primary` so pre-#240 clients (and rows) keep working. */
+export function parseOptionalTrack(value: unknown): Track | null {
+  if (value === undefined || value === null) {
+    return "primary";
+  }
+  return isTrack(value) ? value : null;
+}
 
 export type SessionStatsInput = {
   sessionType?: string;
@@ -40,7 +65,9 @@ export function parseCompleted(value: unknown): boolean | null {
 }
 
 export function durationForDay(dayNumber: number): number {
-  return BASE_DURATION + (Math.max(dayNumber, 1) - 1) * INCREMENT;
+  // #240: cap at ten minutes. Both tracks share this function, so each one holds
+  // at 10 minutes once it reaches FORK_DAY instead of growing without bound.
+  return Math.min(MAX_DURATION, BASE_DURATION + (Math.max(dayNumber, 1) - 1) * INCREMENT);
 }
 
 export function durationForSession(sessionType: SessionType, dayNumber: number): number {

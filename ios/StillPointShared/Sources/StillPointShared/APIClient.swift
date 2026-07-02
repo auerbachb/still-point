@@ -207,6 +207,15 @@ public actor APIClient {
         return (response.sessions, response.stats)
     }
 
+    public func getTracksDoneToday(date: String) async throws -> TracksDoneTodayDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.getTracksDoneToday(date: date)
+        }
+        let encodedDate = date.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? date
+        let response: TracksDoneTodayResponse = try await get("/api/track/done-today?date=\(encodedDate)")
+        return response.tracksDoneToday
+    }
+
     public func createSession(_ data: CreateSessionRequest) async throws -> SessionDTO {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.createSession(data)
@@ -275,6 +284,15 @@ public actor APIClient {
             )
         }
         let response: UserResponse = try await patch("/api/settings", body: body)
+        return response.user
+    }
+
+    /// #240: opt into the dual-track fork (enable a second daily track).
+    public func enableDualTrack() async throws -> UserDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.enableDualTrack()
+        }
+        let response: UserResponse = try await post("/api/track", body: Optional<String>.none)
         return response.user
     }
 

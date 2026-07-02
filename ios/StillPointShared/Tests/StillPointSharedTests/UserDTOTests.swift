@@ -36,4 +36,28 @@ final class UserDTOTests: XCTestCase {
         XCTAssertEqual(decoded.aphorismsEnabled, true)
         XCTAssertEqual(decoded.id, user.id)
     }
+
+    // MARK: - #240 dual-track fields
+
+    func testDecodesDualTrackFieldsWhenPresent() throws {
+        let json = """
+        {"id":"u1","email":"a@b.com","username":"alice","isPublic":false,"currentDay":56,"dualTrackEnabled":true,"secondTrackDay":4}
+        """.data(using: .utf8)!
+
+        let user = try JSONDecoder().decode(UserDTO.self, from: json)
+        XCTAssertTrue(user.dualTrackEnabled)
+        XCTAssertEqual(user.secondTrackDay, 4)
+    }
+
+    /// #240 shipped as additive fields; a server/fixture that predates them must
+    /// still decode, defaulting to single-track (disabled, day 1).
+    func testDefaultsDualTrackFieldsWhenMissing() throws {
+        let json = """
+        {"id":"u1","email":"a@b.com","username":"alice","isPublic":false,"currentDay":3}
+        """.data(using: .utf8)!
+
+        let user = try JSONDecoder().decode(UserDTO.self, from: json)
+        XCTAssertFalse(user.dualTrackEnabled)
+        XCTAssertEqual(user.secondTrackDay, 1)
+    }
 }

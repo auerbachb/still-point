@@ -12,6 +12,11 @@ public struct UserDTO: Codable, Sendable {
     /// responses from a server that predates this field (or cached fixtures)
     /// still decode, defaulting to off.
     public let aphorismsEnabled: Bool
+    /// #240: dual-track fork. `dualTrackEnabled` gates the opt-in second daily
+    /// track; `secondTrackDay` is its independent day counter. Both decoded
+    /// permissively so a server that predates #240 defaults to single-track.
+    public let dualTrackEnabled: Bool
+    public let secondTrackDay: Int
 
     public init(
         id: String,
@@ -19,7 +24,9 @@ public struct UserDTO: Codable, Sendable {
         username: String,
         isPublic: Bool,
         currentDay: Int,
-        aphorismsEnabled: Bool = false
+        aphorismsEnabled: Bool = false,
+        dualTrackEnabled: Bool = false,
+        secondTrackDay: Int = 1
     ) {
         self.id = id
         self.email = email
@@ -27,6 +34,8 @@ public struct UserDTO: Codable, Sendable {
         self.isPublic = isPublic
         self.currentDay = currentDay
         self.aphorismsEnabled = aphorismsEnabled
+        self.dualTrackEnabled = dualTrackEnabled
+        self.secondTrackDay = secondTrackDay
     }
 
     public init(from decoder: Decoder) throws {
@@ -37,10 +46,12 @@ public struct UserDTO: Codable, Sendable {
         isPublic = try c.decode(Bool.self, forKey: .isPublic)
         currentDay = try c.decode(Int.self, forKey: .currentDay)
         aphorismsEnabled = try c.decodeIfPresent(Bool.self, forKey: .aphorismsEnabled) ?? false
+        dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled) ?? false
+        secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay) ?? 1
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, username, isPublic, currentDay, aphorismsEnabled
+        case id, email, username, isPublic, currentDay, aphorismsEnabled, dualTrackEnabled, secondTrackDay
     }
 }
 
@@ -62,6 +73,9 @@ public struct SessionDTO: Codable, Sendable {
     public let buddySessionId: String?
     /// Number of full breaths counted during a breath session (nil for non-breath sessions).
     public let breathCount: Int?
+    /// #240: which daily track this sit advanced. Decoded permissively (nil from a
+    /// server that predates #240); nil is treated as `.primary` by callers.
+    public let track: Track?
 
     public init(
         id: String,
@@ -77,7 +91,8 @@ public struct SessionDTO: Codable, Sendable {
         sessionDate: String,
         createdAt: String? = nil,
         buddySessionId: String?,
-        breathCount: Int? = nil
+        breathCount: Int? = nil,
+        track: Track? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -93,6 +108,7 @@ public struct SessionDTO: Codable, Sendable {
         self.createdAt = createdAt
         self.buddySessionId = buddySessionId
         self.breathCount = breathCount
+        self.track = track
     }
 }
 
@@ -157,6 +173,8 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let sessionDate: String
     /// Number of full breaths counted. Only sent for `.breath` sessions; nil otherwise.
     public let breathCount: Int?
+    /// #240: which daily track this sit advances. Defaults to `.primary`.
+    public let track: Track
 
     public init(
         dayNumber: Int,
@@ -169,7 +187,8 @@ public struct CreateSessionRequest: Codable, Sendable {
         thoughtCount: Int,
         mindStateLog: [MindStateEntry],
         sessionDate: String,
-        breathCount: Int? = nil
+        breathCount: Int? = nil,
+        track: Track = .primary
     ) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
@@ -182,6 +201,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.mindStateLog = mindStateLog
         self.sessionDate = sessionDate
         self.breathCount = breathCount
+        self.track = track
     }
 }
 
@@ -380,6 +400,20 @@ public struct SessionResponse: Codable, Sendable {
 public struct SessionsResponse: Codable, Sendable {
     public let sessions: [SessionDTO]
     public let stats: StatsDTO
+}
+
+public struct TracksDoneTodayDTO: Codable, Sendable {
+    public let primary: Bool
+    public let second: Bool
+
+    public init(primary: Bool, second: Bool) {
+        self.primary = primary
+        self.second = second
+    }
+}
+
+public struct TracksDoneTodayResponse: Codable, Sendable {
+    public let tracksDoneToday: TracksDoneTodayDTO
 }
 
 public struct SessionDetailResponse: Codable, Sendable {

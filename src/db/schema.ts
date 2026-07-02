@@ -40,6 +40,13 @@ export const users = pgTable("users", {
   recoveryTargetDay: integer("recovery_target_day"),
   recoveryCurrentStep: integer("recovery_current_step"),
   recoveryTotalSteps: integer("recovery_total_steps"),
+  /** #240: dual-track fork. Once the primary track passes the 10-minute mark the
+   *  user can opt into a second daily track that restarts at 1 minute and ramps
+   *  +10s/day. `dualTrackEnabled` gates the second track; `secondTrackDay` is its
+   *  independent day counter (starts at 1, capped at 10 min via `durationForDay`).
+   *  Both are backward-compatible defaults so existing rows stay single-track. */
+  dualTrackEnabled: boolean("dual_track_enabled").default(false).notNull(),
+  secondTrackDay: integer("second_track_day").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -345,6 +352,10 @@ export const sessions = pgTable("sessions", {
   buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "set null" }),
   dayNumber: integer("day_number").notNull(),
   sessionType: varchar("session_type", { length: 20 }).notNull().default("standard"),
+  /** #240: which daily progression this sit advanced — `primary` (original,
+   *  10-minute-capped) or `second` (opt-in dual track). Defaults to `primary` so
+   *  every pre-#240 row is attributed to the original track. */
+  track: varchar("track", { length: 16 }).notNull().default("primary"),
   duration: integer("duration").notNull(),
   /** Seconds added via in-session +1/+5 extensions beyond `duration` (#90). */
   bonusSeconds: integer("bonus_seconds").notNull().default(0),
@@ -367,6 +378,17 @@ export const sessions = pgTable("sessions", {
   sessionTypeCheck: check(
     "sessions_session_type_allowed",
     sql`${table.sessionType} in ('standard', 'quick', 'breath')`,
+  ),
+  trackCheck: check(
+    "sessions_track_allowed",
+    sql`${table.track} in ('primary', 'second')`,
+  ),
+  /** #240: backs "did this user complete each track's standard sit today?" —
+   *  the per-track completion badges HomeView shows for the dual-track view. */
+  userTrackDateIdx: index("idx_sessions_user_track_date").on(
+    table.userId,
+    table.track,
+    table.sessionDate,
   ),
   /** At most one personal session row per user per shared buddy sit. */
   userBuddyUnique: uniqueIndex("sessions_user_buddy_session_unique").on(

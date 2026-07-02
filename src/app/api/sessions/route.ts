@@ -3,8 +3,8 @@ import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { sessions, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { calculateSessionStats, parseCompleted, parseOptionalSessionType, shouldAdvanceDay } from "@/lib/constants";
-import { advanceProgression } from "@/lib/duration";
+import { calculateSessionStats, parseCompleted, parseOptionalSessionType, parseOptionalTrack, shouldAdvanceDay } from "@/lib/constants";
+import { advanceProgression, advanceSecondTrackDay } from "@/lib/duration";
 import { eq, desc } from "drizzle-orm";
 
 export async function GET() {
@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
     const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
     const completed = parseCompleted(body.completed);
     const sessionType = parseOptionalSessionType(body.sessionType);
+    // #240: which daily track this sit belongs to. Absent/legacy payloads → primary.
+    const track = parseOptionalTrack(body.track);
     // #374: taps-per-breath count. Only persisted for breath sessions (so a stray
     // breathCount on a standard/quick payload can't violate the data contract), and
     // clamped to the Postgres integer range so an out-of-range value can't turn into
@@ -68,6 +70,9 @@ export async function POST(request: NextRequest) {
     if (!sessionType) {
       return NextResponse.json({ error: "Invalid session type" }, { status: 400 });
     }
+    if (!track) {
+      return NextResponse.json({ error: "Invalid track" }, { status: 400 });
+    }
 
     // Quick sessions are extra practice and do not advance the daily progression.
     // Wrap the insert + any progression update in a single transaction and lock the
@@ -78,6 +83,7 @@ export async function POST(request: NextRequest) {
         userId: auth.userId,
         dayNumber,
         sessionType,
+        track,
         duration,
         bonusSeconds,
         completed,
@@ -99,24 +105,42 @@ export async function POST(request: NextRequest) {
             recoveryTargetDay: users.recoveryTargetDay,
             recoveryCurrentStep: users.recoveryCurrentStep,
             recoveryTotalSteps: users.recoveryTotalSteps,
+            dualTrackEnabled: users.dualTrackEnabled,
+            secondTrackDay: users.secondTrackDay,
           })
           .from(users)
           .where(eq(users.id, auth.userId))
           .limit(1);
 
         if (current) {
-          // #238: while recovering, a completed sit steps the ramp forward instead of
-          // bumping `currentDay` — see advanceProgression for the full rule.
-          const next = advanceProgression(sessionType, completed, current);
-          await tx.update(users)
-            .set({
-              currentDay: next.currentDay,
-              recoveryTargetDay: next.recoveryTargetDay,
-              recoveryCurrentStep: next.recoveryCurrentStep,
-              recoveryTotalSteps: next.recoveryTotalSteps,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, auth.userId));
+          if (track === "second") {
+            // #240: the second track advances its own counter, and only when the
+            // user has actually opted into dual-track. It has no recovery ramp and
+            // never touches `currentDay` (the primary track), so the two progress
+            // independently. A `second` payload from a non-dual user is ignored
+            // defensively rather than trusted.
+            if (current.dualTrackEnabled) {
+              await tx.update(users)
+                .set({
+                  secondTrackDay: advanceSecondTrackDay(sessionType, completed, current.secondTrackDay),
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.id, auth.userId));
+            }
+          } else {
+            // #238: while recovering, a completed primary sit steps the ramp forward
+            // instead of bumping `currentDay` — see advanceProgression for the full rule.
+            const next = advanceProgression(sessionType, completed, current);
+            await tx.update(users)
+              .set({
+                currentDay: next.currentDay,
+                recoveryTargetDay: next.recoveryTargetDay,
+                recoveryCurrentStep: next.recoveryCurrentStep,
+                recoveryTotalSteps: next.recoveryTotalSteps,
+                updatedAt: new Date(),
+              })
+              .where(eq(users.id, auth.userId));
+          }
         }
       }
 

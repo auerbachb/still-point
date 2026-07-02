@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
-import { type SessionType } from "@/lib/constants";
+import { type SessionType, type Track } from "@/lib/constants";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
@@ -25,9 +25,12 @@ type SessionViewProps = {
   currentDay: number;
   recovery?: RecoveryFields;
   sessionType?: SessionType;
+  /** #240: which daily track this sit belongs to; echoed back in the payloads. */
+  track?: Track;
   onComplete: (data: {
     dayNumber: number;
     sessionType: SessionType;
+    track: Track;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -40,6 +43,7 @@ type SessionViewProps = {
   onAbandon: (data: {
     dayNumber: number;
     sessionType: SessionType;
+    track: Track;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -55,7 +59,7 @@ const mono: CSSProperties = {
   fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
 };
 
-export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = "standard", onComplete, onAbandon }: SessionViewProps) {
+export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = "standard", track = "primary", onComplete, onAbandon }: SessionViewProps) {
   const isMobile = useIsMobile();
   const plannedSeconds = sessionDurationForUser(sessionType, currentDay, recovery);
   const [bonusSeconds, setBonusSeconds] = useState(0);
@@ -189,6 +193,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     onComplete({
       dayNumber: currentDay,
       sessionType,
+      track,
       duration: plannedSeconds,
       bonusSeconds,
       completed: true,
@@ -198,7 +203,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
       mindStateLog: resolvedLog,
       thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, sessionType, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
+  }, [currentDay, sessionType, track, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
@@ -248,6 +253,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     onComplete({
       dayNumber: currentDay,
       sessionType,
+      track,
       duration: plannedSeconds,
       bonusSeconds,
       completed: false,
@@ -269,6 +275,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     onAbandon({
       dayNumber: currentDay,
       sessionType,
+      track,
       duration: plannedSeconds,
       bonusSeconds,
       completed: false,

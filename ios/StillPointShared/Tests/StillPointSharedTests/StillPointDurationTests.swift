@@ -32,6 +32,32 @@ final class StillPointDurationTests: XCTestCase {
         XCTAssertEqual(StillPoint.blockCount(forDuration: 65), 7)
     }
 
+    // MARK: - #240 dual-track: 10-minute cap + fork eligibility
+
+    func testDurationCapsAtTenMinutes() {
+        XCTAssertEqual(StillPoint.duration(forDay: 54), 590)
+        XCTAssertEqual(StillPoint.duration(forDay: StillPoint.forkDay), StillPoint.maxDuration)
+        XCTAssertEqual(StillPoint.duration(forDay: 56), StillPoint.maxDuration)
+        XCTAssertEqual(StillPoint.duration(forDay: 200), StillPoint.maxDuration)
+    }
+
+    func testForkDayIsFirstDayAtCap() {
+        XCTAssertEqual(StillPoint.forkDay, 55)
+        XCTAssertLessThan(StillPoint.duration(forDay: StillPoint.forkDay - 1), StillPoint.maxDuration)
+    }
+
+    func testIsDualTrackEligibleOnlyAfterTenMinuteSit() {
+        XCTAssertFalse(StillPoint.isDualTrackEligible(currentDay: 1))
+        XCTAssertFalse(StillPoint.isDualTrackEligible(currentDay: StillPoint.forkDay))
+        XCTAssertTrue(StillPoint.isDualTrackEligible(currentDay: StillPoint.forkDay + 1))
+    }
+
+    func testAdvanceSecondTrackDay() {
+        XCTAssertEqual(StillPoint.advanceSecondTrackDay(sessionType: .standard, completed: true, secondTrackDay: 1), 2)
+        XCTAssertEqual(StillPoint.advanceSecondTrackDay(sessionType: .quick, completed: true, secondTrackDay: 3), 3)
+        XCTAssertEqual(StillPoint.advanceSecondTrackDay(sessionType: .standard, completed: false, secondTrackDay: 3), 3)
+    }
+
     // Note: invalid days (`< 1`) are tested via `clampedCurrentDay(for:)` below.
     // Calling `duration(forDay:)` with `< 1` traps the debug `assert` in the
     // test runner (intended dev behavior); production builds survive via the

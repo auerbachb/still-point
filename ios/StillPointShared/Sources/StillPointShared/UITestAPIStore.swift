@@ -193,6 +193,27 @@ actor UITestAPIStore {
         return (sortedSessions, SessionStatistics.calculateStats(for: sortedSessions))
     }
 
+    func getTracksDoneToday(date: String) throws -> TracksDoneTodayDTO {
+        try ensureAuthenticated()
+
+        if config.forceSessionsFailure {
+            throw APIError(status: 503, message: "Failed to load sessions. Check your connection.")
+        }
+
+        var primary = false
+        var second = false
+        for session in store.sessions where session.completed
+            && session.sessionType == .standard
+            && session.sessionDate == date {
+            if session.track == .second {
+                second = true
+            } else {
+                primary = true
+            }
+        }
+        return TracksDoneTodayDTO(primary: primary, second: second)
+    }
+
     func createSession(_ data: CreateSessionRequest) throws -> SessionDTO {
         try ensureAuthenticated()
 
@@ -210,24 +231,62 @@ actor UITestAPIStore {
             mindStateLog: data.mindStateLog,
             sessionDate: data.sessionDate,
             createdAt: nil,
-            buddySessionId: nil
+            buddySessionId: nil,
+            track: data.track
         )
         store.nextSessionOrdinal += 1
         store.sessions.append(session)
 
         if data.completed && data.sessionType == .standard {
-            store.user = UserDTO(
-                id: store.user.id,
-                email: store.user.email,
-                username: store.user.username,
-                isPublic: store.user.isPublic,
-                currentDay: max(store.user.currentDay, data.dayNumber + 1),
-                aphorismsEnabled: store.user.aphorismsEnabled
-            )
+            // #240: a `second`-track sit advances the second-track counter (only when
+            // opted in); a `primary` sit advances currentDay as before.
+            if data.track == .second {
+                let nextSecond = store.user.dualTrackEnabled
+                    ? StillPoint.advanceSecondTrackDay(sessionType: data.sessionType, completed: data.completed, secondTrackDay: store.user.secondTrackDay)
+                    : store.user.secondTrackDay
+                store.user = UserDTO(
+                    id: store.user.id,
+                    email: store.user.email,
+                    username: store.user.username,
+                    isPublic: store.user.isPublic,
+                    currentDay: store.user.currentDay,
+                    aphorismsEnabled: store.user.aphorismsEnabled,
+                    dualTrackEnabled: store.user.dualTrackEnabled,
+                    secondTrackDay: nextSecond
+                )
+            } else {
+                store.user = UserDTO(
+                    id: store.user.id,
+                    email: store.user.email,
+                    username: store.user.username,
+                    isPublic: store.user.isPublic,
+                    currentDay: max(store.user.currentDay, data.dayNumber + 1),
+                    aphorismsEnabled: store.user.aphorismsEnabled,
+                    dualTrackEnabled: store.user.dualTrackEnabled,
+                    secondTrackDay: store.user.secondTrackDay
+                )
+            }
         }
 
         persist()
         return session
+    }
+
+    /// #240: opt into the dual-track fork (enable a second daily track).
+    func enableDualTrack() throws -> UserDTO {
+        try ensureAuthenticated()
+        store.user = UserDTO(
+            id: store.user.id,
+            email: store.user.email,
+            username: store.user.username,
+            isPublic: store.user.isPublic,
+            currentDay: store.user.currentDay,
+            aphorismsEnabled: store.user.aphorismsEnabled,
+            dualTrackEnabled: true,
+            secondTrackDay: store.user.secondTrackDay
+        )
+        persist()
+        return store.user
     }
 
     func getSession(sessionId: String) throws -> (session: SessionDTO, thoughts: [ThoughtDTO]) {
@@ -323,7 +382,9 @@ actor UITestAPIStore {
             username: nextUsername,
             isPublic: nextIsPublic,
             currentDay: store.user.currentDay,
-            aphorismsEnabled: nextAphorismsEnabled
+            aphorismsEnabled: nextAphorismsEnabled,
+            dualTrackEnabled: store.user.dualTrackEnabled,
+            secondTrackDay: store.user.secondTrackDay
         )
         persist()
         return store.user
