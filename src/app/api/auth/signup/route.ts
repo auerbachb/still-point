@@ -4,14 +4,27 @@ import { users } from "@/db/schema";
 import { hashPassword, createToken, setAuthCookie } from "@/lib/auth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { uniqueViolationConstraint } from "@/lib/dbErrors";
+import { readJsonObject } from "@/lib/readJsonObject";
 import { USERNAME_ERROR, isValidUsername } from "@/lib/username";
 import { eq, sql } from "drizzle-orm";
 
 export const POST = withApiHandler("Signup", async (request: NextRequest) => {
   const includeToken = request.headers.get("x-still-point-client") === "ios";
-  const { email, username, password } = await request.json();
+  const json = await readJsonObject(request);
+  if (!json.ok) return json.response;
 
-  if (!email || !username || !password) {
+  const email = json.body.email;
+  const username = json.body.username;
+  const password = json.body.password;
+
+  if (
+    typeof email !== "string" ||
+    typeof username !== "string" ||
+    typeof password !== "string" ||
+    !email ||
+    !username ||
+    !password
+  ) {
     return NextResponse.json({ error: "All fields required" }, { status: 400 });
   }
 

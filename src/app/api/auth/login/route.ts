@@ -5,15 +5,18 @@ import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { wasAccountDeleted } from "@/lib/accountDeletion";
 import { DELETED_ACCOUNT_MESSAGE } from "@/lib/authErrors";
+import { readJsonObject } from "@/lib/readJsonObject";
 import { eq } from "drizzle-orm";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$Y9nc0LdvLO3K5rJBlkE0qOAEOlfYYvCj5ra9LaWHKE9PCUvfdlUnq";
 
 export const POST = withApiHandler("Login", async (request: NextRequest) => {
   const includeToken = request.headers.get("x-still-point-client") === "ios";
-  const body = await request.json();
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
-  const password = typeof body?.password === "string" ? body.password : "";
+  const json = await readJsonObject(request);
+  if (!json.ok) return json.response;
+
+  const email = typeof json.body.email === "string" ? json.body.email.trim().toLowerCase() : "";
+  const password = typeof json.body.password === "string" ? json.body.password : "";
 
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password required" }, { status: 400 });
