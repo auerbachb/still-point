@@ -189,14 +189,20 @@ export const api = {
   me: () =>
     request<{ user: User }>("/api/auth/me"),
 
-  getSessions: () =>
+  getSessions: (today?: string) =>
     request<{ sessions: Session[]; stats: {
       streak: number;
       avgClearPercent: number;
       avgThoughtsPerSession: number;
       avgThoughtsPerMinute: number;
       bonusMinutesTotal: number;
-    } }>("/api/sessions"),
+      trailing4WeekDays: number;
+      trailing4WeekDayPercent: number;
+      trailing4WeekTotalTime: number;
+      trailing4WeekTimePercent: number;
+      totalTimeAllTime: number;
+      progressTo10kHours: number;
+    } }>(today ? `/api/sessions?today=${encodeURIComponent(today)}` : "/api/sessions"),
 
   createSession: (data: {
     dayNumber: number;

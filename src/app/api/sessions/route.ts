@@ -4,10 +4,12 @@ import { atomicCreateSessionWithProgression } from "@/db/atomic";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { calculateSessionStats, parseCompleted, parseOptionalSessionType, parseOptionalTrack } from "@/lib/constants";
+import { calculateHistoryPeriodStats } from "@/lib/historyStats";
+import { isValidSessionCalendarDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { eq, desc } from "drizzle-orm";
 import { sessions } from "@/db/schema";
 
-export const GET = withApiHandler("Get sessions", async () => {
+export const GET = withApiHandler("Get sessions", async (request: NextRequest) => {
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 
@@ -17,11 +19,18 @@ export const GET = withApiHandler("Get sessions", async () => {
     .orderBy(desc(sessions.dayNumber));
   const stats = calculateSessionStats(userSessions);
 
+  const todayParam = request.nextUrl.searchParams.get("today")?.trim();
+  const todayIso = todayParam && isValidSessionCalendarDate(todayParam)
+    ? todayParam
+    : todayLocalIsoDate();
+  const periodStats = calculateHistoryPeriodStats(userSessions, todayIso);
+
   return NextResponse.json({
     sessions: userSessions,
     stats: {
       ...stats,
       bonusMinutesTotal: Math.round(stats.bonusSecondsTotal / 60),
+      ...periodStats,
     },
   });
 });
