@@ -224,17 +224,17 @@ is_retriable_failure() {
   if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
     return 1
   fi
+  # XCUITest query/wait timeouts that surface as method-level error frames
+  # (without XCTAssert* lines). Before the method-frame check so logs containing
+  # both a timeout phrase and a test selector frame still retry.
+  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
+    return 0
+  fi
   # XCTest method-level error frames referencing a test selector starting
   # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
   # plain "Class" forms.
   if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
     return 1
-  fi
-  # XCUITest query/wait timeouts that surface as method-level error frames
-  # (without XCTAssert* lines). Only after non-retriable assertion signatures
-  # are ruled out above.
-  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
-    return 0
   fi
   # macos-26/iOS 26 launchd terminate race: XCTest logs "Failed to terminate … :0"
   # when SIGTERM hits a process still winding down navigation/audio. Infra-shaped.
