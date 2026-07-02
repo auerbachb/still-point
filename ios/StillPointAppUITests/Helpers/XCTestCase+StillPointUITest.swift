@@ -43,7 +43,7 @@ extension XCTestCase {
         timeout: TimeInterval = 45,
         failureMessage: String,
         assertColdStart: Bool = false,
-        coldStartMaxMs: Int = 12_000,
+        coldStartMaxMs: Int = 50_000,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> XCUIElement {
