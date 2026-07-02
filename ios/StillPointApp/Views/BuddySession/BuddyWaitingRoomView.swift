@@ -122,7 +122,7 @@ struct BuddyWaitingRoomView: View {
                 } label: {
                     Text("Leave")
                         .font(SPFont.mono(11, weight: .medium))
-                        .spCapsuleButtonStyle(.neutral, size: .regular, stroke: SPColor.border2)
+                        .spCapsuleButtonStyle(.neutral, size: .regular, horizontalPadding: SPSpacing.s3, stroke: SPColor.border2)
                 }
                 .padding(.bottom, SPSpacing.s5)
             }
