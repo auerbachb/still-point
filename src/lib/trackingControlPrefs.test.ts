@@ -10,7 +10,9 @@ import {
   syncTrackingUnlockFromSessions,
 } from "./trackingControlPrefs";
 
-const STORAGE_KEY = "stillpoint_tracking_control_prefs";
+const LEGACY_STORAGE_KEY = "stillpoint_tracking_control_prefs";
+const HIDE_STORAGE_KEY = "stillpoint_hide_distraction_hyperfocus_controls";
+const UNLOCK_STORAGE_KEY = "stillpoint_tracking_controls_unlocked";
 
 function stubBrowserStorage(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
@@ -64,9 +66,20 @@ describe("loadTrackingControlPrefs", () => {
     });
   });
 
-  it("reads stored prefs", () => {
+  it("reads stored prefs from per-field keys", () => {
     stubBrowserStorage({
-      [STORAGE_KEY]: JSON.stringify({
+      [HIDE_STORAGE_KEY]: "true",
+      [UNLOCK_STORAGE_KEY]: "true",
+    });
+    expect(loadTrackingControlPrefs()).toEqual({
+      hideDistractionHyperfocusControls: true,
+      trackingControlsUnlocked: true,
+    });
+  });
+
+  it("migrates legacy combined blob to per-field keys", () => {
+    const store = stubBrowserStorage({
+      [LEGACY_STORAGE_KEY]: JSON.stringify({
         hideDistractionHyperfocusControls: true,
         trackingControlsUnlocked: true,
       }),
@@ -75,10 +88,13 @@ describe("loadTrackingControlPrefs", () => {
       hideDistractionHyperfocusControls: true,
       trackingControlsUnlocked: true,
     });
+    expect(store.get(HIDE_STORAGE_KEY)).toBe("true");
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
+    expect(store.has(LEGACY_STORAGE_KEY)).toBe(false);
   });
 
-  it("falls back to defaults on corrupt JSON", () => {
-    stubBrowserStorage({ [STORAGE_KEY]: "{not json" });
+  it("falls back to defaults on corrupt legacy JSON", () => {
+    stubBrowserStorage({ [LEGACY_STORAGE_KEY]: "{not json" });
     expect(loadTrackingControlPrefs()).toEqual({
       hideDistractionHyperfocusControls: false,
       trackingControlsUnlocked: false,
@@ -90,15 +106,11 @@ describe("markTrackingUnlockIfQualifying", () => {
   it("persists unlock for qualifying sessions only", () => {
     const store = stubBrowserStorage();
     markTrackingUnlockIfQualifying({ duration: 300, completed: true });
-    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toEqual({
-      hideDistractionHyperfocusControls: false,
-      trackingControlsUnlocked: true,
-    });
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
+    expect(store.get(HIDE_STORAGE_KEY)).toBe("false");
 
     markTrackingUnlockIfQualifying({ duration: 60, completed: true });
-    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toMatchObject({
-      trackingControlsUnlocked: true,
-    });
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
   });
 });
 
@@ -109,23 +121,17 @@ describe("syncTrackingUnlockFromSessions", () => {
       { duration: 60, completed: true },
       { duration: 300, completed: true },
     ]);
-    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toMatchObject({
-      trackingControlsUnlocked: true,
-    });
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
   });
 
   it("is a no-op when already unlocked", () => {
     const store = stubBrowserStorage({
-      [STORAGE_KEY]: JSON.stringify({
-        hideDistractionHyperfocusControls: true,
-        trackingControlsUnlocked: true,
-      }),
+      [HIDE_STORAGE_KEY]: "true",
+      [UNLOCK_STORAGE_KEY]: "true",
     });
     syncTrackingUnlockFromSessions([{ duration: 60, completed: false }]);
-    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toEqual({
-      hideDistractionHyperfocusControls: true,
-      trackingControlsUnlocked: true,
-    });
+    expect(store.get(HIDE_STORAGE_KEY)).toBe("true");
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
   });
 });
 
@@ -134,10 +140,8 @@ describe("saveHideDistractionHyperfocusControls", () => {
     const store = stubBrowserStorage();
     markTrackingControlsUnlocked();
     saveHideDistractionHyperfocusControls(true);
-    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toEqual({
-      hideDistractionHyperfocusControls: true,
-      trackingControlsUnlocked: true,
-    });
+    expect(store.get(HIDE_STORAGE_KEY)).toBe("true");
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
   });
 });
 

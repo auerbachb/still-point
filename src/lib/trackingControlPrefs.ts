@@ -14,7 +14,10 @@ export type TrackingControlPrefs = {
 /** Planned sit length (seconds) required to unlock tracking controls (#188). */
 export const TRACKING_UNLOCK_MIN_DURATION_SECONDS = 300;
 
-const STORAGE_KEY = "stillpoint_tracking_control_prefs";
+/** Legacy combined blob — migrated to per-field keys on read. */
+const LEGACY_STORAGE_KEY = "stillpoint_tracking_control_prefs";
+const HIDE_STORAGE_KEY = "stillpoint_hide_distraction_hyperfocus_controls";
+const UNLOCK_STORAGE_KEY = "stillpoint_tracking_controls_unlocked";
 
 const DEFAULTS: TrackingControlPrefs = {
   hideDistractionHyperfocusControls: false,
@@ -32,7 +35,7 @@ export function sessionQualifiesForTrackingUnlock(session: {
   return session.completed && session.duration >= TRACKING_UNLOCK_MIN_DURATION_SECONDS;
 }
 
-function parseStoredPrefs(raw: string | null): TrackingControlPrefs {
+function parseLegacyPrefs(raw: string | null): TrackingControlPrefs {
   if (!raw) return DEFAULTS;
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -53,43 +56,80 @@ function parseStoredPrefs(raw: string | null): TrackingControlPrefs {
   }
 }
 
+function readBool(key: string, fallback: boolean): boolean {
+  const raw = localStorage.getItem(key);
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  return fallback;
+}
+
+function writeBool(key: string, value: boolean): void {
+  localStorage.setItem(key, value ? "true" : "false");
+}
+
+function migrateLegacyPrefsIfNeeded(): void {
+  const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!legacyRaw) return;
+  const legacy = parseLegacyPrefs(legacyRaw);
+  writeBool(HIDE_STORAGE_KEY, legacy.hideDistractionHyperfocusControls);
+  writeBool(UNLOCK_STORAGE_KEY, legacy.trackingControlsUnlocked);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+}
+
 export function loadTrackingControlPrefs(): TrackingControlPrefs {
   if (typeof window === "undefined") return DEFAULTS;
   try {
-    return parseStoredPrefs(localStorage.getItem(STORAGE_KEY));
+    migrateLegacyPrefsIfNeeded();
+    return {
+      hideDistractionHyperfocusControls: readBool(
+        HIDE_STORAGE_KEY,
+        DEFAULTS.hideDistractionHyperfocusControls,
+      ),
+      trackingControlsUnlocked: readBool(
+        UNLOCK_STORAGE_KEY,
+        DEFAULTS.trackingControlsUnlocked,
+      ),
+    };
   } catch {
     return DEFAULTS;
   }
 }
 
-function saveTrackingControlPrefs(prefs: TrackingControlPrefs): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  } catch {
-    // Best-effort persistence: ignore storage write failures.
-  }
+function notifyPrefChange(): void {
   notifyTrackingControlPrefsListeners();
 }
 
 export function saveHideDistractionHyperfocusControls(hide: boolean): void {
-  saveTrackingControlPrefs({
-    ...loadTrackingControlPrefs(),
-    hideDistractionHyperfocusControls: hide,
-  });
+  if (typeof window === "undefined") return;
+  try {
+    writeBool(HIDE_STORAGE_KEY, hide);
+    notifyPrefChange();
+  } catch {
+    // Best-effort persistence: ignore storage write failures.
+  }
 }
 
 export function markTrackingControlsUnlocked(): void {
-  const current = loadTrackingControlPrefs();
-  if (current.trackingControlsUnlocked) return;
-  saveTrackingControlPrefs({ ...current, trackingControlsUnlocked: true });
+  if (typeof window === "undefined") return;
+  if (loadTrackingControlPrefs().trackingControlsUnlocked) return;
+  try {
+    writeBool(UNLOCK_STORAGE_KEY, true);
+    notifyPrefChange();
+  } catch {
+    // Best-effort persistence: ignore storage write failures.
+  }
 }
 
 /** Clear account-scoped unlock on logout so the next sign-in re-qualifies (#188). */
 export function resetTrackingUnlockOnLogout(): void {
-  const current = loadTrackingControlPrefs();
-  if (!current.trackingControlsUnlocked) return;
-  saveTrackingControlPrefs({ ...current, trackingControlsUnlocked: false });
+  if (typeof window === "undefined") return;
+  if (!loadTrackingControlPrefs().trackingControlsUnlocked) return;
+  try {
+    writeBool(UNLOCK_STORAGE_KEY, false);
+    notifyPrefChange();
+  } catch {
+    // Best-effort persistence: ignore storage write failures.
+  }
 }
 
 /** Persist unlock when a just-finished sit qualifies (#188). */
@@ -117,7 +157,14 @@ type TrackingControlPrefsListener = () => void;
 const listeners = new Set<TrackingControlPrefsListener>();
 
 function onStorageEvent(e: StorageEvent): void {
-  if (e.key === STORAGE_KEY || e.key === null) notifyTrackingControlPrefsListeners();
+  if (
+    e.key === HIDE_STORAGE_KEY
+    || e.key === UNLOCK_STORAGE_KEY
+    || e.key === LEGACY_STORAGE_KEY
+    || e.key === null
+  ) {
+    notifyTrackingControlPrefsListeners();
+  }
 }
 
 function notifyTrackingControlPrefsListeners(): void {
