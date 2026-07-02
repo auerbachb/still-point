@@ -8,13 +8,14 @@ struct SettingsView: View {
     @State private var aphorismsEnabled: Bool = false
     @State private var isUpdating = false
     @State private var isUpdatingAphorisms = false
+    @State private var isSavingUsername = false
     @State private var showDeleteAccountDialog = false
     @State private var showDeleteAccountConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteAccountError = ""
     @State private var showDeleteAccountError = false
 
-    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms }
+    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isSavingUsername }
 
     var body: some View {
         NavigationStack {
@@ -39,7 +40,12 @@ struct SettingsView: View {
                         .tracking(2)
 
                     if let user = appVM.currentUser {
-                        UsernameEditView(user: user, appVM: appVM, updating: isSavingSettings)
+                        UsernameEditView(
+                            user: user,
+                            appVM: appVM,
+                            updating: isUpdating || isUpdatingAphorisms,
+                            savingUsername: $isSavingUsername
+                        )
 
                         HStack {
                             Text("Email")

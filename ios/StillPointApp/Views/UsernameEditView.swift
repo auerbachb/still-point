@@ -3,20 +3,25 @@ import StillPointShared
 
 /// Username display + inline edit block for the Settings "ACCOUNT" card.
 ///
-/// Owns its own edit state internally. The parent passes the current user, an
-/// `AppViewModel` reference (to persist updates), and an external `updating`
-/// flag reflecting other in-flight Settings writes so the controls disable in
-/// lockstep with the rest of the screen.
+/// Owns its edit UI state internally (editing flag, draft, error/success
+/// messages). The parent passes the current user, an `AppViewModel` reference
+/// (to persist updates), and an external `updating` flag reflecting other
+/// in-flight Settings writes so the controls disable in lockstep with the rest
+/// of the screen. The `savingUsername` flag is bound back up to the parent so
+/// its other controls stay disabled while a username save is in flight.
 struct UsernameEditView: View {
     let user: UserDTO
     let appVM: AppViewModel
     /// True while another Settings write (e.g. visibility / aphorisms) is in
     /// flight. Combined with the local save state to gate the controls.
     let updating: Bool
+    /// Lifted so the parent Settings screen can keep its other controls (Public
+    /// Board / Aphorisms toggles) disabled while a username save is in flight,
+    /// matching the pre-extraction `isSavingSettings` behavior.
+    @Binding var savingUsername: Bool
 
     @State private var editingUsername = false
     @State private var usernameDraft = ""
-    @State private var savingUsername = false
     @State private var usernameFieldError: String?
     @State private var usernameSuccessMessage: String?
 
