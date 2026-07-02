@@ -164,7 +164,7 @@ export function BuddySessionActive({
           ...(isMobile ? {} : { position: "sticky", top: "var(--s4)", alignSelf: "start" }),
         }}
       >
-        {snap.dailyRoomUrl ? (
+        {snap.dailyRoomUrl?.trim() ? (
           dailyTokenError ? (
             <p
               role="alert"
@@ -184,7 +184,7 @@ export function BuddySessionActive({
             </p>
           ) : dailyMeetingToken ? (
             <BuddyVideo
-              roomUrl={snap.dailyRoomUrl}
+              roomUrl={snap.dailyRoomUrl.trim()}
               meetingToken={dailyMeetingToken}
               displayName={me?.username ?? "Participant"}
             />
