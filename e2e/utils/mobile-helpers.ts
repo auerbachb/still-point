@@ -1,5 +1,18 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+/** #188: unlock distraction/hyperfocus controls for E2E — call before first navigation. */
+export async function seedTrackingControlsUnlocked(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "stillpoint_tracking_control_prefs",
+      JSON.stringify({
+        hideDistractionHyperfocusControls: false,
+        trackingControlsUnlocked: true,
+      }),
+    );
+  });
+}
+
 export const MOBILE_SAFE_AREA_TOLERANCE_PX = 6;
 export const MIN_TAP_TARGET_PX = 44;
 const CONTROL_REVEAL_TAP_RETRIES = 3;

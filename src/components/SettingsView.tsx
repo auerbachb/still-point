@@ -21,6 +21,10 @@ import {
   saveBreathKeyBinding,
   type BreathKeyBinding,
 } from "@/lib/breathKeyBinding";
+import {
+  loadTrackingControlPrefs,
+  saveHideDistractionHyperfocusControls,
+} from "@/lib/trackingControlPrefs";
 
 type User = {
   id: string;
@@ -54,6 +58,7 @@ export function SettingsView({
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
   const [keepScreenAwake, setKeepScreenAwake] = useState(false);
   const [breathKeyBinding, setBreathKeyBinding] = useState<BreathKeyBinding>("Space");
+  const [hideDistractionHyperfocusControls, setHideDistractionHyperfocusControls] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState(user.username);
   const [savingUsername, setSavingUsername] = useState(false);
@@ -151,6 +156,9 @@ export function SettingsView({
     setWakeLockSupported(isWakeLockSupported());
     setKeepScreenAwake(loadWakeLockPrefs().keepScreenAwakeDuringSession);
     setBreathKeyBinding(loadBreathKeyBinding());
+    setHideDistractionHyperfocusControls(
+      loadTrackingControlPrefs().hideDistractionHyperfocusControls,
+    );
   }, []);
 
   const handleKeepScreenAwakeToggle = () => {
@@ -162,6 +170,12 @@ export function SettingsView({
   const handleBreathKeyBindingChange = (binding: BreathKeyBinding) => {
     setBreathKeyBinding(binding);
     saveBreathKeyBinding(binding);
+  };
+
+  const handleHideDistractionHyperfocusControlsToggle = () => {
+    const next = !hideDistractionHyperfocusControls;
+    setHideDistractionHyperfocusControls(next);
+    saveHideDistractionHyperfocusControls(next);
   };
 
   const handleLogout = async () => {
@@ -414,6 +428,59 @@ export function SettingsView({
             </button>
           </div>
         )}
+
+        {/* #186: hide distraction/hyperfocus hold cluster during sessions */}
+        <div style={{
+          padding: "16px 20px",
+          background: "var(--surface-1)",
+          borderRadius: "10px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
+            }}>
+              Hide distraction &amp; hyperfocus controls
+            </div>
+            <div style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "13px", fontStyle: "italic",
+              color: "var(--fg-3)",
+            }}>
+              Remove hold buttons and keyboard shortcuts during sessions. The timer is unchanged.
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label={
+              hideDistractionHyperfocusControls
+                ? "Show distraction and hyperfocus controls during sessions"
+                : "Hide distraction and hyperfocus controls during sessions"
+            }
+            aria-pressed={hideDistractionHyperfocusControls}
+            onClick={handleHideDistractionHyperfocusControlsToggle}
+            style={{
+              width: "48px", height: "26px",
+              borderRadius: "13px", border: "none",
+              background: hideDistractionHyperfocusControls
+                ? "var(--accent-green-bg)"
+                : "var(--surface-3)",
+              position: "relative", cursor: "pointer",
+              transition: "background 0.3s",
+              flexShrink: 0, marginLeft: "16px",
+            }}
+          >
+            <div style={{
+              width: "20px", height: "20px",
+              borderRadius: "10px",
+              background: hideDistractionHyperfocusControls ? "var(--accent-green)" : "var(--border-3)",
+              position: "absolute", top: "3px",
+              left: hideDistractionHyperfocusControls ? "25px" : "3px",
+              transition: "all 0.3s",
+            }} />
+          </button>
+        </div>
 
         {/* Breath counting: key binding (#376) */}
         <div style={{

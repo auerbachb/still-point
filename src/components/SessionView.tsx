@@ -10,7 +10,12 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
+import { markTrackingUnlockIfQualifying } from "@/lib/trackingControlPrefs";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
+import {
+  useHideDistractionHyperfocusControlsPref,
+  useTrackingControlsUnlocked,
+} from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
@@ -89,6 +94,10 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
+  const trackingControlsUnlocked = useTrackingControlsUnlocked();
+  const hideDistractionHyperfocusControls = useHideDistractionHyperfocusControlsPref();
+  const showDistractionHyperfocusCluster =
+    trackingControlsUnlocked && !hideDistractionHyperfocusControls;
   useWakeLock(keepScreenAwakePref && isActive);
   // Relay sit state to the service worker so it can suppress push display while
   // a sit is in progress when the opt-in pref is on (#431). Treat a paused sit
@@ -155,7 +164,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   }, [finalizeActiveHold]);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
-    enabled: isActive,
+    enabled: isActive && showDistractionHyperfocusCluster,
     beginDistraction,
     beginHyperfocus,
     endHoldFromKeyboard,
@@ -190,6 +199,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     setIsActive(false);
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || totalSeconds;
+    markTrackingUnlockIfQualifying({ duration: plannedSeconds, completed: true });
     onComplete({
       dayNumber: currentDay,
       sessionType,
@@ -419,108 +429,130 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
             )}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: "12px",
-              marginTop: "16px",
-              width: "100%",
-            }}
-          >
-            <button
-              type="button"
-              disabled={!isActive}
-              aria-pressed={mindState === "thinking"}
-              aria-label={isMobile ? "Hold for light distraction. Release when aware again." : "Hold for light distraction, or hold Space. Release when aware again."}
-              onMouseDown={e => {
-                e.preventDefault();
-                handlePointerDistractionDown();
-              }}
-              onMouseUp={handlePointerDistractionUp}
-              onMouseLeave={() => {
-                if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
-                  handlePointerDistractionUp();
-                }
-              }}
-              onTouchStart={e => {
-                e.preventDefault();
-                handlePointerDistractionDown();
-              }}
-              onTouchEnd={handlePointerDistractionUp}
-              onTouchCancel={handlePointerDistractionUp}
-              style={{
-                ...holdButtonBase,
-                borderColor:
-                  mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
-                background:
-                  mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
-                color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-              }}
-            >
-              <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
-              {!isMobile && (
-                <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
-                  or hold Space
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              disabled={!isActive}
-              aria-pressed={mindState === "hyperfocus"}
-              aria-label={isMobile ? "Hold for hyperfocus. Release to return to aware." : "Hold for hyperfocus, or hold Comma. Release to return to aware."}
-              onMouseDown={e => {
-                e.preventDefault();
-                handlePointerHyperfocusDown();
-              }}
-              onMouseUp={handlePointerHyperfocusUp}
-              onMouseLeave={() => {
-                if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
-                  handlePointerHyperfocusUp();
-                }
-              }}
-              onTouchStart={e => {
-                e.preventDefault();
-                handlePointerHyperfocusDown();
-              }}
-              onTouchEnd={handlePointerHyperfocusUp}
-              onTouchCancel={handlePointerHyperfocusUp}
-              style={{
-                ...holdButtonBase,
-                borderColor:
-                  mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
-                background:
-                  mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
-                color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
-              }}
-            >
-              <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
-              {!isMobile && (
-                <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
-                  or hold ,
-                </span>
-              )}
-            </button>
-          </div>
-
-          <FlashHint>
+          {!trackingControlsUnlocked && (
             <p
+              data-tracking-unlock-explainer
               style={{
-                margin: "12px 0 0",
+                margin: "16px 0 0",
                 textAlign: "center",
                 ...mono,
                 fontSize: "10px",
                 color: "var(--fg-4)",
                 letterSpacing: "0.05em",
-                lineHeight: 1.45,
+                lineHeight: 1.5,
               }}
             >
-              Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
+              Distraction and hyperfocus tracking unlock after you complete one sit of five minutes or longer.
             </p>
-          </FlashHint>
+          )}
+
+          {showDistractionHyperfocusCluster && (
+            <>
+              <div
+                data-tracking-controls="visible"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: "12px",
+                  marginTop: "16px",
+                  width: "100%",
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={!isActive}
+                  aria-pressed={mindState === "thinking"}
+                  aria-label={isMobile ? "Hold for light distraction. Release when aware again." : "Hold for light distraction, or hold Space. Release when aware again."}
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    handlePointerDistractionDown();
+                  }}
+                  onMouseUp={handlePointerDistractionUp}
+                  onMouseLeave={() => {
+                    if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
+                      handlePointerDistractionUp();
+                    }
+                  }}
+                  onTouchStart={e => {
+                    e.preventDefault();
+                    handlePointerDistractionDown();
+                  }}
+                  onTouchEnd={handlePointerDistractionUp}
+                  onTouchCancel={handlePointerDistractionUp}
+                  style={{
+                    ...holdButtonBase,
+                    borderColor:
+                      mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
+                    background:
+                      mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
+                    color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+                  }}
+                >
+                  <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
+                  {!isMobile && (
+                    <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
+                      or hold Space
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!isActive}
+                  aria-pressed={mindState === "hyperfocus"}
+                  aria-label={isMobile ? "Hold for hyperfocus. Release to return to aware." : "Hold for hyperfocus, or hold Comma. Release to return to aware."}
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    handlePointerHyperfocusDown();
+                  }}
+                  onMouseUp={handlePointerHyperfocusUp}
+                  onMouseLeave={() => {
+                    if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
+                      handlePointerHyperfocusUp();
+                    }
+                  }}
+                  onTouchStart={e => {
+                    e.preventDefault();
+                    handlePointerHyperfocusDown();
+                  }}
+                  onTouchEnd={handlePointerHyperfocusUp}
+                  onTouchCancel={handlePointerHyperfocusUp}
+                  style={{
+                    ...holdButtonBase,
+                    borderColor:
+                      mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
+                    background:
+                      mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+                    color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+                  }}
+                >
+                  <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
+                  {!isMobile && (
+                    <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
+                      or hold ,
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <FlashHint>
+                <p
+                  style={{
+                    margin: "12px 0 0",
+                    textAlign: "center",
+                    ...mono,
+                    fontSize: "10px",
+                    color: "var(--fg-4)",
+                    letterSpacing: "0.05em",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
+                </p>
+              </FlashHint>
+            </>
+          )}
 
           <div
             style={{

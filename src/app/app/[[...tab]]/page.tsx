@@ -20,6 +20,7 @@ import { api, ApiError } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import { syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
  *  into the non-optional shape `@/lib/duration` helpers expect. */
@@ -443,6 +444,7 @@ export default function StillPoint() {
           else primary = true;
         }
       }
+      syncTrackingUnlockFromSessions(sessions);
       setTracksDoneToday({ primary, second });
     } catch {
       // Fail closed so a failed refresh can't leave a stale "done today"
