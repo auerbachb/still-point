@@ -5,6 +5,7 @@ import type { Session, Thought } from "@/lib/api";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { buildCurrentMonthGrid, buildPriorMonthSummaries, formatTotalTime } from "@/lib/historyMonthGrid";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
+import { calculateHistoryPeriodStats } from "@/lib/historyStats";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 
@@ -108,17 +109,16 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
         avgThoughtsPerSession: sessData.stats?.avgThoughtsPerSession ?? 0,
         avgThoughtsPerMinute: sessData.stats?.avgThoughtsPerMinute ?? 0,
         bonusMinutesTotal: sessData.stats?.bonusMinutesTotal ?? 0,
-        trailing4WeekDays: sessData.stats?.trailing4WeekDays ?? 0,
-        trailing4WeekDayPercent: sessData.stats?.trailing4WeekDayPercent ?? 0,
-        trailing4WeekTotalTime: sessData.stats?.trailing4WeekTotalTime ?? 0,
-        trailing4WeekTimePercent: sessData.stats?.trailing4WeekTimePercent ?? 0,
-        totalTimeAllTime: sessData.stats?.totalTimeAllTime ?? 0,
-        progressTo10kHours: sessData.stats?.progressTo10kHours ?? 0,
       });
       setThoughts(thoughtData.thoughts || []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  const periodStats = useMemo(
+    () => calculateHistoryPeriodStats(sessions, todayDate),
+    [sessions, todayDate],
+  );
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -284,10 +284,10 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
             display: "flex", gap: isMobile ? "12px" : "20px", flexWrap: "wrap", justifyContent: "center", ...mono,
           }}>
             {[
-              { label: "days meditated", value: String(stats.trailing4WeekDays) },
-              { label: "of days", value: `${stats.trailing4WeekDayPercent}%` },
-              { label: "total time", value: formatTotalTime(stats.trailing4WeekTotalTime) },
-              { label: "of time", value: `${stats.trailing4WeekTimePercent.toFixed(2)}%` },
+              { label: "days meditated", value: String(periodStats.trailing4WeekDays) },
+              { label: "of days", value: `${periodStats.trailing4WeekDayPercent}%` },
+              { label: "total time", value: formatTotalTime(periodStats.trailing4WeekTotalTime) },
+              { label: "of time", value: `${periodStats.trailing4WeekTimePercent.toFixed(2)}%` },
             ].map(s => (
               <div key={s.label} style={statCardStyle}>
                 <div style={{ fontSize: "24px", fontWeight: 200, color: "var(--fg)" }}>{s.value}</div>
@@ -304,15 +304,15 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
               display: "flex", justifyContent: "space-between", alignItems: "baseline",
               marginBottom: "8px", ...mono, fontSize: "11px", color: "var(--fg-3)",
             }}>
-              <span>{formatTotalTime(stats.totalTimeAllTime)} all time</span>
-              <span>{stats.progressTo10kHours.toFixed(2)}% to 10,000 hours</span>
+              <span>{formatTotalTime(periodStats.totalTimeAllTime)} all time</span>
+              <span>{periodStats.progressTo10kHours.toFixed(2)}% to 10,000 hours</span>
             </div>
             <div style={{
               height: "6px", borderRadius: "3px", background: "var(--surface-1)", overflow: "hidden",
             }}>
               <div style={{
                 height: "100%",
-                width: `${Math.min(100, stats.progressTo10kHours)}%`,
+                width: `${Math.min(100, periodStats.progressTo10kHours)}%`,
                 background: "var(--accent-green-bg)",
                 borderRadius: "3px",
               }} />

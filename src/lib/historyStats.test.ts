@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 import { calculateHistoryPeriodStats, sessionTimeSeconds } from "./historyStats";
 
 describe("sessionTimeSeconds", () => {
-  test("uses actualTime and includes bonus seconds", () => {
-    expect(sessionTimeSeconds({ duration: 60, actualTime: 90, bonusSeconds: 30 })).toBe(120);
+  test("uses actualTime when present", () => {
+    expect(sessionTimeSeconds({ duration: 60, actualTime: 90, bonusSeconds: 30 })).toBe(90);
   });
 
   test("falls back to duration when actualTime is null", () => {

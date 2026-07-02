@@ -20,10 +20,9 @@ export type HistoryPeriodStats = {
   progressTo10kHours: number;
 };
 
-/** Seconds counted toward history time totals (actual sit + bonus extensions). */
+/** Seconds counted toward history time totals (elapsed wall time for the sit). */
 export function sessionTimeSeconds(session: HistorySessionTimeInput): number {
-  const base = session.actualTime ?? session.duration;
-  return base + (session.bonusSeconds ?? 0);
+  return session.actualTime ?? session.duration;
 }
 
 /**
