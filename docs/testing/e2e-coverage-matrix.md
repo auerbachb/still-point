@@ -20,10 +20,18 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 
 | Journey | Risk | Web | iOS | Spec / test reference |
 |---------|:----:|:---:|:---:|------------------------|
-| **Public** |
+
+### Public
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Landing page CTAs | P0 | ✅ | ➖ | `e2e/web/smoke.spec.ts` `@smoke` |
 | Privacy / delete-account pages | P2 | ❌ | ➖ | Manual / unit |
-| **Auth (email/password)** |
+
+### Auth (email/password)
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Auth shell visible (`/app`) | P0 | ✅ | ✅ | `e2e/web/critical.spec.ts`; iOS auth cold-start tests |
 | Signup → authenticated home | P0 | ✅ | ⚠️ | `e2e/auth/signup.spec.ts` `@critical`; iOS uses fixture login in smoke |
 | Login → home shell | P0 | ✅ | ✅ | `e2e/auth/login.spec.ts` `@critical`; `testLaunchLoginCompleteSessionAndHistoryPersistence` |
@@ -35,15 +43,27 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Auth network failure + Retry | P1 | ✅ | ✅ | `e2e/auth/login.spec.ts`; `testLaunchOfflineShowsUserVisibleMessage` |
 | Deleted account (410) message | P2 | ✅ | ❌ | `e2e/auth/login.spec.ts` |
 | Username uniqueness / race (DB) | P1 | ✅ | ❌ | `e2e/auth/username-uniqueness.integration.spec.ts` (`@authDbIntegration`) |
-| **OAuth (excluded)** |
-| Google / Apple OAuth (web) | — | ❌ | ➖ | **Excluded** — see [Exclusions](#exclusions) |
+
+### OAuth (excluded)
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
+| Google / Apple OAuth (web) | — | ❌ | ➖ | **Excluded** — see [Exclusions](#exclusions-justified) |
 | Google / Apple native (iOS) | — | ➖ | ❌ | **Excluded** |
-| **Tab routing & deep links** |
+
+### Tab routing & deep links
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Default `/app` → home/progress | P0 | ✅ | ✅ | `e2e/routing/tab-routing.spec.ts` `@smoke`; iOS smoke |
 | Per-tab URLs + deep links | P1 | ✅ | ⚠️ | `e2e/routing/tab-routing.spec.ts`; iOS history/settings smoke only |
 | Buddy invite deep link | P1 | ✅ | ❌ | `e2e/routing/tab-routing.spec.ts` (mocked join) |
 | Browser back clears session overlay | P1 | ✅ | ➖ | `e2e/routing/tab-routing.spec.ts` |
-| **Home & sessions** |
+
+### Home & sessions
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Standard session begin → complete → return | P0 | ✅ | ✅ | `e2e/session/session-flow.spec.ts` `@critical`; iOS smoke golden path |
 | Session history persistence after relaunch | P0 | ⚠️ | ✅ | Web mocked POST only; iOS smoke |
 | Quick minute (no day advance) | P1 | ✅ | ✅ | `e2e/session/session-flow.spec.ts`; `testQuickMinuteCompletesWithoutDayAdvance` |
@@ -52,25 +72,45 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Pause / abandon / thought capture | P2 | ❌ | ❌ | QA manual; snapshot lane only |
 | Landscape session usability | P1 | ✅ | ✅ | `e2e/session/session-flow.spec.ts`; `testRotationDecisionSessionRemainsUsableInLandscape` (non-critical lane) |
 | Pull-to-refresh during session | P2 | ✅ | ➖ | `e2e/session/session-flow.spec.ts` |
-| **Breath counting (excluded)** |
-| Full breath-counting UX | — | ⚠️ | ❌ | **Excluded** — see [Exclusions](#exclusions) |
-| **History / journal / board** |
+
+### Breath counting (excluded)
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
+| Full breath-counting UX | — | ⚠️ | ❌ | **Excluded** — see [Exclusions](#exclusions-justified) |
+
+### History / journal / board
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | History list + scroll | P1 | ✅ | ✅ | `e2e/layout/overflow.spec.ts`; iOS smoke + `testSessionsFailureShowsVisibleRetryMessage` |
 | Calendar / journey view modes | P2 | ❌ | ❌ | Unit tests (`historyJourney.test.ts`, `HistoryJourneyTests.swift`) |
 | Thought journal tab | P2 | ⚠️ | ✅ | Web layout FlashHint; `testJournalAndBoardTabsReachable` |
 | Public board tab | P2 | ✅ | ✅ | `e2e/layout/issue-473-mobile-web-layout.spec.ts`; `testJournalAndBoardTabsReachable` |
-| **Friends / buddy** |
+
+### Friends / buddy
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Friends search & requests (web) | P2 | ❌ | ➖ | Web-only surface |
 | Buddy room UI (video, lobby) | P2 | ❌ | ❌ | QA manual; Daily.co third-party |
 | Buddy duration normalization (API) | P1 | ✅ | ❌ | `e2e/buddy/buddy-session-length.integration.spec.ts` |
-| **Settings & account** |
+
+### Settings & account
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Settings navigation | P1 | ✅ | ✅ | `e2e/auth/login.spec.ts`; `testHistoryAndSettingsNavigationSmoke` |
 | Username inline edit / validation / conflict | P1 | ❌ | ✅ | iOS `testSettingsUsernameInlineEditSucceeds` et al. |
 | Public board / aphorisms toggles | P2 | ❌ | ❌ | QA manual |
 | Notifications subpage | P2 | ❌ | ⚠️ | Link exists; no E2E |
 | App blocking / Screen Time gate | P2 | ➖ | ⚠️ | `testCompletedSessionUnlocksConfiguredAppGate` (settings smoke; no shield E2E) |
 | Delete account flow | P2 | ❌ | ❌ | QA manual |
-| **Layout / a11y (cross-cutting)** |
+
+### Layout / a11y (cross-cutting)
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
 | Safe area / bottom nav overlap | P1 | ✅ | ✅ | `e2e/layout/safe-area.spec.ts`; `testPrimaryControlsVisibleAboveHomeIndicator` |
 | Horizontal overflow / tap targets | P1 | ✅ | ⚠️ | `e2e/layout/overflow.spec.ts`, `login.spec.ts` |
 | Mobile web 320–375px layout (#473) | P1 | ✅ | ➖ | `e2e/layout/issue-473-mobile-web-layout.spec.ts` |
@@ -83,7 +123,7 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 
 ### OAuth (Google / Apple, web + native)
 
-Automated OAuth E2E requires live provider credentials, consent screens, redirect URI wiring, and simulator Keychain state. Policy defers real-provider auth to manual checklists (`docs/mobile-oauth-integration.md`, `ios/QA_CHECKLIST.md`). Route handlers remain covered by unit/integration tests; matrix marks OAuth as **out of scope** until a headless or stub-provider lane exists.
+Automated OAuth E2E requires live provider credentials, consent screens, redirect URI wiring, and simulator Keychain state. Policy defers real-provider auth to manual checklists ([`docs/mobile-oauth-integration.md`](../mobile-oauth-integration.md), [`ios/QA_CHECKLIST.md`](../../ios/QA_CHECKLIST.md)). Route handlers remain covered by unit/integration tests; matrix marks OAuth as **out of scope** until a headless or stub-provider lane exists.
 
 ### Breath counting (full journey)
 
@@ -95,7 +135,7 @@ Breath counting is timing-sensitive (sub-second taps, phase animation, keyboard 
 - **Push notification delivery** — cron/APNs; settings PATCH round-trip still TODO  
 - **Screen Time shield enforcement** — settings gate smoke only (`348-phase2-spec`)  
 - **Full-page visual snapshot gating** — `@visual` / Fastlane only (`e2e-policy.md` §9)  
-- **iOS Friends tab** — web-only; parity gap (`ios/PARITY_CHECKLIST.md`)
+- **iOS Friends tab** — web-only; parity gap ([`ios/PARITY_CHECKLIST.md`](../../ios/PARITY_CHECKLIST.md))
 
 ---
 
