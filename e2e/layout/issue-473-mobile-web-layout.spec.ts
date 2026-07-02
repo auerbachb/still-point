@@ -111,6 +111,8 @@ for (const width of MOBILE_WIDTHS) {
       await ensureLoggedIn();
       await page.goto("/app/journal");
       await expect(page.getByRole("heading", { name: "Thought Journal" })).toBeVisible();
+      // Wait for fetch to finish — the heading also renders during loading, before FlashHint mounts.
+      await expect(page.getByText("Loading...")).toHaveCount(0);
       await expect(
         page.getByText(/Every thought that felt urgent in the moment/i),
       ).toHaveCount(0);
