@@ -77,13 +77,7 @@ final class AttentionTrackingManager: NSObject {
 
     func stop() {
         guard isRunning else { return }
-        session.pause()
-        isRunning = false
-        isPaused = false
-        elapsedProvider = nil
-        pendingLookAt = nil
-        frameDispatchScheduled = false
-        clearPendingDebounce()
+        resetRunningState()
     }
 
     func pause() {
@@ -106,6 +100,16 @@ final class AttentionTrackingManager: NSObject {
     private func clearPendingDebounce() {
         sustained.pendingState = nil
         sustained.pendingSince = nil
+    }
+
+    private func resetRunningState() {
+        session.pause()
+        isRunning = false
+        isPaused = false
+        elapsedProvider = nil
+        pendingLookAt = nil
+        frameDispatchScheduled = false
+        clearPendingDebounce()
     }
 
     fileprivate func handleLookAtPoint(_ lookAtPoint: SIMD3<Float>) {
@@ -148,6 +152,13 @@ final class AttentionTrackingManager: NSObject {
 }
 
 extension AttentionTrackingManager: ARSessionDelegate {
+    nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
+        Task { @MainActor in
+            guard self.isRunning else { return }
+            self.resetRunningState()
+        }
+    }
+
     nonisolated func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
         guard let faceAnchor = anchors.compactMap({ $0 as? ARFaceAnchor }).first else { return }
         let lookAtPoint = faceAnchor.lookAtPoint

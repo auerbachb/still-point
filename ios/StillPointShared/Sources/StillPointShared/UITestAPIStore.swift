@@ -252,6 +252,7 @@ actor UITestAPIStore {
                     isPublic: store.user.isPublic,
                     currentDay: store.user.currentDay,
                     aphorismsEnabled: store.user.aphorismsEnabled,
+                    attentionTrackingEnabled: store.user.attentionTrackingEnabled,
                     dualTrackEnabled: store.user.dualTrackEnabled,
                     secondTrackDay: nextSecond
                 )
@@ -263,6 +264,7 @@ actor UITestAPIStore {
                     isPublic: store.user.isPublic,
                     currentDay: max(store.user.currentDay, data.dayNumber + 1),
                     aphorismsEnabled: store.user.aphorismsEnabled,
+                    attentionTrackingEnabled: store.user.attentionTrackingEnabled,
                     dualTrackEnabled: store.user.dualTrackEnabled,
                     secondTrackDay: store.user.secondTrackDay
                 )
@@ -283,6 +285,7 @@ actor UITestAPIStore {
             isPublic: store.user.isPublic,
             currentDay: store.user.currentDay,
             aphorismsEnabled: store.user.aphorismsEnabled,
+            attentionTrackingEnabled: store.user.attentionTrackingEnabled,
             dualTrackEnabled: true,
             secondTrackDay: store.user.secondTrackDay
         )

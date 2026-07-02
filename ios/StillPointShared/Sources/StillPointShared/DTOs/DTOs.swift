@@ -27,7 +27,7 @@ public struct UserDTO: Codable, Sendable {
         isPublic: Bool,
         currentDay: Int,
         aphorismsEnabled: Bool = false,
-        attentionTrackingEnabled: Bool = false,
+        attentionTrackingEnabled: Bool? = nil,
         dualTrackEnabled: Bool = false,
         secondTrackDay: Int = 1
     ) {
@@ -37,7 +37,7 @@ public struct UserDTO: Codable, Sendable {
         self.isPublic = isPublic
         self.currentDay = currentDay
         self.aphorismsEnabled = aphorismsEnabled
-        self.attentionTrackingEnabled = attentionTrackingEnabled
+        self.attentionTrackingEnabled = attentionTrackingEnabled ?? false
         self.dualTrackEnabled = dualTrackEnabled
         self.secondTrackDay = secondTrackDay
     }
