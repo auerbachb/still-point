@@ -49,7 +49,7 @@ struct AppBlockingSettingsView: View {
                 } label: {
                     Text(manager.hasSelection ? "Edit blocked apps" : "Choose apps")
                         .font(SPFont.mono(13, weight: .medium))
-                        .spCapsuleButtonStyle(.greenSolid, size: .fullWidth)
+                        .spCapsuleButtonStyle(.greenSolid, size: .fullWidth, tall: true)
                 }
                 .accessibilityIdentifier("appBlocking.chooseAppsButton")
 

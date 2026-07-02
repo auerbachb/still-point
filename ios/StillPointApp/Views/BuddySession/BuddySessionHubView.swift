@@ -106,6 +106,7 @@ struct BuddySessionHubView: View {
                     .font(SPFont.serifItalic(20, weight: .light))
                     .spCapsuleButtonStyle(.greenGradient, size: .fullWidth, tall: true)
             }
+            .accessibilityIdentifier("buddy.startSharedSessionButton")
             .disabled(busy)
             .opacity(busy ? 0.6 : 1)
 
@@ -184,6 +185,7 @@ struct BuddySessionHubView: View {
                     .font(SPFont.serifItalic(20, weight: .light))
                     .spCapsuleButtonStyle(.greenGradient, size: .fullWidth, tall: true)
             }
+            .accessibilityIdentifier("buddy.enterWaitingRoomButton")
         }
     }
 

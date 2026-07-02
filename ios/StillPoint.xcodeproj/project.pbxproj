@@ -42,6 +42,8 @@
 		A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */; };
 		A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */; };
+		C498A1B2C3D4E5F60718293 /* SPCapsuleButtonStyleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */; };
+		C498B2C3D4E5F6071829A6 /* XCTestCase+StillPointUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */; };
 		AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
@@ -140,6 +142,8 @@
 		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingViewModel.swift; sourceTree = "<group>"; };
 		AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointAppUITests.swift; sourceTree = "<group>"; };
+		C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyleUITests.swift; sourceTree = "<group>"; };
+		C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCTestCase+StillPointUITest.swift"; sourceTree = "<group>"; };
 		AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
 		B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointMonitorExtension.swift; sourceTree = "<group>"; };
@@ -180,6 +184,7 @@
 			children = (
 				45BC84AB51307C865EF7257A /* README.md */,
 				AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */,
+				C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */,
 				54D40F602F07E94E9BD6CF37 /* Helpers */,
 				F0FD78DD2EB1220358FB4672 /* Snapshots */,
 			);
@@ -270,6 +275,7 @@
 			children = (
 				A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */,
 				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
+				C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -522,8 +528,10 @@
 				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
+				C498A1B2C3D4E5F60718293 /* SPCapsuleButtonStyleUITests.swift in Sources */,
 				A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */,
 				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
+				C498B2C3D4E5F6071829A6 /* XCTestCase+StillPointUITest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
