@@ -29,27 +29,23 @@ struct HabitTimelineProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (HabitEntry) -> Void) {
-        completion(HabitEntry(date: Date(), data: WidgetDataStore.load() ?? .preview))
+        let data: WidgetData
+        if context.isPreview {
+            data = .preview
+        } else if let loaded = WidgetDataStore.load() {
+            data = WidgetDataStore.normalizedForDisplay(loaded)
+        } else {
+            data = .loggedOut
+        }
+        completion(HabitEntry(date: Date(), data: data))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<HabitEntry>) -> Void) {
-        let data = WidgetDataStore.load() ?? .loggedOut
-        let entry = HabitEntry(date: Date(), data: data)
-        let nextRefresh = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date().addingTimeInterval(3600)
+        let now = Date()
+        let raw = WidgetDataStore.load() ?? .loggedOut
+        let data = WidgetDataStore.normalizedForDisplay(raw, now: now)
+        let entry = HabitEntry(date: now, data: data)
+        let nextRefresh = Calendar.current.startOfDay(for: now.addingTimeInterval(86400))
         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
-}
-
-private extension WidgetData {
-    static let preview = WidgetData(
-        isLoggedIn: true,
-        userId: "preview",
-        currentDay: 24,
-        secondTrackDay: 8,
-        dualTrackEnabled: false,
-        primaryDoneToday: false,
-        secondDoneToday: false,
-        streak: 12,
-        lastUpdated: Date()
-    )
 }

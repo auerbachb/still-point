@@ -33,7 +33,7 @@ struct HabitWidgetEntryView: View {
                     .foregroundStyle(WidgetPalette.foregroundMuted)
                     .tracking(1)
 
-                if entry.data.isPrimaryCompleteForToday {
+                if entry.data.isPrimaryCompleteForToday(at: entry.date) {
                     doneBadge
                 } else {
                     Text("\(entry.data.primaryDurationSeconds)s sit")
@@ -90,7 +90,7 @@ struct HabitWidgetEntryView: View {
                             .font(.system(size: 11, weight: .regular, design: .monospaced))
                             .foregroundStyle(WidgetPalette.foregroundMuted)
                     }
-                    if entry.data.isPrimaryCompleteForToday {
+                    if entry.data.isPrimaryCompleteForToday(at: entry.date) {
                         doneBadge
                     }
                 }

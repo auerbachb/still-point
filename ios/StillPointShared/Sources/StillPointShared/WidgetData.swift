@@ -58,9 +58,22 @@ public struct WidgetData: Codable, Sendable, Equatable {
     }
 
     /// Whether the user has finished today's primary standard sit.
-    public var isPrimaryCompleteForToday: Bool {
-        primaryDoneToday
+    public func isPrimaryCompleteForToday(at now: Date = Date()) -> Bool {
+        primaryDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
     }
+
+    /// Widget gallery / Xcode preview fixture.
+    public static let preview = WidgetData(
+        isLoggedIn: true,
+        userId: "preview",
+        currentDay: 24,
+        secondTrackDay: 8,
+        dualTrackEnabled: false,
+        primaryDoneToday: false,
+        secondDoneToday: false,
+        streak: 12,
+        lastUpdated: Date()
+    )
 }
 
 public enum WidgetDataStore {
@@ -124,6 +137,26 @@ public enum WidgetDataStore {
         )
     }
 
+    /// Normalize persisted data for widget display, clearing stale "done today"
+    /// flags and re-resolving streak after local midnight without an app sync.
+    public static func normalizedForDisplay(_ data: WidgetData, now: Date = Date()) -> WidgetData {
+        guard data.isLoggedIn else { return data }
+        guard !isSameLocalDay(data.lastUpdated, now) else { return data }
+
+        var copy = data
+        copy.primaryDoneToday = false
+        copy.secondDoneToday = false
+        if let userId = data.userId {
+            copy.streak = resolvedStreak(
+                userId: userId,
+                primaryDoneToday: false,
+                previous: data,
+                now: now
+            )
+        }
+        return copy
+    }
+
     /// Increment streak once per local day when the primary track flips to done.
     /// Preserves the last known streak across launches; resets on account switch.
     public static func resolvedStreak(
@@ -140,6 +173,11 @@ public enum WidgetDataStore {
             return max(previous.streak, 0) + 1
         }
 
+        if primaryDoneToday && !isSameLocalDay(previous.lastUpdated, now) {
+            // New local day and today is already complete (e.g. cold start after sync).
+            return max(previous.streak, 0) + 1
+        }
+
         if !primaryDoneToday && !isSameLocalDay(previous.lastUpdated, now) {
             // A new local day without a completed sit yet — streak is broken.
             return 0
@@ -148,7 +186,7 @@ public enum WidgetDataStore {
         return max(previous.streak, 0)
     }
 
-    private static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
+    static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
         Calendar.current.isDate(lhs, inSameDayAs: rhs)
     }
 }

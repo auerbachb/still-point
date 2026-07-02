@@ -123,6 +123,49 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(streak, 0)
     }
 
+    func testResolvedStreakIncrementsOnNewDayWhenAlreadyDone() {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let now = Date()
+        let previous = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 4,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: true,
+            secondDoneToday: false,
+            streak: 5,
+            lastUpdated: yesterday
+        )
+
+        let streak = WidgetDataStore.resolvedStreak(
+            userId: "u1",
+            primaryDoneToday: true,
+            previous: previous,
+            now: now
+        )
+        XCTAssertEqual(streak, 6)
+    }
+
+    func testNormalizedForDisplayClearsStaleDoneToday() {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let stale = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 4,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: true,
+            secondDoneToday: false,
+            streak: 6,
+            lastUpdated: yesterday
+        )
+
+        let normalized = WidgetDataStore.normalizedForDisplay(stale, now: Date())
+        XCTAssertFalse(normalized.isPrimaryCompleteForToday(at: Date()))
+        XCTAssertEqual(normalized.streak, 0)
+    }
+
     func testMakeSnapshotPreservesStreakSameDay() {
         let now = Date()
         let user = makeUser()
