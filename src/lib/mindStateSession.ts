@@ -186,12 +186,24 @@ export function computeMindStateCompositionFromLog(
   };
   if (totalSeconds === 0) return out;
 
+  const safeLog = [...log]
+    .map((entry) => ({
+      time: Math.min(Math.max(entry.time, 0), totalSeconds),
+      state: entry.state,
+    }))
+    .sort((a, b) => a.time - b.time);
+
   let lastTime = 0;
   let lastState = "clear";
-  const full = log.length === 0 ? [{ time: totalSeconds, state: "clear" }] : [...log, { time: totalSeconds, state: "clear" }];
+  const full = safeLog.length === 0
+    ? [{ time: totalSeconds, state: "clear" }]
+    : [...safeLog, { time: totalSeconds, state: "clear" }];
   for (const entry of full) {
-    bucketMindStateSeconds(lastState, entry.time - lastTime, out);
-    lastTime = entry.time;
+    const clampedTime = Math.min(Math.max(entry.time, lastTime), totalSeconds);
+    if (clampedTime > lastTime) {
+      bucketMindStateSeconds(lastState, clampedTime - lastTime, out);
+    }
+    lastTime = clampedTime;
     lastState = entry.state;
   }
 

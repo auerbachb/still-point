@@ -67,7 +67,8 @@ function compositionPercents(composition: MindStateCompositionSeconds): MindStat
 
 function compositionForSession(session: MindStateTrendSessionInput): MindStateCompositionSeconds {
   const endTime = sessionEndTime(session);
-  return computeMindStateCompositionFromLog(session.mindStateLog ?? [], endTime);
+  const log = Array.isArray(session.mindStateLog) ? session.mindStateLog : [];
+  return computeMindStateCompositionFromLog(log, endTime);
 }
 
 /**
