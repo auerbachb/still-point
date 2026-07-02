@@ -17,6 +17,7 @@ import {
   useTrackingControlsUnlocked,
 } from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
+import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -92,6 +93,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
+  const [showGuidedExercise, setShowGuidedExercise] = useState(false);
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   const trackingControlsUnlocked = useTrackingControlsUnlocked();
@@ -367,6 +369,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
 
   return (
     <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <GuidedExerciseOverlay open={showGuidedExercise} onClose={() => setShowGuidedExercise(false)} />
       <BlockTimer
         totalSeconds={totalSeconds}
         isActive={isActive}
@@ -570,7 +573,32 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           </div>
 
           {!showPostDistractionCapture && (
-            <div style={{ marginTop: isMobile ? "12px" : "18px", display: "flex", justifyContent: "center", width: "100%" }}>
+            <div
+              style={{
+                marginTop: isMobile ? "12px" : "18px",
+                display: "flex",
+                justifyContent: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                width: "100%",
+              }}
+            >
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={() => setShowGuidedExercise(true)}
+                  aria-label="Open guided exercise"
+                  data-testid="guided-exercise-open"
+                  style={{
+                    ...captureNoteButtonStyle,
+                    borderColor: "var(--accent-green-border-subtle)",
+                    color: "var(--accent-green-dim)",
+                    opacity: sessionChromeDimmed ? 0.48 : 0.88,
+                  }}
+                >
+                  guided exercise
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleOpenThoughtCapture}
