@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { withApiHandler } from "./withApiHandler";
 
 describe("withApiHandler", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("returns handler response on success", async () => {
     const handler = withApiHandler("Test route", async () =>
       NextResponse.json({ ok: true }),
@@ -23,7 +27,6 @@ describe("withApiHandler", () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "Internal server error" });
     expect(consoleError).toHaveBeenCalledWith("Test route error:", expect.any(Error));
-    consoleError.mockRestore();
   });
 
   test("uses mapError when provided", async () => {
@@ -48,7 +51,6 @@ describe("withApiHandler", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "Conflict" });
     expect(consoleError).not.toHaveBeenCalled();
-    consoleError.mockRestore();
   });
 
   test("passes request and context through", async () => {

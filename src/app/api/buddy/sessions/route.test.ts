@@ -18,6 +18,14 @@ vi.mock("@/db", () => ({
   },
 }));
 
+const poolDbTransaction = vi.fn((callback: (tx: { insert: typeof dbInsert; select: typeof dbSelect }) => unknown) =>
+  callback({ insert: dbInsert, select: dbSelect }),
+);
+
+vi.mock("@/db/pool", () => ({
+  poolDb: { transaction: poolDbTransaction },
+}));
+
 vi.mock("@/db/schema", () => ({
   buddySessions: {},
   buddySessionParticipants: {},

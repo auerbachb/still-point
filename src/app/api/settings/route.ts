@@ -4,6 +4,7 @@ import { poolDb } from "@/db/pool";
 import { users } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
+import { isUniqueViolation } from "@/lib/dbErrors";
 import { USERNAME_ERROR, isValidUsername } from "@/lib/username";
 import { and, eq, ne, sql } from "drizzle-orm";
 
@@ -107,12 +108,7 @@ export const PATCH = withApiHandler(
       // Defensive: if a concurrent signup commits the case-EXACT username between
       // the SELECT inside the transaction and the UPDATE, Postgres' case-sensitive
       // unique index will raise SQLSTATE 23505. Surface as 409 rather than 500.
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        (error as { code: unknown }).code === "23505"
-      ) {
+      if (isUniqueViolation(error)) {
         return NextResponse.json({ error: USERNAME_TAKEN_ERROR }, { status: 409 });
       }
       return null;

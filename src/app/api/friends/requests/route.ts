@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { friendRequests, friendships, notificationPreferences, users } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
+import { isUniqueViolation } from "@/lib/dbErrors";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { friendRequestNotificationsAllowed } from "@/lib/notification-preferences";
 import { sendFriendRequestNotification } from "@/lib/notifications";
@@ -145,8 +146,7 @@ export const POST = withApiHandler("Friend request create", async (request: Next
 
     return NextResponse.json({ request: created }, { status: 201 });
   } catch (e: unknown) {
-    const code = typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : "";
-    if (code === "23505") {
+    if (isUniqueViolation(e)) {
       return NextResponse.json(
         { error: "A pending friend request already exists between these users" },
         { status: 409 },

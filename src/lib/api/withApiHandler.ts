@@ -30,9 +30,17 @@ function wrapHandler(
       try {
         return await handler(...args);
       } catch (error) {
-        const mapped = mapError?.(error);
-        if (mapped) return mapped;
-        logError(label, error);
+        try {
+          const mapped = mapError?.(error);
+          if (mapped) return mapped;
+        } catch (mapErrorError) {
+          defaultLogError(`${label} mapError error:`, mapErrorError);
+        }
+        try {
+          logError(label, error);
+        } catch (logErrorError) {
+          defaultLogError(`${label} logError error:`, logErrorError);
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
       }
     };

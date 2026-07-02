@@ -120,7 +120,6 @@ export const POST = withApiHandler(
     if (body.thoughts != null && !Array.isArray(body.thoughts)) {
       console.warn("Buddy personal session rejected invalid thoughts payload", {
         buddySessionId: sessionId,
-        userId: auth.user.userId,
         submittedType: typeof body.thoughts,
       });
       return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
@@ -129,7 +128,6 @@ export const POST = withApiHandler(
     if (hasRejectedSubmittedThoughts(normalizedThoughts)) {
       console.warn("Buddy personal session rejected invalid thoughts payload", {
         buddySessionId: sessionId,
-        userId: auth.user.userId,
         submittedCount: normalizedThoughts.submittedCount,
         invalidCount: normalizedThoughts.invalidCount,
       });

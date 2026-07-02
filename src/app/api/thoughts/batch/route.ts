@@ -4,6 +4,8 @@ import { poolDb } from "@/db/pool";
 import { sessions, thoughts } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
+import { isUuid } from "@/lib/friends";
+import { readJsonObject } from "@/lib/readJsonObject";
 import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
 import { and, eq } from "drizzle-orm";
 
@@ -11,11 +13,13 @@ export const POST = withApiHandler("Batch thoughts", async (request: NextRequest
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 
-  const { sessionId, dayNumber, thoughts: thoughtItems } = await request.json();
+  const json = await readJsonObject(request);
+  if (!json.ok) return json.response;
+  const { sessionId, dayNumber, thoughts: thoughtItems } = json.body;
 
   if (
     typeof sessionId !== "string" ||
-    sessionId.length === 0 ||
+    !isUuid(sessionId) ||
     typeof dayNumber !== "number" ||
     !Number.isFinite(dayNumber) ||
     !Array.isArray(thoughtItems)
