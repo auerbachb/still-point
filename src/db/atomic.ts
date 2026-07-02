@@ -7,6 +7,7 @@ import {
 } from "@/db/schema";
 import { shouldAdvanceDay, type SessionType, type Track } from "@/lib/constants";
 import { and, eq, ne, sql } from "drizzle-orm";
+import { isUniqueViolation } from "@/lib/dbErrors";
 
 type SessionInsertValues = typeof sessions.$inferInsert;
 type ThoughtInsertRow = Pick<
@@ -37,32 +38,39 @@ export async function atomicUpdateUsername(params: {
 }): Promise<UsernameUpdateResult> {
   const { userId, username, updates } = params;
 
-  const [updated] = await db
-    .update(users)
-    .set({ ...updates, username })
-    .where(
-      and(
-        eq(users.id, userId),
-        sql`not exists (
-          select 1 from ${users} u
-          where lower(u.username) = lower(${username})
-            and u.id <> ${userId}
-        )`,
-      ),
-    )
-    .returning({
-      id: users.id,
-      email: users.email,
-      username: users.username,
-      isPublic: users.isPublic,
-      currentDay: users.currentDay,
-      aphorismsEnabled: users.aphorismsEnabled,
-      dualTrackEnabled: users.dualTrackEnabled,
-      secondTrackDay: users.secondTrackDay,
-    });
+  try {
+    const [updated] = await db
+      .update(users)
+      .set({ ...updates, username })
+      .where(
+        and(
+          eq(users.id, userId),
+          sql`not exists (
+            select 1 from ${users} u
+            where lower(u.username) = lower(${username})
+              and u.id <> ${userId}
+          )`,
+        ),
+      )
+      .returning({
+        id: users.id,
+        email: users.email,
+        username: users.username,
+        isPublic: users.isPublic,
+        currentDay: users.currentDay,
+        aphorismsEnabled: users.aphorismsEnabled,
+        dualTrackEnabled: users.dualTrackEnabled,
+        secondTrackDay: users.secondTrackDay,
+      });
 
-  if (updated) {
-    return { ok: true, user: updated };
+    if (updated) {
+      return { ok: true, user: updated };
+    }
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, reason: "taken" };
+    }
+    throw error;
   }
 
   const [existing] = await db
@@ -328,18 +336,27 @@ export async function atomicAcceptFriendRequest(params: {
 
 export async function atomicDeleteUserAccount(params: {
   userId: string;
-  emailHash: string;
 }): Promise<boolean> {
   const result = await db.execute(sql`
-    with logged as (
+    with user_row as (
+      select id, email
+      from users
+      where id = ${params.userId}::uuid
+      for update
+    ),
+    logged as (
       insert into account_deletion_log (user_id, email_hash)
-      values (${params.userId}::uuid, ${params.emailHash})
+      select
+        user_row.id,
+        encode(digest(lower(trim(user_row.email)), 'sha256'), 'hex')
+      from user_row
       returning id
     ),
     deleted as (
-      delete from users
-      where id = ${params.userId}::uuid
-      returning id
+      delete from users u
+      using user_row
+      where u.id = user_row.id
+      returning u.id
     )
     select id from deleted
   `);
@@ -359,11 +376,10 @@ export async function atomicIssuePasswordResetToken(params: {
   newTokenId: string;
   previousTokenId: string | null;
 } | null> {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${params.userId}::text))`);
+
   const result = await db.execute(sql`
-    with locked as (
-      select pg_advisory_xact_lock(hashtext(${params.userId}::text))
-    ),
-    recent as (
+    with recent as (
       select id
       from password_reset_tokens
       where user_id = ${params.userId}::uuid
@@ -412,6 +428,8 @@ export async function atomicRollbackPasswordResetToken(params: {
   newTokenId: string;
   previousTokenId: string | null;
 }): Promise<void> {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${params.userId}::text))`);
+
   if (params.previousTokenId) {
     await db.execute(sql`
       with invalidated as (
@@ -427,6 +445,13 @@ export async function atomicRollbackPasswordResetToken(params: {
         set used_at = null
         where id = ${params.previousTokenId}::uuid
           and user_id = ${params.userId}::uuid
+          and not exists (
+            select 1
+            from password_reset_tokens prt
+            where prt.user_id = ${params.userId}::uuid
+              and prt.used_at is null
+              and prt.id <> ${params.previousTokenId}::uuid
+          )
         returning id
       )
       select 1
@@ -634,6 +659,7 @@ export async function atomicRecordBuddyPersonalSession(params: {
   const thoughtCountSelect = thoughtValues.length > 0
     ? sql`(select count(*)::int from thought_rows)`
     : sql`0`;
+  const thoughtCountValue = params.thoughtItems.length;
 
   const result = await db.execute(sql`
     with user_row as (
@@ -659,7 +685,7 @@ export async function atomicRecordBuddyPersonalSession(params: {
         true,
         ${params.actualTime},
         ${params.clearPercent},
-        ${params.thoughtCount},
+        ${thoughtCountValue},
         ${JSON.stringify(params.mindStateLog)}::jsonb,
         ${params.sessionDate}
       from user_row
@@ -695,6 +721,8 @@ export async function atomicRecordBuddyPersonalSession(params: {
         inserted.*,
         ${thoughtCountSelect} as inserted_thought_count
       from inserted
+      where exists (select 1 from participant)
+        and exists (select 1 from revision)
     )
     select * from summary
   `);

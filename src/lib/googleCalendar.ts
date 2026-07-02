@@ -121,11 +121,6 @@ export async function syncBuddySessionCalendarForUser(
   }
   const scheduledStartAt = session.scheduledStartAt;
   try {
-    // Serialize concurrent syncs for the same session/user so only one caller creates the Google event.
-    await db.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${session.id} || ':' || ${userId}))`,
-    );
-
     const existingEvent = await readCalendarEventRow(session.id, userId);
     if (existingEvent?.googleEventId && existingEvent.status === "created") {
       return {
@@ -136,36 +131,35 @@ export async function syncBuddySessionCalendarForUser(
       };
     }
 
-    // Claim or reclaim rows without a Google event id (fresh claim, failed retry, or
-    // stale placeholder). Rows that already have googleEventId are left untouched.
-    const [claimed] = await db
-      .insert(buddySessionCalendarEvents)
-      .values({
-        buddySessionId: session.id,
-        userId,
-        status: "created",
-        googleEventId: null,
-        error: null,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [
-          buddySessionCalendarEvents.buddySessionId,
-          buddySessionCalendarEvents.userId,
-        ],
-        set: {
-          status: "created",
-          googleEventId: null,
-          error: null,
-          updatedAt: new Date(),
-        },
-        where: isNull(buddySessionCalendarEvents.googleEventId),
-      })
-      .returning({
-        id: buddySessionCalendarEvents.id,
-        googleEventId: buddySessionCalendarEvents.googleEventId,
-      });
+    const lockAndClaim = await db.execute(sql`
+      with locked as (
+        select pg_advisory_xact_lock(hashtext(${session.id} || ':' || ${userId})) as acquired
+      ),
+      claim as (
+        insert into buddy_session_calendar_events (
+          buddy_session_id, user_id, status, google_event_id, error, updated_at
+        )
+        select
+          ${session.id}::uuid,
+          ${userId}::uuid,
+          'created',
+          null,
+          null,
+          now()
+        from locked
+        on conflict (buddy_session_id, user_id) do update
+        set
+          status = 'created',
+          google_event_id = null,
+          error = null,
+          updated_at = now()
+        where buddy_session_calendar_events.google_event_id is null
+        returning id, google_event_id
+      )
+      select id, google_event_id from claim
+    `);
 
+    const claimed = lockAndClaim.rows[0];
     if (!claimed) {
       const synced = await readCalendarEventRow(session.id, userId);
       if (synced?.googleEventId && synced.status === "created") {

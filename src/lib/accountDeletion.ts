@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { atomicDeleteUserAccount } from "@/db/atomic";
-import { accountDeletionLog, users } from "@/db/schema";
+import { accountDeletionLog } from "@/db/schema";
 
 export function getAccountDeletionEmailHash(email: string): string {
   return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
@@ -34,16 +34,5 @@ export async function wasAccountDeleted(email: string): Promise<boolean> {
  * `buddy_session_id` cleared.
  */
 export async function deleteUserAccount(userId: string): Promise<boolean> {
-  const [user] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (!user) return false;
-
-  return atomicDeleteUserAccount({
-    userId: user.id,
-    emailHash: getAccountDeletionEmailHash(user.email),
-  });
+  return atomicDeleteUserAccount({ userId });
 }

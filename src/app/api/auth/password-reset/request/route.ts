@@ -62,11 +62,15 @@ export const POST = withApiHandler("Password reset request", async (request: Nex
     try {
       await sendPasswordResetEmail({ to: user.email, token: tokenIssue.token });
     } catch (error) {
-      await atomicRollbackPasswordResetToken({
-        userId: user.id,
-        newTokenId: tokenIssue.newTokenId,
-        previousTokenId: tokenIssue.previousTokenId,
-      });
+      try {
+        await atomicRollbackPasswordResetToken({
+          userId: user.id,
+          newTokenId: tokenIssue.newTokenId,
+          previousTokenId: tokenIssue.previousTokenId,
+        });
+      } catch (rollbackError) {
+        console.error("Password reset rollback error:", rollbackError);
+      }
       console.error("Password reset email delivery error:", error);
     }
   }

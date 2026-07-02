@@ -78,7 +78,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         let beginButton = app.buttons["home.beginButton"]
         XCTAssertTrue(beginButton.waitForExistence(timeout: 8))
-        tapByStableCenter(beginButton, in: app)
+        beginButton.tap()
         // Wait for session root before terminating: terminate() during Begin's nav/audio init races launchd ("Failed to terminate ... :0").
         XCTAssertTrue(
             app.otherElements["root.currentView.session"].waitForExistence(timeout: 30),
