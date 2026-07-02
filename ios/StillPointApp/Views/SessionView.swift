@@ -3,8 +3,10 @@ import StillPointShared
 import UIKit
 
 struct SessionView: View {
-    /// Space reserved when both distraction hold bar and controls are visible (includes persistent Capture row).
-    private static let bottomOverlayReserveWithControls: CGFloat = 324
+    /// Space reserved when tracking info, secondary controls, and thumb-reach holds are visible.
+    private static let bottomOverlayReserveWithControls: CGFloat = 348
+    /// Minimum vertical hit target for hold-to-track controls (Apple HIG ~44pt+).
+    private static let thumbReachHoldMinHeight: CGFloat = 56
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
@@ -70,15 +72,18 @@ struct SessionView: View {
                 }
             }
 
-            // Bottom chrome: hold tracking never collapses; secondary controls dim while running.
-            VStack {
+            // Bottom chrome: secondary controls above; primary hold targets pinned to thumb-reach zone.
+            VStack(spacing: 0) {
                 Spacer()
                 if sessionInProgress {
-                    persistentDistractionBar
+                    sessionTrackingInfoBar
                 }
                 controlPanel
                     .opacity(secondaryChromeDimmed ? 0.32 : 1)
                     .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
+                if sessionInProgress {
+                    thumbReachHoldControls
+                }
                 Color.clear
                     .frame(width: 1, height: 1)
                     .accessibilityElement(children: .ignore)
@@ -251,8 +256,8 @@ struct SessionView: View {
         vm.isActive && !vm.controlsVisible
     }
 
-    /// Hold control + state dot: visible for the whole active sit path (not hidden with other chrome).
-    private var persistentDistractionBar: some View {
+    /// Status + hints above the thumb zone; hold controls live in `thumbReachHoldControls`.
+    private var sessionTrackingInfoBar: some View {
         VStack(spacing: SPSpacing.s2) {
             HStack(spacing: SPSpacing.s2) {
                 Circle()
@@ -327,71 +332,83 @@ struct SessionView: View {
                 .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
                 .padding(.top, SPSpacing.s1)
             }
-
-            HStack(spacing: SPSpacing.s2) {
-                Text("Hold — light distraction")
-                    .font(SPFont.serifItalic(15))
-                    .foregroundStyle(Color(SPColor.fg))
-                    .multilineTextAlignment(.center)
-                    .spCapsuleButtonStyle(
-                        vm.mindState == "thinking" ? .amber : .green,
-                        size: .fullWidth,
-                        horizontalPadding: SPSpacing.s3
-                    )
-                    .foregroundStyle(Color(SPColor.fg))
-                    .opacity(vm.isActive ? 1 : 0.45)
-                    .accessibilityValue(vm.mindState == "thinking" ? "active" : "inactive")
-                    .accessibilityLabel("Hold for light distraction. Release when aware again.")
-                    .accessibilityIdentifier("session.lightDistractionHoldButton")
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if vm.isActive { vm.beginDistraction() }
-                            }
-                            .onEnded { _ in
-                                vm.endDistraction()
-                            }
-                    )
-
-                Text("Hold — hyperfocus")
-                    .font(SPFont.serifItalic(15))
-                    .foregroundStyle(Color(SPColor.fg))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, SPSpacing.s3)
-                    .padding(.vertical, SPSpacing.s2)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        vm.mindState == "hyperfocus"
-                            ? Color(red: 0.15, green: 0.22, blue: 0.38).opacity(0.55)
-                            : SPColor.surface2
-                    )
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(
-                            vm.mindState == "hyperfocus"
-                                ? Color.blue.opacity(0.45)
-                                : SPColor.border2
-                        )
-                    )
-                    .opacity(vm.isActive ? 1 : 0.45)
-                    .accessibilityValue(vm.mindState == "hyperfocus" ? "active" : "inactive")
-                    .accessibilityLabel("Hold for hyperfocus. Release to return to aware.")
-                    .accessibilityIdentifier("session.hyperfocusHoldButton")
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if vm.isActive { vm.beginHyperfocus() }
-                            }
-                            .onEnded { _ in
-                                vm.endHyperfocus()
-                            }
-                    )
-            }
-            .padding(.horizontal, SPSpacing.s2)
         }
-        .padding(.vertical, SPSpacing.s3)
+        .padding(.top, SPSpacing.s3)
+        .padding(.bottom, SPSpacing.s2)
         .background(
             SPColor.bg.opacity(0.92)
+                .background(.ultraThinMaterial)
+        )
+    }
+
+    /// Primary hold targets pinned to the lower third + home-indicator safe area.
+    private var thumbReachHoldControls: some View {
+        HStack(spacing: SPSpacing.s2) {
+            Text("\(vm.mindState == "thinking" ? "Release" : "Hold") — light distraction")
+                .font(SPFont.serifItalic(15))
+                .foregroundStyle(Color(SPColor.fg))
+                .multilineTextAlignment(.center)
+                .spCapsuleButtonStyle(
+                    vm.mindState == "thinking" ? .amber : .green,
+                    size: .fullWidth,
+                    tall: true,
+                    minHeight: Self.thumbReachHoldMinHeight,
+                    horizontalPadding: SPSpacing.s3
+                )
+                .foregroundStyle(Color(SPColor.fg))
+                .opacity(vm.isActive ? 1 : 0.45)
+                .accessibilityValue(vm.mindState == "thinking" ? "active" : "inactive")
+                .accessibilityLabel("Hold for light distraction. Release when aware again.")
+                .accessibilityIdentifier("session.lightDistractionHoldButton")
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if vm.isActive { vm.beginDistraction() }
+                        }
+                        .onEnded { _ in
+                            vm.endDistraction()
+                        }
+                )
+
+            Text("\(vm.mindState == "hyperfocus" ? "Release" : "Hold") — hyperfocus")
+                .font(SPFont.serifItalic(15))
+                .foregroundStyle(Color(SPColor.fg))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SPSpacing.s3)
+                .frame(maxWidth: .infinity, minHeight: Self.thumbReachHoldMinHeight)
+                .background(
+                    vm.mindState == "hyperfocus"
+                        ? Color(red: 0.15, green: 0.22, blue: 0.38).opacity(0.55)
+                        : SPColor.surface2
+                )
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(
+                        vm.mindState == "hyperfocus"
+                            ? Color.blue.opacity(0.45)
+                            : SPColor.border2
+                    )
+                )
+                .opacity(vm.isActive ? 1 : 0.45)
+                .accessibilityValue(vm.mindState == "hyperfocus" ? "active" : "inactive")
+                .accessibilityLabel("Hold for hyperfocus. Release to return to aware.")
+                .accessibilityIdentifier("session.hyperfocusHoldButton")
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if vm.isActive { vm.beginHyperfocus() }
+                        }
+                        .onEnded { _ in
+                            vm.endHyperfocus()
+                        }
+                )
+        }
+        .padding(.horizontal, SPSpacing.s2)
+        .padding(.top, SPSpacing.s2)
+        .padding(.bottom, SPSpacing.s2)
+        .safeAreaPadding(.bottom, SPSpacing.s1)
+        .background(
+            SPColor.bg.opacity(0.95)
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -495,7 +512,6 @@ struct SessionView: View {
         .background(
             SPColor.bg.opacity(0.9)
                 .background(.ultraThinMaterial)
-                .ignoresSafeArea(edges: .bottom)
         )
     }
 
