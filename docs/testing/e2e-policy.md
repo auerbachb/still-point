@@ -28,10 +28,11 @@ Rules:
 **Enforcement (iOS lanes):** `scripts/e2e/run-ios-tests.sh` runs a 4-tier classifier on each failed attempt:
 
 1. **Crash check first** — if a `*StillPoint*` diagnostic report under `~/Library/Logs/DiagnosticReports/` was written after the attempt-start sentinel (`<lane>-attempt-N.start`), the failure is treated as infra and consumes a retry, **regardless of any concurrent assertion-shape line in the log**. This catches macos-26 simulator XPC faults that surface as timeout-shaped assertions like `XCTAssertTrue failed - Session screen did not appear after Begin tap` but are actually launchd/sim-level crashes.
-2. **Timeout-shaped UI wait second** — if no crash report is correlated, treat the failure as retriable when the log contains either of:
+2. **Timeout-shaped UI wait second** — if no crash report is correlated, treat the failure as retriable when the log contains any of:
     - `XCTAssertTrue failed - <msg>` where `<msg>` matches `did not appear / never appear(ed) / did not exist / does not exist / should be visible / should appear / should exist / not found / never became / did not become / did not show` (case-insensitive — typical `waitForExistence(timeout:)` shape).
     - `Asynchronous wait failed: Exceeded timeout` (XCTestExpectation/`wait(for:)` predicate-value waits, e.g. `Expect predicate value == "visible" for object "session.secondaryChromeMarker"`).
-   These are UI timing flakes (mocked-API stalls, animation handoff delays, focus timing) that don't always trigger an `.ips` but reproduce inconsistently across attempts.
+    - `Failed to set device orientation:` (simulator automation stalls in `setUpWithError()` before the app launches).
+   These are UI timing flakes (mocked-API stalls, animation handoff delays, focus timing, simulator orientation confirmation) that don't always trigger an `.ips` but reproduce inconsistently across attempts.
 3. **Strict assertion check third** — for value assertions (`XCTAssertEqual`, `XCTAssertNotNil`, `XCTAssertGreaterThan`, etc.) and any `XCTAssertTrue` whose message does NOT match the timeout indicators above, the script exits without consuming the retry budget. Method-level frames like `error: -[<Module.>?<TestClass> <testMethod>]` are also non-retriable.
 4. **Default** — any other failure (infra/transient/unknown) consumes retries up to the table value.
 

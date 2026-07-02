@@ -31,6 +31,7 @@
 		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
 		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
+		A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
 		750987110FAE532744F6571E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 45BC84AB51307C865EF7257A /* README.md */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
@@ -116,6 +117,7 @@
 		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
 		3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionHubView.swift; sourceTree = "<group>"; };
 		3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIElement+TapAndType.swift"; sourceTree = "<group>"; };
+		A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIDevice+Portrait.swift"; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		4448B4F081A909461B669A8B /* StillPointApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointApp.entitlements; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 		54D40F602F07E94E9BD6CF37 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */,
 				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
 			);
 			path = Helpers;
@@ -539,6 +542,7 @@
 				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
+				A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */,
 				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

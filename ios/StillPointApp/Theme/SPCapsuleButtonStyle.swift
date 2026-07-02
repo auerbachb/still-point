@@ -53,13 +53,15 @@ struct SPCapsuleButtonStyle: ViewModifier {
         }
     }
 
-    private var resolvedHorizontalPadding: CGFloat? {
+    private var resolvedHorizontalPadding: CGFloat {
         if let horizontalPadding { return horizontalPadding }
         switch size {
-        case .compact, .regular:
-            return size == .compact ? SPSpacing.s3 : SPSpacing.s4
+        case .compact:
+            return SPSpacing.s3
+        case .regular:
+            return SPSpacing.s4
         case .fullWidth:
-            return nil
+            return 0
         }
     }
 
