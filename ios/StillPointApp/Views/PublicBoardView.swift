@@ -12,6 +12,7 @@ struct PublicBoardView: View {
                     .font(SPFont.serifItalic(28, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
                     .padding(.top, SPSpacing.s4)
+                    .accessibilityIdentifier("board.title")
 
                 Text("Not a competition — a community of people training attention together.")
                     .font(SPFont.serifItalic(15, weight: .light))

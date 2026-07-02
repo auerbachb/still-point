@@ -8,7 +8,7 @@ import {
 } from "../utils/mobile-helpers";
 
 test.describe("mobile auth and shell", () => {
-  test("login to session shell with touch and mobile nav", async ({ page, ensureLoggedIn, mockApiState }) => {
+  test("@critical login to session shell with touch and mobile nav", async ({ page, ensureLoggedIn, mockApiState }) => {
     const auth = await ensureLoggedIn();
     mockApiState.authenticated = false;
     await page.goto("/app");

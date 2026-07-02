@@ -8,11 +8,14 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - **OS:** iOS 17.0+
 - **Cold-start auth bound (documented):** auth check should complete within **5,000 ms** on this simulator class.
 
-## Test coverage map (Issue #193)
+## Test coverage map (Issue #193 / #497)
 
 - Launch → login (fixture) → main session surface + cold-start bound (`testLaunchLoginCompleteSessionAndHistoryPersistence`)
 - Start session → complete → stats visible + relaunch history persistence (`testLaunchLoginCompleteSessionAndHistoryPersistence`)
 - Thought/distraction hold controls do not stick (`testLaunchLoginCompleteSessionAndHistoryPersistence`)
+- Quick minute completes without advancing day (`testQuickMinuteCompletesWithoutDayAdvance`)
+- Logout returns to auth screen (`testLogoutReturnsToAuthScreen`)
+- Journal and board tabs reachable (`testJournalAndBoardTabsReachable`)
 - History/Settings smoke navigation path (`testHistoryAndSettingsNavigationSmoke`)
 - Layout on reference device safe areas (`testPrimaryControlsVisibleAboveHomeIndicator`)
 - Rotation policy assertion (product decision: supported and still usable) (`testRotationDecisionSessionRemainsUsableInLandscape`)
@@ -55,14 +58,9 @@ xcodebuild test \
   -only-testing:StillPointAppUITests
 ```
 
-## CI lane plan (stub until #152 merges)
+## CI lane plan
 
-Planned lane: `ios-ui-smoke`
-
-1. Boot simulator `iPhone 15 Pro` on iOS 17.x.
-2. Run the command above (or equivalent lane wrapper).
-3. Upload XCTest result bundle artifact.
-4. Publish summarized pass/fail output back to PR checks.
+Coverage matrix: [`docs/testing/e2e-coverage-matrix.md`](../../docs/testing/e2e-coverage-matrix.md). Lanes are wired in `scripts/e2e/run-ios-tests.sh` (`smoke` = golden path; `critical` = resilience + settings + quick minute + logout + journal/board).
 
 ## CI setup de-duplication notes
 

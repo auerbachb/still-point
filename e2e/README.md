@@ -1,5 +1,7 @@
 # End-to-end and integration tests
 
+Journey coverage audit (P0/P1/P2 matrix, exclusions): [`docs/testing/e2e-coverage-matrix.md`](../docs/testing/e2e-coverage-matrix.md).
+
 Most Playwright specs under `e2e/` hit the dev server with **mocked** API routes (see `e2e/fixtures/auth.fixture.ts`). The **auth DB integration** lane is different: it exercises the real `/api/auth/signup` and `/api/settings` handlers against **live Postgres** (no API mocks).
 
 ## Mobile web E2E (Playwright)

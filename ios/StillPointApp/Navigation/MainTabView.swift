@@ -22,12 +22,14 @@ struct MainTabView: View {
             ThoughtJournalView()
                 .tabItem {
                     Label("JOURNAL", systemImage: "book")
+                        .accessibilityIdentifier("tab.journal")
                 }
                 .tag(2)
 
             PublicBoardView(currentUsername: appVM.currentUser?.username)
                 .tabItem {
                     Label("BOARD", systemImage: "person.3")
+                        .accessibilityIdentifier("tab.board")
                 }
                 .tag(3)
 

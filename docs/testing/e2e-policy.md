@@ -7,6 +7,9 @@ It applies to Issue #194 and is inherited by child issues:
 - [#191](https://github.com/auerbachb/still-point/issues/191)
 - [#192](https://github.com/auerbachb/still-point/issues/192)
 - [#193](https://github.com/auerbachb/still-point/issues/193)
+- [#497](https://github.com/auerbachb/still-point/issues/497) — journey coverage matrix and gap-fill (supersedes [#190](https://github.com/auerbachb/still-point/issues/190) / [#152](https://github.com/auerbachb/still-point/issues/152) tracking)
+
+Journey × platform coverage, P0/P1/P2 tiers, and justified exclusions (OAuth, breath counting): [`e2e-coverage-matrix.md`](./e2e-coverage-matrix.md).
 
 ## 1) Retry policy and non-retriable failures
 
@@ -77,7 +80,7 @@ Enforcement:
 - Playwright tests must rely on role/locator contracts and assertion-driven waits
 - iOS tests must use XCTest expectations/predicate waits and accessibility identifiers
 
-Role/locator contract source of truth remains [#152](https://github.com/auerbachb/still-point/issues/152).
+Role/locator contract source of truth: [`e2e-coverage-matrix.md`](./e2e-coverage-matrix.md) (Issue #497); historical tracking in [#152](https://github.com/auerbachb/still-point/issues/152).
 
 ## 4) Secrets and credentials policy
 

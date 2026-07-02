@@ -4,6 +4,7 @@ import {
   expectNoHorizontalOverflow,
   expectVisibleInViewport,
   seedTrackingControlsUnlocked,
+  applyTrackingControlsUnlocked,
   simulatePullToRefreshGesture,
   tap,
   tapWithControlReveal,
@@ -13,6 +14,7 @@ test.describe("mobile session flow", () => {
   test("tracking controls remain interactive when secondary chrome dims", async ({ page, ensureLoggedIn }) => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
+    await applyTrackingControlsUnlocked(page);
     await tap(page.getByRole("button", { name: "Begin" }));
 
     const trackingLayer = page.locator('[data-session-tracking-layer="persistent"]');
@@ -36,9 +38,10 @@ test.describe("mobile session flow", () => {
     await expect(hyperfocus).toContainText("Hold");
   });
 
-  test("touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
+  test("@critical touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
+    await applyTrackingControlsUnlocked(page);
 
     const beginButton = page.getByRole("button", { name: "Begin" });
     await expectMinimumTapTarget(beginButton, "begin session button");
@@ -121,6 +124,7 @@ test.describe("mobile session flow", () => {
   test("pull-to-refresh style overscroll does not break active session", async ({ page, ensureLoggedIn }) => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
+    await applyTrackingControlsUnlocked(page);
     await tap(page.getByRole("button", { name: "Begin" }));
 
     const pauseButton = page.getByRole("button", { name: "pause" });

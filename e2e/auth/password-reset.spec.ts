@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures/auth.fixture";
 
 test.describe("password reset", () => {
-  test("request link and set new password from token", async ({ page, mockApiState }) => {
+  test("@critical request link and set new password from token", async ({ page, mockApiState }) => {
     let resetRequestedFor: string | null = null;
     let submittedNewPassword: string | null = null;
 

@@ -7,7 +7,7 @@ import { tap } from "../utils/mobile-helpers";
 // query-param flow still works from any tab URL.
 
 test.describe("tab routing reflects in URL (#292)", () => {
-  test("/app resolves to the Progress tab", async ({ page, ensureLoggedIn }) => {
+  test("@smoke /app resolves to the Progress tab", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await page.goto("/app");
     await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
