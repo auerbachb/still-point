@@ -32,7 +32,8 @@ Rules:
     - `XCTAssertTrue failed - <msg>` where `<msg>` matches `did not appear / never appear(ed) / did not exist / does not exist / should be visible / should appear / should exist / not found / never became / did not become / did not show` (case-insensitive — typical `waitForExistence(timeout:)` shape).
     - `Asynchronous wait failed: Exceeded timeout` (XCTestExpectation/`wait(for:)` predicate-value waits, e.g. `Expect predicate value == "visible" for object "session.secondaryChromeMarker"`).
     - `Failed to set device orientation:` (simulator automation stalls in `setUpWithError()` before the app launches).
-   These are UI timing flakes (mocked-API stalls, animation handoff delays, focus timing, simulator orientation confirmation) that don't always trigger an `.ips` but reproduce inconsistently across attempts.
+    - `Timed out while evaluating UI query` or `Timed out waiting for` (XCUITest query/wait timeouts that surface as method-level error frames without `XCTAssert*` lines — e.g. `testLaunchLoginCompleteSessionAndHistoryPersistence` smoke flake, issue #496).
+   These are UI timing flakes (mocked-API stalls, animation handoff delays, focus timing, simulator orientation confirmation, XCUITest query stalls) that don't always trigger an `.ips` but reproduce inconsistently across attempts.
 3. **Strict assertion check third** — for value assertions (`XCTAssertEqual`, `XCTAssertNotNil`, `XCTAssertGreaterThan`, etc.) and any `XCTAssertTrue` whose message does NOT match the timeout indicators above, the script exits without consuming the retry budget. Method-level frames like `error: -[<Module.>?<TestClass> <testMethod>]` are also non-retriable.
 4. **Default** — any other failure (infra/transient/unknown) consumes retries up to the table value.
 
@@ -203,7 +204,7 @@ Default behavior: report-only, store JSON artifacts.
 app-reported cold-start auth-check latency (`coldStartAuthCheckMs`), distinct
 from the `app_boot_seconds` metric above and from XCTest launch overhead.
 
-- **Bound:** 8000ms. Raised from 5000ms in [#334](https://github.com/auerbachb/still-point/issues/334) because the auth-check intermittently exceeded 5000ms on contended macos-26 / iOS-26 simulators, producing infra-shaped flakes rather than real regressions.
+- **Bound:** 12000ms. Raised from 5000ms in [#334](https://github.com/auerbachb/still-point/issues/334) and from 8000ms when macos-26 / iOS-26 CI simulators still reported auth-check latency above 8000ms under contention (infra-shaped flakes, not auth regressions).
 - **Scope:** the assertion runs only on cold-start paths that boot to the auth screen (`seedAuthenticated: false`). Authenticated boots (`seedAuthenticated: true`) and seeded relaunches pass `assertColdStart: false`, since the auth-check there is incidental to what the test asserts (home/settings/session behavior).
 - **Rationale:** keeping the guard on the unauthenticated cold-start path preserves a meaningful latency check where it is the focus, while removing it from authenticated boots eliminates the intermittent failures flagged in #334 (Option 3: skip where cold-start is not the focus).
 

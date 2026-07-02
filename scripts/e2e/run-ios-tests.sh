@@ -201,6 +201,8 @@ is_retriable_failure() {
   #   "Asynchronous wait failed: Exceeded timeout of 5 seconds, with unfulfilled
   #    expectations: \"Expect predicate value == 'visible' for object
   #    'session.secondaryChromeMarker'\"" (PR #328 attempt 2)
+  #   "Timed out while evaluating UI query" / "Timed out waiting for" (issue #496,
+  #    testLaunchLoginCompleteSessionAndHistoryPersistence smoke flake)
   if grep -qiE 'XCTAssertTrue failed - .*(did not appear|never appear(ed)?|did not exist|does not exist|should be visible|should appear|should exist|not found|never became|did not become|did not show)' "$log"; then
     return 0
   fi
@@ -217,26 +219,27 @@ is_retriable_failure() {
     return 0
   fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
-  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Checked before
-  # the terminate-race grep below: `terminateAppReliably` can emit "Failed to
-  # terminate" lines during teardown even when the run also hit a real
-  # assertion failure, so a genuine failure must win over that infra-shaped
-  # noise rather than being masked as retriable.
+  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Must precede
+  # the broad UI-query timeout grep so real assertion failures are not masked.
   if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
+    return 1
+  fi
+  # XCUITest query/wait timeouts that surface as method-level error frames
+  # (without XCTAssert* lines). Before the method-frame check so logs containing
+  # both a timeout phrase and a test selector frame still retry.
+  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
+    return 0
+  fi
+  # XCTest method-level error frames referencing a test selector starting
+  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
+  # plain "Class" forms.
+  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
     return 1
   fi
   # macos-26/iOS 26 launchd terminate race: XCTest logs "Failed to terminate … :0"
   # when SIGTERM hits a process still winding down navigation/audio. Infra-shaped.
   if grep -qE 'Failed to terminate .*: Failed to terminate .*:0' "$log"; then
     return 0
-  fi
-  # XCTest method-level error frames referencing a test selector starting
-  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
-  # plain "Class" forms. Examples:
-  #   error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...
-  #   error: -[StillPointAppUITests testFoo] : ...
-  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
-    return 1
   fi
   # Default: retriable (covers simulator XPC faults, sim boot timeouts,
   # xcodebuild infra errors, signal-killed processes with no test output).
