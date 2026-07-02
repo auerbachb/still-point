@@ -88,12 +88,7 @@ struct AuthView: View {
                     } label: {
                         Text(vm.isSignUp ? "Begin the journey" : "Enter")
                             .font(SPFont.serifItalic(18, weight: .light))
-                            .foregroundStyle(Color(SPColor.fg))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(SPColor.surface2)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border2))
+                            .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                     }
                     .accessibilityIdentifier("auth.submitButton")
                     .disabled(!vm.isValid || vm.isAuthInFlight)
@@ -153,11 +148,9 @@ struct AuthView: View {
                                     .font(SPFont.serif(17))
                                     .foregroundStyle(Color(SPColor.fg))
                             }
-                            .frame(maxWidth: .infinity)
+                            .spCapsuleButtonStyle(.neutral, size: .fullWidth, stroke: SPColor.border2)
+                            .foregroundStyle(Color(SPColor.fg))
                             .frame(height: 44)
-                            .background(SPColor.surface1)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border2))
                         }
                         .accessibilityIdentifier("auth.googleButton")
                         .disabled(vm.isAuthInFlight)

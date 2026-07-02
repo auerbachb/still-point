@@ -104,11 +104,7 @@ struct BuddySessionHubView: View {
             } label: {
                 Text("Start shared session")
                     .font(SPFont.serifItalic(20, weight: .light))
-                    .foregroundStyle(Color(SPColor.bg))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s3)
-                    .background(LinearGradient.greenHorizontal)
-                    .clipShape(Capsule())
+                    .spCapsuleButtonStyle(.greenGradient, size: .fullWidth, tall: true)
             }
             .disabled(busy)
             .opacity(busy ? 0.6 : 1)
@@ -186,11 +182,7 @@ struct BuddySessionHubView: View {
             } label: {
                 Text("Enter waiting room")
                     .font(SPFont.serifItalic(20, weight: .light))
-                    .foregroundStyle(Color(SPColor.bg))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s3)
-                    .background(LinearGradient.greenHorizontal)
-                    .clipShape(Capsule())
+                    .spCapsuleButtonStyle(.greenGradient, size: .fullWidth, tall: true)
             }
         }
     }

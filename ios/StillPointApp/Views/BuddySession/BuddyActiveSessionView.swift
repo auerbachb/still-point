@@ -157,12 +157,11 @@ struct BuddyActiveSessionView: View {
                 } label: {
                     Text(vm.mindState == "thinking" ? "Release distraction" : "Hold distraction")
                         .font(SPFont.mono(11, weight: .medium))
+                        .spCapsuleButtonStyle(
+                            vm.mindState == "thinking" ? .amber : .green,
+                            size: .fullWidth
+                        )
                         .foregroundStyle(vm.mindState == "thinking" ? SPColor.amber : SPColor.green)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(vm.mindState == "thinking" ? SPColor.amberBgFaint : SPColor.greenBgFaint)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(vm.mindState == "thinking" ? SPColor.amberBorderSubtle : SPColor.greenBorderSubtle))
                 }
 
                 Button {
@@ -174,12 +173,8 @@ struct BuddyActiveSessionView: View {
                 } label: {
                     Text(vm.mindState == "hyperfocus" ? "Release hyperfocus" : "Hold hyperfocus")
                         .font(SPFont.mono(11, weight: .medium))
+                        .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                         .foregroundStyle(Color(SPColor.fg3))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.surface2)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border2))
                 }
             }
 
@@ -188,12 +183,7 @@ struct BuddyActiveSessionView: View {
             } label: {
                 Text(showThoughtCapture ? "Hide thought capture" : "Capture note")
                     .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(SPColor.amberText)
-                    .padding(.horizontal, SPSpacing.s3)
-                    .padding(.vertical, SPSpacing.s2)
-                    .background(SPColor.amberBgFaint)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                    .spCapsuleButtonStyle(.amber, size: .regular, horizontalPadding: SPSpacing.s3)
             }
 
             if showThoughtCapture {
@@ -212,12 +202,8 @@ struct BuddyActiveSessionView: View {
                     } label: {
                         Text("Save note")
                             .font(SPFont.mono(11, weight: .medium))
+                            .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                             .foregroundStyle(Color(SPColor.fg2))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, SPSpacing.s2)
-                            .background(SPColor.surface2)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border2))
                     }
                 }
             }
@@ -234,12 +220,7 @@ struct BuddyActiveSessionView: View {
             } label: {
                 Text("Leave")
                     .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(SPColor.dangerMuted)
-                    .padding(.horizontal, SPSpacing.s3)
-                    .padding(.vertical, SPSpacing.s2)
-                    .background(SPColor.surface1)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
+                    .spCapsuleButtonStyle(.danger, size: .regular, horizontalPadding: SPSpacing.s3)
             }
         }
         .padding(SPSpacing.s3)

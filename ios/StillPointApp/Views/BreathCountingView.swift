@@ -74,12 +74,7 @@ struct BreathCountingView: View {
                 } label: {
                     Text("End")
                         .font(SPFont.mono(13, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .padding(.horizontal, SPSpacing.s4)
-                        .padding(.vertical, SPSpacing.s2)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border1))
+                        .spCapsuleButtonStyle(.neutral, size: .regular)
                 }
                 .accessibilityIdentifier("breath.endButton")
                 .accessibilityLabel("End breath counting session")

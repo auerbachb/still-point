@@ -320,13 +320,7 @@ struct SessionView: View {
                 } label: {
                     Text("Capture")
                         .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(SPColor.amberText)
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .frame(minHeight: 44)
-                        .background(SPColor.amberBgFaint)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                        .spCapsuleButtonStyle(.amber, size: .compact, minHeight: 44)
                 }
                 .accessibilityIdentifier("session.captureButton")
                 .opacity(vm.isActive && !vm.controlsVisible ? 0.48 : 0.88)
@@ -339,22 +333,12 @@ struct SessionView: View {
                     .font(SPFont.serifItalic(15))
                     .foregroundStyle(Color(SPColor.fg))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, SPSpacing.s3)
-                    .padding(.vertical, SPSpacing.s2)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        vm.mindState == "thinking"
-                            ? SPColor.amberBgFaint
-                            : SPColor.greenBgFaint
+                    .spCapsuleButtonStyle(
+                        vm.mindState == "thinking" ? .amber : .green,
+                        size: .fullWidth,
+                        horizontalPadding: SPSpacing.s3
                     )
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(
-                            vm.mindState == "thinking"
-                                ? SPColor.amberBorderSubtle
-                                : SPColor.greenBorderSubtle
-                        )
-                    )
+                    .foregroundStyle(Color(SPColor.fg))
                     .opacity(vm.isActive ? 1 : 0.45)
                     .accessibilityValue(vm.mindState == "thinking" ? "active" : "inactive")
                     .accessibilityLabel("Hold for light distraction. Release when aware again.")
@@ -429,12 +413,7 @@ struct SessionView: View {
                 } label: {
                     Text(vm.isPaused ? "Resume" : "Pause")
                         .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border1))
+                        .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.pauseResumeButton")
 
@@ -444,12 +423,7 @@ struct SessionView: View {
                 } label: {
                     Text("End Early")
                         .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border1))
+                        .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.endEarlyButton")
 
@@ -459,12 +433,7 @@ struct SessionView: View {
                     } label: {
                         Text("Capture")
                             .font(SPFont.mono(12, weight: .medium))
-                            .foregroundStyle(SPColor.amberText)
-                            .padding(.horizontal, SPSpacing.s3)
-                            .padding(.vertical, SPSpacing.s1)
-                            .background(SPColor.amberBgFaint)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.amberBorderSubtle))
+                            .spCapsuleButtonStyle(.amber, size: .compact)
                     }
                     .accessibilityIdentifier("session.captureButton")
                     .disabled(!vm.isActive)
@@ -476,12 +445,8 @@ struct SessionView: View {
                 } label: {
                     Text("+1 min")
                         .font(SPFont.mono(12, weight: .medium))
+                        .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border1))
                 }
                 .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
                 .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
@@ -492,12 +457,8 @@ struct SessionView: View {
                 } label: {
                     Text("+5 min")
                         .font(SPFont.mono(12, weight: .medium))
+                        .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.border1))
                 }
                 .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
                 .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
@@ -510,12 +471,7 @@ struct SessionView: View {
                 } label: {
                     Text("Abandon")
                         .font(SPFont.mono(12, weight: .medium))
-                        .foregroundStyle(SPColor.dangerMuted)
-                        .padding(.horizontal, SPSpacing.s3)
-                        .padding(.vertical, SPSpacing.s1)
-                        .background(SPColor.surface1)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SPColor.dangerBorderSubtle))
+                        .spCapsuleButtonStyle(.danger, size: .compact)
                 }
                 .accessibilityIdentifier("session.abandonButton")
             }
