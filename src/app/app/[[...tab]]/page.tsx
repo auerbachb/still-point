@@ -445,7 +445,9 @@ export default function StillPoint() {
       }
       setTracksDoneToday({ primary, second });
     } catch {
-      /* non-fatal: badges just stay in their last state */
+      // Fail closed so a failed refresh can't leave a stale "done today"
+      // badge on screen (e.g. after switching accounts).
+      setTracksDoneToday({ primary: false, second: false });
     }
   }, []);
 
