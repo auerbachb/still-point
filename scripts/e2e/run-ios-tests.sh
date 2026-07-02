@@ -207,6 +207,11 @@ is_retriable_failure() {
   if grep -qE 'Asynchronous wait failed: Exceeded timeout' "$log"; then
     return 0
   fi
+  # macos-26/iOS 26 launchd terminate race: XCTest logs "Failed to terminate … :0"
+  # when SIGTERM hits a process still winding down navigation/audio. Infra-shaped.
+  if grep -qE 'Failed to terminate .*: Failed to terminate .*:0' "$log"; then
+    return 0
+  fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
   # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)".
   if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then

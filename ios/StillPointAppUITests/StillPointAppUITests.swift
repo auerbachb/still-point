@@ -86,6 +86,8 @@ final class StillPointAppUITests: XCTestCase {
             app.otherElements["root.currentView.session"].waitForExistence(timeout: 20),
             "Session screen did not appear after Begin tap"
         )
+        // Let session chrome/timer settle before terminate (macos-26 launchd race).
+        _ = app.staticTexts["session.timerLabel"].waitForExistence(timeout: 8)
         app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
         terminateAppReliably(app)
         app.launch()
@@ -565,17 +567,25 @@ final class StillPointAppUITests: XCTestCase {
         return nil
     }
 
-    /// Retries `terminate()` since XCTest occasionally reports "Failed to terminate … :0" on loaded CI simulators.
-    private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 4) {
+    /// Retries termination since XCTest occasionally reports "Failed to terminate … :0" on loaded CI simulators.
+    private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 6) {
+        if app.state == .notRunning { return }
+
         for _ in 1...attempts {
-            app.terminate()
-            let deadline = Date().addingTimeInterval(15)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            if app.state == .notRunning { return }
+
+            _ = app.terminate()
+
+            let deadline = Date().addingTimeInterval(20)
             while Date() < deadline {
-                if app.state == .notRunning {
-                    return
-                }
-                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                if app.state == .notRunning { return }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.25))
             }
+
+            XCUIDevice.shared.press(.home)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            if app.state == .notRunning { return }
         }
         XCTFail("App did not reach notRunning after \(attempts) terminate attempts")
     }
