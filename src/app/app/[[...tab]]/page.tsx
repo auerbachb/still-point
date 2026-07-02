@@ -20,6 +20,7 @@ import { api, ApiError } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
  *  into the non-optional shape `@/lib/duration` helpers expect. */
@@ -233,6 +234,12 @@ export default function StillPoint() {
   const loginRefreshCancelled = useRef(false);
   const isMobile = useIsMobile();
 
+  const clearAccountScopedLocalState = () => {
+    setTracksDoneToday({ primary: false, second: false });
+    setForkDismissed(false);
+    resetTrackingUnlockOnLogout();
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -251,6 +258,7 @@ export default function StillPoint() {
 
         if (res.status === 401 || res.status === 403) {
           setUser(null);
+          clearAccountScopedLocalState();
           setAuthError(null);
           setAuthChecked(true);
           return;
@@ -263,6 +271,7 @@ export default function StillPoint() {
         }
 
         setUser(null);
+        clearAccountScopedLocalState();
         setAuthError(null);
         setAuthChecked(true);
       } catch {
@@ -414,12 +423,7 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setOverlay(null);
     setUser(null);
-    // #240: per-track completion badges and the fork-dismissal flag are
-    // account-scoped local state, not tied to the user object itself — clear
-    // them on logout so the next account's Home screen doesn't briefly show
-    // this account's "done today" badges or suppressed fork prompt.
-    setTracksDoneToday({ primary: false, second: false });
-    setForkDismissed(false);
+    clearAccountScopedLocalState();
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
@@ -443,6 +447,7 @@ export default function StillPoint() {
           else primary = true;
         }
       }
+      syncTrackingUnlockFromSessions(sessions);
       setTracksDoneToday({ primary, second });
     } catch {
       // Fail closed so a failed refresh can't leave a stale "done today"
