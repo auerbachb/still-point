@@ -14,8 +14,8 @@
  * Without ELEVENLABS_API_KEY, falls back to espeak-ng if installed (dev placeholders only).
  */
 
-import { execSync } from "node:child_process";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 const OUT_DIR = join(process.cwd(), "public", "audio", "voice-countdown");
@@ -58,19 +58,24 @@ async function generateWithElevenLabs(
 }
 
 function generateWithEspeak(text: string, outPath: string): void {
-  execSync(`espeak-ng -v en-us+m3 -s 130 -p 20 -a 80 -w "${outPath}.wav" "${text}"`, {
-    stdio: "inherit",
-  });
-  execSync(
-    `ffmpeg -y -i "${outPath}.wav" -codec:a libmp3lame -qscale:a 6 "${outPath}.mp3"`,
+  const wavPath = `${outPath}.wav`;
+  const mp3Path = `${outPath}.mp3`;
+  execFileSync(
+    "espeak-ng",
+    ["-v", "en-us+m3", "-s", "130", "-p", "20", "-a", "80", "-w", wavPath, text],
     { stdio: "inherit" },
   );
-  execSync(`rm -f "${outPath}.wav"`);
+  execFileSync(
+    "ffmpeg",
+    ["-y", "-i", wavPath, "-codec:a", "libmp3lame", "-qscale:a", "6", mp3Path],
+    { stdio: "inherit" },
+  );
+  unlinkSync(wavPath);
 }
 
 function hasEspeak(): boolean {
   try {
-    execSync("which espeak-ng", { stdio: "ignore" });
+    execFileSync("which", ["espeak-ng"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -79,7 +84,7 @@ function hasEspeak(): boolean {
 
 function hasFfmpeg(): boolean {
   try {
-    execSync("which ffmpeg", { stdio: "ignore" });
+    execFileSync("which", ["ffmpeg"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
