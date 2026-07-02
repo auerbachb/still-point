@@ -21,6 +21,9 @@ function stubBrowserStorage(initial: Record<string, string> = {}) {
     setItem: (key: string, value: string) => {
       store.set(key, value);
     },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
   };
   vi.stubGlobal("window", {
     localStorage: localStorageMock,
@@ -107,7 +110,7 @@ describe("markTrackingUnlockIfQualifying", () => {
     const store = stubBrowserStorage();
     markTrackingUnlockIfQualifying({ duration: 300, completed: true });
     expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
-    expect(store.get(HIDE_STORAGE_KEY)).toBe("false");
+    expect(loadTrackingControlPrefs().hideDistractionHyperfocusControls).toBe(false);
 
     markTrackingUnlockIfQualifying({ duration: 60, completed: true });
     expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
