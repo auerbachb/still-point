@@ -9,6 +9,9 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/buddyCalendar", () => ({
   listBuddyCalendarSessions,
+}));
+
+vi.mock("@/lib/buddyCalendarRange", () => ({
   parseBuddyCalendarRange: vi.fn(() => ({
     fromDate: "2025-03-01",
     toDate: "2025-05-29",
