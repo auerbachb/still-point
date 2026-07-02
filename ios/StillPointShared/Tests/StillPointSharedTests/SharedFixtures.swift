@@ -142,7 +142,7 @@ extension HistoryJourneyFixture.Session {
         SessionDTO(
             id: id,
             dayNumber: 1,
-            sessionType: SessionType(rawValue: sessionType) ?? .standard,
+            sessionType: SessionType(rawValue: sessionType)!,
             duration: 60,
             completed: true,
             actualTime: 60,
@@ -161,7 +161,7 @@ extension SessionStatsFixture.Session {
         SessionDTO(
             id: id,
             dayNumber: dayNumber,
-            sessionType: SessionType(rawValue: sessionType) ?? .standard,
+            sessionType: SessionType(rawValue: sessionType)!,
             duration: duration,
             bonusSeconds: bonusSeconds,
             completed: completed,

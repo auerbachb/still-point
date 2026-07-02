@@ -41,6 +41,11 @@ identical golden values. To keep them in agreement:
   values because web rounds to one decimal while iOS returns a raw `Double`
   (the iOS suite asserts these with a small tolerance). Web exposes
   `bonusSecondsTotal`; iOS exposes `bonusMinutesTotal` — both are provided.
+  Note the inclusion-rule asymmetry: `avgClearPercent` is computed from
+  **completed standard sessions only**, while `avgThoughtsPerSession` and
+  `avgThoughtsPerMinute` average across **all standard sessions** (completed or
+  not) using a per-session-rate average. When adding cases, make sure the
+  fixture's expected values respect this difference.
 - **historyJourney** — each session has a distinct `createdAt`, which web feeds
   as its `sortKey`, so ordering is identical to iOS (`sessionDate`, then
   `createdAt`, then `id`) without relying on the id tiebreaker.
