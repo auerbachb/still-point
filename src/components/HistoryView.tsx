@@ -7,6 +7,8 @@ import { buildCurrentMonthGrid, buildPriorMonthSummaries, formatTotalTime } from
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import type { MindStateTrendStats } from "@/lib/historyMindStateTrends";
+import { HistoryMindStateTrends } from "@/components/HistoryMindStateTrends";
 
 const NO_RECOVERY: RecoveryFields = {
   recoveryTargetDay: null,
@@ -65,6 +67,24 @@ type HistoryViewProps = {
   username: string;
 };
 
+const EMPTY_MIND_STATE_TRENDS: MindStateTrendStats = {
+  trailing4Week: {
+    totalSitSeconds: 0,
+    clearPercent: 0,
+    lightDistractionPercent: 0,
+    heavyDistractionPercent: 0,
+    hyperfocusPercent: 0,
+  },
+  allTime: {
+    totalSitSeconds: 0,
+    clearPercent: 0,
+    lightDistractionPercent: 0,
+    heavyDistractionPercent: 0,
+    hyperfocusPercent: 0,
+  },
+  dailyTrend: [],
+};
+
 export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [stats, setStats] = useState({
@@ -79,6 +99,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
     trailing4WeekTimePercent: 0,
     totalTimeAllTime: 0,
     progressTo10kHours: 0,
+    mindStateTrends: EMPTY_MIND_STATE_TRENDS,
   });
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,6 +135,7 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
         trailing4WeekTimePercent: sessData.stats?.trailing4WeekTimePercent ?? 0,
         totalTimeAllTime: sessData.stats?.totalTimeAllTime ?? 0,
         progressTo10kHours: sessData.stats?.progressTo10kHours ?? 0,
+        mindStateTrends: sessData.stats?.mindStateTrends ?? EMPTY_MIND_STATE_TRENDS,
       });
       setThoughts(thoughtData.thoughts || []);
       setLoading(false);
@@ -297,6 +319,8 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
               </div>
             ))}
           </div>
+
+          <HistoryMindStateTrends trends={stats.mindStateTrends} isMobile={isMobile} />
 
           {/* All-time progress toward 10,000 hours */}
           <div style={{ width: "100%", maxWidth: "480px" }}>

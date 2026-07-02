@@ -141,6 +141,63 @@ function isAwareLikeState(state: string): boolean {
   return state === "clear" || state === "hyperfocus";
 }
 
+export type MindStateCompositionSeconds = {
+  clearSeconds: number;
+  lightDistractionSeconds: number;
+  heavyDistractionSeconds: number;
+  hyperfocusSeconds: number;
+  totalSeconds: number;
+};
+
+function bucketMindStateSeconds(state: string, seconds: number, out: MindStateCompositionSeconds): void {
+  if (seconds <= 0) return;
+  switch (state) {
+    case "thinking":
+      out.lightDistractionSeconds += seconds;
+      break;
+    case "heavy":
+      out.heavyDistractionSeconds += seconds;
+      break;
+    case "hyperfocus":
+      out.hyperfocusSeconds += seconds;
+      break;
+    default:
+      out.clearSeconds += seconds;
+      break;
+  }
+}
+
+/**
+ * Replays `mindStateLog` into sit-time seconds for clear, light distraction,
+ * heavy distraction, and hyperfocus. Uses the same segment boundaries as
+ * `computeClearPercentFromLog`.
+ */
+export function computeMindStateCompositionFromLog(
+  log: Array<{ time: number; state: string }>,
+  endTime: number,
+): MindStateCompositionSeconds {
+  const totalSeconds = Math.max(endTime, 0);
+  const out: MindStateCompositionSeconds = {
+    clearSeconds: 0,
+    lightDistractionSeconds: 0,
+    heavyDistractionSeconds: 0,
+    hyperfocusSeconds: 0,
+    totalSeconds,
+  };
+  if (totalSeconds === 0) return out;
+
+  let lastTime = 0;
+  let lastState = "clear";
+  const full = log.length === 0 ? [{ time: totalSeconds, state: "clear" }] : [...log, { time: totalSeconds, state: "clear" }];
+  for (const entry of full) {
+    bucketMindStateSeconds(lastState, entry.time - lastTime, out);
+    lastTime = entry.time;
+    lastState = entry.state;
+  }
+
+  return out;
+}
+
 export function computeClearPercentFromLog(
   log: Array<{ time: number; state: string }>,
   endTime: number,
