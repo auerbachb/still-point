@@ -216,6 +216,19 @@ For pull requests, required lanes:
 
 iOS E2E lanes are required for iOS test-plan changes and recommended otherwise; keep branch protection in sync with this policy.
 
+### Release-time gating (mobile web + iOS TestFlight)
+
+As of [#494](https://github.com/auerbachb/still-point/issues/494) (mirroring [auerbachb/skingod#1402](https://github.com/auerbachb/skingod/issues/1402)), the mobile-web Playwright suite (`e2e-mobile.yml`, the 3-project cross-browser matrix) no longer runs on `pull_request` — it was the slowest, flakiest per-PR check, had no path filter, and blocked every PR regardless of relevance. It is now a reusable workflow (`workflow_call` + `workflow_dispatch` only) that runs:
+
+- as the first job of [`ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) (the automatic PR-merge + `release:ios`-label release path) — the build-number bump + tag step only proceeds `if: needs.e2e.result == 'success'`, so a failing e2e run leaves nothing committed, tagged, or built;
+- on demand via `gh workflow run e2e-mobile.yml -f ref=<ref>` for ad-hoc verification.
+
+[`ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) (the manual `ios-v*-build*` tag push, a break-glass escape hatch for shipping when e2e infra itself is down) intentionally does **not** call this gate.
+
+`e2e-ios.yml` (native XCTest smoke/critical) is unchanged by #494 — it stays path-filtered to `ios/**` on `pull_request`, matching skingod's analogous Maestro-lane precedent (PR-time signal, not release-gated).
+
+`e2e-web.yml` is also unchanged — web has no discrete "build" step to gate against (it auto-deploys to production on every merge to `main`), unlike iOS's TestFlight build. Revisit separately if that becomes painful.
+
 ## 12) Local runbook (single command per platform)
 
 Prereqs:
