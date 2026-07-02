@@ -1,4 +1,9 @@
-/** ISO calendar date `YYYY-MM-DD` helpers (UTC date arithmetic; matches stored `session_date`). */
+/**
+ * ISO calendar date `YYYY-MM-DD` helpers. UTC date arithmetic (validation,
+ * add/diff) matches the stored `session_date`; the local-day stamps
+ * (`getLocalIsoDate`/`todayLocalIsoDate`) match the client's LOCAL timezone used
+ * on the write path.
+ */
 
 const ISO_CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,15 +38,29 @@ export function daysBetweenIsoDatesInclusive(fromIso: string, toIso: string): nu
 }
 
 /**
+ * Calendar day as `YYYY-MM-DD` in the client's LOCAL timezone, offset by
+ * `offsetDays` (negative = past, positive = future). This reads the LOCAL
+ * calendar components (`getFullYear`/`getMonth`/`getDate`) and advances via
+ * local `Date#setDate`, so it deliberately does NOT use UTC arithmetic — the
+ * result matches the convention used to stamp `session_date` on the write path
+ * for non-UTC users. Use {@link addDaysToIsoDate}/{@link daysBetweenIsoDatesInclusive}
+ * instead when you need pure UTC date math on an already-stored `session_date`.
+ */
+export function getLocalIsoDate(offsetDays = 0): string {
+  const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Today's calendar day as `YYYY-MM-DD` in the client's LOCAL timezone — the same
  * convention used to stamp `session_date` on the write path (solo + buddy session
  * saves). History/journey gap math must use this rather than a UTC day so the
  * trailing gap to "today" lines up with locally-dated sessions for non-UTC users.
  */
 export function todayLocalIsoDate(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return getLocalIsoDate();
 }

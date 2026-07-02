@@ -1,13 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { BASE_DURATION, durationForDay } from "../../src/lib/constants";
-
-function localIsoDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
 
 async function signup(
   request: import("@playwright/test").APIRequestContext,
@@ -40,7 +33,7 @@ async function advanceToDay(
         clearPercent: 80,
         thoughtCount: 0,
         mindStateLog: [],
-        sessionDate: localIsoDate(),
+        sessionDate: getLocalIsoDate(),
       },
     });
     expect(response.status(), await response.text()).toBe(200);
