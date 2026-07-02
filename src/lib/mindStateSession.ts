@@ -36,7 +36,7 @@ export function isMindStateTypingTarget(el: EventTarget | null): boolean {
 }
 
 export function isSpaceHoldKey(e: Pick<KeyboardEvent, "code" | "key">): boolean {
-  return e.code === "Space";
+  return e.code === "Space" || e.key === " " || e.key === "Space";
 }
 
 export function isCommaHoldKey(e: Pick<KeyboardEvent, "code" | "key">): boolean {
