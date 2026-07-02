@@ -165,6 +165,7 @@ final class AppViewModel {
         do {
             if let user = try await APIClient.shared.me() {
                 currentUser = user
+                resetTrackCompletionBadges()
                 currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session(type: .standard, track: .primary) : .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
@@ -221,6 +222,7 @@ final class AppViewModel {
 
     func didLogin(user: UserDTO) {
         currentUser = user
+        resetTrackCompletionBadges()
         currentView = .home
         // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
         // across auth transitions now that selectedTab lives on the view model.
@@ -257,9 +259,15 @@ final class AppViewModel {
         pendingSessionDeepLink = nil
         buddyInviteError = nil
         authStatusMessage = nil
+        resetTrackCompletionBadges()
         currentView = .auth
         // Drop the cached suppress opt-in so it can't leak into the next account.
         SessionNotificationSuppressionController.clearSuppressPreference()
+    }
+
+    private func resetTrackCompletionBadges() {
+        primaryDoneToday = false
+        secondDoneToday = false
     }
 
     func beginSession(type: SessionType = .standard, track: Track = .primary) {
