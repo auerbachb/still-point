@@ -94,22 +94,22 @@ async function insertCalendarEvent(
   }
 }
 
-async function readCreatedCalendarEvent(sessionId: string, userId: string) {
-  const [existingEvent] = await db
+async function readCalendarEventRow(sessionId: string, userId: string) {
+  const [row] = await db
     .select({
       googleEventId: buddySessionCalendarEvents.googleEventId,
       htmlLink: buddySessionCalendarEvents.htmlLink,
+      status: buddySessionCalendarEvents.status,
     })
     .from(buddySessionCalendarEvents)
     .where(
       and(
         eq(buddySessionCalendarEvents.buddySessionId, sessionId),
         eq(buddySessionCalendarEvents.userId, userId),
-        eq(buddySessionCalendarEvents.status, "created"),
       ),
     )
     .limit(1);
-  return existingEvent;
+  return row;
 }
 
 export async function syncBuddySessionCalendarForUser(
@@ -121,8 +121,8 @@ export async function syncBuddySessionCalendarForUser(
   }
   const scheduledStartAt = session.scheduledStartAt;
   try {
-    const existingEvent = await readCreatedCalendarEvent(session.id, userId);
-    if (existingEvent?.googleEventId) {
+    const existingEvent = await readCalendarEventRow(session.id, userId);
+    if (existingEvent?.googleEventId && existingEvent.status === "created") {
       return {
         status: "created",
         userId,
@@ -131,6 +131,8 @@ export async function syncBuddySessionCalendarForUser(
       };
     }
 
+    // Claim or reclaim rows without a Google event id (fresh claim, failed retry, or
+    // stale placeholder). Rows that already have googleEventId are left untouched.
     const [claimed] = await db
       .insert(buddySessionCalendarEvents)
       .values({
@@ -138,22 +140,35 @@ export async function syncBuddySessionCalendarForUser(
         userId,
         status: "created",
         googleEventId: null,
+        error: null,
         updatedAt: new Date(),
       })
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [
+          buddySessionCalendarEvents.buddySessionId,
+          buddySessionCalendarEvents.userId,
+        ],
+        set: {
+          status: "created",
+          googleEventId: null,
+          error: null,
+          updatedAt: new Date(),
+        },
+        where: isNull(buddySessionCalendarEvents.googleEventId),
+      })
       .returning({
         id: buddySessionCalendarEvents.id,
         googleEventId: buddySessionCalendarEvents.googleEventId,
       });
 
     if (!claimed) {
-      const raced = await readCreatedCalendarEvent(session.id, userId);
-      if (raced?.googleEventId) {
+      const synced = await readCalendarEventRow(session.id, userId);
+      if (synced?.googleEventId && synced.status === "created") {
         return {
           status: "created",
           userId,
-          eventId: raced.googleEventId,
-          htmlLink: raced.htmlLink ?? null,
+          eventId: synced.googleEventId,
+          htmlLink: synced.htmlLink ?? null,
         };
       }
       return { status: "skipped", userId, reason: "sync_in_progress" };
