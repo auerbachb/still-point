@@ -36,16 +36,59 @@ extension XCTestCase {
         return app
     }
 
+    @discardableResult
     func waitForRoot(
         _ slug: String,
         in app: XCUIApplication,
         timeout: TimeInterval = 45,
         failureMessage: String,
+        assertColdStart: Bool = false,
+        coldStartMaxMs: Int = 12_000,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> XCUIElement {
+        let root = app.otherElements["root.currentView.\(slug)"]
+        guard root.waitForExistence(timeout: timeout) else {
+            XCTFail(failureMessage, file: file, line: line)
+            return root
+        }
+        if assertColdStart {
+            assertColdStartBound(root: root, maxMs: coldStartMaxMs, timeout: timeout, file: file, line: line)
+        }
+        return root
+    }
+
+    private func assertColdStartBound(
+        root: XCUIElement,
+        maxMs: Int,
+        timeout: TimeInterval,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let root = app.otherElements["root.currentView.\(slug)"]
-        XCTAssertTrue(root.waitForExistence(timeout: timeout), failureMessage, file: file, line: line)
+        let deadline = Date().addingTimeInterval(min(45, timeout))
+        var observedValue = ""
+        while Date() < deadline {
+            observedValue = (root.value as? String) ?? ""
+            if let ms = parseMetricMs(from: observedValue) {
+                XCTAssertLessThanOrEqual(
+                    ms,
+                    maxMs,
+                    "Cold start auth check exceeded documented bound",
+                    file: file,
+                    line: line
+                )
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        XCTFail("Missing cold-start metric in root accessibility value: \(observedValue)", file: file, line: line)
+    }
+
+    private func parseMetricMs(from value: String) -> Int? {
+        let prefix = "coldStartAuthCheckMs="
+        guard let range = value.range(of: prefix) else { return nil }
+        let msRaw = value[range.upperBound...]
+        return Int(msRaw)
     }
 
     @discardableResult

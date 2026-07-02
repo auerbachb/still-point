@@ -56,7 +56,7 @@ final class StillPointAppUITests: XCTestCase {
         )
         app.launch()
 
-        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear", assertColdStart: true)
 
         let emailField = app.textFields["auth.emailField"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 5))
@@ -271,7 +271,7 @@ final class StillPointAppUITests: XCTestCase {
         let app = makeApp(seedAuthenticated: false, resetStore: true)
         app.launch()
 
-        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear")
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear", assertColdStart: true)
         let emailField = app.textFields["auth.emailField"]
         let passwordField = app.secureTextFields["auth.passwordField"]
         let submitButton = app.buttons["auth.submitButton"]
@@ -686,49 +686,4 @@ final class StillPointAppUITests: XCTestCase {
         }
     }
 
-    @discardableResult
-    private func waitForRoot(
-        _ slug: String,
-        in app: XCUIApplication,
-        failureMessage: String,
-        assertColdStart: Bool = true,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> XCUIElement {
-        let root = app.otherElements["root.currentView.\(slug)"]
-        guard root.waitForExistence(timeout: launchTimeout) else {
-            XCTFail(failureMessage, file: file, line: line)
-            return root
-        }
-        if assertColdStart {
-            assertColdStartBound(root: root, maxMs: coldStartMaxMs, file: file, line: line)
-        }
-        return root
-    }
-
-    private func assertColdStartBound(
-        root: XCUIElement,
-        maxMs: Int,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let deadline = Date().addingTimeInterval(min(45, launchTimeout))
-        var observedValue = ""
-        while Date() < deadline {
-            observedValue = (root.value as? String) ?? ""
-            if let ms = parseMetricMs(from: observedValue) {
-                XCTAssertLessThanOrEqual(ms, maxMs, "Cold start auth check exceeded documented bound", file: file, line: line)
-                return
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        XCTFail("Missing cold-start metric in root accessibility value: \(observedValue)", file: file, line: line)
-    }
-
-    private func parseMetricMs(from value: String) -> Int? {
-        let prefix = "coldStartAuthCheckMs="
-        guard let range = value.range(of: prefix) else { return nil }
-        let msRaw = value[range.upperBound...]
-        return Int(msRaw)
-    }
 }
