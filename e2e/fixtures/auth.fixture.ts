@@ -184,6 +184,17 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       return json(route, 200, { session });
     }
 
+    if (pathname === "/api/board" && method === "GET") {
+      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
+      const board = [
+        { username: "contemplative_practitioner", currentDay: 128, streak: 42, avgClear: 91 },
+        { username: state.user.username, currentDay: state.user.currentDay, streak: 9, avgClear: 84 },
+        { username: "quiet_mind", currentDay: 64, streak: 7, avgClear: 77 },
+        { username: "stillness_seeker_2026", currentDay: 31, streak: 3, avgClear: 68 },
+      ];
+      return json(route, 200, { board });
+    }
+
     if (pathname === "/api/thoughts" && method === "GET") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
       const thoughts = [...state.thoughts].sort((a, b) => {
