@@ -42,6 +42,7 @@ export function useBuddySessionSnapshot({ sessionId, onExit }: UseBuddySessionSn
     setPollStopped(false);
     lastRevision.current = -1;
     setExitingRoom(false);
+    setPollError(null);
   }, []);
 
   useEffect(() => {
