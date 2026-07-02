@@ -11,6 +11,7 @@
 		13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* UsernameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */; };
 		1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
@@ -154,6 +155,7 @@
 		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
 				D356465C1B0F69C57FE47A80 /* SettingsView.swift */,
 				44912B427658554F984CCC3A /* ThoughtJournalView.swift */,
+				F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */,
 				3CF33E14AFF118C76854F60A /* BuddyCalendar */,
 				8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */,
 			);
@@ -585,6 +588,7 @@
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* UsernameEditView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
