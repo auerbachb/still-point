@@ -89,17 +89,18 @@ export function BlockTimer({
     const remaining = totalSeconds - newElapsed;
     const voiceMode = Boolean(prefs.voiceCountdown);
     const currentSec = Math.floor(newElapsed);
+    const displayRemainingSec = Math.floor(remaining);
 
     if (voiceMode) {
-      const announceSec = Math.ceil(remaining);
-      if (announceSec >= 1 && announceSec <= 60 && announceSec !== lastVoiceSecRef.current) {
-        lastVoiceSecRef.current = announceSec;
-        playEnabledSound(() => playVoiceCountdown(announceSec));
+      if (
+        displayRemainingSec >= 1 &&
+        displayRemainingSec <= 60 &&
+        displayRemainingSec !== lastVoiceSecRef.current
+      ) {
+        lastVoiceSecRef.current = displayRemainingSec;
+        playEnabledSound(() => playVoiceCountdown(displayRemainingSec));
       }
-      return;
-    }
-
-    if (prefs.tick && currentSec > lastTickSecRef.current) {
+    } else if (prefs.tick && currentSec > lastTickSecRef.current) {
       lastTickSecRef.current = currentSec;
       playEnabledSound(playTick);
     }
@@ -183,7 +184,7 @@ export function BlockTimer({
 
     if (isResume) {
       lastTickSecRef.current = Math.floor(resumeElapsed);
-      lastVoiceSecRef.current = Math.ceil(totalSeconds - resumeElapsed);
+      lastVoiceSecRef.current = Math.floor(totalSeconds - resumeElapsed);
       lastCompletedBlockIndexRef.current = useMinuteBlocks
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
@@ -232,7 +233,7 @@ export function BlockTimer({
 
     const seed = Math.min(duration, Math.max(0, (Date.now() + skewRef.current - startedMs) / 1000));
     lastTickSecRef.current = Math.floor(seed);
-    lastVoiceSecRef.current = Math.ceil(duration - seed);
+    lastVoiceSecRef.current = Math.floor(duration - seed);
     lastCompletedBlockIndexRef.current =
       useMinuteBlocks && minuteBlockCount > 0
         ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)
