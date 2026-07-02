@@ -19,6 +19,7 @@
     "e2e:guard": "node scripts/e2e/assert-non-prod.mjs",
     "e2e:policy:no-sleep": "node scripts/e2e/check-no-naked-sleep.mjs",
     "e2e:policy:secrets": "node scripts/e2e/check-test-secrets.mjs",
+    "e2e:policy:design-tokens": "node scripts/e2e/check-design-tokens.mjs",
     "e2e:policy": "E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:policy:no-sleep && npm run e2e:policy:secrets && E2E_BASE_URL=${E2E_BASE_URL:-http://127.0.0.1:3000} npm run e2e:guard",
     "e2e:setup-web-user": "tsx scripts/e2e/setup-web-user.ts",
     "ios:app-store:dry-run": "node scripts/ios-app-store-dry-run.mjs",

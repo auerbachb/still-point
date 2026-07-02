@@ -41,10 +41,10 @@ public enum SPColor {
     static let amberBg = amber.opacity(0.15)
     static let amberBgFaint = amber.opacity(0.06)
 
-    // Red / Danger
-    static let danger = Color.red.opacity(0.7)
-    static let dangerMuted = Color.red.opacity(0.5)
-    static let dangerBorderSubtle = Color.red.opacity(0.15)
+    // Red / Danger (Tailwind red-500 #ef4444)
+    static let danger = Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.7)
+    static let dangerMuted = Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.5)
+    static let dangerBorderSubtle = Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.15)
 
     // Overlay
     static let overlayText = Color.black.opacity(0.5)
