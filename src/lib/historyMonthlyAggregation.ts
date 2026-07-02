@@ -59,13 +59,12 @@ function advanceMonth(year: number, month: number, delta: number): { year: numbe
 }
 
 /** Aggregate days-active and total sit time for one calendar month. */
-export function aggregateMonthSummary(
-  sessions: HistorySessionTimeInput[],
+function aggregateMonthSummaryFromGrouped(
+  byDate: Map<string, HistorySessionTimeInput[]>,
   year: number,
   month: number,
 ): MonthlySummary {
   const ym = yearMonthKey(year, month);
-  const byDate = groupSessionsByDate(sessions);
   const dim = daysInCalendarMonth(year, month);
   let daysActive = 0;
   let totalTimeSeconds = 0;
@@ -91,6 +90,14 @@ export function aggregateMonthSummary(
   };
 }
 
+export function aggregateMonthSummary(
+  sessions: HistorySessionTimeInput[],
+  year: number,
+  month: number,
+): MonthlySummary {
+  return aggregateMonthSummaryFromGrouped(groupSessionsByDate(sessions), year, month);
+}
+
 /**
  * Trailing 12 calendar months ending with the month containing `todayIso`.
  * Used by the year-in-review grid (#380).
@@ -101,13 +108,14 @@ export function buildTrailing12MonthSummaries(
 ): MonthlySummary[] {
   const { year: todayYear, month: todayMonth } = parseYearMonth(todayIso);
   const start = advanceMonth(todayYear, todayMonth, -11);
+  const byDate = groupSessionsByDate(sessions);
 
   const summaries: MonthlySummary[] = [];
   let y = start.year;
   let m = start.month;
 
   for (let i = 0; i < 12; i++) {
-    summaries.push(aggregateMonthSummary(sessions, y, m));
+    summaries.push(aggregateMonthSummaryFromGrouped(byDate, y, m));
     ({ year: y, month: m } = advanceMonth(y, m, 1));
   }
 
@@ -138,6 +146,7 @@ export function buildPriorMonthSummaries(
 
   const earliest = validDates.reduce((a, b) => (a < b ? a : b));
   const { year: startYear, month: startMonth } = parseYearMonth(earliest);
+  const byDate = groupSessionsByDate(sessions);
 
   const summaries: MonthlySummary[] = [];
   let y = startYear;
@@ -147,7 +156,7 @@ export function buildPriorMonthSummaries(
     const ym = yearMonthKey(y, m);
     if (ym >= currentYm) break;
 
-    summaries.push(aggregateMonthSummary(sessions, y, m));
+    summaries.push(aggregateMonthSummaryFromGrouped(byDate, y, m));
     ({ year: y, month: m } = advanceMonth(y, m, 1));
   }
 
