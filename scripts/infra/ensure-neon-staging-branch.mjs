@@ -53,38 +53,49 @@ function runNeonctl(args) {
   return (result.stdout || "").trim();
 }
 
-const listOutput = runNeonctl([
-  "branches",
-  "list",
-  "--project-id",
-  projectId,
-  "--output",
-  "json",
-]);
+function branchExists() {
+  const listOutput = runNeonctl([
+    "branches",
+    "list",
+    "--project-id",
+    projectId,
+    "--output",
+    "json",
+  ]);
+  const branches = JSON.parse(listOutput || "[]");
+  return branches.some(
+    (branch) =>
+      branch.name === branchName ||
+      branch.branch?.name === branchName ||
+      branch.id === branchName,
+  );
+}
 
-const branches = JSON.parse(listOutput || "[]");
-const exists = branches.some(
-  (branch) =>
-    branch.name === branchName ||
-    branch.branch?.name === branchName ||
-    branch.id === branchName,
-);
-
-if (exists) {
+if (branchExists()) {
   console.log(`Neon branch '${branchName}' already exists in project ${projectId}.`);
   process.exit(0);
 }
 
-runNeonctl([
-  "branches",
-  "create",
-  "--project-id",
-  projectId,
-  "--name",
-  branchName,
-  "--parent",
-  parentBranch,
-]);
+try {
+  runNeonctl([
+    "branches",
+    "create",
+    "--project-id",
+    projectId,
+    "--name",
+    branchName,
+    "--parent",
+    parentBranch,
+  ]);
+} catch (error) {
+  if (branchExists()) {
+    console.log(
+      `Neon branch '${branchName}' already exists in project ${projectId} (concurrent create).`,
+    );
+    process.exit(0);
+  }
+  throw error;
+}
 
 console.log(
   `Created Neon branch '${branchName}' (parent: ${parentBranch}) in project ${projectId}.`,
