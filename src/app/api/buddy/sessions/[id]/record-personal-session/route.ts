@@ -9,7 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
 import { reconcileBuddySession } from "@/lib/buddySession";
 import {
@@ -20,6 +20,8 @@ import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thou
 import { isUniqueViolation } from "@/lib/dbErrors";
 import { advanceProgression } from "@/lib/duration";
 import { and, eq, sql } from "drizzle-orm";
+
+type RouteContext = RouteParams<{ id: string }>;
 
 function parseMindStateLog(raw: unknown): Array<{ time: number; state: string }> {
   if (!Array.isArray(raw)) return [];
@@ -44,11 +46,11 @@ function sessionDateOk(s: string): boolean {
  */
 export const POST = withApiHandler(
   "Buddy record-personal-session",
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
+    const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }

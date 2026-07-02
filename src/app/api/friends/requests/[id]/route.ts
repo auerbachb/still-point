@@ -3,18 +3,20 @@ import { db } from "@/db";
 import { poolDb } from "@/db/pool";
 import { friendRequests, friendships } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq, ne } from "drizzle-orm";
 
+type RouteContext = RouteParams<{ id: string }>;
+
 export const PATCH = withApiHandler(
   "Friend request patch",
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { id } = await (context as { params: Promise<{ id: string }> }).params;
+    const { id } = await context.params;
     if (!isUuid(id)) {
       return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
     }

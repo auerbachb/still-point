@@ -2,16 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, thoughts } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { eq, and, asc } from "drizzle-orm";
+
+type RouteContext = RouteParams<{ dayNumber: string }>;
 
 export const GET = withApiHandler(
   "Get session",
-  async (_request: NextRequest, context) => {
+  async (_request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { dayNumber } = await (context as { params: Promise<{ dayNumber: string }> }).params;
+    const { dayNumber } = await context.params;
     const dayNum = parseInt(dayNumber, 10);
     if (isNaN(dayNum)) {
       return NextResponse.json({ error: "Invalid day number" }, { status: 400 });

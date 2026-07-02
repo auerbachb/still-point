@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, thoughts } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
 import { eq, and, asc } from "drizzle-orm";
+
+type RouteContext = RouteParams<{ sessionId: string }>;
 
 const RATING_FIELDS = ["focusRating", "happinessRating"] as const;
 
@@ -14,11 +16,11 @@ function isValidRating(value: unknown): value is number {
 
 export const GET = withApiHandler(
   "Get session by id",
-  async (_request: NextRequest, context) => {
+  async (_request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { sessionId } = await (context as { params: Promise<{ sessionId: string }> }).params;
+    const { sessionId } = await context.params;
     if (!sessionId || !isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
@@ -64,11 +66,11 @@ export const GET = withApiHandler(
  *  POST /api/thoughts/batch for the completion-note equivalent). */
 export const PATCH = withApiHandler(
   "Update session ratings",
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { sessionId } = await (context as { params: Promise<{ sessionId: string }> }).params;
+    const { sessionId } = await context.params;
     if (!sessionId || !isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }

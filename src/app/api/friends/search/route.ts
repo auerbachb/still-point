@@ -12,7 +12,7 @@ export const GET = withApiHandler("Friends search", async (request: NextRequest)
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 
-  const q = (request!.nextUrl.searchParams.get("q") ?? "").trim();
+  const q = (request.nextUrl.searchParams.get("q") ?? "").trim();
   if (q.length < MIN_LEN) {
     return NextResponse.json({ users: [] });
   }

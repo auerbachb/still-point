@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { bumpBuddyRevision } from "@/lib/buddySession";
 import {
   requireBuddyActiveParticipant,
@@ -11,17 +11,19 @@ import {
 import { isUuid } from "@/lib/friends";
 import { and, eq, isNull } from "drizzle-orm";
 
+type RouteContext = RouteParams<{ id: string }>;
+
 /**
  * #119: Marks this participant as finished with the shared sit (no journaling here).
  * #118: Per-user only; does not mutate shared timer — see `buddySessionControlsPolicy.ts`.
  */
 export const POST = withApiHandler(
   "Buddy participant-complete",
-  async (_request, context) => {
+  async (_request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
+    const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }

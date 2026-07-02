@@ -52,12 +52,15 @@ describe("withApiHandler", () => {
   });
 
   test("passes request and context through", async () => {
-    const handler = withApiHandler("Test route", async (request, context) => {
-      return NextResponse.json({
-        method: request?.method,
-        id: (context as { params: { id: string } })?.params.id,
-      });
-    });
+    const handler = withApiHandler(
+      "Test route",
+      async (request: NextRequest, context: { params: { id: string } }) => {
+        return NextResponse.json({
+          method: request.method,
+          id: context.params.id,
+        });
+      },
+    );
 
     const request = new NextRequest("http://test.local/api/x", { method: "PATCH" });
     const response = await handler(request, { params: { id: "abc" } });

@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
@@ -35,13 +36,13 @@ describe("GET /api/buddy/sessions/calendar", () => {
   test("returns 401 when unauthenticated", async () => {
     getCurrentUser.mockResolvedValue(null);
     const { GET } = await import("./route");
-    const res = await GET(new Request("http://test/api/buddy/sessions/calendar"));
+    const res = await GET(new NextRequest("http://test/api/buddy/sessions/calendar"));
     expect(res.status).toBe(401);
   });
 
   test("returns calendar sessions for authenticated user", async () => {
     const { GET } = await import("./route");
-    const res = await GET(new Request("http://test/api/buddy/sessions/calendar"));
+    const res = await GET(new NextRequest("http://test/api/buddy/sessions/calendar"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.sessions).toEqual([]);

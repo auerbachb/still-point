@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import {
   bumpBuddyRevision,
   reconcileBuddySession,
@@ -15,13 +15,15 @@ import { isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
 import { and, eq } from "drizzle-orm";
 
+type RouteContext = RouteParams<{ id: string }>;
+
 export const PATCH = withApiHandler(
   "Buddy ready PATCH",
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
+    const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }

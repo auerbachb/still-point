@@ -1,18 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { friendships } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { orderedUserPair, isUuid } from "@/lib/friends";
 import { and, eq } from "drizzle-orm";
 
+type RouteContext = RouteParams<{ friendUserId: string }>;
+
 export const DELETE = withApiHandler(
   "Unfriend",
-  async (_request, context) => {
+  async (_request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { friendUserId } = await (context as { params: Promise<{ friendUserId: string }> }).params;
+    const { friendUserId } = await context.params;
 
     if (!isUuid(friendUserId)) {
       return NextResponse.json({ error: "friendUserId must be a valid UUID" }, { status: 400 });

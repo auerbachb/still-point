@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { listBuddyCalendarSessionsForBuddy } from "@/lib/buddyCalendar";
 import { parseBuddyCalendarRange } from "@/lib/buddyCalendarRange";
 import { isUuid } from "@/lib/friends";
+
+type RouteContext = RouteParams<{ buddyId: string }>;
 
 /**
  * Per-buddy shared-session calendar (#350).
@@ -11,11 +13,11 @@ import { isUuid } from "@/lib/friends";
  */
 export const GET = withApiHandler(
   "Buddy per-buddy calendar GET",
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { buddyId } = await (context as { params: Promise<{ buddyId: string }> }).params;
+    const { buddyId } = await context.params;
     if (!isUuid(buddyId)) {
       return NextResponse.json({ error: "Invalid buddy id" }, { status: 400 });
     }

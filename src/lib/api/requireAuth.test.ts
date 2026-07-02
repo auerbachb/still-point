@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const getCurrentUser = vi.fn();
+const { getCurrentUser } = vi.hoisted(() => ({
+  getCurrentUser: vi.fn(),
+}));
 
 vi.mock("@/lib/auth", () => ({
   getCurrentUser,

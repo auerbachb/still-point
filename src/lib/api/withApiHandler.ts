@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export type ApiHandlerContext = unknown;
 
+export type RouteParams<T extends Record<string, string>> = {
+  params: Promise<T>;
+};
+
 export type WithApiHandlerOptions = {
   /** Maps known errors to responses; return null/undefined to fall through to 500. */
   mapError?: (error: unknown) => NextResponse | null | undefined;
@@ -9,13 +13,31 @@ export type WithApiHandlerOptions = {
   logError?: (label: string, error: unknown) => void;
 };
 
-type ApiHandlerFn = (
-  request?: NextRequest,
-  context?: ApiHandlerContext,
-) => Promise<NextResponse>;
-
 function defaultLogError(label: string, error: unknown): void {
   console.error(`${label} error:`, error);
+}
+
+function wrapHandler(
+  label: string,
+  handler: (...args: never[]) => Promise<NextResponse>,
+  options?: WithApiHandlerOptions,
+) {
+  const logError = options?.logError ?? defaultLogError;
+  const mapError = options?.mapError;
+
+  return (...args: never[]) => {
+    const run = async () => {
+      try {
+        return await handler(...args);
+      } catch (error) {
+        const mapped = mapError?.(error);
+        if (mapped) return mapped;
+        logError(label, error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      }
+    };
+    return run();
+  };
 }
 
 /**
@@ -25,20 +47,26 @@ function defaultLogError(label: string, error: unknown): void {
  */
 export function withApiHandler(
   label: string,
-  handler: ApiHandlerFn,
+  handler: () => Promise<NextResponse>,
   options?: WithApiHandlerOptions,
-): ApiHandlerFn {
-  const logError = options?.logError ?? defaultLogError;
-  const mapError = options?.mapError;
+): () => Promise<NextResponse>;
 
-  return async (request?: NextRequest, context?: ApiHandlerContext) => {
-    try {
-      return await handler(request, context);
-    } catch (error) {
-      const mapped = mapError?.(error);
-      if (mapped) return mapped;
-      logError(label, error);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-    }
-  };
+export function withApiHandler(
+  label: string,
+  handler: (request: NextRequest) => Promise<NextResponse>,
+  options?: WithApiHandlerOptions,
+): (request: NextRequest) => Promise<NextResponse>;
+
+export function withApiHandler<TContext extends ApiHandlerContext>(
+  label: string,
+  handler: (request: NextRequest, context: TContext) => Promise<NextResponse>,
+  options?: WithApiHandlerOptions,
+): (request: NextRequest, context: TContext) => Promise<NextResponse>;
+
+export function withApiHandler(
+  label: string,
+  handler: (...args: never[]) => Promise<NextResponse>,
+  options?: WithApiHandlerOptions,
+): (...args: never[]) => Promise<NextResponse> {
+  return wrapHandler(label, handler, options);
 }

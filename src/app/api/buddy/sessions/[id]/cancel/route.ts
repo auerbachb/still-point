@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { buddySessions, buddySessionParticipants } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
-import { withApiHandler } from "@/lib/api/withApiHandler";
+import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { reconcileBuddySession } from "@/lib/buddySession";
 import {
   BUDDY_POLICY_CODES,
@@ -13,13 +13,15 @@ import {
 import { isUuid } from "@/lib/friends";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+type RouteContext = RouteParams<{ id: string }>;
+
 export const POST = withApiHandler(
   "Buddy cancel",
-  async (_request, context) => {
+  async (_request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const { id: sessionId } = await (context as { params: Promise<{ id: string }> }).params;
+    const { id: sessionId } = await context.params;
     if (!isUuid(sessionId)) {
       return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
     }
