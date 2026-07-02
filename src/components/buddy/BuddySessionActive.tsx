@@ -367,6 +367,7 @@ export function BuddySessionActive({
                 [
                   ["tick", "tick"],
                   ["chime", "chime"],
+                  ["voiceCountdown", "voice"],
                   ["completion", "end"],
                 ] as const
               ).map(([key, label]) => (

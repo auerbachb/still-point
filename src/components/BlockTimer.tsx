@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
-import { playTick, playChime, playCompletion, type SoundPrefs } from "@/lib/audio";
+import { playTick, playChime, playCompletion, playVoiceCountdown, type SoundPrefs } from "@/lib/audio";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
 
@@ -62,6 +62,7 @@ export function BlockTimer({
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
+  const lastVoiceSecRef = useRef(-1);
   const lastCompletedBlockIndexRef = useRef(-1);
   const controlledCompleteFiredRef = useRef(false);
   const skewRef = useRef(0);
@@ -78,6 +79,48 @@ export function BlockTimer({
   const playEnabledSound = (play: () => boolean) => {
     if (!play()) {
       onSoundPlaybackBlockedRef.current?.();
+    }
+  };
+
+  const maybePlayCountdownSounds = (newElapsed: number) => {
+    const prefs = soundPrefsRef.current;
+    if (!prefs) return;
+
+    const remaining = totalSeconds - newElapsed;
+    const voiceMode = Boolean(prefs.voiceCountdown);
+    const currentSec = Math.floor(newElapsed);
+
+    if (voiceMode) {
+      const announceSec = Math.ceil(remaining);
+      if (announceSec >= 1 && announceSec <= 60 && announceSec !== lastVoiceSecRef.current) {
+        lastVoiceSecRef.current = announceSec;
+        playEnabledSound(() => playVoiceCountdown(announceSec));
+      }
+      return;
+    }
+
+    if (prefs.tick && currentSec > lastTickSecRef.current) {
+      lastTickSecRef.current = currentSec;
+      playEnabledSound(playTick);
+    }
+
+    if (useMinuteBlocks) {
+      const completedBlockIndex = Math.min(
+        minuteBlockCount - 1,
+        Math.floor(newElapsed / 60) - 1,
+      );
+
+      if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
+        lastCompletedBlockIndexRef.current = completedBlockIndex;
+
+        if (prefs.chime) {
+          const blockEnd = (completedBlockIndex + 1) * 60;
+          const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
+          if (chimeCount >= 1) {
+            playEnabledSound(() => playChime(chimeCount));
+          }
+        }
+      }
     }
   };
 
@@ -140,6 +183,7 @@ export function BlockTimer({
 
     if (isResume) {
       lastTickSecRef.current = Math.floor(resumeElapsed);
+      lastVoiceSecRef.current = Math.ceil(totalSeconds - resumeElapsed);
       lastCompletedBlockIndexRef.current = useMinuteBlocks
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
@@ -147,6 +191,7 @@ export function BlockTimer({
       // Fresh session — clear all accumulated state
       lastCompletedBlockIndexRef.current = -1;
       lastTickSecRef.current = -1;
+      lastVoiceSecRef.current = -1;
       pausedElapsedRef.current = 0;
       setElapsed(0);
     }
@@ -165,35 +210,7 @@ export function BlockTimer({
         } else {
           setElapsed(newElapsed);
           pausedElapsedRef.current = newElapsed;
-
-          const currentSec = Math.floor(newElapsed);
-          const remaining = totalSeconds - newElapsed;
-
-          // Tick sound — once per second
-          if (soundPrefsRef.current?.tick && currentSec > lastTickSecRef.current) {
-            lastTickSecRef.current = currentSec;
-            playEnabledSound(playTick);
-          }
-
-          // Always advance block progress so re-enabling chimes doesn't replay history
-          if (useMinuteBlocks) {
-            const completedBlockIndex = Math.min(
-              minuteBlockCount - 1,
-              Math.floor(newElapsed / 60) - 1,
-            );
-
-            if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
-              lastCompletedBlockIndexRef.current = completedBlockIndex;
-
-              if (soundPrefsRef.current?.chime) {
-                const blockEnd = (completedBlockIndex + 1) * 60;
-                const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
-                if (chimeCount >= 1) {
-                  playEnabledSound(() => playChime(chimeCount));
-                }
-              }
-            }
-          }
+          maybePlayCountdownSounds(newElapsed);
         }
       }, 50);
     } else {
@@ -215,6 +232,7 @@ export function BlockTimer({
 
     const seed = Math.min(duration, Math.max(0, (Date.now() + skewRef.current - startedMs) / 1000));
     lastTickSecRef.current = Math.floor(seed);
+    lastVoiceSecRef.current = Math.ceil(duration - seed);
     lastCompletedBlockIndexRef.current =
       useMinuteBlocks && minuteBlockCount > 0
         ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)
@@ -246,29 +264,7 @@ export function BlockTimer({
 
       setElapsed(newElapsed);
       pausedElapsedRef.current = newElapsed;
-
-      const currentSec = Math.floor(newElapsed);
-      if (soundPrefsRef.current?.tick && currentSec > lastTickSecRef.current) {
-        lastTickSecRef.current = currentSec;
-        playEnabledSound(playTick);
-      }
-
-      if (useMinuteBlocks && minuteBlockCount > 0) {
-        const completedBlockIndex = Math.min(
-          minuteBlockCount - 1,
-          Math.floor(newElapsed / 60) - 1,
-        );
-        if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
-          lastCompletedBlockIndexRef.current = completedBlockIndex;
-          if (soundPrefsRef.current?.chime) {
-            const blockEnd = (completedBlockIndex + 1) * 60;
-            const chimeCount = Math.floor((duration - blockEnd) / 60);
-            if (chimeCount >= 1) {
-              playEnabledSound(() => playChime(chimeCount));
-            }
-          }
-        }
-      }
+      maybePlayCountdownSounds(newElapsed);
     }, 50);
 
     return () => window.clearInterval(id);
@@ -292,29 +288,7 @@ export function BlockTimer({
 
     setElapsed(newElapsed);
     pausedElapsedRef.current = newElapsed;
-
-    const currentSec = Math.floor(newElapsed);
-    if (soundPrefsRef.current?.tick && currentSec > lastTickSecRef.current) {
-      lastTickSecRef.current = currentSec;
-      playEnabledSound(playTick);
-    }
-
-    if (useMinuteBlocks && minuteBlockCount > 0) {
-      const completedBlockIndex = Math.min(
-        minuteBlockCount - 1,
-        Math.floor(newElapsed / 60) - 1,
-      );
-      if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
-        lastCompletedBlockIndexRef.current = completedBlockIndex;
-        if (soundPrefsRef.current?.chime) {
-          const blockEnd = (completedBlockIndex + 1) * 60;
-          const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
-          if (chimeCount >= 1) {
-            playEnabledSound(() => playChime(chimeCount));
-          }
-        }
-      }
-    }
+    maybePlayCountdownSounds(newElapsed);
   }, [
     isControlled,
     controlledElapsed,

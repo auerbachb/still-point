@@ -7,7 +7,8 @@ import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { FlashHint } from "./FlashHint";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { loadSoundPrefs, saveSoundPrefs, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
+import { useVoiceCountdown } from "@/lib/useVoiceCountdown";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { markTrackingUnlockIfQualifying } from "@/lib/trackingControlPrefs";
@@ -89,6 +90,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const [, setLiveElapsed] = useState(0);
   const wallStartRef = useRef<number>(Date.now());
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
+  useVoiceCountdown(soundPrefs.voiceCountdown);
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
@@ -778,6 +780,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
             [
               ["tick", "tick"],
               ["chime", "chime"],
+              ["voiceCountdown", "voice"],
               ["completion", "end"],
             ] as const
           ).map(([key, label]) => (
@@ -788,6 +791,9 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                 const next = { ...soundPrefs, [key]: !soundPrefs[key] };
                 setSoundPrefs(next);
                 saveSoundPrefs(next);
+                if (next[key]) {
+                  void unlockAudioContext();
+                }
               }}
               style={{
                 background: "none",
