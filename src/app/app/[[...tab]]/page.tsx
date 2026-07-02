@@ -234,6 +234,12 @@ export default function StillPoint() {
   const loginRefreshCancelled = useRef(false);
   const isMobile = useIsMobile();
 
+  const clearAccountScopedLocalState = () => {
+    setTracksDoneToday({ primary: false, second: false });
+    setForkDismissed(false);
+    resetTrackingUnlockOnLogout();
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -252,6 +258,7 @@ export default function StillPoint() {
 
         if (res.status === 401 || res.status === 403) {
           setUser(null);
+          clearAccountScopedLocalState();
           setAuthError(null);
           setAuthChecked(true);
           return;
@@ -264,6 +271,7 @@ export default function StillPoint() {
         }
 
         setUser(null);
+        clearAccountScopedLocalState();
         setAuthError(null);
         setAuthChecked(true);
       } catch {
@@ -415,13 +423,7 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setOverlay(null);
     setUser(null);
-    // #240: per-track completion badges and the fork-dismissal flag are
-    // account-scoped local state, not tied to the user object itself — clear
-    // them on logout so the next account's Home screen doesn't briefly show
-    // this account's "done today" badges or suppressed fork prompt.
-    setTracksDoneToday({ primary: false, second: false });
-    setForkDismissed(false);
-    resetTrackingUnlockOnLogout();
+    clearAccountScopedLocalState();
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {

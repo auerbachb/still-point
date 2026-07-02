@@ -109,7 +109,7 @@ test.describe("mobile session flow", () => {
     expect(mockApiState.sessions[0]?.breathCount, "one tap is not yet a full breath").toBe(0);
   });
 
-  test("locked tracking controls show explainer until a five-minute sit unlocks", async ({ page, ensureLoggedIn }) => {
+  test("locked tracking controls show explainer before unlock", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await tap(page.getByRole("button", { name: "Begin" }));
 
