@@ -107,6 +107,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   useSessionSuppressionRelay(!sessionFinished);
 
   useEffect(() => {
+    if (sessionFinished) {
+      setShowGuidedExercise(false);
+    }
+  }, [sessionFinished]);
+
+  useEffect(() => {
     const resetTimer = () => {
       setControlsVisible(true);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);

@@ -19,9 +19,9 @@ export type GuidedExerciseDefinition = {
 /** Default pacing between auto-advances — gentle enough to settle into each prompt. */
 export const GUIDED_STEP_DURATION_MS = 45_000;
 
-const SENSORY_STEP_MS = 40_000;
-const BREATH_STEP_MS = 50_000;
-const BODY_SCAN_STEP_MS = 35_000;
+const SENSORY_STEP_MS = GUIDED_STEP_DURATION_MS - 5_000;
+const BREATH_STEP_MS = GUIDED_STEP_DURATION_MS + 5_000;
+const BODY_SCAN_STEP_MS = GUIDED_STEP_DURATION_MS - 10_000;
 
 export const GUIDED_EXERCISES: GuidedExerciseDefinition[] = [
   {
