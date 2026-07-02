@@ -112,6 +112,9 @@ resolve_test_target() {
       echo "StillPointAppUITests/StillPointAppUITests/testSessionsFailureShowsVisibleRetryMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testTokenExpiryRoutesToReauthMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testVoiceOverLabelsForTimerAndPrimaryButton"
+      echo "StillPointAppUITests/SPCapsuleButtonStyleUITests/testAppBlockingCapsuleControlsRendering"
+      echo "StillPointAppUITests/SPCapsuleButtonStyleUITests/testBreathCountingEndCapsuleRendering"
+      echo "StillPointAppUITests/SPCapsuleButtonStyleUITests/testBuddyHubCapsulePrimaryCTARendering"
       ;;
     *)
       echo "StillPointAppUITests/${1}"

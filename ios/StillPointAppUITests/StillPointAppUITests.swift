@@ -498,8 +498,11 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_BREATH_COUNTING"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_BUDDY_HUB"] = "0"
         app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = appBlockingSelected ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_PROGRESS_TAB"] = forceProgressTab ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
         return app
     }

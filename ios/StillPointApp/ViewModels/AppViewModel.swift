@@ -166,7 +166,7 @@ final class AppViewModel {
             if let user = try await APIClient.shared.me() {
                 currentUser = user
                 resetTrackCompletionBadges()
-                currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session(type: .standard, track: .primary) : .home
+                currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
@@ -220,9 +220,28 @@ final class AppViewModel {
         return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
-    /// Initial tab index. Honors SP_UI_TEST_FORCE_PROGRESS_TAB (Progress = 1).
+    /// Initial tab index. Honors SP_UI_TEST_FORCE_SETTINGS_TAB (Settings = 4)
+    /// and SP_UI_TEST_FORCE_PROGRESS_TAB (Progress = 1).
     private static func defaultSelectedTab() -> Int {
-        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_PROGRESS_TAB"]) ? 1 : 0
+        let env = ProcessInfo.processInfo.environment
+        if truthy(env["SP_UI_TEST_FORCE_SETTINGS_TAB"]) { return 4 }
+        if truthy(env["SP_UI_TEST_FORCE_PROGRESS_TAB"]) { return 1 }
+        return 0
+    }
+
+    /// Boot destination for authenticated UI-test launches. Seed knobs are
+    /// mutually exclusive; the first match wins.
+    private static func initialAuthenticatedView(from env: [String: String]) -> AppView {
+        if truthy(env["SP_UI_TEST_FORCE_START_SESSION"]) {
+            return .session(type: .standard, track: .primary)
+        }
+        if truthy(env["SP_UI_TEST_FORCE_BREATH_COUNTING"]) {
+            return .breathCounting
+        }
+        if truthy(env["SP_UI_TEST_FORCE_BUDDY_HUB"]) {
+            return .buddyHub
+        }
+        return .home
     }
 
     func didLogin(user: UserDTO) {

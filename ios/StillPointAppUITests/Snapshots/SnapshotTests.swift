@@ -159,11 +159,14 @@ final class SnapshotTests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_SESSION_SECONDS"] = "120"
         app.launchEnvironment["SP_UI_TEST_TIMER_MULTIPLIER"] = "0.25"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_BREATH_COUNTING"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_BUDDY_HUB"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = "0"
         app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = "1"
         app.launchEnvironment["SP_UI_TEST_FORCE_PROGRESS_TAB"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = "0"
         return app
     }
