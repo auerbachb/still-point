@@ -234,7 +234,7 @@ const confirmWrapStyle: CSSProperties = {
 };
 
 const promptStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "20px",
   fontStyle: "italic",
   color: "var(--fg)",
@@ -243,7 +243,7 @@ const promptStyle: CSSProperties = {
 };
 
 const confirmLeadStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "20px",
   fontStyle: "italic",
   color: "var(--fg)",
@@ -252,7 +252,7 @@ const confirmLeadStyle: CSSProperties = {
 };
 
 const hintStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "14px",
   fontStyle: "italic",
   color: "var(--fg-3)",
@@ -262,7 +262,7 @@ const hintStyle: CSSProperties = {
 };
 
 const textareaStyle: CSSProperties = {
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "16px",
   color: "var(--fg)",
   background: "var(--surface-2)",
@@ -279,7 +279,7 @@ const textareaStyle: CSSProperties = {
 const counterRowStyle: CSSProperties = {
   display: "flex",
   gap: "var(--s2)",
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--fg-4)",
   letterSpacing: "0.06em",
@@ -294,7 +294,7 @@ const primaryCtaStyle: CSSProperties = {
   color: "var(--fg)",
   borderRadius: "999px",
   padding: "12px 18px",
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "12px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -303,7 +303,7 @@ const primaryCtaStyle: CSSProperties = {
 };
 
 const secondaryLinkStyle: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
@@ -312,7 +312,7 @@ const secondaryLinkStyle: CSSProperties = {
 };
 
 const errorStyle: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   color: "var(--accent-danger-muted)",
   letterSpacing: "0.04em",

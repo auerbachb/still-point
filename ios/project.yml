@@ -33,10 +33,6 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UIAppFonts:
-          - Fonts/Newsreader-Variable.ttf
-          - Fonts/Newsreader-Italic-Variable.ttf
-          - Fonts/JetBrainsMono-Variable.ttf
         CFBundleIconName: AppIcon
         ITSAppUsesNonExemptEncryption: false
         # Native Google Sign-In (#344). The iOS OAuth client ID + optional web

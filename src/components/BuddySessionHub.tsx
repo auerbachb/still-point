@@ -213,7 +213,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
             href="/api/auth/google"
             style={{
               color: "var(--fg)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -275,7 +275,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
                 borderRadius: "8px",
                 padding: "10px 12px",
                 fontSize: "13px",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
               }}
             />
           </label>
@@ -287,7 +287,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               background: "var(--surface-1)",
               border: "1px solid var(--border-2)",
               color: "var(--fg)",
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "16px",
               fontStyle: "italic",
               padding: "14px 28px",
@@ -310,7 +310,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               htmlFor="buddy-join-token"
               style={{
                 display: "block",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "11px",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
@@ -335,7 +335,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
                 borderRadius: "8px",
                 padding: "10px 12px",
                 fontSize: "13px",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 resize: "vertical",
               }}
             />
@@ -349,7 +349,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
                 background: "transparent",
                 border: "1px solid var(--border-2)",
                 color: "var(--fg)",
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "11px",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
@@ -382,7 +382,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               border: "1px solid var(--border-2)",
               borderRadius: "8px",
               color: "var(--fg)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
             }}
           >
             {typeof window !== "undefined"
@@ -409,7 +409,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               padding: "10px",
               borderRadius: "8px",
               cursor: "pointer",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -429,7 +429,7 @@ export function BuddySessionHub({ onEnterSession, onBack }: BuddySessionHubProps
               borderRadius: "40px",
               padding: "14px 24px",
               cursor: "pointer",
-              fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+              fontFamily: "var(--font-serif)",
               fontSize: "17px",
               fontStyle: "italic",
             }}

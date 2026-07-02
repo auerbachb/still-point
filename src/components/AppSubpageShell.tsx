@@ -26,7 +26,7 @@ export function AppSubpageShell({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
         padding: isMobile
           ? "var(--s4) var(--s3) calc(var(--s4) + env(safe-area-inset-bottom, 0px))"
           : "var(--s4) var(--s4)",
@@ -45,7 +45,7 @@ export function AppSubpageShell({
         <Link
           href={backHref}
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.1em",
             textTransform: "uppercase",

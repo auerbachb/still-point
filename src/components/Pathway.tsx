@@ -6,7 +6,7 @@ type PathwayProps = {
   currentDay: number;
 };
 
-const mono = "var(--font-jetbrains), 'JetBrains Mono', monospace";
+const mono = "var(--font-mono)";
 
 function levelLabelColor(state: NodeState): string {
   if (state === "completed") return "var(--accent-green-text)";

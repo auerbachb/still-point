@@ -1,21 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Newsreader, JetBrains_Mono } from "next/font/google";
 import { LastAuthProviderCapture } from "@/components/LastAuthProviderCapture";
 import "./globals.css";
-
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-  weight: ["300", "400", "500"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains",
-  subsets: ["latin"],
-  weight: ["200", "300", "400", "500"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://still-point.me"),
@@ -45,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${newsreader.variable} ${jetbrainsMono.variable}`}>
+      <body>
         <LastAuthProviderCapture />
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <main style={{ flex: 1 }}>{children}</main>
@@ -54,7 +40,7 @@ export default function RootLayout({
               padding: "14px 20px",
               borderTop: "1px solid var(--border-1)",
               color: "var(--fg-3)",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               letterSpacing: "0.03em",
               textAlign: "center",

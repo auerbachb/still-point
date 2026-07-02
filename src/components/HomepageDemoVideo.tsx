@@ -34,7 +34,7 @@ export function HomepageDemoVideo() {
         <p
           style={{
             margin: 0,
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             fontSize: "12px",

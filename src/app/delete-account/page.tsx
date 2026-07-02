@@ -52,7 +52,7 @@ export default function DeleteAccountPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           color: "var(--fg-3)",
           fontSize: "22px",
           fontStyle: "italic",
@@ -75,7 +75,7 @@ export default function DeleteAccountPage() {
           gap: "14px",
           padding: "24px",
           textAlign: "center",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
         }}
       >
         <p style={{ margin: 0, color: "var(--fg-2)", maxWidth: "40ch", lineHeight: 1.5 }}>
@@ -91,7 +91,7 @@ export default function DeleteAccountPage() {
             borderRadius: "999px",
             padding: "10px 14px",
             cursor: "pointer",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -115,7 +115,7 @@ export default function DeleteAccountPage() {
           gap: "16px",
           padding: "24px",
           textAlign: "center",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
         }}
       >
         <h1 style={{ margin: 0, fontSize: "32px", fontStyle: "italic", fontWeight: 300 }}>
@@ -131,7 +131,7 @@ export default function DeleteAccountPage() {
             borderRadius: "999px",
             padding: "10px 16px",
             color: "var(--fg)",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             fontSize: "11px",
@@ -153,7 +153,7 @@ export default function DeleteAccountPage() {
         justifyContent: "center",
         gap: "24px",
         padding: "24px",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
       }}
     >
       <div

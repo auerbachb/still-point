@@ -39,10 +39,10 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
     return (
       <div style={containerStyle}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+          fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
           Practitioners
         </h2>
-        <div style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        <div style={{ fontFamily: "var(--font-mono)",
           fontSize: "12px", color: "var(--fg-3)" }}>
           Loading...
         </div>
@@ -54,11 +54,11 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
     <div style={containerStyle}>
       <div style={{ textAlign: "center" }}>
         <h2 style={{ fontSize: "28px", fontWeight: 300, fontStyle: "italic", margin: 0,
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif", color: "var(--fg)" }}>
+          fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
           Practitioners
         </h2>
         <p style={{
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px", color: "var(--fg-4)",
           letterSpacing: "0.09em", marginTop: "8px",
         }}>
@@ -72,7 +72,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
           display: "grid",
           gridTemplateColumns: gridColumns,
           gap: rowGap, padding: `8px ${rowPadX}`,
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px", color: "var(--fg-4)",
           letterSpacing: isMobile ? "0.06em" : "0.12em", textTransform: "uppercase",
         }}>
@@ -104,7 +104,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
               }}
             >
               <span style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "12px",
                 color: i < 3 ? "var(--accent-amber-text)" : "var(--fg-4)",
                 fontWeight: i < 3 ? 500 : 300,
@@ -112,7 +112,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 {i + 1}
               </span>
               <span style={{
-                fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                fontFamily: "var(--font-serif)",
                 fontSize: "15px",
                 color: isMe ? "var(--accent-green)" : "var(--fg)",
                 fontStyle: isMe ? "italic" : "normal",
@@ -122,14 +122,14 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 {isMe && <span style={{ fontSize: "11px", opacity: 0.5 }}>(you)</span>}
               </span>
               <span style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "14px", color: "var(--fg)",
                 textAlign: "right", fontWeight: 300,
               }}>
                 {user.currentDay}
               </span>
               <span style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "14px",
                 color: user.streak >= 7 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
@@ -137,7 +137,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
                 {user.streak}
               </span>
               <span style={{
-                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "14px",
                 color: user.avgClear >= 80 ? "var(--accent-green-strong)" : "var(--fg-2)",
                 textAlign: "right", fontWeight: 300,
@@ -150,7 +150,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
 
         {sorted.length === 0 && (
           <p style={{
-            fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "14px", fontStyle: "italic", color: "var(--fg-4)",
             textAlign: "center", padding: "40px 0",
           }}>
@@ -161,7 +161,7 @@ export function PublicBoard({ currentUsername }: PublicBoardProps) {
 
       <FlashHint style={{ textAlign: "center" }}>
         <p style={{
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "13px", fontStyle: "italic",
           color: "var(--fg-4)", textAlign: "center", lineHeight: 1.5,
         }}>

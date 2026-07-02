@@ -63,44 +63,23 @@ public enum SPSpacing {
 
 // MARK: - Fonts
 //
-// Bundled variable fonts (OFL-licensed Google Fonts):
-//   - Newsreader-Variable.ttf (PostScript: Newsreader16pt-Regular, weight axis)
-//   - Newsreader-Italic-Variable.ttf (PostScript: Newsreader16pt-Italic, weight axis)
-//   - JetBrainsMono-Variable.ttf (PostScript: JetBrainsMono-Regular, weight axis)
-//
-// Variable fonts support .fontWeight() modifiers natively.
-// Registered in Info.plist under UIAppFonts.
+// System font stacks — no bundled fonts. Web parity uses CSS custom properties
+// --font-serif and --font-mono in globals.css.
 
 public enum SPFont {
-    // PostScript names from the bundled variable fonts
-    private static let newsreaderName = "Newsreader16pt-Regular"
-    private static let newsreaderItalicName = "Newsreader16pt-Italic"
-    private static let jetbrainsMonoName = "JetBrainsMono-Regular"
-
-    // Check if a custom font is available; fall back to system equivalent
-    private static func customOrFallback(_ name: String, size: CGFloat, fallback: Font.Design) -> Font {
-        if UIFont(name: name, size: size) != nil {
-            return .custom(name, size: size)
-        }
-        return .system(size: size, design: fallback)
-    }
-
-    /// Serif font for body text, headings, brand — Newsreader (fallback: system serif)
+    /// Serif font for body text, headings, brand
     static func serif(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        customOrFallback(newsreaderName, size: size, fallback: .serif).weight(weight)
+        .system(size: size, design: .serif).weight(weight)
     }
 
     /// Serif italic for brand lockup and emphasis
     static func serifItalic(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        if UIFont(name: newsreaderItalicName, size: size) != nil {
-            return .custom(newsreaderItalicName, size: size).weight(weight)
-        }
-        return .system(size: size, design: .serif).weight(weight).italic()
+        .system(size: size, design: .serif).weight(weight).italic()
     }
 
-    /// Monospace for labels, stats, data — JetBrains Mono (fallback: system monospaced)
+    /// Monospace for labels, stats, data
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        customOrFallback(jetbrainsMonoName, size: size, fallback: .monospaced).weight(weight)
+        .system(size: size, design: .monospaced).weight(weight)
     }
 
     // Common presets

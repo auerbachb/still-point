@@ -56,7 +56,7 @@ type SessionViewProps = {
 };
 
 const mono: CSSProperties = {
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
 };
 
 export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = "standard", track = "primary", onComplete, onAbandon }: SessionViewProps) {

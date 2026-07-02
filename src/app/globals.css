@@ -1,4 +1,8 @@
 :root {
+  /* Typography — system font stacks (no bundled/web fonts) */
+  --font-serif: Charter, Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
   /* Color tiers — warm off-white on dark */
   --fg:   rgba(232, 228, 222, 0.92);
   --fg-2: rgba(232, 228, 222, 0.70);

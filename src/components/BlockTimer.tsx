@@ -358,7 +358,7 @@ export function BlockTimer({
           position: "absolute", inset: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: `${blockLabelSize}px`,
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           color: isFilled ? "var(--overlay-text)" : "var(--fg-4)",
           fontWeight: 500, zIndex: 1,
         }}>
@@ -393,7 +393,7 @@ export function BlockTimer({
         <div
           aria-hidden={!showTimer}
           style={{
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', 'SF Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: isMobile ? "min(72px, 19vw)" : "min(120px, 18vw)",
             fontWeight: 200,
             letterSpacing: "0.05em",
@@ -422,7 +422,7 @@ export function BlockTimer({
             color: "var(--fg-3)",
             borderRadius: "999px",
             cursor: "pointer",
-            fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "11px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -477,7 +477,7 @@ export function BlockTimer({
             paddingTop: "4px",
           }}>
             <div style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-4)",
               textAlign: "center", marginBottom: "8px",
               letterSpacing: "0.1em", textTransform: "uppercase",

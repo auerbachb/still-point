@@ -710,7 +710,7 @@ export function BuddySessionRoom({
               margin: 0,
               padding: "22px 24px",
               borderRadius: "16px",
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "clamp(15px, 3.8vw, 18px)",
               lineHeight: 1.45,
               letterSpacing: "0.04em",
@@ -758,7 +758,7 @@ export function BuddySessionRoom({
                   style={{
                     color: "var(--fg)",
                     fontSize: "clamp(18px, 4.5vw, 22px)",
-                    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                    fontFamily: "var(--font-serif)",
                   }}
                 >
                   {p.username}
@@ -771,7 +771,7 @@ export function BuddySessionRoom({
                     gap: "12px",
                     fontSize: "clamp(14px, 3.5vw, 17px)",
                     color: "var(--fg-2)",
-                    fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+                    fontFamily: "var(--font-serif)",
                     flexShrink: 0,
                   }}
                 >
@@ -950,7 +950,7 @@ export function BuddySessionRoom({
                   margin: "-12px 0 0",
                   fontSize: "11px",
                   color: "var(--fg-3)",
-                  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-mono)",
                   letterSpacing: "0.08em",
                 }}
               >
@@ -1075,7 +1075,7 @@ export function BuddySessionRoom({
                     alignItems: "center",
                     gap: "10px",
                     marginTop: "8px",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
@@ -1189,7 +1189,7 @@ export function BuddySessionRoom({
                       }`,
                       color:
                         mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "12px",
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
@@ -1209,7 +1209,7 @@ export function BuddySessionRoom({
                     <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
                     <span
                       style={{
-                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-mono)",
                         fontSize: "9px",
                         letterSpacing: "0.14em",
                         opacity: 0.85,
@@ -1272,7 +1272,7 @@ export function BuddySessionRoom({
                       }`,
                       color:
                         mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "12px",
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
@@ -1292,7 +1292,7 @@ export function BuddySessionRoom({
                     <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
                     <span
                       style={{
-                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-mono)",
                         fontSize: "9px",
                         letterSpacing: "0.14em",
                         opacity: 0.85,
@@ -1308,7 +1308,7 @@ export function BuddySessionRoom({
                   style={{
                     margin: "12px 0 0",
                     textAlign: "center",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "10px",
                     color: "var(--fg-4)",
                     letterSpacing: "0.05em",
@@ -1322,7 +1322,7 @@ export function BuddySessionRoom({
                 <div
                   style={{
                     marginTop: "12px",
-                    fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: "10px",
                     color: "var(--fg-4)",
                     letterSpacing: "0.08em",
@@ -1380,7 +1380,7 @@ export function BuddySessionRoom({
                         border: "1px solid var(--accent-amber-border)",
                         background: "none",
                         color: "var(--accent-amber-border)",
-                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-mono)",
                         fontSize: "11px",
                         letterSpacing: "0.15em",
                         textTransform: "uppercase",
@@ -1397,7 +1397,7 @@ export function BuddySessionRoom({
                       margin: 0,
                       fontSize: "11px",
                       color: "var(--fg-4)",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       letterSpacing: "0.06em",
                       textAlign: "center",
                     }}
@@ -1413,7 +1413,7 @@ export function BuddySessionRoom({
                         maxWidth: "340px",
                         fontSize: "11px",
                         color: "var(--accent-amber)",
-                        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-mono)",
                         letterSpacing: "0.04em",
                         textAlign: "center",
                         lineHeight: 1.45,
@@ -1435,7 +1435,7 @@ export function BuddySessionRoom({
                       display: "flex",
                       justifyContent: "center",
                       gap: "16px",
-                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: "11px",
                       letterSpacing: "0.1em",
                       flexWrap: "wrap",
@@ -1548,7 +1548,7 @@ const btnPrimary: CSSProperties = {
   borderRadius: "40px",
   padding: "14px 24px",
   cursor: "pointer",
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "17px",
   fontStyle: "italic",
 };
@@ -1560,7 +1560,7 @@ const btnSecondary: CSSProperties = {
   padding: "12px 18px",
   borderRadius: "8px",
   cursor: "pointer",
-  fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: "11px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",

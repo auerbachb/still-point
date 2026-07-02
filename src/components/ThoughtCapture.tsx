@@ -48,7 +48,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
           background: "var(--overlay-bg)",
           border: "1px solid var(--accent-amber-border-subtle)",
           borderRadius: "8px", padding: "10px 14px", color: "var(--fg)",
-          fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           fontSize: "15px", fontStyle: "italic", outline: "none",
           width: "100%", boxSizing: "border-box" as const,
         }}
@@ -57,7 +57,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
         <button type="button" onClick={onCancel} style={{
           background: "none", border: "none",
           color: "var(--fg-4)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase",
           cursor: "pointer", padding: "6px 12px",
         }}>
@@ -67,7 +67,7 @@ export function ThoughtCapture({ onSave, onCancel }: ThoughtCaptureProps) {
           background: "var(--accent-amber-bg)",
           border: "1px solid var(--accent-amber-muted)",
           color: "var(--accent-amber)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase",
           cursor: "pointer", padding: "6px 16px", borderRadius: "12px",
         }}>

@@ -12,7 +12,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: "8px",
   padding: "12px 16px",
   color: "var(--fg)",
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "15px",
   outline: "none",
   width: "100%",
@@ -22,7 +22,7 @@ const buttonStyle: React.CSSProperties = {
   background: "var(--surface-1)",
   border: "1px solid var(--border-2)",
   color: "var(--fg)",
-  fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+  fontFamily: "var(--font-serif)",
   fontSize: "16px",
   fontStyle: "italic",
   padding: "14px",
@@ -217,7 +217,7 @@ function ResetPasswordForm() {
           <div
             role={status === "error" ? "alert" : "status"}
             style={{
-              fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: "11px",
               color: status === "error" ? "var(--accent-danger)" : "var(--accent-green-text)",
               lineHeight: 1.5,
@@ -243,7 +243,7 @@ function ResetPasswordForm() {
         href="/app"
         style={{
           color: "var(--fg-3)",
-          fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: "11px",
           letterSpacing: "0.08em",
           textTransform: "uppercase",
@@ -266,7 +266,7 @@ export default function ResetPasswordPage() {
         alignItems: "center",
         justifyContent: "center",
         padding: "40px 20px",
-        fontFamily: "var(--font-newsreader), 'Newsreader', Georgia, serif",
+        fontFamily: "var(--font-serif)",
       }}
     >
       <Suspense fallback={<div style={{ color: "var(--fg-3)" }}>Loading reset link...</div>}>
