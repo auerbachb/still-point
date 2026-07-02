@@ -11,10 +11,10 @@ import {
 import {
   GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE,
   syncBuddySessionCalendarForUser,
-} from "@/lib/google";
+} from "@/lib/googleCalendar";
 import { and, eq } from "drizzle-orm";
 import { readJsonObject } from "@/lib/readJsonObject";
-import type { CalendarSyncResult } from "@/lib/google";
+import type { CalendarSyncResult } from "@/lib/googleCalendar";
 
 async function syncCalendarBestEffort(
   session: typeof buddySessions.$inferSelect,

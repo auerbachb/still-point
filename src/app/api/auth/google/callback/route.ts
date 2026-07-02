@@ -4,7 +4,7 @@ import {
   exchangeGoogleCodeForTokens,
   getGoogleStateCookieName,
   verifyGoogleOAuthState,
-} from "@/lib/google";
+} from "@/lib/googleOAuth";
 
 export async function GET(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/+$/, "") ?? "https://still-point.me";

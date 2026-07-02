@@ -35,7 +35,7 @@ vi.mock("@/lib/buddySession", () => ({
   normalizedBuddySessionDurationSeconds: vi.fn(() => 600),
 }));
 
-vi.mock("@/lib/google", () => ({
+vi.mock("@/lib/googleCalendar", () => ({
   GOOGLE_CALENDAR_SYNC_FAILED_MESSAGE: "Could not sync Google Calendar",
   syncBuddySessionCalendarForUser,
 }));

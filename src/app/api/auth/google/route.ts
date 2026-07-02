@@ -4,7 +4,7 @@ import {
   GoogleCalendarUnavailableError,
   buildGoogleAuthUrl,
   makeGoogleOAuthState,
-} from "@/lib/google";
+} from "@/lib/googleOAuth";
 
 export async function GET() {
   try {
