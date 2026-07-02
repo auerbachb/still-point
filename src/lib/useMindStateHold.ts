@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
-import { isMindStateTypingTarget } from "@/lib/mindStateSession";
+import {
+  createInitialMindHoldKeyboardState,
+  reduceMindHoldKeyDown,
+  reduceMindHoldKeyUp,
+  type MindHoldKind,
+} from "@/lib/mindStateSession";
 
-export type MindHoldKind = "none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus";
+export type { MindHoldKind };
 
 type UseMindStateHoldOptions = {
   /** When false, Space/Comma listeners are not registered (e.g. paused sit or buddy lobby). */
@@ -25,61 +30,48 @@ export function useMindStateHold({
   endHoldFromKeyboard,
 }: UseMindStateHoldOptions) {
   const holdKindRef = useRef<MindHoldKind>("none");
-  const spaceDownRef = useRef(false);
-  const commaDownRef = useRef(false);
+  const keyboardStateRef = useRef(createInitialMindHoldKeyboardState());
 
   const resetHoldTracking = useCallback(() => {
     holdKindRef.current = "none";
-    spaceDownRef.current = false;
-    commaDownRef.current = false;
+    keyboardStateRef.current = createInitialMindHoldKeyboardState();
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (isMindStateTypingTarget(e.target)) return;
-
-      if (e.code === "Space" && !e.repeat) {
-        e.preventDefault();
-        spaceDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "spaceDistraction";
-          beginDistraction();
-        }
-        return;
-      }
-
-      if ((e.code === "Comma" || e.key === ",") && !e.repeat) {
-        e.preventDefault();
-        commaDownRef.current = true;
-        if (holdKindRef.current === "none") {
-          holdKindRef.current = "commaHyperfocus";
-          beginHyperfocus();
-        }
+    const applyEffects = (
+      effects: ReturnType<typeof reduceMindHoldKeyDown>["effects"],
+      e: KeyboardEvent,
+    ) => {
+      for (const effect of effects) {
+        if (effect.type === "preventDefault") e.preventDefault();
+        if (effect.type === "beginDistraction") beginDistraction();
+        if (effect.type === "beginHyperfocus") beginHyperfocus();
+        if (effect.type === "endHold") endHoldFromKeyboard();
       }
     };
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      keyboardStateRef.current = {
+        ...keyboardStateRef.current,
+        holdKind: holdKindRef.current,
+      };
+      const { state, effects } = reduceMindHoldKeyDown(keyboardStateRef.current, e);
+      keyboardStateRef.current = state;
+      holdKindRef.current = state.holdKind;
+      applyEffects(effects, e);
+    };
+
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        if (!spaceDownRef.current) return;
-        spaceDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "spaceDistraction") {
-          holdKindRef.current = "none";
-          endHoldFromKeyboard();
-        }
-        return;
-      }
-      if (e.code === "Comma" || e.key === ",") {
-        if (!commaDownRef.current) return;
-        commaDownRef.current = false;
-        e.preventDefault();
-        if (holdKindRef.current === "commaHyperfocus") {
-          holdKindRef.current = "none";
-          endHoldFromKeyboard();
-        }
-      }
+      keyboardStateRef.current = {
+        ...keyboardStateRef.current,
+        holdKind: holdKindRef.current,
+      };
+      const { state, effects } = reduceMindHoldKeyUp(keyboardStateRef.current, e);
+      keyboardStateRef.current = state;
+      holdKindRef.current = state.holdKind;
+      applyEffects(effects, e);
     };
 
     window.addEventListener("keydown", onKeyDown, { capture: true });

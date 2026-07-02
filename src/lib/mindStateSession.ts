@@ -1,7 +1,27 @@
 /**
  * Helpers for mind-state / distraction keyboard handling and clear-percent math.
  * Used by solo `SessionView` and `BuddySessionRoom`.
+ *
+ * Hyperfocus intervals are stored in the existing `mindStateLog` JSON as
+ * `{ time, state: "hyperfocus" }` entries — the same shape as distraction
+ * (`"thinking"`) holds from #72.
  */
+
+export type MindHoldKind = "none" | "pointerHold" | "spaceDistraction" | "commaHyperfocus";
+
+export type MindHoldKeyboardState = {
+  holdKind: MindHoldKind;
+  spaceDown: boolean;
+  commaDown: boolean;
+};
+
+export type MindHoldKeyEffect =
+  | { type: "preventDefault" }
+  | { type: "beginDistraction" }
+  | { type: "beginHyperfocus" }
+  | { type: "endHold" };
+
+type KeyboardLikeEvent = Pick<KeyboardEvent, "code" | "key" | "repeat" | "target">;
 
 /**
  * Returns true when the event target is a control where global shortcuts
@@ -13,6 +33,101 @@ export function isMindStateTypingTarget(el: EventTarget | null): boolean {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (el.isContentEditable) return true;
   return Boolean(el.closest("[data-no-space-distraction]"));
+}
+
+export function isSpaceHoldKey(e: Pick<KeyboardEvent, "code" | "key">): boolean {
+  return e.code === "Space" || e.key === " " || e.key === "Space";
+}
+
+export function isCommaHoldKey(e: Pick<KeyboardEvent, "code" | "key">): boolean {
+  return e.code === "Comma" || e.key === ",";
+}
+
+export function createInitialMindHoldKeyboardState(): MindHoldKeyboardState {
+  return { holdKind: "none", spaceDown: false, commaDown: false };
+}
+
+/**
+ * Pure reducer for Space (distraction) and Comma (hyperfocus) keydown handling.
+ * Pointer holds set `holdKind` to `"pointerHold"` in the parent; keyboard holds
+ * only begin when `holdKind === "none"`.
+ */
+export function reduceMindHoldKeyDown(
+  state: MindHoldKeyboardState,
+  e: KeyboardLikeEvent,
+): { state: MindHoldKeyboardState; effects: MindHoldKeyEffect[] } {
+  if (isMindStateTypingTarget(e.target)) {
+    return { state, effects: [] };
+  }
+
+  if (isSpaceHoldKey(e) && !e.repeat) {
+    const effects: MindHoldKeyEffect[] = [{ type: "preventDefault" }];
+    const next = { ...state, spaceDown: true };
+    if (state.holdKind === "none") {
+      next.holdKind = "spaceDistraction";
+      effects.push({ type: "beginDistraction" });
+    }
+    return { state: next, effects };
+  }
+
+  if (isCommaHoldKey(e) && !e.repeat) {
+    const effects: MindHoldKeyEffect[] = [{ type: "preventDefault" }];
+    const next = { ...state, commaDown: true };
+    if (state.holdKind === "none") {
+      next.holdKind = "commaHyperfocus";
+      effects.push({ type: "beginHyperfocus" });
+    }
+    return { state: next, effects };
+  }
+
+  return { state, effects: [] };
+}
+
+/** Pure reducer for Space/Comma keyup — ends the matching keyboard hold only. */
+export function reduceMindHoldKeyUp(
+  state: MindHoldKeyboardState,
+  e: Pick<KeyboardEvent, "code" | "key">,
+): { state: MindHoldKeyboardState; effects: MindHoldKeyEffect[] } {
+  if (isSpaceHoldKey(e)) {
+    if (!state.spaceDown) return { state, effects: [] };
+    const effects: MindHoldKeyEffect[] = [{ type: "preventDefault" }];
+    const next = { ...state, spaceDown: false };
+    if (state.holdKind === "spaceDistraction") {
+      next.holdKind = "none";
+      effects.push({ type: "endHold" });
+    }
+    return { state: next, effects };
+  }
+
+  if (isCommaHoldKey(e)) {
+    if (!state.commaDown) return { state, effects: [] };
+    const effects: MindHoldKeyEffect[] = [{ type: "preventDefault" }];
+    const next = { ...state, commaDown: false };
+    if (state.holdKind === "commaHyperfocus") {
+      next.holdKind = "none";
+      effects.push({ type: "endHold" });
+    }
+    return { state: next, effects };
+  }
+
+  return { state, effects: [] };
+}
+
+/**
+ * Records a press-and-hold segment the same way SessionView finalizes an interval.
+ * Used for unit tests and documents the persisted `mindStateLog` shape.
+ */
+export function recordHoldSegment(
+  log: Array<{ time: number; state: string }>,
+  segmentState: "thinking" | "hyperfocus",
+  startTime: number,
+  endTime: number,
+): Array<{ time: number; state: string }> {
+  return [
+    ...log,
+    { time: startTime, state: segmentState },
+    { time: endTime, state: "clear" },
+  ];
 }
 
 /**
