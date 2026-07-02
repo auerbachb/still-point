@@ -166,7 +166,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   }, [finalizeActiveHold]);
 
   const { holdKindRef, resetHoldTracking } = useMindStateHold({
-    enabled: isActive && showDistractionHyperfocusCluster,
+    enabled: isActive && showDistractionHyperfocusCluster && !showGuidedExercise,
     beginDistraction,
     beginHyperfocus,
     endHoldFromKeyboard,

@@ -33,6 +33,11 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
   const [elapsedInStepMs, setElapsedInStepMs] = useState(0);
   const [paused, setPaused] = useState(false);
   const reduceMotionRef = useRef(false);
+  const stepIndexRef = useRef(stepIndex);
+  const elapsedRef = useRef(elapsedInStepMs);
+
+  stepIndexRef.current = stepIndex;
+  elapsedRef.current = elapsedInStepMs;
 
   const exercise = exerciseId ? guidedExerciseById(exerciseId) : null;
   const steps = exercise?.steps ?? [];
@@ -62,22 +67,28 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
 
   const advanceStep = useCallback(() => {
     if (!exercise) return;
-    if (isLastStep(stepIndex, exercise.steps.length)) {
-      setPhase("complete");
-      return;
-    }
-    setStepIndex(i => nextStepIndex(i, exercise.steps.length));
-    setElapsedInStepMs(0);
-  }, [exercise, stepIndex]);
+    setStepIndex(i => {
+      if (isLastStep(i, exercise.steps.length)) {
+        setPhase("complete");
+        return i;
+      }
+      elapsedRef.current = 0;
+      setElapsedInStepMs(0);
+      return nextStepIndex(i, exercise.steps.length);
+    });
+  }, [exercise]);
 
   const goBack = useCallback(() => {
-    if (stepIndex === 0) {
-      resetState();
-      return;
-    }
-    setStepIndex(previousStepIndex);
-    setElapsedInStepMs(0);
-  }, [resetState, stepIndex]);
+    setStepIndex(i => {
+      if (i === 0) {
+        resetState();
+        return 0;
+      }
+      elapsedRef.current = 0;
+      setElapsedInStepMs(0);
+      return previousStepIndex(i);
+    });
+  }, [resetState]);
 
   useEffect(() => {
     if (!open) {
@@ -93,21 +104,35 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
   }, []);
 
   useEffect(() => {
-    if (!open || phase !== "running" || paused || !currentStep) return;
+    if (!open || phase !== "running" || paused || !exercise) return;
 
     const id = window.setInterval(() => {
-      setElapsedInStepMs(prev => prev + TICK_MS);
+      const idx = stepIndexRef.current;
+      const step = exercise.steps[idx];
+      if (!step) return;
+
+      const nextElapsed = elapsedRef.current + TICK_MS;
+      if (nextElapsed < step.durationMs) {
+        elapsedRef.current = nextElapsed;
+        setElapsedInStepMs(nextElapsed);
+        return;
+      }
+
+      elapsedRef.current = 0;
+      if (isLastStep(idx, exercise.steps.length)) {
+        setPhase("complete");
+        setElapsedInStepMs(0);
+        return;
+      }
+
+      const nextIdx = nextStepIndex(idx, exercise.steps.length);
+      stepIndexRef.current = nextIdx;
+      setStepIndex(nextIdx);
+      setElapsedInStepMs(0);
     }, TICK_MS);
 
     return () => window.clearInterval(id);
-  }, [open, phase, paused, currentStep, stepIndex]);
-
-  useEffect(() => {
-    if (!open || phase !== "running" || paused || !currentStep) return;
-    if (elapsedInStepMs >= currentStep.durationMs) {
-      advanceStep();
-    }
-  }, [open, phase, paused, currentStep, elapsedInStepMs, advanceStep]);
+  }, [open, phase, paused, exercise]);
 
   useEffect(() => {
     if (!open) return;
@@ -192,6 +217,7 @@ export function GuidedExerciseOverlay({ open, onClose }: GuidedExerciseOverlayPr
       aria-modal="true"
       aria-label="Guided exercise"
       data-testid="guided-exercise-overlay"
+      data-no-space-distraction
       style={overlayStyle}
     >
       <button type="button" onClick={handleClose} aria-label="Close guided exercise" style={closeButtonStyle}>
