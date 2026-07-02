@@ -6,7 +6,7 @@ import os
 enum AppView: Equatable {
     case auth
     case home
-    case session(type: SessionType)
+    case session(type: SessionType, track: Track)
     case buddyHub
     case buddyCalendar
     case buddyCalendarWithBuddy(buddyId: String, buddyUsername: String)
@@ -36,8 +36,8 @@ enum AppView: Equatable {
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
-        case let (.session(lhsType), .session(rhsType)):
-            return lhsType == rhsType
+        case let (.session(lhsType, lhsTrack), .session(rhsType, rhsTrack)):
+            return lhsType == rhsType && lhsTrack == rhsTrack
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
             return lhsSessionId == rhsSessionId
         case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):
@@ -93,6 +93,10 @@ final class AppViewModel {
         }
     }
 
+    /// #240: per-track "completed a standard sit today", drives the Home badges.
+    var primaryDoneToday = false
+    var secondDoneToday = false
+
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
     }
@@ -103,6 +107,31 @@ final class AppViewModel {
 
     var todayBlockCount: Int {
         StillPoint.blockCount(forDuration: todayDuration)
+    }
+
+    // MARK: - #240 Dual-track fork
+
+    /// Whether the user has opted into the second daily track.
+    var dualTrackEnabled: Bool {
+        currentUser?.dualTrackEnabled ?? false
+    }
+
+    /// True once the primary track has passed the 10-minute mark (fork available).
+    var dualTrackEligible: Bool {
+        StillPoint.isDualTrackEligible(currentDay: currentDay)
+    }
+
+    /// Second-track day counter (clamped to >= 1 for defensive upstream data).
+    var secondTrackDay: Int {
+        max(currentUser?.secondTrackDay ?? 1, 1)
+    }
+
+    var secondTrackDuration: Int {
+        StillPoint.duration(forDay: secondTrackDay)
+    }
+
+    var secondTrackBlockCount: Int {
+        StillPoint.blockCount(forDuration: secondTrackDuration)
     }
 
     var isInSession: Bool {
@@ -136,11 +165,12 @@ final class AppViewModel {
         do {
             if let user = try await APIClient.shared.me() {
                 currentUser = user
-                currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session(type: .standard) : .home
+                currentView = Self.truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_FORCE_START_SESSION"]) ? .session(type: .standard, track: .primary) : .home
                 authStatusMessage = nil
                 lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
                 hydrateNotificationSuppressionPreference()
+                await refreshTracksDoneToday()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
                 return
@@ -199,6 +229,7 @@ final class AppViewModel {
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         hydrateNotificationSuppressionPreference()
         Task {
+            await refreshTracksDoneToday()
             await consumePendingBuddyInviteIfNeeded()
             await consumePendingSessionDeepLinkIfNeeded()
         }
@@ -231,8 +262,48 @@ final class AppViewModel {
         SessionNotificationSuppressionController.clearSuppressPreference()
     }
 
-    func beginSession(type: SessionType = .standard) {
-        currentView = .session(type: type)
+    func beginSession(type: SessionType = .standard, track: Track = .primary) {
+        currentView = .session(type: type, track: track)
+    }
+
+    /// #240: opt into the dual-track fork, then refresh local user + badges.
+    func enableDualTrack() async {
+        do {
+            let updated = try await APIClient.shared.enableDualTrack()
+            currentUser = updated
+            await refreshTracksDoneToday()
+        } catch {
+            print("Failed to enable dual track: \(error)")
+        }
+    }
+
+    /// #240: derive per-track "completed a standard sit today" from the session
+    /// list (a missing `track` on a legacy row counts as the primary track).
+    func refreshTracksDoneToday() async {
+        guard currentUser != nil else { return }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+        let today = dateFormatter.string(from: Date())
+        do {
+            let (sessions, _) = try await APIClient.shared.getSessions()
+            var primary = false
+            var second = false
+            for session in sessions where session.completed
+                && session.sessionType == .standard
+                && session.sessionDate == today {
+                if session.track == Track.second {
+                    second = true
+                } else {
+                    primary = true
+                }
+            }
+            primaryDoneToday = primary
+            secondDoneToday = second
+        } catch {
+            // Non-fatal: badges keep their last value.
+        }
     }
 
     func beginBreathCounting() {
@@ -389,6 +460,7 @@ final class AppViewModel {
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }
+        await refreshTracksDoneToday()
         await consumePendingBuddyInviteIfNeeded()
     }
 

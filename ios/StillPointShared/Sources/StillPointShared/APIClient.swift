@@ -278,6 +278,15 @@ public actor APIClient {
         return response.user
     }
 
+    /// #240: opt into the dual-track fork (enable a second daily track).
+    public func enableDualTrack() async throws -> UserDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.enableDualTrack()
+        }
+        let response: UserResponse = try await post("/api/track", body: Optional<String>.none)
+        return response.user
+    }
+
     // MARK: - Notification preferences
 
     public func getNotificationPreferences() async throws -> NotificationPreferencesDTO {

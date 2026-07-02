@@ -7,6 +7,8 @@ final class SessionViewModel {
     // Session config
     let dayNumber: Int
     let sessionType: SessionType
+    /// #240: which daily track this sit advances.
+    let track: Track
     let plannedSeconds: Int
     var bonusSeconds: Int = 0
 
@@ -86,9 +88,10 @@ final class SessionViewModel {
         "\(minutes):\(String(format: "%02d", seconds))"
     }
 
-    init(dayNumber: Int, sessionType: SessionType = .standard) {
+    init(dayNumber: Int, sessionType: SessionType = .standard, track: Track = .primary) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
+        self.track = track
         self.plannedSeconds = Self.resolveTotalSeconds(for: dayNumber, sessionType: sessionType)
         self.soundPrefs = AudioEngine.loadPrefs()
         self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
@@ -241,7 +244,8 @@ final class SessionViewModel {
             clearPercent: clearPercent,
             thoughtCount: thoughtCount,
             mindStateLog: mindStateLog,
-            sessionDate: dateFormatter.string(from: Date())
+            sessionDate: dateFormatter.string(from: Date()),
+            track: track
         )
 
         do {

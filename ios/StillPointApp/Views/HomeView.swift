@@ -6,6 +6,8 @@ struct HomeView: View {
 
     @State private var breatheAnimation = false
     @State private var showAppGateOnboarding = false
+    /// #240: dismiss the fork prompt for this session (may reappear on a later visit).
+    @State private var forkDismissed = false
 
     var body: some View {
         ScrollView {
@@ -21,25 +23,56 @@ struct HomeView: View {
 
                 Spacer().frame(height: SPSpacing.s4)
 
-                // Day number with breathing animation
-                Text("\(appVM.currentDay)")
-                    .font(SPFont.dayNumber)
-                    .foregroundStyle(Color(SPColor.fg))
-                    .scaleEffect(breatheAnimation ? 1.02 : 1.0)
-                    .opacity(breatheAnimation ? 1.0 : 0.6)
-                    .animation(
-                        .easeInOut(duration: 4).repeatForever(autoreverses: true),
-                        value: breatheAnimation
-                    )
-                    .onAppear { breatheAnimation = true }
+                // #240: dual-track shows two independently-startable track cards;
+                // single-track keeps the classic day readout.
+                if appVM.dualTrackEnabled {
+                    VStack(spacing: SPSpacing.s3) {
+                        trackCard(
+                            label: "TRACK ONE · \(StillPoint.maxDuration / 60) MIN",
+                            day: appVM.currentDay,
+                            duration: appVM.todayDuration,
+                            blocks: appVM.todayBlockCount,
+                            doneToday: appVM.primaryDoneToday,
+                            identifier: "home.trackOne",
+                            onBegin: { appVM.beginSession(track: .primary) }
+                        )
+                        trackCard(
+                            label: "TRACK TWO",
+                            day: appVM.secondTrackDay,
+                            duration: appVM.secondTrackDuration,
+                            blocks: appVM.secondTrackBlockCount,
+                            doneToday: appVM.secondDoneToday,
+                            identifier: "home.trackTwo",
+                            onBegin: { appVM.beginSession(track: .second) }
+                        )
+                    }
+                    .padding(.horizontal, SPSpacing.s2)
+                } else {
+                    // Day number with breathing animation
+                    Text("\(appVM.currentDay)")
+                        .font(SPFont.dayNumber)
+                        .foregroundStyle(Color(SPColor.fg))
+                        .scaleEffect(breatheAnimation ? 1.02 : 1.0)
+                        .opacity(breatheAnimation ? 1.0 : 0.6)
+                        .animation(
+                            .easeInOut(duration: 4).repeatForever(autoreverses: true),
+                            value: breatheAnimation
+                        )
+                        .onAppear { breatheAnimation = true }
 
-                // Day info
-                Text("day · \(appVM.todayDuration)s · \(appVM.todayBlockCount) blocks")
-                    .font(SPFont.mono(14, weight: .light))
-                    .foregroundStyle(Color(SPColor.fg3))
-                    .tracking(2)
+                    // Day info
+                    Text("day · \(appVM.todayDuration)s · \(appVM.todayBlockCount) blocks")
+                        .font(SPFont.mono(14, weight: .light))
+                        .foregroundStyle(Color(SPColor.fg3))
+                        .tracking(2)
+                }
 
                 appGatePill
+
+                // #240: fork choice once past the 10-minute mark (not yet opted in).
+                if appVM.dualTrackEligible && !appVM.dualTrackEnabled && !forkDismissed {
+                    dualTrackForkCard
+                }
 
                 aphorismSection
 
@@ -47,22 +80,25 @@ struct HomeView: View {
 
                 // Begin button
                 VStack(spacing: SPSpacing.s2) {
-                    Button {
-                        withAnimation {
-                            appVM.beginSession()
+                    // Primary Begin lives inside the track cards in dual-track mode.
+                    if !appVM.dualTrackEnabled {
+                        Button {
+                            withAnimation {
+                                appVM.beginSession()
+                            }
+                        } label: {
+                            Text("Begin")
+                                .font(SPFont.serifItalic(22, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg))
+                                .padding(.horizontal, 48)
+                                .padding(.vertical, SPSpacing.s3)
+                                .background(SPColor.surface2)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(SPColor.border2))
                         }
-                    } label: {
-                        Text("Begin")
-                            .font(SPFont.serifItalic(22, weight: .light))
-                            .foregroundStyle(Color(SPColor.fg))
-                            .padding(.horizontal, 48)
-                            .padding(.vertical, SPSpacing.s3)
-                            .background(SPColor.surface2)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SPColor.border2))
+                        .accessibilityIdentifier("home.beginButton")
+                        .accessibilityLabel("Start session")
                     }
-                    .accessibilityIdentifier("home.beginButton")
-                    .accessibilityLabel("Start session")
 
                     Button {
                         withAnimation {
@@ -196,6 +232,122 @@ struct HomeView: View {
             .accessibilityIdentifier("home.aphorism")
             .accessibilityElement(children: .combine)
         }
+    }
+
+    /// #240: one track's Home card — day number, planned length, completion badge
+    /// and its own Begin button so either track can be started independently.
+    private func trackCard(
+        label: String,
+        day: Int,
+        duration: Int,
+        blocks: Int,
+        doneToday: Bool,
+        identifier: String,
+        onBegin: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: SPSpacing.s2) {
+            HStack(spacing: SPSpacing.s2) {
+                Text(label)
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .tracking(1.5)
+                if doneToday {
+                    Text("\u{2713} DONE TODAY")
+                        .font(SPFont.mono(11, weight: .medium))
+                        .foregroundStyle(SPColor.greenText)
+                        .tracking(1)
+                }
+            }
+
+            Text("\(day)")
+                .font(SPFont.mono(48, weight: .light))
+                .foregroundStyle(Color(SPColor.fg))
+                .monospacedDigit()
+
+            Text("day · \(duration)s · \(blocks) blocks")
+                .font(SPFont.mono(13, weight: .light))
+                .foregroundStyle(Color(SPColor.fg3))
+                .tracking(2)
+
+            Button {
+                withAnimation { onBegin() }
+            } label: {
+                Text(doneToday ? "Sit again" : "Begin")
+                    .font(SPFont.serifItalic(20, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg))
+                    .padding(.horizontal, 40)
+                    .padding(.vertical, SPSpacing.s2)
+                    .background(SPColor.surface2)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(SPColor.border2))
+            }
+            .padding(.top, SPSpacing.s1)
+            .accessibilityIdentifier("\(identifier).beginButton")
+            .accessibilityLabel(doneToday ? "\(label) sit again" : "\(label) begin")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, SPSpacing.s4)
+        .padding(.horizontal, SPSpacing.s3)
+        .background(SPColor.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(SPColor.border1))
+        .accessibilityIdentifier(identifier)
+    }
+
+    /// #240: fork choice presented once the primary track passes the 10-minute mark.
+    private var dualTrackForkCard: some View {
+        VStack(spacing: SPSpacing.s3) {
+            Text("\(StillPoint.maxDuration / 60)-MINUTE MARK REACHED")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(SPColor.greenText)
+                .tracking(1.5)
+
+            Text("Add a second daily track?")
+                .font(SPFont.serifItalic(22, weight: .light))
+                .foregroundStyle(Color(SPColor.fg))
+                .multilineTextAlignment(.center)
+
+            Text("Your sits have grown to \(StillPoint.maxDuration / 60) minutes. Keep that daily sit and start a second one that restarts at 1 minute and grows +10s a day — two tracks, run independently.")
+                .font(SPFont.serif(15, weight: .light))
+                .foregroundStyle(Color(SPColor.fg3))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SPSpacing.s2)
+
+            Button {
+                Task { await appVM.enableDualTrack() }
+            } label: {
+                Text("Add second track")
+                    .font(SPFont.mono(12, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(SPColor.greenText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SPSpacing.s3)
+                    .background(SPColor.greenBgFaint)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(SPColor.greenBorderSubtle))
+            }
+            .accessibilityIdentifier("home.addSecondTrackButton")
+
+            Button {
+                forkDismissed = true
+            } label: {
+                Text("Keep one track")
+                    .font(SPFont.mono(12, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SPSpacing.s3)
+                    .background(SPColor.surface1)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(SPColor.border1))
+            }
+            .accessibilityIdentifier("home.keepOneTrackButton")
+        }
+        .padding(SPSpacing.s4)
+        .background(SPColor.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(SPColor.border1))
+        .padding(.horizontal, SPSpacing.s2)
     }
 
     /// First-run prompt asking whether to set up the app gate. Shown at most once,
