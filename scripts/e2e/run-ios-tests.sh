@@ -218,32 +218,28 @@ is_retriable_failure() {
   if grep -qE 'Failed to set device orientation:' "$log"; then
     return 0
   fi
-  # XCUITest query/wait timeouts that surface as method-level error frames
-  # (without XCTAssert* lines). Must precede the tier-3 method-frame check.
-  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
-    return 0
-  fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
-  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Checked before
-  # the terminate-race grep below: `terminateAppReliably` can emit "Failed to
-  # terminate" lines during teardown even when the run also hit a real
-  # assertion failure, so a genuine failure must win over that infra-shaped
-  # noise rather than being masked as retriable.
+  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Must precede
+  # the broad UI-query timeout grep so real assertion failures are not masked.
   if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
     return 1
+  fi
+  # XCTest method-level error frames referencing a test selector starting
+  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
+  # plain "Class" forms.
+  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
+    return 1
+  fi
+  # XCUITest query/wait timeouts that surface as method-level error frames
+  # (without XCTAssert* lines). Only after non-retriable assertion signatures
+  # are ruled out above.
+  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
+    return 0
   fi
   # macos-26/iOS 26 launchd terminate race: XCTest logs "Failed to terminate … :0"
   # when SIGTERM hits a process still winding down navigation/audio. Infra-shaped.
   if grep -qE 'Failed to terminate .*: Failed to terminate .*:0' "$log"; then
     return 0
-  fi
-  # XCTest method-level error frames referencing a test selector starting
-  # with "test...". Accept both Swift-style "Module.Class" and ObjC-style
-  # plain "Class" forms. Examples:
-  #   error: -[StillPointAppUITests.StillPointAppUITests testFoo] : ...
-  #   error: -[StillPointAppUITests testFoo] : ...
-  if grep -qE 'error: -\[((([A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+test[A-Za-z0-9_]+)\][[:space:]]*:' "$log"; then
-    return 1
   fi
   # Default: retriable (covers simulator XPC faults, sim boot timeouts,
   # xcodebuild infra errors, signal-killed processes with no test output).
