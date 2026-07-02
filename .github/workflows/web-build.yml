@@ -26,5 +26,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify design token parity (iOS ↔ web)
+        run: npm run e2e:policy:design-tokens
+
       - name: Verify repeatable clean builds
         run: npm run build:verify -- 3

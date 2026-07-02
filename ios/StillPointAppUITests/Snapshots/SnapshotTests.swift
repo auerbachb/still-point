@@ -216,14 +216,24 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(root.waitForExistence(timeout: launchTimeout), message)
     }
 
-    private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 4) {
+    private func terminateAppReliably(_ app: XCUIApplication, attempts: Int = 6) {
+        if app.state == .notRunning { return }
+
         for _ in 1 ... attempts {
-            app.terminate()
-            let deadline = Date().addingTimeInterval(15)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            if app.state == .notRunning { return }
+
+            _ = app.terminate()
+
+            let deadline = Date().addingTimeInterval(20)
             while Date() < deadline {
                 if app.state == .notRunning { return }
-                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                RunLoop.current.run(until: Date().addingTimeInterval(0.25))
             }
+
+            XCUIDevice.shared.press(.home)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            if app.state == .notRunning { return }
         }
         XCTFail("App did not terminate")
     }
