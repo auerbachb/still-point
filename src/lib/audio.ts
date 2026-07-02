@@ -161,8 +161,13 @@ export function preloadVoiceCountdown(): Promise<void> {
       const loads = Array.from({ length: VOICE_COUNTDOWN_MAX }, (_, i) =>
         fetchVoiceBuffer(VOICE_COUNTDOWN_MAX - i),
       );
-      await Promise.all(loads);
-    })();
+      const buffers = await Promise.all(loads);
+      if (buffers.some(buffer => !buffer)) {
+        throw new Error("voice countdown preload incomplete");
+      }
+    })().catch(() => {
+      voicePreloadPromise = null;
+    });
   }
   return voicePreloadPromise;
 }

@@ -62,7 +62,7 @@ export function BlockTimer({
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
-  const lastVoiceSecRef = useRef(-1);
+  const lastVoiceSecRef = useRef(61);
   const lastCompletedBlockIndexRef = useRef(-1);
   const controlledCompleteFiredRef = useRef(false);
   const skewRef = useRef(0);
@@ -96,7 +96,12 @@ export function BlockTimer({
     const currentSec = Math.floor(newElapsed);
 
     if (voiceMode) {
-      if (remaining > 0 && remaining <= 60) {
+      if (remaining > 60) {
+        if (lastVoiceSecRef.current <= 60) {
+          cancelVoiceCountdownPlayback();
+          lastVoiceSecRef.current = 61;
+        }
+      } else if (remaining > 0) {
         let announceSec = Math.floor(remaining);
         if (announceSec < 1) announceSec = 1;
         if (remaining > 59 && lastVoiceSecRef.current > 60) {
@@ -300,6 +305,9 @@ export function BlockTimer({
 
     setElapsed(newElapsed);
     pausedElapsedRef.current = newElapsed;
+    const remainingNow = totalSeconds - newElapsed;
+    lastVoiceSecRef.current =
+      remainingNow > 60 ? 61 : Math.max(lastVoiceSecRef.current, Math.floor(remainingNow));
     maybePlayCountdownSounds(newElapsed);
   }, [
     isControlled,
