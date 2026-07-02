@@ -11,6 +11,7 @@ struct SessionView: View {
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
+    @State private var attentionManager = AttentionTrackingManager()
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
@@ -115,6 +116,10 @@ struct SessionView: View {
         }
         .onAppear {
             vm.start()
+            if appVM.currentUser?.attentionTrackingEnabled == true {
+                vm.attentionLog = [AttentionEntry(time: 0, state: "attentive")]
+                attentionManager.start { vm.elapsed }
+            }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -125,6 +130,7 @@ struct SessionView: View {
             )
         }
         .onDisappear {
+            attentionManager.stop()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: false
@@ -150,7 +156,14 @@ struct SessionView: View {
                 inProgress: sessionInProgress
             )
         }
-        .onChange(of: vm.isPaused) { _, _ in
+        .onChange(of: vm.isPaused) { _, isPaused in
+            if appVM.currentUser?.attentionTrackingEnabled == true {
+                if isPaused {
+                    attentionManager.pause()
+                } else {
+                    attentionManager.resume()
+                }
+            }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -171,6 +184,12 @@ struct SessionView: View {
             )
         }
         .onChange(of: vm.isComplete) { _, isComplete in
+            if isComplete {
+                attentionManager.stop()
+                if appVM.currentUser?.attentionTrackingEnabled == true {
+                    vm.attentionLog = attentionManager.attentionLog
+                }
+            }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning

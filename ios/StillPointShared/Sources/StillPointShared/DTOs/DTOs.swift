@@ -12,6 +12,8 @@ public struct UserDTO: Codable, Sendable {
     /// responses from a server that predates this field (or cached fixtures)
     /// still decode, defaulting to off.
     public let aphorismsEnabled: Bool
+    /// #113: opt-in iOS ARKit gaze attention tracking during sessions.
+    public let attentionTrackingEnabled: Bool
     /// #240: dual-track fork. `dualTrackEnabled` gates the opt-in second daily
     /// track; `secondTrackDay` is its independent day counter. Both decoded
     /// permissively so a server that predates #240 defaults to single-track.
@@ -25,6 +27,7 @@ public struct UserDTO: Codable, Sendable {
         isPublic: Bool,
         currentDay: Int,
         aphorismsEnabled: Bool = false,
+        attentionTrackingEnabled: Bool = false,
         dualTrackEnabled: Bool = false,
         secondTrackDay: Int = 1
     ) {
@@ -34,6 +37,7 @@ public struct UserDTO: Codable, Sendable {
         self.isPublic = isPublic
         self.currentDay = currentDay
         self.aphorismsEnabled = aphorismsEnabled
+        self.attentionTrackingEnabled = attentionTrackingEnabled
         self.dualTrackEnabled = dualTrackEnabled
         self.secondTrackDay = secondTrackDay
     }
@@ -46,12 +50,13 @@ public struct UserDTO: Codable, Sendable {
         isPublic = try c.decode(Bool.self, forKey: .isPublic)
         currentDay = try c.decode(Int.self, forKey: .currentDay)
         aphorismsEnabled = try c.decodeIfPresent(Bool.self, forKey: .aphorismsEnabled) ?? false
+        attentionTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .attentionTrackingEnabled) ?? false
         dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled) ?? false
         secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay) ?? 1
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, username, isPublic, currentDay, aphorismsEnabled, dualTrackEnabled, secondTrackDay
+        case id, email, username, isPublic, currentDay, aphorismsEnabled, attentionTrackingEnabled, dualTrackEnabled, secondTrackDay
     }
 }
 
@@ -67,6 +72,8 @@ public struct SessionDTO: Codable, Sendable {
     public let clearPercent: Int
     public let thoughtCount: Int
     public let mindStateLog: [MindStateEntry]?
+    /// #113: ARKit gaze attention transitions ("attentive" | "away").
+    public let attentionLog: [AttentionEntry]?
     public let sessionDate: String
     /// ISO-8601 from API when present; used for same-day ordering (matches web `sessionSortKey`).
     public let createdAt: String?
@@ -88,6 +95,7 @@ public struct SessionDTO: Codable, Sendable {
         clearPercent: Int,
         thoughtCount: Int,
         mindStateLog: [MindStateEntry]?,
+        attentionLog: [AttentionEntry]? = nil,
         sessionDate: String,
         createdAt: String? = nil,
         buddySessionId: String?,
@@ -104,6 +112,7 @@ public struct SessionDTO: Codable, Sendable {
         self.clearPercent = clearPercent
         self.thoughtCount = thoughtCount
         self.mindStateLog = mindStateLog
+        self.attentionLog = attentionLog
         self.sessionDate = sessionDate
         self.createdAt = createdAt
         self.buddySessionId = buddySessionId
@@ -170,6 +179,8 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let clearPercent: Int
     public let thoughtCount: Int
     public let mindStateLog: [MindStateEntry]
+    /// #113: ARKit gaze attention log; omitted when tracking is off.
+    public let attentionLog: [AttentionEntry]?
     public let sessionDate: String
     /// Number of full breaths counted. Only sent for `.breath` sessions; nil otherwise.
     public let breathCount: Int?
@@ -186,6 +197,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         clearPercent: Int,
         thoughtCount: Int,
         mindStateLog: [MindStateEntry],
+        attentionLog: [AttentionEntry]? = nil,
         sessionDate: String,
         breathCount: Int? = nil,
         track: Track = .primary
@@ -199,6 +211,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.clearPercent = clearPercent
         self.thoughtCount = thoughtCount
         self.mindStateLog = mindStateLog
+        self.attentionLog = attentionLog
         self.sessionDate = sessionDate
         self.breathCount = breathCount
         self.track = track

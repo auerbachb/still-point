@@ -29,6 +29,8 @@ final class SessionViewModel {
     // Mind state
     var mindState: String = "clear"
     var mindStateLog: [MindStateEntry] = []
+    /// #113: ARKit gaze attention log when opt-in tracking is enabled.
+    var attentionLog: [AttentionEntry]?
     /// Distraction segments started this sit (for in-session badge); API `thoughtCount` uses captured notes only.
     var distractionSegmentCount = 0
     var capturedThoughts: [CapturedThought] = []
@@ -244,6 +246,7 @@ final class SessionViewModel {
             clearPercent: clearPercent,
             thoughtCount: thoughtCount,
             mindStateLog: mindStateLog,
+            attentionLog: attentionLog,
             sessionDate: dateFormatter.string(from: Date()),
             track: track
         )

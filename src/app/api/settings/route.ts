@@ -17,6 +17,7 @@ const RETURN_FIELDS = {
   isPublic: users.isPublic,
   currentDay: users.currentDay,
   aphorismsEnabled: users.aphorismsEnabled,
+  attentionTrackingEnabled: users.attentionTrackingEnabled,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
 };
@@ -38,6 +39,11 @@ export const PATCH = withApiHandler(
 
     if (typeof body.aphorismsEnabled === "boolean") {
       updates.aphorismsEnabled = body.aphorismsEnabled;
+      hasSupportedUpdate = true;
+    }
+
+    if (typeof body.attentionTrackingEnabled === "boolean") {
+      updates.attentionTrackingEnabled = body.attentionTrackingEnabled;
       hasSupportedUpdate = true;
     }
 

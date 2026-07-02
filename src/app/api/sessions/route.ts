@@ -51,7 +51,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, sessionDate } = body;
+  const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate } = body;
   const completed = parseCompleted(body.completed);
   const sessionType = parseOptionalSessionType(body.sessionType);
   const track = parseOptionalTrack(body.track);
@@ -97,6 +97,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
       thoughtCount: thoughtCount ?? 0,
       breathCount,
       mindStateLog: mindStateLog ?? [],
+      attentionLog: Array.isArray(attentionLog) ? attentionLog : null,
       sessionDate,
     },
   });

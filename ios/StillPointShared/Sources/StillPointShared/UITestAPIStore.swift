@@ -229,6 +229,7 @@ actor UITestAPIStore {
             clearPercent: data.clearPercent,
             thoughtCount: data.thoughtCount,
             mindStateLog: data.mindStateLog,
+            attentionLog: data.attentionLog,
             sessionDate: data.sessionDate,
             createdAt: nil,
             buddySessionId: nil,
@@ -350,12 +351,18 @@ actor UITestAPIStore {
 
     // MARK: - Settings
 
-    func updateSettings(isPublic: Bool?, username: String?, aphorismsEnabled: Bool?) throws -> UserDTO {
+    func updateSettings(
+        isPublic: Bool?,
+        username: String?,
+        aphorismsEnabled: Bool?,
+        attentionTrackingEnabled: Bool?
+    ) throws -> UserDTO {
         try ensureAuthenticated()
 
         var nextUsername = store.user.username
         var nextIsPublic = store.user.isPublic
         var nextAphorismsEnabled = store.user.aphorismsEnabled
+        var nextAttentionTrackingEnabled = store.user.attentionTrackingEnabled
 
         if let username {
             let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -376,6 +383,10 @@ actor UITestAPIStore {
             nextAphorismsEnabled = aphorismsEnabled
         }
 
+        if let attentionTrackingEnabled {
+            nextAttentionTrackingEnabled = attentionTrackingEnabled
+        }
+
         store.user = UserDTO(
             id: store.user.id,
             email: store.user.email,
@@ -383,6 +394,7 @@ actor UITestAPIStore {
             isPublic: nextIsPublic,
             currentDay: store.user.currentDay,
             aphorismsEnabled: nextAphorismsEnabled,
+            attentionTrackingEnabled: nextAttentionTrackingEnabled,
             dualTrackEnabled: store.user.dualTrackEnabled,
             secondTrackDay: store.user.secondTrackDay
         )

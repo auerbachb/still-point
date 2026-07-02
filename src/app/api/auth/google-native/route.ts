@@ -114,6 +114,7 @@ export const POST = withApiHandler("google-native", async (request: NextRequest)
       isPublic: user.isPublic,
       currentDay: user.currentDay,
       aphorismsEnabled: user.aphorismsEnabled,
+      attentionTrackingEnabled: user.attentionTrackingEnabled,
     },
     token,
   });

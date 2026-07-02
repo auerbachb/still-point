@@ -29,6 +29,7 @@ targets:
         product: GoogleSignIn
       - target: StillPointMonitor
       - target: StillPointWidget
+      - sdk: ARKit.framework
     info:
       path: StillPointApp/Info.plist
       properties:
@@ -57,7 +58,7 @@ targets:
         # Privacy purpose strings — REQUIRED by iOS for the buddy video web view
         # (BuddyVideoWebView: WKWebView -> Daily.co getUserMedia). A missing key is a
         # hard crash the moment camera/mic is requested, not a graceful denial.
-        NSCameraUsageDescription: Still Point needs camera access for partner video sessions.
+        NSCameraUsageDescription: Still Point uses the camera for partner video sessions and, when you opt in, gaze attention tracking during sits.
         NSMicrophoneUsageDescription: Still Point needs microphone access for partner video sessions.
         # NSFamilyControlsUsageDescription is intentionally NOT declared: it is not a
         # recognized iOS key. FamilyControls / Screen Time authorization is gated by the

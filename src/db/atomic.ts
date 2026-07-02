@@ -25,6 +25,7 @@ type UsernameUpdateResult =
         isPublic: boolean;
         currentDay: number;
         aphorismsEnabled: boolean;
+        attentionTrackingEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
       };
@@ -59,6 +60,7 @@ export async function atomicUpdateUsername(params: {
         isPublic: users.isPublic,
         currentDay: users.currentDay,
         aphorismsEnabled: users.aphorismsEnabled,
+        attentionTrackingEnabled: users.attentionTrackingEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
       });

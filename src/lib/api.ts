@@ -29,6 +29,8 @@ export type User = {
   currentDay: number;
   /** #88: opt-in pre-session aphorism shown on Home. */
   aphorismsEnabled: boolean;
+  /** #113: opt-in iOS ARKit gaze attention tracking during sessions. */
+  attentionTrackingEnabled?: boolean;
   /** #238: miss-a-day recovery ramp state, nullable trio (see src/lib/duration.ts). */
   recoveryTargetDay?: number | null;
   recoveryCurrentStep?: number | null;
@@ -54,6 +56,8 @@ export type Session = {
   clearPercent: number;
   thoughtCount: number;
   mindStateLog: Array<{ time: number; state: string }> | null;
+  /** #113: ARKit gaze attention transitions ("attentive" | "away"). */
+  attentionLog?: Array<{ time: number; state: string }> | null;
   sessionDate: string;
   createdAt: string;
   /** Present when this row was created from a completed buddy sit (#119). */
@@ -250,7 +254,7 @@ export const api = {
   getBoard: () =>
     request<{ board: BoardEntry[] }>("/api/board"),
 
-  updateSettings: (data: { isPublic?: boolean; aphorismsEnabled?: boolean }) =>
+  updateSettings: (data: { isPublic?: boolean; aphorismsEnabled?: boolean; attentionTrackingEnabled?: boolean }) =>
     request<{ user: User }>("/api/settings", { method: "PATCH", body: JSON.stringify(data) }),
 
   getFriends: () => request<{ friends: FriendPublicUser[] }>("/api/friends"),
