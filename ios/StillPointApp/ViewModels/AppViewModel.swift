@@ -172,22 +172,27 @@ final class AppViewModel {
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
                 hydrateNotificationSuppressionPreference()
                 await refreshTracksDoneToday()
+                syncWidgetData()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
                 return
             } else {
                 currentView = .auth
                 authStatusMessage = nil
+                syncWidgetData()
             }
         } catch let apiError as APIError where apiError.status == 401 && apiError.code == "TOKEN_EXPIRED" {
             currentView = .auth
             authStatusMessage = apiError.message
+            syncWidgetData()
         } catch let apiError as APIError {
             currentView = .auth
             authStatusMessage = apiError.message
+            syncWidgetData()
         } catch {
             currentView = .auth
             authStatusMessage = "Connection failed. Please try again."
+            syncWidgetData()
         }
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
     }
@@ -232,6 +237,7 @@ final class AppViewModel {
         hydrateNotificationSuppressionPreference()
         Task {
             await refreshTracksDoneToday()
+            syncWidgetData()
             await consumePendingBuddyInviteIfNeeded()
             await consumePendingSessionDeepLinkIfNeeded()
         }
@@ -263,6 +269,7 @@ final class AppViewModel {
         currentView = .auth
         // Drop the cached suppress opt-in so it can't leak into the next account.
         SessionNotificationSuppressionController.clearSuppressPreference()
+        syncWidgetData()
     }
 
     private func resetTrackCompletionBadges() {
@@ -303,6 +310,7 @@ final class AppViewModel {
             primaryDoneToday = false
             secondDoneToday = false
         }
+        syncWidgetData()
     }
 
     func beginBreathCounting() {
@@ -512,5 +520,21 @@ final class AppViewModel {
 
     private func extractBuddyToken(from url: URL) -> String? {
         BuddyInviteTokenParser.token(from: url)
+    }
+
+    /// Persist a widget snapshot to the App Group container and reload timelines.
+    /// Called from auth + session-completion flows; no extra API calls.
+    private func syncWidgetData() {
+        let snapshot = WidgetDataStore.makeSnapshot(
+            user: currentUser,
+            primaryDoneToday: primaryDoneToday,
+            secondDoneToday: secondDoneToday
+        )
+        if snapshot.isLoggedIn {
+            WidgetDataStore.save(snapshot)
+        } else {
+            WidgetDataStore.clear()
+        }
+        WidgetTimelineReloader.reloadHabitWidget()
     }
 }
