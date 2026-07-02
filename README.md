@@ -157,7 +157,6 @@ Third-party keys in use today:
 |---------|----------|----------|
 | Resend (optional) | `EMAIL_FROM`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL` | Send password reset links (`src/lib/email.ts`). If `EMAIL_FROM` / `RESEND_API_KEY` unset, non-prod logs links; prod requires both or send fails safely. Setup: [docs/email-setup.md](docs/email-setup.md). |
 | Daily.co | `DAILY_API_KEY` | Create/delete rooms, issue meeting tokens for buddy video (`src/lib/daily.ts`, `src/app/api/buddy/sessions/[id]/start`, `…/meeting-token`). |
-| YouTube (optional) | `STILLPOINT_HOMEPAGE_YOUTUBE_VIDEO_ID` | **Marketing only:** 11-character video id for the landing-page demo embed. Unset or empty → no embed (#166). |
 | Apple Push Notification service | `APNS_BUNDLE_ID`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY` | iOS push notifications (`src/lib/apns.ts`). |
 | Web Push (VAPID) | `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT` | Browser push (`src/lib/web-push.ts`, `public/sw.js`). See [docs/notifications.md](docs/notifications.md). |
 
