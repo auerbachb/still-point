@@ -11,6 +11,12 @@ export const voiceCountdownAssetPath = (seconds: number) =>
 
 const voiceBuffers = new Map<number, AudioBuffer>();
 let voicePreloadPromise: Promise<void> | null = null;
+let voicePlaybackEpoch = 0;
+
+/** Drop any in-flight voice countdown playback queued by async buffer loads. */
+export function cancelVoiceCountdownPlayback(): void {
+  voicePlaybackEpoch++;
+}
 
 export type AudioUnlockResult = "unlocked" | "blocked" | "unavailable";
 
@@ -167,10 +173,11 @@ export function playVoiceCountdown(seconds: number): boolean {
 
   const buffer = voiceBuffers.get(seconds);
   if (!buffer) {
+    const epoch = voicePlaybackEpoch;
     void fetchVoiceBuffer(seconds).then((loaded) => {
-      if (loaded) playVoiceCountdown(seconds);
+      if (loaded && epoch === voicePlaybackEpoch) playVoiceCountdown(seconds);
     });
-    return false;
+    return true;
   }
 
   try {

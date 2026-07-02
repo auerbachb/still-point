@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
-import { playTick, playChime, playCompletion, playVoiceCountdown, type SoundPrefs } from "@/lib/audio";
+import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, type SoundPrefs } from "@/lib/audio";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
 
@@ -75,6 +75,10 @@ export function BlockTimer({
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
   const blockGap = 11;
+
+  useEffect(() => {
+    if (!isActive) cancelVoiceCountdownPlayback();
+  }, [isActive]);
 
   const playEnabledSound = (play: () => boolean) => {
     if (!play()) {

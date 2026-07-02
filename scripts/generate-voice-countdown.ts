@@ -77,6 +77,15 @@ function hasEspeak(): boolean {
   }
 }
 
+function hasFfmpeg(): boolean {
+  try {
+    execSync("which ffmpeg", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_VOICE_ID;
@@ -84,11 +93,11 @@ async function main() {
 
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const mode = apiKey ? "elevenlabs" : hasEspeak() ? "espeak-fallback" : null;
+  const mode = apiKey ? "elevenlabs" : hasEspeak() && hasFfmpeg() ? "espeak-fallback" : null;
   if (!mode) {
     console.error(
-      "No ELEVENLABS_API_KEY and espeak-ng not found.\n" +
-        "Install espeak-ng for dev placeholders, or set ELEVENLABS_API_KEY for production clips.",
+      "No ELEVENLABS_API_KEY and espeak-ng/ffmpeg fallback unavailable.\n" +
+        "Install espeak-ng and ffmpeg for dev placeholders, or set ELEVENLABS_API_KEY for production clips.",
     );
     process.exit(1);
   }
