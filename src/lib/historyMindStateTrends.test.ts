@@ -59,6 +59,15 @@ describe("computeMindStateCompositionFromLog", () => {
       totalSeconds: 240,
     });
   });
+
+  test("skips malformed log entries without throwing", () => {
+    const composition = computeMindStateCompositionFromLog(
+      [null as unknown as { time: number; state: string }, { time: 30, state: "thinking" }],
+      60,
+    );
+    expect(composition.lightDistractionSeconds).toBe(30);
+    expect(composition.clearSeconds).toBe(30);
+  });
 });
 
 describe("calculateMindStateTrendStats", () => {
@@ -113,5 +122,22 @@ describe("calculateMindStateTrendStats", () => {
       hyperfocusPercent: 0,
     });
     expect(stats.dailyTrend.every(bucket => bucket.totalSitSeconds === 0)).toBe(true);
+  });
+
+  test("uses session elapsed timeline instead of wall-clock actualTime when paused", () => {
+    const stats = calculateMindStateTrendStats(
+      [
+        {
+          sessionDate: "2026-07-02",
+          duration: 300,
+          actualTime: 900,
+          mindStateLog: [],
+        },
+      ],
+      today,
+    );
+
+    expect(stats.trailing4Week.totalSitSeconds).toBe(300);
+    expect(stats.trailing4Week.clearPercent).toBe(100);
   });
 });

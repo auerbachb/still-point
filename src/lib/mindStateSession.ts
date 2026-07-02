@@ -167,6 +167,18 @@ function bucketMindStateSeconds(state: string, seconds: number, out: MindStateCo
   }
 }
 
+function isValidMindStateLogEntry(
+  entry: unknown,
+): entry is { time: number; state: string } {
+  return (
+    entry != null
+    && typeof entry === "object"
+    && typeof (entry as { time?: unknown }).time === "number"
+    && Number.isFinite((entry as { time: number }).time)
+    && typeof (entry as { state?: unknown }).state === "string"
+  );
+}
+
 /**
  * Replays `mindStateLog` into sit-time seconds for clear, light distraction,
  * heavy distraction, and hyperfocus. Uses the same segment boundaries as
@@ -187,10 +199,13 @@ export function computeMindStateCompositionFromLog(
   if (totalSeconds === 0) return out;
 
   const safeLog = [...log]
-    .map((entry) => ({
-      time: Math.min(Math.max(entry.time, 0), totalSeconds),
-      state: entry.state,
-    }))
+    .flatMap((entry) => {
+      if (!isValidMindStateLogEntry(entry)) return [];
+      return [{
+        time: Math.min(Math.max(entry.time, 0), totalSeconds),
+        state: entry.state,
+      }];
+    })
     .sort((a, b) => a.time - b.time);
 
   let lastTime = 0;

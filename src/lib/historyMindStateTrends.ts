@@ -32,8 +32,30 @@ export type MindStateTrendStats = {
   dailyTrend: MindStateDailyTrendBucket[];
 };
 
+function isValidMindStateLogEntry(
+  entry: unknown,
+): entry is { time: number; state: string } {
+  return (
+    entry != null
+    && typeof entry === "object"
+    && typeof (entry as { time?: unknown }).time === "number"
+    && Number.isFinite((entry as { time: number }).time)
+    && typeof (entry as { state?: unknown }).state === "string"
+  );
+}
+
+/** Session-elapsed seconds for trend replay (same axis as clear-percent endT, not wall-clock actualTime). */
 function sessionEndTime(session: MindStateTrendSessionInput): number {
-  return Math.max(session.actualTime ?? session.duration, 0);
+  const duration = Math.max(session.duration, 0);
+  const log = Array.isArray(session.mindStateLog) ? session.mindStateLog : [];
+  let elapsedEnd = 0;
+  for (const entry of log) {
+    if (isValidMindStateLogEntry(entry)) {
+      elapsedEnd = Math.max(elapsedEnd, Math.max(entry.time, 0));
+    }
+  }
+  if (elapsedEnd > 0) return elapsedEnd;
+  return duration;
 }
 
 function emptyComposition(): MindStateCompositionSeconds {
