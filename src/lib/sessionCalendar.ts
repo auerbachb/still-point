@@ -1,4 +1,9 @@
-/** ISO calendar date `YYYY-MM-DD` helpers (UTC date arithmetic; matches stored `session_date`). */
+/**
+ * ISO calendar date `YYYY-MM-DD` helpers. UTC date arithmetic (validation,
+ * add/diff) matches the stored `session_date`; the local-day stamps
+ * (`getLocalIsoDate`/`todayLocalIsoDate`) match the client's LOCAL timezone used
+ * on the write path.
+ */
 
 const ISO_CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
