@@ -36,7 +36,7 @@ test.describe("mobile session flow", () => {
     await expect(hyperfocus).toContainText("Hold");
   });
 
-  test("touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
+  test("@critical touch-only session complete flow has no hover dependency", async ({ page, ensureLoggedIn, mockApiState }) => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
 

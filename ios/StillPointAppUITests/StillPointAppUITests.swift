@@ -324,6 +324,74 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     @MainActor
+    func testQuickMinuteCompletesWithoutDayAdvance() throws {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            sessionSeconds: 60,
+            timerMultiplier: 2.0
+        )
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+
+        let dayLabel = app.staticTexts.matching(
+            NSPredicate(format: "label == %@ AND identifier != %@", "1", "history.title")
+        ).firstMatch
+        XCTAssertTrue(dayLabel.waitForExistence(timeout: 5), "Expected day 1 on home before quick minute")
+
+        let quickMinuteButton = app.buttons["home.quickMinuteButton"]
+        XCTAssertTrue(quickMinuteButton.waitForExistence(timeout: 5))
+        tapByStableCenter(quickMinuteButton, in: app)
+        XCTAssertTrue(
+            app.otherElements["root.currentView.session"].waitForExistence(timeout: 20),
+            "Quick minute session did not open"
+        )
+
+        tapByStableCenter(app.buttons["session.endEarlyButton"], in: app)
+        let completionTitle = app.staticTexts["completion.dayTitle"]
+        XCTAssertTrue(completionTitle.waitForExistence(timeout: 25))
+        XCTAssertTrue(completionTitle.label.localizedCaseInsensitiveContains("quick minute"))
+
+        tapByStableCenter(app.buttons["completion.returnButton"], in: app)
+        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
+        XCTAssertTrue(dayLabel.waitForExistence(timeout: 5), "Day counter should remain 1 after quick minute")
+    }
+
+    @MainActor
+    func testLogoutReturnsToAuthScreen() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
+
+        let logoutButton = app.buttons["settings.logoutButton"]
+        XCTAssertTrue(logoutButton.waitForExistence(timeout: 5))
+        tapByStableCenter(logoutButton, in: app)
+
+        XCTAssertTrue(
+            app.otherElements["root.currentView.auth"].waitForExistence(timeout: 15),
+            "Auth screen should appear after logout"
+        )
+        XCTAssertTrue(app.textFields["auth.emailField"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testJournalAndBoardTabsReachable() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+
+        openTab(identifier: "tab.journal", in: app, waitingFor: app.staticTexts["journal.title"])
+        XCTAssertTrue(app.staticTexts["journal.title"].exists)
+
+        openTab(identifier: "tab.board", in: app, waitingFor: app.staticTexts["board.title"])
+        XCTAssertTrue(app.staticTexts["board.title"].exists)
+    }
+
+    @MainActor
     func testRotationDecisionSessionRemainsUsableInLandscape() throws {
         let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 60, timerMultiplier: 1.0)
         app.launch()
@@ -490,6 +558,10 @@ final class StillPointAppUITests: XCTestCase {
         switch identifier {
         case "tab.progress":
             return 1
+        case "tab.journal":
+            return 2
+        case "tab.board":
+            return 3
         case "tab.settings":
             return 4
         default:

@@ -103,9 +103,12 @@ resolve_test_target() {
       ;;
     critical)
       echo "StillPointAppUITests/StillPointAppUITests/testHistoryAndSettingsNavigationSmoke"
+      echo "StillPointAppUITests/StillPointAppUITests/testJournalAndBoardTabsReachable"
       echo "StillPointAppUITests/StillPointAppUITests/testLaunchOfflineShowsUserVisibleMessage"
+      echo "StillPointAppUITests/StillPointAppUITests/testLogoutReturnsToAuthScreen"
       echo "StillPointAppUITests/StillPointAppUITests/testPasswordResetEntryIsDiscoverable"
       echo "StillPointAppUITests/StillPointAppUITests/testPrimaryControlsVisibleAboveHomeIndicator"
+      echo "StillPointAppUITests/StillPointAppUITests/testQuickMinuteCompletesWithoutDayAdvance"
       echo "StillPointAppUITests/StillPointAppUITests/testSessionsFailureShowsVisibleRetryMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testTokenExpiryRoutesToReauthMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testVoiceOverLabelsForTimerAndPrimaryButton"

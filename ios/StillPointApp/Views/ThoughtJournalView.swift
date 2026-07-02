@@ -11,6 +11,7 @@ struct ThoughtJournalView: View {
                     .font(SPFont.serifItalic(28, weight: .light))
                     .foregroundStyle(Color(SPColor.fg))
                     .padding(.top, SPSpacing.s4)
+                    .accessibilityIdentifier("journal.title")
 
                 if vm.totalCount > 0 {
                     Text("\(vm.totalCount) thoughts captured")

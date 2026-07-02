@@ -41,8 +41,9 @@ export default defineConfig({
         {
           name: "chromium",
           use: {
-            ...devices["Desktop Chrome"],
+            ...devices["iPhone 13"],
             browserName: "chromium",
+            hasTouch: true,
           },
         },
       ]
