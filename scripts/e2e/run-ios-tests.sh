@@ -201,6 +201,8 @@ is_retriable_failure() {
   #   "Asynchronous wait failed: Exceeded timeout of 5 seconds, with unfulfilled
   #    expectations: \"Expect predicate value == 'visible' for object
   #    'session.secondaryChromeMarker'\"" (PR #328 attempt 2)
+  #   "Timed out while evaluating UI query" / "Timed out waiting for" (issue #496,
+  #    testLaunchLoginCompleteSessionAndHistoryPersistence smoke flake)
   if grep -qiE 'XCTAssertTrue failed - .*(did not appear|never appear(ed)?|did not exist|does not exist|should be visible|should appear|should exist|not found|never became|did not become|did not show)' "$log"; then
     return 0
   fi
@@ -214,6 +216,11 @@ is_retriable_failure() {
   # Simulator orientation confirmation timeouts in setUp/tearDown (macos-26
   # runners can stall on XCUIDevice.shared.orientation even before app launch).
   if grep -qE 'Failed to set device orientation:' "$log"; then
+    return 0
+  fi
+  # XCUITest query/wait timeouts that surface as method-level error frames
+  # (without XCTAssert* lines). Must precede the tier-3 method-frame check.
+  if grep -qE 'Timed out while evaluating UI query|Timed out waiting for' "$log"; then
     return 0
   fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
