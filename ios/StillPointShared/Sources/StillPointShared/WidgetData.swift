@@ -146,13 +146,10 @@ public enum WidgetDataStore {
         var copy = data
         copy.primaryDoneToday = false
         copy.secondDoneToday = false
-        if let userId = data.userId {
-            copy.streak = resolvedStreak(
-                userId: userId,
-                primaryDoneToday: false,
-                previous: data,
-                now: now
-            )
+        if data.primaryDoneToday {
+            copy.streak = max(data.streak, 0)
+        } else {
+            copy.streak = 0
         }
         return copy
     }
@@ -179,7 +176,10 @@ public enum WidgetDataStore {
         }
 
         if !primaryDoneToday && !isSameLocalDay(previous.lastUpdated, now) {
-            // A new local day without a completed sit yet — streak is broken.
+            // New day before today's sit: keep streak when yesterday was completed.
+            if previous.primaryDoneToday {
+                return max(previous.streak, 0)
+            }
             return 0
         }
 
