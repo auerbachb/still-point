@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "start": "next start",
     "db:seed": "tsx scripts/seed.ts",
+    "generate:voice-countdown": "tsx scripts/generate-voice-countdown.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install --with-deps chromium webkit",

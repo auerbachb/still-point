@@ -1,7 +1,24 @@
 // Web Audio API utilities for session sounds
-// All sounds are synthesized — no external files needed
+// Tick/chime/completion are synthesized; voice countdown uses pre-generated clips.
 
 let audioCtx: AudioContext | null = null;
+
+/** Remaining-second values with pre-generated voice clips (final minute). */
+export const VOICE_COUNTDOWN_MAX = 60;
+
+export const voiceCountdownAssetPath = (seconds: number) =>
+  `/audio/voice-countdown/${seconds}.mp3`;
+
+const voiceBuffers = new Map<number, AudioBuffer>();
+let voicePreloadPromise: Promise<void> | null = null;
+let voicePlaybackEpoch = 0;
+let lastVoiceCountdownPlayedSec = 61;
+
+/** Drop any in-flight voice countdown playback queued by async buffer loads. */
+export function cancelVoiceCountdownPlayback(): void {
+  voicePlaybackEpoch++;
+  lastVoiceCountdownPlayedSec = 61;
+}
 
 export type AudioUnlockResult = "unlocked" | "blocked" | "unavailable";
 
@@ -116,6 +133,78 @@ export function playChime(count: number): boolean {
   return true;
 }
 
+/** Decode and cache one voice countdown clip. */
+async function fetchVoiceBuffer(seconds: number): Promise<AudioBuffer | null> {
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+
+  const cached = voiceBuffers.get(seconds);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(voiceCountdownAssetPath(seconds));
+    if (!res.ok) return null;
+    const data = await res.arrayBuffer();
+    const buffer = await ctx.decodeAudioData(data.slice(0));
+    voiceBuffers.set(seconds, buffer);
+    return buffer;
+  } catch {
+    return null;
+  }
+}
+
+/** Preload all final-minute voice clips (call when voice countdown is enabled). */
+export function preloadVoiceCountdown(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (!voicePreloadPromise) {
+    voicePreloadPromise = (async () => {
+      const loads = Array.from({ length: VOICE_COUNTDOWN_MAX }, (_, i) =>
+        fetchVoiceBuffer(VOICE_COUNTDOWN_MAX - i),
+      );
+      const buffers = await Promise.all(loads);
+      if (buffers.some(buffer => !buffer)) {
+        throw new Error("voice countdown preload incomplete");
+      }
+    })().catch(() => {
+      voicePreloadPromise = null;
+    });
+  }
+  return voicePreloadPromise;
+}
+
+/** Play a preloaded voice clip for remaining seconds (1–60). */
+export function playVoiceCountdown(seconds: number): boolean {
+  if (seconds < 1 || seconds > VOICE_COUNTDOWN_MAX) return false;
+  const ctx = getPlayableAudioContext();
+  if (!ctx) return false;
+
+  const buffer = voiceBuffers.get(seconds);
+  if (!buffer) {
+    const epoch = voicePlaybackEpoch;
+    void fetchVoiceBuffer(seconds).then((loaded) => {
+      if (
+        loaded &&
+        epoch === voicePlaybackEpoch &&
+        seconds <= lastVoiceCountdownPlayedSec
+      ) {
+        playVoiceCountdown(seconds);
+      }
+    });
+    return true;
+  }
+
+  try {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(ctx.currentTime);
+    lastVoiceCountdownPlayedSec = seconds;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Completion sound — a warm, resonant tone */
 export function playCompletion(): boolean {
   const ctx = getPlayableAudioContext();
@@ -148,6 +237,8 @@ export type SoundPrefs = {
   tick: boolean;
   chime: boolean;
   completion: boolean;
+  /** Spoken final-minute countdown (1–60); suppresses tick/chime while active. */
+  voiceCountdown: boolean;
 };
 
 const STORAGE_KEY = "stillpoint_sound_prefs";
@@ -156,6 +247,7 @@ const DEFAULTS: SoundPrefs = {
   tick: false,
   chime: true,
   completion: true,
+  voiceCountdown: false,
 };
 
 export function loadSoundPrefs(): SoundPrefs {
