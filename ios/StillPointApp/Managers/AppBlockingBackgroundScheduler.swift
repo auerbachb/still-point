@@ -54,13 +54,20 @@ enum AppBlockingBackgroundScheduler {
             task.setTaskCompleted(success: false)
             return
         }
-        refreshTask.expirationHandler = {}
+        var didComplete = false
+        refreshTask.expirationHandler = {
+            guard !didComplete else { return }
+            didComplete = true
+            refreshTask.setTaskCompleted(success: false)
+        }
 
         AppBlockingShared.syncShieldStateFromSharedDefaults()
 
         if AppBlockingShared.shouldScheduleBackgroundShieldRefresh() {
             scheduleRefresh(preferring: AppBlockingShared.preferredBackgroundRefreshDate())
         }
+        guard !didComplete else { return }
+        didComplete = true
         refreshTask.setTaskCompleted(success: true)
     }
     #endif

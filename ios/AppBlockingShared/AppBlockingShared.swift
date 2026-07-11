@@ -173,6 +173,7 @@ extension AppBlockingShared {
 
     /// Whether a background refresh should be requeued after a BG task run.
     static func shouldScheduleBackgroundShieldRefresh() -> Bool {
+        guard AuthorizationCenter.shared.authorizationStatus == .approved else { return false }
         guard let selection = decodeStoredSelection() else { return false }
         return !(selection.applicationTokens.isEmpty
             && selection.categoryTokens.isEmpty
