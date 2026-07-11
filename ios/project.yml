@@ -68,6 +68,8 @@ targets:
         # Keep audio alive when the app is backgrounded mid-session.
         UIBackgroundModes:
           - audio
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.brettonauerbach.stillpoint.app-block-refresh
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

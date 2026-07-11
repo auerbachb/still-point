@@ -12,12 +12,12 @@ final class AppBlockingManager {
     private(set) var didUnlockFromLastCompletedSession = false
 
     private let defaults: UserDefaults
-    private let unlockedForDateKey = "appBlocking.unlockedForDate.v1"
     private let uiTestSelectionEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.unlockedForDate = defaults.object(forKey: unlockedForDateKey) as? Date
+        AppBlockingShared.migrateLegacyUnlockDateIfNeeded(from: defaults)
+        self.unlockedForDate = AppBlockingShared.loadUnlockedForDate(from: defaults)
         self.uiTestSelectionEnabled = ProcessInfo.processInfo.environment["SP_UI_TEST_APP_BLOCKING_SELECTED"] == "1"
         refreshShielding()
     }
@@ -58,13 +58,13 @@ final class AppBlockingManager {
         guard hasSelection else { return }
         unlockedForDate = Date()
         didUnlockFromLastCompletedSession = true
-        defaults.set(unlockedForDate, forKey: unlockedForDateKey)
+        AppBlockingShared.saveUnlockedForDate(unlockedForDate, standardDefaults: defaults)
     }
 
     func lockNow() {
         didUnlockFromLastCompletedSession = false
         unlockedForDate = nil
-        defaults.removeObject(forKey: unlockedForDateKey)
+        AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
     }
 
     func refreshShielding() {
@@ -73,13 +73,13 @@ final class AppBlockingManager {
         if unlockedForDate != nil, AppBlockGate.isUnlockExpired(unlockedFor: unlockedForDate) {
             unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockedForDateKey)
+            AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
         }
 
         if !hasSelection {
             unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockedForDateKey)
+            AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
         }
     }
 }
@@ -102,7 +102,6 @@ final class AppBlockingManager {
 
     private let defaults: UserDefaults
     private let store: ManagedSettingsStore?
-    private let unlockedForDateKey = "appBlocking.unlockedForDate.v1"
     private let uiTestMode: Bool
     private let uiTestSelectionEnabled: Bool
     private let deviceActivityCenter = DeviceActivityCenter()
@@ -120,9 +119,10 @@ final class AppBlockingManager {
             // Older builds stored the selection in standard defaults; copy it into
             // the App Group suite so the monitor extension can read it.
             Self.migrateLegacySelectionIfNeeded(from: defaults)
+            AppBlockingShared.migrateLegacyUnlockDateIfNeeded(from: defaults)
         }
         self.selection = AppBlockingShared.loadSelection()
-        self.unlockedForDate = defaults.object(forKey: unlockedForDateKey) as? Date
+        self.unlockedForDate = AppBlockingShared.loadUnlockedForDate(from: defaults)
         self.authorizationStatus = uiTestMode ? .notDetermined : AuthorizationCenter.shared.authorizationStatus
         self.uiTestMode = uiTestMode
         self.uiTestSelectionEnabled = uiTestSelectionEnabled
@@ -197,7 +197,7 @@ final class AppBlockingManager {
         guard hasSelection else { return }
         unlockedForDate = Date()
         didUnlockFromLastCompletedSession = true
-        defaults.set(unlockedForDate, forKey: unlockedForDateKey)
+        AppBlockingShared.saveUnlockedForDate(unlockedForDate, standardDefaults: defaults)
         lastErrorMessage = nil
         clearShielding()
         // Keep the daily schedule (and foreground backup) armed so the apps re-lock
@@ -208,7 +208,7 @@ final class AppBlockingManager {
     func lockNow() {
         didUnlockFromLastCompletedSession = false
         unlockedForDate = nil
-        defaults.removeObject(forKey: unlockedForDateKey)
+        AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
         refreshShielding()
     }
 
@@ -224,13 +224,13 @@ final class AppBlockingManager {
         if unlockedForDate != nil, AppBlockGate.isUnlockExpired(unlockedFor: unlockedForDate) {
             unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockedForDateKey)
+            AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
         }
 
         if !hasSelection {
             unlockedForDate = nil
             didUnlockFromLastCompletedSession = false
-            defaults.removeObject(forKey: unlockedForDateKey)
+            AppBlockingShared.saveUnlockedForDate(nil, standardDefaults: defaults)
             updateDailyResetScheduling()
             clearShielding()
             return
@@ -294,17 +294,24 @@ final class AppBlockingManager {
     ///   `intervalDidStart` re-applies the shield at local midnight even when the
     ///   app is suspended/terminated — the case the old in-process `Timer` could
     ///   not handle.
+    /// - Heartbeat: an hourly 15-minute window gives the extension extra chances
+    ///   to reconcile shields when the midnight callback is dropped (#549).
     /// - Backup: a foreground-only one-shot `Timer` to the next local midnight, so
     ///   if the app stays open across the day boundary (no `scenePhase` change to
     ///   trigger `refreshShielding`) the in-app state still re-locks promptly even
     ///   if the system schedule is delayed.
+    /// - Background refresh: `BGAppRefreshTask` as a tertiary fallback when the
+    ///   extension does not run (#549).
     ///
     /// When there is no authorized selection both are torn down, so a stale schedule
     /// can never re-shield after the user removes apps or revokes authorization.
     private func updateDailyResetScheduling() {
         guard !uiTestMode else { return }
         guard hasSelection, isAuthorizationApproved else {
-            deviceActivityCenter.stopMonitoring([AppBlockingShared.deviceActivityName])
+            deviceActivityCenter.stopMonitoring([
+                AppBlockingShared.deviceActivityName,
+                AppBlockingShared.heartbeatDeviceActivityName,
+            ])
             midnightTimer?.invalidate()
             midnightTimer = nil
             return
@@ -314,6 +321,10 @@ final class AppBlockingManager {
                 AppBlockingShared.deviceActivityName,
                 during: AppBlockingShared.dailySchedule()
             )
+            try deviceActivityCenter.startMonitoring(
+                AppBlockingShared.heartbeatDeviceActivityName,
+                during: AppBlockingShared.hourlyHeartbeatSchedule()
+            )
         } catch {
             // Re-registering an already-active schedule is benign. Any other
             // failure just means the system schedule isn't armed this run; the
@@ -321,6 +332,20 @@ final class AppBlockingManager {
             // daily-lock guarantee degrades gracefully rather than breaking.
         }
         scheduleForegroundMidnightBackup()
+        AppBlockingBackgroundScheduler.scheduleRefresh(
+            preferring: Self.nextShieldCheckDate(unlockedFor: unlockedForDate)
+        )
+    }
+
+    /// Prefer the next local midnight when the user is unlocked; otherwise ask for
+    /// a sooner opportunistic refresh so a missed extension callback is corrected.
+    private static func nextShieldCheckDate(unlockedFor: Date?) -> Date {
+        if let unlockedFor,
+           !AppBlockGate.isUnlockExpired(unlockedFor: unlockedFor),
+           let nextMidnight = nextLocalMidnight() {
+            return nextMidnight
+        }
+        return Date(timeIntervalSinceNow: 15 * 60)
     }
 
     private func scheduleForegroundMidnightBackup() {
