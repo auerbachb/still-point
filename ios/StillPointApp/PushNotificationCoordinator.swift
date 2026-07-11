@@ -20,6 +20,7 @@ final class PushNotificationCoordinator: NSObject, UIApplicationDelegate, UNUser
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        AppBlockingBackgroundScheduler.registerIfNeeded()
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             queueOrDeliverDeepLink(from: userInfo)
         }

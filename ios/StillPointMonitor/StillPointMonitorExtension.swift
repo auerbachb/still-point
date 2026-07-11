@@ -13,9 +13,17 @@ final class StillPointMonitorExtension: DeviceActivityMonitor {
 
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
-        // A new calendar day has begun, so the prior day's unlock has expired:
-        // re-apply the shield from the saved selection.
-        AppBlockingShared.applySavedShield(to: store)
+        // Reconcile shields with the shared unlock state. On a new local day the
+        // prior unlock has expired so gated apps re-lock; on the same day a
+        // qualifying unlock keeps them clear (#549).
+        AppBlockingShared.syncShieldState(to: store)
+    }
+
+    override func intervalDidEnd(for activity: DeviceActivityName) {
+        super.intervalDidEnd(for: activity)
+        // Backup path when `intervalDidStart` is delayed or dropped — common on
+        // recent iOS releases per Apple Developer Forums reports (#549).
+        AppBlockingShared.syncShieldState(to: store)
     }
 }
 #else

@@ -18,11 +18,48 @@ enum AppBlockingShared {
     /// Matches the historical app-only key so a migration can copy it forward.
     static let selectionKey = "appBlocking.selection.v1"
 
+    /// Key for the calendar day the user last earned an unlock. Stored in the App
+    /// Group so the monitor extension and background refresh can decide whether
+    /// shields should be applied without launching the main app (#549).
+    static let unlockedForDateKey = "appBlocking.unlockedForDate.v1"
+
     /// Identifier for the repeating daily monitoring interval.
     static let activityName = "dailyLock"
 
+    /// Hourly heartbeat so a missed midnight callback still re-locks within ~1h.
+    static let heartbeatActivityName = "shieldHeartbeat"
+
     /// Shared defaults suite the app writes the selection to and the extension reads.
     static var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
+
+    /// Read the unlock date from the App Group, falling back to standard defaults
+    /// for older installs that have not migrated yet.
+    static func loadUnlockedForDate(from standardDefaults: UserDefaults? = nil) -> Date? {
+        if let shared = sharedDefaults?.object(forKey: unlockedForDateKey) as? Date {
+            return shared
+        }
+        return standardDefaults?.object(forKey: unlockedForDateKey) as? Date
+    }
+
+    /// Persist the unlock date to the App Group (for the extension) and standard
+    /// defaults (for in-app reads on older code paths).
+    static func saveUnlockedForDate(_ date: Date?, standardDefaults: UserDefaults? = nil) {
+        if let date {
+            sharedDefaults?.set(date, forKey: unlockedForDateKey)
+            standardDefaults?.set(date, forKey: unlockedForDateKey)
+        } else {
+            sharedDefaults?.removeObject(forKey: unlockedForDateKey)
+            standardDefaults?.removeObject(forKey: unlockedForDateKey)
+        }
+    }
+
+    /// One-time migration of the unlock date from standard `UserDefaults` into the
+    /// App Group suite so the monitor extension can read it.
+    static func migrateLegacyUnlockDateIfNeeded(from standardDefaults: UserDefaults) {
+        guard sharedDefaults?.object(forKey: unlockedForDateKey) == nil,
+              let legacy = standardDefaults.object(forKey: unlockedForDateKey) as? Date else { return }
+        sharedDefaults?.set(legacy, forKey: unlockedForDateKey)
+    }
 }
 
 #if !targetEnvironment(simulator)
@@ -32,6 +69,7 @@ import DeviceActivity
 
 extension AppBlockingShared {
     static var deviceActivityName: DeviceActivityName { DeviceActivityName(activityName) }
+    static var heartbeatDeviceActivityName: DeviceActivityName { DeviceActivityName(heartbeatActivityName) }
 
     /// Repeating daily schedule whose interval starts at local midnight. The
     /// monitor extension's `intervalDidStart` fires at the start of each day,
@@ -40,6 +78,17 @@ extension AppBlockingShared {
         DeviceActivitySchedule(
             intervalStart: DateComponents(hour: 0, minute: 0),
             intervalEnd: DateComponents(hour: 23, minute: 59, second: 59),
+            repeats: true
+        )
+    }
+
+    /// Hourly 15-minute window (DeviceActivity minimum). Gives the monitor
+    /// extension additional chances to re-apply shields when the midnight
+    /// callback is delayed or dropped (#549).
+    static func hourlyHeartbeatSchedule() -> DeviceActivitySchedule {
+        DeviceActivitySchedule(
+            intervalStart: DateComponents(minute: 0),
+            intervalEnd: DateComponents(minute: 14),
             repeats: true
         )
     }
@@ -98,6 +147,60 @@ extension AppBlockingShared {
         store.shield.webDomains = selection.webDomainTokens.isEmpty
             ? nil
             : selection.webDomainTokens
+    }
+
+    /// Reconcile ManagedSettings shields with the shared unlock + selection state.
+    /// Used by the monitor extension and background refresh so gated apps re-lock
+    /// even when Still Point has not been opened (#549).
+    static func syncShieldState(
+        to store: ManagedSettingsStore,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) {
+        if !shouldApplyShield(now: now, calendar: calendar) {
+            store.clearAllSettings()
+            return
+        }
+        applySavedShield(to: store)
+    }
+
+    /// `true` when shields should be active: no unlock stored, or the stored
+    /// unlock is from a prior local calendar day. Mirrors `AppBlockGate` (#348).
+    static func shouldApplyShield(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard let unlockedFor = loadUnlockedForDate() else { return true }
+        return !calendar.isDate(unlockedFor, inSameDayAs: now)
+    }
+
+    /// Whether a background refresh should be requeued after a BG task run.
+    static func shouldScheduleBackgroundShieldRefresh() -> Bool {
+        guard AuthorizationCenter.shared.authorizationStatus == .approved else { return false }
+        guard let selection = decodeStoredSelection() else { return false }
+        return !(selection.applicationTokens.isEmpty
+            && selection.categoryTokens.isEmpty
+            && selection.webDomainTokens.isEmpty)
+    }
+
+    /// Next preferred BG refresh time: soon when shields should be active, otherwise
+    /// the next local midnight when the user is unlocked for today.
+    static func preferredBackgroundRefreshDate(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date {
+        if shouldApplyShield(now: now, calendar: calendar) {
+            return now.addingTimeInterval(15 * 60)
+        }
+        var midnight = DateComponents(hour: 0, minute: 0, second: 0)
+        midnight.calendar = calendar
+        return calendar.nextDate(
+            after: now,
+            matching: midnight,
+            matchingPolicy: .nextTime
+        ) ?? now.addingTimeInterval(15 * 60)
+    }
+
+    /// Background refresh entry point — constructs a store and syncs shields.
+    static func syncShieldStateFromSharedDefaults() {
+        syncShieldState(to: ManagedSettingsStore())
     }
 }
 #endif

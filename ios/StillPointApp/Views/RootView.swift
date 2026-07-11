@@ -128,8 +128,15 @@ struct RootView: View {
                 appVM: appVM,
                 isForegroundActive: phase == .active
             )
-            if phase == .active {
+            switch phase {
+            case .active, .inactive, .background:
+                // Reconcile shields on every lifecycle transition so a stale
+                // unlock cannot survive when the app is backgrounded (#549).
                 appVM.appBlockingManager.refreshShielding()
+            @unknown default:
+                break
+            }
+            if phase == .active {
                 SessionIdleTimerController.applyDesiredIdleTimerState()
             } else if phase == .inactive || phase == .background {
                 // Multi-window: only clear when no scene is foreground-active (issue #87).
