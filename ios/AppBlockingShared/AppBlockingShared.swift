@@ -171,6 +171,32 @@ extension AppBlockingShared {
         return !calendar.isDate(unlockedFor, inSameDayAs: now)
     }
 
+    /// Whether a background refresh should be requeued after a BG task run.
+    static func shouldScheduleBackgroundShieldRefresh() -> Bool {
+        guard let selection = decodeStoredSelection() else { return false }
+        return !(selection.applicationTokens.isEmpty
+            && selection.categoryTokens.isEmpty
+            && selection.webDomainTokens.isEmpty)
+    }
+
+    /// Next preferred BG refresh time: soon when shields should be active, otherwise
+    /// the next local midnight when the user is unlocked for today.
+    static func preferredBackgroundRefreshDate(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date {
+        if shouldApplyShield(now: now, calendar: calendar) {
+            return now.addingTimeInterval(15 * 60)
+        }
+        var midnight = DateComponents(hour: 0, minute: 0, second: 0)
+        midnight.calendar = calendar
+        return calendar.nextDate(
+            after: now,
+            matching: midnight,
+            matchingPolicy: .nextTime
+        ) ?? now.addingTimeInterval(15 * 60)
+    }
+
     /// Background refresh entry point — constructs a store and syncs shields.
     static func syncShieldStateFromSharedDefaults() {
         syncShieldState(to: ManagedSettingsStore())

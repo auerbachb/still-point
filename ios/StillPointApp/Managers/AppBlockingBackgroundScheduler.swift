@@ -39,10 +39,17 @@ enum AppBlockingBackgroundScheduler {
         #endif
     }
 
+    static func cancelRefresh() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+        #if targetEnvironment(simulator)
+        return
+        #else
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
+        #endif
+    }
+
     #if !targetEnvironment(simulator)
     private static func handleRefresh(_ task: BGTask) {
-        scheduleRefresh()
-
         guard let refreshTask = task as? BGAppRefreshTask else {
             task.setTaskCompleted(success: false)
             return
@@ -50,6 +57,10 @@ enum AppBlockingBackgroundScheduler {
         refreshTask.expirationHandler = {}
 
         AppBlockingShared.syncShieldStateFromSharedDefaults()
+
+        if AppBlockingShared.shouldScheduleBackgroundShieldRefresh() {
+            scheduleRefresh(preferring: AppBlockingShared.preferredBackgroundRefreshDate())
+        }
         refreshTask.setTaskCompleted(success: true)
     }
     #endif

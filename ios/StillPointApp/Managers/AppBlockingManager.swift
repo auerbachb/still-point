@@ -314,6 +314,7 @@ final class AppBlockingManager {
             ])
             midnightTimer?.invalidate()
             midnightTimer = nil
+            AppBlockingBackgroundScheduler.cancelRefresh()
             return
         }
         do {
@@ -321,31 +322,21 @@ final class AppBlockingManager {
                 AppBlockingShared.deviceActivityName,
                 during: AppBlockingShared.dailySchedule()
             )
+        } catch {
+            // Re-registering an already-active daily schedule is benign.
+        }
+        do {
             try deviceActivityCenter.startMonitoring(
                 AppBlockingShared.heartbeatDeviceActivityName,
                 during: AppBlockingShared.hourlyHeartbeatSchedule()
             )
         } catch {
-            // Re-registering an already-active schedule is benign. Any other
-            // failure just means the system schedule isn't armed this run; the
-            // foreground backup timer + foreground refresh remain, so the
-            // daily-lock guarantee degrades gracefully rather than breaking.
+            // Re-registering an already-active heartbeat schedule is benign.
         }
         scheduleForegroundMidnightBackup()
         AppBlockingBackgroundScheduler.scheduleRefresh(
-            preferring: Self.nextShieldCheckDate(unlockedFor: unlockedForDate)
+            preferring: AppBlockingShared.preferredBackgroundRefreshDate()
         )
-    }
-
-    /// Prefer the next local midnight when the user is unlocked; otherwise ask for
-    /// a sooner opportunistic refresh so a missed extension callback is corrected.
-    private static func nextShieldCheckDate(unlockedFor: Date?) -> Date {
-        if let unlockedFor,
-           !AppBlockGate.isUnlockExpired(unlockedFor: unlockedFor),
-           let nextMidnight = nextLocalMidnight() {
-            return nextMidnight
-        }
-        return Date(timeIntervalSinceNow: 15 * 60)
     }
 
     private func scheduleForegroundMidnightBackup() {

@@ -66,8 +66,10 @@ targets:
         # and the authorization dialog text cannot be customized via Info.plist. See #432.
 
         # Keep audio alive when the app is backgrounded mid-session.
+        # fetch: required for BGAppRefreshTask (#549 / CodeAnt).
         UIBackgroundModes:
           - audio
+          - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - com.brettonauerbach.stillpoint.app-block-refresh
         UILaunchScreen: {}
