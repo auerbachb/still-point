@@ -330,6 +330,7 @@ final class AppViewModel {
             secondDoneToday = false
         }
         syncWidgetData()
+        refreshWidgetWeekHistory()
     }
 
     func beginBreathCounting() {
@@ -555,5 +556,28 @@ final class AppViewModel {
             WidgetDataStore.clear()
         }
         WidgetTimelineReloader.reloadHabitWidget()
+    }
+
+    /// #84 follow-up: backfill the widget's 7-day completion row from real
+    /// session history so the weekday checkmarks reflect actual practice (not
+    /// just days seen since install). Runs as a detached task off the auth/home
+    /// path so it never blocks cold-start; a fetch failure keeps the
+    /// locally-accumulated week that `syncWidgetData()` already wrote.
+    private func refreshWidgetWeekHistory() {
+        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
+              let user = currentUser else { return }
+        Task {
+            guard let result = try? await APIClient.shared.getSessions() else { return }
+            // Guard against an account switch or logout during the await.
+            guard let current = currentUser, current.id == user.id else { return }
+            let snapshot = WidgetDataStore.makeSnapshot(
+                user: current,
+                primaryDoneToday: primaryDoneToday,
+                secondDoneToday: secondDoneToday,
+                completedPrimaryDates: WidgetDataStore.recentCompletedPrimaryDates(from: result.sessions)
+            )
+            WidgetDataStore.save(snapshot)
+            WidgetTimelineReloader.reloadHabitWidget()
+        }
     }
 }
