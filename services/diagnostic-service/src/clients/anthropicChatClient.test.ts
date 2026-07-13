@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AnthropicChatClient,
+  assistantTurnFromResult,
   buildToolResultTurn,
   historyIncludesParallelToolResults,
 } from "./anthropicChatClient.js";
@@ -306,6 +307,31 @@ describe("AnthropicChatClient", () => {
     expect(result.text).toBe("Safe alternative answer");
   });
 
+  it("maps assistant tool_use turns back into history for continuation", () => {
+    const turn = assistantTurnFromResult({
+      stopReason: "tool_use",
+      text: "",
+      toolUses: [{ id: "toolu_1", name: "lookup", input: { q: "a" } }],
+      assistantMessage: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "lookup",
+            input: { q: "a" },
+          },
+        ],
+      },
+      hadFallback: false,
+    });
+
+    expect(turn).toEqual({
+      role: "assistant",
+      content: [{ type: "tool_use", id: "toolu_1", name: "lookup", input: { q: "a" } }],
+    });
+  });
+
   it("aborts mid-stream and cleans up the underlying stream", async () => {
     const controller = new AbortController();
     const abortSpy = vi.fn();
@@ -316,6 +342,9 @@ describe("AnthropicChatClient", () => {
     const mockClient = createMockAnthropic(() => {
       const stream = createMockStream(makeTextStreamEvents("partial"), finalMessage);
       stream.abort = abortSpy;
+      stream.finalMessage = vi.fn(async () => {
+        throw new Error("finalMessage should not run after abort");
+      });
       return stream;
     });
 
@@ -332,6 +361,41 @@ describe("AnthropicChatClient", () => {
 
     await expect(iterator.next()).rejects.toMatchObject({ name: "AbortError" });
     expect(abortSpy).toHaveBeenCalled();
+  });
+
+  it("supports tool round-trip history with assistant tool_use blocks", async () => {
+    const finalMessage = makeFinalMessage({
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "done", citations: null }],
+    });
+    const mockClient = createMockAnthropic(() => createMockStream([], finalMessage));
+    const client = new AnthropicChatClient(mockClient);
+
+    const history: ChatTurn[] = [
+      { role: "user", content: "lookup both" },
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "toolu_1", name: "lookup", input: { q: "a" } }],
+      },
+      buildToolResultTurn([{ id: "toolu_1", name: "lookup", input: {} }], [
+        { toolUseId: "toolu_1", content: "found" },
+      ]),
+    ];
+
+    const iterator = client.streamChat({ system: "sys", history });
+    const result = await iterator.next();
+    expect(result.done).toBe(true);
+    if (!result.done) {
+      throw new Error("expected generator to finish");
+    }
+    expect(result.value.stopReason).toBe("end_turn");
+
+    const params = mockClient._stream.mock.calls[0]?.[0];
+    expect(params.messages[1]).toEqual({
+      role: "assistant",
+      content: [{ type: "tool_use", id: "toolu_1", name: "lookup", input: { q: "a" } }],
+    });
+    expect(params.messages[2].role).toBe("user");
   });
 
   it("supports claude-opus-4-8 via CHAT_AGENT_MODEL without fable fallbacks", async () => {

@@ -53,6 +53,10 @@ export type AnthropicStreamChatOptions = {
 const FABLE_REFUSAL_BETAS = ["server-side-fallback-2026-06-01"] as const;
 const FABLE_REFUSAL_FALLBACKS = [{ model: "claude-opus-4-8" as const }];
 
+function isToolUseBlock(block: ChatContentBlock): block is Extract<ChatContentBlock, { type: "tool_use" }> {
+  return block.type === "tool_use";
+}
+
 function isToolResultBlock(block: ChatContentBlock): block is Extract<ChatContentBlock, { type: "tool_result" }> {
   return block.type === "tool_result";
 }
@@ -71,6 +75,14 @@ function toBetaMessageParams(history: ChatTurn[]): BetaMessageParam[] {
       content: turn.content.map((block) => {
         if (block.type === "text") {
           return { type: "text" as const, text: block.text };
+        }
+        if (isToolUseBlock(block)) {
+          return {
+            type: "tool_use" as const,
+            id: block.id,
+            name: block.name,
+            input: block.input,
+          };
         }
         return {
           type: "tool_result" as const,
@@ -248,6 +260,11 @@ export class AnthropicChatClient {
         }
       }
 
+      if (options.signal?.aborted || controller.signal.aborted) {
+        abortStream();
+        throw new DOMException("Anthropic chat stream aborted", "AbortError");
+      }
+
       const finalMessage = await stream.finalMessage();
       const stopReason = finalMessage.stop_reason ?? "end_turn";
       const hadFallback = finalMessage.content.some((block) => block.type === "fallback");
@@ -278,6 +295,33 @@ export class AnthropicChatClient {
       options.signal?.removeEventListener("abort", abortStream);
     }
   }
+}
+
+export function assistantTurnFromResult(result: AnthropicTurnResult): ChatTurn {
+  if (typeof result.assistantMessage.content === "string") {
+    return {
+      role: "assistant",
+      content: result.assistantMessage.content,
+    };
+  }
+
+  return {
+    role: "assistant",
+    content: result.assistantMessage.content.map((block) => {
+      if (block.type === "text") {
+        return { type: "text" as const, text: block.text };
+      }
+      if (block.type === "tool_use") {
+        return {
+          type: "tool_use" as const,
+          id: block.id,
+          name: block.name,
+          input: block.input as Record<string, unknown>,
+        };
+      }
+      throw new Error(`unsupported assistant block type for chat history: ${block.type}`);
+    }),
+  };
 }
 
 export function buildToolResultTurn(
