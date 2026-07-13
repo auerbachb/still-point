@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // keep stale agent worktree checkouts out of local runs
-    exclude: [...configDefaults.exclude, "**/.claude/**"],
+    // keep stale agent worktree checkouts and service packages out of local runs
+    exclude: [...configDefaults.exclude, "**/.claude/**", "services/**"],
   },
 });

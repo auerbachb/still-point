@@ -30,6 +30,11 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Run diagnostic-service unit tests
+        run: |
+          npm ci --prefix services/diagnostic-service
+          npm run test:diagnostic-service
+
   # Full-project type gate. `next build` only typechecks app code, so test-only
   # type errors (bad mock signatures, NODE_ENV assignment, etc.) used to land on
   # main undetected (#396). `tsc --noEmit` honors tsconfig's `include`
