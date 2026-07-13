@@ -288,6 +288,10 @@ final class AppViewModel {
         currentView = .auth
         // Drop the cached suppress opt-in so it can't leak into the next account.
         SessionNotificationSuppressionController.clearSuppressPreference()
+        // Cancel any in-flight backfill and clear the throttle so the next login
+        // (even the same account, same day) re-fetches fresh widget history.
+        widgetHistoryTask?.cancel()
+        widgetHistoryRefreshKey = nil
         syncWidgetData()
     }
 
@@ -558,23 +562,49 @@ final class AppViewModel {
         WidgetTimelineReloader.reloadHabitWidget()
     }
 
+    /// In-flight widget history backfill, cancelled before a new one starts so a
+    /// slow earlier fetch can't overwrite a newer snapshot out of order.
+    private var widgetHistoryTask: Task<Void, Never>?
+    /// `"userId|localDay"` of the last successful backfill; throttles the fetch to
+    /// once per account per local day (past days don't change intra-day, and
+    /// today's completion is handled synchronously by `syncWidgetData()`).
+    private var widgetHistoryRefreshKey: String?
+
     /// #84 follow-up: backfill the widget's 7-day completion row from real
     /// session history so the weekday checkmarks reflect actual practice (not
-    /// just days seen since install). Runs as a detached task off the auth/home
+    /// just days seen since install). Runs as a cancellable task off the auth/home
     /// path so it never blocks cold-start; a fetch failure keeps the
     /// locally-accumulated week that `syncWidgetData()` already wrote.
     private func refreshWidgetWeekHistory() {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
               let user = currentUser else { return }
-        Task {
-            guard let result = try? await APIClient.shared.getSessions() else { return }
-            // Guard against an account switch or logout during the await.
-            guard let current = currentUser, current.id == user.id else { return }
+        // Throttle: `/api/sessions` returns the full history, so skip the re-fetch
+        // when we've already backfilled for this account today.
+        let refreshKey = "\(user.id)|\(WidgetDataStore.localDayString(Date()))"
+        guard widgetHistoryRefreshKey != refreshKey else { return }
+        widgetHistoryRefreshKey = refreshKey
+
+        widgetHistoryTask?.cancel()
+        widgetHistoryTask = Task {
+            guard let result = try? await APIClient.shared.getSessions() else {
+                // Allow a later attempt to retry this account+day.
+                if widgetHistoryRefreshKey == refreshKey { widgetHistoryRefreshKey = nil }
+                return
+            }
+            // Drop if superseded, or the account changed during the await.
+            guard !Task.isCancelled,
+                  let current = currentUser, current.id == user.id else { return }
+            let now = Date()
+            let completed = WidgetDataStore.recentCompletedPrimaryDates(from: result.sessions, now: now)
+            // Derive today's completion from the fetched sessions (consistent with
+            // `now`) rather than the in-memory flag, which could be stale past midnight.
+            let doneToday = completed.contains(WidgetDataStore.localDayString(now))
             let snapshot = WidgetDataStore.makeSnapshot(
                 user: current,
-                primaryDoneToday: primaryDoneToday,
+                primaryDoneToday: doneToday,
                 secondDoneToday: secondDoneToday,
-                completedPrimaryDates: WidgetDataStore.recentCompletedPrimaryDates(from: result.sessions)
+                now: now,
+                completedPrimaryDates: completed
             )
             WidgetDataStore.save(snapshot)
             WidgetTimelineReloader.reloadHabitWidget()

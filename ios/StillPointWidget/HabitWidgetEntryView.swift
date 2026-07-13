@@ -118,8 +118,17 @@ struct HabitWidgetEntryView: View {
                     dayMark(mark, size: dotSize)
                 }
                 .frame(maxWidth: .infinity)
+                // Collapse the decorative letter + circle into one VoiceOver element.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(mark.weekdayName)
+                .accessibilityValue(Self.accessibilityState(for: mark))
             }
         }
+    }
+
+    private static func accessibilityState(for mark: WidgetDayMark) -> String {
+        if mark.done { return "Completed" }
+        return mark.isToday ? "Not done yet" : "Missed"
     }
 
     @ViewBuilder

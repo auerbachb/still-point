@@ -430,4 +430,50 @@ final class WidgetDataTests: XCTestCase {
         let normalized = WidgetDataStore.normalizedForDisplay(data, now: now)
         XCTAssertEqual(normalized.completedDates, [inWindow])
     }
+
+    /// Authoritative (session-derived) path must not inject today from a possibly
+    /// stale `primaryDoneToday` flag — it trusts the fetched completion set.
+    func testMakeSnapshotDoesNotFoldTodayWhenSessionsAuthoritative() {
+        let now = Date()
+        let today = localDay(0, from: now)
+        let threeDaysAgo = localDay(-3, from: now)
+        let snapshot = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: true, // stale flag; sessions say today is not complete
+            secondDoneToday: false,
+            now: now,
+            previous: nil,
+            completedPrimaryDates: [threeDaysAgo]
+        )
+        XCTAssertFalse(snapshot.completedDates.contains(today))
+        XCTAssertEqual(snapshot.completedDates, [threeDaysAgo])
+    }
+
+    /// `localDayString` must emit Gregorian digits even when the supplied calendar
+    /// is non-Gregorian, so keys match `sessionDate` (stamped Gregorian).
+    func testLocalDayStringForcesGregorianDigits() {
+        let date = Date(timeIntervalSince1970: 1_784_000_000) // ~2026
+        var buddhist = Calendar(identifier: .buddhist)
+        buddhist.timeZone = TimeZone(identifier: "UTC")!
+        let iso = WidgetDataStore.localDayString(date, calendar: buddhist)
+        XCTAssertEqual(iso.count, 10)
+        XCTAssertTrue(iso.hasPrefix("20"), "expected Gregorian year, got \(iso)")
+    }
+
+    func testWeekMarksPopulateWeekdayName() {
+        let now = Date()
+        let data = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 5,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            streak: 3,
+            completedDates: [],
+            lastUpdated: now
+        )
+        XCTAssertFalse(data.weekMarks(now: now).last?.weekdayName.isEmpty ?? true)
+    }
 }

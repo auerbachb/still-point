@@ -13,6 +13,8 @@ public struct WidgetDayMark: Sendable, Equatable, Identifiable {
     public let iso: String
     /// Narrow weekday initial (e.g. `M`, `T`, `W`) for the caller's locale.
     public let letter: String
+    /// Full weekday name (e.g. `Monday`) for the VoiceOver label.
+    public let weekdayName: String
     /// True when the primary standard sit was completed on `iso`.
     public let done: Bool
     /// True for the trailing column (the caller's local "today").
@@ -20,9 +22,10 @@ public struct WidgetDayMark: Sendable, Equatable, Identifiable {
 
     public var id: String { iso }
 
-    public init(iso: String, letter: String, done: Bool, isToday: Bool) {
+    public init(iso: String, letter: String, weekdayName: String, done: Bool, isToday: Bool) {
         self.iso = iso
         self.letter = letter
+        self.weekdayName = weekdayName
         self.done = done
         self.isToday = isToday
     }
@@ -120,15 +123,17 @@ public struct WidgetData: Codable, Sendable, Equatable {
     public func weekMarks(now: Date = Date(), calendar: Calendar = .current) -> [WidgetDayMark] {
         let completed = Set(completedDates)
         let start = calendar.startOfDay(for: now)
-        let symbols = WidgetData.narrowWeekdaySymbols(calendar: calendar)
+        let letters = WidgetData.narrowWeekdaySymbols(calendar: calendar)
+        let names = WidgetData.fullWeekdaySymbols(calendar: calendar)
         return (0..<7).reversed().compactMap { offset -> WidgetDayMark? in
             guard let date = calendar.date(byAdding: .day, value: -offset, to: start) else { return nil }
             let iso = WidgetDataStore.localDayString(date, calendar: calendar)
             let isToday = offset == 0
             let done = completed.contains(iso) || (isToday && isPrimaryCompleteForToday(at: now))
             let weekday = calendar.component(.weekday, from: date)
-            let letter = symbols.isEmpty ? "" : symbols[(weekday - 1) % symbols.count]
-            return WidgetDayMark(iso: iso, letter: letter, done: done, isToday: isToday)
+            let letter = letters.isEmpty ? "" : letters[(weekday - 1) % letters.count]
+            let name = names.isEmpty ? "" : names[(weekday - 1) % names.count]
+            return WidgetDayMark(iso: iso, letter: letter, weekdayName: name, done: done, isToday: isToday)
         }
     }
 
@@ -139,6 +144,15 @@ public struct WidgetData: Codable, Sendable, Equatable {
         df.locale = calendar.locale ?? Locale(identifier: "en_US")
         let symbols: [String]? = df.veryShortStandaloneWeekdaySymbols
         return symbols ?? ["S", "M", "T", "W", "T", "F", "S"]
+    }
+
+    /// Full standalone weekday names indexed by `weekday - 1` (1 = Sunday).
+    static func fullWeekdaySymbols(calendar: Calendar) -> [String] {
+        let df = DateFormatter()
+        df.calendar = calendar
+        df.locale = calendar.locale ?? Locale(identifier: "en_US")
+        let symbols: [String]? = df.standaloneWeekdaySymbols
+        return symbols ?? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     }
 
     /// Widget gallery / Xcode preview fixture.
@@ -221,7 +235,12 @@ public enum WidgetDataStore {
         } else {
             dates = []
         }
-        if primaryDoneToday {
+        // Fold today in only on the synchronous fast path (no session set), where
+        // `primaryDoneToday` is always same-day fresh. The authoritative path
+        // already carries today's real completion in `completedPrimaryDates`, so
+        // trusting a possibly-stale flag there could wrongly check a new day if the
+        // async fetch crossed local midnight.
+        if completedPrimaryDates == nil, primaryDoneToday {
             dates.insert(localDayString(now))
         }
 
@@ -317,12 +336,16 @@ public enum WidgetDataStore {
         Calendar.current.isDate(lhs, inSameDayAs: rhs)
     }
 
-    /// Local-calendar `yyyy-MM-dd` for `date`, matching how the app stamps
-    /// `sessionDate` (local day, POSIX locale) so string equality lines up.
+    /// Local-day `yyyy-MM-dd` for `date`, matching exactly how the app stamps
+    /// `sessionDate` (`SessionViewModel.saveSession`): POSIX locale + an explicit
+    /// **Gregorian** calendar, in the caller's timezone. Forcing Gregorian (rather
+    /// than `Calendar.current`) keeps the digits aligned on devices whose preferred
+    /// calendar is non-Gregorian (e.g. Buddhist/Japanese), so string equality with
+    /// `sessionDate` still holds and real completions aren't dropped from the row.
     public static func localDayString(_ date: Date, calendar: Calendar = .current) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
-        df.calendar = calendar
+        df.calendar = Calendar(identifier: .gregorian)
         df.timeZone = calendar.timeZone
         df.dateFormat = "yyyy-MM-dd"
         return df.string(from: date)
