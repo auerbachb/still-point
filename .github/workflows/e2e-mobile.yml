@@ -18,17 +18,24 @@ on:
         description: "Commit ref (SHA, branch, or tag) to check out and test"
         type: string
         required: true
+    # These MUST stay `required: false`. The only caller (ios-testflight-auto.yml)
+    # passes `secrets: inherit`, and the repo does not define POSTGRES_URL /
+    # E2E_WEB_EMAIL / E2E_WEB_PASSWORD — marking a secret the caller can't supply
+    # as `required: true` fails the whole workflow_call at startup (no runner,
+    # ~2s), which silently blocked every release:ios auto-build. e2e/global-setup.ts
+    # already skips DB provisioning and runs the mobile suite in mock mode when
+    # these are empty, so absent secrets are expected, not an error.
     secrets:
       POSTGRES_URL:
-        required: true
+        required: false
       E2E_WEB_EMAIL:
-        required: true
+        required: false
       E2E_WEB_PASSWORD:
-        required: true
+        required: false
       E2E_TEST_USER_EMAIL:
-        required: true
+        required: false
       E2E_TEST_USER_PASSWORD:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       ref:
