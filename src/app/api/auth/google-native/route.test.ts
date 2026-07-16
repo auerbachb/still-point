@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const jwtVerify = vi.fn();
 
@@ -68,6 +68,12 @@ describe("POST /api/auth/google-native", () => {
       },
     ]);
     createToken.mockResolvedValue("jwt-from-createToken");
+  });
+
+  afterEach(() => {
+    // Restores console.error spies even when an assertion throws mid-test;
+    // in Vitest 4 this only affects vi.spyOn spies, not the module vi.fn mocks.
+    vi.restoreAllMocks();
   });
 
   test("returns user + token and sets sp_token cookie on valid id token", async () => {
@@ -180,7 +186,6 @@ describe("POST /api/auth/google-native", () => {
     expect(logged).not.toContain("person@gmail.com");
     expect(logged).not.toContain("google-sub-1");
     expect(logged).not.toContain('unexpected "aud" claim value');
-    consoleError.mockRestore();
   });
 
   test("logs a signature failure distinctly from an aud mismatch", async () => {
@@ -205,7 +210,6 @@ describe("POST /api/auth/google-native", () => {
     expect(logged).toContain("code=ERR_JWS_SIGNATURE_VERIFICATION_FAILED");
     expect(logged).not.toContain("claim=");
     expect(logged).not.toContain("configuredAudiences=");
-    consoleError.mockRestore();
   });
 
   test("returns 401 when email is present but not verified", async () => {
