@@ -62,7 +62,7 @@ private final class LogReasonViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !submittingInFlight else { return }
 
-        let maxAllowedDate = WidgetData.localDayString(Date())
+        let maxAllowedDate = WidgetDataStore.localDayString(Date())
         guard date <= maxAllowedDate else {
             errorMessage = "You can only log a reason for today or earlier."
             return
@@ -100,7 +100,7 @@ struct LogReasonView: View {
 
     @State private var vm = LogReasonViewModel()
 
-    private var today: String { WidgetData.localDayString(Date()) }
+    private var today: String { WidgetDataStore.localDayString(Date()) }
     private var yesterday: String { SessionCalendar.addDays(toIsoDate: today, deltaDays: -1) }
     private var isYesterday: Bool { targetDate == yesterday }
     private var dayLabel: String {
