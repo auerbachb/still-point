@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { verifyAppleJwt } from "@/lib/apple-auth";
 import {
+  claimAppleNotificationForProcessing,
   finalizeAppleNotificationLog,
   handleAppleNotificationEvent,
   parseAppleEventsClaim,
@@ -43,9 +44,9 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
 
   // Receipt first: the audit row exists before any side effect runs, so a
   // mid-handling crash can never lose the record of a received notification.
-  let logId: string;
+  let receipt: Awaited<ReturnType<typeof recordAppleNotificationReceipt>>;
   try {
-    logId = await recordAppleNotificationReceipt({
+    receipt = await recordAppleNotificationReceipt({
       eventType: event.type,
       subject: event.sub,
       eventTime: event.event_time,
@@ -57,16 +58,27 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
-  try {
-    const result = await handleAppleNotificationEvent(event);
-    await finalizeAppleNotificationLog(logId, result);
+  if (receipt.alreadySeen) {
+    console.info(
+      `apple notifications: duplicate jti replay suppressed (logId=${receipt.logId})`,
+    );
     return NextResponse.json({ received: true });
+  }
+
+  const claimed = await claimAppleNotificationForProcessing(receipt.logId);
+  if (!claimed) {
+    console.info(
+      `apple notifications: concurrent delivery suppressed (logId=${receipt.logId})`,
+    );
+    return NextResponse.json({ received: true });
+  }
+
+  let result: Awaited<ReturnType<typeof handleAppleNotificationEvent>>;
+  try {
+    result = await handleAppleNotificationEvent(event);
   } catch (error) {
-    // Apple does not document retry semantics for these notifications, so the
-    // 500 may be final — log loudly for manual follow-up. If Apple (or an
-    // operator) redelivers, the idempotent handlers make that safe.
     console.error("apple notifications: processing failed:", error);
-    await finalizeAppleNotificationLog(logId, {
+    await finalizeAppleNotificationLog(receipt.logId, {
       actionTaken: "processing_failed",
       userId: null,
     }).catch((finalizeError) => {
@@ -74,4 +86,14 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+
+  try {
+    await finalizeAppleNotificationLog(receipt.logId, result);
+  } catch (finalizeError) {
+    console.error("apple notifications: finalize audit row failed:", finalizeError);
+    // Side effects already applied — acknowledge to avoid duplicate handler runs.
+    return NextResponse.json({ received: true });
+  }
+
+  return NextResponse.json({ received: true });
 });

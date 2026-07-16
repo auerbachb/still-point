@@ -8,10 +8,11 @@ const {
   updateWhere,
   updateReturning,
   insertValues,
+  insertOnConflict,
   insertReturning,
   deleteUserAccount,
 } = vi.hoisted(() => ({
-  /** select().from().where().limit() — oauth_accounts link lookup */
+  /** select().from().where().limit() — oauth_accounts link lookup and jti replay lookup */
   linkLimit: vi.fn(),
   /** select().from().where().orderBy().limit() — audit-log fallback lookup */
   fallbackLimit: vi.fn(),
@@ -20,6 +21,7 @@ const {
   updateWhere: vi.fn(),
   updateReturning: vi.fn(),
   insertValues: vi.fn(),
+  insertOnConflict: vi.fn(),
   insertReturning: vi.fn(),
   deleteUserAccount: vi.fn(),
 }));
@@ -50,7 +52,13 @@ vi.mock("@/db", () => ({
     insert: () => ({
       values: (values: unknown) => {
         insertValues(values);
-        return { returning: insertReturning };
+        return {
+          onConflictDoNothing: (...args: unknown[]) => {
+            insertOnConflict(...args);
+            return { returning: insertReturning };
+          },
+          returning: insertReturning,
+        };
       },
     }),
   },
@@ -207,15 +215,17 @@ describe("handleAppleNotificationEvent", () => {
 });
 
 describe("recordAppleNotificationReceipt", () => {
-  test("inserts a received row and returns its id", async () => {
-    const id = await recordAppleNotificationReceipt({
+  test("inserts a received row and returns alreadySeen false", async () => {
+    linkLimit.mockResolvedValueOnce([]);
+
+    const result = await recordAppleNotificationReceipt({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
       eventTime: 1_718_000_000_000,
       jti: "jti-abc",
     });
 
-    expect(id).toBe("log-uuid-1");
+    expect(result).toEqual({ logId: "log-uuid-1", alreadySeen: false });
     expect(insertValues).toHaveBeenCalledWith({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
@@ -225,14 +235,72 @@ describe("recordAppleNotificationReceipt", () => {
     });
   });
 
-  test("tolerates missing event_time and jti", async () => {
+  test("returns alreadySeen true when the jti insert conflicts after successful handling", async () => {
+    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id", actionTaken: "account_deleted" }]);
+
+    const result = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-replay",
+    });
+
+    expect(result).toEqual({ logId: "existing-log-id", alreadySeen: true });
+    expect(linkLimit).toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  test("returns alreadySeen false when the jti replay is still in-flight or failed", async () => {
+    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id", actionTaken: "received" }]);
+
+    const retryResult = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-replay",
+    });
+
+    expect(retryResult).toEqual({ logId: "existing-log-id", alreadySeen: false });
+
+    linkLimit.mockResolvedValueOnce([
+      { id: "failed-log-id", actionTaken: "processing_failed" },
+    ]);
+
+    const failedRetry = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-failed",
+    });
+
+    expect(failedRetry).toEqual({ logId: "failed-log-id", alreadySeen: false });
+  });
+
+  test("hashes oversized jti values before insert", async () => {
+    linkLimit.mockResolvedValueOnce([]);
+    const longJti = "x".repeat(300);
+
     await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: undefined,
+      jti: longJti,
+    });
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ jti: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) }),
+    );
+  });
+
+  test("tolerates missing event_time and jti", async () => {
+    const result = await recordAppleNotificationReceipt({
       eventType: "email-enabled",
       subject: "apple-sub-1",
       eventTime: undefined,
       jti: undefined,
     });
 
+    expect(result).toEqual({ logId: "log-uuid-1", alreadySeen: false });
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({ eventTime: null, jti: null }),
     );

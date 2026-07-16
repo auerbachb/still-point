@@ -1,13 +1,21 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
+import { createHash } from "crypto";
 import { db } from "@/db";
 import { appleNotificationLog, oauthAccounts, users } from "@/db/schema";
 import { deleteUserAccount } from "@/lib/accountDeletion";
+import { isUniqueViolation } from "@/lib/dbErrors";
 
 /** Column widths from schema.ts — externally sourced strings are truncated to
  *  fit so a pathological value can never turn an audit insert into a 500. */
 const EVENT_TYPE_MAX = 50;
 const SUBJECT_MAX = 255;
 const JTI_MAX = 255;
+
+/** Fit a JWT `jti` into the audit column without truncating distinct values. */
+function storageJti(raw: string): string {
+  if (raw.length <= JTI_MAX) return raw;
+  return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
+}
 
 /** One event from the JWT `events` claim of an Apple server-to-server notification. */
 export type AppleNotificationEvent = {
@@ -131,24 +139,73 @@ export async function handleAppleNotificationEvent(
 
 /** Append the audit row for a verified notification BEFORE it is handled, with
  *  `action_taken = "received"`. Two-phase logging means a crash mid-handling can
- *  never lose the receipt — the row is finalized with the real action afterwards. */
+ *  never lose the receipt — the row is finalized with the real action afterwards.
+ *  Duplicate deliveries sharing a `jti` return `alreadySeen: true` once handling
+ *  has finalized beyond the in-flight `received` / `processing_failed` states (#532). */
+export type AppleNotificationReceiptResult = {
+  logId: string;
+  alreadySeen: boolean;
+};
+
 export async function recordAppleNotificationReceipt(params: {
   eventType: string;
   subject: string;
   eventTime: number | undefined;
   jti: string | undefined;
-}): Promise<string> {
-  const [row] = await db
-    .insert(appleNotificationLog)
-    .values({
-      eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
-      subject: params.subject.slice(0, SUBJECT_MAX),
-      eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
-      jti: params.jti !== undefined ? params.jti.slice(0, JTI_MAX) : null,
-      actionTaken: "received",
-    })
-    .returning({ id: appleNotificationLog.id });
-  return row.id;
+}): Promise<AppleNotificationReceiptResult> {
+  const jti =
+    typeof params.jti === "string" && params.jti.length > 0 ? storageJti(params.jti) : null;
+  const values = {
+    eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
+    subject: params.subject.slice(0, SUBJECT_MAX),
+    eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
+    jti,
+    actionTaken: "received",
+  };
+
+  if (jti !== null) {
+    const [existing] = await db
+      .select({
+        id: appleNotificationLog.id,
+        actionTaken: appleNotificationLog.actionTaken,
+      })
+      .from(appleNotificationLog)
+      .where(eq(appleNotificationLog.jti, jti))
+      .limit(1);
+    if (existing) {
+      const retryEligible =
+        existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
+      return { logId: existing.id, alreadySeen: !retryEligible };
+    }
+  }
+
+  try {
+    const inserted = await db.insert(appleNotificationLog).values(values).returning({
+      id: appleNotificationLog.id,
+    });
+    if (inserted.length === 0) {
+      throw new Error("apple_notification_log insert returned no rows");
+    }
+    return { logId: inserted[0].id, alreadySeen: false };
+  } catch (error) {
+    if (jti !== null && isUniqueViolation(error)) {
+      const [existing] = await db
+        .select({
+          id: appleNotificationLog.id,
+          actionTaken: appleNotificationLog.actionTaken,
+        })
+        .from(appleNotificationLog)
+        .where(eq(appleNotificationLog.jti, jti))
+        .limit(1);
+      if (!existing) {
+        throw new Error("apple_notification_log jti conflict but no existing row");
+      }
+      const retryEligible =
+        existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
+      return { logId: existing.id, alreadySeen: !retryEligible };
+    }
+    throw error;
+  }
 }
 
 /** Finalize the receipt row with the handler outcome (or `processing_failed`). */
@@ -160,4 +217,22 @@ export async function finalizeAppleNotificationLog(
     .update(appleNotificationLog)
     .set({ actionTaken: result.actionTaken.slice(0, 64), userId: result.userId })
     .where(eq(appleNotificationLog.id, logId));
+}
+
+/** Atomically claim an in-flight receipt so concurrent duplicate deliveries run once. */
+export async function claimAppleNotificationForProcessing(logId: string): Promise<boolean> {
+  const [claimed] = await db
+    .update(appleNotificationLog)
+    .set({ actionTaken: "processing" })
+    .where(
+      and(
+        eq(appleNotificationLog.id, logId),
+        or(
+          eq(appleNotificationLog.actionTaken, "received"),
+          eq(appleNotificationLog.actionTaken, "processing_failed"),
+        ),
+      ),
+    )
+    .returning({ id: appleNotificationLog.id });
+  return claimed !== undefined;
 }

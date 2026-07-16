@@ -6,11 +6,13 @@ const {
   handleAppleNotificationEvent,
   recordAppleNotificationReceipt,
   finalizeAppleNotificationLog,
+  claimAppleNotificationForProcessing,
 } = vi.hoisted(() => ({
   verifyAppleJwt: vi.fn(),
   handleAppleNotificationEvent: vi.fn(),
   recordAppleNotificationReceipt: vi.fn(),
   finalizeAppleNotificationLog: vi.fn(),
+  claimAppleNotificationForProcessing: vi.fn(),
 }));
 
 vi.mock("@/lib/apple-auth", () => ({
@@ -24,6 +26,7 @@ vi.mock("@/lib/apple-notifications", async (importOriginal) => {
     handleAppleNotificationEvent,
     recordAppleNotificationReceipt,
     finalizeAppleNotificationLog,
+    claimAppleNotificationForProcessing,
   };
 });
 
@@ -49,7 +52,8 @@ beforeEach(() => {
     actionTaken: "account_deleted",
     userId: "user-uuid-1",
   });
-  recordAppleNotificationReceipt.mockResolvedValue("log-uuid-1");
+  recordAppleNotificationReceipt.mockResolvedValue({ logId: "log-uuid-1", alreadySeen: false });
+  claimAppleNotificationForProcessing.mockResolvedValue(true);
   finalizeAppleNotificationLog.mockResolvedValue(undefined);
 });
 
@@ -143,6 +147,21 @@ describe("POST /api/auth/apple/notifications", () => {
       actionTaken: "processing_failed",
       userId: null,
     });
+  });
+
+  test("replayed jti returns 200 without reprocessing", async () => {
+    recordAppleNotificationReceipt.mockResolvedValue({
+      logId: "existing-log-id",
+      alreadySeen: true,
+    });
+    const { POST } = await import("./route");
+
+    const res = await POST(requestWithBody({ payload: "tok" }));
+
+    expect(res.status).toBe(200);
+    expect(recordAppleNotificationReceipt).toHaveBeenCalled();
+    expect(handleAppleNotificationEvent).not.toHaveBeenCalled();
+    expect(finalizeAppleNotificationLog).not.toHaveBeenCalled();
   });
 
   test("duplicate deliveries still return 200 and are audited", async () => {
