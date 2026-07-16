@@ -1,6 +1,7 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
 import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
+import { isValidUsername, USERNAME_ERROR } from "../../src/lib/username";
 import { tap } from "../utils/mobile-helpers";
 
 type UserRecord = {
@@ -8,6 +9,8 @@ type UserRecord = {
   email: string;
   username: string;
   isPublic: boolean;
+  aphorismsEnabled: boolean;
+  attentionTrackingEnabled: boolean;
   currentDay: number;
 };
 
@@ -105,6 +108,8 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         email,
         username,
         isPublic: false,
+        aphorismsEnabled: false,
+        attentionTrackingEnabled: false,
         currentDay: 1,
       };
       state.authenticated = true;
@@ -152,6 +157,47 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       state.credentials = { ...state.credentials, password: String(body.password) };
       state.resetToken = null;
       return json(route, 200, { ok: true });
+    }
+
+    if (pathname === "/api/settings" && method === "PATCH") {
+      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
+      const body = (request.postDataJSON() ?? {}) as {
+        username?: string;
+        isPublic?: boolean;
+        aphorismsEnabled?: boolean;
+        attentionTrackingEnabled?: boolean;
+      };
+
+      let hasSupportedUpdate = false;
+
+      if (body.username !== undefined) {
+        hasSupportedUpdate = true;
+        const username = String(body.username).trim();
+        if (!isValidUsername(username)) {
+          return json(route, 400, { error: USERNAME_ERROR });
+        }
+        if (username.toLowerCase() === "taken_name") {
+          return json(route, 409, { error: "Username already taken" });
+        }
+        state.user.username = username;
+        state.credentials.username = username;
+      }
+      if (typeof body.isPublic === "boolean") {
+        hasSupportedUpdate = true;
+        state.user.isPublic = body.isPublic;
+      }
+      if (typeof body.aphorismsEnabled === "boolean") {
+        hasSupportedUpdate = true;
+        state.user.aphorismsEnabled = body.aphorismsEnabled;
+      }
+      if (typeof body.attentionTrackingEnabled === "boolean") {
+        hasSupportedUpdate = true;
+        state.user.attentionTrackingEnabled = body.attentionTrackingEnabled;
+      }
+      if (!hasSupportedUpdate) {
+        return json(route, 400, { error: "No supported settings provided" });
+      }
+      return json(route, 200, { user: state.user });
     }
 
     if (pathname === "/api/sessions" && method === "GET") {
@@ -239,6 +285,8 @@ export const test = base.extend<AuthFixture>({
         email: credentials.email,
         username: credentials.username,
         isPublic: false,
+        aphorismsEnabled: false,
+        attentionTrackingEnabled: false,
         currentDay: 1,
       },
       resetToken: null,
