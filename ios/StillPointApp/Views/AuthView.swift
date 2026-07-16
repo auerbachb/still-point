@@ -5,6 +5,7 @@ import StillPointShared
 struct AuthView: View {
     let appVM: AppViewModel
     @State private var vm = AuthViewModel()
+    @State private var appleSignInRawNonce: String?
     let launchAuthStatusMessage: String?
 
     var body: some View {
@@ -157,13 +158,21 @@ struct AuthView: View {
                         .opacity(vm.isAuthInFlight ? 0.5 : 1)
 
                         SignInWithAppleButton(.signIn) { request in
+                            let rawNonce = AppleSignInNonce.randomNonceString()
+                            appleSignInRawNonce = rawNonce
                             request.requestedScopes = [.fullName, .email]
+                            request.nonce = AppleSignInNonce.sha256Hex(rawNonce)
                         } onCompletion: { result in
+                            let rawNonce = appleSignInRawNonce
+                            appleSignInRawNonce = nil
                             switch result {
                             case .success(let authorization):
                                 guard
                                     let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                                    let body = AppleSignInController.nativeSignInRequest(from: credential)
+                                    let body = AppleSignInController.nativeSignInRequest(
+                                        from: credential,
+                                        rawNonce: rawNonce
+                                    )
                                 else {
                                     vm.error = "Could not read Sign in with Apple credentials."
                                     return
