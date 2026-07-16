@@ -10,7 +10,9 @@ import {
   recoveryTotalStepsFor,
   sessionDurationForUser,
   startRecovery,
+  type ProgressionState,
 } from "./duration";
+import { loadSharedFixture, type DurationForDayFixture } from "./testing/sharedFixtures";
 
 const NO_RECOVERY = { recoveryTargetDay: null, recoveryCurrentStep: null, recoveryTotalSteps: null };
 
@@ -263,10 +265,10 @@ describe("advanceProgression", () => {
     });
   });
 
-  test("completing the final recovery step clears recovery and leaves currentDay at the prior level", () => {
+  test("completing the final recovery step clears recovery and advances currentDay (#559)", () => {
     const state = { currentDay: 11, recoveryTargetDay: 11, recoveryCurrentStep: 5, recoveryTotalSteps: 5 };
     expect(advanceProgression("standard", true, state)).toEqual({
-      currentDay: 11,
+      currentDay: 12,
       recoveryTargetDay: null,
       recoveryCurrentStep: null,
       recoveryTotalSteps: null,
@@ -279,12 +281,88 @@ describe("advanceProgression", () => {
   });
 
   test("after recovery clears, the next completed session resumes normal progression", () => {
-    const cleared = { currentDay: 11, recoveryTargetDay: null, recoveryCurrentStep: null, recoveryTotalSteps: null };
+    const cleared = { currentDay: 12, recoveryTargetDay: null, recoveryCurrentStep: null, recoveryTotalSteps: null };
     expect(advanceProgression("standard", true, cleared)).toEqual({
-      currentDay: 12,
+      currentDay: 13,
       recoveryTargetDay: null,
       recoveryCurrentStep: null,
       recoveryTotalSteps: null,
     });
+  });
+
+  test("repeated miss gaps after recovery no longer stall progression (#559)", () => {
+    let state: ProgressionState = { currentDay: 45, ...NO_RECOVERY };
+
+    const completeRecoveryCycle = () => {
+      state = {
+        ...state,
+        recoveryTargetDay: state.currentDay,
+        recoveryCurrentStep: 1,
+        recoveryTotalSteps: 5,
+      };
+      for (let step = 1; step <= 5; step++) {
+        state = { ...state, recoveryCurrentStep: step };
+        state = advanceProgression("standard", true, state);
+      }
+    };
+
+    completeRecoveryCycle();
+    expect(state.currentDay).toBe(46);
+    expect(activeRecovery(state)).toBeNull();
+
+    const gapRecovery = detectMissedDayGap({
+      lastCompletedSessionDate: "2026-06-01",
+      todayIso: "2026-06-04",
+      currentDay: state.currentDay,
+      recovery: state,
+    });
+    expect(gapRecovery).toEqual({
+      recoveryTargetDay: 46,
+      recoveryCurrentStep: 1,
+      recoveryTotalSteps: 5,
+    });
+
+    state = { ...state, ...gapRecovery! };
+    completeRecoveryCycle();
+    expect(state.currentDay).toBe(47);
+    expect(durationForDay(state.currentDay)).toBe(520);
+  });
+
+  test("cap-boundary progression climbs past 500s toward 600s after recovery", () => {
+    let state: ProgressionState = { currentDay: 54, ...NO_RECOVERY };
+    expect(durationForDay(state.currentDay)).toBe(590);
+
+    state = advanceProgression("standard", true, state);
+    expect(state.currentDay).toBe(55);
+    expect(durationForDay(state.currentDay)).toBe(MAX_DURATION);
+
+    state = advanceProgression("standard", true, state);
+    expect(state.currentDay).toBe(56);
+    expect(durationForDay(state.currentDay)).toBe(MAX_DURATION);
+  });
+});
+
+describe("duration + progression — shared fixtures (#540/#421)", () => {
+  const fixture = loadSharedFixture<DurationForDayFixture>("durationForDay.json");
+
+  test("constants match implementation", () => {
+    expect(fixture.constants.forkDay).toBe(FORK_DAY);
+    expect(fixture.constants.maxDuration).toBe(MAX_DURATION);
+  });
+
+  test.each(fixture.durationForDay)("durationForDay day $day", ({ day, expected }) => {
+    expect(durationForDay(day)).toBe(expected);
+  });
+
+  test.each(fixture.isDualTrackEligible)("isDualTrackEligible currentDay $currentDay", ({ currentDay, expected }) => {
+    expect(isDualTrackEligible(currentDay)).toBe(expected);
+  });
+
+  test.each(fixture.advanceProgression)("$name", ({ sessionType, completed, state, expected }) => {
+    expect(advanceProgression(sessionType, completed, state)).toEqual(expected);
+  });
+
+  test.each(fixture.detectMissedDayGap)("$name", ({ lastCompletedSessionDate, todayIso, currentDay, recovery, expected }) => {
+    expect(detectMissedDayGap({ lastCompletedSessionDate, todayIso, currentDay, recovery })).toEqual(expected);
   });
 });

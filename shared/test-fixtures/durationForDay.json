@@ -1,0 +1,83 @@
+{
+  "algorithm": "durationAndProgression",
+  "description": "Golden values for durationForDay, advanceProgression, and detectMissedDayGap. Web src/lib/duration.ts + src/lib/constants.ts and iOS StillPointShared/Constants.swift share durationForDay; advanceProgression and detectMissedDayGap are web-only until iOS recovery parity (#524). Includes cap/fork-day (#240) and missed-day recovery cases (#238/#559).",
+  "constants": {
+    "baseDuration": 60,
+    "increment": 10,
+    "maxDuration": 600,
+    "forkDay": 55,
+    "recoveryMaxSteps": 5,
+    "missedDayGapThreshold": 2
+  },
+  "durationForDay": [
+    { "day": 1, "expected": 60 },
+    { "day": 2, "expected": 70 },
+    { "day": 45, "expected": 500 },
+    { "day": 46, "expected": 510 },
+    { "day": 54, "expected": 590 },
+    { "day": 55, "expected": 600 },
+    { "day": 56, "expected": 600 },
+    { "day": 200, "expected": 600 }
+  ],
+  "isDualTrackEligible": [
+    { "currentDay": 1, "expected": false },
+    { "currentDay": 55, "expected": false },
+    { "currentDay": 56, "expected": true }
+  ],
+  "advanceProgression": [
+    {
+      "name": "completed standard sit outside recovery bumps currentDay",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 45, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
+      "expected": { "currentDay": 46, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
+    },
+    {
+      "name": "mid-recovery step leaves currentDay frozen",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 45, "recoveryTargetDay": 45, "recoveryCurrentStep": 2, "recoveryTotalSteps": 5 },
+      "expected": { "currentDay": 45, "recoveryTargetDay": 45, "recoveryCurrentStep": 3, "recoveryTotalSteps": 5 }
+    },
+    {
+      "name": "final recovery step clears recovery and advances currentDay (#559)",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 45, "recoveryTargetDay": 45, "recoveryCurrentStep": 5, "recoveryTotalSteps": 5 },
+      "expected": { "currentDay": 46, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
+    },
+    {
+      "name": "quick sit never advances",
+      "sessionType": "quick",
+      "completed": true,
+      "state": { "currentDay": 45, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
+      "expected": { "currentDay": 45, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
+    }
+  ],
+  "detectMissedDayGap": [
+    {
+      "name": "no gap with one calendar day between sits",
+      "lastCompletedSessionDate": "2026-06-10",
+      "todayIso": "2026-06-11",
+      "currentDay": 45,
+      "recovery": { "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
+      "expected": null
+    },
+    {
+      "name": "2+ day gap starts recovery at currentDay",
+      "lastCompletedSessionDate": "2026-06-09",
+      "todayIso": "2026-06-11",
+      "currentDay": 45,
+      "recovery": { "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
+      "expected": { "recoveryTargetDay": 45, "recoveryCurrentStep": 1, "recoveryTotalSteps": 5 }
+    },
+    {
+      "name": "already recovering does not restart ramp",
+      "lastCompletedSessionDate": "2026-05-01",
+      "todayIso": "2026-06-11",
+      "currentDay": 45,
+      "recovery": { "recoveryTargetDay": 45, "recoveryCurrentStep": 3, "recoveryTotalSteps": 5 },
+      "expected": null
+    }
+  ]
+}

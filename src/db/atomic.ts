@@ -536,7 +536,9 @@ function progressionUpdateSql(shouldAdvance: boolean, track: Track) {
   return sql`
     current_day = case
       when not ${shouldAdvance} or ${track} <> 'primary' then u.current_day
-      when ${activeRecoverySql} then u.current_day
+      when ${activeRecoverySql}
+        and u.recovery_current_step + 1 <= u.recovery_total_steps
+      then u.current_day
       else u.current_day + 1
     end,
     recovery_target_day = case

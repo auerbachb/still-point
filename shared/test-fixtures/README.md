@@ -15,6 +15,7 @@ implementations breaks CI on at least one platform.
 | `breathCounting.json` | `breathCountForTaps` / `phaseForTaps` / `elapsedDisplay` (`src/lib/breathCounting.ts`) | `BreathCounting.breathCount` / `phase` / `elapsedDisplay` (`BreathCountingLogic.swift`) |
 | `aphorisms.json` | `aphorismForDay` (`src/lib/aphorisms.ts`) | `Aphorisms.forDay` (`Aphorisms.swift`) |
 | `buddyCalendarColors.json` | `buddyColorFromUserId` (`src/lib/buddyCalendarColors.ts`) | `buddyColorIndexFromUserId` (`BuddyCalendarColors.swift`) |
+| `durationForDay.json` | `durationForDay` / `isDualTrackEligible` (`src/lib/constants.ts`, `src/lib/duration.ts`) | `StillPoint.duration(forDay:)` / `isDualTrackEligible` (`Constants.swift`). `advanceProgression` and `detectMissedDayGap` cases are web-only until iOS recovery parity (#524). |
 
 ## How each suite loads them
 

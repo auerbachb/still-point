@@ -6,9 +6,9 @@
  *
  * Recovery model: missing 2+ calendar days freezes `recoveryTargetDay` at the
  * pre-miss `currentDay` (the level to ramp back to) and starts a step counter.
- * `currentDay` itself is left untouched for the whole ramp, so once the final
- * recovery step completes and the recovery columns clear, the very next session
- * naturally lands back on `durationForDay(currentDay)` — the prior level.
+ * `currentDay` is frozen mid-ramp but advances by one when the final recovery
+ * step completes (#559), so sparse sitters are not stuck re-entering recovery at
+ * the same day forever before they can climb toward the 10-minute cap.
  */
 import { BASE_DURATION, FORK_DAY, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
 import { daysBetweenIsoDatesInclusive } from "./sessionCalendar";
@@ -62,10 +62,9 @@ export function recoveryTotalStepsFor(targetDay: number): number {
 /**
  * Duration (seconds) for a given recovery step (1-indexed). Step 1 is always exactly
  * `BASE_DURATION` (the "reset to 1 minute" session immediately after the miss); later
- * steps ramp linearly by `difference / totalSteps` seconds. The session that follows
- * the final recovery step is no longer "in recovery" — it uses the normal
- * `durationForDay(targetDay)` via `activeRecovery` returning `null`, landing exactly
- * back on the prior duration.
+ * steps ramp linearly by `difference / totalSteps` seconds. Completing the final
+ * recovery step clears recovery and advances `currentDay` by one (#559), so the
+ * next standard sit uses `durationForDay(currentDay)` at the newly earned level.
  */
 export function recoveryStepDuration(targetDay: number, totalSteps: number, step: number): number {
   if (totalSteps <= 0) return BASE_DURATION;
@@ -124,8 +123,8 @@ export function detectMissedDayGap(params: {
  * Advances progression after a session save — the shared replacement for the old
  * "always bump currentDay" rule. Non-advancing sessions (quick sits, incomplete
  * standard sits) return `state` unchanged. A completed standard sit either steps
- * the recovery ramp forward (clearing it once the final step is done, leaving
- * `currentDay` untouched) or, outside recovery, bumps `currentDay` by one as before.
+ * the recovery ramp forward (clearing it and bumping `currentDay` once the final
+ * step is done) or, outside recovery, bumps `currentDay` by one as before.
  */
 export function advanceProgression(
   sessionType: SessionType,
@@ -139,7 +138,7 @@ export function advanceProgression(
     const nextStep = active.recoveryCurrentStep + 1;
     const stillRecovering = nextStep <= active.recoveryTotalSteps;
     return {
-      currentDay: state.currentDay,
+      currentDay: stillRecovering ? state.currentDay : state.currentDay + 1,
       recoveryTargetDay: stillRecovering ? active.recoveryTargetDay : null,
       recoveryCurrentStep: stillRecovering ? nextStep : null,
       recoveryTotalSteps: stillRecovering ? active.recoveryTotalSteps : null,
