@@ -234,9 +234,9 @@ describe("recordAppleNotificationReceipt", () => {
     expect(insertOnConflict).toHaveBeenCalled();
   });
 
-  test("returns alreadySeen true when the jti insert conflicts", async () => {
+  test("returns alreadySeen true when the jti insert conflicts after successful handling", async () => {
     insertReturning.mockResolvedValueOnce([]);
-    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id" }]);
+    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id", actionTaken: "account_deleted" }]);
 
     const result = await recordAppleNotificationReceipt({
       eventType: "consent-revoked",
@@ -247,6 +247,34 @@ describe("recordAppleNotificationReceipt", () => {
 
     expect(result).toEqual({ logId: "existing-log-id", alreadySeen: true });
     expect(linkLimit).toHaveBeenCalled();
+  });
+
+  test("returns alreadySeen false when the jti replay is still in-flight or failed", async () => {
+    insertReturning.mockResolvedValueOnce([]);
+    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id", actionTaken: "received" }]);
+
+    const retryResult = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-replay",
+    });
+
+    expect(retryResult).toEqual({ logId: "existing-log-id", alreadySeen: false });
+
+    insertReturning.mockResolvedValueOnce([]);
+    linkLimit.mockResolvedValueOnce([
+      { id: "failed-log-id", actionTaken: "processing_failed" },
+    ]);
+
+    const failedRetry = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-failed",
+    });
+
+    expect(failedRetry).toEqual({ logId: "failed-log-id", alreadySeen: false });
   });
 
   test("tolerates missing event_time and jti", async () => {

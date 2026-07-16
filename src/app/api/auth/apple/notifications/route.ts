@@ -66,7 +66,12 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
 
   try {
     const result = await handleAppleNotificationEvent(event);
-    await finalizeAppleNotificationLog(receipt.logId, result);
+    try {
+      await finalizeAppleNotificationLog(receipt.logId, result);
+    } catch (finalizeError) {
+      console.error("apple notifications: finalize audit row failed:", finalizeError);
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
     return NextResponse.json({ received: true });
   } catch (error) {
     // Apple does not document retry semantics for these notifications, so the

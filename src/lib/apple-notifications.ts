@@ -132,7 +132,8 @@ export async function handleAppleNotificationEvent(
 /** Append the audit row for a verified notification BEFORE it is handled, with
  *  `action_taken = "received"`. Two-phase logging means a crash mid-handling can
  *  never lose the receipt — the row is finalized with the real action afterwards.
- *  Duplicate deliveries sharing a `jti` return `alreadySeen: true` (#532). */
+ *  Duplicate deliveries sharing a `jti` return `alreadySeen: true` once handling
+ *  has finalized beyond the in-flight `received` / `processing_failed` states (#532). */
 export type AppleNotificationReceiptResult = {
   logId: string;
   alreadySeen: boolean;
@@ -165,14 +166,19 @@ export async function recordAppleNotificationReceipt(params: {
 
   if (jti !== null) {
     const [existing] = await db
-      .select({ id: appleNotificationLog.id })
+      .select({
+        id: appleNotificationLog.id,
+        actionTaken: appleNotificationLog.actionTaken,
+      })
       .from(appleNotificationLog)
       .where(eq(appleNotificationLog.jti, jti))
       .limit(1);
     if (!existing) {
       throw new Error("apple_notification_log jti conflict but no existing row");
     }
-    return { logId: existing.id, alreadySeen: true };
+    const retryEligible =
+      existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
+    return { logId: existing.id, alreadySeen: !retryEligible };
   }
 
   throw new Error("apple_notification_log insert returned no rows");
