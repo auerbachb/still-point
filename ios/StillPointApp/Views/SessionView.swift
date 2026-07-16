@@ -14,6 +14,9 @@ struct SessionView: View {
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
     @State private var showCaptureHelper = false
+    @State private var showAttentionUnsupportedAlert = false
+    @State private var showAttentionPermissionAlert = false
+    @State private var showAttentionFailedAlert = false
     @State private var attentionManager = AttentionTrackingManager()
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
@@ -242,6 +245,26 @@ struct SessionView: View {
         } message: {
             Text("Your session data couldn't be saved. You can retry or continue without saving.")
         }
+        .alert("Gaze tracking unavailable", isPresented: $showAttentionUnsupportedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This device does not support TrueDepth face tracking. Gaze attention tracking requires an iPhone or iPad with a front-facing TrueDepth camera.")
+        }
+        .alert("Camera access required", isPresented: $showAttentionPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Continue without gaze tracking", role: .cancel) {}
+        } message: {
+            Text("Gaze attention tracking needs front camera access. Allow camera access in Settings to use this feature during sessions.")
+        }
+        .alert("Gaze tracking failed", isPresented: $showAttentionFailedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(attentionManager.lastFailureMessage ?? "The ARKit session stopped unexpectedly. Your sit continues without gaze tracking.")
+        }
     }
 
     // MARK: - Progress Bar
@@ -284,7 +307,25 @@ struct SessionView: View {
     private func syncAttentionTracking() {
         guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
         guard !vm.showIntroOverlay, sessionTimerRunning else { return }
-        attentionManager.start { vm.elapsed }
+        Task {
+            await attentionManager.start { vm.elapsed }
+            switch attentionManager.status {
+            case .unsupported:
+                showAttentionUnsupportedAlert = true
+            case .permissionDenied:
+                showAttentionPermissionAlert = true
+            case .failed:
+                showAttentionFailedAlert = true
+            default:
+                break
+            }
+        }
+    }
+
+    private var showsLiveGazeIndicator: Bool {
+        appVM.currentUser?.attentionTrackingEnabled == true
+            && attentionManager.status == .running
+            && (attentionManager.isRunning || attentionManager.didReceiveSample)
     }
 
     private var bottomOverlayReserve: CGFloat {
@@ -345,6 +386,32 @@ struct SessionView: View {
                 }
             }
             .padding(.horizontal, SPSpacing.s3)
+
+            if showsLiveGazeIndicator {
+                HStack(spacing: SPSpacing.s2) {
+                    Circle()
+                        .fill(
+                            attentionManager.currentAttentionState == "attentive"
+                                ? SPColor.green
+                                : SPColor.amber
+                        )
+                        .frame(width: 8, height: 8)
+
+                    Text(
+                        attentionManager.currentAttentionState == "attentive"
+                            ? "Gaze on screen"
+                            : "Gaze away"
+                    )
+                    .font(SPFont.mono(10, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .tracking(1)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, SPSpacing.s3)
+                .accessibilityIdentifier("session.gazeIndicator")
+                .accessibilityValue(attentionManager.currentAttentionState)
+            }
 
             if !vm.showPostDistractionCapture, vm.isActive || vm.isPaused {
                 HStack(spacing: SPSpacing.s1) {
@@ -614,7 +681,9 @@ struct SessionView: View {
                 sessionType: session.sessionType,
                 duration: vm.plannedSeconds,
                 bonusSeconds: vm.bonusSeconds,
-                unlockAppGate: vm.completedNaturally
+                unlockAppGate: vm.completedNaturally,
+                attentionLog: vm.attentionLog,
+                attentionElapsed: vm.attentionLog != nil ? vm.elapsed : nil
             )
         }
     }

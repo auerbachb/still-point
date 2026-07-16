@@ -19,7 +19,9 @@ enum AppView: Equatable {
         dayNumber: Int,
         sessionType: SessionType,
         duration: Int,
-        bonusSeconds: Int
+        bonusSeconds: Int,
+        attentionLog: [AttentionEntry]?,
+        attentionElapsed: Double?
     )
     case breathCounting
     case logReason(date: String)
@@ -488,7 +490,9 @@ final class AppViewModel {
         sessionType: SessionType = .standard,
         duration: Int,
         bonusSeconds: Int = 0,
-        unlockAppGate: Bool
+        unlockAppGate: Bool,
+        attentionLog: [AttentionEntry]? = nil,
+        attentionElapsed: Double? = nil
     ) {
         // Daily-lock model (#348): any naturally-completed session — quick-minute
         // or standard — unlocks the gated apps for the rest of the day.
@@ -505,7 +509,9 @@ final class AppViewModel {
             dayNumber: dayNumber,
             sessionType: sessionType,
             duration: duration,
-            bonusSeconds: bonusSeconds
+            bonusSeconds: bonusSeconds,
+            attentionLog: attentionLog,
+            attentionElapsed: attentionElapsed
         )
     }
 

@@ -65,4 +65,56 @@ public enum AttentionTrackingLogic {
         next.log.append(AttentionEntry(time: elapsed, state: rawState))
         return next
     }
+
+    /// Percent attentive vs away derived from a session attention log (#562).
+    public struct AttentionSummary: Equatable, Sendable {
+        public let attentivePercent: Int
+        public let awayPercent: Int
+
+        public init(attentivePercent: Int, awayPercent: Int) {
+            self.attentivePercent = attentivePercent
+            self.awayPercent = awayPercent
+        }
+    }
+
+    /// Compute gaze-on-screen vs gaze-away proportions for completion summaries.
+    /// Assumes the session begins in `initialState` (default `"attentive"`).
+    public static func calculateAttentionSummary(
+        log: [AttentionEntry],
+        totalElapsed: Double,
+        initialState: String = "attentive"
+    ) -> AttentionSummary {
+        guard totalElapsed > 0 else {
+            return AttentionSummary(attentivePercent: 100, awayPercent: 0)
+        }
+
+        guard !log.isEmpty else {
+            let attentive = initialState == "attentive" ? 100 : 0
+            return AttentionSummary(attentivePercent: attentive, awayPercent: 100 - attentive)
+        }
+
+        var effectiveLog = log
+        if effectiveLog[0].time > 0 {
+            effectiveLog.insert(AttentionEntry(time: 0, state: initialState), at: 0)
+        }
+
+        var attentiveTime: Double = 0
+        for (index, entry) in effectiveLog.enumerated() {
+            let endTime: Double
+            if index + 1 < effectiveLog.count {
+                endTime = effectiveLog[index + 1].time
+            } else {
+                endTime = totalElapsed
+            }
+            if entry.isAttentive {
+                attentiveTime += endTime - entry.time
+            }
+        }
+
+        let attentivePercent = Int(round((attentiveTime / totalElapsed) * 100))
+        return AttentionSummary(
+            attentivePercent: attentivePercent,
+            awayPercent: max(0, 100 - attentivePercent)
+        )
+    }
 }

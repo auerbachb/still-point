@@ -1,5 +1,6 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct SettingsView: View {
     let appVM: AppViewModel
@@ -17,6 +18,8 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var deleteAccountError = ""
     @State private var showDeleteAccountError = false
+    @State private var showAttentionUnsupportedAlert = false
+    @State private var showAttentionPermissionDeniedAlert = false
 
     private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isSavingUsername }
 
@@ -128,6 +131,21 @@ struct SettingsView: View {
                         isUpdatingAttentionTracking = true
                         Task {
                             defer { isUpdatingAttentionTracking = false }
+                            if newValue {
+                                let capability = await AttentionTrackingCapability.requestCameraAccessIfNeeded()
+                                switch capability {
+                                case .unsupported:
+                                    attentionTrackingEnabled = false
+                                    showAttentionUnsupportedAlert = true
+                                    return
+                                case .permissionDenied:
+                                    attentionTrackingEnabled = false
+                                    showAttentionPermissionDeniedAlert = true
+                                    return
+                                default:
+                                    break
+                                }
+                            }
                             do {
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
                                 appVM.applySettingsUser(updated)
@@ -313,6 +331,21 @@ struct SettingsView: View {
         .onChange(of: appVM.currentUser?.attentionTrackingEnabled) { _, _ in
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
+        }
+        .alert("Gaze tracking unavailable", isPresented: $showAttentionUnsupportedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This device does not support TrueDepth face tracking. Gaze attention tracking requires an iPhone or iPad with a front-facing TrueDepth camera.")
+        }
+        .alert("Camera access required", isPresented: $showAttentionPermissionDeniedAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Gaze attention tracking needs front camera access. Allow camera access in Settings to enable this feature.")
         }
     }
 
