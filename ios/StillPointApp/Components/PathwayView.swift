@@ -13,22 +13,19 @@ struct PathwayView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: SPSpacing.s4) {
-                Text("Pathway")
-                    .font(SPFont.mono(12, weight: .regular))
-                    .foregroundStyle(Color(SPColor.fg3))
-                    .tracking(2.4)
-                    .textCase(.uppercase)
-                    .frame(maxWidth: .infinity)
+        VStack(spacing: SPSpacing.s4) {
+            Text("Pathway")
+                .font(SPFont.mono(12, weight: .regular))
+                .foregroundStyle(Color(SPColor.fg3))
+                .tracking(2.4)
+                .textCase(.uppercase)
+                .frame(maxWidth: .infinity)
 
-                ForEach(levels, id: \.level) { level in
-                    levelSection(level)
-                }
+            ForEach(levels, id: \.level) { level in
+                levelSection(level)
             }
         }
         .frame(maxWidth: 420)
-        .frame(maxHeight: 240)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Lesson pathway")
         .accessibilityIdentifier("home.pathway")
