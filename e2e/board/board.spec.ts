@@ -20,7 +20,7 @@ test.describe("public board @critical", () => {
 
     const youMarker = page.getByText("(you)");
     await expect(youMarker).toBeVisible();
-    await expect(page.getByText(mockApiState.user.username)).toBeVisible();
+    await expect(page.getByText(new RegExp(`${mockApiState.user.username}\\s*\\(you\\)`))).toBeVisible();
     await expectVisibleInViewport(page, youMarker, "board current-user marker");
     await expectNoHorizontalOverflow(page);
   });

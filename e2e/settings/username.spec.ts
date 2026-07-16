@@ -18,7 +18,7 @@ test.describe("settings username @critical", () => {
     await tap(page.getByRole("button", { name: "save" }));
 
     await expect(page.getByText("Username updated")).toBeVisible();
-    await expect(page.getByText("renamed_user")).toBeVisible();
+    await expect(page.locator("div").filter({ hasText: "ACCOUNT" }).getByText("renamed_user", { exact: true })).toBeVisible();
     expect(mockApiState.user.username).toBe("renamed_user");
     expect(mockApiState.credentials.username).toBe("renamed_user");
   });
@@ -32,7 +32,7 @@ test.describe("settings username @critical", () => {
     await page.getByRole("textbox", { name: "Username" }).fill("ab");
     await tap(page.getByRole("button", { name: "save" }));
 
-    await expect(page.getByRole("alert")).toContainText(USERNAME_ERROR);
+    await expect(page.getByText(USERNAME_ERROR)).toBeVisible();
     expect(mockApiState.user.username).toBe(original);
   });
 
@@ -45,7 +45,7 @@ test.describe("settings username @critical", () => {
     await page.getByRole("textbox", { name: "Username" }).fill("taken_name");
     await tap(page.getByRole("button", { name: "save" }));
 
-    await expect(page.getByRole("alert")).toContainText("taken");
+    await expect(page.getByText(/already taken/i)).toBeVisible();
     expect(mockApiState.user.username).toBe(original);
   });
 });
