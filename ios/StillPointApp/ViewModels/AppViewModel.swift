@@ -517,6 +517,7 @@ final class AppViewModel {
         }
         await refreshTracksDoneToday()
         await consumePendingBuddyInviteIfNeeded()
+        await consumePendingLogReasonIfNeeded()
     }
 
     private func consumePendingBuddyInviteIfNeeded() async {
