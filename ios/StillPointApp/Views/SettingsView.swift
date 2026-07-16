@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var notificationPrefs = NotificationPreferencesViewModel()
     @State private var isPublic: Bool = false
     @State private var aphorismsEnabled: Bool = false
+    @State private var sessionIntroEnabled: Bool = true
     @State private var attentionTrackingEnabled: Bool = false
     @State private var isUpdating = false
     @State private var isUpdatingAphorisms = false
@@ -91,6 +92,22 @@ struct SettingsView: View {
                     }
                     .tint(SPColor.green)
                     .accessibilityIdentifier("settings.keepScreenAwakeDuringSessionToggle")
+
+                    Toggle(isOn: $sessionIntroEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Session intro overlay")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Show a brief intro before each session countdown begins")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .accessibilityIdentifier("settings.sessionIntroToggle")
+                    .onChange(of: sessionIntroEnabled) { _, newValue in
+                        SessionIntroPrefs.setIntroOverlayHidden(!newValue)
+                    }
 
                     Toggle(isOn: $attentionTrackingEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -331,6 +348,7 @@ struct SettingsView: View {
     private func syncFromCurrentUser() {
         isPublic = appVM.currentUser?.isPublic ?? false
         aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
+        sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
         attentionTrackingEnabled = appVM.currentUser?.attentionTrackingEnabled ?? false
     }
 

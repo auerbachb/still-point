@@ -4,13 +4,16 @@ import UIKit
 
 struct SessionView: View {
     /// Space reserved when tracking info, secondary controls, and thumb-reach holds are visible.
-    private static let bottomOverlayReserveWithControls: CGFloat = 348
+    private static let bottomOverlayReserveWithControls: CGFloat = 300
     /// Minimum vertical hit target for hold-to-track controls (Apple HIG ~44pt+).
     private static let thumbReachHoldMinHeight: CGFloat = 56
+    /// Minimum tap target for sound toggles (Apple HIG 44pt).
+    private static let soundToggleMinSize: CGFloat = 44
 
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
     @State private var showSaveError = false
+    @State private var showCaptureHelper = false
     @State private var attentionManager = AttentionTrackingManager()
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
@@ -69,8 +72,17 @@ struct SessionView: View {
                             .tracking(2)
                     }
                     .frame(height: contentHeight)
-                    .padding(.top, SPSpacing.s2)
+                    .padding(.top, SPSpacing.s1)
                 }
+            }
+
+            // Pre-session intro gates the countdown (#560).
+            if vm.showIntroOverlay {
+                SessionIntroOverlayView(
+                    onBegin: { vm.dismissIntroOverlay(dontShowAgain: false) },
+                    onDontShowAgain: { vm.dismissIntroOverlay(dontShowAgain: true) }
+                )
+                .transition(.opacity)
             }
 
             // Bottom chrome: secondary controls above; primary hold targets pinned to thumb-reach zone.
@@ -115,7 +127,11 @@ struct SessionView: View {
             vm.userInteracted()
         }
         .onAppear {
-            vm.start()
+            let skipIntro = ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1"
+            vm.prepareSession(
+                introHiddenPermanently: SessionIntroPrefs.isIntroOverlayHidden,
+                skipIntroForUITest: skipIntro
+            )
             if appVM.currentUser?.attentionTrackingEnabled == true {
                 attentionManager.start { vm.elapsed }
             }
@@ -275,7 +291,7 @@ struct SessionView: View {
         vm.isActive && !vm.controlsVisible
     }
 
-    /// Status + hints above the thumb zone; hold controls live in `thumbReachHoldControls`.
+    /// Status + capture action above the thumb zone; hold controls live in `thumbReachHoldControls`.
     private var sessionTrackingInfoBar: some View {
         VStack(spacing: SPSpacing.s2) {
             HStack(spacing: SPSpacing.s2) {
@@ -318,42 +334,46 @@ struct SessionView: View {
             }
             .padding(.horizontal, SPSpacing.s3)
 
-            if appVM.appBlockingManager.hasSelection {
-                Text("Complete the timer to open your selected app gate. Ending early keeps those apps held.")
-                    .font(SPFont.mono(10))
-                    .foregroundStyle(Color(SPColor.fg4))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, SPSpacing.s4)
-            }
-
-            Text("Hold a button, or hold Space (light distraction) or Comma (hyperfocus) on an external keyboard.")
-                .font(SPFont.mono(10))
-                .foregroundStyle(Color(SPColor.fg4))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, SPSpacing.s4)
-
-            Text("Light distraction holds only log segments. Use explicit capture paths to save notes.")
-                .font(SPFont.mono(10))
-                .foregroundStyle(Color(SPColor.fg4))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, SPSpacing.s4)
-
             if !vm.showPostDistractionCapture, vm.isActive || vm.isPaused {
-                Button {
-                    vm.openThoughtCapture()
-                } label: {
-                    Text("Capture")
-                        .font(SPFont.mono(12, weight: .medium))
-                        .spCapsuleButtonStyle(.amber, size: .compact, minHeight: 44)
+                HStack(spacing: SPSpacing.s1) {
+                    Button {
+                        vm.openThoughtCapture()
+                    } label: {
+                        Text("Capture intrusive thought")
+                            .font(SPFont.mono(12, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .spCapsuleButtonStyle(.amber, size: .fullWidth, minHeight: 44)
+                    }
+                    .accessibilityIdentifier("session.captureButton")
+
+                    Button {
+                        showCaptureHelper = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color(SPColor.fg4))
+                            .frame(width: Self.soundToggleMinSize, height: Self.soundToggleMinSize)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Capture intrusive thought help")
+                    .accessibilityIdentifier("session.captureHelperButton")
+                    .popover(isPresented: $showCaptureHelper, arrowEdge: .bottom) {
+                        Text("Tap to save a note about what you were thinking. Hold buttons only log awareness segments — they do not save notes.")
+                            .font(SPFont.serif(14, weight: .light))
+                            .foregroundStyle(Color(SPColor.fg2))
+                            .padding(SPSpacing.s3)
+                            .frame(maxWidth: 280)
+                            .presentationCompactAdaptation(.popover)
+                    }
                 }
-                .accessibilityIdentifier("session.captureButton")
                 .opacity(vm.isActive && !vm.controlsVisible ? 0.48 : 0.88)
                 .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
-                .padding(.top, SPSpacing.s1)
+                .padding(.horizontal, SPSpacing.s3)
             }
         }
-        .padding(.top, SPSpacing.s3)
-        .padding(.bottom, SPSpacing.s2)
+        .padding(.top, SPSpacing.s2)
+        .padding(.bottom, SPSpacing.s1)
         .background(
             SPColor.bg.opacity(0.92)
                 .background(.ultraThinMaterial)
@@ -366,7 +386,8 @@ struct SessionView: View {
             Text("\(vm.mindState == "thinking" ? "Release" : "Hold") — light distraction")
                 .font(SPFont.serifItalic(15))
                 .foregroundStyle(Color(SPColor.fg))
-                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .spCapsuleButtonStyle(
                     vm.mindState == "thinking" ? .amber : .green,
                     size: .fullWidth,
@@ -392,7 +413,8 @@ struct SessionView: View {
             Text("\(vm.mindState == "hyperfocus" ? "Release" : "Hold") — hyperfocus")
                 .font(SPFont.serifItalic(15))
                 .foregroundStyle(Color(SPColor.fg))
-                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .padding(.horizontal, SPSpacing.s3)
                 .frame(maxWidth: .infinity, minHeight: Self.thumbReachHoldMinHeight)
                 .background(
@@ -449,6 +471,8 @@ struct SessionView: View {
                 } label: {
                     Text(vm.isPaused ? "Resume" : "Pause")
                         .font(SPFont.mono(12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.pauseResumeButton")
@@ -459,6 +483,8 @@ struct SessionView: View {
                 } label: {
                     Text("End Early")
                         .font(SPFont.mono(12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.endEarlyButton")
@@ -467,8 +493,10 @@ struct SessionView: View {
                     Button {
                         vm.openThoughtCapture()
                     } label: {
-                        Text("Capture")
+                        Text("Capture intrusive thought")
                             .font(SPFont.mono(12, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .spCapsuleButtonStyle(.amber, size: .compact)
                     }
                     .accessibilityIdentifier("session.captureButton")
@@ -481,6 +509,8 @@ struct SessionView: View {
                 } label: {
                     Text("+1 min")
                         .font(SPFont.mono(12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
                 }
@@ -493,6 +523,8 @@ struct SessionView: View {
                 } label: {
                     Text("+5 min")
                         .font(SPFont.mono(12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
                 }
@@ -507,6 +539,8 @@ struct SessionView: View {
                 } label: {
                     Text("Abandon")
                         .font(SPFont.mono(12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .spCapsuleButtonStyle(.danger, size: .compact)
                 }
                 .accessibilityIdentifier("session.abandonButton")
@@ -538,12 +572,16 @@ struct SessionView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                 Text(label)
-                    .font(SPFont.mono(10))
+                    .font(SPFont.mono(11))
+                    .lineLimit(1)
             }
             .foregroundStyle(isOn ? Color(SPColor.fg3) : Color(SPColor.fg4))
+            .frame(minWidth: Self.soundToggleMinSize, minHeight: Self.soundToggleMinSize)
+            .contentShape(Rectangle())
         }
+        .accessibilityIdentifier("session.soundToggle.\(label)")
     }
 
     // MARK: - Completion Handler
