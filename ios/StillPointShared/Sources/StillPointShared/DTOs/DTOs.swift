@@ -544,6 +544,39 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         self.tz = tz
         self.updatedAt = updatedAt
     }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pushEnabled = try c.decode(Bool.self, forKey: .pushEnabled)
+        dailyReminderEnabled = try c.decode(Bool.self, forKey: .dailyReminderEnabled)
+        missADayEnabled = try c.decode(Bool.self, forKey: .missADayEnabled)
+        friendRequestNotificationsEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .friendRequestNotificationsEnabled) ?? true
+        failureReasonReminderEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .failureReasonReminderEnabled) ?? false
+        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession) ?? false
+        dailyReminderTime = try c.decode(String.self, forKey: .dailyReminderTime)
+        dailyReminderFrequency = try c.decode(DailyReminderFrequency.self, forKey: .dailyReminderFrequency)
+        quietHoursStart = try c.decodeIfPresent(String.self, forKey: .quietHoursStart)
+        quietHoursEnd = try c.decodeIfPresent(String.self, forKey: .quietHoursEnd)
+        tz = try c.decode(String.self, forKey: .tz)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pushEnabled
+        case dailyReminderEnabled
+        case missADayEnabled
+        case friendRequestNotificationsEnabled
+        case failureReasonReminderEnabled
+        case suppressDuringSession
+        case dailyReminderTime
+        case dailyReminderFrequency
+        case quietHoursStart
+        case quietHoursEnd
+        case tz
+        case updatedAt
+    }
 }
 
 public struct NotificationPreferencesResponse: Codable, Sendable {
