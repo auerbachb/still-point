@@ -134,11 +134,11 @@ describe("buildPathway", () => {
         expect(currents[0]!.day).toBe(testCase.expectedCurrentNodeDay);
       }
 
-      if (testCase.expectedAllNodesCompleted) {
+      if (testCase.expectedAllNodesCompleted === true) {
         expect(levels.flatMap((l) => l.nodes).every((n) => n.state === "completed")).toBe(true);
       }
 
-      if (testCase.expectedAllLevelsCompleted) {
+      if (testCase.expectedAllLevelsCompleted === true) {
         expect(levels.every((l) => l.state === "completed")).toBe(true);
       }
 

@@ -53,7 +53,7 @@ final class PathwayTests: XCTestCase {
             .flatMap(\.nodes)
             .filter { $0.state == .current }
         XCTAssertEqual(currents.count, 1)
-        XCTAssertEqual(currents[0].day, 27)
+        XCTAssertEqual(currents.map(\.day), [27])
     }
 
     func testCurrentDayBeyondProgramCompletesEveryNode() {
@@ -134,6 +134,10 @@ final class PathwayTests: XCTestCase {
             }
 
             for expectedLevel in testCase.expectedLevels ?? [] {
+                guard expectedLevel.level >= 1, expectedLevel.level <= levels.count else {
+                    XCTFail("\(testCase.name): level \(expectedLevel.level) out of range")
+                    continue
+                }
                 let level = levels[expectedLevel.level - 1]
                 XCTAssertEqual(level.name, expectedLevel.name, testCase.name)
                 XCTAssertEqual(level.state.rawValue, expectedLevel.state, testCase.name)

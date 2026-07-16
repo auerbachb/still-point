@@ -78,7 +78,10 @@ struct HomeView: View {
                 }
 
                 // L1–L5 lesson pathway (#525) — primary track day drives unlock state.
-                PathwayView(currentDay: appVM.currentDay)
+                // Suppressed during UI tests (extra vertical content can push Begin off-screen).
+                if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
+                    PathwayView(currentDay: appVM.currentDay)
+                }
 
                 aphorismSection
 
