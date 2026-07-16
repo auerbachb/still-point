@@ -506,6 +506,8 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
     public let dailyReminderEnabled: Bool
     public let missADayEnabled: Bool
     public let friendRequestNotificationsEnabled: Bool
+    /// Opt-in (#441): fixed 8 PM local nudge to log why the user could not meditate.
+    public let failureReasonReminderEnabled: Bool
     /// Opt-in (#431): suppress push presentation while a sit is in progress.
     public let suppressDuringSession: Bool
     public let dailyReminderTime: String
@@ -520,6 +522,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         dailyReminderEnabled: Bool,
         missADayEnabled: Bool,
         friendRequestNotificationsEnabled: Bool = true,
+        failureReasonReminderEnabled: Bool = false,
         suppressDuringSession: Bool = false,
         dailyReminderTime: String,
         dailyReminderFrequency: DailyReminderFrequency,
@@ -532,6 +535,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         self.dailyReminderEnabled = dailyReminderEnabled
         self.missADayEnabled = missADayEnabled
         self.friendRequestNotificationsEnabled = friendRequestNotificationsEnabled
+        self.failureReasonReminderEnabled = failureReasonReminderEnabled
         self.suppressDuringSession = suppressDuringSession
         self.dailyReminderTime = dailyReminderTime
         self.dailyReminderFrequency = dailyReminderFrequency
@@ -539,6 +543,39 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         self.quietHoursEnd = quietHoursEnd
         self.tz = tz
         self.updatedAt = updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pushEnabled = try c.decode(Bool.self, forKey: .pushEnabled)
+        dailyReminderEnabled = try c.decode(Bool.self, forKey: .dailyReminderEnabled)
+        missADayEnabled = try c.decode(Bool.self, forKey: .missADayEnabled)
+        friendRequestNotificationsEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .friendRequestNotificationsEnabled) ?? true
+        failureReasonReminderEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .failureReasonReminderEnabled) ?? false
+        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession) ?? false
+        dailyReminderTime = try c.decode(String.self, forKey: .dailyReminderTime)
+        dailyReminderFrequency = try c.decode(DailyReminderFrequency.self, forKey: .dailyReminderFrequency)
+        quietHoursStart = try c.decodeIfPresent(String.self, forKey: .quietHoursStart)
+        quietHoursEnd = try c.decodeIfPresent(String.self, forKey: .quietHoursEnd)
+        tz = try c.decode(String.self, forKey: .tz)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pushEnabled
+        case dailyReminderEnabled
+        case missADayEnabled
+        case friendRequestNotificationsEnabled
+        case failureReasonReminderEnabled
+        case suppressDuringSession
+        case dailyReminderTime
+        case dailyReminderFrequency
+        case quietHoursStart
+        case quietHoursEnd
+        case tz
+        case updatedAt
     }
 }
 
@@ -551,6 +588,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
     public var dailyReminderEnabled: Bool?
     public var missADayEnabled: Bool?
     public var friendRequestNotificationsEnabled: Bool?
+    public var failureReasonReminderEnabled: Bool?
     public var suppressDuringSession: Bool?
     public var dailyReminderTime: String?
     public var dailyReminderFrequency: DailyReminderFrequency?
@@ -563,6 +601,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         dailyReminderEnabled: Bool? = nil,
         missADayEnabled: Bool? = nil,
         friendRequestNotificationsEnabled: Bool? = nil,
+        failureReasonReminderEnabled: Bool? = nil,
         suppressDuringSession: Bool? = nil,
         dailyReminderTime: String? = nil,
         dailyReminderFrequency: DailyReminderFrequency? = nil,
@@ -574,6 +613,7 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         self.dailyReminderEnabled = dailyReminderEnabled
         self.missADayEnabled = missADayEnabled
         self.friendRequestNotificationsEnabled = friendRequestNotificationsEnabled
+        self.failureReasonReminderEnabled = failureReasonReminderEnabled
         self.suppressDuringSession = suppressDuringSession
         self.dailyReminderTime = dailyReminderTime
         self.dailyReminderFrequency = dailyReminderFrequency
@@ -589,6 +629,9 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         if let missADayEnabled { try c.encode(missADayEnabled, forKey: .missADayEnabled) }
         if let friendRequestNotificationsEnabled {
             try c.encode(friendRequestNotificationsEnabled, forKey: .friendRequestNotificationsEnabled)
+        }
+        if let failureReasonReminderEnabled {
+            try c.encode(failureReasonReminderEnabled, forKey: .failureReasonReminderEnabled)
         }
         if let suppressDuringSession { try c.encode(suppressDuringSession, forKey: .suppressDuringSession) }
         if let dailyReminderTime { try c.encode(dailyReminderTime, forKey: .dailyReminderTime) }
@@ -613,11 +656,62 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         case dailyReminderEnabled
         case missADayEnabled
         case friendRequestNotificationsEnabled
+        case failureReasonReminderEnabled
         case suppressDuringSession
         case dailyReminderTime
         case dailyReminderFrequency
         case quietHoursStart
         case quietHoursEnd
         case tz
+    }
+}
+
+public struct FailureReasonDTO: Codable, Sendable, Equatable {
+    public let id: String
+    public let reasonDate: String
+    public let text: String
+    public let createdAt: String
+    public let updatedAt: String
+
+    public init(
+        id: String,
+        reasonDate: String,
+        text: String,
+        createdAt: String,
+        updatedAt: String
+    ) {
+        self.id = id
+        self.reasonDate = reasonDate
+        self.text = text
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct FailureReasonLookupDTO: Codable, Sendable, Equatable {
+    public let exists: Bool
+    public let failureReason: FailureReasonDTO?
+
+    public init(exists: Bool, failureReason: FailureReasonDTO?) {
+        self.exists = exists
+        self.failureReason = failureReason
+    }
+}
+
+public struct FailureReasonResponse: Codable, Sendable {
+    public let failureReason: FailureReasonDTO
+
+    public init(failureReason: FailureReasonDTO) {
+        self.failureReason = failureReason
+    }
+}
+
+public struct SubmitFailureReasonRequest: Encodable, Sendable {
+    public let reasonDate: String
+    public let text: String
+
+    public init(reasonDate: String, text: String) {
+        self.reasonDate = reasonDate
+        self.text = text
     }
 }

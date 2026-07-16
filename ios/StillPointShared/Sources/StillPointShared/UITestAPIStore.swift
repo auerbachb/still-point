@@ -18,6 +18,8 @@ actor UITestAPIStore {
     private var notificationPreferences: NotificationPreferencesDTO
     private let defaultsKey: String
 
+    private static let maxFailureReasonLength = 1000
+
     /// Whether launch requested a full reset. `APIClient` reads this
     /// synchronously during init so it can also clear the session artifacts it
     /// owns (auth token, cookies, URL credentials).
@@ -33,6 +35,7 @@ actor UITestAPIStore {
             dailyReminderEnabled: false,
             missADayEnabled: false,
             friendRequestNotificationsEnabled: true,
+            failureReasonReminderEnabled: false,
             suppressDuringSession: false,
             dailyReminderTime: "09:00",
             dailyReminderFrequency: .daily,
@@ -147,6 +150,7 @@ actor UITestAPIStore {
         store.isAuthenticated = false
         store.sessions = []
         store.thoughts = []
+        store.failureReasons = [:]
         persist()
         return true
     }
@@ -436,6 +440,7 @@ actor UITestAPIStore {
             dailyReminderEnabled: patch.dailyReminderEnabled ?? current.dailyReminderEnabled,
             missADayEnabled: patch.missADayEnabled ?? current.missADayEnabled,
             friendRequestNotificationsEnabled: patch.friendRequestNotificationsEnabled ?? current.friendRequestNotificationsEnabled,
+            failureReasonReminderEnabled: patch.failureReasonReminderEnabled ?? current.failureReasonReminderEnabled,
             suppressDuringSession: patch.suppressDuringSession ?? current.suppressDuringSession,
             dailyReminderTime: patch.dailyReminderTime ?? current.dailyReminderTime,
             dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
@@ -447,6 +452,67 @@ actor UITestAPIStore {
 
         notificationPreferences = next
         return next
+    }
+
+    // MARK: - Failure reasons
+
+    func getFailureReason(date: String) throws -> FailureReasonLookupDTO {
+        try ensureAuthenticated()
+        guard SessionCalendar.isValidSessionCalendarDate(date) else {
+            throw APIError(status: 400, message: "date must be YYYY-MM-DD", code: "VALIDATION_ERROR")
+        }
+        if let row = store.failureReasons[date] {
+            return FailureReasonLookupDTO(exists: true, failureReason: row)
+        }
+        return FailureReasonLookupDTO(exists: false, failureReason: nil)
+    }
+
+    func submitFailureReason(_ request: SubmitFailureReasonRequest) throws -> FailureReasonDTO {
+        try ensureAuthenticated()
+        guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
+            throw APIError(status: 400, message: "reasonDate must be YYYY-MM-DD", code: "VALIDATION_ERROR")
+        }
+        let maxAllowedDate = WidgetDataStore.localDayString(Date())
+        guard request.reasonDate <= maxAllowedDate else {
+            throw APIError(status: 400, message: "reasonDate cannot be in the future", code: "VALIDATION_ERROR")
+        }
+
+        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw APIError(status: 400, message: "text must not be empty", code: "VALIDATION_ERROR")
+        }
+        guard trimmed.count <= Self.maxFailureReasonLength else {
+            throw APIError(
+                status: 400,
+                message: "text must be at most \(Self.maxFailureReasonLength) characters",
+                code: "VALIDATION_ERROR"
+            )
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        if let existing = store.failureReasons[request.reasonDate] {
+            let updated = FailureReasonDTO(
+                id: existing.id,
+                reasonDate: existing.reasonDate,
+                text: trimmed,
+                createdAt: existing.createdAt,
+                updatedAt: now
+            )
+            store.failureReasons[request.reasonDate] = updated
+            persist()
+            return updated
+        }
+
+        let created = FailureReasonDTO(
+            id: "ui-failure-reason-\(store.failureReasons.count + 1)",
+            reasonDate: request.reasonDate,
+            text: trimmed,
+            createdAt: now,
+            updatedAt: now
+        )
+        store.failureReasons[request.reasonDate] = created
+        persist()
+        return created
     }
 
     // MARK: - Helpers
@@ -464,6 +530,13 @@ actor UITestAPIStore {
     private static func persist(store: UITestStore, key: String) {
         guard let encoded = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(encoded, forKey: key)
+    }
+
+    private static func utcTodayIsoDate() -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let components = calendar.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02d", components.year!, components.month!, components.day!)
     }
 }
 
@@ -508,8 +581,45 @@ private struct UITestStore: Codable, Sendable {
     var isAuthenticated: Bool
     var sessions: [SessionDTO]
     var thoughts: [ThoughtDTO]
+    var failureReasons: [String: FailureReasonDTO]
     var nextSessionOrdinal: Int
     var nextThoughtOrdinal: Int
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decode(UserDTO.self, forKey: .user)
+        loginEmail = try container.decode(String.self, forKey: .loginEmail)
+        loginPassword = try container.decode(String.self, forKey: .loginPassword)
+        isAuthenticated = try container.decode(Bool.self, forKey: .isAuthenticated)
+        sessions = try container.decode([SessionDTO].self, forKey: .sessions)
+        thoughts = try container.decode([ThoughtDTO].self, forKey: .thoughts)
+        failureReasons =
+            try container.decodeIfPresent([String: FailureReasonDTO].self, forKey: .failureReasons) ?? [:]
+        nextSessionOrdinal = try container.decode(Int.self, forKey: .nextSessionOrdinal)
+        nextThoughtOrdinal = try container.decode(Int.self, forKey: .nextThoughtOrdinal)
+    }
+
+    init(
+        user: UserDTO,
+        loginEmail: String,
+        loginPassword: String,
+        isAuthenticated: Bool,
+        sessions: [SessionDTO],
+        thoughts: [ThoughtDTO],
+        failureReasons: [String: FailureReasonDTO],
+        nextSessionOrdinal: Int,
+        nextThoughtOrdinal: Int
+    ) {
+        self.user = user
+        self.loginEmail = loginEmail
+        self.loginPassword = loginPassword
+        self.isAuthenticated = isAuthenticated
+        self.sessions = sessions
+        self.thoughts = thoughts
+        self.failureReasons = failureReasons
+        self.nextSessionOrdinal = nextSessionOrdinal
+        self.nextThoughtOrdinal = nextThoughtOrdinal
+    }
 
     static func makeDefault(seedAuthenticated: Bool) -> UITestStore {
         let fixtureUser = UserDTO(
@@ -526,6 +636,7 @@ private struct UITestStore: Codable, Sendable {
             isAuthenticated: seedAuthenticated,
             sessions: [],
             thoughts: [],
+            failureReasons: [:],
             nextSessionOrdinal: 1,
             nextThoughtOrdinal: 1
         )
@@ -667,6 +778,7 @@ private struct UITestStore: Codable, Sendable {
             isAuthenticated: seedAuthenticated,
             sessions: sessions,
             thoughts: thoughts,
+            failureReasons: [:],
             nextSessionOrdinal: 100,
             nextThoughtOrdinal: 100
         )
