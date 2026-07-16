@@ -131,24 +131,51 @@ export async function handleAppleNotificationEvent(
 
 /** Append the audit row for a verified notification BEFORE it is handled, with
  *  `action_taken = "received"`. Two-phase logging means a crash mid-handling can
- *  never lose the receipt — the row is finalized with the real action afterwards. */
+ *  never lose the receipt — the row is finalized with the real action afterwards.
+ *  Duplicate deliveries sharing a `jti` return `alreadySeen: true` (#532). */
+export type AppleNotificationReceiptResult = {
+  logId: string;
+  alreadySeen: boolean;
+};
+
 export async function recordAppleNotificationReceipt(params: {
   eventType: string;
   subject: string;
   eventTime: number | undefined;
   jti: string | undefined;
-}): Promise<string> {
-  const [row] = await db
-    .insert(appleNotificationLog)
-    .values({
-      eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
-      subject: params.subject.slice(0, SUBJECT_MAX),
-      eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
-      jti: params.jti !== undefined ? params.jti.slice(0, JTI_MAX) : null,
-      actionTaken: "received",
-    })
-    .returning({ id: appleNotificationLog.id });
-  return row.id;
+}): Promise<AppleNotificationReceiptResult> {
+  const jti = params.jti !== undefined ? params.jti.slice(0, JTI_MAX) : null;
+  const values = {
+    eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
+    subject: params.subject.slice(0, SUBJECT_MAX),
+    eventTime: params.eventTime !== undefined ? new Date(params.eventTime) : null,
+    jti,
+    actionTaken: "received",
+  };
+
+  const insertQuery = db.insert(appleNotificationLog).values(values);
+  const inserted = await (jti !== null
+    ? insertQuery.onConflictDoNothing({ target: appleNotificationLog.jti })
+    : insertQuery
+  ).returning({ id: appleNotificationLog.id });
+
+  if (inserted.length > 0) {
+    return { logId: inserted[0].id, alreadySeen: false };
+  }
+
+  if (jti !== null) {
+    const [existing] = await db
+      .select({ id: appleNotificationLog.id })
+      .from(appleNotificationLog)
+      .where(eq(appleNotificationLog.jti, jti))
+      .limit(1);
+    if (!existing) {
+      throw new Error("apple_notification_log jti conflict but no existing row");
+    }
+    return { logId: existing.id, alreadySeen: true };
+  }
+
+  throw new Error("apple_notification_log insert returned no rows");
 }
 
 /** Finalize the receipt row with the handler outcome (or `processing_failed`). */

@@ -191,7 +191,8 @@ export const accountDeletionLog = pgTable("account_deletion_log", {
 }));
 
 /** #338: Audit log for Sign in with Apple server-to-server notifications.
- *  One row per verified notification received, including repeat deliveries.
+ *  One row per verified notification; duplicate deliveries sharing a `jti` are
+ *  deduplicated (#532) rather than re-logged or re-processed.
  *  `user_id` has no FK so rows survive account deletion (same as account_deletion_log). */
 export const appleNotificationLog = pgTable("apple_notification_log", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -212,6 +213,9 @@ export const appleNotificationLog = pgTable("apple_notification_log", {
 }, (table) => ({
   subjectIdx: index("idx_apple_notification_log_subject").on(table.subject),
   userIdx: index("idx_apple_notification_log_user").on(table.userId),
+  jtiUnique: uniqueIndex("apple_notification_log_jti_unique")
+    .on(table.jti)
+    .where(sql`"jti" IS NOT NULL`),
 }));
 
 /** OAuth provider identities linked to a user (#136).

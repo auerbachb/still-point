@@ -8,10 +8,11 @@ const {
   updateWhere,
   updateReturning,
   insertValues,
+  insertOnConflict,
   insertReturning,
   deleteUserAccount,
 } = vi.hoisted(() => ({
-  /** select().from().where().limit() — oauth_accounts link lookup */
+  /** select().from().where().limit() — oauth_accounts link lookup and jti replay lookup */
   linkLimit: vi.fn(),
   /** select().from().where().orderBy().limit() — audit-log fallback lookup */
   fallbackLimit: vi.fn(),
@@ -20,6 +21,7 @@ const {
   updateWhere: vi.fn(),
   updateReturning: vi.fn(),
   insertValues: vi.fn(),
+  insertOnConflict: vi.fn(),
   insertReturning: vi.fn(),
   deleteUserAccount: vi.fn(),
 }));
@@ -50,7 +52,13 @@ vi.mock("@/db", () => ({
     insert: () => ({
       values: (values: unknown) => {
         insertValues(values);
-        return { returning: insertReturning };
+        return {
+          onConflictDoNothing: (...args: unknown[]) => {
+            insertOnConflict(...args);
+            return { returning: insertReturning };
+          },
+          returning: insertReturning,
+        };
       },
     }),
   },
@@ -207,15 +215,15 @@ describe("handleAppleNotificationEvent", () => {
 });
 
 describe("recordAppleNotificationReceipt", () => {
-  test("inserts a received row and returns its id", async () => {
-    const id = await recordAppleNotificationReceipt({
+  test("inserts a received row and returns alreadySeen false", async () => {
+    const result = await recordAppleNotificationReceipt({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
       eventTime: 1_718_000_000_000,
       jti: "jti-abc",
     });
 
-    expect(id).toBe("log-uuid-1");
+    expect(result).toEqual({ logId: "log-uuid-1", alreadySeen: false });
     expect(insertValues).toHaveBeenCalledWith({
       eventType: "consent-revoked",
       subject: "apple-sub-1",
@@ -223,19 +231,37 @@ describe("recordAppleNotificationReceipt", () => {
       jti: "jti-abc",
       actionTaken: "received",
     });
+    expect(insertOnConflict).toHaveBeenCalled();
+  });
+
+  test("returns alreadySeen true when the jti insert conflicts", async () => {
+    insertReturning.mockResolvedValueOnce([]);
+    linkLimit.mockResolvedValueOnce([{ id: "existing-log-id" }]);
+
+    const result = await recordAppleNotificationReceipt({
+      eventType: "consent-revoked",
+      subject: "apple-sub-1",
+      eventTime: 1_718_000_000_000,
+      jti: "jti-replay",
+    });
+
+    expect(result).toEqual({ logId: "existing-log-id", alreadySeen: true });
+    expect(linkLimit).toHaveBeenCalled();
   });
 
   test("tolerates missing event_time and jti", async () => {
-    await recordAppleNotificationReceipt({
+    const result = await recordAppleNotificationReceipt({
       eventType: "email-enabled",
       subject: "apple-sub-1",
       eventTime: undefined,
       jti: undefined,
     });
 
+    expect(result).toEqual({ logId: "log-uuid-1", alreadySeen: false });
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({ eventTime: null, jti: null }),
     );
+    expect(insertOnConflict).not.toHaveBeenCalled();
   });
 
   test("truncates an oversized external event type instead of failing the insert", async () => {

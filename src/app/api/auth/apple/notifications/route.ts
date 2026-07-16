@@ -43,9 +43,9 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
 
   // Receipt first: the audit row exists before any side effect runs, so a
   // mid-handling crash can never lose the record of a received notification.
-  let logId: string;
+  let receipt: Awaited<ReturnType<typeof recordAppleNotificationReceipt>>;
   try {
-    logId = await recordAppleNotificationReceipt({
+    receipt = await recordAppleNotificationReceipt({
       eventType: event.type,
       subject: event.sub,
       eventTime: event.event_time,
@@ -57,16 +57,23 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
+  if (receipt.alreadySeen) {
+    console.info(
+      `apple notifications: duplicate jti replay suppressed (logId=${receipt.logId})`,
+    );
+    return NextResponse.json({ received: true });
+  }
+
   try {
     const result = await handleAppleNotificationEvent(event);
-    await finalizeAppleNotificationLog(logId, result);
+    await finalizeAppleNotificationLog(receipt.logId, result);
     return NextResponse.json({ received: true });
   } catch (error) {
     // Apple does not document retry semantics for these notifications, so the
     // 500 may be final — log loudly for manual follow-up. If Apple (or an
     // operator) redelivers, the idempotent handlers make that safe.
     console.error("apple notifications: processing failed:", error);
-    await finalizeAppleNotificationLog(logId, {
+    await finalizeAppleNotificationLog(receipt.logId, {
       actionTaken: "processing_failed",
       userId: null,
     }).catch((finalizeError) => {
