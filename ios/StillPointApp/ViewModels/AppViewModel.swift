@@ -458,8 +458,8 @@ final class AppViewModel {
 
     private func consumePendingSessionDeepLinkIfNeeded() async {
         guard currentUser != nil, let sessionType = pendingSessionDeepLink else { return }
-        pendingSessionDeepLink = nil
         guard !isInSession else { return }
+        pendingSessionDeepLink = nil
         beginSession(type: sessionType)
     }
 
@@ -474,8 +474,8 @@ final class AppViewModel {
 
     private func consumePendingLogReasonIfNeeded() async {
         guard currentUser != nil, let date = pendingLogReasonDate else { return }
-        pendingLogReasonDate = nil
         guard !isInSession else { return }
+        pendingLogReasonDate = nil
         currentView = .logReason(date: date)
     }
 

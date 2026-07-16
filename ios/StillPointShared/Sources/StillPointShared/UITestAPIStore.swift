@@ -472,7 +472,8 @@ actor UITestAPIStore {
         guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
             throw APIError(status: 400, message: "reasonDate must be YYYY-MM-DD", code: "VALIDATION_ERROR")
         }
-        let maxAllowedDate = WidgetData.localDayString(Date())
+        let utcToday = Self.utcTodayIsoDate()
+        let maxAllowedDate = SessionCalendar.addDays(toIsoDate: utcToday, deltaDays: 1)
         guard request.reasonDate <= maxAllowedDate else {
             throw APIError(status: 400, message: "reasonDate cannot be in the future", code: "VALIDATION_ERROR")
         }
@@ -530,6 +531,13 @@ actor UITestAPIStore {
     private static func persist(store: UITestStore, key: String) {
         guard let encoded = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(encoded, forKey: key)
+    }
+
+    private static func utcTodayIsoDate() -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let components = calendar.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02d", components.year!, components.month!, components.day!)
     }
 }
 

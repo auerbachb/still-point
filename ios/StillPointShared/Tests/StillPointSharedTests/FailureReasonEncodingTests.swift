@@ -12,7 +12,7 @@ final class FailureReasonEncodingTests: XCTestCase {
         XCTAssertEqual(object["text"] as? String, "Too tired")
     }
 
-    func testFailureReasonLookupDTODecodesMissingNote() throws {
+    func testFailureReasonLookupDTODecodesMissingFailureReason() throws {
         let json = """
         {
             "exists": false,
@@ -26,7 +26,7 @@ final class FailureReasonEncodingTests: XCTestCase {
         XCTAssertNil(dto.failureReason)
     }
 
-    func testFailureReasonDTODecodesExistingNote() throws {
+    func testFailureReasonDTODecodesExistingFailureReason() throws {
         let json = """
         {
             "id": "reason-1",
