@@ -3,10 +3,11 @@
 -- This file is the manual-apply reference for existing databases (prod / preview branches)
 -- and is what `scripts/apply-migrations.ts` runs automatically on every deploy.
 --
--- Invariant: each JWT `jti` is recorded at most once. Replayed notifications with
+-- Invariant: each non-null JWT `jti` is recorded at most once. Replayed notifications with
 -- the same `jti` are deduplicated at insert time and must not re-trigger handlers.
--- A partial unique index is used because `jti` is nullable — legacy/malformed tokens
--- may omit it and must remain insertable without colliding with each other.
+-- Notifications that omit `jti` are out of scope for this guard and rely on idempotent
+-- handler noops on redelivery. A partial unique index is used because `jti` is nullable —
+-- legacy/malformed tokens may omit it and must remain insertable without colliding.
 --
 -- Pre-flight (RUN FIRST against the target DB, read-only; must return 0 rows):
 --   SELECT jti, count(*)

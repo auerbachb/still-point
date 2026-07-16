@@ -64,19 +64,10 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     return NextResponse.json({ received: true });
   }
 
+  let result: Awaited<ReturnType<typeof handleAppleNotificationEvent>>;
   try {
-    const result = await handleAppleNotificationEvent(event);
-    try {
-      await finalizeAppleNotificationLog(receipt.logId, result);
-    } catch (finalizeError) {
-      console.error("apple notifications: finalize audit row failed:", finalizeError);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-    }
-    return NextResponse.json({ received: true });
+    result = await handleAppleNotificationEvent(event);
   } catch (error) {
-    // Apple does not document retry semantics for these notifications, so the
-    // 500 may be final — log loudly for manual follow-up. If Apple (or an
-    // operator) redelivers, the idempotent handlers make that safe.
     console.error("apple notifications: processing failed:", error);
     await finalizeAppleNotificationLog(receipt.logId, {
       actionTaken: "processing_failed",
@@ -86,4 +77,13 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+
+  try {
+    await finalizeAppleNotificationLog(receipt.logId, result);
+  } catch (finalizeError) {
+    console.error("apple notifications: finalize audit row failed:", finalizeError);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true });
 });

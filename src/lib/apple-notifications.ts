@@ -1,13 +1,21 @@
 import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { createHash } from "crypto";
 import { db } from "@/db";
 import { appleNotificationLog, oauthAccounts, users } from "@/db/schema";
 import { deleteUserAccount } from "@/lib/accountDeletion";
+import { isUniqueViolation } from "@/lib/dbErrors";
 
 /** Column widths from schema.ts — externally sourced strings are truncated to
  *  fit so a pathological value can never turn an audit insert into a 500. */
 const EVENT_TYPE_MAX = 50;
 const SUBJECT_MAX = 255;
 const JTI_MAX = 255;
+
+/** Fit a JWT `jti` into the audit column without truncating distinct values. */
+function storageJti(raw: string): string {
+  if (raw.length <= JTI_MAX) return raw;
+  return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
+}
 
 /** One event from the JWT `events` claim of an Apple server-to-server notification. */
 export type AppleNotificationEvent = {
@@ -145,7 +153,7 @@ export async function recordAppleNotificationReceipt(params: {
   eventTime: number | undefined;
   jti: string | undefined;
 }): Promise<AppleNotificationReceiptResult> {
-  const jti = params.jti !== undefined ? params.jti.slice(0, JTI_MAX) : null;
+  const jti = params.jti !== undefined ? storageJti(params.jti) : null;
   const values = {
     eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
     subject: params.subject.slice(0, SUBJECT_MAX),
@@ -153,16 +161,6 @@ export async function recordAppleNotificationReceipt(params: {
     jti,
     actionTaken: "received",
   };
-
-  const insertQuery = db.insert(appleNotificationLog).values(values);
-  const inserted = await (jti !== null
-    ? insertQuery.onConflictDoNothing({ target: appleNotificationLog.jti })
-    : insertQuery
-  ).returning({ id: appleNotificationLog.id });
-
-  if (inserted.length > 0) {
-    return { logId: inserted[0].id, alreadySeen: false };
-  }
 
   if (jti !== null) {
     const [existing] = await db
@@ -173,15 +171,40 @@ export async function recordAppleNotificationReceipt(params: {
       .from(appleNotificationLog)
       .where(eq(appleNotificationLog.jti, jti))
       .limit(1);
-    if (!existing) {
-      throw new Error("apple_notification_log jti conflict but no existing row");
+    if (existing) {
+      const retryEligible =
+        existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
+      return { logId: existing.id, alreadySeen: !retryEligible };
     }
-    const retryEligible =
-      existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
-    return { logId: existing.id, alreadySeen: !retryEligible };
   }
 
-  throw new Error("apple_notification_log insert returned no rows");
+  try {
+    const inserted = await db.insert(appleNotificationLog).values(values).returning({
+      id: appleNotificationLog.id,
+    });
+    if (inserted.length === 0) {
+      throw new Error("apple_notification_log insert returned no rows");
+    }
+    return { logId: inserted[0].id, alreadySeen: false };
+  } catch (error) {
+    if (jti !== null && isUniqueViolation(error)) {
+      const [existing] = await db
+        .select({
+          id: appleNotificationLog.id,
+          actionTaken: appleNotificationLog.actionTaken,
+        })
+        .from(appleNotificationLog)
+        .where(eq(appleNotificationLog.jti, jti))
+        .limit(1);
+      if (!existing) {
+        throw new Error("apple_notification_log jti conflict but no existing row");
+      }
+      const retryEligible =
+        existing.actionTaken === "received" || existing.actionTaken === "processing_failed";
+      return { logId: existing.id, alreadySeen: !retryEligible };
+    }
+    throw error;
+  }
 }
 
 /** Finalize the receipt row with the handler outcome (or `processing_failed`). */
