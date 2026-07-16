@@ -126,7 +126,7 @@ function isWithinCronWindow(
   return { within: true, dayOffset };
 }
 
-function isInQuietHours(
+export function isInQuietHours(
   localMinutes: number,
   quietStart: string | null,
   quietEnd: string | null,
@@ -143,6 +143,46 @@ function isInQuietHours(
     return localMinutes >= start && localMinutes < end;
   }
   return localMinutes >= start || localMinutes < end;
+}
+
+/**
+ * Whether a daily/miss-a-day cron tick should dispatch for the user's reminder time.
+ *
+ * Quiet hours suppress delivery while the run is inside the configured range. When
+ * the reminder itself falls during quiet hours, the window extends to
+ * CRON_WINDOW_MINUTES after quiet ends so a morning reminder blocked at 07:54 is
+ * still delivered at 08:00 rather than permanently dropped once delta exceeds the
+ * normal 5-minute window.
+ */
+export function evaluateReminderDispatchWindow(
+  localMinutes: number,
+  reminderMinutes: number,
+  quietStart: string | null,
+  quietEnd: string | null,
+): { due: boolean; dayOffset: 0 | -1 } {
+  if (isInQuietHours(localMinutes, quietStart, quietEnd)) {
+    return { due: false, dayOffset: 0 };
+  }
+
+  const window = isWithinCronWindow(localMinutes, reminderMinutes);
+  if (window.within) {
+    return { due: true, dayOffset: window.dayOffset };
+  }
+
+  if (!quietStart || !quietEnd || !isInQuietHours(reminderMinutes, quietStart, quietEnd)) {
+    return { due: false, dayOffset: 0 };
+  }
+
+  const quietEndMinutes = parseReminderMinutes(quietEnd);
+  const dayMinutes = 24 * 60;
+  const deltaFromQuietEnd = (localMinutes - quietEndMinutes + dayMinutes) % dayMinutes;
+  if (deltaFromQuietEnd > CRON_WINDOW_MINUTES) {
+    return { due: false, dayOffset: 0 };
+  }
+
+  const delta = (localMinutes - reminderMinutes + dayMinutes) % dayMinutes;
+  const dayOffset: 0 | -1 = delta > 0 && localMinutes < reminderMinutes ? -1 : 0;
+  return { due: true, dayOffset };
 }
 
 function frequencyAllowsSend(
@@ -353,8 +393,13 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
       const reminderMinutes = parseReminderMinutes(prefs.dailyReminderTime);
 
-      const { within, dayOffset } = isWithinCronWindow(local.minutesSinceMidnight, reminderMinutes);
-      if (!within) {
+      const { due, dayOffset } = evaluateReminderDispatchWindow(
+        local.minutesSinceMidnight,
+        reminderMinutes,
+        prefs.quietHoursStart,
+        prefs.quietHoursEnd,
+      );
+      if (!due) {
         skipped += 1;
         continue;
       }
@@ -364,11 +409,6 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       // Using it as the dispatch windowKey anchors deduplication to the reminder's intended
       // date rather than the run's date, preventing duplicate sends at midnight boundaries.
       const intendedDateKey = addCalendarDays(local.dateKey, dayOffset);
-
-      if (isInQuietHours(local.minutesSinceMidnight, prefs.quietHoursStart, prefs.quietHoursEnd)) {
-        skipped += 1;
-        continue;
-      }
 
       if (prefs.missADayEnabled) {
         const yesterday = addCalendarDays(intendedDateKey, -1);
