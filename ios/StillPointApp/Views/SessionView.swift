@@ -19,6 +19,7 @@ struct SessionView: View {
     @State private var showAttentionFailedAlert = false
     @State private var attentionManager = AttentionTrackingManager()
     @State private var attentionStartGeneration = 0
+    @State private var gazeTrackingRanThisSession = false
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
@@ -168,6 +169,9 @@ struct SessionView: View {
             }
         }
         .onChange(of: attentionManager.status) { _, status in
+            if status == .running {
+                gazeTrackingRanThisSession = true
+            }
             guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
             guard sessionInProgress, !vm.showIntroOverlay else { return }
             presentAttentionStatusAlert(for: status)
@@ -217,11 +221,16 @@ struct SessionView: View {
         }
         .onChange(of: vm.isComplete) { _, isComplete in
             if isComplete {
+                let shouldIncludeGazeSummary = appVM.currentUser?.attentionTrackingEnabled == true
+                    && gazeTrackingRanThisSession
+                let gazeLog = shouldIncludeGazeSummary ? attentionManager.attentionLog : nil
                 attentionManager.stop()
-                if appVM.currentUser?.attentionTrackingEnabled == true,
-                   attentionManager.didReceiveSample {
-                    vm.attentionLog = attentionManager.attentionLog
+                if shouldIncludeGazeSummary {
+                    vm.attentionLog = gazeLog
                 }
+                gazeTrackingRanThisSession = false
+            } else {
+                attentionManager.stop()
             }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
