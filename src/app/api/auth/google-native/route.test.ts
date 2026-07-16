@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const jwtVerify = vi.fn();
 
@@ -68,6 +68,12 @@ describe("POST /api/auth/google-native", () => {
       },
     ]);
     createToken.mockResolvedValue("jwt-from-createToken");
+  });
+
+  afterEach(() => {
+    // Restores console.error spies even when an assertion throws mid-test;
+    // in Vitest 4 this only affects vi.spyOn spies, not the module vi.fn mocks.
+    vi.restoreAllMocks();
   });
 
   test("returns user + token and sets sp_token cookie on valid id token", async () => {
@@ -144,6 +150,66 @@ describe("POST /api/auth/google-native", () => {
     // A rejected audience must never resolve or link an account.
     expect(resolveOAuthUserId).not.toHaveBeenCalled();
     expect(res.cookies.get("sp_token")).toBeUndefined();
+  });
+
+  test("logs an aud-mismatch diagnostic with the configured audience count, never token contents", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const audError = Object.assign(new Error('unexpected "aud" claim value'), {
+      code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+      claim: "aud",
+      reason: "check_failed",
+      // jose attaches the decoded Claims Set to claim-validation errors; none
+      // of it may reach the log.
+      payload: {
+        aud: "999-rogue.apps.googleusercontent.com",
+        email: "person@gmail.com",
+        sub: "google-sub-1",
+      },
+    });
+    jwtVerify.mockRejectedValueOnce(audError);
+
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({ idToken: "header.payload.sig" }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error).toBe("Invalid identity token");
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    const logged = consoleError.mock.calls[0].map(String).join(" ");
+    expect(logged).toContain("claim=aud");
+    expect(logged).toContain("configuredAudiences=2");
+    expect(logged).not.toContain("999-rogue.apps.googleusercontent.com");
+    expect(logged).not.toContain("person@gmail.com");
+    expect(logged).not.toContain("google-sub-1");
+    expect(logged).not.toContain('unexpected "aud" claim value');
+  });
+
+  test("logs a signature failure distinctly from an aud mismatch", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const sigError = Object.assign(new Error("signature verification failed"), {
+      code: "ERR_JWS_SIGNATURE_VERIFICATION_FAILED",
+    });
+    jwtVerify.mockRejectedValueOnce(sigError);
+
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({ idToken: "header.payload.sig" }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error).toBe("Invalid identity token");
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    const logged = consoleError.mock.calls[0].map(String).join(" ");
+    expect(logged).toContain("code=ERR_JWS_SIGNATURE_VERIFICATION_FAILED");
+    expect(logged).not.toContain("claim=");
+    expect(logged).not.toContain("configuredAudiences=");
   });
 
   test("returns 401 when email is present but not verified", async () => {

@@ -24,6 +24,30 @@ function googleAudiences(): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+/**
+ * Log why `jwtVerify` rejected an identity token using only jose's stable error
+ * metadata: class name, error `code`, and the failed `claim` when present.
+ * Never log `error.message` or `error.payload` — jose attaches the decoded JWT
+ * Claims Set (aud, email, sub, name) to claim-validation errors, and token
+ * contents must stay out of server logs. For `aud` failures, include how many
+ * audiences the server accepts so a missing/mismatched client-ID env var
+ * (#546) is diagnosable from logs alone — never the token's actual `aud`.
+ */
+function logTokenVerificationFailure(error: unknown): void {
+  const { code, claim } = (error ?? {}) as { code?: unknown; claim?: unknown };
+  const parts = [`error=${error instanceof Error ? error.name : typeof error}`];
+  if (typeof code === "string" && code) {
+    parts.push(`code=${code}`);
+  }
+  if (typeof claim === "string" && claim) {
+    parts.push(`claim=${claim}`);
+    if (claim === "aud") {
+      parts.push(`configuredAudiences=${googleAudiences().length}`);
+    }
+  }
+  console.error(`google-native: identity token verification failed (${parts.join(", ")})`);
+}
+
 type RequestBody = {
   idToken?: string;
   // Optional; included for parity with Google's API and future server-side token
@@ -77,7 +101,8 @@ export const POST = withApiHandler("google-native", async (request: NextRequest)
     if (typeof payload.name === "string" && payload.name.trim()) {
       nameFromToken = payload.name.trim();
     }
-  } catch {
+  } catch (error) {
+    logTokenVerificationFailure(error);
     return NextResponse.json({ error: "Invalid identity token" }, { status: 401 });
   }
 
