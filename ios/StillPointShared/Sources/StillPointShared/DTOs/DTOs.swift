@@ -351,7 +351,7 @@ public struct RecordBuddyPersonalSessionRequest: Codable, Sendable {
 public struct AppleNativeSignInRequest: Encodable, Sendable {
     public let identityToken: String
     public let authorizationCode: String?
-    public let rawNonce: String?
+    public let rawNonce: String
     public let user: AppleUserFirstSignInPayload?
 
     public struct AppleUserFirstSignInPayload: Encodable, Sendable {
@@ -377,7 +377,7 @@ public struct AppleNativeSignInRequest: Encodable, Sendable {
     public init(
         identityToken: String,
         authorizationCode: String?,
-        rawNonce: String? = nil,
+        rawNonce: String,
         user: AppleUserFirstSignInPayload?
     ) {
         self.identityToken = identityToken

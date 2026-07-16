@@ -3,11 +3,17 @@ import Foundation
 
 /// Nonce helpers for native Sign in with Apple (#533).
 public enum AppleSignInNonce {
+    public enum Error: Swift.Error {
+        case randomBytesGenerationFailed(OSStatus)
+    }
+
     /// Cryptographically random nonce string for binding an identity token to this request.
-    public static func randomNonceString(byteCount: Int = 32) -> String {
+    public static func randomNonceString(byteCount: Int = 32) throws -> String {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        precondition(status == errSecSuccess, "SecRandomCopyBytes failed: \(status)")
+        guard status == errSecSuccess else {
+            throw Error.randomBytesGenerationFailed(status)
+        }
         return Data(bytes).base64EncodedString()
     }
 

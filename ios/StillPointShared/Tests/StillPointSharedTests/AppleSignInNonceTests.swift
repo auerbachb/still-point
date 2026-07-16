@@ -9,9 +9,9 @@ final class AppleSignInNonceTests: XCTestCase {
         )
     }
 
-    func testRandomNonceStringIsSufficientlyLongAndUnique() {
-        let first = AppleSignInNonce.randomNonceString()
-        let second = AppleSignInNonce.randomNonceString()
+    func testRandomNonceStringIsSufficientlyLongAndUnique() throws {
+        let first = try AppleSignInNonce.randomNonceString()
+        let second = try AppleSignInNonce.randomNonceString()
 
         XCTAssertGreaterThanOrEqual(first.count, 32)
         XCTAssertGreaterThanOrEqual(second.count, 32)
@@ -34,20 +34,5 @@ final class AppleNativeSignInRequestEncodingTests: XCTestCase {
         XCTAssertEqual(object["identityToken"] as? String, "header.payload.signature")
         XCTAssertEqual(object["authorizationCode"] as? String, "opaque-code")
         XCTAssertEqual(object["rawNonce"] as? String, "nonce-abc")
-    }
-
-    func testOmitsRawNonceWhenNil() throws {
-        let request = AppleNativeSignInRequest(
-            identityToken: "tok",
-            authorizationCode: nil,
-            user: nil
-        )
-
-        let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(object["identityToken"] as? String, "tok")
-        XCTAssertNil(object["rawNonce"])
-        XCTAssertFalse(object.keys.contains("rawNonce"))
     }
 }

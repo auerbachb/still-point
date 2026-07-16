@@ -158,12 +158,18 @@ struct AuthView: View {
                         .opacity(vm.isAuthInFlight ? 0.5 : 1)
 
                         SignInWithAppleButton(.signIn) { request in
-                            let rawNonce = AppleSignInNonce.randomNonceString()
+                            guard let rawNonce = try? AppleSignInNonce.randomNonceString() else {
+                                appleSignInRawNonce = nil
+                                return
+                            }
                             appleSignInRawNonce = rawNonce
                             request.requestedScopes = [.fullName, .email]
                             request.nonce = AppleSignInNonce.sha256Hex(rawNonce)
                         } onCompletion: { result in
-                            let rawNonce = appleSignInRawNonce
+                            guard let rawNonce = appleSignInRawNonce else {
+                                vm.error = "Could not prepare Sign in with Apple. Please try again."
+                                return
+                            }
                             appleSignInRawNonce = nil
                             switch result {
                             case .success(let authorization):
