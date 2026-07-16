@@ -39,6 +39,8 @@ final class SessionViewModel {
 
     // UI state — optional thought prompt after a distraction segment ends
     var showPostDistractionCapture = false
+    /// Pre-session intro overlay; gates `start()` until dismissed (#560).
+    var showIntroOverlay = false
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
 
@@ -99,6 +101,25 @@ final class SessionViewModel {
         self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
         // Initial mind state log entry
         self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
+    }
+
+    /// Prepare the session screen. Shows the intro overlay unless permanently hidden or UI-test skip.
+    func prepareSession(introHiddenPermanently: Bool, skipIntroForUITest: Bool) {
+        if skipIntroForUITest || introHiddenPermanently {
+            showIntroOverlay = false
+            start()
+        } else {
+            showIntroOverlay = true
+        }
+    }
+
+    /// Dismiss the intro overlay and begin the countdown.
+    func dismissIntroOverlay(dontShowAgain: Bool) {
+        if dontShowAgain {
+            SessionIntroPrefs.setIntroOverlayHidden(true)
+        }
+        showIntroOverlay = false
+        start()
     }
 
     func start() {
