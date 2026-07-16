@@ -18,6 +18,7 @@ struct SessionView: View {
     @State private var showAttentionPermissionAlert = false
     @State private var showAttentionFailedAlert = false
     @State private var attentionManager = AttentionTrackingManager()
+    @State private var attentionStartGeneration = 0
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
@@ -147,6 +148,7 @@ struct SessionView: View {
             )
         }
         .onDisappear {
+            attentionStartGeneration += 1
             attentionManager.stop()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
@@ -159,10 +161,16 @@ struct SessionView: View {
         }
         .onChange(of: vm.showIntroOverlay) { _, showIntro in
             if showIntro {
+                attentionStartGeneration += 1
                 attentionManager.stop()
             } else {
                 syncAttentionTracking()
             }
+        }
+        .onChange(of: attentionManager.status) { _, status in
+            guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
+            guard sessionTimerRunning, !vm.showIntroOverlay else { return }
+            presentAttentionStatusAlert(for: status)
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             SessionIdleTimerController.syncLocalSession(
@@ -307,18 +315,29 @@ struct SessionView: View {
     private func syncAttentionTracking() {
         guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
         guard !vm.showIntroOverlay, sessionTimerRunning else { return }
+        attentionStartGeneration += 1
+        let generation = attentionStartGeneration
         Task {
             await attentionManager.start { vm.elapsed }
-            switch attentionManager.status {
-            case .unsupported:
-                showAttentionUnsupportedAlert = true
-            case .permissionDenied:
-                showAttentionPermissionAlert = true
-            case .failed:
-                showAttentionFailedAlert = true
-            default:
-                break
+            guard generation == attentionStartGeneration else { return }
+            guard !vm.showIntroOverlay, sessionTimerRunning else {
+                attentionManager.stop()
+                return
             }
+            presentAttentionStatusAlert(for: attentionManager.status)
+        }
+    }
+
+    private func presentAttentionStatusAlert(for status: AttentionTrackingStatus) {
+        switch status {
+        case .unsupported:
+            showAttentionUnsupportedAlert = true
+        case .permissionDenied:
+            showAttentionPermissionAlert = true
+        case .failed:
+            showAttentionFailedAlert = true
+        case .idle, .running, .paused:
+            break
         }
     }
 

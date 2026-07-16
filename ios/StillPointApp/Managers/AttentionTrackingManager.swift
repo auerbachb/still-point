@@ -9,6 +9,7 @@ enum AttentionTrackingStatus: Equatable {
     case permissionDenied
     case idle
     case running
+    case paused
     case failed
 }
 
@@ -51,9 +52,15 @@ final class AttentionTrackingManager {
         status = .unsupported
     }
 
-    func pause() {}
+    func pause() {
+        guard status == .running else { return }
+        status = .paused
+    }
 
-    func resume() {}
+    func resume() {
+        guard status == .paused else { return }
+        status = .running
+    }
 }
 
 #else
@@ -69,6 +76,7 @@ enum AttentionTrackingStatus: Equatable {
     case permissionDenied
     case idle
     case running
+    case paused
     case failed
 }
 
@@ -165,6 +173,7 @@ final class AttentionTrackingManager: NSObject {
         guard isRunning, !isPaused else { return }
         session.pause()
         isPaused = true
+        status = .paused
         pendingLookAt = nil
         frameDispatchScheduled = false
         clearPendingDebounce()
@@ -176,6 +185,7 @@ final class AttentionTrackingManager: NSObject {
         configuration.isLightEstimationEnabled = false
         session.run(configuration)
         isPaused = false
+        status = .running
     }
 
     private func ensureCameraAuthorized() async -> Bool {
