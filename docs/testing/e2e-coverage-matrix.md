@@ -85,8 +85,8 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 |---------|:----:|:---:|:---:|------------------------|
 | History list + scroll | P1 | ✅ | ✅ | `e2e/layout/overflow.spec.ts`; iOS smoke + `testSessionsFailureShowsVisibleRetryMessage` |
 | Calendar / journey view modes | P2 | ❌ | ❌ | Unit tests (`historyJourney.test.ts`, `HistoryJourneyTests.swift`) |
-| Thought journal tab | P2 | ⚠️ | ✅ | Web layout FlashHint; `testJournalAndBoardTabsReachable` |
-| Public board tab | P2 | ✅ | ✅ | `e2e/layout/issue-473-mobile-web-layout.spec.ts`; `testJournalAndBoardTabsReachable` |
+| Thought journal tab | P2 | ✅ | ✅ | `e2e/journal/journal.spec.ts`; layout in `issue-473-mobile-web-layout.spec.ts`; `testJournalAndBoardTabsReachable` |
+| Public board tab | P2 | ✅ | ✅ | `e2e/board/board.spec.ts`; layout in `issue-473-mobile-web-layout.spec.ts`; `testJournalAndBoardTabsReachable` |
 
 ### Friends / buddy
 
@@ -101,7 +101,7 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Journey | Risk | Web | iOS | Spec / test reference |
 |---------|:----:|:---:|:---:|------------------------|
 | Settings navigation | P1 | ✅ | ✅ | `e2e/auth/login.spec.ts`; `testHistoryAndSettingsNavigationSmoke` |
-| Username inline edit / validation / conflict | P1 | ❌ | ✅ | iOS `testSettingsUsernameInlineEditSucceeds` et al. |
+| Username inline edit / validation / conflict | P1 | ✅ | ✅ | `e2e/settings/username.spec.ts`; iOS `testSettingsUsernameInlineEditSucceeds` et al. (critical lane) |
 | Public board / aphorisms toggles | P2 | ❌ | ❌ | QA manual |
 | Notifications subpage | P2 | ❌ | ⚠️ | Link exists; no E2E |
 | App blocking / Screen Time gate | P2 | ➖ | ⚠️ | `testCompletedSessionUnlocksConfiguredAppGate` (settings smoke; no shield E2E) |
@@ -139,13 +139,29 @@ Breath counting is timing-sensitive (sub-second taps, phase animation, keyboard 
 
 ---
 
+## Wave 1 scope (stable areas — Issue #497)
+
+This wave covers **stable** journeys only. Session-screen and history/progress UI specs are **deferred** while those surfaces change under [#560](https://github.com/auerbachb/still-point/issues/560) and [#559](https://github.com/auerbachb/still-point/issues/559).
+
+| Area | In wave 1 | Notes |
+|------|-----------|-------|
+| Auth (login / signup / password-reset) | ✅ | `@critical` web specs; iOS smoke/critical |
+| Board tab | ✅ | Web functional + layout; iOS tab reachability |
+| Thought journal tab | ✅ | Web functional + layout; iOS tab reachability |
+| Settings (logout, username edit) | ✅ | Web `@critical` logout + username; iOS username in critical lane |
+| Session screen / timer flow | ➖ deferred | Existing specs retained; no new session specs this wave |
+| History / progress list | ➖ deferred | Existing specs retained; no new history specs this wave |
+
 ## Gap-fill status (this issue)
 
 | Gap | Action |
 |-----|--------|
 | PR `@smoke`/`@critical` covered only landing + auth shell | Tagged golden-path specs; added `signup` + `logout` area specs |
 | Web logout untested | `e2e/settings/logout.spec.ts` |
+| Web board / journal functional gaps | `e2e/board/board.spec.ts`, `e2e/journal/journal.spec.ts` |
+| Web settings username inline edit | `e2e/settings/username.spec.ts` |
 | iOS quick minute / logout / journal+board tabs | New XCUITest methods + tab accessibility identifiers |
+| iOS username tests not in critical lane | Wired into `scripts/e2e/run-ios-tests.sh` critical lane |
 | Published matrix missing | This document |
 | Locator contract (#152) | iOS `tab.journal`, `tab.board`, `journal.title`, `board.title` identifiers |
 
