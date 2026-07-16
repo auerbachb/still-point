@@ -153,7 +153,8 @@ export async function recordAppleNotificationReceipt(params: {
   eventTime: number | undefined;
   jti: string | undefined;
 }): Promise<AppleNotificationReceiptResult> {
-  const jti = params.jti !== undefined ? storageJti(params.jti) : null;
+  const jti =
+    typeof params.jti === "string" && params.jti.length > 0 ? storageJti(params.jti) : null;
   const values = {
     eventType: params.eventType.slice(0, EVENT_TYPE_MAX),
     subject: params.subject.slice(0, SUBJECT_MAX),
