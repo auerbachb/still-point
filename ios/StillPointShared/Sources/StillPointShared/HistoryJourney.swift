@@ -50,6 +50,15 @@ public enum SessionCalendar {
               let date = isoFormatter.date(from: value) else { return false }
         return isoFormatter.string(from: date) == value
     }
+
+    public static func utcTodayIsoDate() -> String {
+        isoFormatter.string(from: Date())
+    }
+
+    /// Matches backend `maxReasonDate()` — UTC today + 1 for users ahead of UTC (#441).
+    public static func maxFailureReasonDate() -> String {
+        addDays(toIsoDate: utcTodayIsoDate(), deltaDays: 1)
+    }
 }
 
 // MARK: - Streak / aggregate stats (matches web `calculateSessionStats`)

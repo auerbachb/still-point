@@ -472,8 +472,7 @@ actor UITestAPIStore {
         guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
             throw APIError(status: 400, message: "reasonDate must be YYYY-MM-DD", code: "VALIDATION_ERROR")
         }
-        let utcToday = Self.utcTodayIsoDate()
-        let maxAllowedDate = SessionCalendar.addDays(toIsoDate: utcToday, deltaDays: 1)
+        let maxAllowedDate = WidgetDataStore.localDayString(Date())
         guard request.reasonDate <= maxAllowedDate else {
             throw APIError(status: 400, message: "reasonDate cannot be in the future", code: "VALIDATION_ERROR")
         }

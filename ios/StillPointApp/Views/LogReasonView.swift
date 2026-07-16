@@ -62,7 +62,7 @@ private final class LogReasonViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !submittingInFlight else { return }
 
-        let maxAllowedDate = WidgetDataStore.localDayString(Date())
+        let maxAllowedDate = SessionCalendar.maxFailureReasonDate()
         guard date <= maxAllowedDate else {
             errorMessage = "You can only log a reason for today or earlier."
             return
