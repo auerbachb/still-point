@@ -6,6 +6,7 @@ struct AuthView: View {
     let appVM: AppViewModel
     @State private var vm = AuthViewModel()
     @State private var appleSignInRawNonce: String?
+    @State private var appleSignInInFlight = false
     let launchAuthStatusMessage: String?
 
     var body: some View {
@@ -158,19 +159,26 @@ struct AuthView: View {
                         .opacity(vm.isAuthInFlight ? 0.5 : 1)
 
                         SignInWithAppleButton(.signIn) { request in
+                            guard !appleSignInInFlight else { return }
                             guard let rawNonce = try? AppleSignInNonce.randomNonceString() else {
                                 appleSignInRawNonce = nil
+                                vm.error = "Could not prepare Sign in with Apple. Please try again."
                                 return
                             }
+                            appleSignInInFlight = true
                             appleSignInRawNonce = rawNonce
                             request.requestedScopes = [.fullName, .email]
                             request.nonce = AppleSignInNonce.sha256Hex(rawNonce)
                         } onCompletion: { result in
-                            guard let rawNonce = appleSignInRawNonce else {
+                            let rawNonce = appleSignInRawNonce
+                            defer {
+                                appleSignInInFlight = false
+                                appleSignInRawNonce = nil
+                            }
+                            guard let rawNonce else {
                                 vm.error = "Could not prepare Sign in with Apple. Please try again."
                                 return
                             }
-                            appleSignInRawNonce = nil
                             switch result {
                             case .success(let authorization):
                                 guard
@@ -200,8 +208,8 @@ struct AuthView: View {
                         .frame(height: 44)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border2))
-                        .disabled(vm.isAuthInFlight)
-                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
+                        .disabled(vm.isAuthInFlight || appleSignInInFlight)
+                        .opacity(vm.isAuthInFlight || appleSignInInFlight ? 0.5 : 1)
                     }
                 }
                 .padding(.horizontal, SPSpacing.s4)
