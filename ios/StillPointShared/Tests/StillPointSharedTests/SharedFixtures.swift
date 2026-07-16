@@ -135,6 +135,46 @@ struct BuddyCalendarColorsFixture: Decodable {
     let cases: [Case]
 }
 
+struct PathwayFixture: Decodable {
+    struct NodeStateCase: Decodable {
+        let day: Int
+        let currentDay: Int
+        let expected: String
+    }
+
+    struct ExpectedLevel: Decodable {
+        let level: Int
+        let name: String
+        let state: String
+        let completedCount: Int
+        let firstNodeState: String?
+        let lastNodeState: String?
+        let nodeStates: [String]?
+    }
+
+    struct BuildPathwayCase: Decodable {
+        let name: String
+        let currentDay: Int
+        let expectedCurrentNodeDay: Int?
+        let expectedCurrentNodeCount: Int?
+        let expectedLevelCount: Int?
+        let expectedAllDays: [Int]?
+        let expectedLevels: [ExpectedLevel]?
+        let expectedAllNodesCompleted: Bool?
+        let expectedAllLevelsCompleted: Bool?
+        let expectedLastLevelState: String?
+        let expectedLastNodeState: String?
+        let expectedFirstNodeState: String?
+    }
+
+    let daysPerLevel: Int
+    let totalLevels: Int
+    let pathwayMaxDay: Int
+    let levelNames: [String]
+    let nodeStateForDay: [NodeStateCase]
+    let buildPathway: [BuildPathwayCase]
+}
+
 struct DurationForDayFixture: Decodable {
     struct Constants: Decodable {
         let baseDuration: Int

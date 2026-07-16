@@ -7,6 +7,7 @@ import {
   buildPathway,
   nodeStateForDay,
 } from "./pathway";
+import { loadSharedFixture, type PathwayFixture } from "./testing/sharedFixtures";
 
 describe("nodeStateForDay", () => {
   test("days before currentDay are completed", () => {
@@ -93,6 +94,82 @@ describe("buildPathway", () => {
         expect(levels[0]!.nodes[0]!.state).toBe("current");
       } else {
         expect(levels[0]!.nodes[0]!.state).toBe("current");
+      }
+    }
+  });
+
+  // MARK: - Shared cross-platform fixtures (#421 / #525)
+
+  test("shared pathway fixtures", () => {
+    const fixture = loadSharedFixture<PathwayFixture>("pathway.json");
+
+    expect(DAYS_PER_LEVEL).toBe(fixture.daysPerLevel);
+    expect(TOTAL_LEVELS).toBe(fixture.totalLevels);
+    expect(PATHWAY_MAX_DAY).toBe(fixture.pathwayMaxDay);
+    expect([...LEVEL_NAMES]).toEqual(fixture.levelNames);
+
+    for (const testCase of fixture.nodeStateForDay) {
+      expect(nodeStateForDay(testCase.day, testCase.currentDay)).toBe(testCase.expected);
+    }
+
+    for (const testCase of fixture.buildPathway) {
+      const levels = buildPathway(testCase.currentDay);
+
+      if (testCase.expectedLevelCount != null) {
+        expect(levels).toHaveLength(testCase.expectedLevelCount);
+      }
+
+      if (testCase.expectedAllDays != null) {
+        const days = levels.flatMap((l) => l.nodes.map((n) => n.day));
+        expect(days).toEqual(testCase.expectedAllDays);
+      }
+
+      if (testCase.expectedCurrentNodeCount != null) {
+        const currents = levels.flatMap((l) => l.nodes).filter((n) => n.state === "current");
+        expect(currents).toHaveLength(testCase.expectedCurrentNodeCount);
+      }
+
+      if (testCase.expectedCurrentNodeDay != null) {
+        const currents = levels.flatMap((l) => l.nodes).filter((n) => n.state === "current");
+        expect(currents[0]!.day).toBe(testCase.expectedCurrentNodeDay);
+      }
+
+      if (testCase.expectedAllNodesCompleted === true) {
+        expect(levels.flatMap((l) => l.nodes).every((n) => n.state === "completed")).toBe(true);
+      }
+
+      if (testCase.expectedAllLevelsCompleted === true) {
+        expect(levels.every((l) => l.state === "completed")).toBe(true);
+      }
+
+      if (testCase.expectedLastLevelState != null) {
+        expect(levels[TOTAL_LEVELS - 1]!.state).toBe(testCase.expectedLastLevelState);
+      }
+
+      if (testCase.expectedLastNodeState != null) {
+        expect(levels[TOTAL_LEVELS - 1]!.nodes[DAYS_PER_LEVEL - 1]!.state).toBe(
+          testCase.expectedLastNodeState,
+        );
+      }
+
+      if (testCase.expectedFirstNodeState != null) {
+        expect(levels[0]!.nodes[0]!.state).toBe(testCase.expectedFirstNodeState);
+      }
+
+      for (const expectedLevel of testCase.expectedLevels ?? []) {
+        const level = levels[expectedLevel.level - 1]!;
+        expect(level.name).toBe(expectedLevel.name);
+        expect(level.state).toBe(expectedLevel.state);
+        expect(level.completedCount).toBe(expectedLevel.completedCount);
+        if (expectedLevel.firstNodeState != null) {
+          expect(level.nodes[0]!.state).toBe(expectedLevel.firstNodeState);
+        }
+        if (expectedLevel.lastNodeState != null) {
+          expect(level.nodes[DAYS_PER_LEVEL - 1]!.state).toBe(expectedLevel.lastNodeState);
+        }
+        if (expectedLevel.nodeStates != null) {
+          expect(level.nodes.map((n) => n.state)).toEqual(expectedLevel.nodeStates);
+        }
       }
     }
   });

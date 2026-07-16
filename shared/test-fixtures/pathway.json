@@ -1,0 +1,83 @@
+{
+  "algorithm": "pathway",
+  "description": "Duolingo-style L1–L5 lesson pathway derivation from currentDay. Web buildPathway/nodeStateForDay and iOS Pathway.build/nodeState(forDay:currentDay:) share the same unlock rule: day < currentDay → completed, day === currentDay → current, else locked. Golden cases pin level rollups, node states, and boundary clamping so drift breaks CI on both platforms.",
+  "daysPerLevel": 10,
+  "totalLevels": 5,
+  "pathwayMaxDay": 50,
+  "levelNames": ["Stillness", "Awareness", "Focus", "Intention", "Kindness"],
+  "nodeStateForDay": [
+    { "day": 1, "currentDay": 5, "expected": "completed" },
+    { "day": 4, "currentDay": 5, "expected": "completed" },
+    { "day": 5, "currentDay": 5, "expected": "current" },
+    { "day": 6, "currentDay": 5, "expected": "locked" },
+    { "day": 50, "currentDay": 5, "expected": "locked" }
+  ],
+  "buildPathway": [
+    {
+      "name": "day 1 first node current",
+      "currentDay": 1,
+      "expectedCurrentNodeDay": 1,
+      "expectedCurrentNodeCount": 1,
+      "expectedLevelCount": 5,
+      "expectedAllDays": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+      "expectedLevels": [
+        { "level": 1, "name": "Stillness", "state": "current", "completedCount": 0, "firstNodeState": "current", "lastNodeState": "locked" },
+        { "level": 2, "name": "Awareness", "state": "locked", "completedCount": 0, "firstNodeState": "locked", "lastNodeState": "locked" }
+      ]
+    },
+    {
+      "name": "mid-level currentDay 13",
+      "currentDay": 13,
+      "expectedCurrentNodeDay": 13,
+      "expectedCurrentNodeCount": 1,
+      "expectedLevelCount": 5,
+      "expectedLevels": [
+        { "level": 1, "name": "Stillness", "state": "completed", "completedCount": 10, "firstNodeState": "completed", "lastNodeState": "completed" },
+        {
+          "level": 2,
+          "name": "Awareness",
+          "state": "current",
+          "completedCount": 2,
+          "firstNodeState": "completed",
+          "nodeStates": ["completed", "completed", "current", "locked", "locked", "locked", "locked", "locked", "locked", "locked"]
+        }
+      ]
+    },
+    {
+      "name": "currentDay 27",
+      "currentDay": 27,
+      "expectedCurrentNodeDay": 27,
+      "expectedCurrentNodeCount": 1,
+      "expectedLevelCount": 5
+    },
+    {
+      "name": "beyond program completes all nodes",
+      "currentDay": 55,
+      "expectedCurrentNodeCount": 0,
+      "expectedAllNodesCompleted": true,
+      "expectedAllLevelsCompleted": true
+    },
+    {
+      "name": "last day keeps final node current",
+      "currentDay": 50,
+      "expectedCurrentNodeDay": 50,
+      "expectedCurrentNodeCount": 1,
+      "expectedLastLevelState": "current",
+      "expectedLastNodeState": "current"
+    },
+    {
+      "name": "clamps sub-1 input to day 1",
+      "currentDay": 0,
+      "expectedCurrentNodeDay": 1,
+      "expectedCurrentNodeCount": 1,
+      "expectedFirstNodeState": "current"
+    },
+    {
+      "name": "clamps negative input to day 1",
+      "currentDay": -5,
+      "expectedCurrentNodeDay": 1,
+      "expectedCurrentNodeCount": 1,
+      "expectedFirstNodeState": "current"
+    }
+  ]
+}
