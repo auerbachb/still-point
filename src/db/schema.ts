@@ -93,6 +93,8 @@ export const notificationPreferences = pgTable("notification_preferences", {
   dispatchDueIdx: index("idx_notification_preferences_dispatch").on(
     table.pushEnabled,
     table.dailyReminderEnabled,
+    table.missADayEnabled,
+    table.failureReasonReminderEnabled,
     table.dailyReminderTime,
   ),
 }));

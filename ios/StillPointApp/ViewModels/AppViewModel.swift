@@ -22,6 +22,7 @@ enum AppView: Equatable {
         bonusSeconds: Int
     )
     case breathCounting
+    case logReason(date: String)
     case history
     case journal
     case board
@@ -42,6 +43,8 @@ enum AppView: Equatable {
             return lhsSessionId == rhsSessionId
         case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):
             return lhsId == rhsId && lhsName == rhsName
+        case let (.logReason(lhsDate), .logReason(rhsDate)):
+            return lhsDate == rhsDate
         case (.completion, .completion):
             return true
         default:
@@ -85,6 +88,7 @@ final class AppViewModel {
     }
     private var pendingBuddyInviteToken: String?
     private var pendingSessionDeepLink: SessionType?
+    private var pendingLogReasonDate: String?
 
     /// Persisted: keep device screen awake during an active sit when enabled.
     var keepScreenAwakeDuringSession: Bool {
@@ -175,6 +179,7 @@ final class AppViewModel {
                 syncWidgetData()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
+                await consumePendingLogReasonIfNeeded()
                 return
             } else {
                 currentView = .auth
@@ -208,6 +213,7 @@ final class AppViewModel {
         case .buddySession: return "buddySession"
         case .completion: return "completion"
         case .breathCounting: return "breathCounting"
+        case .logReason: return "logReason"
         case .history: return "history"
         case .journal: return "journal"
         case .board: return "board"
@@ -259,6 +265,7 @@ final class AppViewModel {
             syncWidgetData()
             await consumePendingBuddyInviteIfNeeded()
             await consumePendingSessionDeepLinkIfNeeded()
+            await consumePendingLogReasonIfNeeded()
         }
     }
 
@@ -282,6 +289,7 @@ final class AppViewModel {
         currentUser = nil
         pendingBuddyInviteToken = nil
         pendingSessionDeepLink = nil
+        pendingLogReasonDate = nil
         buddyInviteError = nil
         authStatusMessage = nil
         resetTrackCompletionBadges()
@@ -455,6 +463,22 @@ final class AppViewModel {
         beginSession(type: sessionType)
     }
 
+    func openLogReason(date: String) {
+        if currentUser == nil {
+            pendingLogReasonDate = date
+            return
+        }
+        if isInSession { return }
+        currentView = .logReason(date: date)
+    }
+
+    private func consumePendingLogReasonIfNeeded() async {
+        guard currentUser != nil, let date = pendingLogReasonDate else { return }
+        pendingLogReasonDate = nil
+        guard !isInSession else { return }
+        currentView = .logReason(date: date)
+    }
+
     func completeSession(
         sessionId: String,
         clearPercent: Int,
@@ -535,8 +559,8 @@ final class AppViewModel {
             return true
         }
         if host == "log-reason" {
-            // Failure-reason log UI is web-only; land on home so the notification tap is not silently dropped.
-            openHomeFromNotification()
+            let date = LogReasonDeepLinkParser.date(from: url)
+            openLogReason(date: date)
             return true
         }
         return false

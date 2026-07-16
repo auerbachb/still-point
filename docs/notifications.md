@@ -63,6 +63,7 @@ Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or 
 | Miss a day | #247 | `miss_a_day` | `stillpoint://session/quick` | `pushEnabled` + `missADayEnabled` |
 | Daily practice reminder | #346 | `daily_reminder` | `stillpoint://home` | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency |
 | Friend request | #359 | `friend_request` | `stillpoint://home` | `pushEnabled` + `friendRequestNotificationsEnabled` |
+| Failure-reason reminder | #441 | `failure_reason_reminder` | `stillpoint://log-reason?date=YYYY-MM-DD` | `pushEnabled` + `failureReasonReminderEnabled` |
 
 Miss-a-day wins over daily reminder when both would fire in the same cron window (user missed yesterday and has not sat today).
 
@@ -82,6 +83,14 @@ Miss-a-day wins over daily reminder when both would fire in the same cron window
 
 - Event-driven on `POST /api/friends/requests`
 - Helper: `sendFriendRequestNotification` (APNs + Web Push)
+
+### Failure-reason reminder (#441)
+
+- Fixed **8 PM local** trigger, independent of `dailyReminderTime`
+- Helper: `sendFailureReasonReminderNotification` (yesterday-first catch-up framing)
+- Deep link: `/app/log-reason?date=…` (web) / `stillpoint://log-reason?date=…` (iOS)
+- Idempotency `window_key` = local firing date (not the day being asked about)
+- Skipped when user completed a session or logged a failure reason for the target day
 
 ## Suppress during session (#431)
 
@@ -121,6 +130,7 @@ held until the sit truly completes or is abandoned.
 - **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
 - **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
 - **Dedup:** `claimNotificationDispatch` is the source of truth per `(user_id, notification_type, window_key)`
+- **DST spring-forward gap (#531):** reminders scheduled inside the skipped local hour on spring-forward night (e.g. 02:30 `America/New_York`) are not delivered — cron ticks land at 01:55 then 03:00, both outside the 5-minute window. This is a once-per-year-per-timezone edge case; no catch-up pass is implemented yet.
 
 ## Settings UI (#359)
 
@@ -136,6 +146,7 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - `PushNotificationCoordinator` stores pending deep links until `RootView` wires handlers
 - `stillpoint://home` → home
 - `stillpoint://session` / `stillpoint://session/quick` → `AppViewModel.consumePendingSessionDeepLinkIfNeeded()`
+- `stillpoint://log-reason?date=…` → native log-reason capture (`LogReasonView`)
 - `stillpoint://friends` → friends surface (via notification deep-link handler)
 
 ## Adding a notification type

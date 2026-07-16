@@ -9,6 +9,7 @@ final class NotificationPreferencesViewModel {
     var dailyReminderEnabled = false
     var missADayEnabled = false
     var friendRequestNotificationsEnabled = true
+    var failureReasonReminderEnabled = false
     var suppressDuringSession = false
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
@@ -129,6 +130,11 @@ final class NotificationPreferencesViewModel {
         await persist(patch: NotificationPreferencesPatch(suppressDuringSession: enabled))
     }
 
+    func persistFailureReasonReminderEnabled(_ enabled: Bool) async {
+        failureReasonReminderEnabled = enabled
+        await persist(patch: NotificationPreferencesPatch(failureReasonReminderEnabled: enabled))
+    }
+
     func persistTimezone(_ tz: String) async {
         timezoneDisplay = tz
         await persist(patch: NotificationPreferencesPatch(tz: tz))
@@ -164,6 +170,7 @@ final class NotificationPreferencesViewModel {
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
         friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
+        failureReasonReminderEnabled = dto.failureReasonReminderEnabled
         suppressDuringSession = dto.suppressDuringSession
         // Keep the cached opt-in (read by willPresent) in sync with the server row.
         SessionNotificationSuppressionController.setSuppressPreferenceEnabled(dto.suppressDuringSession)

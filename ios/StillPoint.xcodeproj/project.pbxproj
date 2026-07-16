@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4976183C8621BCA485D0B82D /* BreathCountingView.swift */; };
+		C1D2E3F4A5B60718293A4B60 /* LogReasonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */; };
 		13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
@@ -50,6 +51,7 @@
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
 		A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */; };
 		B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */; };
+		D2E3F4A5B60718293A4B61C0 /* LogReasonDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */; };
 		B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */; };
 		B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */; };
 		B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */; };
@@ -124,6 +126,7 @@
 		45BC84AB51307C865EF7257A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
 		4976183C8621BCA485D0B82D /* BreathCountingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingView.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonView.swift; sourceTree = "<group>"; };
 		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
@@ -163,6 +166,7 @@
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
+		D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonDeepLinkParser.swift; sourceTree = "<group>"; };
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
@@ -199,6 +203,7 @@
 				B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */,
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
 				4976183C8621BCA485D0B82D /* BreathCountingView.swift */,
+				C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
@@ -286,6 +291,7 @@
 			isa = PBXGroup;
 			children = (
 				B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */,
+				D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */,
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
 				A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */,
 			);
@@ -553,6 +559,7 @@
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
 				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
 				101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */,
+				C1D2E3F4A5B60718293A4B60 /* LogReasonView.swift in Sources */,
 				9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */,
 				47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */,
 				A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */,
@@ -573,6 +580,7 @@
 				B106890588723F191CC4AEAA /* MainTabView.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */,
 				B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */,
+				D2E3F4A5B60718293A4B61C0 /* LogReasonDeepLinkParser.swift in Sources */,
 				80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */,
 				13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */,
 				C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */,

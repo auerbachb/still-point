@@ -22,6 +22,9 @@ struct NotificationsSettingsView: View {
                     sectionHeader("Miss a day")
                     missADayToggle
 
+                    sectionHeader("Reflect on a missed day")
+                    failureReasonReminderToggle
+
                     sectionHeader("Friend activity")
                     friendRequestToggle
 
@@ -232,6 +235,27 @@ struct NotificationsSettingsView: View {
         .tint(SPColor.green)
         .disabled(notificationPrefs.isSaving)
         .accessibilityIdentifier("notifications.missADayToggle")
+    }
+
+    private var failureReasonReminderToggle: some View {
+        Toggle(isOn: Binding(
+            get: { notificationPrefs.failureReasonReminderEnabled },
+            set: { newValue in
+                Task { await notificationPrefs.persistFailureReasonReminderEnabled(newValue) }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Log why you missed")
+                    .font(SPFont.mono(13))
+                    .foregroundStyle(Color(SPColor.fg))
+                Text("At 8 PM, if you haven't sat, a nudge to jot down what got in the way")
+                    .font(SPFont.serif(13, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg4))
+            }
+        }
+        .tint(SPColor.green)
+        .disabled(notificationPrefs.isSaving)
+        .accessibilityIdentifier("notifications.failureReasonReminderToggle")
     }
 
     private var friendRequestToggle: some View {

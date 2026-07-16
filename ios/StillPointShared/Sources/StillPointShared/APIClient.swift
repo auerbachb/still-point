@@ -323,6 +323,24 @@ public actor APIClient {
         return response.preferences
     }
 
+    // MARK: - Failure reasons
+
+    public func getFailureReason(date: String) async throws -> FailureReasonLookupDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.getFailureReason(date: date)
+        }
+        let encodedDate = date.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? date
+        return try await get("/api/failure-reasons?date=\(encodedDate)")
+    }
+
+    public func submitFailureReason(_ request: SubmitFailureReasonRequest) async throws -> FailureReasonDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.submitFailureReason(request)
+        }
+        let response: FailureReasonResponse = try await post("/api/failure-reasons", body: request)
+        return response.failureReason
+    }
+
     // MARK: - Buddy Sessions
 
     public func createBuddySession() async throws -> BuddySessionCreatedDTO {

@@ -62,6 +62,10 @@ struct RootView: View {
                 BreathCountingView(appVM: appVM)
                     .transition(.opacity)
 
+            case .logReason(let date):
+                LogReasonView(appVM: appVM, targetDate: date)
+                    .transition(.opacity)
+
             default:
                 MainTabView(appVM: appVM)
                     .transition(.opacity)
@@ -192,6 +196,8 @@ struct RootView: View {
             return "completion"
         case .breathCounting:
             return "breathCounting"
+        case .logReason:
+            return "logReason"
         case .history:
             return "history"
         case .journal:

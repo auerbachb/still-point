@@ -16,6 +16,7 @@ actor UITestAPIStore {
     private let config: UITestConfig
     private var store: UITestStore
     private var notificationPreferences: NotificationPreferencesDTO
+    private var failureReasonsByDate: [String: FailureReasonDTO] = [:]
     private let defaultsKey: String
 
     /// Whether launch requested a full reset. `APIClient` reads this
@@ -33,6 +34,7 @@ actor UITestAPIStore {
             dailyReminderEnabled: false,
             missADayEnabled: false,
             friendRequestNotificationsEnabled: true,
+            failureReasonReminderEnabled: false,
             suppressDuringSession: false,
             dailyReminderTime: "09:00",
             dailyReminderFrequency: .daily,
@@ -436,6 +438,7 @@ actor UITestAPIStore {
             dailyReminderEnabled: patch.dailyReminderEnabled ?? current.dailyReminderEnabled,
             missADayEnabled: patch.missADayEnabled ?? current.missADayEnabled,
             friendRequestNotificationsEnabled: patch.friendRequestNotificationsEnabled ?? current.friendRequestNotificationsEnabled,
+            failureReasonReminderEnabled: patch.failureReasonReminderEnabled ?? current.failureReasonReminderEnabled,
             suppressDuringSession: patch.suppressDuringSession ?? current.suppressDuringSession,
             dailyReminderTime: patch.dailyReminderTime ?? current.dailyReminderTime,
             dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
@@ -447,6 +450,47 @@ actor UITestAPIStore {
 
         notificationPreferences = next
         return next
+    }
+
+    // MARK: - Failure reasons
+
+    func getFailureReason(date: String) throws -> FailureReasonLookupDTO {
+        try ensureAuthenticated()
+        if let row = failureReasonsByDate[date] {
+            return FailureReasonLookupDTO(exists: true, failureReason: row)
+        }
+        return FailureReasonLookupDTO(exists: false, failureReason: nil)
+    }
+
+    func submitFailureReason(_ request: SubmitFailureReasonRequest) throws -> FailureReasonDTO {
+        try ensureAuthenticated()
+        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw APIError(status: 400, message: "text must not be empty", code: "VALIDATION_ERROR")
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        if let existing = failureReasonsByDate[request.reasonDate] {
+            let updated = FailureReasonDTO(
+                id: existing.id,
+                reasonDate: existing.reasonDate,
+                text: trimmed,
+                createdAt: existing.createdAt,
+                updatedAt: now
+            )
+            failureReasonsByDate[request.reasonDate] = updated
+            return updated
+        }
+
+        let created = FailureReasonDTO(
+            id: "ui-failure-reason-\(failureReasonsByDate.count + 1)",
+            reasonDate: request.reasonDate,
+            text: trimmed,
+            createdAt: now,
+            updatedAt: now
+        )
+        failureReasonsByDate[request.reasonDate] = created
+        return created
     }
 
     // MARK: - Helpers

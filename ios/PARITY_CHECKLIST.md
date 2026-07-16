@@ -21,6 +21,7 @@ Release owner: iOS release DRI
 | Buddy invite deep links | Implemented | Implemented | ✅ Complete | iOS handles `stillpoint://buddy` and web invite URL forms. |
 | Account deletion flow | Implemented | Implemented | ✅ Complete | iOS Settings includes two-step destructive confirmation. |
 | Aphorisms pre-session inspiration toggle (#88) | Implemented | Implemented | ✅ Complete | Shared quote list in `StillPointShared/Aphorisms.swift` mirrors `src/lib/aphorisms.ts`; both clients toggle via `PATCH /api/settings`. |
+| Failure-reason reminder + log-reason capture (#441 / web PR #466) | Implemented | Implemented | ✅ Complete | iOS exposes `failureReasonReminderEnabled` in Notifications settings, handles `stillpoint://log-reason?date=…`, and captures notes via `/api/failure-reasons`. |
 
 ## Known parity gaps (critical + non-critical)
 
