@@ -95,6 +95,36 @@ export type BuddyCalendarColorsFixture = {
   cases: Array<{ userId: string; expectedIndex: number; expectedHex: string }>;
 };
 
+export type PathwayFixture = {
+  daysPerLevel: number;
+  totalLevels: number;
+  pathwayMaxDay: number;
+  levelNames: string[];
+  nodeStateForDay: Array<{ day: number; currentDay: number; expected: "completed" | "current" | "locked" }>;
+  buildPathway: Array<{
+    name: string;
+    currentDay: number;
+    expectedCurrentNodeDay?: number;
+    expectedCurrentNodeCount?: number;
+    expectedLevelCount?: number;
+    expectedAllDays?: number[];
+    expectedLevels?: Array<{
+      level: number;
+      name: string;
+      state: "completed" | "current" | "locked";
+      completedCount: number;
+      firstNodeState?: "completed" | "current" | "locked";
+      lastNodeState?: "completed" | "current" | "locked";
+      nodeStates?: Array<"completed" | "current" | "locked">;
+    }>;
+    expectedAllNodesCompleted?: boolean;
+    expectedAllLevelsCompleted?: boolean;
+    expectedLastLevelState?: "completed" | "current" | "locked";
+    expectedLastNodeState?: "completed" | "current" | "locked";
+    expectedFirstNodeState?: "completed" | "current" | "locked";
+  }>;
+};
+
 export type DurationForDayFixture = {
   constants: {
     baseDuration: number;

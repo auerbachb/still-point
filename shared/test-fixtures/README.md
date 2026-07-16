@@ -16,6 +16,7 @@ implementations breaks CI on at least one platform.
 | `aphorisms.json` | `aphorismForDay` (`src/lib/aphorisms.ts`) | `Aphorisms.forDay` (`Aphorisms.swift`) |
 | `buddyCalendarColors.json` | `buddyColorFromUserId` (`src/lib/buddyCalendarColors.ts`) | `buddyColorIndexFromUserId` (`BuddyCalendarColors.swift`) |
 | `durationForDay.json` | `durationForDay` / `isDualTrackEligible` (`src/lib/constants.ts`, `src/lib/duration.ts`) | `StillPoint.duration(forDay:)` / `isDualTrackEligible` (`Constants.swift`). `advanceProgression` and `detectMissedDayGap` cases are web-only until iOS recovery parity (#524). |
+| `pathway.json` | `buildPathway` / `nodeStateForDay` (`src/lib/pathway.ts`) | `Pathway.build` / `Pathway.nodeState(forDay:currentDay:)` (`Pathway.swift`) |
 
 ## How each suite loads them
 
