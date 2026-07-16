@@ -8,9 +8,10 @@ enum AppleSignInController {
     /// Returns `nil` if the identity token cannot be decoded as UTF-8 (should not happen for valid credentials).
     static func nativeSignInRequest(
         from credential: ASAuthorizationAppleIDCredential,
-        rawNonce: String?
+        rawNonce: String
     ) -> AppleNativeSignInRequest? {
         guard
+            !rawNonce.isEmpty,
             let tokenData = credential.identityToken,
             let identityToken = String(data: tokenData, encoding: .utf8),
             !identityToken.isEmpty
