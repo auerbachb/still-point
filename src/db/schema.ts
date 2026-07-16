@@ -38,8 +38,8 @@ export const users = pgTable("users", {
   /** #238: miss-a-day recovery ramp. Nullable trio — all three are set together when a
    *  2+ day gap is detected (`/api/auth/me`) and cleared together once the ramp finishes.
    *  `recoveryTargetDay` freezes the pre-miss `currentDay` (the level to ramp back to);
-   *  `currentDay` itself is left untouched during recovery so the first fully-recovered
-   *  session naturally lands back on that level via `durationForDay(currentDay)`. */
+   *  `currentDay` is frozen mid-ramp but advances by one when the final recovery step
+   *  completes (#559), preventing sparse sitters from livelocking below the cap. */
   recoveryTargetDay: integer("recovery_target_day"),
   recoveryCurrentStep: integer("recovery_current_step"),
   recoveryTotalSteps: integer("recovery_total_steps"),

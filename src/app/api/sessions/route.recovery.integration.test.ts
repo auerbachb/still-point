@@ -127,7 +127,7 @@ describe("POST /api/sessions — miss-a-day recovery progression (#238)", () => 
     expect(row!.recoveryTotalSteps).toBe(5);
   });
 
-  test("completing the final recovery step clears recovery and leaves currentDay at the prior level", async () => {
+  test("completing the final recovery step clears recovery and advances currentDay (#559)", async () => {
     const user = await makeUser({
       currentDay: 11,
       recoveryTargetDay: 11,
@@ -140,10 +140,39 @@ describe("POST /api/sessions — miss-a-day recovery progression (#238)", () => 
     expect(res.status).toBe(200);
 
     const [row] = await db.select().from(users).where(eq(users.id, user.id));
-    expect(row!.currentDay).toBe(11);
+    expect(row!.currentDay).toBe(12);
     expect(row!.recoveryTargetDay).toBeNull();
     expect(row!.recoveryCurrentStep).toBeNull();
     expect(row!.recoveryTotalSteps).toBeNull();
+  });
+
+  test("repeated gap cycles advance past day 45 instead of livelocking at 500s (#559)", async () => {
+    const user = await makeUser({ currentDay: 45 });
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+
+    for (let step = 1; step <= 5; step++) {
+      await db.update(users).set({
+        recoveryTargetDay: 45,
+        recoveryCurrentStep: step,
+        recoveryTotalSteps: 5,
+      }).where(eq(users.id, user.id));
+
+      const res = await POST(sessionRequest(baseSessionBody({
+        dayNumber: 45,
+        sessionDate: `2026-06-${String(step).padStart(2, "0")}`,
+      })));
+      expect(res.status).toBe(200);
+    }
+
+    const [afterRecovery] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(afterRecovery!.currentDay).toBe(46);
+    expect(afterRecovery!.recoveryTargetDay).toBeNull();
+
+    const res = await POST(sessionRequest(baseSessionBody({ dayNumber: 46, sessionDate: "2026-06-10" })));
+    expect(res.status).toBe(200);
+
+    const [afterNormal] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(afterNormal!.currentDay).toBe(47);
   });
 
   test("the session immediately after recovery clears resumes normal +1 progression", async () => {

@@ -58,6 +58,31 @@ final class StillPointDurationTests: XCTestCase {
         XCTAssertEqual(StillPoint.advanceSecondTrackDay(sessionType: .standard, completed: false, secondTrackDay: 3), 3)
     }
 
+    // MARK: - Shared fixtures (#540/#421)
+
+    func testDurationForDaySharedFixture() throws {
+        let fixture = try SharedFixtures.load("durationForDay.json", as: DurationForDayFixture.self)
+
+        XCTAssertEqual(fixture.constants.forkDay, StillPoint.forkDay)
+        XCTAssertEqual(fixture.constants.maxDuration, StillPoint.maxDuration)
+
+        for testCase in fixture.durationForDay {
+            XCTAssertEqual(
+                StillPoint.duration(forDay: testCase.day),
+                testCase.expected,
+                "durationForDay day \(testCase.day)"
+            )
+        }
+
+        for testCase in fixture.isDualTrackEligible {
+            XCTAssertEqual(
+                StillPoint.isDualTrackEligible(currentDay: testCase.currentDay),
+                testCase.expected,
+                "isDualTrackEligible currentDay \(testCase.currentDay)"
+            )
+        }
+    }
+
     // Note: invalid days (`< 1`) are tested via `clampedCurrentDay(for:)` below.
     // Calling `duration(forDay:)` with `< 1` traps the debug `assert` in the
     // test runner (intended dev behavior); production builds survive via the

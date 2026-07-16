@@ -94,3 +94,49 @@ export type BuddyCalendarColorsFixture = {
   palette: string[];
   cases: Array<{ userId: string; expectedIndex: number; expectedHex: string }>;
 };
+
+export type DurationForDayFixture = {
+  constants: {
+    baseDuration: number;
+    increment: number;
+    maxDuration: number;
+    forkDay: number;
+    recoveryMaxSteps: number;
+    missedDayGapThreshold: number;
+  };
+  durationForDay: Array<{ day: number; expected: number }>;
+  isDualTrackEligible: Array<{ currentDay: number; expected: boolean }>;
+  advanceProgression: Array<{
+    name: string;
+    sessionType: "standard" | "quick" | "breath";
+    completed: boolean;
+    state: {
+      currentDay: number;
+      recoveryTargetDay: number | null;
+      recoveryCurrentStep: number | null;
+      recoveryTotalSteps: number | null;
+    };
+    expected: {
+      currentDay: number;
+      recoveryTargetDay: number | null;
+      recoveryCurrentStep: number | null;
+      recoveryTotalSteps: number | null;
+    };
+  }>;
+  detectMissedDayGap: Array<{
+    name: string;
+    lastCompletedSessionDate: string | null;
+    todayIso: string;
+    currentDay: number;
+    recovery: {
+      recoveryTargetDay: number | null;
+      recoveryCurrentStep: number | null;
+      recoveryTotalSteps: number | null;
+    };
+    expected: {
+      recoveryTargetDay: number;
+      recoveryCurrentStep: number;
+      recoveryTotalSteps: number;
+    } | null;
+  }>;
+};

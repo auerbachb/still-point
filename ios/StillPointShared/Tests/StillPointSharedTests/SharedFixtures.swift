@@ -135,6 +135,28 @@ struct BuddyCalendarColorsFixture: Decodable {
     let cases: [Case]
 }
 
+struct DurationForDayFixture: Decodable {
+    struct Constants: Decodable {
+        let baseDuration: Int
+        let increment: Int
+        let maxDuration: Int
+        let forkDay: Int
+        let recoveryMaxSteps: Int
+        let missedDayGapThreshold: Int
+    }
+    struct DurationCase: Decodable {
+        let day: Int
+        let expected: Int
+    }
+    struct EligibilityCase: Decodable {
+        let currentDay: Int
+        let expected: Bool
+    }
+    let constants: Constants
+    let durationForDay: [DurationCase]
+    let isDualTrackEligible: [EligibilityCase]
+}
+
 // MARK: - Fixture -> SessionDTO helpers
 
 extension HistoryJourneyFixture.Session {
