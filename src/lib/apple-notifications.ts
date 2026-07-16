@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { createHash } from "crypto";
 import { db } from "@/db";
 import { appleNotificationLog, oauthAccounts, users } from "@/db/schema";
@@ -217,4 +217,22 @@ export async function finalizeAppleNotificationLog(
     .update(appleNotificationLog)
     .set({ actionTaken: result.actionTaken.slice(0, 64), userId: result.userId })
     .where(eq(appleNotificationLog.id, logId));
+}
+
+/** Atomically claim an in-flight receipt so concurrent duplicate deliveries run once. */
+export async function claimAppleNotificationForProcessing(logId: string): Promise<boolean> {
+  const [claimed] = await db
+    .update(appleNotificationLog)
+    .set({ actionTaken: "processing" })
+    .where(
+      and(
+        eq(appleNotificationLog.id, logId),
+        or(
+          eq(appleNotificationLog.actionTaken, "received"),
+          eq(appleNotificationLog.actionTaken, "processing_failed"),
+        ),
+      ),
+    )
+    .returning({ id: appleNotificationLog.id });
+  return claimed !== undefined;
 }

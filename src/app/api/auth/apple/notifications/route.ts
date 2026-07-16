@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { verifyAppleJwt } from "@/lib/apple-auth";
 import {
+  claimAppleNotificationForProcessing,
   finalizeAppleNotificationLog,
   handleAppleNotificationEvent,
   parseAppleEventsClaim,
@@ -64,6 +65,14 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     return NextResponse.json({ received: true });
   }
 
+  const claimed = await claimAppleNotificationForProcessing(receipt.logId);
+  if (!claimed) {
+    console.info(
+      `apple notifications: concurrent delivery suppressed (logId=${receipt.logId})`,
+    );
+    return NextResponse.json({ received: true });
+  }
+
   let result: Awaited<ReturnType<typeof handleAppleNotificationEvent>>;
   try {
     result = await handleAppleNotificationEvent(event);
@@ -82,7 +91,8 @@ export const POST = withApiHandler("apple notifications", async (request: NextRe
     await finalizeAppleNotificationLog(receipt.logId, result);
   } catch (finalizeError) {
     console.error("apple notifications: finalize audit row failed:", finalizeError);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    // Side effects already applied — acknowledge to avoid duplicate handler runs.
+    return NextResponse.json({ received: true });
   }
 
   return NextResponse.json({ received: true });
