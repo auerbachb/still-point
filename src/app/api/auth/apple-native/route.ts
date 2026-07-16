@@ -1,18 +1,11 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createToken, SP_TOKEN_COOKIE } from "@/lib/auth";
+import { verifyAppleJwt } from "@/lib/apple-auth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { resolveOAuthUserId, OAuthEmailRequiredError } from "@/lib/oauth-user-resolution";
-
-const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
-const ISSUER = "https://appleid.apple.com";
-
-function defaultIOSAudience(): string {
-  return process.env.AUTH_APPLE_IOS_AUDIENCE ?? "com.brettonauerbach.stillpoint";
-}
 
 type AppleUserPayload = {
   name?: { firstName?: string; lastName?: string };
@@ -22,6 +15,7 @@ type AppleUserPayload = {
 type RequestBody = {
   identityToken?: string;
   authorizationCode?: string;
+  rawNonce?: string;
   user?: AppleUserPayload;
 };
 
@@ -45,13 +39,15 @@ export const POST = withApiHandler("apple-native", async (request: NextRequest) 
     return NextResponse.json({ error: "identityToken required" }, { status: 400 });
   }
 
+  const rawNonce = typeof body.rawNonce === "string" ? body.rawNonce : "";
+  if (!rawNonce) {
+    return NextResponse.json({ error: "rawNonce required" }, { status: 400 });
+  }
+
   let sub: string;
   let emailFromToken: string | undefined;
   try {
-    const { payload } = await jwtVerify(identityToken, APPLE_JWKS, {
-      issuer: ISSUER,
-      audience: defaultIOSAudience(),
-    });
+    const payload = await verifyAppleJwt(identityToken, { expectedNonce: rawNonce });
     if (typeof payload.sub !== "string" || !payload.sub) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
