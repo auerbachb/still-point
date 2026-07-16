@@ -14,6 +14,8 @@ struct CompletionView: View {
     let sessionType: SessionType
     let duration: Int
     let bonusSeconds: Int
+    let attentionLog: [AttentionEntry]?
+    let attentionElapsed: Double?
 
     @State private var endNote = ""
     @State private var noteSaved = false
@@ -27,6 +29,14 @@ struct CompletionView: View {
     private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
     private var isQuickSession: Bool { sessionType == .quick }
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
+
+    private var attentionSummary: AttentionTrackingLogic.AttentionSummary? {
+        guard let attentionLog, let attentionElapsed, attentionElapsed > 0 else { return nil }
+        return AttentionTrackingLogic.calculateAttentionSummary(
+            log: attentionLog,
+            totalElapsed: attentionElapsed
+        )
+    }
 
     private var durationSubtitle: String {
         guard bonusSeconds > 0 else {
@@ -82,6 +92,27 @@ struct CompletionView: View {
                         bgColor: SPColor.amberBgFaint,
                         borderColor: SPColor.amberBorderSubtle
                     )
+
+                    if let attentionSummary {
+                        HStack(spacing: SPSpacing.s3) {
+                            statCard(
+                                value: "\(attentionSummary.attentivePercent)%",
+                                label: "GAZE ON SCREEN",
+                                color: SPColor.green,
+                                bgColor: SPColor.greenBgFaint,
+                                borderColor: SPColor.greenBorderSubtle
+                            )
+
+                            statCard(
+                                value: "\(attentionSummary.awayPercent)%",
+                                label: "GAZE AWAY",
+                                color: SPColor.amber,
+                                bgColor: SPColor.amberBgFaint,
+                                borderColor: SPColor.amberBorderSubtle
+                            )
+                        }
+                        .accessibilityIdentifier("completion.attentionSummary")
+                    }
                 }
 
                 // Captured thoughts
