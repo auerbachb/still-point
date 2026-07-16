@@ -48,12 +48,9 @@ private final class LogReasonViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !submittingInFlight else { return }
 
-        let maxAllowedDate = SessionCalendar.addDays(
-            toIsoDate: WidgetData.localDayString(Date()),
-            deltaDays: 1
-        )
+        let maxAllowedDate = WidgetData.localDayString(Date())
         guard date <= maxAllowedDate else {
-            errorMessage = "You can't log a reason for a future day."
+            errorMessage = "You can only log a reason for today or earlier."
             return
         }
 
