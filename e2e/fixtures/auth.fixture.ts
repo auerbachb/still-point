@@ -163,24 +163,37 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         username?: string;
         isPublic?: boolean;
         aphorismsEnabled?: boolean;
+        attentionTrackingEnabled?: boolean;
       };
 
+      let hasSupportedUpdate = false;
+
       if (body.username !== undefined) {
+        hasSupportedUpdate = true;
         const username = String(body.username).trim();
         if (!isValidUsername(username)) {
           return json(route, 400, { error: USERNAME_ERROR });
         }
         if (username.toLowerCase() === "taken_name") {
-          return json(route, 409, { error: "Username is already taken" });
+          return json(route, 409, { error: "Username already taken" });
         }
         state.user.username = username;
         state.credentials.username = username;
       }
       if (typeof body.isPublic === "boolean") {
+        hasSupportedUpdate = true;
         state.user.isPublic = body.isPublic;
       }
       if (typeof body.aphorismsEnabled === "boolean") {
+        hasSupportedUpdate = true;
         state.user.aphorismsEnabled = body.aphorismsEnabled;
+      }
+      if (typeof body.attentionTrackingEnabled === "boolean") {
+        hasSupportedUpdate = true;
+        state.user.attentionTrackingEnabled = body.attentionTrackingEnabled;
+      }
+      if (!hasSupportedUpdate) {
+        return json(route, 400, { error: "No supported settings provided" });
       }
       return json(route, 200, { user: state.user });
     }
