@@ -128,6 +128,7 @@ final class AttentionTrackingManager: NSObject {
     private var isPaused = false
     private var pendingLookAt: SIMD3<Float>?
     private var frameDispatchScheduled = false
+    private var startGeneration = 0
 
     override init() {
         isSupported = ARFaceTrackingConfiguration.isSupported
@@ -143,7 +144,11 @@ final class AttentionTrackingManager: NSObject {
         }
         guard !isRunning else { return }
 
+        startGeneration += 1
+        let generation = startGeneration
+
         guard await ensureCameraAuthorized() else { return }
+        guard generation == startGeneration else { return }
 
         self.elapsedProvider = elapsedProvider
         sustained = AttentionTrackingLogic.SustainedState()
@@ -163,7 +168,12 @@ final class AttentionTrackingManager: NSObject {
     }
 
     func stop() {
-        guard isRunning else { return }
+        startGeneration += 1
+        guard isRunning else {
+            status = .idle
+            lastFailureMessage = nil
+            return
+        }
         resetRunningState()
         status = .idle
         lastFailureMessage = nil

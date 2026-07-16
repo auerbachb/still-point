@@ -169,7 +169,7 @@ struct SessionView: View {
         }
         .onChange(of: attentionManager.status) { _, status in
             guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
-            guard sessionTimerRunning, !vm.showIntroOverlay else { return }
+            guard sessionInProgress, !vm.showIntroOverlay else { return }
             presentAttentionStatusAlert(for: status)
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
@@ -344,7 +344,8 @@ struct SessionView: View {
     private var showsLiveGazeIndicator: Bool {
         appVM.currentUser?.attentionTrackingEnabled == true
             && attentionManager.status == .running
-            && (attentionManager.isRunning || attentionManager.didReceiveSample)
+            && !vm.isPaused
+            && attentionManager.didReceiveSample
     }
 
     private var bottomOverlayReserve: CGFloat {
