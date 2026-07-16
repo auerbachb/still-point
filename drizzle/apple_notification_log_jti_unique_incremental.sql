@@ -20,7 +20,7 @@
 -- This script is idempotent (IF NOT EXISTS) and is wrapped in a transaction by the
 -- migration runner, so a failure mid-flight rolls back cleanly.
 --
--- Lock note: CREATE UNIQUE INDEX (non-CONCURRENTLY) takes ACCESS EXCLUSIVE on
+-- Lock note: CREATE UNIQUE INDEX (non-CONCURRENTLY) takes SHARE on
 -- apple_notification_log for the duration of the build, blocking concurrent writes.
 -- This is fine on the current small table (sub-second build). The runner executes
 -- inside a transaction, so CONCURRENTLY is not an option here.
