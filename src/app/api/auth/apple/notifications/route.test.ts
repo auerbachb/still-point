@@ -6,11 +6,13 @@ const {
   handleAppleNotificationEvent,
   recordAppleNotificationReceipt,
   finalizeAppleNotificationLog,
+  claimAppleNotificationForProcessing,
 } = vi.hoisted(() => ({
   verifyAppleJwt: vi.fn(),
   handleAppleNotificationEvent: vi.fn(),
   recordAppleNotificationReceipt: vi.fn(),
   finalizeAppleNotificationLog: vi.fn(),
+  claimAppleNotificationForProcessing: vi.fn(),
 }));
 
 vi.mock("@/lib/apple-auth", () => ({
@@ -24,6 +26,7 @@ vi.mock("@/lib/apple-notifications", async (importOriginal) => {
     handleAppleNotificationEvent,
     recordAppleNotificationReceipt,
     finalizeAppleNotificationLog,
+    claimAppleNotificationForProcessing,
   };
 });
 
@@ -50,6 +53,7 @@ beforeEach(() => {
     userId: "user-uuid-1",
   });
   recordAppleNotificationReceipt.mockResolvedValue({ logId: "log-uuid-1", alreadySeen: false });
+  claimAppleNotificationForProcessing.mockResolvedValue(true);
   finalizeAppleNotificationLog.mockResolvedValue(undefined);
 });
 
