@@ -395,5 +395,130 @@ describe("notification scheduler", () => {
     expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
   });
 
+  describe("quiet-hours boundary (#561)", () => {
+    test("isInQuietHours: overnight end is exclusive at 08:00", async () => {
+      const { isInQuietHours } = await import("./notification-scheduler");
+      const quiet = { start: "22:00", end: "08:00" } as const;
+
+      expect(isInQuietHours(7 * 60 + 59, quiet.start, quiet.end)).toBe(true);
+      expect(isInQuietHours(8 * 60, quiet.start, quiet.end)).toBe(false);
+    });
+
+    test("isInQuietHours: default iOS window 22:00–07:00 treats 07:59 as outside quiet", async () => {
+      const { isInQuietHours } = await import("./notification-scheduler");
+      const quiet = { start: "22:00", end: "07:00" } as const;
+
+      expect(isInQuietHours(6 * 60 + 59, quiet.start, quiet.end)).toBe(true);
+      expect(isInQuietHours(7 * 60, quiet.start, quiet.end)).toBe(false);
+      expect(isInQuietHours(7 * 60 + 59, quiet.start, quiet.end)).toBe(false);
+    });
+
+    test("evaluateReminderDispatchWindow defers a 07:54 reminder until quiet ends at 08:00", async () => {
+      const { evaluateReminderDispatchWindow } = await import("./notification-scheduler");
+      const reminder = 7 * 60 + 54;
+      const quiet = { start: "22:00", end: "08:00" } as const;
+
+      expect(evaluateReminderDispatchWindow(7 * 60 + 54, reminder, quiet.start, quiet.end)).toEqual({
+        due: false,
+        dayOffset: 0,
+      });
+      expect(evaluateReminderDispatchWindow(7 * 60 + 59, reminder, quiet.start, quiet.end)).toEqual({
+        due: false,
+        dayOffset: 0,
+      });
+      expect(evaluateReminderDispatchWindow(8 * 60, reminder, quiet.start, quiet.end)).toEqual({
+        due: true,
+        dayOffset: 0,
+      });
+    });
+
+    test("evaluateReminderDispatchWindow still delivers a 07:59 reminder on the 08:00 tick", async () => {
+      const { evaluateReminderDispatchWindow } = await import("./notification-scheduler");
+      const reminder = 7 * 60 + 59;
+      const quiet = { start: "22:00", end: "08:00" } as const;
+
+      expect(evaluateReminderDispatchWindow(7 * 60 + 59, reminder, quiet.start, quiet.end)).toEqual({
+        due: false,
+        dayOffset: 0,
+      });
+      expect(evaluateReminderDispatchWindow(8 * 60, reminder, quiet.start, quiet.end)).toEqual({
+        due: true,
+        dayOffset: 0,
+      });
+    });
+
+    test("dispatchDueNotifications delivers after quiet hours when the normal window expired (#561)", async () => {
+      preferenceRows = [{
+        ...basePrefs,
+        dailyReminderTime: "07:54",
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+      }];
+
+      const { dispatchDueNotifications } = await import("./notification-scheduler");
+
+      const blocked = await dispatchDueNotifications(new Date("2026-05-29T07:59:00.000Z"));
+      expect(blocked.sent).toBe(0);
+      expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+
+      const delivered = await dispatchDueNotifications(new Date("2026-05-29T08:00:00.000Z"));
+      expect(delivered.sent).toBe(1);
+      expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+    });
+
+    test("dispatchDueNotifications does not defer past CRON_WINDOW_MINUTES after quiet end", async () => {
+      preferenceRows = [{
+        ...basePrefs,
+        dailyReminderTime: "07:45",
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+      }];
+
+      const { dispatchDueNotifications } = await import("./notification-scheduler");
+      const result = await dispatchDueNotifications(new Date("2026-05-29T08:06:00.000Z"));
+
+      expect(result.sent).toBe(0);
+      expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("America/New_York DST (#561)", () => {
+    test("dispatchDueNotifications matches 08:00 local on spring-forward day", async () => {
+      preferenceRows = [{ ...basePrefs, tz: "America/New_York", dailyReminderTime: "08:00" }];
+      const { dispatchDueNotifications } = await import("./notification-scheduler");
+      // 2026-03-08 08:02 EDT (UTC-4 after 2 AM spring-forward) = 12:02 UTC
+      const result = await dispatchDueNotifications(new Date("2026-03-08T12:02:00.000Z"));
+
+      expect(result.sent).toBe(1);
+      expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+    });
+
+    test("dispatchDueNotifications matches 08:00 local on fall-back day", async () => {
+      preferenceRows = [{ ...basePrefs, tz: "America/New_York", dailyReminderTime: "08:00" }];
+      const { dispatchDueNotifications } = await import("./notification-scheduler");
+      // 2026-11-01 08:02 EST (UTC-5 after 2 AM fall-back) = 13:02 UTC
+      const result = await dispatchDueNotifications(new Date("2026-11-01T13:02:00.000Z"));
+
+      expect(result.sent).toBe(1);
+      expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+    });
+
+    test("quiet-hours deferral works in America/New_York across DST", async () => {
+      preferenceRows = [{
+        ...basePrefs,
+        tz: "America/New_York",
+        dailyReminderTime: "07:54",
+        quietHoursStart: "22:00",
+        quietHoursEnd: "08:00",
+      }];
+      const { dispatchDueNotifications } = await import("./notification-scheduler");
+      // 2026-03-08 08:00 EDT = 12:00 UTC
+      const result = await dispatchDueNotifications(new Date("2026-03-08T12:00:00.000Z"));
+
+      expect(result.sent).toBe(1);
+      expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+    });
+  });
+
 
 });
