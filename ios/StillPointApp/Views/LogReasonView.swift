@@ -53,7 +53,7 @@ private final class LogReasonViewModel {
             deltaDays: 1
         )
         guard date <= maxAllowedDate else {
-            errorMessage = "You can only log a reason for today or earlier."
+            errorMessage = "You can't log a reason for a future day."
             return
         }
 

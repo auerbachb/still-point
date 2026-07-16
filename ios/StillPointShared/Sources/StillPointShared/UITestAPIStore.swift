@@ -16,8 +16,9 @@ actor UITestAPIStore {
     private let config: UITestConfig
     private var store: UITestStore
     private var notificationPreferences: NotificationPreferencesDTO
-    private var failureReasonsByDate: [String: FailureReasonDTO] = [:]
     private let defaultsKey: String
+
+    private static let maxFailureReasonLength = 1000
 
     /// Whether launch requested a full reset. `APIClient` reads this
     /// synchronously during init so it can also clear the session artifacts it
@@ -456,7 +457,10 @@ actor UITestAPIStore {
 
     func getFailureReason(date: String) throws -> FailureReasonLookupDTO {
         try ensureAuthenticated()
-        if let row = failureReasonsByDate[date] {
+        guard SessionCalendar.isValidSessionCalendarDate(date) else {
+            throw APIError(status: 400, message: "date must be YYYY-MM-DD", code: "VALIDATION_ERROR")
+        }
+        if let row = store.failureReasons[date] {
             return FailureReasonLookupDTO(exists: true, failureReason: row)
         }
         return FailureReasonLookupDTO(exists: false, failureReason: nil)
@@ -464,13 +468,31 @@ actor UITestAPIStore {
 
     func submitFailureReason(_ request: SubmitFailureReasonRequest) throws -> FailureReasonDTO {
         try ensureAuthenticated()
+        guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
+            throw APIError(status: 400, message: "reasonDate must be YYYY-MM-DD", code: "VALIDATION_ERROR")
+        }
+        let maxAllowedDate = SessionCalendar.addDays(
+            toIsoDate: WidgetData.localDayString(Date()),
+            deltaDays: 1
+        )
+        guard request.reasonDate <= maxAllowedDate else {
+            throw APIError(status: 400, message: "reasonDate cannot be in the future", code: "VALIDATION_ERROR")
+        }
+
         let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw APIError(status: 400, message: "text must not be empty", code: "VALIDATION_ERROR")
         }
+        guard trimmed.count <= Self.maxFailureReasonLength else {
+            throw APIError(
+                status: 400,
+                message: "text must be at most \(Self.maxFailureReasonLength) characters",
+                code: "VALIDATION_ERROR"
+            )
+        }
 
         let now = ISO8601DateFormatter().string(from: Date())
-        if let existing = failureReasonsByDate[request.reasonDate] {
+        if let existing = store.failureReasons[request.reasonDate] {
             let updated = FailureReasonDTO(
                 id: existing.id,
                 reasonDate: existing.reasonDate,
@@ -478,18 +500,20 @@ actor UITestAPIStore {
                 createdAt: existing.createdAt,
                 updatedAt: now
             )
-            failureReasonsByDate[request.reasonDate] = updated
+            store.failureReasons[request.reasonDate] = updated
+            persist()
             return updated
         }
 
         let created = FailureReasonDTO(
-            id: "ui-failure-reason-\(failureReasonsByDate.count + 1)",
+            id: "ui-failure-reason-\(store.failureReasons.count + 1)",
             reasonDate: request.reasonDate,
             text: trimmed,
             createdAt: now,
             updatedAt: now
         )
-        failureReasonsByDate[request.reasonDate] = created
+        store.failureReasons[request.reasonDate] = created
+        persist()
         return created
     }
 
@@ -552,6 +576,7 @@ private struct UITestStore: Codable, Sendable {
     var isAuthenticated: Bool
     var sessions: [SessionDTO]
     var thoughts: [ThoughtDTO]
+    var failureReasons: [String: FailureReasonDTO]
     var nextSessionOrdinal: Int
     var nextThoughtOrdinal: Int
 
@@ -570,6 +595,7 @@ private struct UITestStore: Codable, Sendable {
             isAuthenticated: seedAuthenticated,
             sessions: [],
             thoughts: [],
+            failureReasons: [:],
             nextSessionOrdinal: 1,
             nextThoughtOrdinal: 1
         )
@@ -711,6 +737,7 @@ private struct UITestStore: Codable, Sendable {
             isAuthenticated: seedAuthenticated,
             sessions: sessions,
             thoughts: thoughts,
+            failureReasons: [:],
             nextSessionOrdinal: 100,
             nextThoughtOrdinal: 100
         )
