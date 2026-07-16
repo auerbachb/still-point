@@ -76,15 +76,6 @@ struct SessionView: View {
                 }
             }
 
-            // Pre-session intro gates the countdown (#560).
-            if vm.showIntroOverlay {
-                SessionIntroOverlayView(
-                    onBegin: { vm.dismissIntroOverlay(dontShowAgain: false) },
-                    onDontShowAgain: { vm.dismissIntroOverlay(dontShowAgain: true) }
-                )
-                .transition(.opacity)
-            }
-
             // Bottom chrome: secondary controls above; primary hold targets pinned to thumb-reach zone.
             VStack(spacing: 0) {
                 Spacer()
@@ -103,6 +94,7 @@ struct SessionView: View {
                     .accessibilityIdentifier("session.secondaryChromeMarker")
                     .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
             }
+            .allowsHitTesting(!vm.showIntroOverlay)
             .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
             // Thought capture after releasing a distraction hold
@@ -122,6 +114,15 @@ struct SessionView: View {
                 }
                 .transition(.opacity)
             }
+
+            // Pre-session intro gates the countdown (#560) — topmost layer blocks chrome interaction.
+            if vm.showIntroOverlay {
+                SessionIntroOverlayView(
+                    onBegin: { vm.dismissIntroOverlay(dontShowAgain: false) },
+                    onDontShowAgain: { vm.dismissIntroOverlay(dontShowAgain: true) }
+                )
+                .transition(.opacity)
+            }
         }
         .onTapGesture {
             vm.userInteracted()
@@ -132,9 +133,7 @@ struct SessionView: View {
                 introHiddenPermanently: SessionIntroPrefs.isIntroOverlayHidden,
                 skipIntroForUITest: skipIntro
             )
-            if appVM.currentUser?.attentionTrackingEnabled == true {
-                attentionManager.start { vm.elapsed }
-            }
+            syncAttentionTracking()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -154,6 +153,13 @@ struct SessionView: View {
                 appVM: appVM,
                 inProgress: false
             )
+        }
+        .onChange(of: vm.showIntroOverlay) { _, showIntro in
+            if showIntro {
+                attentionManager.stop()
+            } else {
+                syncAttentionTracking()
+            }
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             SessionIdleTimerController.syncLocalSession(
@@ -273,6 +279,12 @@ struct SessionView: View {
     /// Active sit timer only (not paused); idle timer may lock while paused.
     private var sessionTimerRunning: Bool {
         vm.isActive && !vm.isPaused && !vm.isComplete && !vm.isAbandoned
+    }
+
+    private func syncAttentionTracking() {
+        guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
+        guard !vm.showIntroOverlay, sessionTimerRunning else { return }
+        attentionManager.start { vm.elapsed }
     }
 
     private var bottomOverlayReserve: CGFloat {
