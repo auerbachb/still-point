@@ -171,16 +171,14 @@ struct AuthView: View {
                             request.nonce = AppleSignInNonce.sha256Hex(rawNonce)
                         } onCompletion: { result in
                             let rawNonce = appleSignInRawNonce
-                            defer {
-                                appleSignInInFlight = false
-                                appleSignInRawNonce = nil
-                            }
-                            guard let rawNonce else {
-                                vm.error = "Could not prepare Sign in with Apple. Please try again."
-                                return
-                            }
                             switch result {
                             case .success(let authorization):
+                                guard let rawNonce else {
+                                    appleSignInInFlight = false
+                                    appleSignInRawNonce = nil
+                                    vm.error = "Could not prepare Sign in with Apple. Please try again."
+                                    return
+                                }
                                 guard
                                     let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                                     let body = AppleSignInController.nativeSignInRequest(
@@ -188,15 +186,23 @@ struct AuthView: View {
                                         rawNonce: rawNonce
                                     )
                                 else {
+                                    appleSignInInFlight = false
+                                    appleSignInRawNonce = nil
                                     vm.error = "Could not read Sign in with Apple credentials."
                                     return
                                 }
                                 Task {
+                                    defer {
+                                        appleSignInInFlight = false
+                                        appleSignInRawNonce = nil
+                                    }
                                     if let user = await vm.signInWithApple(using: body) {
                                         appVM.didLogin(user: user)
                                     }
                                 }
                             case .failure(let error):
+                                appleSignInInFlight = false
+                                appleSignInRawNonce = nil
                                 if let authError = error as? ASAuthorizationError,
                                    authError.code == .canceled {
                                     return
