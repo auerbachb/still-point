@@ -150,6 +150,7 @@ actor UITestAPIStore {
         store.isAuthenticated = false
         store.sessions = []
         store.thoughts = []
+        store.failureReasons = [:]
         persist()
         return true
     }
@@ -576,6 +577,42 @@ private struct UITestStore: Codable, Sendable {
     var failureReasons: [String: FailureReasonDTO]
     var nextSessionOrdinal: Int
     var nextThoughtOrdinal: Int
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decode(UserDTO.self, forKey: .user)
+        loginEmail = try container.decode(String.self, forKey: .loginEmail)
+        loginPassword = try container.decode(String.self, forKey: .loginPassword)
+        isAuthenticated = try container.decode(Bool.self, forKey: .isAuthenticated)
+        sessions = try container.decode([SessionDTO].self, forKey: .sessions)
+        thoughts = try container.decode([ThoughtDTO].self, forKey: .thoughts)
+        failureReasons =
+            try container.decodeIfPresent([String: FailureReasonDTO].self, forKey: .failureReasons) ?? [:]
+        nextSessionOrdinal = try container.decode(Int.self, forKey: .nextSessionOrdinal)
+        nextThoughtOrdinal = try container.decode(Int.self, forKey: .nextThoughtOrdinal)
+    }
+
+    init(
+        user: UserDTO,
+        loginEmail: String,
+        loginPassword: String,
+        isAuthenticated: Bool,
+        sessions: [SessionDTO],
+        thoughts: [ThoughtDTO],
+        failureReasons: [String: FailureReasonDTO],
+        nextSessionOrdinal: Int,
+        nextThoughtOrdinal: Int
+    ) {
+        self.user = user
+        self.loginEmail = loginEmail
+        self.loginPassword = loginPassword
+        self.isAuthenticated = isAuthenticated
+        self.sessions = sessions
+        self.thoughts = thoughts
+        self.failureReasons = failureReasons
+        self.nextSessionOrdinal = nextSessionOrdinal
+        self.nextThoughtOrdinal = nextThoughtOrdinal
+    }
 
     static func makeDefault(seedAuthenticated: Bool) -> UITestStore {
         let fixtureUser = UserDTO(

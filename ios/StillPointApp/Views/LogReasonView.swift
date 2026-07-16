@@ -28,16 +28,30 @@ private final class LogReasonViewModel {
     }
 
     func loadExisting(date: String) async {
-        resetForDate(date)
+        let dateChanged = activeDate != date
+        activeDate = date
+        saved = false
+        errorMessage = nil
+        submittingInFlight = false
+        submitting = false
+        loadingExisting = true
+        if dateChanged {
+            text = ""
+            hadExisting = false
+        }
+
         do {
             let lookup = try await APIClient.shared.getFailureReason(date: date)
             guard activeDate == date else { return }
             if let existing = lookup.failureReason {
                 text = existing.text
                 hadExisting = true
+            } else {
+                text = ""
+                hadExisting = false
             }
         } catch {
-            // Non-fatal: fall back to an empty field.
+            // Transient GET failure: keep any in-memory text instead of enabling a blank upsert.
         }
         if activeDate == date {
             loadingExisting = false
