@@ -10,6 +10,7 @@ type UserRecord = {
   username: string;
   isPublic: boolean;
   aphorismsEnabled: boolean;
+  attentionTrackingEnabled: boolean;
   currentDay: number;
 };
 
@@ -108,6 +109,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         username,
         isPublic: false,
         aphorismsEnabled: false,
+        attentionTrackingEnabled: false,
         currentDay: 1,
       };
       state.authenticated = true;
@@ -284,6 +286,7 @@ export const test = base.extend<AuthFixture>({
         username: credentials.username,
         isPublic: false,
         aphorismsEnabled: false,
+        attentionTrackingEnabled: false,
         currentDay: 1,
       },
       resetToken: null,
