@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { vi } from "vitest";
+import { createHash } from "crypto";
 import {
   SignJWT,
   createLocalJWKSet,
@@ -23,6 +24,10 @@ async function makeAppleLikeKeys(): Promise<{
   return { privateKey, jwks: createLocalJWKSet({ keys: [jwk] }) };
 }
 
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function signNotificationJwt(
   privateKey: CryptoKey,
   { issuer = APPLE_ISSUER, audience = BUNDLE_ID }: { issuer?: string; audience?: string } = {},
@@ -40,6 +45,25 @@ function signNotificationJwt(
     .setIssuedAt()
     .setJti("jti-abc")
     .sign(privateKey);
+}
+
+function signIdentityJwt(
+  privateKey: CryptoKey,
+  {
+    issuer = APPLE_ISSUER,
+    audience = BUNDLE_ID,
+    rawNonce,
+  }: { issuer?: string; audience?: string; rawNonce?: string } = {},
+): Promise<string> {
+  const builder = new SignJWT({
+    ...(rawNonce !== undefined ? { nonce: sha256Hex(rawNonce) } : {}),
+  })
+    .setProtectedHeader({ alg: "ES256", kid: TEST_KID })
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setSubject("apple-sub-native")
+    .setIssuedAt();
+  return builder.sign(privateKey);
 }
 
 afterEach(() => {
@@ -103,6 +127,34 @@ describe("verifyAppleJwt", () => {
 
     const payload = await verifyAppleJwt(token, { jwks });
     expect(payload.aud).toBe("me.still-point.web");
+  });
+
+  test("accepts a matching hashed nonce when expectedNonce is provided", async () => {
+    const { privateKey, jwks } = await makeAppleLikeKeys();
+    const rawNonce = "random-nonce-abc";
+    const token = await signIdentityJwt(privateKey, { rawNonce });
+
+    const payload = await verifyAppleJwt(token, { jwks, expectedNonce: rawNonce });
+
+    expect(payload.nonce).toBe(sha256Hex(rawNonce));
+  });
+
+  test("rejects a mismatched nonce", async () => {
+    const { privateKey, jwks } = await makeAppleLikeKeys();
+    const token = await signIdentityJwt(privateKey, { rawNonce: "correct-nonce" });
+
+    await expect(
+      verifyAppleJwt(token, { jwks, expectedNonce: "wrong-nonce" }),
+    ).rejects.toThrow();
+  });
+
+  test("rejects when expectedNonce is provided but the token omits nonce", async () => {
+    const { privateKey, jwks } = await makeAppleLikeKeys();
+    const token = await signIdentityJwt(privateKey);
+
+    await expect(
+      verifyAppleJwt(token, { jwks, expectedNonce: "any-nonce" }),
+    ).rejects.toThrow();
   });
 });
 

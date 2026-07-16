@@ -5,6 +5,8 @@ import StillPointShared
 struct AuthView: View {
     let appVM: AppViewModel
     @State private var vm = AuthViewModel()
+    @State private var appleSignInRawNonce: String?
+    @State private var appleSignInInFlight = false
     let launchAuthStatusMessage: String?
 
     var body: some View {
@@ -157,23 +159,50 @@ struct AuthView: View {
                         .opacity(vm.isAuthInFlight ? 0.5 : 1)
 
                         SignInWithAppleButton(.signIn) { request in
+                            guard !appleSignInInFlight else { return }
+                            guard let rawNonce = try? AppleSignInNonce.randomNonceString() else {
+                                appleSignInRawNonce = nil
+                                vm.error = "Could not prepare Sign in with Apple. Please try again."
+                                return
+                            }
+                            appleSignInInFlight = true
+                            appleSignInRawNonce = rawNonce
                             request.requestedScopes = [.fullName, .email]
+                            request.nonce = AppleSignInNonce.sha256Hex(rawNonce)
                         } onCompletion: { result in
+                            let rawNonce = appleSignInRawNonce
                             switch result {
                             case .success(let authorization):
+                                guard let rawNonce else {
+                                    appleSignInInFlight = false
+                                    appleSignInRawNonce = nil
+                                    vm.error = "Could not prepare Sign in with Apple. Please try again."
+                                    return
+                                }
                                 guard
                                     let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                                    let body = AppleSignInController.nativeSignInRequest(from: credential)
+                                    let body = AppleSignInController.nativeSignInRequest(
+                                        from: credential,
+                                        rawNonce: rawNonce
+                                    )
                                 else {
+                                    appleSignInInFlight = false
+                                    appleSignInRawNonce = nil
                                     vm.error = "Could not read Sign in with Apple credentials."
                                     return
                                 }
                                 Task {
+                                    defer {
+                                        appleSignInInFlight = false
+                                        appleSignInRawNonce = nil
+                                    }
                                     if let user = await vm.signInWithApple(using: body) {
                                         appVM.didLogin(user: user)
                                     }
                                 }
                             case .failure(let error):
+                                appleSignInInFlight = false
+                                appleSignInRawNonce = nil
                                 if let authError = error as? ASAuthorizationError,
                                    authError.code == .canceled {
                                     return
@@ -185,8 +214,8 @@ struct AuthView: View {
                         .frame(height: 44)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border2))
-                        .disabled(vm.isAuthInFlight)
-                        .opacity(vm.isAuthInFlight ? 0.5 : 1)
+                        .disabled(vm.isAuthInFlight || appleSignInInFlight)
+                        .opacity(vm.isAuthInFlight || appleSignInInFlight ? 0.5 : 1)
                     }
                 }
                 .padding(.horizontal, SPSpacing.s4)

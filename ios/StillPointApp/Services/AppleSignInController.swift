@@ -6,8 +6,12 @@ import StillPointShared
 /// `SignInWithAppleButton`, or a raw `ASAuthorizationController` — all deliver the same credential type.
 enum AppleSignInController {
     /// Returns `nil` if the identity token cannot be decoded as UTF-8 (should not happen for valid credentials).
-    static func nativeSignInRequest(from credential: ASAuthorizationAppleIDCredential) -> AppleNativeSignInRequest? {
+    static func nativeSignInRequest(
+        from credential: ASAuthorizationAppleIDCredential,
+        rawNonce: String
+    ) -> AppleNativeSignInRequest? {
         guard
+            !rawNonce.isEmpty,
             let tokenData = credential.identityToken,
             let identityToken = String(data: tokenData, encoding: .utf8),
             !identityToken.isEmpty
@@ -31,6 +35,7 @@ enum AppleSignInController {
         return AppleNativeSignInRequest(
             identityToken: identityToken,
             authorizationCode: authorizationCode,
+            rawNonce: rawNonce,
             user: user
         )
     }

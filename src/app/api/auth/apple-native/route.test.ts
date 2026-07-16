@@ -1,11 +1,10 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const jwtVerify = vi.fn();
+const verifyAppleJwt = vi.fn();
 
-vi.mock("jose", () => ({
-  createRemoteJWKSet: vi.fn(() => ({})),
-  jwtVerify,
+vi.mock("@/lib/apple-auth", () => ({
+  verifyAppleJwt,
 }));
 
 const { resolveOAuthUserId } = vi.hoisted(() => ({
@@ -47,12 +46,10 @@ describe("POST /api/auth/apple-native", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("NODE_ENV", "test");
-    jwtVerify.mockResolvedValue({
-      payload: {
-        sub: "apple-sub-1",
-        email: "relay@privaterelay.appleid.com",
-        email_verified: true,
-      },
+    verifyAppleJwt.mockResolvedValue({
+      sub: "apple-sub-1",
+      email: "relay@privaterelay.appleid.com",
+      email_verified: true,
     });
     resolveOAuthUserId.mockResolvedValue("user-uuid-1");
     dbSelectWhereLimit.mockResolvedValue([
@@ -73,6 +70,7 @@ describe("POST /api/auth/apple-native", () => {
       json: async () => ({
         identityToken: "header.payload.sig",
         authorizationCode: "opaque-code",
+        rawNonce: "nonce-abc",
       }),
     } as unknown as NextRequest;
 
@@ -84,6 +82,9 @@ describe("POST /api/auth/apple-native", () => {
     expect(json.user.id).toBe("user-uuid-1");
     expect(json.user.username).toBe("alice");
 
+    expect(verifyAppleJwt).toHaveBeenCalledWith("header.payload.sig", {
+      expectedNonce: "nonce-abc",
+    });
     expect(resolveOAuthUserId).toHaveBeenCalledWith({
       provider: "apple",
       providerAccountId: "apple-sub-1",
@@ -96,15 +97,13 @@ describe("POST /api/auth/apple-native", () => {
   });
 
   test("accepts token without email when resolveOAuthUserId links by sub", async () => {
-    jwtVerify.mockResolvedValue({
-      payload: {
-        sub: "apple-sub-repeat",
-        email_verified: true,
-      },
+    verifyAppleJwt.mockResolvedValue({
+      sub: "apple-sub-repeat",
+      email_verified: true,
     });
     const { POST } = await import("./route");
     const req = {
-      json: async () => ({ identityToken: "tok" }),
+      json: async () => ({ identityToken: "tok", rawNonce: "nonce-abc" }),
     } as unknown as NextRequest;
 
     const res = await POST(req);
@@ -117,18 +116,32 @@ describe("POST /api/auth/apple-native", () => {
     });
   });
 
+  test("returns 401 when nonce verification fails", async () => {
+    verifyAppleJwt.mockRejectedValue(new Error("nonce mismatch"));
+    const { POST } = await import("./route");
+    const req = {
+      json: async () => ({
+        identityToken: "tok",
+        rawNonce: "wrong-nonce",
+      }),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    expect(resolveOAuthUserId).not.toHaveBeenCalled();
+    expect(res.cookies.get("sp_token")).toBeUndefined();
+  });
+
   test("returns 400 when OAuthEmailRequiredError is thrown", async () => {
     const { OAuthEmailRequiredError } = await import("@/lib/oauth-user-resolution");
-    jwtVerify.mockResolvedValue({
-      payload: {
-        sub: "apple-new",
-        email_verified: true,
-      },
+    verifyAppleJwt.mockResolvedValue({
+      sub: "apple-new",
+      email_verified: true,
     });
     resolveOAuthUserId.mockRejectedValueOnce(new OAuthEmailRequiredError());
     const { POST } = await import("./route");
     const req = {
-      json: async () => ({ identityToken: "tok" }),
+      json: async () => ({ identityToken: "tok", rawNonce: "nonce-abc" }),
     } as unknown as NextRequest;
 
     const res = await POST(req);
@@ -137,8 +150,16 @@ describe("POST /api/auth/apple-native", () => {
 
   test("rejects missing identity token", async () => {
     const { POST } = await import("./route");
-    const req = { json: async () => ({}) } as unknown as NextRequest;
+    const req = { json: async () => ({ rawNonce: "nonce-abc" }) } as unknown as NextRequest;
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+
+  test("rejects missing rawNonce", async () => {
+    const { POST } = await import("./route");
+    const req = { json: async () => ({ identityToken: "tok" }) } as unknown as NextRequest;
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(verifyAppleJwt).not.toHaveBeenCalled();
   });
 });

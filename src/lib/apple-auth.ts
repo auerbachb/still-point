@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 
 /** Issuer for every Sign in with Apple JWT (identity tokens and server-to-server notifications). */
@@ -32,9 +33,22 @@ export function appleAudiences(): string[] {
 export type VerifyAppleJwtOptions = {
   /** Override the accepted audiences (defaults to `appleAudiences()`). */
   audience?: string | string[];
+  /** Raw nonce from the client; hashed and compared to the token's `nonce` claim. */
+  expectedNonce?: string;
   /** Test seam: local key set instead of Apple's remote JWKS. */
   jwks?: JWTVerifyGetKey;
 };
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function assertNonceMatches(payload: JWTPayload, expectedNonce: string): void {
+  const expectedHashed = sha256Hex(expectedNonce);
+  if (typeof payload.nonce !== "string" || payload.nonce !== expectedHashed) {
+    throw new Error("nonce mismatch");
+  }
+}
 
 /** Verify an Apple-signed JWT — signature against Apple's JWKS, issuer, audience —
  *  and return its payload. Throws on any verification failure. */
@@ -46,5 +60,8 @@ export async function verifyAppleJwt(
     issuer: APPLE_ISSUER,
     audience: options.audience ?? appleAudiences(),
   });
+  if (options.expectedNonce !== undefined) {
+    assertNonceMatches(payload, options.expectedNonce);
+  }
   return payload;
 }
