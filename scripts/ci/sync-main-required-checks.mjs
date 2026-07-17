@@ -65,33 +65,8 @@ function mergeRequiredStatusChecks(protection, mergedContexts) {
   };
 }
 
-function buildProtectionPayload(protection, mergedContexts) {
-  const reviews = protection.required_pull_request_reviews;
-  const restrictions = protection.restrictions;
-  return {
-    required_status_checks: mergeRequiredStatusChecks(protection, mergedContexts),
-    enforce_admins: protection.enforce_admins?.enabled ?? false,
-    required_pull_request_reviews: reviews
-      ? {
-          dismiss_stale_reviews: reviews.dismiss_stale_reviews ?? false,
-          require_code_owner_reviews: reviews.require_code_owner_reviews ?? false,
-          required_approving_review_count: reviews.required_approving_review_count ?? 0,
-          ...(reviews.require_last_push_approval !== undefined
-            ? { require_last_push_approval: reviews.require_last_push_approval }
-            : {}),
-          ...(reviews.bypass_pull_request_allowances !== undefined
-            ? { bypass_pull_request_allowances: reviews.bypass_pull_request_allowances }
-            : {}),
-        }
-      : null,
-    restrictions: restrictions
-      ? {
-          users: (restrictions.users ?? []).map((user) => user.login ?? user),
-          teams: (restrictions.teams ?? []).map((team) => team.slug ?? team),
-          apps: (restrictions.apps ?? []).map((app) => app.slug ?? app),
-        }
-      : null,
-  };
+function buildRequiredStatusChecksPayload(protection, mergedContexts) {
+  return mergeRequiredStatusChecks(protection, mergedContexts);
 }
 
 function mergeChecks(existing, target) {
@@ -121,7 +96,7 @@ function main() {
 
   const existing = protection.required_status_checks?.contexts ?? [];
   const merged = mergeChecks(existing, TARGET_CHECKS);
-  const payload = buildProtectionPayload(protection, merged);
+  const payload = buildRequiredStatusChecksPayload(protection, merged);
 
   console.log(`Branch: ${BRANCH}`);
   console.log(`Existing required checks (${existing.length}):`);
@@ -143,7 +118,10 @@ function main() {
     return;
   }
 
-  ghApiPut(`repos/{owner}/{repo}/branches/${BRANCH}/protection`, payload);
+  ghApiPut(
+    `repos/{owner}/{repo}/branches/${BRANCH}/protection/required_status_checks`,
+    payload,
+  );
   console.log("[branch-protection] Updated required status checks.");
 }
 
