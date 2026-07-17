@@ -215,17 +215,32 @@ public struct StatsDTO: Codable, Sendable {
         sessions: [SessionDTO],
         todayIso: String
     ) -> StatsDTO {
-        let needsPeriod = base.trailing4WeekDays == 0
-            && base.trailing4WeekTotalTime == 0
-            && base.totalTimeAllTime == 0
-            && !sessions.isEmpty
-        let needsTrends = base.mindStateTrends == .empty && !sessions.isEmpty
-        let period = needsPeriod
+        let hasSessions = !sessions.isEmpty
+        let needsTrends = base.mindStateTrends == .empty && hasSessions
+        let needsPeriodComputation = hasSessions && (
+            base.trailing4WeekDays == 0
+                || base.trailing4WeekTotalTime == 0
+                || base.trailing4WeekDayPercent == 0
+                || base.trailing4WeekTimePercent == 0
+                || base.totalTimeAllTime == 0
+                || base.progressTo10kHours == 0
+        )
+        let period = needsPeriodComputation
             ? HistoryStats.calculatePeriodStats(sessions: sessions, todayIso: todayIso)
             : nil
         let trends = needsTrends
             ? HistoryMindStateTrends.calculateTrendStats(sessions: sessions, todayIso: todayIso)
             : nil
+
+        func pickInt(_ baseValue: Int, _ computed: Int?) -> Int {
+            guard baseValue == 0, let computed else { return baseValue }
+            return computed
+        }
+
+        func pickDouble(_ baseValue: Double, _ computed: Double?) -> Double {
+            guard baseValue == 0, let computed else { return baseValue }
+            return computed
+        }
 
         return StatsDTO(
             streak: base.streak,
@@ -233,12 +248,12 @@ public struct StatsDTO: Codable, Sendable {
             avgThoughtsPerSession: base.avgThoughtsPerSession,
             avgThoughtsPerMinute: base.avgThoughtsPerMinute,
             bonusMinutesTotal: base.bonusMinutesTotal,
-            trailing4WeekDays: needsPeriod ? period!.trailing4WeekDays : base.trailing4WeekDays,
-            trailing4WeekDayPercent: needsPeriod ? period!.trailing4WeekDayPercent : base.trailing4WeekDayPercent,
-            trailing4WeekTotalTime: needsPeriod ? period!.trailing4WeekTotalTime : base.trailing4WeekTotalTime,
-            trailing4WeekTimePercent: needsPeriod ? period!.trailing4WeekTimePercent : base.trailing4WeekTimePercent,
-            totalTimeAllTime: needsPeriod ? period!.totalTimeAllTime : base.totalTimeAllTime,
-            progressTo10kHours: needsPeriod ? period!.progressTo10kHours : base.progressTo10kHours,
+            trailing4WeekDays: pickInt(base.trailing4WeekDays, period?.trailing4WeekDays),
+            trailing4WeekDayPercent: pickDouble(base.trailing4WeekDayPercent, period?.trailing4WeekDayPercent),
+            trailing4WeekTotalTime: pickInt(base.trailing4WeekTotalTime, period?.trailing4WeekTotalTime),
+            trailing4WeekTimePercent: pickDouble(base.trailing4WeekTimePercent, period?.trailing4WeekTimePercent),
+            totalTimeAllTime: pickInt(base.totalTimeAllTime, period?.totalTimeAllTime),
+            progressTo10kHours: pickDouble(base.progressTo10kHours, period?.progressTo10kHours),
             mindStateTrends: needsTrends ? trends! : base.mindStateTrends
         )
     }

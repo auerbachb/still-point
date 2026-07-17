@@ -6,10 +6,12 @@ final class HistoryMonthGridTests: XCTestCase {
         date: String,
         duration: Int,
         actualTime: Int? = nil,
-        sessionType: SessionType = .standard
+        sessionType: SessionType = .standard,
+        createdAt: String? = nil,
+        id: String = UUID().uuidString
     ) -> SessionDTO {
         SessionDTO(
-            id: UUID().uuidString,
+            id: id,
             dayNumber: 1,
             sessionType: sessionType,
             duration: duration,
@@ -19,7 +21,7 @@ final class HistoryMonthGridTests: XCTestCase {
             thoughtCount: 0,
             mindStateLog: nil,
             sessionDate: date,
-            createdAt: nil,
+            createdAt: createdAt,
             buddySessionId: nil
         )
     }
@@ -68,8 +70,8 @@ final class HistoryMonthGridTests: XCTestCase {
     func testMultipleSessionsOnOneDay() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [
-                makeSession(date: "2026-07-01", duration: 480),
-                makeSession(date: "2026-07-01", duration: 60),
+                makeSession(date: "2026-07-01", duration: 480, createdAt: "2026-07-01T10:00:00Z"),
+                makeSession(date: "2026-07-01", duration: 60, createdAt: "2026-07-01T11:00:00Z"),
             ],
             todayIso: "2026-07-02"
         )
