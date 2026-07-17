@@ -18,6 +18,10 @@ import {
   sendMissADayNotification,
 } from "@/lib/notifications";
 
+/** Five-minute lookback for each cron tick. See docs/notifications.md § Scheduler
+ *  for the DST spring-forward gap: a reminder inside the skipped local hour (e.g.
+ *  02:30 America/New_York) is dropped for that day — ticks land at 01:55 then 03:00,
+ *  both outside this window. Fall-back (repeated hour) is safe via windowKey dedup. */
 const CRON_WINDOW_MINUTES = 5;
 
 type LocalParts = {

@@ -14,6 +14,7 @@ final class BreathCountingViewModel {
 
     private(set) var tapCount: Int = 0
     private(set) var startedAt: Date?
+    private(set) var sessionInProgress = false
     private(set) var elapsedSeconds: Int = 0
 
     // MARK: - Computed from BreathCounting helpers
@@ -42,6 +43,7 @@ final class BreathCountingViewModel {
 
         if startedAt == nil {
             startedAt = Date()
+            sessionInProgress = true
             startTimer()
         }
 
@@ -53,6 +55,7 @@ final class BreathCountingViewModel {
         // Recompute elapsed from the wall clock so ending between 1-second ticks
         // (or right after the first tap) doesn't under-report the persisted duration.
         let finalElapsed = startedAt.map { BreathCounting.elapsedSeconds(since: $0) } ?? elapsedSeconds
+        sessionInProgress = false
         stop()
         return (elapsed: finalElapsed, breaths: breathCount)
     }
@@ -62,6 +65,7 @@ final class BreathCountingViewModel {
     /// under strict concurrency, and the timer's `[weak self]` closure means it
     /// never retains the view model, so lifecycle-driven cleanup is sufficient.)
     func stop() {
+        sessionInProgress = false
         timer?.invalidate()
         timer = nil
     }
