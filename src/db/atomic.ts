@@ -9,6 +9,13 @@ import { shouldAdvanceDay, type SessionType, type Track } from "@/lib/constants"
 import { and, eq, ne, sql } from "drizzle-orm";
 import { isUniqueViolation } from "@/lib/dbErrors";
 
+/**
+ * Neon HTTP driver contract: each `db.execute()` / query is its own autocommit
+ * transaction. Multi-statement serialization (e.g. `pg_advisory_xact_lock` in a
+ * separate call) does not hold across statements. Atomicity here relies on single
+ * SQL statements (CTEs) and DB constraints — not advisory locks in prior calls.
+ */
+
 type SessionInsertValues = typeof sessions.$inferInsert;
 type ThoughtInsertRow = Pick<
   typeof thoughts.$inferInsert,
@@ -378,8 +385,6 @@ export async function atomicIssuePasswordResetToken(params: {
   newTokenId: string;
   previousTokenId: string | null;
 } | null> {
-  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${params.userId}::text))`);
-
   const result = await db.execute(sql`
     with recent as (
       select id
@@ -430,8 +435,6 @@ export async function atomicRollbackPasswordResetToken(params: {
   newTokenId: string;
   previousTokenId: string | null;
 }): Promise<void> {
-  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${params.userId}::text))`);
-
   if (params.previousTokenId) {
     await db.execute(sql`
       with invalidated as (

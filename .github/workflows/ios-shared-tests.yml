@@ -74,4 +74,4 @@ jobs:
       # "StillPointShared swift test" check green without macOS minutes (issue #463).
       - name: Skip (StillPointShared unchanged)
         if: needs.changes.outputs.shared != 'true'
-        run: echo "StillPointShared unchanged on this PR — required check satisfied without running swift test (issue #463)."
+        run: 'echo "StillPointShared unchanged on this PR — required check satisfied without running swift test (issue #463)."'
