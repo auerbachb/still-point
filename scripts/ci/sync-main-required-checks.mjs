@@ -37,14 +37,39 @@ function ghApiPut(path, body) {
   });
 }
 
+function mergeRequiredStatusChecks(protection, mergedContexts) {
+  const existing = protection.required_status_checks ?? {};
+  const existingChecks = existing.checks ?? [];
+  const checksByContext = new Map();
+
+  for (const check of existingChecks) {
+    if (check?.context) {
+      checksByContext.set(check.context, check);
+    }
+  }
+
+  for (const context of mergedContexts) {
+    if (!checksByContext.has(context)) {
+      checksByContext.set(context, { context });
+    }
+  }
+
+  const mergedChecks = mergedContexts.map((context) => checksByContext.get(context));
+
+  return {
+    strict: existing.strict ?? true,
+    contexts: mergedContexts,
+    ...(existingChecks.length > 0 || mergedChecks.length > 0
+      ? { checks: mergedChecks }
+      : {}),
+  };
+}
+
 function buildProtectionPayload(protection, mergedContexts) {
   const reviews = protection.required_pull_request_reviews;
   const restrictions = protection.restrictions;
   return {
-    required_status_checks: {
-      strict: protection.required_status_checks?.strict ?? true,
-      contexts: mergedContexts,
-    },
+    required_status_checks: mergeRequiredStatusChecks(protection, mergedContexts),
     enforce_admins: protection.enforce_admins?.enabled ?? false,
     required_pull_request_reviews: reviews
       ? {

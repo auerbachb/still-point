@@ -165,3 +165,8 @@ export function hashDeviceToken(token: string): string {
 export function isValidDeviceToken(token: string): boolean {
   return /^[0-9a-f]{64,200}$/.test(normalizeDeviceToken(token));
 }
+
+/** Clears the in-memory provider JWT cache (test isolation). */
+export function resetApnsProviderTokenCacheForTests(): void {
+  cachedJwt = null;
+}

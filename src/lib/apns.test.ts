@@ -35,6 +35,7 @@ vi.mock("jose", async (importOriginal) => {
 import {
   hashDeviceToken,
   isValidDeviceToken,
+  resetApnsProviderTokenCacheForTests,
   sendApnsNotification,
 } from "./apns";
 
@@ -94,6 +95,10 @@ describe("apns helpers (#539)", () => {
     expect(isValidDeviceToken("a".repeat(64))).toBe(true);
     expect(isValidDeviceToken("not-hex")).toBe(false);
     expect(isValidDeviceToken("abc")).toBe(false);
+  });
+
+  test("resetApnsProviderTokenCacheForTests clears cached provider JWT", () => {
+    expect(() => resetApnsProviderTokenCacheForTests()).not.toThrow();
   });
 });
 

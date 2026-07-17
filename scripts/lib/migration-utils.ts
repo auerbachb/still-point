@@ -23,16 +23,36 @@ export function readMigrationBody(migrationsDir: string, file: string): string {
   return fs.readFileSync(path.join(migrationsDir, file), "utf8");
 }
 
+function stripLeadingSqlComments(sql: string): string {
+  let rest = sql;
+  while (true) {
+    const lineComment = rest.match(/^\s*--[^\n]*\n/);
+    if (lineComment) {
+      rest = rest.slice(lineComment[0].length);
+      continue;
+    }
+    const blockComment = rest.match(/^\s*\/\*[\s\S]*?\*\/\s*/);
+    if (blockComment) {
+      rest = rest.slice(blockComment[0].length);
+      continue;
+    }
+    break;
+  }
+  return rest.trimStart();
+}
+
 /**
  * Strip outer BEGIN/COMMIT wrappers before the runner wraps the body in its own
  * transaction. Inner BEGIN inside DO $$ ... $$ blocks is left alone.
  */
 export function stripOuterTransactionWrappers(body: string): string {
   const trimmed = body.trim();
+  const afterComments = stripLeadingSqlComments(trimmed);
   const hasOuterWrapper =
-    /^\s*BEGIN\s*;\s*\r?\n/i.test(trimmed) && /\r?\n\s*COMMIT\s*;\s*$/i.test(trimmed);
+    /^BEGIN\s*;\s*\r?\n/i.test(afterComments) &&
+    /\r?\n\s*COMMIT\s*;\s*$/i.test(trimmed);
   if (!hasOuterWrapper) return body;
-  return trimmed
-    .replace(/^\s*BEGIN\s*;\s*\r?\n/i, "")
+  return afterComments
+    .replace(/^BEGIN\s*;\s*\r?\n/i, "")
     .replace(/\r?\n\s*COMMIT\s*;\s*$/i, "");
 }
