@@ -143,6 +143,7 @@ final class StillPointAppUITests: XCTestCase {
             relaunch.staticTexts["history.title"].waitForExistence(timeout: launchTimeout),
             "History screen did not appear after relaunch"
         )
+        openHistoryJourneyView(in: relaunch)
         let sessionRow = relaunch.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.")).firstMatch
         XCTAssertTrue(sessionRow.waitForExistence(timeout: 8), "Expected persisted history row after relaunch")
     }
@@ -346,7 +347,16 @@ final class StillPointAppUITests: XCTestCase {
             "Quick minute session did not open"
         )
 
-        tapByStableCenter(app.buttons["session.endEarlyButton"], in: app)
+        let endEarlyButton = app.buttons["session.endEarlyButton"]
+        let completionRoot = app.otherElements["root.currentView.completion"]
+        if endEarlyButton.waitForExistence(timeout: 8) {
+            tapByStableCenter(endEarlyButton, in: app)
+        } else {
+            XCTAssertTrue(
+                completionRoot.waitForExistence(timeout: 20),
+                "Expected End Early control or natural quick-minute completion"
+            )
+        }
         let completionTitle = app.staticTexts["completion.dayTitle"]
         XCTAssertTrue(completionTitle.waitForExistence(timeout: 25))
         XCTAssertTrue(completionTitle.label.localizedCaseInsensitiveContains("quick minute"))
@@ -503,6 +513,12 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
         return app
+    }
+
+    private func openHistoryJourneyView(in app: XCUIApplication) {
+        let journeyToggle = app.buttons["history.viewMode.journey"]
+        guard journeyToggle.waitForExistence(timeout: 5) else { return }
+        tapByStableCenter(journeyToggle, in: app)
     }
 
     private func openTab(

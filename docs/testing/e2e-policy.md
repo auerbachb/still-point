@@ -219,7 +219,7 @@ For pull requests, required lanes:
 2. `web-e2e-critical`
 3. `e2e-policy` (guard/secrets/no-sleep)
 
-iOS E2E lanes are required for iOS test-plan changes and recommended otherwise; keep branch protection in sync with this policy.
+iOS E2E lanes are required for iOS test-plan changes and recommended otherwise; keep branch protection in sync with this policy ([branch-protection.md](./branch-protection.md)).
 
 ### Release-time gating (mobile web + iOS TestFlight)
 

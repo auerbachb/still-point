@@ -1,17 +1,18 @@
 import { loadEnvConfig } from "@next/env";
 import { Pool, neonConfig } from "@neondatabase/serverless";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import ws from "ws";
+import {
+  MIGRATION_ADVISORY_LOCK_KEY,
+  listIncrementalMigrationFiles,
+  migrationChecksum,
+  readMigrationBody,
+} from "./lib/migration-utils";
 
 loadEnvConfig(process.cwd());
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "drizzle");
-
-// Same key as scripts/apply-migrations.ts so a reconcile can never race a
-// concurrent migration run on the same branch (the lock is session-scoped).
-const ADVISORY_LOCK_KEY = 7195279_0001;
 
 function usage(message?: string): never {
   if (message) console.error(`[reconcile] ${message}\n`);
@@ -30,21 +31,10 @@ function usage(message?: string): never {
   process.exit(2);
 }
 
-function listIncrementalFiles(): string[] {
-  // Mirror apply-migrations.ts: managed files are *.sql that are not the
-  // numbered `0000_*` drizzle-kit output.
-  return fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .filter((f) => !/^\d{4}_/.test(f))
-    .sort();
-}
-
 function checksumOf(file: string): string {
   // Identical to the runner: sha256 of the raw file body (pre any BEGIN/COMMIT
   // stripping, which only affects the executed SQL, not the checksum).
-  const body = fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8");
-  return crypto.createHash("sha256").update(body).digest("hex");
+  return migrationChecksum(readMigrationBody(MIGRATIONS_DIR, file));
 }
 
 function isUndefinedTable(err: unknown): boolean {
@@ -76,7 +66,7 @@ async function main() {
 
   let targets: string[];
   if (all) {
-    targets = listIncrementalFiles();
+    targets = listIncrementalMigrationFiles(MIGRATIONS_DIR);
   } else {
     // Accept "drizzle/foo.sql" or "foo.sql".
     const name = path.basename(positionals[0]);
@@ -98,7 +88,7 @@ async function main() {
   let reconciled = 0;
 
   try {
-    await client.query(`SELECT pg_advisory_lock($1)`, [ADVISORY_LOCK_KEY]);
+    await client.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_ADVISORY_LOCK_KEY]);
     lockHeld = true;
 
     const ledger = new Map<string, string>();
@@ -180,7 +170,7 @@ async function main() {
   } finally {
     if (lockHeld) {
       try {
-        await client.query(`SELECT pg_advisory_unlock($1)`, [ADVISORY_LOCK_KEY]);
+        await client.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_ADVISORY_LOCK_KEY]);
       } catch {
         // best-effort; the session ending also releases it.
       }

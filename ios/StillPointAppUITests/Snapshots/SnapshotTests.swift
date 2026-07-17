@@ -105,6 +105,10 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["history.title"].waitForExistence(timeout: 12))
         snapshot("09-progress-history", timeWaitingForIdle: 0)
 
+        let journeyToggle = app.buttons["history.viewMode.journey"]
+        if journeyToggle.waitForExistence(timeout: 5) {
+            tapStable(journeyToggle, in: app)
+        }
         let sessionRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.session.")).firstMatch
         XCTAssertTrue(sessionRow.waitForExistence(timeout: 8))
         tapStable(sessionRow, in: app)
