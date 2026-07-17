@@ -47,6 +47,7 @@ function useBreathKeyBinding(): BreathKeyBinding {
 export function BreathCountView({ onEnd }: BreathCountViewProps) {
   const [tapCount, setTapCount] = useState(0);
   const [startMs, setStartMs] = useState<number | null>(null);
+  const [sessionActive, setSessionActive] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const keyBinding = useBreathKeyBinding();
 
@@ -54,7 +55,7 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
   const keepAwakePref = useKeepScreenAwakePref();
   useWakeLock(keepAwakePref && startMs !== null);
   // Suppress push display while breath counting is in progress (#530 / #431).
-  useSessionSuppressionRelay(startMs !== null);
+  useSessionSuppressionRelay(sessionActive);
 
   // Re-entrancy guard so a second End (button + key in the same frame) can't
   // double-report. Mirrors iOS `isSavingBreathSession`.
@@ -73,12 +74,14 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
     if (startMsRef.current === null) {
       startMsRef.current = Date.now();
       setStartMs(startMsRef.current);
+      setSessionActive(true);
     }
   }, []);
 
   const handleEnd = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
+    setSessionActive(false);
     // Recompute elapsed from the wall clock so ending between 1-second ticks
     // (or right after the first tap) doesn't under-report the duration. When
     // no tap was recorded, startMsRef is null and the session is empty (0s).
