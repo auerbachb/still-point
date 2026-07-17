@@ -263,10 +263,14 @@ Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env
 
 ## Merge gates (current)
 
-As of this audit, GitHub branch protection and rulesets are not configured with required status checks on `main`. In practice, the team uses Vercel + PR review signals as the merge gate.
+Branch protection on `main` requires **`typecheck`** and **`StillPointShared swift test`**. Issue #537 adds **`build`**, **`web-e2e-smoke`**, and **`web-e2e-critical`** — see [docs/testing/branch-protection.md](docs/testing/branch-protection.md) for the admin runbook and path-filter notes.
 
 What should be green before merge:
 
+- `typecheck` — full-project `tsc --noEmit` (includes test files)
+- `StillPointShared swift test` — shared Swift parity suite (no-op pass when the package is unchanged; issue #463)
+- `build` — repeatable clean Next builds + design-token parity lint
+- `web-e2e-smoke` / `web-e2e-critical` — P0 Playwright lanes ([`e2e-policy.md`](docs/testing/e2e-policy.md))
 - `Vercel` — preview deployment completed successfully
 - `Vercel Agent Review` — Vercel's automated review completed
 - `Vercel Preview Comments` — preview comment bot completed
@@ -275,7 +279,7 @@ What should be green before merge:
 Notes:
 
 - The GitHub Actions workflows **Build & Upload to TestFlight** (`ios-v*-build*` tags) and **iOS App Store release (Fastlane)** (`ios-vMAJOR.MINOR.PATCH` tags) are **release-only** and are not pull-request merge gates.
-- For strict enforcement, add these check names under GitHub branch protection required checks for `main`.
+- Repo admins can apply the #537 check list with `node scripts/ci/sync-main-required-checks.mjs --apply` (dry-run first).
 
 ## Project structure
 
