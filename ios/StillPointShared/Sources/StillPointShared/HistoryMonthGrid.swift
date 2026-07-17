@@ -140,7 +140,6 @@ public enum HistoryMonthGrid {
             return "\(hours)h \(minutes)m"
         }
         let minutes = Int((Double(safeSeconds) / 60.0).rounded())
-        if minutes >= 60 { return "1h" }
         return "\(minutes)m"
     }
 

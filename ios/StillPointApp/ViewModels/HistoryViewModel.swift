@@ -41,17 +41,13 @@ final class HistoryViewModel {
     /// Stable local calendar day for the current load cycle (refreshed in `load()`).
     private(set) var todayIsoDate: String = HistoryViewModel.currentLocalIsoDate()
 
-    var monthGrid: CurrentMonthGrid {
-        HistoryMonthGrid.buildCurrentMonthGrid(sessions: sessions, todayIso: todayIsoDate)
-    }
-
-    var priorMonthSummaries: [MonthlySummary] {
-        HistoryMonthGrid.buildPriorMonthSummaries(sessions: sessions, todayIso: todayIsoDate)
-    }
-
-    var trailing12MonthSummaries: [MonthlySummary] {
-        HistoryMonthlyAggregation.buildTrailing12MonthSummaries(sessions: sessions, todayIso: todayIsoDate)
-    }
+    private(set) var monthGrid: CurrentMonthGrid = CurrentMonthGrid(
+        yearMonth: "",
+        monthLabel: "",
+        cells: []
+    )
+    private(set) var priorMonthSummaries: [MonthlySummary] = []
+    private(set) var trailing12MonthSummaries: [MonthlySummary] = []
 
     var mindStateTrends: MindStateTrendStats {
         stats?.mindStateTrends ?? .empty
@@ -70,6 +66,7 @@ final class HistoryViewModel {
             sessions = result.sessions.sorted { $0.sessionDate < $1.sessionDate }
             stats = StatsDTO.enrich(result.stats, sessions: sessions, todayIso: today)
             buildJourney(todayIso: today)
+            rebuildCalendarAggregates(todayIso: today)
         } catch {
             errorMessage = "Failed to load sessions. Check your connection."
             print("Failed to load sessions: \(error)")
@@ -105,6 +102,15 @@ final class HistoryViewModel {
 
         let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
         maxDuration = max(sessionTimes.max() ?? 60, 60)
+    }
+
+    private func rebuildCalendarAggregates(todayIso: String) {
+        monthGrid = HistoryMonthGrid.buildCurrentMonthGrid(sessions: sessions, todayIso: todayIso)
+        priorMonthSummaries = HistoryMonthGrid.buildPriorMonthSummaries(sessions: sessions, todayIso: todayIso)
+        trailing12MonthSummaries = HistoryMonthlyAggregation.buildTrailing12MonthSummaries(
+            sessions: sessions,
+            todayIso: todayIso
+        )
     }
 
     private static func currentLocalIsoDate() -> String {

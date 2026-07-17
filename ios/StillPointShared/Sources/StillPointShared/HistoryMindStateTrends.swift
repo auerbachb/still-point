@@ -126,7 +126,7 @@ public enum HistoryMindStateTrends {
         )
     }
 
-    /// Session-elapsed seconds for trend replay (same axis as clear-percent endT, not wall-clock actualTime).
+    /// Cap mind-state replay at elapsed sit seconds (`actualTime` when present, else `duration`).
     private static func sessionEndTime(_ session: some MindStateTrendSessionInput) -> Int {
         let elapsedCap = max(HistorySessionTime.sessionTimeSeconds(session), 0)
         let log = session.mindStateLog ?? []
