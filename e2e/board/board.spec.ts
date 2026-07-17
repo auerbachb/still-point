@@ -15,8 +15,8 @@ test.describe("public board @critical", () => {
 
     // Mock fixture returns practitioners sorted by currentDay descending.
     await expect(page.getByText("contemplative_practitioner")).toBeVisible();
-    await expect(page.getByText("128")).toBeVisible();
-    await expect(page.getByText("91%")).toBeVisible();
+    await expect(page.getByText("128", { exact: true })).toBeVisible();
+    await expect(page.getByText("91%", { exact: true })).toBeVisible();
 
     const youMarker = page.getByText("(you)");
     await expect(youMarker).toBeVisible();
