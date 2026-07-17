@@ -74,13 +74,13 @@ public struct FileOfflineSessionQueueStore: OfflineSessionQueueStore {
     public init(
         fileURL: URL,
         fileManager: FileManager = .default,
-        encoder: JSONEncoder = FileOfflineSessionQueueStore.makeEncoder(),
-        decoder: JSONDecoder = FileOfflineSessionQueueStore.makeDecoder()
+        encoder: JSONEncoder? = nil,
+        decoder: JSONDecoder? = nil
     ) {
         self.fileURL = fileURL
         self.fileManager = fileManager
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = encoder ?? Self.makeEncoder()
+        self.decoder = decoder ?? Self.makeDecoder()
     }
 
     public func loadEntries() throws -> [PendingSessionEntry] {
@@ -111,7 +111,7 @@ public struct FileOfflineSessionQueueStore: OfflineSessionQueueStore {
     }
 }
 
-public struct InMemoryOfflineSessionQueueStore: OfflineSessionQueueStore {
+public final class InMemoryOfflineSessionQueueStore: OfflineSessionQueueStore, @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [PendingSessionEntry]
 
