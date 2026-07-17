@@ -114,12 +114,13 @@ describe("applyIncrementalMigrations (#539)", () => {
       const second = await applyIncrementalMigrations(client, dir);
       expect(second).toEqual({ appliedCount: 0, skippedCount: 1 });
 
-      const { rows } = await client.query<{ filename: string; checksum: string }>(
+      const { rows } = await client.query(
         "SELECT filename, checksum FROM schema_migrations",
       );
-      expect(rows).toHaveLength(1);
-      expect(rows[0]!.filename).toBe("demo_table_incremental.sql");
-      expect(rows[0]!.checksum).toBe(
+      const migrationRows = rows as { filename: string; checksum: string }[];
+      expect(migrationRows).toHaveLength(1);
+      expect(migrationRows[0]!.filename).toBe("demo_table_incremental.sql");
+      expect(migrationRows[0]!.checksum).toBe(
         migrationChecksum("CREATE TABLE IF NOT EXISTS migrate_demo (id int PRIMARY KEY);"),
       );
     });
@@ -143,10 +144,11 @@ describe("applyIncrementalMigrations (#539)", () => {
         skippedCount: 0,
       });
 
-      const { rows } = await client.query<{ rel: string | null }>(
+      const { rows } = await client.query(
         "SELECT to_regclass('public.wrapped_demo') AS rel",
       );
-      expect(rows[0]?.rel).toBe("wrapped_demo");
+      const relRows = rows as { rel: string | null }[];
+      expect(relRows[0]?.rel).toBe("wrapped_demo");
     });
   });
 
