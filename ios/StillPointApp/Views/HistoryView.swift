@@ -123,35 +123,9 @@ struct HistoryView: View {
                 .foregroundStyle(Color(SPColor.fg2))
                 .tracking(2)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: SPSpacing.s3) {
-                mindStateStatCard(
-                    value: String(format: "%.1f%%", vm.mindStateTrends.trailing4Week.lightDistractionPercent),
-                    label: "LIGHT DISTRACTION",
-                    color: SPColor.amberText
-                )
-                mindStateStatCard(
-                    value: String(format: "%.1f%%", vm.mindStateTrends.trailing4Week.heavyDistractionPercent),
-                    label: "HEAVY DISTRACTION",
-                    color: SPColor.dangerMuted
-                )
-                mindStateStatCard(
-                    value: String(format: "%.1f%%", vm.mindStateTrends.trailing4Week.hyperfocusPercent),
-                    label: "HYPERFOCUS",
-                    color: Color(red: 96/255, green: 165/255, blue: 250/255).opacity(0.95)
-                )
-                mindStateStatCard(
-                    value: HistoryMonthGrid.formatTotalTime(vm.mindStateTrends.trailing4Week.totalSitSeconds),
-                    label: "SIT TIME",
-                    color: Color(SPColor.fg)
-                )
-            }
+            mindStateTrailing4WeekStatGrid
 
-            Text(
-                "Trailing 4 weeks · all time "
-                + String(format: "%.1f%%", vm.mindStateTrends.allTime.lightDistractionPercent) + " light · "
-                + String(format: "%.1f%%", vm.mindStateTrends.allTime.heavyDistractionPercent) + " heavy · "
-                + String(format: "%.1f%%", vm.mindStateTrends.allTime.hyperfocusPercent) + " hyperfocus"
-            )
+            Text(mindStateAllTimeSummaryText)
             .font(SPFont.mono(10))
             .foregroundStyle(Color(SPColor.fg4))
             .multilineTextAlignment(.center)
@@ -173,6 +147,40 @@ struct HistoryView: View {
         }
         .frame(maxWidth: 480)
         .accessibilityIdentifier("history.mindStateTrends")
+    }
+
+    private var mindStateTrailing4WeekStatGrid: some View {
+        let trailing = vm.mindStateTrends.trailing4Week
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: SPSpacing.s3) {
+            mindStateStatCard(
+                value: String(format: "%.1f%%", trailing.lightDistractionPercent),
+                label: "LIGHT DISTRACTION",
+                color: SPColor.amberText
+            )
+            mindStateStatCard(
+                value: String(format: "%.1f%%", trailing.heavyDistractionPercent),
+                label: "HEAVY DISTRACTION",
+                color: SPColor.dangerMuted
+            )
+            mindStateStatCard(
+                value: String(format: "%.1f%%", trailing.hyperfocusPercent),
+                label: "HYPERFOCUS",
+                color: Color(red: 96/255, green: 165/255, blue: 250/255).opacity(0.95)
+            )
+            mindStateStatCard(
+                value: HistoryMonthGrid.formatTotalTime(trailing.totalSitSeconds),
+                label: "SIT TIME",
+                color: Color(SPColor.fg)
+            )
+        }
+    }
+
+    private var mindStateAllTimeSummaryText: String {
+        let allTime = vm.mindStateTrends.allTime
+        return "Trailing 4 weeks · all time "
+            + String(format: "%.1f%%", allTime.lightDistractionPercent) + " light · "
+            + String(format: "%.1f%%", allTime.heavyDistractionPercent) + " heavy · "
+            + String(format: "%.1f%%", allTime.hyperfocusPercent) + " hyperfocus"
     }
 
     private func mindStateDayRow(_ day: MindStateDailyTrendBucket) -> some View {

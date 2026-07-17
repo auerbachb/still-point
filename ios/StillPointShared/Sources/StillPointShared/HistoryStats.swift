@@ -34,7 +34,7 @@ public enum HistoryStats {
     /// `todayIso` should match the client's local calendar day (same convention as
     /// `sessionDate` stamping) so the window ends on the user's "today".
     public static func calculatePeriodStats(
-        sessions: [some HistorySessionTimeInput],
+        sessions: [any HistorySessionTimeInput],
         todayIso: String
     ) -> PeriodStats {
         let periodStart = SessionCalendar.addDays(toIsoDate: todayIso, deltaDays: -(trailing4WeekDays - 1))
