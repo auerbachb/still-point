@@ -14,6 +14,7 @@ import {
   subscribeBreathKeyBinding,
   type BreathKeyBinding,
 } from "@/lib/breathKeyBinding";
+import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 
 export type BreathSessionResult = {
@@ -52,6 +53,8 @@ export function BreathCountView({ onEnd }: BreathCountViewProps) {
   // Wake lock parity with sits (#317): keep the screen awake once running.
   const keepAwakePref = useKeepScreenAwakePref();
   useWakeLock(keepAwakePref && startMs !== null);
+  // Suppress push display while breath counting is in progress (#530 / #431).
+  useSessionSuppressionRelay(startMs !== null);
 
   // Re-entrancy guard so a second End (button + key in the same frame) can't
   // double-report. Mirrors iOS `isSavingBreathSession`.

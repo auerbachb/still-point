@@ -83,15 +83,29 @@ struct BreathCountingView: View {
         }
         .onAppear {
             // No session until the first tap; reflect actual running state.
-            SessionIdleTimerController.syncLocalSession(appVM: appVM, isRunning: vm.startedAt != nil)
+            let inProgress = vm.startedAt != nil
+            SessionIdleTimerController.syncLocalSession(appVM: appVM, isRunning: inProgress)
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: inProgress
+            )
         }
         .onDisappear {
             vm.stop()
             SessionIdleTimerController.syncLocalSession(appVM: appVM, isRunning: false)
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: false
+            )
         }
         .onChange(of: vm.startedAt) { _, _ in
             // The session starts on the first tap — keep the screen awake from then on.
-            SessionIdleTimerController.syncLocalSession(appVM: appVM, isRunning: vm.startedAt != nil)
+            let inProgress = vm.startedAt != nil
+            SessionIdleTimerController.syncLocalSession(appVM: appVM, isRunning: inProgress)
+            SessionNotificationSuppressionController.syncLocalSession(
+                appVM: appVM,
+                inProgress: inProgress
+            )
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             // Re-sync when the preference toggles while on screen.
