@@ -50,6 +50,18 @@ export const POST = withApiHandler("Enable dual track", async () => {
     );
   }
 
+  if (current.dualTrackEnabled) {
+    const [existing] = await db
+      .select(RETURN_FIELDS)
+      .from(users)
+      .where(eq(users.id, auth.user.userId))
+      .limit(1);
+    if (!existing) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    return NextResponse.json({ user: existing });
+  }
+
   const [updated] = await db
     .update(users)
     .set({ dualTrackEnabled: true, updatedAt: new Date() })
