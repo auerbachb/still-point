@@ -133,7 +133,9 @@ public enum HistoryMindStateTrends {
         var elapsedEnd = 0
         for entry in log {
             guard entry.time.isFinite else { continue }
-            elapsedEnd = max(elapsedEnd, max(Int(entry.time.rounded(.down)), 0))
+            let clamped = min(max(entry.time, 0), Double(elapsedCap))
+            guard clamped <= Double(Int.max) else { continue }
+            elapsedEnd = max(elapsedEnd, Int(clamped.rounded(.down)))
         }
         if elapsedEnd > 0 { return min(elapsedEnd, elapsedCap) }
         return elapsedCap

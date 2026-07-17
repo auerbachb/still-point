@@ -64,7 +64,7 @@ public enum MindStateSession {
             if clampedTime > lastTime {
                 bucketMindStateSeconds(
                     lastState,
-                    seconds: Int(clampedTime - lastTime),
+                    seconds: clampedTime - lastTime,
                     into: &out
                 )
             }
@@ -77,19 +77,21 @@ public enum MindStateSession {
 
     private static func bucketMindStateSeconds(
         _ state: String,
-        seconds: Int,
+        seconds: Double,
         into out: inout MindStateCompositionSeconds
     ) {
         guard seconds > 0 else { return }
+        let wholeSeconds = Int(seconds.rounded(.down))
+        guard wholeSeconds > 0 else { return }
         switch state {
         case "thinking":
-            out.lightDistractionSeconds += seconds
+            out.lightDistractionSeconds += wholeSeconds
         case "heavy":
-            out.heavyDistractionSeconds += seconds
+            out.heavyDistractionSeconds += wholeSeconds
         case "hyperfocus":
-            out.hyperfocusSeconds += seconds
+            out.hyperfocusSeconds += wholeSeconds
         default:
-            out.clearSeconds += seconds
+            out.clearSeconds += wholeSeconds
         }
     }
 }
