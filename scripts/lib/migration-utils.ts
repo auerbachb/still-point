@@ -28,7 +28,11 @@ export function readMigrationBody(migrationsDir: string, file: string): string {
  * transaction. Inner BEGIN inside DO $$ ... $$ blocks is left alone.
  */
 export function stripOuterTransactionWrappers(body: string): string {
-  return body
-    .replace(/^[ \t]*BEGIN[ \t]*;\s*$/im, "")
-    .replace(/^[ \t]*COMMIT[ \t]*;\s*$/im, "");
+  const trimmed = body.trim();
+  const hasOuterWrapper =
+    /^\s*BEGIN\s*;\s*\r?\n/i.test(trimmed) && /\r?\n\s*COMMIT\s*;\s*$/i.test(trimmed);
+  if (!hasOuterWrapper) return body;
+  return trimmed
+    .replace(/^\s*BEGIN\s*;\s*\r?\n/i, "")
+    .replace(/\r?\n\s*COMMIT\s*;\s*$/i, "");
 }

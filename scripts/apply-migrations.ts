@@ -37,7 +37,7 @@ async function main() {
 
   const files = listIncrementalMigrationFiles(MIGRATIONS_DIR);
   if (files.length === 0) {
-    console.log("[migrate] No .sql files in drizzle/ — nothing to apply.");
+    console.log("[migrate] No managed incremental migration files in drizzle/ — nothing to apply.");
     return;
   }
 

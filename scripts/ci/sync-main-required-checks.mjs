@@ -30,18 +30,43 @@ function ghJson(args) {
   return JSON.parse(out);
 }
 
-function ghApi(method, path, body) {
-  const args = ["api", "-X", method, path, "-H", "Accept: application/vnd.github+json"];
-  if (body !== undefined) {
-    args.push("-f", `required_status_checks[strict]=${body.required_status_checks.strict}`);
-    for (const ctx of body.required_status_checks.contexts) {
-      args.push("-f", `required_status_checks[contexts][]=${ctx}`);
-    }
-    args.push("-f", `enforce_admins=${body.enforce_admins}`);
-    args.push("-f", `required_pull_request_reviews[required_approving_review_count]=${body.required_pull_request_reviews.required_approving_review_count}`);
-    args.push("-f", `restrictions=`);
-  }
-  execFileSync("gh", args, { stdio: "inherit" });
+function ghApiPut(path, body) {
+  execFileSync("gh", ["api", "-X", "PUT", path, "--input", "-"], {
+    input: JSON.stringify(body),
+    stdio: ["pipe", "inherit", "inherit"],
+  });
+}
+
+function buildProtectionPayload(protection, mergedContexts) {
+  const reviews = protection.required_pull_request_reviews;
+  const restrictions = protection.restrictions;
+  return {
+    required_status_checks: {
+      strict: protection.required_status_checks?.strict ?? true,
+      contexts: mergedContexts,
+    },
+    enforce_admins: protection.enforce_admins?.enabled ?? false,
+    required_pull_request_reviews: reviews
+      ? {
+          dismiss_stale_reviews: reviews.dismiss_stale_reviews ?? false,
+          require_code_owner_reviews: reviews.require_code_owner_reviews ?? false,
+          required_approving_review_count: reviews.required_approving_review_count ?? 0,
+          ...(reviews.require_last_push_approval !== undefined
+            ? { require_last_push_approval: reviews.require_last_push_approval }
+            : {}),
+          ...(reviews.bypass_pull_request_allowances !== undefined
+            ? { bypass_pull_request_allowances: reviews.bypass_pull_request_allowances }
+            : {}),
+        }
+      : null,
+    restrictions: restrictions
+      ? {
+          users: (restrictions.users ?? []).map((user) => user.login ?? user),
+          teams: (restrictions.teams ?? []).map((team) => team.slug ?? team),
+          apps: (restrictions.apps ?? []).map((app) => app.slug ?? app),
+        }
+      : null,
+  };
 }
 
 function mergeChecks(existing, target) {
@@ -71,17 +96,7 @@ function main() {
 
   const existing = protection.required_status_checks?.contexts ?? [];
   const merged = mergeChecks(existing, TARGET_CHECKS);
-  const payload = {
-    required_status_checks: {
-      strict: protection.required_status_checks?.strict ?? true,
-      contexts: merged,
-    },
-    enforce_admins: protection.enforce_admins?.enabled ?? false,
-    required_pull_request_reviews: {
-      required_approving_review_count:
-        protection.required_pull_request_reviews?.required_approving_review_count ?? 0,
-    },
-  };
+  const payload = buildProtectionPayload(protection, merged);
 
   console.log(`Branch: ${BRANCH}`);
   console.log(`Existing required checks (${existing.length}):`);
@@ -103,7 +118,7 @@ function main() {
     return;
   }
 
-  ghApi("PUT", `repos/{owner}/{repo}/branches/${BRANCH}/protection`, payload);
+  ghApiPut(`repos/{owner}/{repo}/branches/${BRANCH}/protection`, payload);
   console.log("[branch-protection] Updated required status checks.");
 }
 
