@@ -177,7 +177,7 @@ struct HistoryView: View {
 
     private var mindStateAllTimeSummaryText: String {
         let allTime = vm.mindStateTrends.allTime
-        return "Trailing 4 weeks · all time "
+        return "All time "
             + String(format: "%.1f%%", allTime.lightDistractionPercent) + " light · "
             + String(format: "%.1f%%", allTime.heavyDistractionPercent) + " heavy · "
             + String(format: "%.1f%%", allTime.hyperfocusPercent) + " hyperfocus"

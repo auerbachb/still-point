@@ -64,7 +64,7 @@ public enum MindStateSession {
             if clampedTime > lastTime {
                 bucketMindStateSeconds(
                     lastState,
-                    seconds: Int((clampedTime - lastTime).rounded()),
+                    seconds: Int(clampedTime - lastTime),
                     into: &out
                 )
             }

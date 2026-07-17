@@ -131,8 +131,15 @@ public enum HistoryMonthGrid {
 
     /// Format sit length for calendar cells — minutes when ≥60s, else seconds.
     public static func formatSessionDurationLabel(_ seconds: Int) -> String {
-        if seconds < 60 { return "\(seconds)s" }
-        let minutes = Int((Double(seconds) / 60.0).rounded())
+        let safeSeconds = max(seconds, 0)
+        if safeSeconds < 60 { return "\(safeSeconds)s" }
+        if safeSeconds >= 3600 {
+            let hours = safeSeconds / 3600
+            let minutes = (safeSeconds % 3600) / 60
+            if minutes == 0 { return "\(hours)h" }
+            return "\(hours)h \(minutes)m"
+        }
+        let minutes = Int((Double(safeSeconds) / 60.0).rounded())
         if minutes >= 60 { return "1h" }
         return "\(minutes)m"
     }

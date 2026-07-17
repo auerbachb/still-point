@@ -128,14 +128,15 @@ public enum HistoryMindStateTrends {
 
     /// Session-elapsed seconds for trend replay (same axis as clear-percent endT, not wall-clock actualTime).
     private static func sessionEndTime(_ session: some MindStateTrendSessionInput) -> Int {
-        let duration = max(session.duration, 0)
+        let elapsedCap = max(HistorySessionTime.sessionTimeSeconds(session), 0)
         let log = session.mindStateLog ?? []
         var elapsedEnd = 0
         for entry in log {
             guard entry.time.isFinite else { continue }
             elapsedEnd = max(elapsedEnd, max(Int(entry.time.rounded(.down)), 0))
         }
-        return max(elapsedEnd, duration)
+        if elapsedEnd > 0 { return min(elapsedEnd, elapsedCap) }
+        return elapsedCap
     }
 
     private static func compositionForSession(_ session: some MindStateTrendSessionInput) -> MindStateCompositionSeconds {

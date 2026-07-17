@@ -12,6 +12,6 @@ extension SessionDTO: HistorySessionTimeInput {}
 public enum HistorySessionTime {
     /// Seconds counted toward history time totals (elapsed wall time for the sit).
     public static func sessionTimeSeconds(_ session: some HistorySessionTimeInput) -> Int {
-        session.actualTime ?? session.duration
+        max(0, session.actualTime ?? session.duration)
     }
 }
