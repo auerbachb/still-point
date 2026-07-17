@@ -6,6 +6,7 @@ import StillPointShared
 @Observable
 final class NetworkReachabilityMonitor {
     private(set) var isConnected = true
+    var ownerUserIdProvider: (@MainActor () -> String?)?
 
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.brettonauerbach.stillpoint.network-reachability")
@@ -18,7 +19,7 @@ final class NetworkReachabilityMonitor {
                 let wasConnected = self.isConnected
                 self.isConnected = connected
                 if !wasConnected && connected {
-                    await self.flushOfflineQueue()
+                    await self.flushOfflineQueue(ownerUserId: self.ownerUserIdProvider?())
                 }
             }
         }
@@ -30,9 +31,10 @@ final class NetworkReachabilityMonitor {
     }
 
     @MainActor
-    func flushOfflineQueue() async {
+    func flushOfflineQueue(ownerUserId: String?) async {
+        guard let ownerUserId, !ownerUserId.isEmpty else { return }
         do {
-            _ = try await SessionSyncCoordinator.shared.flushPending()
+            _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
         } catch {
             print("Failed to flush offline session queue on reconnect: \(error)")
         }

@@ -252,10 +252,16 @@ final class SessionViewModel {
     /// #557: stable local key for offline end-note sync during completion.
     private(set) var lastClientSessionId: UUID?
 
-    /// Save session locally first, then sync when online (#557). Always returns a session DTO.
-    func saveSession(completed: Bool) async -> SessionDTO? {
-        let clientSessionId = UUID()
-        lastClientSessionId = clientSessionId
+    /// Save session locally first, then sync when online (#557). Returns nil when persistence fails.
+    func saveSession(completed: Bool, ownerUserId: String) async -> SessionDTO? {
+        let clientSessionId: UUID
+        if let existing = lastClientSessionId {
+            clientSessionId = existing
+        } else {
+            let newId = UUID()
+            lastClientSessionId = newId
+            clientSessionId = newId
+        }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -285,6 +291,7 @@ final class SessionViewModel {
             let result = try await SessionSyncCoordinator.shared.saveCompletedSession(
                 request: request,
                 clientSessionId: clientSessionId,
+                ownerUserId: ownerUserId,
                 thoughts: pendingThoughts
             )
             return result.session

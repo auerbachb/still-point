@@ -27,7 +27,11 @@ struct CompletionView: View {
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
-    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
+    private var trimmedEndNote: String {
+        endNote.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSaveDisabled: Bool { trimmedEndNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
     private var isQuickSession: Bool { sessionType == .quick }
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
@@ -300,14 +304,16 @@ struct CompletionView: View {
     }
 
     private func saveEndNote() {
-        let noteToSave = endNote
+        let noteToSave = trimmedEndNote
         guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving, !noteSaved else { return }
+        guard let ownerUserId = appVM.currentUser?.id else { return }
         isSaving = true
         saveError = nil
         Task { @MainActor in
             do {
                 try await SessionSyncCoordinator.shared.appendEndNote(
                     clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
                     note: noteToSave
                 )
                 isSaving = false

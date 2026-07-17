@@ -129,8 +129,9 @@ struct RootView: View {
             )
         }
         .task {
+            reachability.ownerUserIdProvider = { appVM.currentUser?.id }
             await appVM.checkAuth()
-            await reachability.flushOfflineQueue()
+            await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
         }
         .onChange(of: scenePhase) { _, phase in
             SessionIdleTimerController.syncSceneForegroundActive(
@@ -147,7 +148,7 @@ struct RootView: View {
             }
             if phase == .active {
                 SessionIdleTimerController.applyDesiredIdleTimerState()
-                Task { await reachability.flushOfflineQueue() }
+                Task { await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id) }
             } else if phase == .inactive || phase == .background {
                 // Multi-window: only clear when no scene is foreground-active (issue #87).
                 SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()

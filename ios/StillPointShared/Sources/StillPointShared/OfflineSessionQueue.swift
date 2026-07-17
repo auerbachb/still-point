@@ -15,6 +15,8 @@ public struct PendingSessionThought: Codable, Sendable, Equatable {
 public struct PendingSessionEntry: Codable, Sendable, Identifiable {
     public var id: UUID { clientSessionId }
     public let clientSessionId: UUID
+    /// Account that enqueued this sit — prevents cross-user replay after logout/login (#557).
+    public let ownerUserId: String
     public let request: CreateSessionRequest
     public var thoughts: [PendingSessionThought]
     public var serverSessionId: String?
@@ -23,6 +25,7 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
 
     public init(
         clientSessionId: UUID,
+        ownerUserId: String,
         request: CreateSessionRequest,
         thoughts: [PendingSessionThought],
         serverSessionId: String? = nil,
@@ -30,11 +33,44 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         enqueuedAt: Date = Date()
     ) {
         self.clientSessionId = clientSessionId
+        self.ownerUserId = ownerUserId
         self.request = request
         self.thoughts = thoughts
         self.serverSessionId = serverSessionId
         self.sessionSynced = sessionSynced
         self.enqueuedAt = enqueuedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case clientSessionId
+        case ownerUserId
+        case request
+        case thoughts
+        case serverSessionId
+        case sessionSynced
+        case enqueuedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientSessionId = try container.decode(UUID.self, forKey: .clientSessionId)
+        ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId) ?? ""
+        request = try container.decode(CreateSessionRequest.self, forKey: .request)
+        thoughts = try container.decode([PendingSessionThought].self, forKey: .thoughts)
+        serverSessionId = try container.decodeIfPresent(String.self, forKey: .serverSessionId)
+        sessionSynced = try container.decode(Bool.self, forKey: .sessionSynced)
+        enqueuedAt = try container.decodeIfPresent(Date.self, forKey: .enqueuedAt) ?? Date()
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(clientSessionId, forKey: .clientSessionId)
+        try container.encode(ownerUserId, forKey: .ownerUserId)
+        try container.encode(request, forKey: .request)
+        try container.encode(thoughts, forKey: .thoughts)
+        try container.encodeIfPresent(serverSessionId, forKey: .serverSessionId)
+        try container.encode(sessionSynced, forKey: .sessionSynced)
+        try container.encode(enqueuedAt, forKey: .enqueuedAt)
     }
 }
 
@@ -87,7 +123,14 @@ public struct FileOfflineSessionQueueStore: OfflineSessionQueueStore {
         guard fileManager.fileExists(atPath: fileURL.path) else { return [] }
         let data = try Data(contentsOf: fileURL)
         guard !data.isEmpty else { return [] }
-        return try decoder.decode([PendingSessionEntry].self, from: data)
+        do {
+            return try decoder.decode([PendingSessionEntry].self, from: data)
+        } catch {
+            let corruptURL = fileURL.appendingPathExtension("corrupt")
+            try? fileManager.removeItem(at: corruptURL)
+            try? fileManager.moveItem(at: fileURL, to: corruptURL)
+            return []
+        }
     }
 
     public func saveEntries(_ entries: [PendingSessionEntry]) throws {

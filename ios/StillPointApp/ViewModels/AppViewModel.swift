@@ -303,6 +303,9 @@ final class AppViewModel {
         // (even the same account, same day) re-fetches fresh widget history.
         widgetHistoryTask?.cancel()
         widgetHistoryRefreshKey = nil
+        Task {
+            try? await SessionSyncCoordinator.shared.clearQueue()
+        }
         syncWidgetData()
     }
 
@@ -361,7 +364,9 @@ final class AppViewModel {
             return
         }
         guard !isSavingBreathSession else { return }
+        guard let ownerUserId = currentUser?.id else { return }
         isSavingBreathSession = true
+        defer { isSavingBreathSession = false }
 
         let clientSessionId = UUID()
         let dateFormatter = DateFormatter()
@@ -388,14 +393,13 @@ final class AppViewModel {
             _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
                 request: request,
                 clientSessionId: clientSessionId,
+                ownerUserId: ownerUserId,
                 thoughts: []
             )
+            currentView = .home
         } catch {
             print("Failed to persist breath session locally: \(error)")
         }
-
-        isSavingBreathSession = false
-        currentView = .home
     }
 
     func beginBuddySession() {
@@ -519,11 +523,13 @@ final class AppViewModel {
     func returnHome() async {
         currentView = .home
         selectedTab = 0
-        do {
-            _ = try await SessionSyncCoordinator.shared.flushPending()
-            try await SessionSyncCoordinator.shared.pruneCompletedEntries()
-        } catch {
-            print("Failed to flush offline session queue: \(error)")
+        if let ownerUserId = currentUser?.id {
+            do {
+                _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
+                try await SessionSyncCoordinator.shared.pruneCompletedEntries(ownerUserId: ownerUserId)
+            } catch {
+                print("Failed to flush offline session queue: \(error)")
+            }
         }
         if let user = try? await APIClient.shared.me() {
             currentUser = user
