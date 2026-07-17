@@ -132,10 +132,10 @@ public enum HistoryMindStateTrends {
         let log = session.mindStateLog ?? []
         var elapsedEnd = 0
         for entry in log {
+            guard entry.time.isFinite else { continue }
             elapsedEnd = max(elapsedEnd, max(Int(entry.time.rounded(.down)), 0))
         }
-        if elapsedEnd > 0 { return elapsedEnd }
-        return duration
+        return max(elapsedEnd, duration)
     }
 
     private static func compositionForSession(_ session: some MindStateTrendSessionInput) -> MindStateCompositionSeconds {

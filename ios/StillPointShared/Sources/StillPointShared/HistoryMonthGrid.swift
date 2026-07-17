@@ -99,6 +99,19 @@ public enum HistoryMonthGrid {
         return monthLabelFormatter.string(from: date)
     }
 
+    private static func sortSessionsChronologically(_ sessions: [any HistorySessionTimeInput]) -> [any HistorySessionTimeInput] {
+        sessions.sorted { lhs, rhs in
+            guard let a = lhs as? SessionDTO, let b = rhs as? SessionDTO else {
+                return lhs.sessionDate < rhs.sessionDate
+            }
+            if a.sessionDate != b.sessionDate { return a.sessionDate < b.sessionDate }
+            let aCreated = a.createdAt ?? ""
+            let bCreated = b.createdAt ?? ""
+            if aCreated != bCreated { return aCreated < bCreated }
+            return a.id < b.id
+        }
+    }
+
     private static func groupSessionsByDate(
         _ sessions: [some HistorySessionTimeInput]
     ) -> [String: [any HistorySessionTimeInput]] {
@@ -120,6 +133,7 @@ public enum HistoryMonthGrid {
     public static func formatSessionDurationLabel(_ seconds: Int) -> String {
         if seconds < 60 { return "\(seconds)s" }
         let minutes = Int((Double(seconds) / 60.0).rounded())
+        if minutes >= 60 { return "1h" }
         return "\(minutes)m"
     }
 
@@ -130,7 +144,10 @@ public enum HistoryMonthGrid {
         let minutes = hours == 0
             ? Int((Double(seconds) / 60.0).rounded())
             : (seconds % 3600) / 60
-        if hours == 0 { return "\(minutes)m" }
+        if hours == 0 {
+            if minutes >= 60 { return "1h" }
+            return "\(minutes)m"
+        }
         if minutes == 0 { return "\(hours)h" }
         return "\(hours)h \(minutes)m"
     }
@@ -156,7 +173,7 @@ public enum HistoryMonthGrid {
         for day in 1...dim {
             let dd = String(format: "%02d", day)
             let isoDate = "\(ym)-\(dd)"
-            let daySessions = byDate[isoDate] ?? []
+            let daySessions = sortSessionsChronologically(byDate[isoDate] ?? [])
             let durationLabels = daySessions.map {
                 formatSessionDurationLabel(HistorySessionTime.sessionTimeSeconds($0))
             }

@@ -215,13 +215,17 @@ public struct StatsDTO: Codable, Sendable {
         sessions: [SessionDTO],
         todayIso: String
     ) -> StatsDTO {
-        let period = HistoryStats.calculatePeriodStats(sessions: sessions, todayIso: todayIso)
-        let trends = HistoryMindStateTrends.calculateTrendStats(sessions: sessions, todayIso: todayIso)
         let needsPeriod = base.trailing4WeekDays == 0
             && base.trailing4WeekTotalTime == 0
             && base.totalTimeAllTime == 0
             && !sessions.isEmpty
         let needsTrends = base.mindStateTrends == .empty && !sessions.isEmpty
+        let period = needsPeriod
+            ? HistoryStats.calculatePeriodStats(sessions: sessions, todayIso: todayIso)
+            : nil
+        let trends = needsTrends
+            ? HistoryMindStateTrends.calculateTrendStats(sessions: sessions, todayIso: todayIso)
+            : nil
 
         return StatsDTO(
             streak: base.streak,
@@ -229,13 +233,13 @@ public struct StatsDTO: Codable, Sendable {
             avgThoughtsPerSession: base.avgThoughtsPerSession,
             avgThoughtsPerMinute: base.avgThoughtsPerMinute,
             bonusMinutesTotal: base.bonusMinutesTotal,
-            trailing4WeekDays: needsPeriod ? period.trailing4WeekDays : base.trailing4WeekDays,
-            trailing4WeekDayPercent: needsPeriod ? period.trailing4WeekDayPercent : base.trailing4WeekDayPercent,
-            trailing4WeekTotalTime: needsPeriod ? period.trailing4WeekTotalTime : base.trailing4WeekTotalTime,
-            trailing4WeekTimePercent: needsPeriod ? period.trailing4WeekTimePercent : base.trailing4WeekTimePercent,
-            totalTimeAllTime: needsPeriod ? period.totalTimeAllTime : base.totalTimeAllTime,
-            progressTo10kHours: needsPeriod ? period.progressTo10kHours : base.progressTo10kHours,
-            mindStateTrends: needsTrends ? trends : base.mindStateTrends
+            trailing4WeekDays: needsPeriod ? period!.trailing4WeekDays : base.trailing4WeekDays,
+            trailing4WeekDayPercent: needsPeriod ? period!.trailing4WeekDayPercent : base.trailing4WeekDayPercent,
+            trailing4WeekTotalTime: needsPeriod ? period!.trailing4WeekTotalTime : base.trailing4WeekTotalTime,
+            trailing4WeekTimePercent: needsPeriod ? period!.trailing4WeekTimePercent : base.trailing4WeekTimePercent,
+            totalTimeAllTime: needsPeriod ? period!.totalTimeAllTime : base.totalTimeAllTime,
+            progressTo10kHours: needsPeriod ? period!.progressTo10kHours : base.progressTo10kHours,
+            mindStateTrends: needsTrends ? trends! : base.mindStateTrends
         )
     }
 }

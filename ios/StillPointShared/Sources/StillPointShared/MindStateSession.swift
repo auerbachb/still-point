@@ -35,14 +35,20 @@ public enum MindStateSession {
         guard totalSeconds > 0 else { return out }
 
         let safeLog = log
-            .filter { $0.time.isFinite }
-            .map { entry in
+            .enumerated()
+            .filter { $0.element.time.isFinite }
+            .sorted { lhs, rhs in
+                if lhs.element.time != rhs.element.time {
+                    return lhs.element.time < rhs.element.time
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map { _, entry in
                 MindStateEntry(
                     time: min(max(entry.time, 0), Double(totalSeconds)),
                     state: entry.state
                 )
             }
-            .sorted { $0.time < $1.time }
 
         var lastTime = 0.0
         var lastState = "clear"
@@ -58,7 +64,7 @@ public enum MindStateSession {
             if clampedTime > lastTime {
                 bucketMindStateSeconds(
                     lastState,
-                    seconds: Int(clampedTime - lastTime),
+                    seconds: Int((clampedTime - lastTime).rounded()),
                     into: &out
                 )
             }

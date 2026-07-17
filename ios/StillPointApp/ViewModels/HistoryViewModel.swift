@@ -38,9 +38,8 @@ final class HistoryViewModel {
     /// Longest actualTime across sessions in the journey (floor 60).
     var maxDuration: Int = 60
 
-    var todayIsoDate: String {
-        Self.localIsoDateFormatter.string(from: Date())
-    }
+    /// Stable local calendar day for the current load cycle (refreshed in `load()`).
+    private(set) var todayIsoDate: String = HistoryViewModel.currentLocalIsoDate()
 
     var monthGrid: CurrentMonthGrid {
         HistoryMonthGrid.buildCurrentMonthGrid(sessions: sessions, todayIso: todayIsoDate)
@@ -65,11 +64,12 @@ final class HistoryViewModel {
         defer { isLoading = false }
 
         do {
-            let today = todayIsoDate
+            let today = Self.currentLocalIsoDate()
+            todayIsoDate = today
             let result = try await APIClient.shared.getSessions(today: today)
             sessions = result.sessions.sorted { $0.sessionDate < $1.sessionDate }
             stats = StatsDTO.enrich(result.stats, sessions: sessions, todayIso: today)
-            buildJourney()
+            buildJourney(todayIso: today)
         } catch {
             errorMessage = "Failed to load sessions. Check your connection."
             print("Failed to load sessions: \(error)")
@@ -97,11 +97,18 @@ final class HistoryViewModel {
 
     // MARK: - Private
 
-    private func buildJourney() {
-        journeyRows = HistoryJourney.buildRows(fromSessions: sessions, todayIsoDate: todayIsoDate)
+    private func buildJourney(todayIso: String? = nil) {
+        journeyRows = HistoryJourney.buildRows(
+            fromSessions: sessions,
+            todayIsoDate: todayIso ?? todayIsoDate
+        )
 
         let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
         maxDuration = max(sessionTimes.max() ?? 60, 60)
+    }
+
+    private static func currentLocalIsoDate() -> String {
+        localIsoDateFormatter.string(from: Date())
     }
 
     private static let localIsoDateFormatter: DateFormatter = {

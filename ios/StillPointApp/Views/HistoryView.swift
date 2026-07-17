@@ -496,6 +496,38 @@ struct HistoryView: View {
 
     // MARK: - Journey
 
+    private struct JourneyRowDisplay: Identifiable {
+        let id: Int
+        let row: HistoryJourneyListRow
+        let showDateColumn: Bool
+    }
+
+    private var journeyRowDisplays: [JourneyRowDisplay] {
+        var displays: [JourneyRowDisplay] = []
+        var lastSessionDate: String?
+        for (index, row) in vm.journeyRows.enumerated() {
+            switch row {
+            case .missed(let date):
+                displays.append(JourneyRowDisplay(id: index, row: row, showDateColumn: false))
+                lastSessionDate = date
+            case .missedRange(_, let endDate, _):
+                displays.append(JourneyRowDisplay(id: index, row: row, showDateColumn: false))
+                lastSessionDate = endDate
+            case .session(let session, let sessionIndex):
+                let showDate = lastSessionDate.map { $0 != session.sessionDate } ?? true
+                displays.append(
+                    JourneyRowDisplay(
+                        id: index,
+                        row: .session(session: session, sessionIndexInDay: sessionIndex),
+                        showDateColumn: showDate
+                    )
+                )
+                lastSessionDate = session.sessionDate
+            }
+        }
+        return displays
+    }
+
     private var journeyContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("JOURNEY")
@@ -504,17 +536,18 @@ struct HistoryView: View {
                 .tracking(2)
                 .padding(.bottom, 4)
 
-            ForEach(0..<vm.journeyRows.count, id: \.self) { index in
-                let row = vm.journeyRows[index]
-                let prevDate: String? = index > 0 ? previousSessionDate(before: index) : nil
-                switch row {
+            ForEach(journeyRowDisplays) { display in
+                switch display.row {
                 case .missed(let date):
                     missedRow(date: date)
                 case .missedRange(let startDate, _, let dayCount):
                     missedRangeRow(startDate: startDate, dayCount: dayCount)
                 case .session(let session, let sessionIndex):
-                    let showDate = prevDate.map { $0 != session.sessionDate } ?? true
-                    sessionRow(session: session, sessionIndexInDay: sessionIndex, showDateColumn: showDate)
+                    sessionRow(
+                        session: session,
+                        sessionIndexInDay: sessionIndex,
+                        showDateColumn: display.showDateColumn
+                    )
                 }
             }
 
@@ -838,22 +871,6 @@ struct HistoryView: View {
     }
 
     // MARK: - Helpers
-
-    private func previousSessionDate(before index: Int) -> String? {
-        var i = index - 1
-        while i >= 0 {
-            switch vm.journeyRows[i] {
-            case .missed(let date):
-                return date
-            case .missedRange(_, let endDate, _):
-                return endDate
-            case .session(let session, _):
-                return session.sessionDate
-            }
-            i -= 1
-        }
-        return nil
-    }
 
     private static let isoDateFormatter: DateFormatter = {
         let df = DateFormatter()
