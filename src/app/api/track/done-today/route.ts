@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/api/requireAuth";
+import { withApiHandler } from "@/lib/api/withApiHandler";
 import { isValidSessionCalendarDate } from "@/lib/sessionCalendar";
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await getCurrentUser();
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withApiHandler(
+  "Get track completion",
+  async (request: NextRequest) => {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     const date = request.nextUrl.searchParams.get("date");
     if (!date || !isValidSessionCalendarDate(date)) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       .select({ track: sessions.track })
       .from(sessions)
       .where(and(
-        eq(sessions.userId, auth.userId),
+        eq(sessions.userId, auth.user.userId),
         eq(sessions.sessionDate, date),
         eq(sessions.completed, true),
         eq(sessions.sessionType, "standard"),
@@ -34,8 +34,5 @@ export async function GET(request: NextRequest) {
         second: completedTracks.some((session) => session.track === "second"),
       },
     });
-  } catch (error) {
-    console.error("Get track completion error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);
