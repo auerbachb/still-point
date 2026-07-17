@@ -188,7 +188,7 @@ actor UITestAPIStore {
 
     // MARK: - Sessions
 
-    func getSessions() throws -> (sessions: [SessionDTO], stats: StatsDTO) {
+    func getSessions(today: String? = nil) throws -> (sessions: [SessionDTO], stats: StatsDTO) {
         try ensureAuthenticated()
 
         if config.forceSessionsFailure {
@@ -196,7 +196,33 @@ actor UITestAPIStore {
         }
 
         let sortedSessions = store.sessions.sorted { $0.sessionDate < $1.sessionDate }
-        return (sortedSessions, SessionStatistics.calculateStats(for: sortedSessions))
+        let todayIso = today ?? localTodayIsoDate()
+        let base = SessionStatistics.calculateStats(for: sortedSessions)
+        let period = HistoryStats.calculatePeriodStats(sessions: sortedSessions, todayIso: todayIso)
+        let trends = HistoryMindStateTrends.calculateTrendStats(sessions: sortedSessions, todayIso: todayIso)
+        let stats = StatsDTO(
+            streak: base.streak,
+            avgClearPercent: base.avgClearPercent,
+            avgThoughtsPerSession: base.avgThoughtsPerSession,
+            avgThoughtsPerMinute: base.avgThoughtsPerMinute,
+            bonusMinutesTotal: base.bonusMinutesTotal,
+            trailing4WeekDays: period.trailing4WeekDays,
+            trailing4WeekDayPercent: period.trailing4WeekDayPercent,
+            trailing4WeekTotalTime: period.trailing4WeekTotalTime,
+            trailing4WeekTimePercent: period.trailing4WeekTimePercent,
+            totalTimeAllTime: period.totalTimeAllTime,
+            progressTo10kHours: period.progressTo10kHours,
+            mindStateTrends: trends
+        )
+        return (sortedSessions, stats)
+    }
+
+    private func localTodayIsoDate() -> String {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.calendar = Calendar(identifier: .gregorian)
+        return df.string(from: Date())
     }
 
     func getTracksDoneToday(date: String) throws -> TracksDoneTodayDTO {

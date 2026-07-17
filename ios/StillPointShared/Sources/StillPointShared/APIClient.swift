@@ -199,11 +199,18 @@ public actor APIClient {
 
     // MARK: - Sessions
 
-    public func getSessions() async throws -> (sessions: [SessionDTO], stats: StatsDTO) {
+    public func getSessions(today: String? = nil) async throws -> (sessions: [SessionDTO], stats: StatsDTO) {
         if let uiTestAPIStore {
-            return try await uiTestAPIStore.getSessions()
+            return try await uiTestAPIStore.getSessions(today: today)
         }
-        let response: SessionsResponse = try await get("/api/sessions")
+        let path: String
+        if let today, !today.isEmpty {
+            let encoded = today.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? today
+            path = "/api/sessions?today=\(encoded)"
+        } else {
+            path = "/api/sessions"
+        }
+        let response: SessionsResponse = try await get(path)
         return (response.sessions, response.stats)
     }
 

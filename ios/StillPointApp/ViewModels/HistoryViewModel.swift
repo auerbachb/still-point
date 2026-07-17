@@ -1,6 +1,23 @@
 import SwiftUI
 import StillPointShared
 
+enum HistoryViewMode: String, CaseIterable {
+    case calendar
+    case journey
+
+    var label: String {
+        switch self {
+        case .calendar: return "Calendar"
+        case .journey: return "Session buildup"
+        }
+    }
+}
+
+enum HistoryCalendarSubView {
+    case `default`
+    case yearInReview
+}
+
 @MainActor
 @Observable
 final class HistoryViewModel {
@@ -12,11 +29,34 @@ final class HistoryViewModel {
     var expandedSessionId: String?
     var sessionThoughts: [String: [ThoughtDTO]] = [:]
 
+    var viewMode: HistoryViewMode = .calendar
+    var calendarSubView: HistoryCalendarSubView = .default
+
     /// All sits (standard + quick), ordered for the Journey list with collapsed missed-day gaps.
     var journeyRows: [HistoryJourneyListRow] = []
 
     /// Longest actualTime across sessions in the journey (floor 60).
     var maxDuration: Int = 60
+
+    var todayIsoDate: String {
+        Self.localIsoDateFormatter.string(from: Date())
+    }
+
+    var monthGrid: CurrentMonthGrid {
+        HistoryMonthGrid.buildCurrentMonthGrid(sessions: sessions, todayIso: todayIsoDate)
+    }
+
+    var priorMonthSummaries: [MonthlySummary] {
+        HistoryMonthGrid.buildPriorMonthSummaries(sessions: sessions, todayIso: todayIsoDate)
+    }
+
+    var trailing12MonthSummaries: [MonthlySummary] {
+        HistoryMonthlyAggregation.buildTrailing12MonthSummaries(sessions: sessions, todayIso: todayIsoDate)
+    }
+
+    var mindStateTrends: MindStateTrendStats {
+        stats?.mindStateTrends ?? .empty
+    }
 
     func load() async {
         guard !isLoading else { return }
@@ -25,9 +65,10 @@ final class HistoryViewModel {
         defer { isLoading = false }
 
         do {
-            let result = try await APIClient.shared.getSessions()
+            let today = todayIsoDate
+            let result = try await APIClient.shared.getSessions(today: today)
             sessions = result.sessions.sorted { $0.sessionDate < $1.sessionDate }
-            stats = result.stats
+            stats = StatsDTO.enrich(result.stats, sessions: sessions, todayIso: today)
             buildJourney()
         } catch {
             errorMessage = "Failed to load sessions. Check your connection."
@@ -57,10 +98,7 @@ final class HistoryViewModel {
     // MARK: - Private
 
     private func buildJourney() {
-        // Today in device-local time, matching how `sessionDate` is stamped at creation,
-        // so the gap between the last session and today renders (#379).
-        let today = Self.localIsoDateFormatter.string(from: Date())
-        journeyRows = HistoryJourney.buildRows(fromSessions: sessions, todayIsoDate: today)
+        journeyRows = HistoryJourney.buildRows(fromSessions: sessions, todayIsoDate: todayIsoDate)
 
         let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
         maxDuration = max(sessionTimes.max() ?? 60, 60)
