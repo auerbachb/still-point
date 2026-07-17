@@ -249,6 +249,7 @@ struct SessionView: View {
             Button("Continue without saving", role: .destructive) {
                 appVM.completeSession(
                     sessionId: "",
+                    clientSessionId: UUID(),
                     clearPercent: vm.clearPercent,
                     thoughtCount: vm.thoughtCount,
                     thoughts: vm.capturedThoughts,
@@ -260,7 +261,7 @@ struct SessionView: View {
                 )
             }
         } message: {
-            Text("Your session data couldn't be saved. You can retry or continue without saving.")
+            Text("Your session couldn't be saved on this device. You can retry or continue without saving.")
         }
         .alert("Gaze tracking unavailable", isPresented: $showAttentionUnsupportedAlert) {
             Button("OK", role: .cancel) {}
@@ -696,13 +697,21 @@ struct SessionView: View {
 
     private func handleCompletion() {
         Task {
+            guard let ownerUserId = appVM.currentUser?.id else {
+                showSaveError = true
+                return
+            }
             // Persist session before navigating to completion screen
-            guard let session = await vm.saveSession(completed: vm.completedNaturally) else {
+            guard let session = await vm.saveSession(
+                completed: vm.completedNaturally,
+                ownerUserId: ownerUserId
+            ) else {
                 showSaveError = true
                 return
             }
             appVM.completeSession(
                 sessionId: session.id,
+                clientSessionId: vm.lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
                 clearPercent: vm.clearPercent,
                 thoughtCount: vm.thoughtCount,
                 thoughts: vm.capturedThoughts,

@@ -7,6 +7,7 @@ struct CompletionView: View {
 
     let appVM: AppViewModel
     let sessionId: String
+    let clientSessionId: UUID
     let clearPercent: Int
     let thoughtCount: Int
     let thoughts: [CapturedThought]
@@ -26,7 +27,11 @@ struct CompletionView: View {
     private var nextDay: Int { dayNumber + 1 }
     private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
-    private var isSaveDisabled: Bool { endNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
+    private var trimmedEndNote: String {
+        endNote.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSaveDisabled: Bool { trimmedEndNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
     private var isQuickSession: Bool { sessionType == .quick }
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
@@ -299,12 +304,22 @@ struct CompletionView: View {
     }
 
     private func saveEndNote() {
-        let noteToSave = endNote
+        let noteToSave = trimmedEndNote
         guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving, !noteSaved else { return }
+        guard let ownerUserId = appVM.currentUser?.id else { return }
         isSaving = true
         saveError = nil
         Task { @MainActor in
             do {
+                try await SessionSyncCoordinator.shared.appendEndNote(
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
+                    note: noteToSave
+                )
+                isSaving = false
+                noteSaved = true
+                logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
+            } catch SessionSyncError.entryNotFound {
                 let request = BatchThoughtsRequest(
                     sessionId: sessionId,
                     dayNumber: dayNumber,
@@ -315,10 +330,21 @@ struct CompletionView: View {
                         )
                     ]
                 )
-                _ = try await APIClient.shared.batchThoughts(request)
-                isSaving = false
-                noteSaved = true
-                logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
+                do {
+                    _ = try await APIClient.shared.batchThoughts(request)
+                    isSaving = false
+                    noteSaved = true
+                    logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
+                } catch let error as APIError {
+                    print("Failed to save end note: \(error)")
+                    isSaving = false
+                    saveError = saveErrorMessage(for: error.status)
+                    logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
+                } catch {
+                    print("Failed to save end note: \(error)")
+                    isSaving = false
+                    saveError = "Could not save your note. Please try again."
+                }
             } catch let error as APIError {
                 print("Failed to save end note: \(error)")
                 isSaving = false
@@ -327,12 +353,7 @@ struct CompletionView: View {
             } catch {
                 print("Failed to save end note: \(error)")
                 isSaving = false
-                if let urlError = error as? URLError,
-                   urlError.code == .notConnectedToInternet {
-                    saveError = "No internet connection"
-                } else {
-                    saveError = "Failed to save note"
-                }
+                saveError = "Could not save your note. Please try again."
                 logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
             }
         }

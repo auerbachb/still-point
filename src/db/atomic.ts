@@ -506,6 +506,7 @@ function mapSessionRow(row: Record<string, unknown>): typeof sessions.$inferSele
   return {
     id: String(row.id),
     userId: String(row.user_id),
+    clientSessionId: row.client_session_id ? String(row.client_session_id) : null,
     buddySessionId: row.buddy_session_id ? String(row.buddy_session_id) : null,
     dayNumber: Number(row.day_number),
     sessionType: String(row.session_type),
@@ -583,54 +584,91 @@ export async function atomicCreateSessionWithProgression(params: {
   sessionType: SessionType;
   completed: boolean;
   track: Track;
-}): Promise<typeof sessions.$inferSelect> {
+}): Promise<{ session: typeof sessions.$inferSelect; already: boolean }> {
   const shouldAdvance = shouldAdvanceDay(params.sessionType, params.completed);
   const { session, userId, track } = params;
+  const clientSessionId = session.clientSessionId ?? null;
 
-  const result = await db.execute(sql`
-    with locked as (
-      select id from users where id = ${userId}::uuid for update
-    ),
-    inserted as (
-      insert into sessions (
-        user_id, buddy_session_id, day_number, session_type, track, duration,
-        bonus_seconds, completed, actual_time, clear_percent, thought_count,
-        breath_count, mind_state_log, attention_log, session_date
+  if (clientSessionId) {
+    const [existing] = await db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          eq(sessions.clientSessionId, clientSessionId),
+        ),
       )
-      values (
-        ${userId}::uuid,
-        ${session.buddySessionId ?? null},
-        ${session.dayNumber},
-        ${session.sessionType ?? "standard"},
-        ${session.track ?? "primary"},
-        ${session.duration},
-        ${session.bonusSeconds ?? 0},
-        ${session.completed},
-        ${session.actualTime ?? session.duration},
-        ${session.clearPercent},
-        ${session.thoughtCount ?? 0},
-        ${session.breathCount ?? null},
-        ${JSON.stringify(session.mindStateLog ?? [])}::jsonb,
-        ${session.attentionLog ? JSON.stringify(session.attentionLog) : null}::jsonb,
-        ${session.sessionDate}
-      )
-      returning *
-    ),
-    progressed as (
-      update users u
-      set ${progressionUpdateSql(shouldAdvance, track)}
-      from locked l
-      where u.id = l.id
-      returning u.id
-    )
-    select * from inserted
-  `);
-
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error("SESSION_INSERT_FAILED");
+      .limit(1);
+    if (existing) {
+      return { session: existing, already: true };
+    }
   }
-  return mapSessionRow(row);
+
+  try {
+    const result = await db.execute(sql`
+      with locked as (
+        select id from users where id = ${userId}::uuid for update
+      ),
+      inserted as (
+        insert into sessions (
+          user_id, client_session_id, buddy_session_id, day_number, session_type, track, duration,
+          bonus_seconds, completed, actual_time, clear_percent, thought_count,
+          breath_count, mind_state_log, attention_log, session_date
+        )
+        values (
+          ${userId}::uuid,
+          ${clientSessionId},
+          ${session.buddySessionId ?? null},
+          ${session.dayNumber},
+          ${session.sessionType ?? "standard"},
+          ${session.track ?? "primary"},
+          ${session.duration},
+          ${session.bonusSeconds ?? 0},
+          ${session.completed},
+          ${session.actualTime ?? session.duration},
+          ${session.clearPercent},
+          ${session.thoughtCount ?? 0},
+          ${session.breathCount ?? null},
+          ${JSON.stringify(session.mindStateLog ?? [])}::jsonb,
+          ${session.attentionLog ? JSON.stringify(session.attentionLog) : null}::jsonb,
+          ${session.sessionDate}
+        )
+        returning *
+      ),
+      progressed as (
+        update users u
+        set ${progressionUpdateSql(shouldAdvance, track)}
+        from locked l
+        where u.id = l.id
+        returning u.id
+      )
+      select * from inserted
+    `);
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error("SESSION_INSERT_FAILED");
+    }
+    return { session: mapSessionRow(row), already: false };
+  } catch (error) {
+    if (clientSessionId && isUniqueViolation(error)) {
+      const [again] = await db
+        .select()
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.userId, userId),
+            eq(sessions.clientSessionId, clientSessionId),
+          ),
+        )
+        .limit(1);
+      if (again) {
+        return { session: again, already: true };
+      }
+    }
+    throw error;
+  }
 }
 
 export async function atomicRecordBuddyPersonalSession(params: {

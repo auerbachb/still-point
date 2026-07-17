@@ -13,6 +13,7 @@ enum AppView: Equatable {
     case buddySession(sessionId: String)
     case completion(
         sessionId: String,
+        clientSessionId: UUID,
         clearPercent: Int,
         thoughtCount: Int,
         thoughts: [CapturedThought],
@@ -288,21 +289,21 @@ final class AppViewModel {
     }
 
     func didLogout() {
-        currentUser = nil
-        pendingBuddyInviteToken = nil
-        pendingSessionDeepLink = nil
-        pendingLogReasonDate = nil
-        buddyInviteError = nil
-        authStatusMessage = nil
-        resetTrackCompletionBadges()
-        currentView = .auth
-        // Drop the cached suppress opt-in so it can't leak into the next account.
-        SessionNotificationSuppressionController.clearSuppressPreference()
-        // Cancel any in-flight backfill and clear the throttle so the next login
-        // (even the same account, same day) re-fetches fresh widget history.
         widgetHistoryTask?.cancel()
         widgetHistoryRefreshKey = nil
-        syncWidgetData()
+        Task { @MainActor in
+            try? await SessionSyncCoordinator.shared.clearQueue()
+            currentUser = nil
+            pendingBuddyInviteToken = nil
+            pendingSessionDeepLink = nil
+            pendingLogReasonDate = nil
+            buddyInviteError = nil
+            authStatusMessage = nil
+            resetTrackCompletionBadges()
+            currentView = .auth
+            SessionNotificationSuppressionController.clearSuppressPreference()
+            syncWidgetData()
+        }
     }
 
     private func resetTrackCompletionBadges() {
@@ -353,20 +354,18 @@ final class AppViewModel {
 
     /// Save a completed breath session and return to home.
     ///
-    /// Mirrors SessionViewModel.saveSession / AppViewModel.completeSession field construction exactly.
-    /// On API failure the error is logged and the user returns home anyway — we never trap them on the breath screen.
+    /// Local-first via the offline write queue (#557); non-fatal API failures no longer drop data.
     func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
-        // Skip empty sessions (entered then ended with no taps) — nothing to log.
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
             return
         }
-        // Re-entrancy guard: a second End tap during the await must not create a
-        // duplicate row. Cleared explicitly after the await rather than via defer,
-        // which would not fire at the @MainActor suspension point.
         guard !isSavingBreathSession else { return }
+        guard let ownerUserId = currentUser?.id else { return }
         isSavingBreathSession = true
+        defer { isSavingBreathSession = false }
 
+        let clientSessionId = UUID()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -383,18 +382,22 @@ final class AppViewModel {
             thoughtCount: 0,
             mindStateLog: [],
             sessionDate: dateFormatter.string(from: Date()),
-            breathCount: breathCount
+            breathCount: breathCount,
+            clientSessionId: clientSessionId
         )
 
         do {
-            _ = try await APIClient.shared.createSession(request)
+            _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
+                request: request,
+                clientSessionId: clientSessionId,
+                ownerUserId: ownerUserId,
+                thoughts: []
+            )
+            currentView = .home
         } catch {
-            // Non-fatal: session save failure is logged but does not block navigation home.
-            print("Failed to save breath session: \(error)")
+            print("Failed to persist breath session locally: \(error)")
+            currentView = .home
         }
-
-        isSavingBreathSession = false
-        currentView = .home
     }
 
     func beginBuddySession() {
@@ -483,6 +486,7 @@ final class AppViewModel {
 
     func completeSession(
         sessionId: String,
+        clientSessionId: UUID,
         clearPercent: Int,
         thoughtCount: Int,
         thoughts: [CapturedThought],
@@ -494,8 +498,6 @@ final class AppViewModel {
         attentionLog: [AttentionEntry]? = nil,
         attentionElapsed: Double? = nil
     ) {
-        // Daily-lock model (#348): any naturally-completed session — quick-minute
-        // or standard — unlocks the gated apps for the rest of the day.
         if unlockAppGate {
             appBlockingManager.unlockAfterCompletedSession()
         } else {
@@ -503,6 +505,7 @@ final class AppViewModel {
         }
         currentView = .completion(
             sessionId: sessionId,
+            clientSessionId: clientSessionId,
             clearPercent: clearPercent,
             thoughtCount: thoughtCount,
             thoughts: thoughts,
@@ -518,6 +521,14 @@ final class AppViewModel {
     func returnHome() async {
         currentView = .home
         selectedTab = 0
+        if let ownerUserId = currentUser?.id {
+            do {
+                _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
+                try await SessionSyncCoordinator.shared.pruneCompletedEntries(ownerUserId: ownerUserId)
+            } catch {
+                print("Failed to flush offline session queue: \(error)")
+            }
+        }
         if let user = try? await APIClient.shared.me() {
             currentUser = user
         }

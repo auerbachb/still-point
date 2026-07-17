@@ -17,6 +17,11 @@ struct StillPointApp: App {
         // container opens leaves the in-memory ModelContainer attached to
         // stale SQLite state via Unix file handles.
         // Issue #276 — flagged in PR #277 review by both CodeAnt and Cursor.
+        //
+        // #557: the offline write queue lives in a separate JSON file
+        // (`offline-session-queue.json`) and is intentionally NOT removed here,
+        // so unsynced sits survive UI-test SwiftData wipes. UITest reset clears
+        // the queue explicitly via `OfflineSessionQueue.removePersistedQueue()`.
         StillPointApp.resetSwiftDataIfRequested()
     }
 

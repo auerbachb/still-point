@@ -46,4 +46,23 @@ final class CreateSessionEncodingTests: XCTestCase {
         XCTAssertEqual(object["duration"] as? Int, 60)
         XCTAssertEqual(object["dayNumber"] as? Int, 7)
     }
+
+    func testCreateSessionRequestIncludesClientSessionIdWhenPresent() throws {
+        let clientSessionId = UUID()
+        let request = CreateSessionRequest(
+            dayNumber: 1,
+            duration: 60,
+            completed: true,
+            actualTime: 60,
+            clearPercent: 90,
+            thoughtCount: 0,
+            mindStateLog: [],
+            sessionDate: "2026-07-17",
+            clientSessionId: clientSessionId
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["clientSessionId"] as? String, clientSessionId.uuidString)
+    }
 }

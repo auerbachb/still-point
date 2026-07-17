@@ -249,9 +249,19 @@ final class SessionViewModel {
         isComplete = true
     }
 
-    /// Save session to the API. Returns the session on success.
-    /// Thought batch failure is logged but does not fail the session save.
-    func saveSession(completed: Bool) async -> SessionDTO? {
+    /// #557: stable local key for offline end-note sync during completion.
+    private(set) var lastClientSessionId: UUID?
+
+    /// Save session locally first, then sync when online (#557). Returns nil when persistence fails.
+    func saveSession(completed: Bool, ownerUserId: String) async -> SessionDTO? {
+        let clientSessionId: UUID
+        if let existing = lastClientSessionId {
+            clientSessionId = existing
+        } else {
+            let newId = UUID()
+            lastClientSessionId = newId
+            clientSessionId = newId
+        }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -269,37 +279,24 @@ final class SessionViewModel {
             mindStateLog: mindStateLog,
             attentionLog: attentionLog,
             sessionDate: dateFormatter.string(from: Date()),
-            track: track
+            track: track,
+            clientSessionId: clientSessionId
         )
 
+        let pendingThoughts = capturedThoughts.map {
+            PendingSessionThought(timeInSession: $0.timeInSession, text: $0.text)
+        }
+
         do {
-            let session = try await APIClient.shared.createSession(request)
-
-            // Batch save thoughts — failure here is non-fatal since the session is already persisted
-            let allThoughts = capturedThoughts.map {
-                BatchThoughtsRequest.ThoughtInput(
-                    timeInSession: $0.timeInSession,
-                    text: $0.text
-                )
-            }
-
-            if !allThoughts.isEmpty {
-                do {
-                    _ = try await APIClient.shared.batchThoughts(
-                        BatchThoughtsRequest(
-                            sessionId: session.id,
-                            dayNumber: session.dayNumber,
-                            thoughts: allThoughts
-                        )
-                    )
-                } catch {
-                    print("Failed to save thoughts (session was saved): \(error)")
-                }
-            }
-
-            return session
+            let result = try await SessionSyncCoordinator.shared.saveCompletedSession(
+                request: request,
+                clientSessionId: clientSessionId,
+                ownerUserId: ownerUserId,
+                thoughts: pendingThoughts
+            )
+            return result.session
         } catch {
-            print("Failed to save session: \(error)")
+            print("Failed to persist session locally: \(error)")
             return nil
         }
     }
