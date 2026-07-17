@@ -357,6 +357,8 @@ export const buddySessionCalendarEvents = pgTable("buddy_session_calendar_events
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  /** #557: iOS offline write-queue idempotency key; null for web/legacy creates. */
+  clientSessionId: uuid("client_session_id"),
   /** #119: provenance when this row was created from a completed buddy sit (personal copy per user). */
   buddySessionId: uuid("buddy_session_id").references(() => buddySessions.id, { onDelete: "set null" }),
   dayNumber: integer("day_number").notNull(),
@@ -406,6 +408,11 @@ export const sessions = pgTable("sessions", {
     table.userId,
     table.buddySessionId,
   ).where(sql`${table.buddySessionId} is not null`),
+  /** #557: idempotent offline iOS session create — one row per user per client UUID. */
+  userClientSessionUnique: uniqueIndex("sessions_user_client_session_unique").on(
+    table.userId,
+    table.clientSessionId,
+  ).where(sql`${table.clientSessionId} is not null`),
   focusRatingCheck: check(
     "sessions_focus_rating_range",
     sql`${table.focusRating} is null or (${table.focusRating} between 1 and 10)`,

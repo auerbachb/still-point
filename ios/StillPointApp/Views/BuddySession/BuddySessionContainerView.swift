@@ -178,6 +178,7 @@ struct BuddySessionContainerView: View {
         guard appVM.currentView == .buddySession(sessionId: sessionId) else { return }
         appVM.completeSession(
             sessionId: saved.id,
+            clientSessionId: UUID(uuidString: saved.id) ?? UUID(),
             clearPercent: saved.clearPercent,
             thoughtCount: saved.thoughtCount,
             thoughts: vm.capturedThoughts,

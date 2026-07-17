@@ -5,6 +5,7 @@ import UIKit
 
 struct RootView: View {
     @State private var appVM = AppViewModel()
+    @State private var reachability = NetworkReachabilityMonitor()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -44,10 +45,11 @@ struct RootView: View {
                     .id(sessionId)
                     .transition(.opacity)
 
-            case .completion(let sessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration, let bonusSeconds, let attentionLog, let attentionElapsed):
+            case .completion(let sessionId, let clientSessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let duration, let bonusSeconds, let attentionLog, let attentionElapsed):
                 CompletionView(
                     appVM: appVM,
                     sessionId: sessionId,
+                    clientSessionId: clientSessionId,
                     clearPercent: clearPercent,
                     thoughtCount: thoughtCount,
                     thoughts: thoughts,
@@ -128,6 +130,7 @@ struct RootView: View {
         }
         .task {
             await appVM.checkAuth()
+            await reachability.flushOfflineQueue()
         }
         .onChange(of: scenePhase) { _, phase in
             SessionIdleTimerController.syncSceneForegroundActive(
@@ -144,6 +147,7 @@ struct RootView: View {
             }
             if phase == .active {
                 SessionIdleTimerController.applyDesiredIdleTimerState()
+                Task { await reachability.flushOfflineQueue() }
             } else if phase == .inactive || phase == .background {
                 // Multi-window: only clear when no scene is foreground-active (issue #87).
                 SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()

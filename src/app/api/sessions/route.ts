@@ -9,6 +9,7 @@ import { calculateMindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { isValidSessionCalendarDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { eq, desc } from "drizzle-orm";
 import { sessions } from "@/db/schema";
+import { isUuid } from "@/lib/friends";
 
 export const GET = withApiHandler("Get sessions", async (request: NextRequest) => {
   const auth = await requireAuth();
@@ -79,13 +80,23 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     return NextResponse.json({ error: "Invalid track" }, { status: 400 });
   }
 
-  const session = await atomicCreateSessionWithProgression({
+  const clientSessionIdRaw = body.clientSessionId;
+  let clientSessionId: string | null = null;
+  if (clientSessionIdRaw != null) {
+    if (typeof clientSessionIdRaw !== "string" || !isUuid(clientSessionIdRaw)) {
+      return NextResponse.json({ error: "Invalid clientSessionId" }, { status: 400 });
+    }
+    clientSessionId = clientSessionIdRaw;
+  }
+
+  const { session, already } = await atomicCreateSessionWithProgression({
     userId: auth.user.userId,
     sessionType,
     completed,
     track,
     session: {
       userId: auth.user.userId,
+      clientSessionId,
       dayNumber,
       sessionType,
       track,
@@ -102,5 +113,5 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     },
   });
 
-  return NextResponse.json({ session });
+  return NextResponse.json(already ? { session, already: true } : { session });
 });

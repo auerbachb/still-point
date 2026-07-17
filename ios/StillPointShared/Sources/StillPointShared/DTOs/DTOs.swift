@@ -186,6 +186,8 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let breathCount: Int?
     /// #240: which daily track this sit advances. Defaults to `.primary`.
     public let track: Track
+    /// #557: client-generated UUID for offline idempotent create; omitted for web.
+    public let clientSessionId: UUID?
 
     public init(
         dayNumber: Int,
@@ -200,7 +202,8 @@ public struct CreateSessionRequest: Codable, Sendable {
         attentionLog: [AttentionEntry]? = nil,
         sessionDate: String,
         breathCount: Int? = nil,
-        track: Track = .primary
+        track: Track = .primary,
+        clientSessionId: UUID? = nil
     ) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
@@ -215,6 +218,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.sessionDate = sessionDate
         self.breathCount = breathCount
         self.track = track
+        self.clientSessionId = clientSessionId
     }
 }
 

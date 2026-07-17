@@ -63,8 +63,9 @@ actor UITestAPIStore {
             // silent-skip fix from issue #253.
             // Note: the SwiftData store is wiped earlier in
             // `StillPointApp.init()`, before `.modelContainer(...)` opens
-            // its SQLite files (issue #276). The session artifacts owned by
-            // `APIClient` are cleared by the client itself via `resetStore`.
+            // its SQLite files (issue #276). The offline write queue (#557)
+            // is stored separately and cleared here on UI-test reset.
+            OfflineSessionQueue.removePersistedQueue()
             defaults.removeObject(forKey: defaultsKey)
             AudioEngine.resetPersistedPrefs()
             SessionIntroPrefs.resetPersistedPrefs()
@@ -222,9 +223,15 @@ actor UITestAPIStore {
     func createSession(_ data: CreateSessionRequest) throws -> SessionDTO {
         try ensureAuthenticated()
 
+        if let clientSessionId = data.clientSessionId?.uuidString,
+           let existing = store.sessions.first(where: { $0.id == clientSessionId }) {
+            return existing
+        }
+
         let nextOrdinal = store.nextSessionOrdinal
+        let sessionId = data.clientSessionId?.uuidString ?? "ui-session-\(nextOrdinal)"
         let session = SessionDTO(
-            id: "ui-session-\(nextOrdinal)",
+            id: sessionId,
             dayNumber: data.dayNumber,
             sessionType: data.sessionType,
             duration: data.duration,
