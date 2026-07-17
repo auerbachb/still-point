@@ -196,7 +196,12 @@ actor UITestAPIStore {
         }
 
         let sortedSessions = store.sessions.sorted { $0.sessionDate < $1.sessionDate }
-        let todayIso = today ?? localTodayIsoDate()
+        let todayIso: String
+        if let today, !today.isEmpty {
+            todayIso = today
+        } else {
+            todayIso = localTodayIsoDate()
+        }
         let base = SessionStatistics.calculateStats(for: sortedSessions)
         let period = HistoryStats.calculatePeriodStats(sessions: sortedSessions, todayIso: todayIso)
         let trends = HistoryMindStateTrends.calculateTrendStats(sessions: sortedSessions, todayIso: todayIso)
