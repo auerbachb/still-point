@@ -35,22 +35,25 @@ describe("migration-utils (#539)", () => {
     ]);
   });
 
-  test("stripOuterTransactionWrappers removes only start-of-line BEGIN/COMMIT", () => {
-    const body = [
+  test("stripOuterTransactionWrappers removes only a full-file outer BEGIN/COMMIT pair", () => {
+    const wrapped = [
+      "BEGIN;",
+      "CREATE TABLE IF NOT EXISTS demo (id int);",
+      "COMMIT;",
+    ].join("\n");
+
+    expect(stripOuterTransactionWrappers(wrapped)).toBe(
+      "CREATE TABLE IF NOT EXISTS demo (id int);",
+    );
+
+    const innerBeginPreserved = [
       "BEGIN;",
       "CREATE TABLE IF NOT EXISTS demo (id int);",
       "COMMIT;",
       "DO $$ BEGIN PERFORM 1; END $$;",
     ].join("\n");
 
-    expect(stripOuterTransactionWrappers(body)).toBe(
-      [
-        "",
-        "CREATE TABLE IF NOT EXISTS demo (id int);",
-        "",
-        "DO $$ BEGIN PERFORM 1; END $$;",
-      ].join("\n"),
-    );
+    expect(stripOuterTransactionWrappers(innerBeginPreserved)).toBe(innerBeginPreserved);
   });
 
   test("migrationChecksum is stable for the same body", () => {
