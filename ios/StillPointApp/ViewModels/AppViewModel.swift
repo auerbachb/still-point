@@ -289,24 +289,21 @@ final class AppViewModel {
     }
 
     func didLogout() {
-        currentUser = nil
-        pendingBuddyInviteToken = nil
-        pendingSessionDeepLink = nil
-        pendingLogReasonDate = nil
-        buddyInviteError = nil
-        authStatusMessage = nil
-        resetTrackCompletionBadges()
-        currentView = .auth
-        // Drop the cached suppress opt-in so it can't leak into the next account.
-        SessionNotificationSuppressionController.clearSuppressPreference()
-        // Cancel any in-flight backfill and clear the throttle so the next login
-        // (even the same account, same day) re-fetches fresh widget history.
         widgetHistoryTask?.cancel()
         widgetHistoryRefreshKey = nil
-        Task {
+        Task { @MainActor in
             try? await SessionSyncCoordinator.shared.clearQueue()
+            currentUser = nil
+            pendingBuddyInviteToken = nil
+            pendingSessionDeepLink = nil
+            pendingLogReasonDate = nil
+            buddyInviteError = nil
+            authStatusMessage = nil
+            resetTrackCompletionBadges()
+            currentView = .auth
+            SessionNotificationSuppressionController.clearSuppressPreference()
+            syncWidgetData()
         }
-        syncWidgetData()
     }
 
     private func resetTrackCompletionBadges() {
@@ -399,6 +396,7 @@ final class AppViewModel {
             currentView = .home
         } catch {
             print("Failed to persist breath session locally: \(error)")
+            currentView = .home
         }
     }
 

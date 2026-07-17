@@ -697,10 +697,14 @@ struct SessionView: View {
 
     private func handleCompletion() {
         Task {
+            guard let ownerUserId = appVM.currentUser?.id else {
+                showSaveError = true
+                return
+            }
             // Persist session before navigating to completion screen
             guard let session = await vm.saveSession(
                 completed: vm.completedNaturally,
-                ownerUserId: appVM.currentUser?.id ?? ""
+                ownerUserId: ownerUserId
             ) else {
                 showSaveError = true
                 return
