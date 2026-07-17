@@ -151,19 +151,111 @@ public struct StatsDTO: Codable, Sendable {
     public let avgThoughtsPerSession: Double
     public let avgThoughtsPerMinute: Double
     public let bonusMinutesTotal: Int?
+    public let trailing4WeekDays: Int
+    public let trailing4WeekDayPercent: Double
+    public let trailing4WeekTotalTime: Int
+    public let trailing4WeekTimePercent: Double
+    public let totalTimeAllTime: Int
+    public let progressTo10kHours: Double
+    public let mindStateTrends: MindStateTrendStats
 
     public init(
         streak: Int,
         avgClearPercent: Int,
         avgThoughtsPerSession: Double,
         avgThoughtsPerMinute: Double,
-        bonusMinutesTotal: Int? = nil
+        bonusMinutesTotal: Int? = nil,
+        trailing4WeekDays: Int = 0,
+        trailing4WeekDayPercent: Double = 0,
+        trailing4WeekTotalTime: Int = 0,
+        trailing4WeekTimePercent: Double = 0,
+        totalTimeAllTime: Int = 0,
+        progressTo10kHours: Double = 0,
+        mindStateTrends: MindStateTrendStats = .empty
     ) {
         self.streak = streak
         self.avgClearPercent = avgClearPercent
         self.avgThoughtsPerSession = avgThoughtsPerSession
         self.avgThoughtsPerMinute = avgThoughtsPerMinute
         self.bonusMinutesTotal = bonusMinutesTotal
+        self.trailing4WeekDays = trailing4WeekDays
+        self.trailing4WeekDayPercent = trailing4WeekDayPercent
+        self.trailing4WeekTotalTime = trailing4WeekTotalTime
+        self.trailing4WeekTimePercent = trailing4WeekTimePercent
+        self.totalTimeAllTime = totalTimeAllTime
+        self.progressTo10kHours = progressTo10kHours
+        self.mindStateTrends = mindStateTrends
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        streak = try c.decode(Int.self, forKey: .streak)
+        avgClearPercent = try c.decode(Int.self, forKey: .avgClearPercent)
+        avgThoughtsPerSession = try c.decode(Double.self, forKey: .avgThoughtsPerSession)
+        avgThoughtsPerMinute = try c.decode(Double.self, forKey: .avgThoughtsPerMinute)
+        bonusMinutesTotal = try c.decodeIfPresent(Int.self, forKey: .bonusMinutesTotal)
+        trailing4WeekDays = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekDays) ?? 0
+        trailing4WeekDayPercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekDayPercent) ?? 0
+        trailing4WeekTotalTime = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekTotalTime) ?? 0
+        trailing4WeekTimePercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekTimePercent) ?? 0
+        totalTimeAllTime = try c.decodeIfPresent(Int.self, forKey: .totalTimeAllTime) ?? 0
+        progressTo10kHours = try c.decodeIfPresent(Double.self, forKey: .progressTo10kHours) ?? 0
+        mindStateTrends = try c.decodeIfPresent(MindStateTrendStats.self, forKey: .mindStateTrends) ?? .empty
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case streak, avgClearPercent, avgThoughtsPerSession, avgThoughtsPerMinute, bonusMinutesTotal
+        case trailing4WeekDays, trailing4WeekDayPercent, trailing4WeekTotalTime, trailing4WeekTimePercent
+        case totalTimeAllTime, progressTo10kHours, mindStateTrends
+    }
+
+    /// Fills period and mind-state trend fields client-side when the API omits them.
+    public static func enrich(
+        _ base: StatsDTO,
+        sessions: [SessionDTO],
+        todayIso: String
+    ) -> StatsDTO {
+        let hasSessions = !sessions.isEmpty
+        let needsTrends = base.mindStateTrends == .empty && hasSessions
+        let needsPeriodComputation = hasSessions && (
+            base.trailing4WeekDays == 0
+                || base.trailing4WeekTotalTime == 0
+                || base.trailing4WeekDayPercent == 0
+                || base.trailing4WeekTimePercent == 0
+                || base.totalTimeAllTime == 0
+                || base.progressTo10kHours == 0
+        )
+        let period = needsPeriodComputation
+            ? HistoryStats.calculatePeriodStats(sessions: sessions, todayIso: todayIso)
+            : nil
+        let trends = needsTrends
+            ? HistoryMindStateTrends.calculateTrendStats(sessions: sessions, todayIso: todayIso)
+            : nil
+
+        func pickInt(_ baseValue: Int, _ computed: Int?) -> Int {
+            guard baseValue == 0, let computed else { return baseValue }
+            return computed
+        }
+
+        func pickDouble(_ baseValue: Double, _ computed: Double?) -> Double {
+            guard baseValue == 0, let computed else { return baseValue }
+            return computed
+        }
+
+        return StatsDTO(
+            streak: base.streak,
+            avgClearPercent: base.avgClearPercent,
+            avgThoughtsPerSession: base.avgThoughtsPerSession,
+            avgThoughtsPerMinute: base.avgThoughtsPerMinute,
+            bonusMinutesTotal: base.bonusMinutesTotal,
+            trailing4WeekDays: pickInt(base.trailing4WeekDays, period?.trailing4WeekDays),
+            trailing4WeekDayPercent: pickDouble(base.trailing4WeekDayPercent, period?.trailing4WeekDayPercent),
+            trailing4WeekTotalTime: pickInt(base.trailing4WeekTotalTime, period?.trailing4WeekTotalTime),
+            trailing4WeekTimePercent: pickDouble(base.trailing4WeekTimePercent, period?.trailing4WeekTimePercent),
+            totalTimeAllTime: pickInt(base.totalTimeAllTime, period?.totalTimeAllTime),
+            progressTo10kHours: pickDouble(base.progressTo10kHours, period?.progressTo10kHours),
+            mindStateTrends: needsTrends ? trends! : base.mindStateTrends
+        )
     }
 }
 

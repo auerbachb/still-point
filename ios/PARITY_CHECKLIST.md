@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-07-16  
+Last updated: 2026-07-17  
 Release owner: iOS release DRI
 
 ## Core product parity
@@ -13,7 +13,7 @@ Release owner: iOS release DRI
 | Solo session timer + pause for “I’m thinking” | Implemented | Implemented | ✅ Complete | Shared session timing logic is in `StillPointShared/SessionLogic.swift`. |
 | Thought capture during session | Implemented | Implemented | ✅ Complete | Both clients write to `/api/thoughts/batch`. |
 | Completion screen + end note | Implemented | Implemented | ✅ Complete | End note uses `timeInSession = -1` in both clients. |
-| Progress/history view | Implemented | Implemented | ✅ Complete | iOS `HistoryView` maps to web `HistoryView`. |
+| Progress/history view | Implemented | Implemented | ✅ Complete | iOS `HistoryView` mirrors web calendar-first History: month grid, prior-month summaries, year-in-review, mind-state trends, and session-buildup journey toggle (#523/#520/#522). |
 | Thought journal | Implemented | Implemented | ✅ Complete | iOS `ThoughtJournalView` maps to web `ThoughtJournal`. |
 | Public board + visibility toggle | Implemented | Implemented | ✅ Complete | iOS `SettingsView` includes `isPublic` toggle and board read. |
 | Buddy session create/join/wait/start/leave/complete | Implemented | Implemented | ✅ Complete | iOS uses same buddy session API contract as web. |
