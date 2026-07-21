@@ -26,34 +26,44 @@ struct ThoughtJournalView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, SPSpacing.s3)
 
-                // Grouped thoughts
-                ForEach(vm.groupedThoughts, id: \.dayNumber) { group in
-                    VStack(alignment: .leading, spacing: SPSpacing.s2) {
-                        Text("DAY \(group.dayNumber)")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .foregroundStyle(Color(SPColor.fg4))
-                            .tracking(2)
-
-                        ForEach(group.thoughts, id: \.id) { thought in
-                            HStack(alignment: .top, spacing: SPSpacing.s2) {
-                                Text(thought.timeInSession == -1 ? "note" : "@\(thought.timeInSession)s")
-                                    .font(SPFont.mono(11))
-                                    .foregroundStyle(SPColor.amberText)
-                                    .frame(width: 44, alignment: .trailing)
-
-                                Text(thought.text)
-                                    .font(SPFont.serifItalic(15))
-                                    .foregroundStyle(Color(SPColor.fg2))
+                // Grouped thoughts — a flat, left-aligned log: no cards, hairline
+                // dividers between date groups, tight vertical rhythm.
+                if !vm.groupedThoughts.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(vm.groupedThoughts.enumerated()), id: \.element.dayNumber) { index, group in
+                            // Thin hairline separating one date's entry from the
+                            // next — never above the first entry or below the last.
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(SPColor.border1)
+                                    .frame(height: 1)
                             }
+
+                            VStack(alignment: .leading, spacing: SPSpacing.s2) {
+                                Text("DAY \(group.dayNumber)")
+                                    .font(SPFont.mono(11, weight: .medium))
+                                    .foregroundStyle(Color(SPColor.fg4))
+                                    .tracking(2)
+
+                                ForEach(group.thoughts, id: \.id) { thought in
+                                    HStack(alignment: .firstTextBaseline, spacing: SPSpacing.s2) {
+                                        Text(thought.timeInSession == -1 ? "note" : "@\(thought.timeInSession)s")
+                                            .font(SPFont.mono(11))
+                                            .foregroundStyle(SPColor.amberText)
+                                            .frame(width: 44, alignment: .leading)
+
+                                        Text(thought.text)
+                                            .font(SPFont.serifItalic(15))
+                                            .foregroundStyle(Color(SPColor.fg2))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, SPSpacing.s2)
                         }
                     }
-                    .padding(SPSpacing.s3)
-                    .background(SPColor.surface1)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(SPColor.border1)
-                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if vm.groupedThoughts.isEmpty && !vm.isLoading {
