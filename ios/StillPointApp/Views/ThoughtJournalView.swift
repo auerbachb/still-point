@@ -5,7 +5,11 @@ struct ThoughtJournalView: View {
     @State private var vm = ThoughtJournalViewModel()
 
     var body: some View {
-        ScrollView {
+        // Compute the grouped collection once per render — it does a
+        // Dictionary grouping + sort + map, so avoid recomputing it per access.
+        let groups = vm.groupedThoughts
+
+        return ScrollView {
             VStack(spacing: SPSpacing.s5) {
                 Text("Thought Journal")
                     .font(SPFont.serifItalic(28, weight: .light))
@@ -28,12 +32,13 @@ struct ThoughtJournalView: View {
 
                 // Grouped thoughts — a flat, left-aligned log: no cards, hairline
                 // dividers between date groups, tight vertical rhythm.
-                if !vm.groupedThoughts.isEmpty {
+                if !groups.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(vm.groupedThoughts.enumerated()), id: \.element.dayNumber) { index, group in
+                        ForEach(groups, id: \.dayNumber) { group in
                             // Thin hairline separating one date's entry from the
-                            // next — never above the first entry or below the last.
-                            if index > 0 {
+                            // next — rendered above every group except the first,
+                            // so there's none above the first or below the last.
+                            if group.dayNumber != groups[0].dayNumber {
                                 Rectangle()
                                     .fill(SPColor.border1)
                                     .frame(height: 1)
@@ -66,7 +71,7 @@ struct ThoughtJournalView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if vm.groupedThoughts.isEmpty && !vm.isLoading {
+                if groups.isEmpty && !vm.isLoading {
                     Text("No thoughts captured yet")
                         .font(SPFont.serifItalic(15))
                         .foregroundStyle(Color(SPColor.fg4))
