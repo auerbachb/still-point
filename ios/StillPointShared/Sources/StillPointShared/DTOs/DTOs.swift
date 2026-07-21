@@ -224,18 +224,21 @@ public struct SessionDTO: Codable, Sendable {
         clearPercent = try c.decode(Int.self, forKey: .clearPercent)
         thoughtCount = try c.decode(Int.self, forKey: .thoughtCount)
         sessionDate = try c.decode(String.self, forKey: .sessionDate)
-        // `try?` on the enums tolerates an unknown raw value (a future server case) instead
-        // of throwing; an absent/null key defaults the same way.
+        // Enums tolerate an unknown raw value (a future server case) by falling back rather
+        // than throwing. The collection / nested-object fields (mindStateLog, attentionLog,
+        // ambientSoundSummary) use `try?` too, so a malformed element or shape degrades to
+        // nil instead of failing the whole history list (#612) — only the strict identity
+        // fields above can fail a row. Absent/null keys default the same way throughout.
         sessionType = (try? c.decode(SessionType.self, forKey: .sessionType)) ?? .standard
         track = try? c.decode(Track.self, forKey: .track)
         bonusSeconds = try c.decodeIfPresent(Int.self, forKey: .bonusSeconds)
         actualTime = try c.decodeIfPresent(Int.self, forKey: .actualTime)
-        mindStateLog = try c.decodeIfPresent([MindStateEntry].self, forKey: .mindStateLog)
-        attentionLog = try c.decodeIfPresent([AttentionEntry].self, forKey: .attentionLog)
+        mindStateLog = try? c.decode([MindStateEntry].self, forKey: .mindStateLog)
+        attentionLog = try? c.decode([AttentionEntry].self, forKey: .attentionLog)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         buddySessionId = try c.decodeIfPresent(String.self, forKey: .buddySessionId)
         breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
-        ambientSoundSummary = try c.decodeIfPresent(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
+        ambientSoundSummary = try? c.decode(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
     }
 
     private enum CodingKeys: String, CodingKey {

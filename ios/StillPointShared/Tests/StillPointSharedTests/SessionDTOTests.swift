@@ -182,4 +182,50 @@ final class SessionDTOTests: XCTestCase {
         XCTAssertEqual(decoded.mindStateLog, original.mindStateLog)
         XCTAssertEqual(decoded.ambientSoundSummary, original.ambientSoundSummary)
     }
+
+    /// A malformed mind-state log (wrong element shape) must degrade to nil, not fail the
+    /// whole session — otherwise one bad row nukes the entire history list (#612).
+    func testToleratesMalformedMindStateLog() throws {
+        let json = """
+        {
+          "id": "s8", "dayNumber": 2, "sessionType": "standard", "duration": 60,
+          "completed": true, "clearPercent": 40, "thoughtCount": 1, "sessionDate": "2026-06-04",
+          "mindStateLog": [{"time": "not-a-number", "state": 5}]
+        }
+        """.data(using: .utf8)!
+
+        let s = try JSONDecoder().decode(SessionDTO.self, from: json)
+        XCTAssertNil(s.mindStateLog)
+        XCTAssertEqual(s.clearPercent, 40)   // the rest of the row still decoded
+    }
+
+    /// A malformed attention log (not even an array) must degrade to nil, not throw.
+    func testToleratesMalformedAttentionLog() throws {
+        let json = """
+        {
+          "id": "s9", "dayNumber": 2, "sessionType": "standard", "duration": 60,
+          "completed": true, "clearPercent": 40, "thoughtCount": 1, "sessionDate": "2026-06-03",
+          "attentionLog": "corrupt"
+        }
+        """.data(using: .utf8)!
+
+        let s = try JSONDecoder().decode(SessionDTO.self, from: json)
+        XCTAssertNil(s.attentionLog)
+        XCTAssertEqual(s.id, "s9")
+    }
+
+    /// A malformed ambient summary (wrong field types / shape) must degrade to nil.
+    func testToleratesMalformedAmbientSummary() throws {
+        let json = """
+        {
+          "id": "s10", "dayNumber": 2, "sessionType": "standard", "duration": 60,
+          "completed": true, "clearPercent": 40, "thoughtCount": 1, "sessionDate": "2026-06-02",
+          "ambientSoundSummary": {"avgDb": "loud"}
+        }
+        """.data(using: .utf8)!
+
+        let s = try JSONDecoder().decode(SessionDTO.self, from: json)
+        XCTAssertNil(s.ambientSoundSummary)
+        XCTAssertEqual(s.id, "s10")
+    }
 }
