@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PATHWAY_COMING_SOON_MESSAGE,
   buildPathway,
@@ -46,10 +46,25 @@ function Node({ node, onTap }: { node: PathwayNode; onTap: () => void }) {
 export function Pathway() {
   const levels = buildPathway();
   const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimeoutRef.current !== null) {
+        window.clearTimeout(noticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const showComingSoon = useCallback(() => {
     setNotice(PATHWAY_COMING_SOON_MESSAGE);
-    window.setTimeout(() => setNotice(null), 2400);
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+    }
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      noticeTimeoutRef.current = null;
+      setNotice(null);
+    }, 2400);
   }, []);
 
   return (
