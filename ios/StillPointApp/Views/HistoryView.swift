@@ -126,9 +126,9 @@ struct HistoryView: View {
             mindStateTrailing4WeekStatGrid
 
             Text(mindStateAllTimeSummaryText)
-            .font(SPFont.mono(10))
-            .foregroundStyle(Color(SPColor.fg4))
-            .multilineTextAlignment(.center)
+                .font(SPFont.mono(10))
+                .foregroundStyle(Color(SPColor.fg4))
+                .multilineTextAlignment(.center)
 
             let activeDays = vm.mindStateTrends.dailyTrend.filter { $0.totalSitSeconds > 0 }
             if activeDays.isEmpty {
@@ -177,7 +177,7 @@ struct HistoryView: View {
 
     private var mindStateAllTimeSummaryText: String {
         let allTime = vm.mindStateTrends.allTime
-        return "All time "
+        return "Trailing 4 weeks · all time "
             + String(format: "%.1f%%", allTime.lightDistractionPercent) + " light · "
             + String(format: "%.1f%%", allTime.heavyDistractionPercent) + " heavy · "
             + String(format: "%.1f%%", allTime.hyperfocusPercent) + " hyperfocus"
@@ -330,7 +330,7 @@ struct HistoryView: View {
                 .tracking(1)
                 .foregroundStyle(Color(SPColor.fg3))
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .frame(minHeight: 44)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(SPColor.border1, lineWidth: 1)
@@ -418,11 +418,12 @@ struct HistoryView: View {
                 .tracking(1)
                 .foregroundStyle(Color(SPColor.fg3))
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .frame(minHeight: 44)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(SPColor.border1, lineWidth: 1)
                 )
+                .accessibilityIdentifier("history.yearInReviewBack")
                 Spacer()
                 Text("YEAR IN REVIEW")
                     .font(SPFont.serif(14))
@@ -492,6 +493,7 @@ struct HistoryView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .opacity(opacity)
+        .accessibilityIdentifier("history.yearMonth.\(month.yearMonth)")
     }
 
     // MARK: - Journey
