@@ -67,6 +67,12 @@ const CSS_ONLY_VARS = new Set([
   "--nav-h",
 ]);
 
+/** iOS-only SPColor tokens that intentionally have no web counterpart. */
+const SPCOLOR_ONLY = new Set(/** @type {string[]} */ ([]));
+
+/** iOS-only SPSpacing tokens that intentionally have no web counterpart. */
+const SPSPACING_ONLY = new Set(/** @type {string[]} */ ([]));
+
 const SHARED_CSS_VARS = new Set([
   ...Object.values(SHARED_COLOR_MAP).map((entry) => entry.css),
   ...Object.values(SHARED_SPACING_MAP).map((entry) => entry.css),
@@ -321,6 +327,24 @@ function main() {
     );
   }
 
+  for (const swiftName of Object.keys(swiftColors)) {
+    if (SHARED_COLOR_MAP[swiftName] != null || SPCOLOR_ONLY.has(swiftName)) {
+      continue;
+    }
+    violations.push(
+      `Unexpected Swift token SPColor.${swiftName} is neither shared nor listed as platform-specific`
+    );
+  }
+
+  for (const swiftName of Object.keys(swiftSpacing)) {
+    if (SHARED_SPACING_MAP[swiftName] != null || SPSPACING_ONLY.has(swiftName)) {
+      continue;
+    }
+    violations.push(
+      `Unexpected Swift token SPSpacing.${swiftName} is neither shared nor listed as platform-specific`
+    );
+  }
+
   if (violations.length > 0) {
     console.error("Design token parity check failed:");
     for (const violation of violations) {
@@ -336,7 +360,7 @@ function main() {
   const sharedColorCount = Object.keys(SHARED_COLOR_MAP).length;
   const sharedSpacingCount = Object.keys(SHARED_SPACING_MAP).length;
   console.log(
-    `Design token parity check passed (${sharedColorCount} shared colors, ${sharedSpacingCount} shared spacing values, ${CSS_ONLY_VARS.size} web-only CSS tokens).`
+    `Design token parity check passed (${sharedColorCount} shared colors, ${sharedSpacingCount} shared spacing values, ${CSS_ONLY_VARS.size} web-only CSS tokens, ${SPCOLOR_ONLY.size + SPSPACING_ONLY.size} iOS-only tokens).`
   );
 }
 

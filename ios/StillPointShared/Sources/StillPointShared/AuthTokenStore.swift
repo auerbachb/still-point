@@ -1,9 +1,14 @@
 import Foundation
 import Security
+import os
 
 enum AuthTokenStore {
     private static let account = "sp-auth-token"
     private static let service = "still-point.auth"
+    private static let log = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.brettonauerbach.stillpoint",
+        category: "keychain"
+    )
 
     @discardableResult
     static func save(_ token: String) -> Bool {
@@ -75,6 +80,6 @@ enum AuthTokenStore {
 
     private static func logKeychainFailure(operation: String, status: OSStatus) {
         let message = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown Keychain error"
-        print("AuthTokenStore \(operation) failed (\(status)): \(message)")
+        log.error("AuthTokenStore \(operation, privacy: .public) failed (\(status, privacy: .public)): \(message, privacy: .public)")
     }
 }
