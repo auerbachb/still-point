@@ -9,7 +9,7 @@ Release owner: iOS release DRI
 |---|---|---|---|---|
 | Auth (sign up / login / logout / persisted session) | Implemented | Implemented | ✅ Complete | iOS uses the same `/api/auth/*` endpoints via `StillPointShared/APIClient.swift`. |
 | Home + day progression CTA | Implemented | Implemented | ✅ Complete | “Begin” + day-based duration behavior is present on both clients. |
-| L1–L5 lesson pathway on Home (#452 / #525) | Implemented | Implemented | ✅ Complete | Shared derivation in `src/lib/pathway.ts` / `StillPointShared/Pathway.swift`; UI in `Pathway.tsx` / `PathwayView.swift` embedded in each client's Home. |
+| L1–L5 lesson pathway on Home (#452 / #525 / #587) | Implemented | Implemented | ✅ Complete | Shared structure in `src/lib/pathway.ts` / `StillPointShared/Pathway.swift`; UI in `Pathway.tsx` / `PathwayView.swift`. Coming-soon preview — not derived from day count. |
 | Solo session timer + pause for “I’m thinking” | Implemented | Implemented | ✅ Complete | Shared session timing logic is in `StillPointShared/SessionLogic.swift`. |
 | Thought capture during session | Implemented | Implemented | ✅ Complete | Both clients write to `/api/thoughts/batch`. |
 | Completion screen + end note | Implemented | Implemented | ✅ Complete | End note uses `timeInSession = -1` in both clients. |

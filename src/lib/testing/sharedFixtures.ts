@@ -100,28 +100,24 @@ export type PathwayFixture = {
   totalLevels: number;
   pathwayMaxDay: number;
   levelNames: string[];
+  comingSoonMessage: string;
   nodeStateForDay: Array<{ day: number; currentDay: number; expected: "completed" | "current" | "locked" }>;
   buildPathway: Array<{
     name: string;
-    currentDay: number;
-    expectedCurrentNodeDay?: number;
-    expectedCurrentNodeCount?: number;
     expectedLevelCount?: number;
     expectedAllDays?: number[];
+    expectedAllNodesComingSoon?: boolean;
+    expectedAllLevelsComingSoon?: boolean;
+    expectedAllCompletedCountsZero?: boolean;
     expectedLevels?: Array<{
       level: number;
       name: string;
-      state: "completed" | "current" | "locked";
+      state: "completed" | "current" | "locked" | "comingSoon";
       completedCount: number;
-      firstNodeState?: "completed" | "current" | "locked";
-      lastNodeState?: "completed" | "current" | "locked";
-      nodeStates?: Array<"completed" | "current" | "locked">;
+      firstNodeState?: "completed" | "current" | "locked" | "comingSoon";
+      lastNodeState?: "completed" | "current" | "locked" | "comingSoon";
+      nodeStates?: Array<"completed" | "current" | "locked" | "comingSoon">;
     }>;
-    expectedAllNodesCompleted?: boolean;
-    expectedAllLevelsCompleted?: boolean;
-    expectedLastLevelState?: "completed" | "current" | "locked";
-    expectedLastNodeState?: "completed" | "current" | "locked";
-    expectedFirstNodeState?: "completed" | "current" | "locked";
   }>;
 };
 

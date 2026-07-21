@@ -154,23 +154,19 @@ struct PathwayFixture: Decodable {
 
     struct BuildPathwayCase: Decodable {
         let name: String
-        let currentDay: Int
-        let expectedCurrentNodeDay: Int?
-        let expectedCurrentNodeCount: Int?
         let expectedLevelCount: Int?
         let expectedAllDays: [Int]?
         let expectedLevels: [ExpectedLevel]?
-        let expectedAllNodesCompleted: Bool?
-        let expectedAllLevelsCompleted: Bool?
-        let expectedLastLevelState: String?
-        let expectedLastNodeState: String?
-        let expectedFirstNodeState: String?
+        let expectedAllNodesComingSoon: Bool?
+        let expectedAllLevelsComingSoon: Bool?
+        let expectedAllCompletedCountsZero: Bool?
     }
 
     let daysPerLevel: Int
     let totalLevels: Int
     let pathwayMaxDay: Int
     let levelNames: [String]
+    let comingSoonMessage: String
     let nodeStateForDay: [NodeStateCase]
     let buildPathway: [BuildPathwayCase]
 }
