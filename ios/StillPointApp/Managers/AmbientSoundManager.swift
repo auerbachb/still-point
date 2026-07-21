@@ -74,6 +74,12 @@ final class AmbientSoundManager {
         // Wait for the serial queue to flush so the session category is .playAndRecord
         // before we install the tap — avoids an intermittent capture-start failure.
         await AudioEngine.shared.drainSerialQueue()
+        // Re-validate after the drain: stop() may have been called while we were waiting.
+        // If cancelled, undo the session category change before returning.
+        guard generation == startGeneration, !isRunning else {
+            AudioEngine.shared.setAmbientCaptureActive(false)
+            return
+        }
 
         accumulator = AmbientSoundLevelLogic.Accumulator()
         summary = nil

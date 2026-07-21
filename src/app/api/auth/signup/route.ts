@@ -92,6 +92,7 @@ export const POST = withApiHandler("Signup", async (request: NextRequest) => {
       currentDay: newUser.currentDay,
       aphorismsEnabled: newUser.aphorismsEnabled,
       attentionTrackingEnabled: newUser.attentionTrackingEnabled,
+      ambientSoundEnabled: newUser.ambientSoundEnabled,
       recoveryTargetDay: newUser.recoveryTargetDay,
       recoveryCurrentStep: newUser.recoveryCurrentStep,
       recoveryTotalSteps: newUser.recoveryTotalSteps,
