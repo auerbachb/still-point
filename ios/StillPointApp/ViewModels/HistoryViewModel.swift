@@ -67,9 +67,58 @@ final class HistoryViewModel {
             stats = StatsDTO.enrich(result.stats, sessions: sessions, todayIso: today)
             buildJourney(todayIso: today)
             rebuildCalendarAggregates(todayIso: today)
+        } catch is CancellationError {
+            // SwiftUI cancelled this task (e.g. tab switch or view dismissal) — not a user-facing error.
+        } catch let error as DecodingError {
+            // #612: the payload did not match the strict session DTOs. Surface a distinct
+            // message and log the coding path so the offending field is pinpointable from
+            // device logs, instead of masking a data problem as a connection problem.
+            errorMessage = "We couldn't read your session history. Please update the app, or try again later."
+            print("Failed to decode sessions (\(Self.describe(error))): \(error)")
+        } catch let error as APIError {
+            errorMessage = message(for: error)
+            print("Failed to load sessions (API \(error.status)): \(error.message)")
         } catch {
+            // Genuine transport failures (URLError, etc.) land here.
             errorMessage = "Failed to load sessions. Check your connection."
             print("Failed to load sessions: \(error)")
+        }
+    }
+
+    /// Maps an `APIError` to a user-facing message, mirroring `BuddyCalendarViewModel` (#612).
+    private func message(for error: APIError) -> String {
+        switch error.status {
+        case 401:
+            return error.code == "TOKEN_EXPIRED"
+                ? "Your session expired. Please sign in again."
+                : "Please sign in to view your session history."
+        case 400:
+            return error.message.isEmpty ? "We couldn't load your session history." : error.message
+        case 500...599:
+            return "Server hiccup. Please try again in a moment."
+        default:
+            return error.message.isEmpty ? "We couldn't load your session history." : error.message
+        }
+    }
+
+    /// Compact, log-friendly description of a decoding failure — the failure kind and its
+    /// coding path — so a mismatched field can be pinpointed from device logs (#612).
+    private static func describe(_ error: DecodingError) -> String {
+        func path(_ context: DecodingError.Context) -> String {
+            let joined = context.codingPath.map(\.stringValue).joined(separator: ".")
+            return joined.isEmpty ? "<root>" : joined
+        }
+        switch error {
+        case let .keyNotFound(key, context):
+            return "keyNotFound '\(key.stringValue)' at \(path(context))"
+        case let .typeMismatch(type, context):
+            return "typeMismatch \(type) at \(path(context))"
+        case let .valueNotFound(type, context):
+            return "valueNotFound \(type) at \(path(context))"
+        case let .dataCorrupted(context):
+            return "dataCorrupted at \(path(context))"
+        @unknown default:
+            return "unknown decoding error"
         }
     }
 

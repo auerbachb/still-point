@@ -15,7 +15,28 @@ export const GET = withApiHandler("Get sessions", async (request: NextRequest) =
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 
-  const userSessions = await db.select()
+  // Explicit column projection matching SessionDTO (mirrors the board/thoughts routes).
+  // Never leak userId, clientSessionId, or the focus/happiness ratings the history list
+  // does not consume (#612).
+  const userSessions = await db.select({
+    id: sessions.id,
+    dayNumber: sessions.dayNumber,
+    sessionType: sessions.sessionType,
+    duration: sessions.duration,
+    bonusSeconds: sessions.bonusSeconds,
+    completed: sessions.completed,
+    actualTime: sessions.actualTime,
+    clearPercent: sessions.clearPercent,
+    thoughtCount: sessions.thoughtCount,
+    mindStateLog: sessions.mindStateLog,
+    attentionLog: sessions.attentionLog,
+    sessionDate: sessions.sessionDate,
+    createdAt: sessions.createdAt,
+    buddySessionId: sessions.buddySessionId,
+    breathCount: sessions.breathCount,
+    track: sessions.track,
+    ambientSoundSummary: sessions.ambientSoundSummary,
+  })
     .from(sessions)
     .where(eq(sessions.userId, auth.user.userId))
     .orderBy(desc(sessions.dayNumber));
