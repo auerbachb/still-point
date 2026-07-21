@@ -362,6 +362,7 @@ final class AppViewModel {
         }
         guard !isSavingBreathSession else { return }
         guard let ownerUserId = currentUser?.id else { return }
+        applyAppGateAfterSessionCompletion(unlock: true)
         isSavingBreathSession = true
         defer { isSavingBreathSession = false }
 
@@ -484,6 +485,17 @@ final class AppViewModel {
         currentView = .logReason(date: date)
     }
 
+    /// Shared app-gate side effect for any local session completion path (#590).
+    /// Keeps standard/quick (`completeSession`), breath (`completeBreathSession`), and
+    /// future completion handlers (#589 widget sync, etc.) aligned on one call site.
+    private func applyAppGateAfterSessionCompletion(unlock: Bool) {
+        if unlock {
+            appBlockingManager.unlockAfterCompletedSession()
+        } else {
+            appBlockingManager.prepareForSession()
+        }
+    }
+
     func completeSession(
         sessionId: String,
         clientSessionId: UUID,
@@ -498,11 +510,7 @@ final class AppViewModel {
         attentionLog: [AttentionEntry]? = nil,
         attentionElapsed: Double? = nil
     ) {
-        if unlockAppGate {
-            appBlockingManager.unlockAfterCompletedSession()
-        } else {
-            appBlockingManager.prepareForSession()
-        }
+        applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
         currentView = .completion(
             sessionId: sessionId,
             clientSessionId: clientSessionId,
