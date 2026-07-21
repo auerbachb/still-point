@@ -383,7 +383,7 @@ public enum WidgetDataStore {
         return max(previous.streak, 0)
     }
 
-    static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
+    public static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
         Calendar.current.isDate(lhs, inSameDayAs: rhs)
     }
 
