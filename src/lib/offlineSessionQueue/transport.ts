@@ -11,7 +11,8 @@ export type SessionSyncTransport = {
 };
 
 function isNetworkFailure(error: unknown): boolean {
-  return error instanceof TypeError;
+  if (error instanceof TypeError) return true;
+  return Boolean(error && typeof error === "object" && "retryable" in error && (error as { retryable?: boolean }).retryable);
 }
 
 export function liveSessionSyncTransport(): SessionSyncTransport {
@@ -27,7 +28,7 @@ export function liveSessionSyncTransport(): SessionSyncTransport {
         const text = await res.text().catch(() => "");
         const err = new Error(text || `Create session failed (${res.status})`);
         if (res.status >= 500 || res.status === 408 || res.status === 429) {
-          throw err;
+          throw Object.assign(err, { retryable: true });
         }
         throw Object.assign(err, { permanent: true });
       }
@@ -45,7 +46,7 @@ export function liveSessionSyncTransport(): SessionSyncTransport {
         const text = await res.text().catch(() => "");
         const err = new Error(text || `Batch thoughts failed (${res.status})`);
         if (res.status >= 500 || res.status === 408 || res.status === 429) {
-          throw err;
+          throw Object.assign(err, { retryable: true });
         }
         throw Object.assign(err, { permanent: true });
       }

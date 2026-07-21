@@ -8,6 +8,21 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
 let bootstrapStarted = false;
 
+export async function persistOfflineOwnerUserId(userId: string | null): Promise<void> {
+  if (typeof caches === "undefined") return;
+  try {
+    const cache = await caches.open("stillpoint-state-v1");
+    await cache.put(
+      "https://still-point.internal/__offline_owner__",
+      new Response(JSON.stringify({ userId }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  } catch {
+    // Best-effort: foreground flush still has owner context.
+  }
+}
+
 /** Register the PWA service worker and wire reconnect flush (#558). */
 export function initWebPwaOffline(ownerUserIdProvider: () => string | null): () => void {
   if (typeof window === "undefined" || bootstrapStarted) {
@@ -45,6 +60,7 @@ export function initWebPwaOffline(ownerUserIdProvider: () => string | null): () 
   flushForCurrentUser();
 
   return () => {
+    bootstrapStarted = false;
     window.removeEventListener("online", onOnline);
     document.removeEventListener("visibilitychange", onVisibility);
     navigator.serviceWorker?.removeEventListener("message", onMessage);

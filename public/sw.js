@@ -33,6 +33,7 @@ const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanife
 const SW_SUPPRESSION_CHANNEL = "stillpoint-session-suppression";
 const STATE_CACHE = "stillpoint-state-v1";
 const SUPPRESSION_STATE_URL = "https://still-point.internal/__session_suppression__";
+const OFFLINE_OWNER_STATE_URL = "https://still-point.internal/__offline_owner__";
 /** A suppress flag older than this is treated as inactive (self-heals a missed reset). */
 const SUPPRESS_TTL_MS = 10 * 60 * 1000;
 
@@ -140,12 +141,30 @@ async function postJson(url, body) {
   return res.json();
 }
 
+async function readOfflineOwnerUserId() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const cached = await cache.match(OFFLINE_OWNER_STATE_URL);
+    if (!cached) return null;
+    const data = await cached.json();
+    return typeof data.userId === "string" ? data.userId : null;
+  } catch {
+    return null;
+  }
+}
+
 async function flushOfflineQueueFromSw() {
+  const ownerUserId = await readOfflineOwnerUserId();
+  if (!ownerUserId) {
+    await notifyClientsToFlush();
+    return;
+  }
   const db = await openOfflineDb();
   try {
     const entries = await loadOfflineEntries(db);
     let changed = false;
     for (const entry of entries) {
+      if (entry.ownerUserId !== ownerUserId) continue;
       if (entry.sessionSynced && (!entry.thoughts || entry.thoughts.length === 0)) {
         continue;
       }
@@ -238,14 +257,24 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAssetRequest(request)) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        const networkFetch = fetch(request).then((response) => {
+        if (cached) {
+          void fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                const copy = response.clone();
+                void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+        return fetch(request).then((response) => {
           if (response.ok) {
             const copy = response.clone();
             void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
           }
           return response;
         });
-        return cached ?? networkFetch;
       }),
     );
   }

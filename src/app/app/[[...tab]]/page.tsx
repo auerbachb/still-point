@@ -430,7 +430,9 @@ export default function StillPoint() {
     setOverlay(null);
     setUser(null);
     clearAccountScopedLocalState();
-    void getWebSessionSyncCoordinator().clearQueue().catch(() => {});
+    void getWebSessionSyncCoordinator().clearQueue().catch((error) => {
+      console.error("Failed to clear offline session queue on logout:", error);
+    });
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
@@ -561,6 +563,8 @@ export default function StillPoint() {
         }
       } catch (error) {
         console.error("Failed to save session:", error);
+        isPendingSync = true;
+        savedSessionId = clientSessionId;
       }
     }
 

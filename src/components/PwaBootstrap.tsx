@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { initWebPwaOffline } from "@/lib/offlineSessionQueue/pwaBootstrap";
+import { initWebPwaOffline, persistOfflineOwnerUserId } from "@/lib/offlineSessionQueue/pwaBootstrap";
 
 type PwaBootstrapProps = {
   ownerUserId: string | null;
@@ -15,6 +15,10 @@ export function PwaBootstrap({ ownerUserId }: PwaBootstrapProps) {
   useEffect(() => {
     return initWebPwaOffline(() => ownerUserIdRef.current);
   }, []);
+
+  useEffect(() => {
+    void persistOfflineOwnerUserId(ownerUserId);
+  }, [ownerUserId]);
 
   return null;
 }

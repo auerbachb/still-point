@@ -23,13 +23,26 @@ function runTransaction<T>(
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
+        const closeDb = () => {
+          try {
+            db.close();
+          } catch {
+            // ignore close failures
+          }
+        };
         const tx = db.transaction(OFFLINE_IDB_STORE, mode);
         const store = tx.objectStore(OFFLINE_IDB_STORE);
         const request = fn(store);
         request.onsuccess = () => resolve(request.result as T);
-        request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed"));
-        tx.oncomplete = () => db.close();
-        tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
+        request.onerror = () => {
+          closeDb();
+          reject(request.error ?? new Error("IndexedDB request failed"));
+        };
+        tx.oncomplete = () => closeDb();
+        tx.onerror = () => {
+          closeDb();
+          reject(tx.error ?? new Error("IndexedDB transaction failed"));
+        };
       }),
   );
 }
@@ -53,20 +66,33 @@ export class IndexedDbOfflineSessionQueueStore implements OfflineSessionQueueSto
     await openDb().then(
       (db) =>
         new Promise<void>((resolve, reject) => {
+          const closeDb = () => {
+            try {
+              db.close();
+            } catch {
+              // ignore close failures
+            }
+          };
           const tx = db.transaction(OFFLINE_IDB_STORE, "readwrite");
           const store = tx.objectStore(OFFLINE_IDB_STORE);
           const clearRequest = store.clear();
-          clearRequest.onerror = () => reject(clearRequest.error ?? new Error("IndexedDB clear failed"));
+          clearRequest.onerror = () => {
+            closeDb();
+            reject(clearRequest.error ?? new Error("IndexedDB clear failed"));
+          };
           clearRequest.onsuccess = () => {
             for (const entry of entries) {
               store.put(entry);
             }
           };
           tx.oncomplete = () => {
-            db.close();
+            closeDb();
             resolve();
           };
-          tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
+          tx.onerror = () => {
+            closeDb();
+            reject(tx.error ?? new Error("IndexedDB transaction failed"));
+          };
         }),
     );
   }

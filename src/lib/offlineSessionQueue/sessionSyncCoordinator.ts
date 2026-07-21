@@ -63,49 +63,51 @@ export class WebSessionSyncCoordinator {
       throw new SessionSyncError("missingOwnerUserId");
     }
 
-    const entries = await this.queueStore.loadEntries();
-    const existingIndex = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const existingIndex = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
 
-    if (existingIndex >= 0) {
-      const existing = entries[existingIndex]!;
-      if (existing.ownerUserId !== ownerUserId) {
-        throw new SessionSyncError("ownerMismatch");
+      if (existingIndex >= 0) {
+        const existing = entries[existingIndex]!;
+        if (existing.ownerUserId !== ownerUserId) {
+          throw new SessionSyncError("ownerMismatch");
+        }
+        if (existing.sessionSynced && existing.thoughts.length === 0 && existing.serverSessionId) {
+          return {
+            sessionId: existing.serverSessionId,
+            isPendingSync: false,
+            serverSessionId: existing.serverSessionId,
+          };
+        }
+      } else {
+        entries.push({
+          clientSessionId,
+          ownerUserId,
+          request: requestWithClientId(request, clientSessionId),
+          thoughts,
+          serverSessionId: null,
+          sessionSynced: false,
+          enqueuedAt: new Date().toISOString(),
+        });
+        await this.queueStore.saveEntries(entries);
+        await requestBackgroundSync();
       }
-      if (existing.sessionSynced && existing.thoughts.length === 0 && existing.serverSessionId) {
+
+      const synced = await this.flushEntry(clientSessionId, ownerUserId);
+      if (synced) {
         return {
-          sessionId: existing.serverSessionId,
+          sessionId: synced.serverSessionId!,
           isPendingSync: false,
-          serverSessionId: existing.serverSessionId,
+          serverSessionId: synced.serverSessionId,
         };
       }
-    } else {
-      entries.push({
-        clientSessionId,
-        ownerUserId,
-        request: requestWithClientId(request, clientSessionId),
-        thoughts,
-        serverSessionId: null,
-        sessionSynced: false,
-        enqueuedAt: new Date().toISOString(),
-      });
-      await this.queueStore.saveEntries(entries);
-      await requestBackgroundSync();
-    }
 
-    const synced = await this.flushEntry(clientSessionId, ownerUserId);
-    if (synced) {
       return {
-        sessionId: synced.serverSessionId!,
-        isPendingSync: false,
-        serverSessionId: synced.serverSessionId,
+        sessionId: provisionalSessionId(clientSessionId),
+        isPendingSync: true,
+        serverSessionId: null,
       };
-    }
-
-    return {
-      sessionId: provisionalSessionId(clientSessionId),
-      isPendingSync: true,
-      serverSessionId: null,
-    };
+    });
   }
 
   async appendEndNote(clientSessionId: string, ownerUserId: string, note: string): Promise<void> {
@@ -115,19 +117,21 @@ export class WebSessionSyncCoordinator {
       throw new SessionSyncError("missingOwnerUserId");
     }
 
-    const entries = await this.queueStore.loadEntries();
-    const index = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
-    if (index < 0) {
-      throw new SessionSyncError("entryNotFound");
-    }
-    if (entries[index]!.ownerUserId !== ownerUserId) {
-      throw new SessionSyncError("ownerMismatch");
-    }
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const index = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
+      if (index < 0) {
+        throw new SessionSyncError("entryNotFound");
+      }
+      if (entries[index]!.ownerUserId !== ownerUserId) {
+        throw new SessionSyncError("ownerMismatch");
+      }
 
-    entries[index]!.thoughts.push({ timeInSession: -1, text: trimmed });
-    await this.queueStore.saveEntries(entries);
-    await requestBackgroundSync();
-    await this.flushEntry(clientSessionId, ownerUserId);
+      entries[index]!.thoughts.push({ timeInSession: -1, text: trimmed });
+      await this.queueStore.saveEntries(entries);
+      await requestBackgroundSync();
+      await this.flushEntry(clientSessionId, ownerUserId);
+    });
   }
 
   async flushPending(ownerUserId: string): Promise<number> {
@@ -190,7 +194,8 @@ export class WebSessionSyncCoordinator {
         entry = entries[index]!;
       } catch (error) {
         if (isNetworkFailure(error)) return null;
-        throw error;
+        if (error && typeof error === "object" && "permanent" in error) throw error;
+        return null;
       }
     }
 
@@ -213,12 +218,14 @@ export class WebSessionSyncCoordinator {
           (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
         );
         if (index < 0) return entry;
+        if (entries[index]!.thoughts.length === 0) return entry;
         entries[index]!.thoughts = [];
         await this.queueStore.saveEntries(entries);
         entry = entries[index]!;
       } catch (error) {
         if (isNetworkFailure(error)) return null;
-        throw error;
+        if (error && typeof error === "object" && "permanent" in error) throw error;
+        return null;
       }
     }
 
@@ -227,6 +234,16 @@ export class WebSessionSyncCoordinator {
 }
 
 let sharedCoordinator: WebSessionSyncCoordinator | null = null;
+let queueMutation: Promise<unknown> = Promise.resolve();
+
+async function withQueueMutation<T>(fn: () => Promise<T>): Promise<T> {
+  const result = queueMutation.then(fn);
+  queueMutation = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 export function getWebSessionSyncCoordinator(): WebSessionSyncCoordinator {
   if (!sharedCoordinator) {
@@ -240,12 +257,16 @@ export async function requestBackgroundSync(): Promise<void> {
     return;
   }
   try {
-    const registration = await navigator.serviceWorker.ready;
-    if ("sync" in registration) {
-      await (registration as ServiceWorkerRegistration & {
-        sync: { register: (tag: string) => Promise<void> };
-      }).sync.register(OFFLINE_SYNC_TAG);
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
+    ]);
+    if (!registration || !("sync" in registration)) {
+      return;
     }
+    await (registration as ServiceWorkerRegistration & {
+      sync: { register: (tag: string) => Promise<void> };
+    }).sync.register(OFFLINE_SYNC_TAG);
   } catch {
     // Background Sync is best-effort; foreground online flush covers unsupported browsers.
   }
