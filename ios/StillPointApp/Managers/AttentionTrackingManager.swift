@@ -276,7 +276,7 @@ extension AttentionTrackingManager: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
         Task { @MainActor in
             guard self.isRunning else { return }
-            if let arError = error as? ARError, arError.errorCode == .cameraUnauthorized {
+            if let arError = error as? ARError, arError.code == .cameraUnauthorized {
                 self.status = .permissionDenied
             } else {
                 self.status = .failed
