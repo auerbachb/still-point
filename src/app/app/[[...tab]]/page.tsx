@@ -21,6 +21,8 @@ import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
+import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
+import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
  *  into the non-optional shape `@/lib/duration` helpers expect. */
@@ -183,6 +185,10 @@ type Overlay = "session" | "breath" | "complete";
 
 type CompletionData = {
   sessionId: string | null;
+  /** #558: stable local key for offline end-note sync during completion. */
+  clientSessionId: string | null;
+  /** #558: true when the sit is queued locally and awaiting server sync. */
+  isPendingSync: boolean;
   dayNumber: number;
   sessionType: SessionType;
   /** #240: which daily track this completed sit belonged to. */
@@ -424,6 +430,7 @@ export default function StillPoint() {
     setOverlay(null);
     setUser(null);
     clearAccountScopedLocalState();
+    void getWebSessionSyncCoordinator().clearQueue().catch(() => {});
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
@@ -481,6 +488,8 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setCompletionData({
       sessionId: data.sessionId,
+      clientSessionId: null,
+      isPendingSync: false,
       dayNumber: data.dayNumber,
       sessionType: "standard",
       // Buddy sits always count toward the primary track (#240).
@@ -513,66 +522,52 @@ export default function StillPoint() {
     mindStateLog: Array<{ time: number; state: string }>;
     thoughts: Array<{ timeInSession: number; text: string }>;
   }) => {
+    const clientSessionId = crypto.randomUUID();
     let savedSessionId: string | null = null;
+    let isPendingSync = false;
 
-    try {
-      // Save session
-      const sessionRes = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dayNumber: data.dayNumber,
-          sessionType: data.sessionType,
-          track: data.track,
-          duration: data.duration,
-          bonusSeconds: data.bonusSeconds,
-          completed: data.completed,
-          actualTime: data.actualTime,
-          clearPercent: data.clearPercent,
-          thoughtCount: data.thoughtCount,
-          mindStateLog: data.mindStateLog,
-          sessionDate: todayLocalIsoDate(),
-        }),
-      });
+    if (user?.id) {
+      try {
+        const coordinator = getWebSessionSyncCoordinator();
+        const result = await coordinator.saveCompletedSession(
+          {
+            dayNumber: data.dayNumber,
+            sessionType: data.sessionType,
+            track: data.track,
+            duration: data.duration,
+            bonusSeconds: data.bonusSeconds,
+            completed: data.completed,
+            actualTime: data.actualTime,
+            clearPercent: data.clearPercent,
+            thoughtCount: data.thoughtCount,
+            mindStateLog: data.mindStateLog,
+            sessionDate: todayLocalIsoDate(),
+          },
+          clientSessionId,
+          user.id,
+          data.thoughts,
+        );
+        savedSessionId = result.sessionId;
+        isPendingSync = result.isPendingSync;
 
-      if (!sessionRes.ok) {
-        console.error("Failed to save session:", await sessionRes.text());
-      } else {
-        const sessionData = await sessionRes.json();
-        savedSessionId = sessionData.session?.id ?? null;
-
-        // Save thoughts if any
-        if (data.thoughts.length > 0 && savedSessionId) {
-          await fetch("/api/thoughts/batch", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sessionId: savedSessionId,
-              dayNumber: data.dayNumber,
-              thoughts: data.thoughts,
-            }),
-          });
-        }
-
-        // Refresh local user state from the server (#238): whether this completed
-        // standard sit advances `currentDay` or steps a recovery ramp instead is
-        // decided server-side in POST /api/sessions, so re-fetch rather than
-        // optimistically guessing which one happened.
-        if (data.completed && data.sessionType === "standard") {
+        if (data.completed && data.sessionType === "standard" && !isPendingSync) {
           void api
             .me()
             .then(({ user: u }) => setUser(u))
             .catch(() => {});
-          // #240: refresh per-track completion badges for today.
+          void refreshTodayTracks();
+        } else if (data.completed && data.sessionType === "standard" && isPendingSync) {
           void refreshTodayTracks();
         }
+      } catch (error) {
+        console.error("Failed to save session:", error);
       }
-    } catch (error) {
-      console.error("Failed to save session:", error);
     }
 
     setCompletionData({
       sessionId: savedSessionId,
+      clientSessionId,
+      isPendingSync,
       dayNumber: data.dayNumber,
       sessionType: data.sessionType,
       track: data.track,
@@ -599,47 +594,34 @@ export default function StillPoint() {
     mindStateLog: Array<{ time: number; state: string }>;
     thoughts: Array<{ timeInSession: number; text: string }>;
   }) => {
-    try {
-      // Save abandoned session
-      const sessionRes = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dayNumber: data.dayNumber,
-          sessionType: data.sessionType,
-          track: data.track,
-          duration: data.duration,
-          bonusSeconds: data.bonusSeconds,
-          completed: false,
-          actualTime: data.actualTime,
-          clearPercent: data.clearPercent,
-          thoughtCount: data.thoughtCount,
-          mindStateLog: data.mindStateLog,
-          sessionDate: todayLocalIsoDate(),
-        }),
-      });
-
-      if (sessionRes.ok) {
-        const sessionData = await sessionRes.json();
-
-        if (data.thoughts.length > 0 && sessionData.session?.id) {
-          await fetch("/api/thoughts/batch", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sessionId: sessionData.session.id,
-              dayNumber: data.dayNumber,
-              thoughts: data.thoughts,
-            }),
-          });
-        }
+    if (user?.id) {
+      try {
+        const clientSessionId = crypto.randomUUID();
+        await getWebSessionSyncCoordinator().saveCompletedSession(
+          {
+            dayNumber: data.dayNumber,
+            sessionType: data.sessionType,
+            track: data.track,
+            duration: data.duration,
+            bonusSeconds: data.bonusSeconds,
+            completed: false,
+            actualTime: data.actualTime,
+            clearPercent: data.clearPercent,
+            thoughtCount: data.thoughtCount,
+            mindStateLog: data.mindStateLog,
+            sessionDate: todayLocalIsoDate(),
+          },
+          clientSessionId,
+          user.id,
+          data.thoughts,
+        );
+      } catch (error) {
+        console.error("Failed to save abandoned session:", error);
       }
-    } catch (error) {
-      console.error("Failed to save abandoned session:", error);
     }
 
     setOverlay(null);
-  }, []);
+  }, [user]);
 
   // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
   // (#374). Empty sessions (entered then ended with no taps) are not logged.
@@ -658,25 +640,26 @@ export default function StillPoint() {
     if (breathSavingRef.current) return;
     breathSavingRef.current = true;
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dayNumber: user?.currentDay ?? 1,
-          sessionType: "breath",
-          duration: Math.max(result.elapsedSeconds, 1),
-          bonusSeconds: 0,
-          completed: true,
-          actualTime: result.elapsedSeconds,
-          clearPercent: 0,
-          thoughtCount: 0,
-          breathCount: result.breathCount,
-          mindStateLog: [],
-          sessionDate: todayLocalIsoDate(),
-        }),
-      });
-      if (!res.ok) {
-        console.error("Failed to save breath session: HTTP", res.status);
+      if (user?.id) {
+        const clientSessionId = crypto.randomUUID();
+        await getWebSessionSyncCoordinator().saveCompletedSession(
+          {
+            dayNumber: user.currentDay ?? 1,
+            sessionType: "breath",
+            duration: Math.max(result.elapsedSeconds, 1),
+            bonusSeconds: 0,
+            completed: true,
+            actualTime: result.elapsedSeconds,
+            clearPercent: 0,
+            thoughtCount: 0,
+            breathCount: result.breathCount,
+            mindStateLog: [],
+            sessionDate: todayLocalIsoDate(),
+          },
+          clientSessionId,
+          user.id,
+          [],
+        );
       }
     } catch (error) {
       console.error("Failed to save breath session:", error);
@@ -708,7 +691,9 @@ export default function StillPoint() {
 
   if (authError) {
     return (
-      <div style={{
+      <>
+        <PwaBootstrap ownerUserId={null} />
+        <div style={{
         minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: "var(--s3)",
@@ -745,13 +730,16 @@ export default function StillPoint() {
           Retry
         </button>
       </div>
+      </>
     );
   }
 
   // Not logged in
   if (!user) {
     return (
-      <div style={{
+      <>
+        <PwaBootstrap ownerUserId={null} />
+        <div style={{
         minHeight: "100%", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         fontFamily: "var(--font-serif)",
@@ -759,6 +747,7 @@ export default function StillPoint() {
       }}>
         <AuthScreen onLogin={handleLogin} />
       </div>
+      </>
     );
   }
 
@@ -766,7 +755,9 @@ export default function StillPoint() {
 
   // Logged in
   return (
-    <div style={{
+    <>
+      <PwaBootstrap ownerUserId={user.id} />
+      <div style={{
       minHeight: "100%",
       display: "grid",
       gridTemplateRows: isImmersive ? "1fr" : "auto 1fr auto",
@@ -933,12 +924,29 @@ export default function StillPoint() {
               .then(({ user: u }) => setUser(u))
               .catch(() => {});
           }}
-          onSaveNote={completionData.sessionId ? async (text: string) => {
+          onSaveNote={completionData.clientSessionId && user ? async (text: string) => {
+            const coordinator = getWebSessionSyncCoordinator();
+            if (completionData.isPendingSync) {
+              await coordinator.appendEndNote(
+                completionData.clientSessionId!,
+                user.id,
+                text,
+              );
+              return;
+            }
+            const sessionId = completionData.sessionId
+              ?? (await coordinator.resolvedServerSessionId(
+                completionData.clientSessionId!,
+                user.id,
+              ));
+            if (!sessionId) {
+              throw new Error("Failed to save note");
+            }
             const res = await fetch("/api/thoughts/batch", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                sessionId: completionData.sessionId,
+                sessionId,
                 dayNumber: completionData.dayNumber,
                 thoughts: [{ timeInSession: -1, text }],
               }),
@@ -947,7 +955,7 @@ export default function StillPoint() {
               throw new Error("Failed to save note");
             }
           } : undefined}
-          onSaveRatings={completionData.sessionId ? async (ratings) => {
+          onSaveRatings={completionData.sessionId && !completionData.isPendingSync ? async (ratings) => {
             await api.updateSessionRatings(completionData.sessionId!, ratings);
           } : undefined}
           compact={isMobile}
@@ -1030,5 +1038,6 @@ export default function StillPoint() {
         />
       )}
     </div>
+    </>
   );
 }
