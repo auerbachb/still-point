@@ -1,5 +1,7 @@
 "use client";
 
+import { registerServiceWorker } from "@/lib/offlineSessionQueue/pwaBootstrap";
+
 export type NotificationPreferencesDto = {
   pushEnabled: boolean;
   dailyReminderEnabled: boolean;
@@ -45,10 +47,6 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
     output[i] = raw.charCodeAt(i);
   }
   return output;
-}
-
-async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
-  return navigator.serviceWorker.register("/sw.js", { scope: "/" });
 }
 
 export async function fetchVapidPublicKey(): Promise<string> {

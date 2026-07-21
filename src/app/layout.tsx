@@ -6,8 +6,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://still-point.me"),
   title: "Still Point",
+  manifest: "/manifest.webmanifest",
   description:
     "Build steadier focus with a guided one-minute meditation practice designed for real, distractible days.",
+  appleWebApp: {
+    capable: true,
+    title: "Still Point",
+  },
   openGraph: {
     type: "website",
     images: [

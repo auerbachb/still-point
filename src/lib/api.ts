@@ -221,6 +221,8 @@ export const api = {
     thoughtCount: number;
     mindStateLog: Array<{ time: number; state: string }>;
     sessionDate: string;
+    /** #557/#558: client-generated UUID for offline idempotent create. */
+    clientSessionId?: string;
   }) =>
     request<{ session: Session }>("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
 

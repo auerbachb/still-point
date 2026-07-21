@@ -1,4 +1,13 @@
-/* Still Point Web Push service worker (#347). Served from site root. */
+/* Still Point service worker (#347 push, #431 suppression, #558 offline PWA). */
+
+/*
+ * Offline PWA (#558). Keep these in sync with src/lib/offlineSessionQueue/constants.ts.
+ */
+const OFFLINE_IDB_NAME = "stillpoint-offline-v1";
+const OFFLINE_IDB_STORE = "session-queue";
+const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
+const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
+const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
 /*
  * Suppress-during-session (#431). The app page relays the desired suppression
@@ -24,6 +33,7 @@
 const SW_SUPPRESSION_CHANNEL = "stillpoint-session-suppression";
 const STATE_CACHE = "stillpoint-state-v1";
 const SUPPRESSION_STATE_URL = "https://still-point.internal/__session_suppression__";
+const OFFLINE_OWNER_STATE_URL = "https://still-point.internal/__offline_owner__";
 /** A suppress flag older than this is treated as inactive (self-heals a missed reset). */
 const SUPPRESS_TTL_MS = 10 * 60 * 1000;
 
@@ -76,6 +86,208 @@ try {
 } catch {
   // BroadcastChannel unsupported: suppression simply never engages.
 }
+
+function openOfflineDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_IDB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OFFLINE_IDB_STORE)) {
+        db.createObjectStore(OFFLINE_IDB_STORE, { keyPath: "clientSessionId" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+  });
+}
+
+function loadOfflineEntries(db) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_IDB_STORE, "readonly");
+    const store = tx.objectStore(OFFLINE_IDB_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result ?? []);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB read failed"));
+  });
+}
+
+function saveOfflineEntries(db, entries) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_IDB_STORE, "readwrite");
+    const store = tx.objectStore(OFFLINE_IDB_STORE);
+    const clearRequest = store.clear();
+    clearRequest.onerror = () => reject(clearRequest.error ?? new Error("IndexedDB clear failed"));
+    clearRequest.onsuccess = () => {
+      for (const entry of entries) {
+        store.put(entry);
+      }
+    };
+    tx.oncomplete = () => resolve(undefined);
+    tx.onerror = () => reject(tx.error ?? new Error("IndexedDB write failed"));
+  });
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+async function readOfflineOwnerUserId() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const cached = await cache.match(OFFLINE_OWNER_STATE_URL);
+    if (!cached) return null;
+    const data = await cached.json();
+    return typeof data.userId === "string" ? data.userId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function flushOfflineQueueFromSw() {
+  const ownerUserId = await readOfflineOwnerUserId();
+  if (!ownerUserId) {
+    await notifyClientsToFlush();
+    return;
+  }
+  const db = await openOfflineDb();
+  try {
+    const entries = await loadOfflineEntries(db);
+    let changed = false;
+    for (const entry of entries) {
+      if (entry.ownerUserId !== ownerUserId) continue;
+      if (entry.sessionSynced && (!entry.thoughts || entry.thoughts.length === 0)) {
+        continue;
+      }
+      if (!entry.sessionSynced) {
+        const data = await postJson("/api/sessions", entry.request);
+        entry.serverSessionId = data.session?.id ?? null;
+        entry.sessionSynced = true;
+        changed = true;
+      }
+      if (entry.serverSessionId && entry.thoughts?.length > 0) {
+        await postJson("/api/thoughts/batch", {
+          sessionId: entry.serverSessionId,
+          dayNumber: entry.request.dayNumber,
+          thoughts: entry.thoughts,
+        });
+        entry.thoughts = [];
+        changed = true;
+      }
+    }
+    if (changed) {
+      await saveOfflineEntries(db, entries);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+async function notifyClientsToFlush() {
+  const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of windowClients) {
+    client.postMessage({ type: "flush-offline-session-queue" });
+  }
+}
+
+function isStaticAssetRequest(request) {
+  const url = new URL(request.url);
+  return url.pathname.startsWith("/_next/static/")
+    || url.pathname.startsWith("/audio/")
+    || url.pathname === "/og.png"
+    || url.pathname === "/manifest.webmanifest";
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_URLS)).then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key.startsWith("stillpoint-app-shell-") && key !== APP_SHELL_CACHE)
+          .map((key) => caches.delete(key)),
+      ),
+    ).then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          const shell = await caches.match("/app/progress");
+          if (shell) return shell;
+          return caches.match("/app");
+        }),
+    );
+    return;
+  }
+
+  if (isStaticAssetRequest(request)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) {
+          void fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                const copy = response.clone();
+                void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        });
+      }),
+    );
+  }
+});
+
+self.addEventListener("sync", (event) => {
+  if (event.tag !== OFFLINE_SYNC_TAG) return;
+  event.waitUntil(
+    flushOfflineQueueFromSw()
+      .then(() => notifyClientsToFlush())
+      .catch(() => notifyClientsToFlush()),
+  );
+});
 
 self.addEventListener("push", (event) => {
   let data = {};
