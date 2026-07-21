@@ -213,26 +213,35 @@ from the `app_boot_seconds` metric above and from XCTest launch overhead.
 
 ## 11) PR merge gating policy
 
-For pull requests, required lanes:
+As of [#588](https://github.com/auerbachb/still-point/issues/588) (SkinGod model), **comprehensive e2e does not gate PR merges**. Required lanes are the fast checks documented in [branch-protection.md](./branch-protection.md):
 
-1. `web-e2e-smoke`
-2. `web-e2e-critical`
-3. `e2e-policy` (guard/secrets/no-sleep)
+1. `typecheck`
+2. `unit-tests` (#434)
+3. `build` (clean Next build + design-token parity)
+4. `StillPointShared swift test` (#463 no-op when unchanged)
+5. `Info.plist in sync with project.yml` (#439 — always-run workflow, #588)
 
-iOS E2E lanes are required for iOS test-plan changes and recommended otherwise; keep branch protection in sync with this policy ([branch-protection.md](./branch-protection.md)).
+PR advisory (non-blocking):
 
-### Release-time gating (mobile web + iOS TestFlight)
+- `pr-e2e-smoke (advisory)` — fast web smoke ([e2e-smoke.yml](../../.github/workflows/e2e-smoke.yml))
+- `e2e coverage nudge (advisory)` — neutral reminder when UI changes lack spec updates
+
+Issue [#537](https://github.com/auerbachb/still-point/issues/537) (require `web-e2e-smoke` / `web-e2e-critical` on PRs) is **superseded** by #588. Strategy overview: [e2e-strategy.md](./e2e-strategy.md).
+
+### Release-time gating (mobile web + native iOS TestFlight)
 
 As of [#494](https://github.com/auerbachb/still-point/issues/494) (mirroring [auerbachb/skingod#1402](https://github.com/auerbachb/skingod/issues/1402)), the mobile-web Playwright suite (`e2e-mobile.yml`, the 3-project cross-browser matrix) no longer runs on `pull_request` — it was the slowest, flakiest per-PR check, had no path filter, and blocked every PR regardless of relevance. It is now a reusable workflow (`workflow_call` + `workflow_dispatch` only) that runs:
 
-- as the first job of [`ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) (the automatic PR-merge + `release:ios`-label release path) — the build-number bump + tag step only proceeds `if: needs.e2e.result == 'success'`, so a failing e2e run leaves nothing committed, tagged, or built;
+- as the first job of [`ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) (the automatic PR-merge + `release:ios`-label release path) — the build-number bump + tag step only proceeds when **both** mobile-web and native iOS e2e succeed (#588);
 - on demand via `gh workflow run e2e-mobile.yml -f ref=<ref>` for ad-hoc verification.
 
 [`ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) (the manual `ios-v*-build*` tag push, a break-glass escape hatch for shipping when e2e infra itself is down) intentionally does **not** call this gate.
 
-`e2e-ios.yml` (native XCTest smoke/critical) is unchanged by #494 — it stays path-filtered to `ios/**` on `pull_request`, matching skingod's analogous Maestro-lane precedent (PR-time signal, not release-gated).
+As of [#588](https://github.com/auerbachb/still-point/issues/588), native iOS e2e (`e2e-ios.yml` — XCTest smoke/critical) also moved off `pull_request` and gates the same `release:ios` TestFlight path alongside mobile-web e2e. Info.plist sync moved to [`infoplist-sync.yml`](../../.github/workflows/infoplist-sync.yml) as a fast required PR check.
 
-`e2e-web.yml` is also unchanged — web has no discrete "build" step to gate against (it auto-deploys to production on every merge to `main`), unlike iOS's TestFlight build. Revisit separately if that becomes painful.
+### Nightly web e2e (#588)
+
+Web has no discrete "build" step (production deploys on every merge to `main`), so comprehensive web e2e runs on a **nightly schedule** via [`e2e-web-nightly.yml`](../../.github/workflows/e2e-web-nightly.yml) (full smoke + critical + policy lanes on `main`) plus `workflow_dispatch`. This keeps [#497](./e2e-coverage-matrix.md) P0 coverage exercised without blocking PR merges.
 
 ## 12) Local runbook (single command per platform)
 

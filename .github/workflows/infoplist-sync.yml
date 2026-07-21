@@ -1,0 +1,91 @@
+name: Info.plist sync
+
+# The `Info.plist in sync with project.yml` job is a REQUIRED status check on
+# `main` (#439, folded into #588). It must report on every PR — previously it
+# lived inside path-filtered `e2e-ios.yml`, which left non-iOS PRs stuck at
+# mergeStateStatus=BLOCKED forever (#442). Same no-op pattern as #463 /
+# ios-shared-tests.yml: run the real xcodegen diff on macOS when iOS plist
+# inputs changed; otherwise a cheap ubuntu no-op still satisfies the check.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: detect Info.plist inputs
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - name: Detect changed paths
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Fail safe toward MORE coverage when the diff is unknown.
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || true)"
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/project\.yml$|ios/StillPointApp/Info\.plist$|\.github/workflows/infoplist-sync\.yml$)'; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ios=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  infoplist-sync:
+    name: Info.plist in sync with project.yml
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        if: needs.changes.outputs.ios == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        if: needs.changes.outputs.ios == 'true'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+
+      - name: Generate Xcode project
+        if: needs.changes.outputs.ios == 'true'
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Verify committed Info.plist matches XcodeGen output
+        if: needs.changes.outputs.ios == 'true'
+        run: |
+          if ! git diff --exit-code -- ios/StillPointApp/Info.plist; then
+            echo "::error::ios/StillPointApp/Info.plist is out of sync with ios/project.yml."
+            echo "CI regenerates Info.plist via 'xcodegen generate' before every build, so any key that"
+            echo "exists only in the committed Info.plist (not in project.yml info.properties) is DROPPED"
+            echo "from shipped builds. Fix: add the key(s) to ios/project.yml -> targets.StillPoint.info.properties,"
+            echo "then run 'cd ios && xcodegen generate' and commit the regenerated ios/StillPointApp/Info.plist."
+            exit 1
+          fi
+
+      - name: Skip (Info.plist inputs unchanged)
+        if: needs.changes.outputs.ios != 'true'
+        run: 'echo "Info.plist inputs unchanged on this PR — required check satisfied without macOS (issue #588 / #439)."'

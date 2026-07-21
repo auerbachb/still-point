@@ -1,0 +1,31 @@
+name: E2E Web Nightly
+
+# Scheduled comprehensive web e2e on `main` — off the PR critical path (#588).
+# Mirrors auerbachb/skingod's e2e-mobile-web-nightly.yml pattern: full smoke +
+# critical lanes run nightly so #497 P0 coverage stays exercised without blocking
+# every PR merge.
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # 08:00 UTC nightly (~03:00-04:00 ET), after neon-preview-reset
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit ref to test. Defaults to main when scheduled."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-web-nightly
+  cancel-in-progress: false
+
+jobs:
+  e2e-web:
+    name: nightly web e2e
+    uses: ./.github/workflows/e2e-web.yml
+    with:
+      ref: ${{ inputs.ref || 'main' }}
+    secrets: inherit

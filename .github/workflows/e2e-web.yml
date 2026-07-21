@@ -1,8 +1,29 @@
 name: E2E Web
 
+# As of #588 (SkinGod model), this workflow NO LONGER runs on `pull_request`.
+# Comprehensive web e2e gates release/nightly paths instead of blocking every
+# merge. PRs get fast required checks + optional advisory smoke/nudge workflows.
+#
+# Runs via:
+#   - `e2e-web-nightly.yml` — scheduled full dry-run on main (#588)
+#   - `workflow_dispatch` — ad-hoc verification
+#   - `workflow_call` — reusable from other workflows
+#
+# Supersedes #537 (which would have required web-e2e-smoke/critical on PRs).
+
 on:
-  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit ref (SHA, branch, or tag) to check out and test"
+        type: string
+        required: false
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit ref to test. Defaults to the ref this run was dispatched from."
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -16,6 +37,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -47,6 +69,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -91,6 +114,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -148,6 +172,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Check auth DB secrets

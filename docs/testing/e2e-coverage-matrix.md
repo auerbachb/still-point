@@ -6,7 +6,7 @@ Published audit of user journeys across **web** (Playwright mobile web) and **iO
 
 | Tier | Meaning | CI lane |
 |------|---------|---------|
-| **P0** | Core retention path; regression blocks merge | `@smoke` / `@critical` (web PR lanes); iOS smoke/critical |
+| **P0** | Core retention path; regression blocks release / nightly audit | `@smoke` / `@critical` (web nightly + iOS release lanes) |
 | **P1** | High-value adjacent flows; covered in release or platform lanes | Full mobile web suite (`e2e-mobile.yml`); iOS critical where noted |
 | **P2** | Lower blast radius, manual QA, or unit/integration only | Tracked; no merge gate in v1 |
 
