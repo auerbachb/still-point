@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-07-17  
+Last updated: 2026-07-21  
 Release owner: iOS release DRI
 
 ## Core product parity
@@ -8,6 +8,7 @@ Release owner: iOS release DRI
 | Area | Web | iOS | Status | Notes |
 |---|---|---|---|---|
 | Auth (sign up / login / logout / persisted session) | Implemented | Implemented | ✅ Complete | iOS uses the same `/api/auth/*` endpoints via `StillPointShared/APIClient.swift`. |
+| Auth "last used" sign-in tag (#337 / #528) | OAuth only (Google, Apple) | All methods (email/password, Google, Apple) | ✅ Complete | Web: `AuthScreen.tsx` + `lastAuthProvider.ts`. iOS: `AuthView.swift` + `StillPointShared/LastAuthProvider.swift` (UserDefaults key `stillpoint_last_auth_provider`). |
 | Home + day progression CTA | Implemented | Implemented | ✅ Complete | “Begin” + day-based duration behavior is present on both clients. |
 | L1–L5 lesson pathway on Home (#452 / #525) | Implemented | Implemented | ✅ Complete | Shared derivation in `src/lib/pathway.ts` / `StillPointShared/Pathway.swift`; UI in `Pathway.tsx` / `PathwayView.swift` embedded in each client's Home. |
 | Solo session timer + pause for “I’m thinking” | Implemented | Implemented | ✅ Complete | Shared session timing logic is in `StillPointShared/SessionLogic.swift`. |
