@@ -1,7 +1,7 @@
 # iOS Release Candidate QA Checklist (Issue #210)
 
-Release candidate: 1.0.3 (10)
-Last updated: 2026-04-27
+Release candidate: 1.0.3 (17)
+Last updated: 2026-07-21
 QA owner: iOS QA DRI
 
 ## 1) Smoke + regression pass
@@ -19,6 +19,8 @@ QA owner: iOS QA DRI
 | Buddy create/join/start | Two participants can create, join, ready, and start | ✅ Pass | Deep-link invite join path validated. |
 | Buddy leave/cancel + personal completion save | Exit/cancel behavior and personal save remain correct | ✅ Pass | Session teardown and return navigation verified. |
 | Delete account safety flow | Two-step confirmation then sign-out/auth screen | ✅ Pass | Matches App Review guideline flow in `RELEASING.md`. |
+| **Camera/mic permission regression (#433)** | Buddy-video WKWebView `getUserMedia` grant succeeds; gaze-tracking camera consent is shown on first `attentionTrackingEnabled` toggle | ⬜ | `BuddyVideoWebView.swift` (getUserMedia path); `SettingsView.swift` (gaze toggle); `NSCameraUsageDescription` + `NSMicrophoneUsageDescription` in `ios/project.yml`. |
+| **Deep-link routing regression (#433)** | Push-tap and `stillpoint://buddy/…` invite links open the correct screen on cold start and from background | ⬜ | `.onOpenURL` in `RootView.swift`; custom-scheme `stillpoint://` only — no universal-links/associated-domains path exists. |
 
 ## 2) Platform checks
 
@@ -28,10 +30,11 @@ QA owner: iOS QA DRI
 | Foreground/background resume | ✅ Pass | Session state is preserved on short background transitions. |
 | Network offline handling | ✅ Pass | API errors surface user-readable messaging for critical paths. |
 | Light/dark appearance sanity | ✅ Pass | Core screens remain legible and themed correctly. |
+| **Background-audio regression (#433)** | ⬜ | Timer tick/chime stays audible while backgrounded; resume does not crash. `UIBackgroundModes: [audio]` in `ios/project.yml`; `.playback`/interruption handling in `StillPointShared/AudioEngine.swift` (includes `#262` crash-avoidance guard). |
 
 ## 3) Release metadata + submission readiness
 
-- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 10`.
+- [x] `ios/project.yml` versioning finalized: `MARKETING_VERSION = 1.0.3`, `CURRENT_PROJECT_VERSION = 17`.
 - [x] App Store release notes finalized for this build (see `ios/RELEASING.md`).
 - [x] App Store metadata checklist finalized (privacy policy URL, support URL, account deletion review notes).
 - [x] App Store submission automation dry-run evidence can be generated with `npm run ios:app-store:dry-run`.
@@ -39,12 +42,12 @@ QA owner: iOS QA DRI
   - Live ASC validation requires `APPSTORE_APP_ID` plus the App Store Connect API key environment variables.
 - [ ] Build submitted to App Store review in App Store Connect.
   - Owner: iOS release DRI
-  - Target date: 2026-04-29 (after TestFlight smoke test for this build passes)
+  - Target date: TBD (re-evaluate after build 17 TestFlight smoke test passes)
   - Completion evidence: attach App Store Connect submission timestamp and build number in PR comment.
 
 ## Release gate decision (Issue #210)
 
-- [x] Regression/QA pass for release candidate is completed.
+- [ ] Regression/QA pass for release candidate is completed. (Re-opened: camera/mic, deep-link, and background-audio regression checks added for build 17 — see §1 and §2 above.)
 - [x] App Store metadata/versioning/release notes are finalized.
 - [ ] Updated iOS build is submitted to App Store by end of week.
 

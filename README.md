@@ -299,31 +299,58 @@ src/
     layout.tsx               # global styles, metadata
     globals.css              # keyframes (fadeIn, breathe, pulse)
     api/
-      auth/                  # signup, login, logout, me
-      sessions/              # CRUD for meditation sessions
-      thoughts/              # batch insert + list thoughts
+      account/               # account management (password reset, deletion)
+      auth/                  # signup, login, logout, me, OAuth (Google, Apple)
       board/                 # public leaderboard
-      settings/              # toggle public visibility
+      buddy/                 # buddy-session create/join/start/leave + video token
+      cron/                  # scheduled jobs (notification dispatch, cleanup)
+      device-token/          # iOS APNs token registration
+      failure-reasons/       # failure-reason log (missed-sit capture)
+      friends/               # friend requests, accept/reject, list
+      notifications/         # notification preferences + web-push subscriptions
+      sessions/              # CRUD for meditation sessions
+      settings/              # user settings (public toggle, attention tracking, etc.)
+      thoughts/              # batch insert + list thoughts
+      track/                 # post-session rating track endpoint
   components/
-    AuthScreen.tsx           # login/signup form
-    HomeView.tsx             # day counter, begin button, FAQ
+    AuthScreen.tsx           # login/signup form (email, Google, Apple)
+    HomeView.tsx             # day counter, begin button, pathway preview
     SessionView.tsx          # timer orchestrator + auto-hide controls
     BlockTimer.tsx           # visual block grid + countdown + 60s bar
     MindStateBar.tsx         # green/amber timeline bar
     ThoughtCapture.tsx       # thought input during thinking state
-    CompletionScreen.tsx     # stats + session note input
-    HistoryView.tsx          # session history with bar charts
+    CompletionScreen.tsx     # stats + session note + rating input
+    HistoryView.tsx          # calendar-first history: month grid, mind-state trends, year-in-review
     ThoughtJournal.tsx       # all captured thoughts by day
     PublicBoard.tsx          # practitioners leaderboard
-    SettingsView.tsx         # account + public toggle
+    SettingsView.tsx         # account, public toggle, notification prefs
+    BuddySessionHub.tsx      # buddy session lobby + controls
+    BuddyCalendarView.tsx    # unified + per-buddy session calendar
+    FriendsView.tsx          # friend search, requests, list
+    Pathway.tsx              # L1–L5 lesson pathway preview
+    GuidedExerciseOverlay.tsx # guided breath/movement/insight exercises
+    RatingSlider.tsx         # post-session quality rating
+    WebNotificationSettings.tsx # web push opt-in + failure-reason reminder
+    # … plus buddy/, layout, and utility components
   db/
-    schema.ts                # Drizzle schema (users, sessions, thoughts)
+    schema.ts                # Drizzle schema: users, sessions, thoughts, device_tokens,
+                             #   friendships, friendRequests, buddySessions, buddySessionParticipants,
+                             #   oauthAccounts, notificationPreferences, failureReasons, and more
     index.ts                 # database connection
   lib/
     auth.ts                  # JWT + bcrypt helpers
     api.ts                   # typed fetch wrapper
     audio.ts                 # Web Audio API sound synthesis
     constants.ts             # BASE_DURATION, INCREMENT, BLOCK_DURATION
+    apns.ts                  # Apple Push Notification Service helpers
+    web-push.ts              # VAPID web push helpers
+    daily.ts                 # Daily.co video room + meeting token helpers
+    buddySession.ts          # buddy session logic + friendship gate
+    email.ts                 # Resend password-reset email helpers
+    pathway.ts               # L1–L5 lesson pathway logic
+    guidedExercise.ts        # guided exercise content + sequencing
+    notification-scheduler.ts # push notification scheduling logic
+    # … plus history aggregation, OAuth, friend, and other helpers
   middleware.ts              # route protection
 ```
 
@@ -335,6 +362,11 @@ src/
 | **sessions** | One per completed or abandoned sitting | dayNumber, duration, clearPercent, thoughtCount, mindStateLog, sessionDate |
 | **thoughts** | Captured during sessions or as end-of-session notes | sessionId, dayNumber, timeInSession, text |
 | **device_tokens** | iOS APNs registration targets | userId, platform, tokenHash, apnsEnvironment, enabled |
+| **friendships** + **friend_requests** | Mutual friend graph and pending invitations | requesterId, addresseeId, status |
+| **buddy_sessions** + **buddy_session_participants** | Shared sits, participant state, and Daily.co video rooms | hostId, roomName, status, dailyRoomName |
+| **oauth_accounts** | Linked OAuth provider accounts (Google, Apple) | userId, provider, providerAccountId |
+| **notification_preferences** | Per-user push notification settings | userId, failureReasonReminderEnabled, etc. |
+| **failure_reasons** | Logged missed-sit reasons | userId, sessionDate, reason |
 
 Thoughts with `timeInSession >= 0` were captured mid-session. Thoughts with `timeInSession = -1` are end-of-session journal notes.
 
