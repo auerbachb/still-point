@@ -717,6 +717,7 @@ struct SessionView: View {
                 thoughts: vm.capturedThoughts,
                 dayNumber: session.dayNumber,
                 sessionType: session.sessionType,
+                track: vm.track,
                 duration: vm.plannedSeconds,
                 bonusSeconds: vm.bonusSeconds,
                 unlockAppGate: vm.completedNaturally,
