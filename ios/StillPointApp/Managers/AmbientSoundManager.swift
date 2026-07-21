@@ -52,17 +52,28 @@ final class AmbientSoundManager {
     private var accumulator = AmbientSoundLevelLogic.Accumulator()
     private let captureEngine = AVAudioEngine()
     private var isPaused = false
+    /// Monotonic counter incremented on every start attempt and on stop.
+    /// Compared after the mic-permission await to detect lifecycle races.
+    private var startGeneration = 0
 
     // MARK: - Lifecycle
 
     func start(elapsedProvider: @escaping () -> Double) async {
         _ = elapsedProvider // elapsed unused in level-only MVP
         guard !isRunning else { return }
+        startGeneration &+= 1
+        let generation = startGeneration
         guard await ensureMicAuthorized() else { return }
+        // Re-validate after the await suspension: stop() may have been called while
+        // the mic permission prompt was visible, in which case capture must not start.
+        guard generation == startGeneration, !isRunning else { return }
 
         // Reconfigure the shared audio session to playAndRecord so mic input is
         // available while tick/chime/completion playback continues uninterrupted.
         AudioEngine.shared.setAmbientCaptureActive(true)
+        // Wait for the serial queue to flush so the session category is .playAndRecord
+        // before we install the tap — avoids an intermittent capture-start failure.
+        await AudioEngine.shared.drainSerialQueue()
 
         accumulator = AmbientSoundLevelLogic.Accumulator()
         summary = nil
@@ -98,6 +109,7 @@ final class AmbientSoundManager {
     }
 
     func stop() {
+        startGeneration &+= 1 // Invalidate any pending start suspended at mic permission
         guard isRunning else { return }
         captureEngine.inputNode.removeTap(onBus: 0)
         captureEngine.stop()

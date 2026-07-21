@@ -140,7 +140,7 @@ struct CompletionView: View {
                             )
 
                             statCard(
-                                value: String(format: "%.0f dB", ambient.avgDb),
+                                value: String(format: "%.0f dBFS", ambient.avgDb),
                                 label: "AVG LEVEL",
                                 color: SPColor.amber,
                                 bgColor: SPColor.amberBgFaint,

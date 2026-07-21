@@ -53,7 +53,8 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate } = body;
-  // #563: ambient sound summary — validate shape; reject partial / malformed objects.
+  // #563: ambient sound summary — validate shape and physical invariants; coerce
+  // invalid/absent summaries to null rather than rejecting the whole session.
   const ambientRaw = body.ambientSoundSummary;
   const ambientSoundSummary =
     ambientRaw !== null &&
@@ -61,8 +62,12 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     !Array.isArray(ambientRaw) &&
     typeof ambientRaw.avgDb === "number" && Number.isFinite(ambientRaw.avgDb) &&
     typeof ambientRaw.peakDb === "number" && Number.isFinite(ambientRaw.peakDb) &&
-    typeof ambientRaw.quietPercent === "number" && Number.isFinite(ambientRaw.quietPercent) &&
-    typeof ambientRaw.loudPercent === "number" && Number.isFinite(ambientRaw.loudPercent) &&
+    ambientRaw.peakDb >= ambientRaw.avgDb &&           // peak must be ≥ average (dBFS)
+    typeof ambientRaw.quietPercent === "number" && Number.isInteger(ambientRaw.quietPercent) &&
+    ambientRaw.quietPercent >= 0 && ambientRaw.quietPercent <= 100 &&
+    typeof ambientRaw.loudPercent === "number" && Number.isInteger(ambientRaw.loudPercent) &&
+    ambientRaw.loudPercent >= 0 && ambientRaw.loudPercent <= 100 &&
+    ambientRaw.quietPercent + ambientRaw.loudPercent === 100 && // every sample is classified
     typeof ambientRaw.sampleCount === "number" && Number.isInteger(ambientRaw.sampleCount) &&
     ambientRaw.sampleCount > 0
       ? {

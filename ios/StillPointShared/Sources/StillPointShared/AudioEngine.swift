@@ -14,6 +14,8 @@ public final class AudioEngine: @unchecked Sendable {
     public func playCompletion() {}
     /// No-op on macOS / host builds; real coordination happens on-device only.
     public func setAmbientCaptureActive(_ active: Bool) {}
+    /// No-op on macOS / host builds.
+    public func drainSerialQueue() async {}
 }
 
 #else
@@ -75,6 +77,15 @@ public final class AudioEngine: @unchecked Sendable {
             guard let self else { return }
             self.isAmbientCaptureActive = active
             self.configureAudioSession()
+        }
+    }
+
+    /// Awaitable barrier that resolves after all currently-enqueued serial-queue work
+    /// completes. Callers use this to ensure a prior `setAmbientCaptureActive(true)`
+    /// has finished reconfiguring the audio session before installing a mic tap.
+    public func drainSerialQueue() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            serialQueue.async { continuation.resume() }
         }
     }
 

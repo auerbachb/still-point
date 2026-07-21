@@ -33,6 +33,7 @@ type UsernameUpdateResult =
         currentDay: number;
         aphorismsEnabled: boolean;
         attentionTrackingEnabled: boolean;
+        ambientSoundEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
       };
@@ -68,6 +69,7 @@ export async function atomicUpdateUsername(params: {
         currentDay: users.currentDay,
         aphorismsEnabled: users.aphorismsEnabled,
         attentionTrackingEnabled: users.attentionTrackingEnabled,
+        ambientSoundEnabled: users.ambientSoundEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
       });
