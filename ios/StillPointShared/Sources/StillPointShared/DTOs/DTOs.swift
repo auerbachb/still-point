@@ -209,6 +209,40 @@ public struct SessionDTO: Codable, Sendable {
         self.track = track
         self.ambientSoundSummary = ambientSoundSummary
     }
+
+    /// #612: decode defensively. Identity/structural fields stay strict — a row missing
+    /// these is genuinely malformed — but every additive, newly-nullable, or enum field is
+    /// tolerated (unknown `sessionType`/`track` raw values fall back rather than throwing),
+    /// so one drifted or unexpected value never fails the whole history list. This mirrors
+    /// the permissive decoders on `UserDTO`/`StatsDTO` and the web app's tolerant parsing.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        dayNumber = try c.decode(Int.self, forKey: .dayNumber)
+        duration = try c.decode(Int.self, forKey: .duration)
+        completed = try c.decode(Bool.self, forKey: .completed)
+        clearPercent = try c.decode(Int.self, forKey: .clearPercent)
+        thoughtCount = try c.decode(Int.self, forKey: .thoughtCount)
+        sessionDate = try c.decode(String.self, forKey: .sessionDate)
+        // `try?` on the enums tolerates an unknown raw value (a future server case) instead
+        // of throwing; an absent/null key defaults the same way.
+        sessionType = (try? c.decode(SessionType.self, forKey: .sessionType)) ?? .standard
+        track = try? c.decode(Track.self, forKey: .track)
+        bonusSeconds = try c.decodeIfPresent(Int.self, forKey: .bonusSeconds)
+        actualTime = try c.decodeIfPresent(Int.self, forKey: .actualTime)
+        mindStateLog = try c.decodeIfPresent([MindStateEntry].self, forKey: .mindStateLog)
+        attentionLog = try c.decodeIfPresent([AttentionEntry].self, forKey: .attentionLog)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        buddySessionId = try c.decodeIfPresent(String.self, forKey: .buddySessionId)
+        breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
+        ambientSoundSummary = try c.decodeIfPresent(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
+        case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
+        case createdAt, buddySessionId, breathCount, track, ambientSoundSummary
+    }
 }
 
 public struct ThoughtDTO: Codable, Sendable {
@@ -279,10 +313,13 @@ public struct StatsDTO: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        streak = try c.decode(Int.self, forKey: .streak)
-        avgClearPercent = try c.decode(Int.self, forKey: .avgClearPercent)
-        avgThoughtsPerSession = try c.decode(Double.self, forKey: .avgThoughtsPerSession)
-        avgThoughtsPerMinute = try c.decode(Double.self, forKey: .avgThoughtsPerMinute)
+        // #612: decoded permissively. A server-side NaN (e.g. avg over zero sessions)
+        // serializes to JSON `null`, which a required `decode` would reject — failing the
+        // whole Progress load. Default to 0; `enrich` recomputes period fields client-side.
+        streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
+        avgClearPercent = try c.decodeIfPresent(Int.self, forKey: .avgClearPercent) ?? 0
+        avgThoughtsPerSession = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerSession) ?? 0
+        avgThoughtsPerMinute = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerMinute) ?? 0
         bonusMinutesTotal = try c.decodeIfPresent(Int.self, forKey: .bonusMinutesTotal)
         trailing4WeekDays = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekDays) ?? 0
         trailing4WeekDayPercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekDayPercent) ?? 0
