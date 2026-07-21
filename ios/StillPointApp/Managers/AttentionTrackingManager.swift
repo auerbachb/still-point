@@ -131,8 +131,9 @@ final class AttentionTrackingManager: NSObject {
     private var startGeneration = 0
 
     override init() {
-        isSupported = ARFaceTrackingConfiguration.isSupported
-        status = isSupported ? .idle : .unsupported
+        let supported = ARFaceTrackingConfiguration.isSupported
+        isSupported = supported
+        status = supported ? .idle : .unsupported
         super.init()
         session.delegate = self
     }
