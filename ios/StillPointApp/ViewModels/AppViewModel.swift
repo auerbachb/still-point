@@ -300,6 +300,7 @@ final class AppViewModel {
             buddyInviteError = nil
             authStatusMessage = nil
             resetTrackCompletionBadges()
+            LastAuthProvider.resetPersisted()
             currentView = .auth
             SessionNotificationSuppressionController.clearSuppressPreference()
             syncWidgetData()

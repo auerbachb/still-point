@@ -23,7 +23,7 @@ public enum LastAuthProvider {
         UserDefaults.standard.set(method.rawValue, forKey: storageKey)
     }
 
-    /// Wipes persisted value. Used by unit tests and UI-test reset paths.
+    /// Wipes persisted value. Called on logout and UI-test reset paths.
     public static func resetPersisted() {
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
