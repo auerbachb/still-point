@@ -13,6 +13,8 @@ struct CompletionView: View {
     let thoughts: [CapturedThought]
     let dayNumber: Int
     let sessionType: SessionType
+    let track: Track
+    let sessionCompleted: Bool
     let duration: Int
     let bonusSeconds: Int
     let attentionLog: [AttentionEntry]?
@@ -24,8 +26,14 @@ struct CompletionView: View {
     @State private var saveError: String?
     @State private var uiTestAutoSaveTask: Task<Void, Never>?
 
-    private var nextDay: Int { dayNumber + 1 }
-    private var nextDuration: Int { StillPoint.duration(forDay: nextDay) }
+    private var nextDuration: Int {
+        DurationRecovery.previewNextStandardDuration(
+            sessionType: sessionType,
+            completed: sessionCompleted,
+            track: track,
+            user: appVM.currentUser
+        )
+    }
     private var nextBlocks: Int { StillPoint.blockCount(forDuration: nextDuration) }
     private var trimmedEndNote: String {
         endNote.trimmingCharacters(in: .whitespacesAndNewlines)

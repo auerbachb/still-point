@@ -92,11 +92,16 @@ final class SessionViewModel {
         "\(minutes):\(String(format: "%02d", seconds))"
     }
 
-    init(dayNumber: Int, sessionType: SessionType = .standard, track: Track = .primary) {
+    init(dayNumber: Int, sessionType: SessionType = .standard, track: Track = .primary, recovery: DurationRecovery.RecoveryFields = .none) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
         self.track = track
-        self.plannedSeconds = Self.resolveTotalSeconds(for: dayNumber, sessionType: sessionType)
+        self.plannedSeconds = Self.resolveTotalSeconds(
+            for: dayNumber,
+            sessionType: sessionType,
+            track: track,
+            recovery: recovery
+        )
         self.soundPrefs = AudioEngine.loadPrefs()
         self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
         // Initial mind state log entry
@@ -378,12 +383,24 @@ final class SessionViewModel {
             }
     }
 
-    private static func resolveTotalSeconds(for dayNumber: Int, sessionType: SessionType) -> Int {
+    private static func resolveTotalSeconds(
+        for dayNumber: Int,
+        sessionType: SessionType,
+        track: Track,
+        recovery: DurationRecovery.RecoveryFields
+    ) -> Int {
         let env = ProcessInfo.processInfo.environment
         guard let override = env["SP_UI_TEST_SESSION_SECONDS"],
               let overrideSeconds = Int(override),
               overrideSeconds > 0 else {
-            return StillPoint.duration(for: sessionType, day: dayNumber)
+            if track == .second {
+                return StillPoint.duration(for: sessionType, day: dayNumber)
+            }
+            return DurationRecovery.sessionDurationForUser(
+                sessionType: sessionType,
+                currentDay: dayNumber,
+                recovery: recovery
+            )
         }
         return overrideSeconds
     }

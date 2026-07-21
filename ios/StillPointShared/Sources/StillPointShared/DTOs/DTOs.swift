@@ -19,6 +19,10 @@ public struct UserDTO: Codable, Sendable {
     /// permissively so a server that predates #240 defaults to single-track.
     public let dualTrackEnabled: Bool
     public let secondTrackDay: Int
+    /// #238: miss-a-day recovery ramp. All three are nil when not recovering.
+    public let recoveryTargetDay: Int?
+    public let recoveryCurrentStep: Int?
+    public let recoveryTotalSteps: Int?
 
     public init(
         id: String,
@@ -29,7 +33,10 @@ public struct UserDTO: Codable, Sendable {
         aphorismsEnabled: Bool = false,
         attentionTrackingEnabled: Bool? = nil,
         dualTrackEnabled: Bool = false,
-        secondTrackDay: Int = 1
+        secondTrackDay: Int = 1,
+        recoveryTargetDay: Int? = nil,
+        recoveryCurrentStep: Int? = nil,
+        recoveryTotalSteps: Int? = nil
     ) {
         self.id = id
         self.email = email
@@ -40,6 +47,9 @@ public struct UserDTO: Codable, Sendable {
         self.attentionTrackingEnabled = attentionTrackingEnabled ?? false
         self.dualTrackEnabled = dualTrackEnabled
         self.secondTrackDay = secondTrackDay
+        self.recoveryTargetDay = recoveryTargetDay
+        self.recoveryCurrentStep = recoveryCurrentStep
+        self.recoveryTotalSteps = recoveryTotalSteps
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,10 +63,75 @@ public struct UserDTO: Codable, Sendable {
         attentionTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .attentionTrackingEnabled) ?? false
         dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled) ?? false
         secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay) ?? 1
+        recoveryTargetDay = try c.decodeIfPresent(Int.self, forKey: .recoveryTargetDay)
+        recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
+        recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, username, isPublic, currentDay, aphorismsEnabled, attentionTrackingEnabled, dualTrackEnabled, secondTrackDay
+        case id, email, username, isPublic, currentDay, aphorismsEnabled, attentionTrackingEnabled
+        case dualTrackEnabled, secondTrackDay
+        case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
+    }
+}
+
+extension UserDTO {
+    func updating(
+        username: String? = nil,
+        isPublic: Bool? = nil,
+        aphorismsEnabled: Bool? = nil,
+        attentionTrackingEnabled: Bool? = nil,
+        dualTrackEnabled: Bool? = nil,
+        secondTrackDay: Int? = nil
+    ) -> UserDTO {
+        UserDTO(
+            id: id,
+            email: email,
+            username: username ?? self.username,
+            isPublic: isPublic ?? self.isPublic,
+            currentDay: currentDay,
+            aphorismsEnabled: aphorismsEnabled ?? self.aphorismsEnabled,
+            attentionTrackingEnabled: attentionTrackingEnabled ?? self.attentionTrackingEnabled,
+            dualTrackEnabled: dualTrackEnabled ?? self.dualTrackEnabled,
+            secondTrackDay: secondTrackDay ?? self.secondTrackDay,
+            recoveryTargetDay: recoveryTargetDay,
+            recoveryCurrentStep: recoveryCurrentStep,
+            recoveryTotalSteps: recoveryTotalSteps
+        )
+    }
+
+    func updatingProgression(_ state: DurationRecovery.ProgressionState) -> UserDTO {
+        UserDTO(
+            id: id,
+            email: email,
+            username: username,
+            isPublic: isPublic,
+            currentDay: state.currentDay,
+            aphorismsEnabled: aphorismsEnabled,
+            attentionTrackingEnabled: attentionTrackingEnabled,
+            dualTrackEnabled: dualTrackEnabled,
+            secondTrackDay: secondTrackDay,
+            recoveryTargetDay: state.recoveryTargetDay,
+            recoveryCurrentStep: state.recoveryCurrentStep,
+            recoveryTotalSteps: state.recoveryTotalSteps
+        )
+    }
+
+    func updatingRecovery(targetDay: Int, currentStep: Int, totalSteps: Int) -> UserDTO {
+        UserDTO(
+            id: id,
+            email: email,
+            username: username,
+            isPublic: isPublic,
+            currentDay: currentDay,
+            aphorismsEnabled: aphorismsEnabled,
+            attentionTrackingEnabled: attentionTrackingEnabled,
+            dualTrackEnabled: dualTrackEnabled,
+            secondTrackDay: secondTrackDay,
+            recoveryTargetDay: targetDay,
+            recoveryCurrentStep: currentStep,
+            recoveryTotalSteps: totalSteps
+        )
     }
 }
 

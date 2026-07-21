@@ -1,6 +1,6 @@
 {
   "algorithm": "durationAndProgression",
-  "description": "Golden values for durationForDay, advanceProgression, and detectMissedDayGap. Web src/lib/duration.ts + src/lib/constants.ts and iOS StillPointShared/Constants.swift share durationForDay; advanceProgression and detectMissedDayGap are web-only until iOS recovery parity (#524). Includes cap/fork-day (#240) and missed-day recovery cases (#238/#559).",
+  "description": "Golden values for durationForDay, advanceProgression, and detectMissedDayGap. Web src/lib/duration.ts + src/lib/constants.ts and iOS StillPointShared share these algorithms via DurationRecovery.swift. Includes cap/fork-day (#240) and missed-day recovery cases (#238/#559/#524).",
   "constants": {
     "baseDuration": 60,
     "increment": 10,
@@ -52,6 +52,27 @@
       "completed": true,
       "state": { "currentDay": 45, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
       "expected": { "currentDay": 45, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
+    },
+    {
+      "name": "repeated miss at day 45 advances to 46 after final recovery step (#559/#524)",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 45, "recoveryTargetDay": 45, "recoveryCurrentStep": 5, "recoveryTotalSteps": 5 },
+      "expected": { "currentDay": 46, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
+    },
+    {
+      "name": "second recovery cycle at day 46 steps mid-ramp without bumping currentDay",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 46, "recoveryTargetDay": 46, "recoveryCurrentStep": 2, "recoveryTotalSteps": 5 },
+      "expected": { "currentDay": 46, "recoveryTargetDay": 46, "recoveryCurrentStep": 3, "recoveryTotalSteps": 5 }
+    },
+    {
+      "name": "second recovery cycle at day 46 clears and advances to 47",
+      "sessionType": "standard",
+      "completed": true,
+      "state": { "currentDay": 46, "recoveryTargetDay": 46, "recoveryCurrentStep": 5, "recoveryTotalSteps": 5 },
+      "expected": { "currentDay": 47, "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null }
     }
   ],
   "detectMissedDayGap": [
@@ -78,6 +99,37 @@
       "currentDay": 45,
       "recovery": { "recoveryTargetDay": 45, "recoveryCurrentStep": 3, "recoveryTotalSteps": 5 },
       "expected": null
+    },
+    {
+      "name": "re-enter recovery at day 46 after prior cycle cleared",
+      "lastCompletedSessionDate": "2026-06-01",
+      "todayIso": "2026-06-04",
+      "currentDay": 46,
+      "recovery": { "recoveryTargetDay": null, "recoveryCurrentStep": null, "recoveryTotalSteps": null },
+      "expected": { "recoveryTargetDay": 46, "recoveryCurrentStep": 1, "recoveryTotalSteps": 5 }
+    }
+  ],
+  "recoveryStepDuration": [
+    {
+      "name": "day 45 recovery ramp step 1 resets to 60s",
+      "targetDay": 45,
+      "totalSteps": 5,
+      "step": 1,
+      "expected": 60
+    },
+    {
+      "name": "day 45 recovery ramp step 3",
+      "targetDay": 45,
+      "totalSteps": 5,
+      "step": 3,
+      "expected": 236
+    },
+    {
+      "name": "day 45 recovery ramp step 5 before landing sit",
+      "targetDay": 45,
+      "totalSteps": 5,
+      "step": 5,
+      "expected": 412
     }
   ]
 }

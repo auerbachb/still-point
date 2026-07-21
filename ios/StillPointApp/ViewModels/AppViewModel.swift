@@ -19,6 +19,8 @@ enum AppView: Equatable {
         thoughts: [CapturedThought],
         dayNumber: Int,
         sessionType: SessionType,
+        track: Track,
+        sessionCompleted: Bool,
         duration: Int,
         bonusSeconds: Int,
         attentionLog: [AttentionEntry]?,
@@ -110,8 +112,20 @@ final class AppViewModel {
         StillPoint.clampedCurrentDay(for: currentUser)
     }
 
+    var recoveryFields: DurationRecovery.RecoveryFields {
+        DurationRecovery.recoveryFields(from: currentUser)
+    }
+
+    var activeRecovery: DurationRecovery.ActiveRecovery? {
+        DurationRecovery.activeRecovery(recoveryFields)
+    }
+
     var todayDuration: Int {
-        StillPoint.duration(forDay: currentDay)
+        DurationRecovery.sessionDurationForUser(
+            sessionType: .standard,
+            currentDay: currentDay,
+            recovery: recoveryFields
+        )
     }
 
     var todayBlockCount: Int {
@@ -172,7 +186,7 @@ final class AppViewModel {
         }
 
         do {
-            if let user = try await APIClient.shared.me() {
+            if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
                 currentUser = user
                 resetTrackCompletionBadges()
                 currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
@@ -537,6 +551,8 @@ final class AppViewModel {
             thoughts: thoughts,
             dayNumber: dayNumber,
             sessionType: sessionType,
+            track: track,
+            sessionCompleted: unlockAppGate,
             duration: duration,
             bonusSeconds: bonusSeconds,
             attentionLog: attentionLog,
@@ -555,7 +571,7 @@ final class AppViewModel {
                 print("Failed to flush offline session queue: \(error)")
             }
         }
-        if let user = try? await APIClient.shared.me() {
+        if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
             currentUser = user
         }
         await refreshTracksDoneToday()

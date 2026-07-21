@@ -33,6 +33,7 @@ struct HomeView: View {
                             duration: appVM.todayDuration,
                             blocks: appVM.todayBlockCount,
                             doneToday: appVM.primaryDoneToday,
+                            recovery: appVM.activeRecovery,
                             identifier: "home.trackOne",
                             onBegin: { appVM.beginSession(track: .primary) }
                         )
@@ -42,6 +43,7 @@ struct HomeView: View {
                             duration: appVM.secondTrackDuration,
                             blocks: appVM.secondTrackBlockCount,
                             doneToday: appVM.secondDoneToday,
+                            recovery: nil,
                             identifier: "home.trackTwo",
                             onBegin: { appVM.beginSession(track: .second) }
                         )
@@ -65,6 +67,15 @@ struct HomeView: View {
                         .font(SPFont.mono(14, weight: .light))
                         .foregroundStyle(Color(SPColor.fg3))
                         .tracking(2)
+
+                    if let recovery = appVM.activeRecovery {
+                        Text("recovery \(recovery.recoveryCurrentStep)/\(recovery.recoveryTotalSteps) · ramping back to day \(recovery.recoveryTargetDay)")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .foregroundStyle(SPColor.amberText)
+                            .tracking(1)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("home.recoveryBadge")
+                    }
                 }
 
                 appGatePill
@@ -229,6 +240,7 @@ struct HomeView: View {
         duration: Int,
         blocks: Int,
         doneToday: Bool,
+        recovery: DurationRecovery.ActiveRecovery?,
         identifier: String,
         onBegin: @escaping () -> Void
     ) -> some View {
@@ -255,6 +267,14 @@ struct HomeView: View {
                 .font(SPFont.mono(13, weight: .light))
                 .foregroundStyle(Color(SPColor.fg3))
                 .tracking(2)
+
+            if let recovery {
+                Text("recovery \(recovery.recoveryCurrentStep)/\(recovery.recoveryTotalSteps) · ramping back to day \(recovery.recoveryTargetDay)")
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(SPColor.amberText)
+                    .tracking(1)
+                    .multilineTextAlignment(.center)
+            }
 
             Button {
                 withAnimation { onBegin() }
