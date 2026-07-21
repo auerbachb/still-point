@@ -36,6 +36,8 @@ struct BuddyActiveSessionView: View {
             // #554: voice countdown — fires once per second in the final minute.
             vm.handleVoiceCountdownTick(remaining: remaining)
             if remaining == 0 {
+                // Cancel any in-flight voice clip at session end (#554).
+                AudioEngine.shared.cancelVoiceCountdownPlayback()
                 guard !didRequestCompletionRefresh else { return }
                 didRequestCompletionRefresh = true
                 Task {

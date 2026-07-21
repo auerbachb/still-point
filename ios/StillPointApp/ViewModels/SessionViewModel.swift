@@ -250,7 +250,9 @@ final class SessionViewModel {
             // Voice countdown was just enabled — prime the buffer cache.
             AudioEngine.shared.preloadVoiceCountdown()
         } else if voiceCountdownWasEnabled {
-            // Voice countdown was just disabled — stop any in-flight clip.
+            // Voice countdown was just disabled — reset dedup state so re-enabling
+            // during the same remaining second announces correctly (#554).
+            lastVoiceCountdownSec = 0
             AudioEngine.shared.cancelVoiceCountdownPlayback()
         }
     }

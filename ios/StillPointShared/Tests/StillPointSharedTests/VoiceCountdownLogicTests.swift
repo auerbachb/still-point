@@ -52,11 +52,15 @@ final class VoiceCountdownLogicTests: XCTestCase {
     }
 
     func testAnnounceSecondSkipsAfterResetAbove60() {
-        // After remaining goes above 60 and lastAnnouncedSec is reset to 0,
-        // the next tick below 60 should announce again.
+        // Announce at 30 s with a clean last-announced state.
         let firstAnnounce = VoiceCountdownLogic.announceSecond(remaining: 30.0, lastAnnouncedSec: 0)
         XCTAssertEqual(firstAnnounce, 30)
-        // remaining jumps above 60 (bonus added); state reset to 0
+
+        // Remaining rises above 60 (e.g. bonus time added) — shouldReset returns true
+        // and the caller zeros lastAnnouncedSec before the next tick.
+        XCTAssertTrue(VoiceCountdownLogic.shouldReset(remaining: 90.0))
+
+        // After the reset the same second (30) must be announced again.
         let afterReset = VoiceCountdownLogic.announceSecond(remaining: 30.0, lastAnnouncedSec: 0)
         XCTAssertEqual(afterReset, 30)
     }
