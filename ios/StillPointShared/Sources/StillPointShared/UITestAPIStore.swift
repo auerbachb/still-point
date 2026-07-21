@@ -69,6 +69,7 @@ actor UITestAPIStore {
             defaults.removeObject(forKey: defaultsKey)
             AudioEngine.resetPersistedPrefs()
             SessionIntroPrefs.resetPersistedPrefs()
+            LastAuthProvider.resetPersisted()
             // Flush the in-memory cache to cfprefsd so the immediately
             // following read sees the cleared state. Issue #266 follow-up.
             defaults.synchronize()

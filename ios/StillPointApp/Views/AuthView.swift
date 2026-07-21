@@ -7,6 +7,7 @@ struct AuthView: View {
     @State private var vm = AuthViewModel()
     @State private var appleSignInRawNonce: String?
     @State private var appleSignInInFlight = false
+    @State private var lastUsedMethod: LastAuthProvider.Method?
     let launchAuthStatusMessage: String?
 
     var body: some View {
@@ -84,6 +85,7 @@ struct AuthView: View {
                     Button {
                         Task {
                             if let user = await vm.submit() {
+                                LastAuthProvider.save(.email)
                                 appVM.didLogin(user: user)
                             }
                         }
@@ -92,6 +94,16 @@ struct AuthView: View {
                             .font(SPFont.serifItalic(18, weight: .light))
                             .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                     }
+                    .overlay(alignment: .trailing) {
+                        if lastUsedMethod == .email {
+                            LastUsedAuthTag(onDark: false)
+                        }
+                    }
+                    .accessibilityLabel(
+                        lastUsedMethod == .email
+                            ? (vm.isSignUp ? "Begin the journey (last used)" : "Enter (last used)")
+                            : (vm.isSignUp ? "Begin the journey" : "Enter")
+                    )
                     .accessibilityIdentifier("auth.submitButton")
                     .disabled(!vm.isValid || vm.isAuthInFlight)
                     .opacity(vm.isValid && !vm.isAuthInFlight ? 1 : 0.5)
@@ -139,6 +151,7 @@ struct AuthView: View {
                         Button {
                             Task {
                                 if let user = await vm.signInWithGoogle() {
+                                    LastAuthProvider.save(.google)
                                     appVM.didLogin(user: user)
                                 }
                             }
@@ -154,6 +167,16 @@ struct AuthView: View {
                             .foregroundStyle(Color(SPColor.fg))
                             .frame(height: 44)
                         }
+                        .overlay(alignment: .trailing) {
+                            if lastUsedMethod == .google {
+                                LastUsedAuthTag(onDark: false)
+                            }
+                        }
+                        .accessibilityLabel(
+                            lastUsedMethod == .google
+                                ? "Continue with Google (last used)"
+                                : "Continue with Google"
+                        )
                         .accessibilityIdentifier("auth.googleButton")
                         .disabled(vm.isAuthInFlight)
                         .opacity(vm.isAuthInFlight ? 0.5 : 1)
@@ -197,6 +220,7 @@ struct AuthView: View {
                                         appleSignInRawNonce = nil
                                     }
                                     if let user = await vm.signInWithApple(using: body) {
+                                        LastAuthProvider.save(.apple)
                                         appVM.didLogin(user: user)
                                     }
                                 }
@@ -214,6 +238,16 @@ struct AuthView: View {
                         .frame(height: 44)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(SPColor.border2))
+                        .overlay(alignment: .trailing) {
+                            if lastUsedMethod == .apple {
+                                LastUsedAuthTag(onDark: true)
+                            }
+                        }
+                        .accessibilityLabel(
+                            lastUsedMethod == .apple
+                                ? "Continue with Apple (last used)"
+                                : "Continue with Apple"
+                        )
                         .disabled(vm.isAuthInFlight || appleSignInInFlight)
                         .opacity(vm.isAuthInFlight || appleSignInInFlight ? 0.5 : 1)
                     }
@@ -223,6 +257,9 @@ struct AuthView: View {
             .padding(.bottom, SPSpacing.s6)
         }
         .stillPointBackground()
+        .onAppear {
+            lastUsedMethod = LastAuthProvider.load()
+        }
     }
 
     private var isUiTestMode: Bool {
@@ -253,6 +290,29 @@ struct AuthView: View {
                     .stroke(SPColor.border2)
             )
             .foregroundStyle(Color(SPColor.fg))
+    }
+}
+
+/// Small pill badge mirroring web `LastUsedTag` in `AuthScreen.tsx` (#337 / #528).
+private struct LastUsedAuthTag: View {
+    let onDark: Bool
+
+    var body: some View {
+        Text("last used")
+            .font(SPFont.mono(8))
+            .tracking(1)
+            .textCase(.uppercase)
+            .foregroundStyle(onDark ? Color.white.opacity(0.65) : Color(SPColor.fg3))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(onDark ? Color.white.opacity(0.08) : SPColor.surface1)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(onDark ? Color.white.opacity(0.25) : SPColor.border2)
+            )
+            .padding(.trailing, SPSpacing.s3)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
