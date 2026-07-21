@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { loadLastAuthProvider, type OAuthProvider } from "@/lib/lastAuthProvider";
+import { loadLastAuthProvider, saveLastAuthProvider, type AuthProvider } from "@/lib/lastAuthProvider";
 
 type AuthScreenProps = {
   onLogin: (user: {
@@ -63,7 +63,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   // Read in an effect (not the initializer) so server and first client
   // render agree — localStorage is only available after hydration.
-  const [lastProvider, setLastProvider] = useState<OAuthProvider | null>(null);
+  const [lastProvider, setLastProvider] = useState<AuthProvider | null>(null);
 
   useEffect(() => {
     setLastProvider(loadLastAuthProvider());
@@ -106,6 +106,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         return;
       }
 
+      saveLastAuthProvider("password");
       onLogin(data.user);
     } catch {
       setError("Network error");
@@ -380,6 +381,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             transition: "all 0.3s",
             marginTop: "var(--s1)",
             opacity: loading ? 0.5 : 1,
+            position: "relative",
           }}
           onMouseEnter={e => {
             if (!loading) {
@@ -391,8 +393,14 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             e.currentTarget.style.borderColor = "var(--border-2)";
             e.currentTarget.style.background = "var(--surface-1)";
           }}
+          aria-label={
+            lastProvider === "password"
+              ? (mode === "login" ? "Enter (last used)" : "Begin the journey (last used)")
+              : undefined
+          }
         >
           {loading ? "..." : mode === "login" ? "Enter" : "Begin the journey"}
+          {lastProvider === "password" && <LastUsedTag onDark={false} />}
         </button>
         {mode === "login" && (
           <a

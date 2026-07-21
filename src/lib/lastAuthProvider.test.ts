@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isOAuthProvider, loadLastAuthProvider, saveLastAuthProvider, STORAGE_KEY } from "./lastAuthProvider";
+import { isAuthProvider, isOAuthProvider, loadLastAuthProvider, saveLastAuthProvider, STORAGE_KEY } from "./lastAuthProvider";
 
 function stubBrowserStorage(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
@@ -30,6 +30,28 @@ describe("isOAuthProvider", () => {
     expect(isOAuthProvider(null)).toBe(false);
     expect(isOAuthProvider(undefined)).toBe(false);
   });
+
+  it("rejects 'password' (password is not an OAuth provider)", () => {
+    expect(isOAuthProvider("password")).toBe(false);
+  });
+});
+
+describe("isAuthProvider", () => {
+  it("accepts OAuth providers", () => {
+    expect(isAuthProvider("google")).toBe(true);
+    expect(isAuthProvider("apple")).toBe(true);
+  });
+
+  it("accepts 'password'", () => {
+    expect(isAuthProvider("password")).toBe(true);
+  });
+
+  it("rejects unknown values", () => {
+    expect(isAuthProvider("facebook")).toBe(false);
+    expect(isAuthProvider("")).toBe(false);
+    expect(isAuthProvider(null)).toBe(false);
+    expect(isAuthProvider(undefined)).toBe(false);
+  });
 });
 
 describe("loadLastAuthProvider", () => {
@@ -42,9 +64,14 @@ describe("loadLastAuthProvider", () => {
     expect(loadLastAuthProvider()).toBeNull();
   });
 
-  it("returns a stored valid provider", () => {
+  it("returns a stored valid OAuth provider", () => {
     stubBrowserStorage({ [STORAGE_KEY]: "google" });
     expect(loadLastAuthProvider()).toBe("google");
+  });
+
+  it("returns 'password' when stored", () => {
+    stubBrowserStorage({ [STORAGE_KEY]: "password" });
+    expect(loadLastAuthProvider()).toBe("password");
   });
 
   it("returns null for a tampered/unknown stored value", () => {
@@ -69,11 +96,18 @@ describe("saveLastAuthProvider", () => {
     expect(() => saveLastAuthProvider("google")).not.toThrow();
   });
 
-  it("persists the provider and round-trips through load", () => {
+  it("persists an OAuth provider and round-trips through load", () => {
     const store = stubBrowserStorage();
     saveLastAuthProvider("apple");
     expect(store.get(STORAGE_KEY)).toBe("apple");
     expect(loadLastAuthProvider()).toBe("apple");
+  });
+
+  it("persists 'password' and round-trips through load", () => {
+    const store = stubBrowserStorage();
+    saveLastAuthProvider("password");
+    expect(store.get(STORAGE_KEY)).toBe("password");
+    expect(loadLastAuthProvider()).toBe("password");
   });
 
   it("overwrites a previously stored provider", () => {
