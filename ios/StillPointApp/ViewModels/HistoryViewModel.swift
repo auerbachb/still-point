@@ -1,5 +1,6 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 enum HistoryViewMode: String, CaseIterable {
     case calendar
@@ -28,6 +29,11 @@ final class HistoryViewModel {
     /// Expanded session (by row id).
     var expandedSessionId: String?
     var sessionThoughts: [String: [ThoughtDTO]] = [:]
+    /// Local environment photos keyed by session ID — only sessions that have a photo.
+    /// Use `photoCheckedIds` to distinguish "not yet checked" from "checked, no photo".
+    var sessionPhotos: [String: UIImage] = [:]
+    /// Session IDs whose local photo file has already been looked up (avoids repeat disk reads).
+    private(set) var photoCheckedIds: Set<String> = []
 
     var viewMode: HistoryViewMode = .calendar
     var calendarSubView: HistoryCalendarSubView = .default
@@ -127,6 +133,7 @@ final class HistoryViewModel {
             expandedSessionId = nil
         } else {
             expandedSessionId = sessionId
+            // Load thoughts from the server
             if sessionThoughts[sessionId] == nil {
                 do {
                     let detail = try await APIClient.shared.getSessionBySessionId(sessionId)
@@ -136,6 +143,21 @@ final class HistoryViewModel {
                     if expandedSessionId == sessionId {
                         expandedSessionId = nil
                     }
+                }
+            }
+            // Load local environment photo off the main thread (disk I/O + JPEG decode).
+            // photoCheckedIds deduplicates lookup across expands; nil → no photo (expected)
+            // vs. a transient read error (extremely rare for our own-written JPEGs — MVP).
+            if !photoCheckedIds.contains(sessionId) {
+                photoCheckedIds.insert(sessionId)
+                let id = sessionId
+                let photo: UIImage? = await withCheckedContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        continuation.resume(returning: SessionPhotoStore.shared.loadImage(forSessionId: id))
+                    }
+                }
+                if let photo {
+                    sessionPhotos[id] = photo
                 }
             }
         }
