@@ -77,10 +77,10 @@ struct HomeView: View {
                     dualTrackForkCard
                 }
 
-                // L1–L5 lesson pathway (#525) — primary track day drives unlock state.
+                // L1–L5 lesson pathway preview (#525 / #587) — not tied to day count.
                 // Suppressed during UI tests (extra vertical content can push Begin off-screen).
                 if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
-                    PathwayView(currentDay: appVM.currentDay)
+                    PathwayView()
                 }
 
                 aphorismSection

@@ -270,8 +270,8 @@ export function HomeView({
         />
       )}
 
-      {/* Block B2: Lesson pathway (#336) */}
-      <Pathway currentDay={currentDay} />
+      {/* Block B2: Lesson pathway preview (#336 / #587) */}
+      <Pathway />
 
       {/* Block B3: pre-session aphorism, opt-in (#88) */}
       {aphorism && (

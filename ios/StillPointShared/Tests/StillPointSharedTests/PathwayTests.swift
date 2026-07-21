@@ -3,7 +3,7 @@ import StillPointShared
 
 final class PathwayTests: XCTestCase {
     func testProducesFiveNamedLevelsWithTenNodesEach() {
-        let levels = Pathway.build(currentDay: 1)
+        let levels = Pathway.build()
         XCTAssertEqual(levels.count, Pathway.totalLevels)
         XCTAssertEqual(levels.map(\.name), Pathway.levelNames)
         for level in levels {
@@ -12,7 +12,7 @@ final class PathwayTests: XCTestCase {
     }
 
     func testNodeDaysAreContiguousFromOneThroughFifty() {
-        let days = Pathway.build(currentDay: 1).flatMap { $0.nodes.map(\.day) }
+        let days = Pathway.build().flatMap { $0.nodes.map(\.day) }
         XCTAssertEqual(days, Array(1...Pathway.pathwayMaxDay))
     }
 
@@ -24,59 +24,21 @@ final class PathwayTests: XCTestCase {
         XCTAssertEqual(Pathway.nodeState(forDay: 50, currentDay: 5), .locked)
     }
 
-    func testDayOneFirstNodeCurrentRestLocked() {
-        let first = Pathway.build(currentDay: 1)[0]
-        XCTAssertEqual(first.nodes[0].state, .current)
-        XCTAssertTrue(first.nodes.dropFirst().allSatisfy { $0.state == .locked })
-        XCTAssertEqual(first.completedCount, 0)
-        XCTAssertEqual(first.state, .current)
-    }
-
-    func testMidLevelCurrentDayMarksStatesCorrectly() {
-        let levels = Pathway.build(currentDay: 13)
-        let l1 = levels[0]
-        let l2 = levels[1]
-        XCTAssertEqual(l1.state, .completed)
-        XCTAssertEqual(l1.completedCount, Pathway.daysPerLevel)
-        XCTAssertTrue(l1.nodes.allSatisfy { $0.state == .completed })
-
-        XCTAssertEqual(l2.state, .current)
-        XCTAssertEqual(l2.completedCount, 2)
-        XCTAssertEqual(l2.nodes[0].state, .completed)
-        XCTAssertEqual(l2.nodes[1].state, .completed)
-        XCTAssertEqual(l2.nodes[2].state, .current)
-        XCTAssertEqual(l2.nodes[3].state, .locked)
-    }
-
-    func testExactlyOneNodeIsCurrentWithinPathwayRange() {
-        let currents = Pathway.build(currentDay: 27)
-            .flatMap(\.nodes)
-            .filter { $0.state == .current }
-        XCTAssertEqual(currents.count, 1)
-        XCTAssertEqual(currents.map(\.day), [27])
-    }
-
-    func testCurrentDayBeyondProgramCompletesEveryNode() {
-        let levels = Pathway.build(currentDay: Pathway.pathwayMaxDay + 5)
+    func testDoesNotDeriveCompletedOrCurrentNodesFromDayCount() {
+        let levels = Pathway.build()
         let allNodes = levels.flatMap(\.nodes)
-        XCTAssertTrue(allNodes.allSatisfy { $0.state == .completed })
-        XCTAssertTrue(levels.allSatisfy { $0.state == .completed })
+        XCTAssertTrue(allNodes.allSatisfy { $0.state == .comingSoon })
+        XCTAssertTrue(levels.allSatisfy { $0.state == .comingSoon })
+        XCTAssertTrue(levels.allSatisfy { $0.completedCount == 0 })
+        XCTAssertFalse(allNodes.contains { $0.state == .completed })
+        XCTAssertFalse(allNodes.contains { $0.state == .current })
     }
 
-    func testCurrentDayExactlyAtLastDayKeepsItCurrent() {
-        let last = Pathway.build(currentDay: Pathway.pathwayMaxDay)[Pathway.totalLevels - 1]
-        XCTAssertEqual(last.nodes[Pathway.daysPerLevel - 1].state, .current)
-        XCTAssertEqual(last.state, .current)
+    func testExposesComingSoonCopyForTapAffordance() {
+        XCTAssertEqual(Pathway.comingSoonMessage, "Lessons coming soon")
     }
 
-    func testClampsSubOneInputToDayOne() {
-        for input in [0, -5] {
-            let levels = Pathway.build(currentDay: input)
-            XCTAssertEqual(levels[0].nodes[0].state, .current, "input \(input)")
-        }
-    }
-
-    // MARK: - Shared cross-platform fixtures (#421 / #525)
+    // MARK: - Shared cross-platform fixtures (#421 / #525 / #587)
 
     func testSharedPathwayFixtures() throws {
         let fixture = try SharedFixtures.load("pathway.json", as: PathwayFixture.self)
@@ -85,6 +47,7 @@ final class PathwayTests: XCTestCase {
         XCTAssertEqual(Pathway.totalLevels, fixture.totalLevels)
         XCTAssertEqual(Pathway.pathwayMaxDay, fixture.pathwayMaxDay)
         XCTAssertEqual(Pathway.levelNames, fixture.levelNames)
+        XCTAssertEqual(Pathway.comingSoonMessage, fixture.comingSoonMessage)
 
         for testCase in fixture.nodeStateForDay {
             let actual = Pathway.nodeState(forDay: testCase.day, currentDay: testCase.currentDay)
@@ -92,7 +55,7 @@ final class PathwayTests: XCTestCase {
         }
 
         for testCase in fixture.buildPathway {
-            let levels = Pathway.build(currentDay: testCase.currentDay)
+            let levels = Pathway.build()
 
             if let expectedLevelCount = testCase.expectedLevelCount {
                 XCTAssertEqual(levels.count, expectedLevelCount, testCase.name)
@@ -103,34 +66,16 @@ final class PathwayTests: XCTestCase {
                 XCTAssertEqual(days, expectedAllDays, testCase.name)
             }
 
-            if let expectedCurrentNodeCount = testCase.expectedCurrentNodeCount {
-                let currents = levels.flatMap(\.nodes).filter { $0.state == .current }
-                XCTAssertEqual(currents.count, expectedCurrentNodeCount, testCase.name)
+            if testCase.expectedAllNodesComingSoon == true {
+                XCTAssertTrue(levels.flatMap(\.nodes).allSatisfy { $0.state == .comingSoon }, testCase.name)
             }
 
-            if let expectedCurrentNodeDay = testCase.expectedCurrentNodeDay {
-                let currents = levels.flatMap(\.nodes).filter { $0.state == .current }
-                XCTAssertEqual(currents.first?.day, expectedCurrentNodeDay, testCase.name)
+            if testCase.expectedAllLevelsComingSoon == true {
+                XCTAssertTrue(levels.allSatisfy { $0.state == .comingSoon }, testCase.name)
             }
 
-            if testCase.expectedAllNodesCompleted == true {
-                XCTAssertTrue(levels.flatMap(\.nodes).allSatisfy { $0.state == .completed }, testCase.name)
-            }
-
-            if testCase.expectedAllLevelsCompleted == true {
-                XCTAssertTrue(levels.allSatisfy { $0.state == .completed }, testCase.name)
-            }
-
-            if let expectedLastLevelState = testCase.expectedLastLevelState {
-                XCTAssertEqual(levels.last?.state.rawValue, expectedLastLevelState, testCase.name)
-            }
-
-            if let expectedLastNodeState = testCase.expectedLastNodeState {
-                XCTAssertEqual(levels.last?.nodes.last?.state.rawValue, expectedLastNodeState, testCase.name)
-            }
-
-            if let expectedFirstNodeState = testCase.expectedFirstNodeState {
-                XCTAssertEqual(levels[0].nodes[0].state.rawValue, expectedFirstNodeState, testCase.name)
+            if testCase.expectedAllCompletedCountsZero == true {
+                XCTAssertTrue(levels.allSatisfy { $0.completedCount == 0 }, testCase.name)
             }
 
             for expectedLevel in testCase.expectedLevels ?? [] {

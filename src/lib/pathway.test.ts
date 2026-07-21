@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   DAYS_PER_LEVEL,
   LEVEL_NAMES,
+  PATHWAY_COMING_SOON_MESSAGE,
   PATHWAY_MAX_DAY,
   TOTAL_LEVELS,
   buildPathway,
@@ -27,7 +28,7 @@ describe("nodeStateForDay", () => {
 
 describe("buildPathway", () => {
   test("produces five named levels with ten nodes each", () => {
-    const levels = buildPathway(1);
+    const levels = buildPathway();
     expect(levels).toHaveLength(TOTAL_LEVELS);
     expect(levels.map((l) => l.name)).toEqual([...LEVEL_NAMES]);
     for (const level of levels) {
@@ -36,69 +37,25 @@ describe("buildPathway", () => {
   });
 
   test("node days are contiguous from 1..50", () => {
-    const days = buildPathway(1).flatMap((l) => l.nodes.map((n) => n.day));
+    const days = buildPathway().flatMap((l) => l.nodes.map((n) => n.day));
     expect(days).toEqual(Array.from({ length: PATHWAY_MAX_DAY }, (_, i) => i + 1));
   });
 
-  test("day 1: first node current, rest locked", () => {
-    const [first] = buildPathway(1);
-    expect(first!.nodes[0]!.state).toBe("current");
-    expect(first!.nodes.slice(1).every((n) => n.state === "locked")).toBe(true);
-    expect(first!.completedCount).toBe(0);
-    expect(first!.state).toBe("current");
-  });
-
-  test("mid-level currentDay marks completed/current/locked correctly", () => {
-    // currentDay 13 → L1 fully complete, L2 has 2 completed + day 13 current
-    const levels = buildPathway(13);
-    const l1 = levels[0]!;
-    const l2 = levels[1]!;
-    expect(l1.state).toBe("completed");
-    expect(l1.completedCount).toBe(DAYS_PER_LEVEL);
-    expect(l1.nodes.every((n) => n.state === "completed")).toBe(true);
-
-    expect(l2.state).toBe("current");
-    expect(l2.completedCount).toBe(2);
-    expect(l2.nodes[0]!.state).toBe("completed"); // day 11
-    expect(l2.nodes[1]!.state).toBe("completed"); // day 12
-    expect(l2.nodes[2]!.state).toBe("current"); // day 13
-    expect(l2.nodes[3]!.state).toBe("locked"); // day 14
-  });
-
-  test("exactly one node is current within the pathway range", () => {
-    const currents = buildPathway(27)
-      .flatMap((l) => l.nodes)
-      .filter((n) => n.state === "current");
-    expect(currents).toHaveLength(1);
-    expect(currents[0]!.day).toBe(27);
-  });
-
-  test("currentDay beyond the program completes every node", () => {
-    const levels = buildPathway(PATHWAY_MAX_DAY + 5);
+  test("does not derive completed or current nodes from day count (#587)", () => {
+    const levels = buildPathway();
     const allNodes = levels.flatMap((l) => l.nodes);
-    expect(allNodes.every((n) => n.state === "completed")).toBe(true);
-    expect(levels.every((l) => l.state === "completed")).toBe(true);
+    expect(allNodes.every((n) => n.state === "comingSoon")).toBe(true);
+    expect(levels.every((l) => l.state === "comingSoon")).toBe(true);
+    expect(levels.every((l) => l.completedCount === 0)).toBe(true);
+    expect(allNodes.some((n) => n.state === "completed")).toBe(false);
+    expect(allNodes.some((n) => n.state === "current")).toBe(false);
   });
 
-  test("currentDay exactly at the last day keeps it current", () => {
-    const last = buildPathway(PATHWAY_MAX_DAY)[TOTAL_LEVELS - 1]!;
-    expect(last.nodes[DAYS_PER_LEVEL - 1]!.state).toBe("current");
-    expect(last.state).toBe("current");
+  test("exposes coming-soon copy for tap affordance", () => {
+    expect(PATHWAY_COMING_SOON_MESSAGE).toBe("Lessons coming soon");
   });
 
-  test("clamps non-finite or sub-1 input to day 1", () => {
-    for (const input of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const levels = buildPathway(input as number);
-      if (input === Number.POSITIVE_INFINITY) {
-        // Infinity is non-finite → clamped to 1
-        expect(levels[0]!.nodes[0]!.state).toBe("current");
-      } else {
-        expect(levels[0]!.nodes[0]!.state).toBe("current");
-      }
-    }
-  });
-
-  // MARK: - Shared cross-platform fixtures (#421 / #525)
+  // MARK: - Shared cross-platform fixtures (#421 / #525 / #587)
 
   test("shared pathway fixtures", () => {
     const fixture = loadSharedFixture<PathwayFixture>("pathway.json");
@@ -107,13 +64,14 @@ describe("buildPathway", () => {
     expect(TOTAL_LEVELS).toBe(fixture.totalLevels);
     expect(PATHWAY_MAX_DAY).toBe(fixture.pathwayMaxDay);
     expect([...LEVEL_NAMES]).toEqual(fixture.levelNames);
+    expect(PATHWAY_COMING_SOON_MESSAGE).toBe(fixture.comingSoonMessage);
 
     for (const testCase of fixture.nodeStateForDay) {
       expect(nodeStateForDay(testCase.day, testCase.currentDay)).toBe(testCase.expected);
     }
 
     for (const testCase of fixture.buildPathway) {
-      const levels = buildPathway(testCase.currentDay);
+      const levels = buildPathway();
 
       if (testCase.expectedLevelCount != null) {
         expect(levels).toHaveLength(testCase.expectedLevelCount);
@@ -124,36 +82,16 @@ describe("buildPathway", () => {
         expect(days).toEqual(testCase.expectedAllDays);
       }
 
-      if (testCase.expectedCurrentNodeCount != null) {
-        const currents = levels.flatMap((l) => l.nodes).filter((n) => n.state === "current");
-        expect(currents).toHaveLength(testCase.expectedCurrentNodeCount);
+      if (testCase.expectedAllNodesComingSoon === true) {
+        expect(levels.flatMap((l) => l.nodes).every((n) => n.state === "comingSoon")).toBe(true);
       }
 
-      if (testCase.expectedCurrentNodeDay != null) {
-        const currents = levels.flatMap((l) => l.nodes).filter((n) => n.state === "current");
-        expect(currents[0]!.day).toBe(testCase.expectedCurrentNodeDay);
+      if (testCase.expectedAllLevelsComingSoon === true) {
+        expect(levels.every((l) => l.state === "comingSoon")).toBe(true);
       }
 
-      if (testCase.expectedAllNodesCompleted === true) {
-        expect(levels.flatMap((l) => l.nodes).every((n) => n.state === "completed")).toBe(true);
-      }
-
-      if (testCase.expectedAllLevelsCompleted === true) {
-        expect(levels.every((l) => l.state === "completed")).toBe(true);
-      }
-
-      if (testCase.expectedLastLevelState != null) {
-        expect(levels[TOTAL_LEVELS - 1]!.state).toBe(testCase.expectedLastLevelState);
-      }
-
-      if (testCase.expectedLastNodeState != null) {
-        expect(levels[TOTAL_LEVELS - 1]!.nodes[DAYS_PER_LEVEL - 1]!.state).toBe(
-          testCase.expectedLastNodeState,
-        );
-      }
-
-      if (testCase.expectedFirstNodeState != null) {
-        expect(levels[0]!.nodes[0]!.state).toBe(testCase.expectedFirstNodeState);
+      if (testCase.expectedAllCompletedCountsZero === true) {
+        expect(levels.every((l) => l.completedCount === 0)).toBe(true);
       }
 
       for (const expectedLevel of testCase.expectedLevels ?? []) {

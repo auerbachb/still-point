@@ -1,11 +1,12 @@
 import Foundation
 
-/// Duolingo-style pathway derivation (#336 / #525).
+/// Duolingo-style pathway structure (#336 / #525).
 ///
-/// Levels and node states are derived purely from the user's `currentDay`; there
-/// is no backend or migration. `currentDay` is the day the user is *on* (not yet
-/// completed) — completing a standard sit advances it by one. Mirrors
-/// `src/lib/pathway.ts` on web — keep both in sync.
+/// L1–L5 levels and node layout are fixed. Until real lesson content ships,
+/// every node is a coming-soon preview — node state is **not** derived from
+/// `currentDay` (#587). When lessons exist, real completions can drive
+/// `completed` / `current` / `locked`. Mirrors `src/lib/pathway.ts` — keep
+/// both in sync.
 public enum Pathway {
     /// Days that make up a single level. Five levels cover days 1–50.
     public static let daysPerLevel = 10
@@ -24,10 +25,14 @@ public enum Pathway {
     /// Highest day represented in the pathway (L5, day 10).
     public static let pathwayMaxDay = totalLevels * daysPerLevel
 
+    /// Copy shown when a pathway node is tapped before lessons ship.
+    public static let comingSoonMessage = "Lessons coming soon"
+
     public enum NodeState: String, Equatable, Sendable {
         case completed
         case current
         case locked
+        case comingSoon
     }
 
     public struct PathwayNode: Equatable, Sendable {
@@ -70,38 +75,23 @@ public enum Pathway {
     }
 
     /// Resolve a single day's node state relative to `currentDay`.
+    /// Reserved for future real-lesson progression — not used by `build()`.
     public static func nodeState(forDay day: Int, currentDay: Int) -> NodeState {
         if day < currentDay { return .completed }
         if day == currentDay { return .current }
         return .locked
     }
 
-    /// Build the full L1–L5 pathway for a given `currentDay`. Sub-1 inputs are
-    /// clamped to day 1 so the first node is always the current one.
-    public static func build(currentDay: Int) -> [PathwayLevel] {
-        let day = max(1, currentDay)
-
+    /// Build the L1–L5 pathway preview. Every node is `comingSoon` until lesson
+    /// completions drive state (#587).
+    public static func build() -> [PathwayLevel] {
         var levels: [PathwayLevel] = []
         for level in 1...totalLevels {
             var nodes: [PathwayNode] = []
-            var completedCount = 0
 
             for dayInLevel in 1...daysPerLevel {
                 let nodeDay = (level - 1) * daysPerLevel + dayInLevel
-                let state = nodeState(forDay: nodeDay, currentDay: day)
-                if state == .completed { completedCount += 1 }
-                nodes.append(PathwayNode(day: nodeDay, dayInLevel: dayInLevel, state: state))
-            }
-
-            let levelStartDay = (level - 1) * daysPerLevel + 1
-            let levelEndDay = level * daysPerLevel
-            let state: NodeState
-            if day > levelEndDay {
-                state = .completed
-            } else if day >= levelStartDay {
-                state = .current
-            } else {
-                state = .locked
+                nodes.append(PathwayNode(day: nodeDay, dayInLevel: dayInLevel, state: .comingSoon))
             }
 
             levels.append(
@@ -109,8 +99,8 @@ public enum Pathway {
                     level: level,
                     name: levelNames[level - 1],
                     nodes: nodes,
-                    completedCount: completedCount,
-                    state: state
+                    completedCount: 0,
+                    state: .comingSoon
                 )
             )
         }
