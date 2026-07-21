@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-07-21  
+Last updated: 2026-07-21 (#554 — voice countdown parity restored; completes #519–#529 series)  
 Release owner: iOS release DRI
 
 ## Core product parity
@@ -25,6 +25,7 @@ Release owner: iOS release DRI
 | Failure-reason reminder + log-reason capture (#441 / web PR #466) | Implemented | Implemented | ✅ Complete | iOS exposes `failureReasonReminderEnabled` in Notifications settings, handles `stillpoint://log-reason?date=…`, and captures notes via `/api/failure-reasons`. |
 | Miss-a-day recovery ramp (#481 / #511) | Implemented | Implemented | ✅ Complete | Shared ramp logic in `StillPointShared/DurationRecovery.swift`; applied in `AppViewModel.swift`, `SessionViewModel.swift`, `HomeView.swift`, and `CompletionView.swift`. |
 | ARKit gaze attention tracking (#512) | Not applicable — web | Implemented (iOS-only) | ✅ Intentional iOS-only | TrueDepth/ARKit hardware requirement; consent-gated toggle in `SettingsView.swift`; core manager is `AttentionTrackingManager.swift`. Web has no camera-during-session equivalent by design — not a parity defect. |
+| Voice countdown final-minute mode (#554, ports web PR #518 / Issue #507) | Implemented (`src/lib/audio.ts` + `BlockTimer.tsx`; `SoundPrefs.voiceCountdown` in localStorage) | Implemented | ✅ Complete | iOS: 60 pre-generated MP3 clips bundled at `ios/StillPointApp/Resources/VoiceCountdown/` (mirror of `scripts/generate-voice-countdown.ts` output); playback via `AudioEngine.playVoiceCountdown(seconds:)` + `preloadVoiceCountdown()` + `cancelVoiceCountdownPlayback()`; toggle persisted in `AudioEngine.SoundPrefs.voiceCountdown` (UserDefaults); fires in the final 60 s only, suppresses tick + per-minute chime, completion unaffected — semantics identical to web. Wired into both `SessionViewModel.tick()` (solo) and `BuddySessionViewModel` / `BuddyActiveSessionView` (buddy). Prefs decoder uses `decodeIfPresent` merge so existing users' saved preferences survive upgrade. Pure selection logic extracted to `StillPointShared/VoiceCountdownLogic.swift` with unit tests. Completes the #519–#529 parity series. |
 
 ## Known parity gaps (critical + non-critical)
 

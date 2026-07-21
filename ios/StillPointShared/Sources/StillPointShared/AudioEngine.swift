@@ -16,6 +16,12 @@ public final class AudioEngine: @unchecked Sendable {
     public func setAmbientCaptureActive(_ active: Bool) {}
     /// No-op on macOS / host builds.
     public func drainSerialQueue() async {}
+    /// No-op on macOS / host builds.
+    public func preloadVoiceCountdown() {}
+    /// No-op on macOS / host builds.
+    public func playVoiceCountdown(seconds: Int) {}
+    /// No-op on macOS / host builds.
+    public func cancelVoiceCountdownPlayback() {}
 }
 
 #else
@@ -33,6 +39,12 @@ public final class AudioEngine: @unchecked Sendable {
     private let serialQueue = DispatchQueue(
         label: "com.stillpoint.audioengine",
         qos: .userInteractive
+    )
+    /// Background queue for MP3 decoding so that preload and cache-miss decoding
+    /// never block tick, chime, or completion calls on serialQueue.
+    private let decodeQueue = DispatchQueue(
+        label: "com.stillpoint.audioengine.decode",
+        qos: .utility
     )
     private let engine = AVAudioEngine()
     private let notificationCenter = NotificationCenter.default
@@ -211,6 +223,120 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
+    // MARK: - Voice Countdown Playback
+
+    /// PCM buffers keyed by remaining-seconds value (1–60), populated by preload.
+    private var voiceBufferCache: [Int: AVAudioPCMBuffer] = [:]
+    /// Persistent player node for voice countdown; attached lazily on first play.
+    private var voicePlayerNode: AVAudioPlayerNode?
+    /// Incremented on every play or cancel to invalidate in-flight stale completions.
+    private var voicePlaybackEpoch: Int = 0
+
+    /// Preload all 60 voice-countdown clips into memory.
+    /// Call when the toggle is enabled or the session starts with the toggle on.
+    /// Decoding runs on decodeQueue so it never blocks tick, chime, or completion.
+    public func preloadVoiceCountdown() {
+        decodeQueue.async { [self] in self._preloadVoiceCountdown() }
+    }
+
+    private func _preloadVoiceCountdown() {
+        for seconds in 1...60 {
+            // Cache check on serialQueue to avoid data races.
+            var alreadyCached = false
+            serialQueue.sync { alreadyCached = self.voiceBufferCache[seconds] != nil }
+            guard !alreadyCached else { continue }
+            guard let url = Self.voiceCountdownURL(for: seconds),
+                  let buffer = Self.loadPCMBuffer(from: url) else {
+                print("AudioEngine: Failed to load voice countdown clip for \(seconds)s")
+                continue
+            }
+            // Insert the decoded buffer on serialQueue.
+            serialQueue.async { [self] in self.voiceBufferCache[seconds] = buffer }
+        }
+    }
+
+    /// Play the voice countdown clip for the given remaining seconds (1–60).
+    public func playVoiceCountdown(seconds: Int) {
+        serialQueue.async { [self] in self._playVoiceCountdown(seconds: seconds) }
+    }
+
+    private func _playVoiceCountdown(seconds: Int) {
+        guard seconds >= 1 && seconds <= 60 else { return }
+
+        voicePlaybackEpoch += 1
+        let epoch = voicePlaybackEpoch
+
+        if let buffer = voiceBufferCache[seconds] {
+            _doPlayVoiceBuffer(buffer)
+        } else {
+            // Decode off serialQueue so a cache miss cannot delay tick/chime/completion.
+            decodeQueue.async { [self] in
+                guard let url = Self.voiceCountdownURL(for: seconds),
+                      let buffer = Self.loadPCMBuffer(from: url) else { return }
+                self.serialQueue.async { [self] in
+                    // Guard against stale epochs (cancel or a newer play arrived).
+                    guard self.voicePlaybackEpoch == epoch else { return }
+                    self.voiceBufferCache[seconds] = buffer
+                    self._doPlayVoiceBuffer(buffer)
+                }
+            }
+        }
+    }
+
+    /// Schedule and play `buffer` on the voice player node.
+    /// Must be called on serialQueue.
+    private func _doPlayVoiceBuffer(_ buffer: AVAudioPCMBuffer) {
+        // Lazily create and attach the player node using the buffer's decoded format.
+        let player: AVAudioPlayerNode
+        if let existing = voicePlayerNode {
+            player = existing
+        } else {
+            let node = AVAudioPlayerNode()
+            voicePlayerNode = node
+            engine.attach(node)
+            engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
+        }
+
+        ensureEngineRunning()
+        // .interrupts cancels any in-progress buffer and starts the new one immediately.
+        player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
+        player.play()
+    }
+
+    /// Cancel any in-flight voice countdown playback.
+    /// Call on pause, session completion, or session unmount.
+    public func cancelVoiceCountdownPlayback() {
+        serialQueue.async { [self] in self._cancelVoiceCountdownPlayback() }
+    }
+
+    private func _cancelVoiceCountdownPlayback() {
+        voicePlaybackEpoch += 1
+        voicePlayerNode?.stop()
+    }
+
+    // MARK: - Voice Countdown Asset Helpers
+
+    private static func voiceCountdownURL(for seconds: Int) -> URL? {
+        // Folder references from XcodeGen preserve the VoiceCountdown subdirectory.
+        Bundle.main.url(forResource: "\(seconds)", withExtension: "mp3", subdirectory: "VoiceCountdown")
+    }
+
+    private static func loadPCMBuffer(from url: URL) -> AVAudioPCMBuffer? {
+        do {
+            let audioFile = try AVAudioFile(forReading: url)
+            let frameCount = AVAudioFrameCount(audioFile.length)
+            guard let buffer = AVAudioPCMBuffer(
+                pcmFormat: audioFile.processingFormat,
+                frameCapacity: frameCount
+            ) else { return nil }
+            try audioFile.read(into: buffer)
+            return buffer
+        } catch {
+            print("AudioEngine: Error loading PCM buffer at \(url.lastPathComponent): \(error)")
+            return nil
+        }
+    }
+
     // MARK: - Synthesizer Core
 
     /// Reference-type wrapper so the render callback captures a single mutable box
@@ -349,8 +475,31 @@ extension AudioEngine {
         public var tick: Bool
         public var chime: Bool
         public var completion: Bool
+        /// #554: voice countdown — spoken numbers during the final 60 seconds.
+        /// Mirrors the `voiceCountdown` toggle on web (persisted in localStorage).
+        public var voiceCountdown: Bool
 
-        public static let defaults = SoundPrefs(tick: false, chime: true, completion: true)
+        public static let defaults = SoundPrefs(
+            tick: false, chime: true, completion: true, voiceCountdown: false
+        )
+
+        /// Memberwise initialiser (required because we added a custom `init(from:)`).
+        public init(tick: Bool, chime: Bool, completion: Bool, voiceCountdown: Bool = false) {
+            self.tick = tick
+            self.chime = chime
+            self.completion = completion
+            self.voiceCountdown = voiceCountdown
+        }
+
+        /// Custom decoder that merges over defaults — mirrors web's `{ ...DEFAULTS, ...stored }`.
+        /// Prevents legacy persisted JSON (missing `voiceCountdown`) from wiping tick/chime/completion.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tick           = try c.decodeIfPresent(Bool.self, forKey: .tick)           ?? false
+            chime          = try c.decodeIfPresent(Bool.self, forKey: .chime)          ?? true
+            completion     = try c.decodeIfPresent(Bool.self, forKey: .completion)     ?? true
+            voiceCountdown = try c.decodeIfPresent(Bool.self, forKey: .voiceCountdown) ?? false
+        }
     }
 
     private static let prefsKey = "stillpoint_sound_prefs"

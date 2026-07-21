@@ -701,6 +701,10 @@ struct SessionView: View {
                 soundToggle("end", isOn: vm.soundPrefs.completion) {
                     vm.toggleSound(\.completion)
                 }
+                // #554: voice countdown — spoken numbers in the final minute.
+                soundToggle("voice", isOn: vm.soundPrefs.voiceCountdown) {
+                    vm.toggleSound(\.voiceCountdown)
+                }
             }
         }
         .padding(.horizontal, SPSpacing.s4)
