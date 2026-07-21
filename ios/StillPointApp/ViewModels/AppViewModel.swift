@@ -103,6 +103,8 @@ final class AppViewModel {
     /// #240: per-track "completed a standard sit today", drives the Home badges.
     var primaryDoneToday = false
     var secondDoneToday = false
+    /// Any counted practice today (standard primary, quick, or breath) for the widget.
+    var practiceDoneToday = false
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -309,6 +311,7 @@ final class AppViewModel {
     private func resetTrackCompletionBadges() {
         primaryDoneToday = false
         secondDoneToday = false
+        practiceDoneToday = false
     }
 
     func beginSession(type: SessionType = .standard, track: Track = .primary) {
@@ -330,6 +333,11 @@ final class AppViewModel {
     /// server-side filtered query.
     func refreshTracksDoneToday() async {
         guard currentUser != nil else { return }
+        let now = Date()
+        let prior = WidgetDataStore.load()
+        if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
+            practiceDoneToday = false
+        }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -339,10 +347,14 @@ final class AppViewModel {
             let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
             primaryDoneToday = tracksDoneToday.primary
             secondDoneToday = tracksDoneToday.second
+            if primaryDoneToday {
+                practiceDoneToday = true
+            }
         } catch {
             // Non-fatal: fail closed so stale "done today" badges do not leak.
             primaryDoneToday = false
             secondDoneToday = false
+            practiceDoneToday = false
         }
         syncWidgetData()
         refreshWidgetWeekHistory()
@@ -394,6 +406,7 @@ final class AppViewModel {
                 ownerUserId: ownerUserId,
                 thoughts: []
             )
+            markPracticeDoneToday()
             currentView = .home
         } catch {
             print("Failed to persist breath session locally: \(error)")
@@ -504,12 +517,16 @@ final class AppViewModel {
         thoughts: [CapturedThought],
         dayNumber: Int,
         sessionType: SessionType = .standard,
+        track: Track,
         duration: Int,
         bonusSeconds: Int = 0,
         unlockAppGate: Bool,
         attentionLog: [AttentionEntry]? = nil,
         attentionElapsed: Double? = nil
     ) {
+        if countsForWidgetPractice(sessionType: sessionType, track: track) {
+            markPracticeDoneToday()
+        }
         applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
         currentView = .completion(
             sessionId: sessionId,
@@ -602,7 +619,8 @@ final class AppViewModel {
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
-            secondDoneToday: secondDoneToday
+            secondDoneToday: secondDoneToday,
+            practiceDoneToday: practiceDoneToday
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)
@@ -645,19 +663,36 @@ final class AppViewModel {
             guard !Task.isCancelled,
                   let current = currentUser, current.id == user.id else { return }
             let now = Date()
-            let completed = WidgetDataStore.recentCompletedPrimaryDates(from: result.sessions, now: now)
+            let completed = WidgetDataStore.recentCompletedPracticeDates(from: result.sessions, now: now)
             // Derive today's completion from the fetched sessions (consistent with
             // `now`) rather than the in-memory flag, which could be stale past midnight.
             let doneToday = completed.contains(WidgetDataStore.localDayString(now))
             let snapshot = WidgetDataStore.makeSnapshot(
                 user: current,
-                primaryDoneToday: doneToday,
+                primaryDoneToday: primaryDoneToday,
                 secondDoneToday: secondDoneToday,
+                practiceDoneToday: doneToday,
                 now: now,
-                completedPrimaryDates: completed
+                completedPracticeDates: completed
             )
             WidgetDataStore.save(snapshot)
             WidgetTimelineReloader.reloadHabitWidget()
+        }
+    }
+
+    /// Mark today as having counted practice and push an immediate widget snapshot.
+    /// Shared touchpoint with #590 completion-handler work — rebase carefully.
+    private func markPracticeDoneToday() {
+        practiceDoneToday = true
+        syncWidgetData()
+    }
+
+    private func countsForWidgetPractice(sessionType: SessionType, track: Track) -> Bool {
+        switch sessionType {
+        case .quick, .breath:
+            return true
+        case .standard:
+            return track == .primary
         }
     }
 }

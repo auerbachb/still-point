@@ -21,6 +21,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: true,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 5,
             lastUpdated: Date(timeIntervalSince1970: 1_700_000_000)
         )
@@ -34,7 +35,8 @@ final class WidgetDataTests: XCTestCase {
         let snapshot = WidgetDataStore.makeSnapshot(
             user: nil,
             primaryDoneToday: false,
-            secondDoneToday: false
+            secondDoneToday: false,
+            practiceDoneToday: false
         )
         XCTAssertEqual(snapshot, .loggedOut)
     }
@@ -51,12 +53,13 @@ final class WidgetDataTests: XCTestCase {
             user: user,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             previous: nil
         )
         XCTAssertEqual(snapshot.currentDay, 1)
     }
 
-    func testResolvedStreakIncrementsWhenPrimaryDoneFlips() {
+    func testResolvedStreakIncrementsWhenPracticeDoneFlips() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let previous = WidgetData(
             isLoggedIn: true,
@@ -66,13 +69,14 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 3,
             lastUpdated: now
         )
 
         let streak = WidgetDataStore.resolvedStreak(
             userId: "u1",
-            primaryDoneToday: true,
+            practiceDoneToday: true,
             previous: previous,
             now: now
         )
@@ -88,13 +92,14 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 8,
             lastUpdated: Date()
         )
 
         let streak = WidgetDataStore.resolvedStreak(
             userId: "new-user",
-            primaryDoneToday: false,
+            practiceDoneToday: false,
             previous: previous
         )
         XCTAssertEqual(streak, 0)
@@ -110,13 +115,14 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 6,
             lastUpdated: yesterday
         )
 
         let streak = WidgetDataStore.resolvedStreak(
             userId: "u1",
-            primaryDoneToday: false,
+            practiceDoneToday: false,
             previous: previous,
             now: Date()
         )
@@ -133,13 +139,14 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 6,
             lastUpdated: yesterday
         )
 
         let streak = WidgetDataStore.resolvedStreak(
             userId: "u1",
-            primaryDoneToday: false,
+            practiceDoneToday: false,
             previous: previous,
             now: Date()
         )
@@ -157,13 +164,14 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 5,
             lastUpdated: yesterday
         )
 
         let streak = WidgetDataStore.resolvedStreak(
             userId: "u1",
-            primaryDoneToday: true,
+            practiceDoneToday: true,
             previous: previous,
             now: now
         )
@@ -180,12 +188,13 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 6,
             lastUpdated: yesterday
         )
 
         let normalized = WidgetDataStore.normalizedForDisplay(stale, now: Date())
-        XCTAssertFalse(normalized.isPrimaryCompleteForToday(at: Date()))
+        XCTAssertFalse(normalized.isPracticeCompleteForToday(at: Date()))
         XCTAssertEqual(normalized.streak, 6)
     }
 
@@ -200,6 +209,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 9,
             lastUpdated: now
         )
@@ -208,6 +218,7 @@ final class WidgetDataTests: XCTestCase {
             user: user,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             now: now,
             previous: previous
         )
@@ -262,9 +273,10 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(decoded.completedDates, [])
         XCTAssertEqual(decoded.streak, 7)
         XCTAssertTrue(decoded.primaryDoneToday)
+        XCTAssertTrue(decoded.practiceDoneToday, "legacy blobs fall back to primaryDoneToday")
     }
 
-    func testRecentCompletedPrimaryDatesFiltersTypeTrackAndWindow() {
+    func testRecentCompletedPracticeDatesFiltersTypeTrackAndWindow() {
         let now = Date()
         let today = localDay(0, from: now)
         let twoDaysAgo = localDay(-2, from: now)
@@ -274,12 +286,13 @@ final class WidgetDataTests: XCTestCase {
             session(date: today, type: .standard, completed: true, track: .primary),
             session(date: twoDaysAgo, type: .standard, completed: true, track: nil), // nil treated as primary
             session(date: tenDaysAgo, type: .standard, completed: true, track: .primary), // outside 7-day window
-            session(date: today, type: .quick, completed: true, track: .primary), // quick excluded
+            session(date: today, type: .quick, completed: true, track: .primary), // quick counts (#589)
+            session(date: twoDaysAgo, type: .breath, completed: true, track: nil), // breath counts (#589)
             session(date: today, type: .standard, completed: false, track: .primary), // incomplete excluded
             session(date: today, type: .standard, completed: true, track: .second) // second track excluded
         ]
 
-        let result = WidgetDataStore.recentCompletedPrimaryDates(from: sessions, now: now)
+        let result = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
         XCTAssertEqual(result, [today, twoDaysAgo])
     }
 
@@ -294,6 +307,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 3,
             completedDates: [today],
             lastUpdated: now
@@ -306,7 +320,7 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(marks.first?.isToday, false)
     }
 
-    func testWeekMarksChecksTodayViaPrimaryFlagWithoutCompletedDate() {
+    func testWeekMarksChecksTodayViaPracticeFlagWithoutCompletedDate() {
         let now = Date()
         let data = WidgetData(
             isLoggedIn: true,
@@ -314,8 +328,9 @@ final class WidgetDataTests: XCTestCase {
             currentDay: 5,
             secondTrackDay: 1,
             dualTrackEnabled: false,
-            primaryDoneToday: true,
+            primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 3,
             completedDates: [],
             lastUpdated: now
@@ -334,6 +349,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 4,
             completedDates: [twoDaysAgo],
             lastUpdated: now
@@ -342,18 +358,20 @@ final class WidgetDataTests: XCTestCase {
             user: makeUser(id: "u1"),
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             now: now,
             previous: previous
         )
         XCTAssertEqual(snapshot.completedDates, [twoDaysAgo])
     }
 
-    func testMakeSnapshotFoldsTodayWhenPrimaryDone() {
+    func testMakeSnapshotFoldsTodayWhenPracticeDone() {
         let now = Date()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
-            primaryDoneToday: true,
+            primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: true,
             now: now,
             previous: nil
         )
@@ -372,6 +390,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 4,
             completedDates: ["1999-01-01"], // stale; must be discarded
             lastUpdated: now
@@ -380,9 +399,10 @@ final class WidgetDataTests: XCTestCase {
             user: makeUser(id: "u1"),
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             now: now,
             previous: previous,
-            completedPrimaryDates: [today, threeDaysAgo]
+            completedPracticeDates: [today, threeDaysAgo]
         )
         XCTAssertEqual(Set(snapshot.completedDates), [today, threeDaysAgo])
     }
@@ -397,6 +417,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 4,
             completedDates: [localDay(-2, from: now)],
             lastUpdated: now
@@ -405,6 +426,7 @@ final class WidgetDataTests: XCTestCase {
             user: makeUser(id: "new-user"),
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             now: now,
             previous: previous
         )
@@ -423,6 +445,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true,
             streak: 6,
             completedDates: ["2000-01-01", inWindow],
             lastUpdated: yesterday
@@ -432,21 +455,49 @@ final class WidgetDataTests: XCTestCase {
     }
 
     /// Authoritative (session-derived) path must not inject today from a possibly
-    /// stale `primaryDoneToday` flag — it trusts the fetched completion set.
+    /// stale `practiceDoneToday` flag — it trusts the fetched completion set.
     func testMakeSnapshotDoesNotFoldTodayWhenSessionsAuthoritative() {
         let now = Date()
         let today = localDay(0, from: now)
         let threeDaysAgo = localDay(-3, from: now)
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
-            primaryDoneToday: true, // stale flag; sessions say today is not complete
+            primaryDoneToday: true,
             secondDoneToday: false,
+            practiceDoneToday: true, // stale flag; sessions say today is not complete
             now: now,
             previous: nil,
-            completedPrimaryDates: [threeDaysAgo]
+            completedPracticeDates: [threeDaysAgo]
         )
         XCTAssertFalse(snapshot.completedDates.contains(today))
         XCTAssertEqual(snapshot.completedDates, [threeDaysAgo])
+    }
+
+    /// Quick-only practice must extend widget streak (#589).
+    func testMakeSnapshotIncrementsStreakForQuickOnlyDay() {
+        let now = Date()
+        let previous = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 5,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            streak: 2,
+            lastUpdated: now
+        )
+        let snapshot = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            now: now,
+            previous: previous
+        )
+        XCTAssertEqual(snapshot.streak, 3)
+        XCTAssertTrue(snapshot.completedDates.contains(localDay(0, from: now)))
     }
 
     /// `localDayString` must emit Gregorian digits even when the supplied calendar
@@ -470,6 +521,7 @@ final class WidgetDataTests: XCTestCase {
             dualTrackEnabled: false,
             primaryDoneToday: false,
             secondDoneToday: false,
+            practiceDoneToday: false,
             streak: 3,
             completedDates: [],
             lastUpdated: now
