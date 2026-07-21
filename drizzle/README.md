@@ -88,6 +88,59 @@ file instead.
    discards preview-only data - use the "preserve under name" option if you might
    need it back.)
 
+## Bootstrapping a fresh database
+
+Fresh/empty databases (new dev environments, ephemeral e2e branches per #316,
+disaster-recovery rebuilds) can now be fully bootstrapped via:
+
+```bash
+POSTGRES_URL='<connection-string>' npm run db:migrate
+```
+
+`drizzle/0_core_tables_incremental.sql` is the bootstrap shim that makes this
+work. It creates the three core tables (`users`, `sessions`, `thoughts`) that
+only exist in the excluded `0000_romantic_night_nurse.sql` baseline, plus
+`buddy_sessions` and `buddy_session_participants` to resolve an ordering hazard
+(see below). Every statement is idempotent (`IF NOT EXISTS`, `DO $$ ... $$`
+guards), so this file is a pure no-op on prod/preview where the schema already
+exists.
+
+### Sort-order convention
+
+The runner excludes files matching `/^\d{4}_/` (exactly four digits then
+underscore) and sorts the rest with a plain `.sort()`. A **single leading
+digit + underscore** (e.g. `0_`) sorts before all letter-prefixed filenames
+in ASCII order, yet is not matched by the four-digit exclusion — so the file
+runs first.
+
+If you ever need another "must-run-before-everything" bootstrap file, follow
+the same convention (`1_`, `2_`, etc.) and document the reason.
+
+### Ordering hazards
+
+Some incremental files sort before the file that creates the table they touch.
+The known case: `buddy_session_participants_one_host_per_session_incremental.sql`
+and `buddy_session_participants_user_index_incremental.sql` sort before
+`buddy_sessions_incremental.sql`, yet create indexes on `buddy_session_participants`.
+The bootstrap file resolves this by creating `buddy_sessions` and
+`buddy_session_participants` with their full current definitions so those index
+files are no-ops on existing DBs and valid operations on fresh ones.
+
+If you add a new table that is referenced by an earlier-sorting file, add it to
+`0_core_tables_incremental.sql` following the append-only rule for that file:
+wait for the file to be applied, then add a _new_ incremental file with the
+additional definition (or extend the bootstrap via a separate new
+`1_<name>_incremental.sql`).
+
+### Local dev
+
+`drizzle-kit push` remains the fastest path for local development — it
+introspects `src/db/schema.ts` directly and applies the delta in one step
+without the ledger overhead. Use `npm run db:migrate` when you need the
+ledgered incremental path (CI, Vercel, ephemeral e2e branches).
+
+---
+
 ## `db:reconcile` helper
 
 [`scripts/reconcile-migration-checksum.ts`](../scripts/reconcile-migration-checksum.ts)
