@@ -23,17 +23,22 @@ Release owner: iOS release DRI
 | Account deletion flow | Implemented | Implemented | ✅ Complete | iOS Settings includes two-step destructive confirmation. |
 | Aphorisms pre-session inspiration toggle (#88) | Implemented | Implemented | ✅ Complete | Shared quote list in `StillPointShared/Aphorisms.swift` mirrors `src/lib/aphorisms.ts`; both clients toggle via `PATCH /api/settings`. |
 | Failure-reason reminder + log-reason capture (#441 / web PR #466) | Implemented | Implemented | ✅ Complete | iOS exposes `failureReasonReminderEnabled` in Notifications settings, handles `stillpoint://log-reason?date=…`, and captures notes via `/api/failure-reasons`. |
+| Miss-a-day recovery ramp (#481 / #511) | Implemented | Implemented | ✅ Complete | Shared ramp logic in `StillPointShared/DurationRecovery.swift`; applied in `AppViewModel.swift`, `SessionViewModel.swift`, `HomeView.swift`, and `CompletionView.swift`. |
+| ARKit gaze attention tracking (#512) | Not applicable — web | Implemented (iOS-only) | ✅ Intentional iOS-only | TrueDepth/ARKit hardware requirement; consent-gated toggle in `SettingsView.swift`; core manager is `AttentionTrackingManager.swift`. Web has no camera-during-session equivalent by design — not a parity defect. |
 
 ## Known parity gaps (critical + non-critical)
 
 | Gap | Severity | Decision | Owner | Target date | Tracking notes |
 |---|---|---|---|---|---|
-| Dedicated **Friends management UI** (search users, request/accept/reject/cancel, remove friend) exists on web (`FriendsView.tsx`) but not in iOS tabs. | Critical | Deferred for this release candidate (buddy core flow remains functional without in-app friend graph controls). | Mobile platform owner (@ios-release) | 2026-05-01 | Add iOS Friends tab + friend-request flows using existing API endpoints before next social feature milestone. |
+| Dedicated **Friends management UI** (search users, request/accept/reject/cancel, remove friend) exists on web (`FriendsView.tsx`) but not in iOS tabs. | Critical | Deferred for this release candidate (buddy core flow remains functional without in-app friend graph controls). | Mobile platform owner (@ios-release) | TBD (overdue from 2026-05-01; re-plan before next social feature milestone) | Add iOS Friends tab + friend-request flows using existing API endpoints before next social feature milestone. |
 | Marketing-only web homepage demo embed / App Store badge behavior has no iOS equivalent screen. | Non-critical | Explicitly out of scope for native parity. | Product (@product) | 2026-05-08 | Keep web-only marketing surfaces documented; no native action required. |
+| **Guided exercises (#517)** — branching breath/movement/insight exercises layered on the core timer. Web: `GuidedExerciseOverlay.tsx` + `src/lib/guidedExercise.ts`. | Non-critical | Deferred post-1.0; add to iOS feature roadmap. | Mobile platform owner (@ios-release) | TBD | No iOS surface exists. Part of June–July batch (#519–#529). |
+| **Session ratings (#479)** — post-session quality slider. Web: `RatingSlider.tsx` + `/api/track`. | Non-critical | Deferred post-1.0. | Mobile platform owner (@ios-release) | TBD | No iOS surface exists. |
+| **Last-used tag (#394)** — surfacing a "last used N days ago" indicator. Not built on either platform (net-new). | Non-critical | Not yet designed — add to backlog. | Product (@product) | TBD | Distinct from the auth-provider last-used sign-in tag (row above, #337/#528). `LastAuthProviderCapture.tsx` / `StillPointShared/LastAuthProvider.swift` handle a different feature. |
 
 ## Release gate decision (Issue #210)
 
 - [x] Feature parity checklist between iOS and web is completed.
 - [x] All critical parity gaps are fixed or explicitly deferred with owner/date.
 
-The current release candidate is allowed to ship with the deferred critical gap above because it does not block session completion, account safety, or backend data integrity.
+The current release candidate is allowed to ship with the deferred critical gap above because it does not block session completion, account safety, or backend data integrity. The June–July batch (#519–#529) added additional non-critical web-only gaps (guided exercises, session ratings) and one net-new unbuilt item (last-used tag #394); none of these block the release gate.
