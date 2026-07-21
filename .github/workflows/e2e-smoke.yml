@@ -1,0 +1,57 @@
+name: E2E PR Smoke (advisory)
+
+# Fast, optional web smoke on pull requests — does NOT gate merge (#588).
+# Mirrors auerbachb/skingod's e2e-smoke.yml: gives authors early signal without
+# the full smoke+critical suite that now runs nightly + at release.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pr-e2e-smoke:
+    name: pr-e2e-smoke (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_WORKERS: "1"
+      E2E_REPEAT_EACH: "1"
+      E2E_RUN_ID: ${{ github.run_id }}
+      SEED_CONFIRM: still-point-nonprod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run web smoke lane (advisory)
+        run: npm run e2e:web:smoke
+
+      - name: Upload advisory smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-e2e-smoke-advisory-artifacts
+          path: |
+            artifacts/e2e/web/**
+            playwright-report/**
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 7

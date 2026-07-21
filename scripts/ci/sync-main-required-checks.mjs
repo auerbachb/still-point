@@ -1,28 +1,38 @@
 #!/usr/bin/env node
 /**
- * Sync required status checks on `main` for issue #537.
+ * Sync required status checks on `main` for issue #588.
  *
- * Adds `build`, `web-e2e-smoke`, and `web-e2e-critical` alongside the existing
- * required checks (`typecheck`, `StillPointShared swift test`). Does not remove
- * checks already configured unless they are superseded by this script's target
- * list (the script unions current + target).
+ * Sets the fast PR merge gate (folds #434 unit-tests + #439 Info.plist sync +
+ * #588 e2e-off-PR). Supersedes #537 (which would have required web-e2e lanes).
+ *
+ * Adds the target checks and removes deprecated e2e required checks if present.
+ * Preserves unrelated required checks (e.g. Vercel app checks).
  *
  * Usage:
  *   node scripts/ci/sync-main-required-checks.mjs --dry-run
  *   node scripts/ci/sync-main-required-checks.mjs --apply
+ *
+ * Requires explicit repo-admin confirmation before --apply (see branch-protection.md).
  */
 
 import { execFileSync } from "node:child_process";
 
 const BRANCH = "main";
 
-/** Checks that must stay required (existing + #537). */
+/** Fast checks that must stay required (#588, #434, #439). */
 const TARGET_CHECKS = [
   "typecheck",
-  "StillPointShared swift test",
+  "unit-tests",
   "build",
+  "StillPointShared swift test",
+  "Info.plist in sync with project.yml",
+];
+
+/** Deprecated e2e checks to remove when syncing (#588 supersedes #537). */
+const REMOVE_CHECKS = [
   "web-e2e-smoke",
   "web-e2e-critical",
+  "e2e-policy",
 ];
 
 function ghJson(args) {
@@ -69,8 +79,9 @@ function buildRequiredStatusChecksPayload(protection, mergedContexts) {
   return mergeRequiredStatusChecks(protection, mergedContexts);
 }
 
-function mergeChecks(existing, target) {
-  return [...new Set([...existing, ...target])].sort((a, b) => a.localeCompare(b));
+function mergeChecks(existing, target, remove) {
+  const filtered = existing.filter((ctx) => !remove.includes(ctx));
+  return [...new Set([...filtered, ...target])].sort((a, b) => a.localeCompare(b));
 }
 
 function main() {
@@ -95,7 +106,7 @@ function main() {
   }
 
   const existing = protection.required_status_checks?.contexts ?? [];
-  const merged = mergeChecks(existing, TARGET_CHECKS);
+  const merged = mergeChecks(existing, TARGET_CHECKS, REMOVE_CHECKS);
   const payload = buildRequiredStatusChecksPayload(protection, merged);
 
   console.log(`Branch: ${BRANCH}`);
@@ -104,14 +115,22 @@ function main() {
   console.log(`Target union (${merged.length}):`);
   for (const ctx of merged) console.log(`  - ${ctx}`);
 
+  const removed = existing.filter((ctx) => REMOVE_CHECKS.includes(ctx));
+  if (removed.length > 0) {
+    console.log("Will remove (deprecated e2e gates — #588):");
+    for (const ctx of removed) console.log(`  - ${ctx}`);
+  }
+
   const added = merged.filter((ctx) => !existing.includes(ctx));
-  if (added.length === 0) {
-    console.log("[branch-protection] Nothing to add — already in sync.");
+  if (added.length === 0 && removed.length === 0) {
+    console.log("[branch-protection] Nothing to change — already in sync.");
     return;
   }
 
-  console.log("Will add:");
-  for (const ctx of added) console.log(`  + ${ctx}`);
+  if (added.length > 0) {
+    console.log("Will add:");
+    for (const ctx of added) console.log(`  + ${ctx}`);
+  }
 
   if (dryRun) {
     console.log("[branch-protection] Dry run — re-run with --apply to write.");

@@ -1,0 +1,59 @@
+name: E2E Coverage Nudge (advisory)
+
+# Non-blocking advisory when a PR touches user-facing surfaces without e2e updates
+# (#588). Mirrors auerbachb/skingod's e2e-coverage-nudge.yml — neutral signal,
+# not a merge gate.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  coverage-nudge:
+    name: e2e coverage nudge (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Post coverage nudge
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/e2e/coverage-nudge.mjs
+
+      - name: Mark advisory check neutral
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.payload.pull_request?.head?.sha ?? context.sha;
+            if (!sha) {
+              core.info('No PR head SHA — skipping neutral check creation.');
+              return;
+            }
+            await github.rest.checks.create({
+              owner,
+              repo,
+              name: 'e2e coverage nudge (advisory)',
+              head_sha: sha,
+              status: 'completed',
+              conclusion: 'neutral',
+              output: {
+                title: 'E2E coverage nudge (advisory — does not gate merge)',
+                summary:
+                  'See workflow logs for UI paths touched without e2e spec updates. Comprehensive e2e runs nightly and on iOS release (#588).',
+              },
+            });

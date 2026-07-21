@@ -5,8 +5,9 @@ name: Auto TestFlight on merge
 # adapted for Still Point's self-hosted xcodebuild pipeline (skingod uses EAS).
 #
 # Flow:
-#   1. Run the mobile-web e2e suite (e2e-mobile.yml) against the merge commit.
-#   2. Only if it's green: read CURRENT_PROJECT_VERSION from ios/project.yml
+#   1. Run mobile-web e2e (e2e-mobile.yml) AND native iOS e2e (e2e-ios.yml) in
+#      parallel against the merge commit (#588 — both gate the release).
+#   2. Only if both are green: read CURRENT_PROJECT_VERSION from ios/project.yml
 #      at the merge commit.
 #   3. Increment it (build-number source of truth: the committed project.yml).
 #   4. Commit the bump back to main with [skip ci].
@@ -17,9 +18,9 @@ name: Auto TestFlight on merge
 # purpose (#494): the bump commit + tag push are themselves release side
 # effects, and this workflow only fires once per merged PR (no natural retry
 # trigger), so a failing e2e must prevent them too — not just skip the build
-# after a tag already exists. `tag`'s `if:` checks `needs.e2e.result ==
-# 'success'`; a failed OR skipped e2e run (no release:ios label) leaves `tag`
-# skipped and nothing is committed/tagged/built.
+# after a tag already exists. `tag`'s `if:` checks both e2e gates succeeded; a
+# failed OR skipped e2e run (no release:ios label) leaves `tag` skipped and
+# nothing is committed/tagged/built.
 #
 # The bump commit and tag are pushed with the default GITHUB_TOKEN. GitHub does
 # NOT start new workflow runs for GITHUB_TOKEN-authored pushes, so:
@@ -44,7 +45,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  e2e:
+  e2e-mobile:
     name: release e2e (mobile web)
     if: >-
       github.event.pull_request.merged == true &&
@@ -55,10 +56,23 @@ jobs:
       ref: ${{ github.event.pull_request.merge_commit_sha }}
     secrets: inherit
 
+  e2e-ios:
+    name: release e2e (native iOS)
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      contains(github.event.pull_request.labels.*.name, 'release:ios')
+    uses: ./.github/workflows/e2e-ios.yml
+    with:
+      ref: ${{ github.event.pull_request.merge_commit_sha }}
+    secrets: inherit
+
   tag:
     name: Bump build number and cut TestFlight tag
-    needs: e2e
-    if: needs.e2e.result == 'success'
+    needs: [e2e-mobile, e2e-ios]
+    if: >-
+      needs.e2e-mobile.result == 'success' &&
+      needs.e2e-ios.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

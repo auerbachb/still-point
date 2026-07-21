@@ -259,27 +259,36 @@ Automated code review on pull requests via [CodeRabbit](https://coderabbit.ai). 
 Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env guardrails, artifact policy, flake triage rubric, tags/lanes, visual+perf scope, merge gates, and reproducibility) are documented in:
 
 - [docs/testing/e2e-policy.md](docs/testing/e2e-policy.md)
+- [docs/testing/e2e-strategy.md](docs/testing/e2e-strategy.md)
 - [ios/E2E_RUNBOOK.md](ios/E2E_RUNBOOK.md)
 
 ## Merge gates (current)
 
-Branch protection on `main` requires **`typecheck`** and **`StillPointShared swift test`**. Issue #537 adds **`build`**, **`web-e2e-smoke`**, and **`web-e2e-critical`** — see [docs/testing/branch-protection.md](docs/testing/branch-protection.md) for the admin runbook and path-filter notes.
+Branch protection on `main` requires **`typecheck`** and **`StillPointShared swift test`**. Issue [#588](https://github.com/auerbachb/still-point/issues/588) adds the fast merge gate — **`unit-tests`** (#434), **`build`**, and **`Info.plist in sync with project.yml`** (#439) — and **removes e2e from required PR checks** (supersedes #537). See [docs/testing/branch-protection.md](docs/testing/branch-protection.md) and [docs/testing/e2e-strategy.md](docs/testing/e2e-strategy.md).
 
 What should be green before merge:
 
 - `typecheck` — full-project `tsc --noEmit` (includes test files)
+- `unit-tests` — Jest/unit suite (#434)
 - `StillPointShared swift test` — shared Swift parity suite (no-op pass when the package is unchanged; issue #463)
 - `build` — repeatable clean Next builds + design-token parity lint
-- `web-e2e-smoke` / `web-e2e-critical` — P0 Playwright lanes ([`e2e-policy.md`](docs/testing/e2e-policy.md))
+- `Info.plist in sync with project.yml` — XcodeGen drift guard (no-op when plist inputs unchanged; #439/#588)
 - `Vercel` — preview deployment completed successfully
 - `Vercel Agent Review` — Vercel's automated review completed
 - `Vercel Preview Comments` — preview comment bot completed
 - `CodeRabbit` — review completed with no blocking findings
 
+Advisory (do not require on `main`):
+
+- `pr-e2e-smoke (advisory)` — fast optional web smoke on PRs
+- `e2e coverage nudge (advisory)` — neutral reminder when UI changes lack e2e updates
+
+Comprehensive e2e (`web-e2e-smoke` / `web-e2e-critical`, native iOS lanes, mobile-web matrix) runs **nightly on main** and **gates iOS TestFlight releases** (`release:ios` label) — not on every PR.
+
 Notes:
 
 - The GitHub Actions workflows **Build & Upload to TestFlight** (`ios-v*-build*` tags) and **iOS App Store release (Fastlane)** (`ios-vMAJOR.MINOR.PATCH` tags) are **release-only** and are not pull-request merge gates.
-- Repo admins can apply the #537 check list with `node scripts/ci/sync-main-required-checks.mjs --apply` (dry-run first).
+- Repo admins can apply the #588 check list with `node scripts/ci/sync-main-required-checks.mjs --apply` (dry-run first; requires confirmation).
 
 ## Project structure
 

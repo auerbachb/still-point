@@ -1,15 +1,38 @@
 name: E2E iOS
 
+# As of #588 (SkinGod model), this workflow NO LONGER runs on `pull_request`.
+# Native iOS e2e (macOS XCTest smoke/critical) gates the TestFlight release path
+# via `ios-testflight-auto.yml` instead of blocking every PR. The Info.plist
+# sync guard moved to `infoplist-sync.yml` (required on every PR — #439/#588).
+#
+# Runs via:
+#   - `ios-testflight-auto.yml` — release:ios merge gate (#588)
+#   - `workflow_dispatch` — ad-hoc verification
+#   - `workflow_call` — reusable from other workflows
+#
+# Mirrors auerbachb/skingod#1402 / still-point #494 (mobile-web off PRs).
+
 on:
-  pull_request:
-    paths:
-      - "ios/**"
-      - "docs/testing/e2e-policy.md"
-      - ".github/workflows/e2e-ios.yml"
-      - "scripts/e2e/**"
-      - "package.json"
-      - "package-lock.json"
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit ref (SHA, branch, or tag) to check out and test"
+        type: string
+        required: true
+    secrets:
+      E2E_TEST_USER_EMAIL:
+        required: false
+      E2E_TEST_USER_PASSWORD:
+        required: false
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit ref to test. Defaults to the ref this run was dispatched from."
+        type: string
+        required: false
+
+permissions:
+  contents: read
 
 jobs:
   ios-e2e:
@@ -24,6 +47,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -98,48 +122,3 @@ jobs:
           path: ~/Library/Logs/DiagnosticReports/**
           if-no-files-found: ignore
           retention-days: 14
-
-  # Guards against project.yml <-> Info.plist drift. CI regenerates Info.plist via
-  # `xcodegen generate` before every build, so any key that lives only in the committed
-  # Info.plist (and not in project.yml's info.properties) is silently dropped from
-  # shipped builds. This job fails the PR if regeneration would change the committed
-  # Info.plist, forcing project.yml to stay the single source of truth. See issue #432.
-  infoplist-sync:
-    name: Info.plist in sync with project.yml
-    runs-on: macos-26
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Install XcodeGen
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          for attempt in 1 2 3; do
-            if brew install xcodegen; then
-              exit 0
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              sleep $((attempt * 10))
-            fi
-          done
-          echo "Failed to install xcodegen after 3 attempts."
-          exit 1
-
-      - name: Generate Xcode project
-        working-directory: ios
-        run: xcodegen generate
-
-      - name: Verify committed Info.plist matches XcodeGen output
-        run: |
-          if ! git diff --exit-code -- ios/StillPointApp/Info.plist; then
-            echo "::error::ios/StillPointApp/Info.plist is out of sync with ios/project.yml."
-            echo "CI regenerates Info.plist via 'xcodegen generate' before every build, so any key that"
-            echo "exists only in the committed Info.plist (not in project.yml info.properties) is DROPPED"
-            echo "from shipped builds. Fix: add the key(s) to ios/project.yml -> targets.StillPoint.info.properties,"
-            echo "then run 'cd ios && xcodegen generate' and commit the regenerated ios/StillPointApp/Info.plist."
-            exit 1
-          fi
