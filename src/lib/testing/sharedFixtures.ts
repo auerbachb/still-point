@@ -165,7 +165,7 @@ export type DurationForDayFixture = {
       recoveryTotalSteps: number;
     } | null;
   }>;
-  recoveryStepDuration?: Array<{
+  recoveryStepDuration: Array<{
     name: string;
     targetDay: number;
     totalSteps: number;

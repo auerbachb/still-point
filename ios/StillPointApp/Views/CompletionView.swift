@@ -13,6 +13,8 @@ struct CompletionView: View {
     let thoughts: [CapturedThought]
     let dayNumber: Int
     let sessionType: SessionType
+    let track: Track
+    let sessionCompleted: Bool
     let duration: Int
     let bonusSeconds: Int
     let attentionLog: [AttentionEntry]?
@@ -27,8 +29,8 @@ struct CompletionView: View {
     private var nextDuration: Int {
         DurationRecovery.previewNextStandardDuration(
             sessionType: sessionType,
-            completed: true,
-            track: .primary,
+            completed: sessionCompleted,
+            track: track,
             user: appVM.currentUser
         )
     }
