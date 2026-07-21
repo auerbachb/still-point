@@ -24,7 +24,8 @@ enum AppView: Equatable {
         duration: Int,
         bonusSeconds: Int,
         attentionLog: [AttentionEntry]?,
-        attentionElapsed: Double?
+        attentionElapsed: Double?,
+        ambientSoundSummary: AmbientSoundSummary?
     )
     case breathCounting
     case logReason(date: String)
@@ -537,7 +538,8 @@ final class AppViewModel {
         bonusSeconds: Int = 0,
         unlockAppGate: Bool,
         attentionLog: [AttentionEntry]? = nil,
-        attentionElapsed: Double? = nil
+        attentionElapsed: Double? = nil,
+        ambientSoundSummary: AmbientSoundSummary? = nil
     ) {
         if countsForWidgetPractice(sessionType: sessionType, track: track) {
             markPracticeDoneToday()
@@ -556,7 +558,8 @@ final class AppViewModel {
             duration: duration,
             bonusSeconds: bonusSeconds,
             attentionLog: attentionLog,
-            attentionElapsed: attentionElapsed
+            attentionElapsed: attentionElapsed,
+            ambientSoundSummary: ambientSoundSummary
         )
     }
 

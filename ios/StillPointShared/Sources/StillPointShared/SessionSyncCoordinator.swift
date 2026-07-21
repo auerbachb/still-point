@@ -252,7 +252,8 @@ public actor SessionSyncCoordinator {
             sessionDate: request.sessionDate,
             breathCount: request.breathCount,
             track: request.track,
-            clientSessionId: clientSessionId
+            clientSessionId: clientSessionId,
+            ambientSoundSummary: request.ambientSoundSummary
         )
     }
 
@@ -280,7 +281,8 @@ public actor SessionSyncCoordinator {
             createdAt: nil,
             buddySessionId: nil,
             breathCount: request.breathCount,
-            track: request.track
+            track: request.track,
+            ambientSoundSummary: request.ambientSoundSummary
         )
     }
 }

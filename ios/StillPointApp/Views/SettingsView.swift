@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import StillPointShared
 import UIKit
@@ -9,9 +10,12 @@ struct SettingsView: View {
     @State private var aphorismsEnabled: Bool = false
     @State private var sessionIntroEnabled: Bool = true
     @State private var attentionTrackingEnabled: Bool = false
+    /// #563: opt-in ambient sound level capture during solo sits.
+    @State private var ambientSoundEnabled: Bool = false
     @State private var isUpdating = false
     @State private var isUpdatingAphorisms = false
     @State private var isUpdatingAttentionTracking = false
+    @State private var isUpdatingAmbientSound = false
     @State private var isSavingUsername = false
     @State private var showDeleteAccountDialog = false
     @State private var showDeleteAccountConfirm = false
@@ -20,8 +24,9 @@ struct SettingsView: View {
     @State private var showDeleteAccountError = false
     @State private var showAttentionUnsupportedAlert = false
     @State private var showAttentionPermissionDeniedAlert = false
+    @State private var showAmbientSoundPermissionDeniedAlert = false
 
-    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isSavingUsername }
+    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isUpdatingAmbientSound || isSavingUsername }
 
     var body: some View {
         NavigationStack {
@@ -151,6 +156,43 @@ struct SettingsView: View {
                                 appVM.applySettingsUser(updated)
                             } catch {
                                 attentionTrackingEnabled = !newValue
+                            }
+                        }
+                    }
+
+                    // #563: ambient sound level capture
+                    Toggle(isOn: $ambientSoundEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ambient sound level")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Samples mic volume during solo sits to log quiet vs. loud environments. No audio is stored. Off by default.")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .disabled(isSavingSettings)
+                    .accessibilityIdentifier("settings.ambientSoundToggle")
+                    .onChange(of: ambientSoundEnabled) { _, newValue in
+                        guard !isUpdatingAmbientSound else { return }
+                        guard appVM.currentUser?.ambientSoundEnabled != newValue else { return }
+                        isUpdatingAmbientSound = true
+                        Task {
+                            defer { isUpdatingAmbientSound = false }
+                            if newValue {
+                                let granted = await AVAudioApplication.requestRecordPermission()
+                                if !granted {
+                                    ambientSoundEnabled = false
+                                    showAmbientSoundPermissionDeniedAlert = true
+                                    return
+                                }
+                            }
+                            do {
+                                let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
+                                appVM.applySettingsUser(updated)
+                            } catch {
+                                ambientSoundEnabled = !newValue
                             }
                         }
                     }
@@ -332,6 +374,20 @@ struct SettingsView: View {
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
+        .onChange(of: appVM.currentUser?.ambientSoundEnabled) { _, _ in
+            guard appVM.currentUser != nil else { return }
+            syncFromCurrentUser()
+        }
+        .alert("Microphone access required", isPresented: $showAmbientSoundPermissionDeniedAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Ambient sound level tracking needs microphone access. Allow microphone access in Settings to enable this feature.")
+        }
         .alert("Gaze tracking unavailable", isPresented: $showAttentionUnsupportedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -383,6 +439,7 @@ struct SettingsView: View {
         aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
         sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
         attentionTrackingEnabled = appVM.currentUser?.attentionTrackingEnabled ?? false
+        ambientSoundEnabled = appVM.currentUser?.ambientSoundEnabled ?? false
     }
 
     private var appVersionFooter: String {

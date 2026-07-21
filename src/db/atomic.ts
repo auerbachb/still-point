@@ -33,6 +33,7 @@ type UsernameUpdateResult =
         currentDay: number;
         aphorismsEnabled: boolean;
         attentionTrackingEnabled: boolean;
+        ambientSoundEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
       };
@@ -68,6 +69,7 @@ export async function atomicUpdateUsername(params: {
         currentDay: users.currentDay,
         aphorismsEnabled: users.aphorismsEnabled,
         attentionTrackingEnabled: users.attentionTrackingEnabled,
+        ambientSoundEnabled: users.ambientSoundEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
       });
@@ -520,6 +522,7 @@ function mapSessionRow(row: Record<string, unknown>): typeof sessions.$inferSele
     breathCount: row.breath_count == null ? null : Number(row.breath_count),
     mindStateLog: row.mind_state_log as typeof sessions.$inferSelect["mindStateLog"],
     attentionLog: row.attention_log as typeof sessions.$inferSelect["attentionLog"],
+    ambientSoundSummary: row.ambient_sound_summary as typeof sessions.$inferSelect["ambientSoundSummary"],
     sessionDate: String(row.session_date),
     focusRating: row.focus_rating == null ? null : Number(row.focus_rating),
     happinessRating: row.happiness_rating == null ? null : Number(row.happiness_rating),
@@ -614,7 +617,7 @@ export async function atomicCreateSessionWithProgression(params: {
         insert into sessions (
           user_id, client_session_id, buddy_session_id, day_number, session_type, track, duration,
           bonus_seconds, completed, actual_time, clear_percent, thought_count,
-          breath_count, mind_state_log, attention_log, session_date
+          breath_count, mind_state_log, attention_log, ambient_sound_summary, session_date
         )
         values (
           ${userId}::uuid,
@@ -632,6 +635,7 @@ export async function atomicCreateSessionWithProgression(params: {
           ${session.breathCount ?? null},
           ${JSON.stringify(session.mindStateLog ?? [])}::jsonb,
           ${session.attentionLog ? JSON.stringify(session.attentionLog) : null}::jsonb,
+          ${session.ambientSoundSummary ? JSON.stringify(session.ambientSoundSummary) : null}::jsonb,
           ${session.sessionDate}
         )
         returning *

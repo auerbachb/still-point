@@ -20,6 +20,8 @@ struct SessionView: View {
     @State private var attentionManager = AttentionTrackingManager()
     @State private var attentionStartGeneration = 0
     @State private var gazeTrackingRanThisSession = false
+    /// #563: ambient sound level sampler for solo sits.
+    @State private var ambientSoundManager = AmbientSoundManager()
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
@@ -145,6 +147,7 @@ struct SessionView: View {
                 skipIntroForUITest: skipIntro
             )
             syncAttentionTracking()
+            syncAmbientSound()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -157,6 +160,7 @@ struct SessionView: View {
         .onDisappear {
             attentionStartGeneration += 1
             attentionManager.stop()
+            ambientSoundManager.stop()
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: false
@@ -170,8 +174,10 @@ struct SessionView: View {
             if showIntro {
                 attentionStartGeneration += 1
                 attentionManager.stop()
+                ambientSoundManager.stop()
             } else {
                 syncAttentionTracking()
+                syncAmbientSound()
             }
         }
         .onChange(of: attentionManager.status) { _, status in
@@ -206,6 +212,13 @@ struct SessionView: View {
                     attentionManager.resume()
                 }
             }
+            if appVM.currentUser?.ambientSoundEnabled == true {
+                if isPaused {
+                    ambientSoundManager.pause()
+                } else {
+                    ambientSoundManager.resume()
+                }
+            }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -235,8 +248,12 @@ struct SessionView: View {
                     vm.attentionLog = gazeLog
                 }
                 gazeTrackingRanThisSession = false
+                // #563: stop mic tap and persist the level summary into the view model.
+                ambientSoundManager.stop()
+                vm.ambientSoundSummary = ambientSoundManager.summary
             } else {
                 attentionManager.stop()
+                ambientSoundManager.stop()
             }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
@@ -264,7 +281,8 @@ struct SessionView: View {
                     track: vm.track,
                     duration: vm.plannedSeconds,
                     bonusSeconds: vm.bonusSeconds,
-                    unlockAppGate: vm.completedNaturally
+                    unlockAppGate: vm.completedNaturally,
+                    ambientSoundSummary: vm.ambientSoundSummary
                 )
             }
         } message: {
@@ -342,6 +360,16 @@ struct SessionView: View {
                 return
             }
             presentAttentionStatusAlert(for: attentionManager.status)
+        }
+    }
+
+    /// #563: start ambient sound capture when the user has opted in and the sit is running.
+    /// No-ops gracefully when the feature is disabled, mic was denied, or on simulator.
+    private func syncAmbientSound() {
+        guard appVM.currentUser?.ambientSoundEnabled == true else { return }
+        guard !vm.showIntroOverlay, sessionTimerRunning else { return }
+        Task {
+            await ambientSoundManager.start { vm.elapsed }
         }
     }
 
@@ -729,7 +757,8 @@ struct SessionView: View {
                 bonusSeconds: vm.bonusSeconds,
                 unlockAppGate: vm.completedNaturally,
                 attentionLog: vm.attentionLog,
-                attentionElapsed: vm.attentionLog != nil ? vm.elapsed : nil
+                attentionElapsed: vm.attentionLog != nil ? vm.elapsed : nil,
+                ambientSoundSummary: vm.ambientSoundSummary
             )
         }
     }

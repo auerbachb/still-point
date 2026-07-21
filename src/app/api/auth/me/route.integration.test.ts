@@ -150,4 +150,24 @@ describe("GET /api/auth/me — miss-a-day recovery detection (#238)", () => {
     const { user: body } = await res.json();
     expect(body.recoveryTargetDay).toBe(4);
   });
+
+  test("returns ambientSoundEnabled in the response body (#563)", async () => {
+    const userWithAmbient = await makeUser({ currentDay: 1, ambientSoundEnabled: true });
+    getCurrentUser.mockResolvedValue({ userId: userWithAmbient.id, email: userWithAmbient.email });
+
+    const res = await GET(meRequest("2026-06-11"));
+    expect(res.status).toBe(200);
+    const { user: body } = await res.json();
+    expect(body.ambientSoundEnabled).toBe(true);
+  });
+
+  test("ambientSoundEnabled defaults to false when not set (#563)", async () => {
+    const userDefault = await makeUser({ currentDay: 1 });
+    getCurrentUser.mockResolvedValue({ userId: userDefault.id, email: userDefault.email });
+
+    const res = await GET(meRequest("2026-06-11"));
+    expect(res.status).toBe(200);
+    const { user: body } = await res.json();
+    expect(body.ambientSoundEnabled).toBe(false);
+  });
 });

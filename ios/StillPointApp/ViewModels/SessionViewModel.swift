@@ -31,6 +31,8 @@ final class SessionViewModel {
     var mindStateLog: [MindStateEntry] = []
     /// #113: ARKit gaze attention log when opt-in tracking is enabled.
     var attentionLog: [AttentionEntry]?
+    /// #563: ambient sound level summary; nil when capture was off or mic was denied.
+    var ambientSoundSummary: AmbientSoundSummary?
     /// Distraction segments started this sit (for in-session badge); API `thoughtCount` uses captured notes only.
     var distractionSegmentCount = 0
     var capturedThoughts: [CapturedThought] = []
@@ -285,7 +287,8 @@ final class SessionViewModel {
             attentionLog: attentionLog,
             sessionDate: dateFormatter.string(from: Date()),
             track: track,
-            clientSessionId: clientSessionId
+            clientSessionId: clientSessionId,
+            ambientSoundSummary: ambientSoundSummary
         )
 
         let pendingThoughts = capturedThoughts.map {

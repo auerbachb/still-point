@@ -31,6 +31,8 @@ export type User = {
   aphorismsEnabled: boolean;
   /** #113: opt-in iOS ARKit gaze attention tracking during sessions. */
   attentionTrackingEnabled?: boolean;
+  /** #563: opt-in ambient mic sound-level sampling during solo sits. */
+  ambientSoundEnabled?: boolean;
   /** #238: miss-a-day recovery ramp state, nullable trio (see src/lib/duration.ts). */
   recoveryTargetDay?: number | null;
   recoveryCurrentStep?: number | null;
@@ -58,6 +60,14 @@ export type Session = {
   mindStateLog: Array<{ time: number; state: string }> | null;
   /** #113: ARKit gaze attention transitions ("attentive" | "away"). */
   attentionLog?: Array<{ time: number; state: string }> | null;
+  /** #563: ambient sound level summary; null when capture was off or mic was denied. */
+  ambientSoundSummary?: {
+    avgDb: number;
+    peakDb: number;
+    quietPercent: number;
+    loudPercent: number;
+    sampleCount: number;
+  } | null;
   sessionDate: string;
   createdAt: string;
   /** Present when this row was created from a completed buddy sit (#119). */

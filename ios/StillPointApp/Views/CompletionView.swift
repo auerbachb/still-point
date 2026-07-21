@@ -19,6 +19,8 @@ struct CompletionView: View {
     let bonusSeconds: Int
     let attentionLog: [AttentionEntry]?
     let attentionElapsed: Double?
+    /// #563: ambient sound level summary; nil when capture was off or mic was denied.
+    let ambientSoundSummary: AmbientSoundSummary?
 
     @State private var endNote = ""
     @State private var noteSaved = false
@@ -125,6 +127,27 @@ struct CompletionView: View {
                             )
                         }
                         .accessibilityIdentifier("completion.attentionSummary")
+                    }
+
+                    if let ambient = ambientSoundSummary {
+                        HStack(spacing: SPSpacing.s3) {
+                            statCard(
+                                value: "\(ambient.quietPercent)%",
+                                label: "QUIET TIME",
+                                color: SPColor.green,
+                                bgColor: SPColor.greenBgFaint,
+                                borderColor: SPColor.greenBorderSubtle
+                            )
+
+                            statCard(
+                                value: String(format: "%.0f dBFS", ambient.avgDb),
+                                label: "AVG LEVEL",
+                                color: SPColor.amber,
+                                bgColor: SPColor.amberBgFaint,
+                                borderColor: SPColor.amberBorderSubtle
+                            )
+                        }
+                        .accessibilityIdentifier("completion.ambientSoundSummary")
                     }
                 }
 

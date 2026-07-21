@@ -53,6 +53,31 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   const { dayNumber, duration, actualTime, clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate } = body;
+  // #563: ambient sound summary — validate shape and physical invariants; coerce
+  // invalid/absent summaries to null rather than rejecting the whole session.
+  const ambientRaw = body.ambientSoundSummary;
+  const ambientSoundSummary =
+    ambientRaw !== null &&
+    typeof ambientRaw === "object" &&
+    !Array.isArray(ambientRaw) &&
+    typeof ambientRaw.avgDb === "number" && Number.isFinite(ambientRaw.avgDb) &&
+    typeof ambientRaw.peakDb === "number" && Number.isFinite(ambientRaw.peakDb) &&
+    ambientRaw.peakDb >= ambientRaw.avgDb &&           // peak must be ≥ average (dBFS)
+    typeof ambientRaw.quietPercent === "number" && Number.isInteger(ambientRaw.quietPercent) &&
+    ambientRaw.quietPercent >= 0 && ambientRaw.quietPercent <= 100 &&
+    typeof ambientRaw.loudPercent === "number" && Number.isInteger(ambientRaw.loudPercent) &&
+    ambientRaw.loudPercent >= 0 && ambientRaw.loudPercent <= 100 &&
+    ambientRaw.quietPercent + ambientRaw.loudPercent === 100 && // every sample is classified
+    typeof ambientRaw.sampleCount === "number" && Number.isInteger(ambientRaw.sampleCount) &&
+    ambientRaw.sampleCount > 0
+      ? {
+          avgDb: ambientRaw.avgDb as number,
+          peakDb: ambientRaw.peakDb as number,
+          quietPercent: ambientRaw.quietPercent as number,
+          loudPercent: ambientRaw.loudPercent as number,
+          sampleCount: ambientRaw.sampleCount as number,
+        }
+      : null;
   const completed = parseCompleted(body.completed);
   const sessionType = parseOptionalSessionType(body.sessionType);
   const track = parseOptionalTrack(body.track);
@@ -109,6 +134,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
       breathCount,
       mindStateLog: mindStateLog ?? [],
       attentionLog: Array.isArray(attentionLog) ? attentionLog : null,
+      ambientSoundSummary,
       sessionDate,
     },
   });
