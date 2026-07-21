@@ -41,8 +41,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
     public var primaryDoneToday: Bool
     public var secondDoneToday: Bool
     /// True when any counted practice (standard primary, quick, or breath) was
-    /// completed today. Drives widget streak + weekday row; decoded as `false`
-    /// for snapshots written before this field shipped (#589).
+    /// completed today. Drives widget streak + weekday row. Legacy snapshots
+    /// without this field decode using `primaryDoneToday` (#589).
     public var practiceDoneToday: Bool
     public var streak: Int
     /// #84 follow-up: ISO local-day strings (`yyyy-MM-dd`) within the trailing

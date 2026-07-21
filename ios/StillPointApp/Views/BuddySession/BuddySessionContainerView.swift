@@ -184,6 +184,7 @@ struct BuddySessionContainerView: View {
             thoughts: vm.capturedThoughts,
             dayNumber: saved.dayNumber,
             sessionType: saved.sessionType,
+            track: .primary,
             duration: saved.duration,
             bonusSeconds: saved.bonusSeconds ?? 0,
             unlockAppGate: true

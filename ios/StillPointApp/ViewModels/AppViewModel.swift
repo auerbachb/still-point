@@ -333,6 +333,11 @@ final class AppViewModel {
     /// server-side filtered query.
     func refreshTracksDoneToday() async {
         guard currentUser != nil else { return }
+        let now = Date()
+        let prior = WidgetDataStore.load()
+        if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
+            practiceDoneToday = false
+        }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -349,6 +354,7 @@ final class AppViewModel {
             // Non-fatal: fail closed so stale "done today" badges do not leak.
             primaryDoneToday = false
             secondDoneToday = false
+            practiceDoneToday = false
         }
         syncWidgetData()
         refreshWidgetWeekHistory()
@@ -511,7 +517,7 @@ final class AppViewModel {
         thoughts: [CapturedThought],
         dayNumber: Int,
         sessionType: SessionType = .standard,
-        track: Track = .primary,
+        track: Track,
         duration: Int,
         bonusSeconds: Int = 0,
         unlockAppGate: Bool,
