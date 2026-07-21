@@ -37,6 +37,7 @@ struct SessionPhotoPicker: View {
                     .font(SPFont.serifItalic(18, weight: .light))
                     .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
             }
+            .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
             .accessibilityIdentifier("photoPicker.cameraButton")
 
             // Library — system picker via PhotosUI (no NSPhotoLibraryUsageDescription needed)
@@ -97,6 +98,7 @@ struct SessionPhotoPicker: View {
     }
 
     private func handleCameraTap() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
         CameraPermissionHelper.requestIfNeeded { status in
             if status == .authorized {
                 showCameraCapture = true

@@ -98,7 +98,7 @@ final class SessionPhotoStore {
         return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 
-    /// Strips characters unsafe in filenames, keeping alphanumerics and hyphens.
+    /// Strips characters unsafe in filenames, keeping alphanumerics, hyphens, and underscores.
     private func sanitizedFilename(_ sessionId: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
         let sanitized = sessionId.unicodeScalars

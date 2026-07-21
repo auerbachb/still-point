@@ -395,7 +395,7 @@ struct CompletionView: View {
 
     private func handlePhotoSelected(_ image: UIImage) {
         guard !sessionId.isEmpty else { return }
-        SessionPhotoStore.shared.save(image, forSessionId: sessionId)
+        guard SessionPhotoStore.shared.save(image, forSessionId: sessionId) != nil else { return }
         capturedPhoto = image
     }
 
