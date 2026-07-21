@@ -48,7 +48,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Still Point uses the camera for partner video sessions and, when you opt in, gaze attention tracking during sits.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Still Point needs microphone access for partner video sessions.</string>
+	<string>Still Point needs microphone access for partner video sessions and to sample ambient sound levels during solo sits (no audio is stored).</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

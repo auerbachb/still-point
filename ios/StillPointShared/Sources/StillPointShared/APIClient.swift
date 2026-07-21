@@ -294,13 +294,19 @@ public actor APIClient {
         try await updateSettings(body: SettingsPatchBody(attentionTrackingEnabled: attentionTrackingEnabled))
     }
 
+    /// #563: opt-in ambient sound level capture during solo sits.
+    public func updateSettings(ambientSoundEnabled: Bool) async throws -> UserDTO {
+        try await updateSettings(body: SettingsPatchBody(ambientSoundEnabled: ambientSoundEnabled))
+    }
+
     private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.updateSettings(
                 isPublic: body.isPublic,
                 username: body.username,
                 aphorismsEnabled: body.aphorismsEnabled,
-                attentionTrackingEnabled: body.attentionTrackingEnabled
+                attentionTrackingEnabled: body.attentionTrackingEnabled,
+                ambientSoundEnabled: body.ambientSoundEnabled
             )
         }
         let response: UserResponse = try await patch("/api/settings", body: body)
@@ -543,17 +549,20 @@ private struct SettingsPatchBody: Encodable {
     let username: String?
     let aphorismsEnabled: Bool?
     let attentionTrackingEnabled: Bool?
+    let ambientSoundEnabled: Bool?
 
     init(
         isPublic: Bool? = nil,
         username: String? = nil,
         aphorismsEnabled: Bool? = nil,
-        attentionTrackingEnabled: Bool? = nil
+        attentionTrackingEnabled: Bool? = nil,
+        ambientSoundEnabled: Bool? = nil
     ) {
         self.isPublic = isPublic
         self.username = username
         self.aphorismsEnabled = aphorismsEnabled
         self.attentionTrackingEnabled = attentionTrackingEnabled
+        self.ambientSoundEnabled = ambientSoundEnabled
     }
 
     func encode(to encoder: Encoder) throws {
@@ -562,6 +571,7 @@ private struct SettingsPatchBody: Encodable {
         if let username { try c.encode(username, forKey: .username) }
         if let aphorismsEnabled { try c.encode(aphorismsEnabled, forKey: .aphorismsEnabled) }
         if let attentionTrackingEnabled { try c.encode(attentionTrackingEnabled, forKey: .attentionTrackingEnabled) }
+        if let ambientSoundEnabled { try c.encode(ambientSoundEnabled, forKey: .ambientSoundEnabled) }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -569,6 +579,7 @@ private struct SettingsPatchBody: Encodable {
         case username
         case aphorismsEnabled
         case attentionTrackingEnabled
+        case ambientSoundEnabled
     }
 }
 

@@ -12,6 +12,8 @@ public final class AudioEngine: @unchecked Sendable {
     public func playTick() {}
     public func playChime(count: Int) {}
     public func playCompletion() {}
+    /// No-op on macOS / host builds; real coordination happens on-device only.
+    public func setAmbientCaptureActive(_ active: Bool) {}
 }
 
 #else
@@ -34,6 +36,9 @@ public final class AudioEngine: @unchecked Sendable {
     private let notificationCenter = NotificationCenter.default
     private var observerTokens: [NSObjectProtocol] = []
     private var wasRunningBeforeInterruption = false
+    /// Set to true while AmbientSoundManager's capture engine is running so
+    /// configureAudioSession() switches to .playAndRecord instead of .playback.
+    private var isAmbientCaptureActive = false
 
     private init() {
         configureAudioSession()
@@ -49,10 +54,27 @@ public final class AudioEngine: @unchecked Sendable {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, options: [.mixWithOthers])
+            if isAmbientCaptureActive {
+                // #563: mic tap active — use playAndRecord so tick/chime/completion
+                // continue playing while we sample ambient level via a second engine.
+                try session.setCategory(.playAndRecord, options: [.mixWithOthers, .defaultToSpeaker])
+            } else {
+                try session.setCategory(.playback, options: [.mixWithOthers])
+            }
             try session.setActive(true)
         } catch {
             print("AudioEngine: Failed to configure audio session: \(error)")
+        }
+    }
+
+    /// Called by AmbientSoundManager before/after its capture engine runs.
+    /// Switches the audio session between .playback and .playAndRecord so that
+    /// synthesized sounds and mic capture can coexist without interrupting each other.
+    public func setAmbientCaptureActive(_ active: Bool) {
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            self.isAmbientCaptureActive = active
+            self.configureAudioSession()
         }
     }
 

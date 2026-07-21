@@ -34,6 +34,8 @@ export const users = pgTable("users", {
   /** #113: opt-in iOS ARKit gaze attention tracking during sessions. Defaults off
    *  so the camera is never requested without explicit user consent. */
   attentionTrackingEnabled: boolean("attention_tracking_enabled").default(false).notNull(),
+  /** #563: opt-in ambient mic sound-level sampling during solo sits. Defaults off. */
+  ambientSoundEnabled: boolean("ambient_sound_enabled").default(false).notNull(),
   currentDay: integer("current_day").default(1).notNull(),
   /** #238: miss-a-day recovery ramp. Nullable trio — all three are set together when a
    *  2+ day gap is detected (`/api/auth/me`) and cleared together once the ramp finishes.
@@ -379,6 +381,14 @@ export const sessions = pgTable("sessions", {
   mindStateLog: jsonb("mind_state_log").$type<Array<{ time: number; state: string }>>(),
   /** #113: ARKit gaze attention transitions ({ time, state: "attentive" | "away" }). */
   attentionLog: jsonb("attention_log").$type<Array<{ time: number; state: string }>>(),
+  /** #563: ambient sound level summary from a solo sit; null when capture was off. */
+  ambientSoundSummary: jsonb("ambient_sound_summary").$type<{
+    avgDb: number;
+    peakDb: number;
+    quietPercent: number;
+    loudPercent: number;
+    sampleCount: number;
+  }>(),
   sessionDate: date("session_date").notNull(),
   /** #109: post-session self-report ratings (1-10), null until set via the
    *  by-session PATCH route from the CompletionScreen sliders. */

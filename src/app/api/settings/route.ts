@@ -18,6 +18,7 @@ const RETURN_FIELDS = {
   currentDay: users.currentDay,
   aphorismsEnabled: users.aphorismsEnabled,
   attentionTrackingEnabled: users.attentionTrackingEnabled,
+  ambientSoundEnabled: users.ambientSoundEnabled,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
 };
@@ -44,6 +45,11 @@ export const PATCH = withApiHandler(
 
     if (typeof body.attentionTrackingEnabled === "boolean") {
       updates.attentionTrackingEnabled = body.attentionTrackingEnabled;
+      hasSupportedUpdate = true;
+    }
+
+    if (typeof body.ambientSoundEnabled === "boolean") {
+      updates.ambientSoundEnabled = body.ambientSoundEnabled;
       hasSupportedUpdate = true;
     }
 

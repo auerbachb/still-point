@@ -23,6 +23,9 @@ public struct UserDTO: Codable, Sendable {
     public let recoveryTargetDay: Int?
     public let recoveryCurrentStep: Int?
     public let recoveryTotalSteps: Int?
+    /// #563: opt-in ambient sound level capture during solo sits. Decoded
+    /// permissively so older server responses (pre-#563) default to off.
+    public let ambientSoundEnabled: Bool
 
     public init(
         id: String,
@@ -36,7 +39,8 @@ public struct UserDTO: Codable, Sendable {
         secondTrackDay: Int = 1,
         recoveryTargetDay: Int? = nil,
         recoveryCurrentStep: Int? = nil,
-        recoveryTotalSteps: Int? = nil
+        recoveryTotalSteps: Int? = nil,
+        ambientSoundEnabled: Bool? = nil
     ) {
         self.id = id
         self.email = email
@@ -50,6 +54,7 @@ public struct UserDTO: Codable, Sendable {
         self.recoveryTargetDay = recoveryTargetDay
         self.recoveryCurrentStep = recoveryCurrentStep
         self.recoveryTotalSteps = recoveryTotalSteps
+        self.ambientSoundEnabled = ambientSoundEnabled ?? false
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,12 +71,14 @@ public struct UserDTO: Codable, Sendable {
         recoveryTargetDay = try c.decodeIfPresent(Int.self, forKey: .recoveryTargetDay)
         recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
         recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
+        ambientSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .ambientSoundEnabled) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, email, username, isPublic, currentDay, aphorismsEnabled, attentionTrackingEnabled
         case dualTrackEnabled, secondTrackDay
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
+        case ambientSoundEnabled
     }
 }
 
@@ -82,7 +89,8 @@ extension UserDTO {
         aphorismsEnabled: Bool? = nil,
         attentionTrackingEnabled: Bool? = nil,
         dualTrackEnabled: Bool? = nil,
-        secondTrackDay: Int? = nil
+        secondTrackDay: Int? = nil,
+        ambientSoundEnabled: Bool? = nil
     ) -> UserDTO {
         UserDTO(
             id: id,
@@ -96,7 +104,8 @@ extension UserDTO {
             secondTrackDay: secondTrackDay ?? self.secondTrackDay,
             recoveryTargetDay: recoveryTargetDay,
             recoveryCurrentStep: recoveryCurrentStep,
-            recoveryTotalSteps: recoveryTotalSteps
+            recoveryTotalSteps: recoveryTotalSteps,
+            ambientSoundEnabled: ambientSoundEnabled ?? self.ambientSoundEnabled
         )
     }
 
@@ -113,7 +122,8 @@ extension UserDTO {
             secondTrackDay: secondTrackDay,
             recoveryTargetDay: state.recoveryTargetDay,
             recoveryCurrentStep: state.recoveryCurrentStep,
-            recoveryTotalSteps: state.recoveryTotalSteps
+            recoveryTotalSteps: state.recoveryTotalSteps,
+            ambientSoundEnabled: ambientSoundEnabled
         )
     }
 
@@ -130,7 +140,8 @@ extension UserDTO {
             secondTrackDay: secondTrackDay,
             recoveryTargetDay: targetDay,
             recoveryCurrentStep: currentStep,
-            recoveryTotalSteps: totalSteps
+            recoveryTotalSteps: totalSteps,
+            ambientSoundEnabled: ambientSoundEnabled
         )
     }
 }
@@ -158,6 +169,8 @@ public struct SessionDTO: Codable, Sendable {
     /// #240: which daily track this sit advanced. Decoded permissively (nil from a
     /// server that predates #240); nil is treated as `.primary` by callers.
     public let track: Track?
+    /// #563: ambient sound level summary; nil when capture was off or mic was denied.
+    public let ambientSoundSummary: AmbientSoundSummary?
 
     public init(
         id: String,
@@ -175,7 +188,8 @@ public struct SessionDTO: Codable, Sendable {
         createdAt: String? = nil,
         buddySessionId: String?,
         breathCount: Int? = nil,
-        track: Track? = nil
+        track: Track? = nil,
+        ambientSoundSummary: AmbientSoundSummary? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -193,6 +207,7 @@ public struct SessionDTO: Codable, Sendable {
         self.buddySessionId = buddySessionId
         self.breathCount = breathCount
         self.track = track
+        self.ambientSoundSummary = ambientSoundSummary
     }
 }
 
@@ -355,6 +370,8 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let track: Track
     /// #557: client-generated UUID for offline idempotent create; omitted for web.
     public let clientSessionId: UUID?
+    /// #563: ambient sound level summary; omitted when capture was off or mic was denied.
+    public let ambientSoundSummary: AmbientSoundSummary?
 
     public init(
         dayNumber: Int,
@@ -370,7 +387,8 @@ public struct CreateSessionRequest: Codable, Sendable {
         sessionDate: String,
         breathCount: Int? = nil,
         track: Track = .primary,
-        clientSessionId: UUID? = nil
+        clientSessionId: UUID? = nil,
+        ambientSoundSummary: AmbientSoundSummary? = nil
     ) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
@@ -386,6 +404,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.breathCount = breathCount
         self.track = track
         self.clientSessionId = clientSessionId
+        self.ambientSoundSummary = ambientSoundSummary
     }
 }
 
