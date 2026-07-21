@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 
 const UI_PATH_RE =
   /^(src\/(app|components|views|features)\/|ios\/StillPointApp\/Views\/|ios\/StillPointApp\/.*View\.swift$)/;
-const E2E_PATH_RE = /^(e2e\/|ios\/StillPointAppUITests\/|scripts\/e2e\/)/;
+const E2E_SPEC_PATH_RE = /^(e2e\/|ios\/StillPointAppUITests\/)/;
 
 function ghLines(args) {
   try {
@@ -38,12 +38,16 @@ function listChangedFiles() {
   const base = process.env.BASE_SHA?.trim();
   const head = process.env.HEAD_SHA?.trim();
   if (base && head) {
-    return execFileSync("git", ["diff", "--name-only", `${base}...${head}`], {
-      encoding: "utf8",
-    })
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+    try {
+      return execFileSync("git", ["diff", "--name-only", `${base}...${head}`], {
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch {
+      return null;
+    }
   }
 
   return null;
@@ -57,7 +61,7 @@ function main() {
   }
 
   const uiFiles = files.filter((file) => UI_PATH_RE.test(file));
-  const e2eFiles = files.filter((file) => E2E_PATH_RE.test(file));
+  const e2eFiles = files.filter((file) => E2E_SPEC_PATH_RE.test(file));
 
   if (uiFiles.length === 0) {
     console.log("::notice::Coverage nudge: no user-facing surface changes detected.");
