@@ -365,4 +365,8 @@ describe("duration + progression — shared fixtures (#540/#421)", () => {
   test.each(fixture.detectMissedDayGap)("$name", ({ lastCompletedSessionDate, todayIso, currentDay, recovery, expected }) => {
     expect(detectMissedDayGap({ lastCompletedSessionDate, todayIso, currentDay, recovery })).toEqual(expected);
   });
+
+  test.each(fixture.recoveryStepDuration ?? [])("$name", ({ targetDay, totalSteps, step, expected }) => {
+    expect(recoveryStepDuration(targetDay, totalSteps, step)).toBe(expected);
+  });
 });

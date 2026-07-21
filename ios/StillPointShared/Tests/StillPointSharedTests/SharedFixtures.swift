@@ -188,9 +188,50 @@ struct DurationForDayFixture: Decodable {
         let currentDay: Int
         let expected: Bool
     }
+    struct RecoveryState: Decodable {
+        let recoveryTargetDay: Int?
+        let recoveryCurrentStep: Int?
+        let recoveryTotalSteps: Int?
+    }
+    struct ProgressionState: Decodable {
+        let currentDay: Int
+        let recoveryTargetDay: Int?
+        let recoveryCurrentStep: Int?
+        let recoveryTotalSteps: Int?
+    }
+    struct AdvanceProgressionCase: Decodable {
+        let name: String
+        let sessionType: String
+        let completed: Bool
+        let state: ProgressionState
+        let expected: ProgressionState
+    }
+    struct DetectMissedDayGapCase: Decodable {
+        let name: String
+        let lastCompletedSessionDate: String?
+        let todayIso: String
+        let currentDay: Int
+        let recovery: RecoveryState
+        let expected: RecoveryFieldsExpected?
+    }
+    struct RecoveryFieldsExpected: Decodable {
+        let recoveryTargetDay: Int
+        let recoveryCurrentStep: Int
+        let recoveryTotalSteps: Int
+    }
+    struct RecoveryStepDurationCase: Decodable {
+        let name: String
+        let targetDay: Int
+        let totalSteps: Int
+        let step: Int
+        let expected: Int
+    }
     let constants: Constants
     let durationForDay: [DurationCase]
     let isDualTrackEligible: [EligibilityCase]
+    let advanceProgression: [AdvanceProgressionCase]?
+    let detectMissedDayGap: [DetectMissedDayGapCase]?
+    let recoveryStepDuration: [RecoveryStepDurationCase]?
 }
 
 // MARK: - Fixture -> SessionDTO helpers

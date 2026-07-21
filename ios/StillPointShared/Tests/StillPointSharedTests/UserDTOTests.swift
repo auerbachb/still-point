@@ -60,4 +60,28 @@ final class UserDTOTests: XCTestCase {
         XCTAssertFalse(user.dualTrackEnabled)
         XCTAssertEqual(user.secondTrackDay, 1)
     }
+
+    // MARK: - #238 recovery fields
+
+    func testDecodesRecoveryFieldsWhenPresent() throws {
+        let json = """
+        {"id":"u1","email":"a@b.com","username":"alice","isPublic":false,"currentDay":45,"recoveryTargetDay":45,"recoveryCurrentStep":3,"recoveryTotalSteps":5}
+        """.data(using: .utf8)!
+
+        let user = try JSONDecoder().decode(UserDTO.self, from: json)
+        XCTAssertEqual(user.recoveryTargetDay, 45)
+        XCTAssertEqual(user.recoveryCurrentStep, 3)
+        XCTAssertEqual(user.recoveryTotalSteps, 5)
+    }
+
+    func testDefaultsRecoveryFieldsToNilWhenMissing() throws {
+        let json = """
+        {"id":"u1","email":"a@b.com","username":"alice","isPublic":false,"currentDay":3}
+        """.data(using: .utf8)!
+
+        let user = try JSONDecoder().decode(UserDTO.self, from: json)
+        XCTAssertNil(user.recoveryTargetDay)
+        XCTAssertNil(user.recoveryCurrentStep)
+        XCTAssertNil(user.recoveryTotalSteps)
+    }
 }

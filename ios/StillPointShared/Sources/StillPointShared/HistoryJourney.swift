@@ -55,6 +55,22 @@ public enum SessionCalendar {
         isoFormatter.string(from: Date())
     }
 
+    /// Today's calendar day as `YYYY-MM-DD` in the client's LOCAL timezone — the same
+    /// convention used to stamp `session_date` on the write path. Pass this to
+    /// `/api/auth/me?date=` so missed-day recovery detection aligns with local sits.
+    public static func localTodayIsoDate() -> String {
+        localIsoFormatter.string(from: Date())
+    }
+
+    private static let localIsoFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.calendar = Calendar(identifier: .gregorian)
+        df.timeZone = .current
+        df.dateFormat = "yyyy-MM-dd"
+        return df
+    }()
+
     /// Matches backend `maxReasonDate()` — UTC today + 1 for users ahead of UTC (#441).
     public static func maxFailureReasonDate() -> String {
         addDays(toIsoDate: utcTodayIsoDate(), deltaDays: 1)

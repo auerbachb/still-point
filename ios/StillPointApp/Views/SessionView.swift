@@ -25,7 +25,13 @@ struct SessionView: View {
         self.appVM = appVM
         // #240: the second track uses its own day counter; the primary track uses currentDay.
         let day = track == .second ? appVM.secondTrackDay : appVM.currentDay
-        self._vm = State(initialValue: SessionViewModel(dayNumber: day, sessionType: sessionType, track: track))
+        let recovery = track == .second ? DurationRecovery.RecoveryFields.none : appVM.recoveryFields
+        self._vm = State(initialValue: SessionViewModel(
+            dayNumber: day,
+            sessionType: sessionType,
+            track: track,
+            recovery: recovery
+        ))
     }
 
     var body: some View {

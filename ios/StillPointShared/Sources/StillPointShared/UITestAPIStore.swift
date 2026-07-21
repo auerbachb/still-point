@@ -157,7 +157,7 @@ actor UITestAPIStore {
         return true
     }
 
-    func me() throws -> UserDTO? {
+    func me(today: String? = nil) throws -> UserDTO? {
         if config.forceLaunchOffline {
             throw APIError(status: 0, message: "No internet connection")
         }
@@ -174,7 +174,36 @@ actor UITestAPIStore {
             )
         }
 
-        return store.isAuthenticated ? store.user : nil
+        guard store.isAuthenticated else { return nil }
+
+        if DurationRecovery.activeRecovery(DurationRecovery.recoveryFields(from: store.user)) == nil {
+            let todayIso: String
+            if let today, SessionCalendar.isValidSessionCalendarDate(today) {
+                todayIso = today
+            } else {
+                todayIso = SessionCalendar.localTodayIsoDate()
+            }
+
+            let lastPrimary = store.sessions
+                .filter { $0.completed && $0.sessionType == .standard && ($0.track ?? .primary) == .primary }
+                .max(by: { $0.sessionDate < $1.sessionDate })
+
+            if let recovery = DurationRecovery.detectMissedDayGap(
+                lastCompletedSessionDate: lastPrimary?.sessionDate,
+                todayIso: todayIso,
+                currentDay: store.user.currentDay,
+                recovery: DurationRecovery.recoveryFields(from: store.user)
+            ) {
+                store.user = store.user.updatingRecovery(
+                    targetDay: recovery.recoveryTargetDay,
+                    currentStep: recovery.recoveryCurrentStep,
+                    totalSteps: recovery.recoveryTotalSteps
+                )
+                persist()
+            }
+        }
+
+        return store.user
     }
 
     // MARK: - Device Tokens
@@ -284,34 +313,22 @@ actor UITestAPIStore {
 
         if data.completed && data.sessionType == .standard {
             // #240: a `second`-track sit advances the second-track counter (only when
-            // opted in); a `primary` sit advances currentDay as before.
+            // opted in); a `primary` sit advances currentDay / recovery ramp (#238).
             if data.track == .second {
                 let nextSecond = store.user.dualTrackEnabled
                     ? StillPoint.advanceSecondTrackDay(sessionType: data.sessionType, completed: data.completed, secondTrackDay: store.user.secondTrackDay)
                     : store.user.secondTrackDay
-                store.user = UserDTO(
-                    id: store.user.id,
-                    email: store.user.email,
-                    username: store.user.username,
-                    isPublic: store.user.isPublic,
-                    currentDay: store.user.currentDay,
-                    aphorismsEnabled: store.user.aphorismsEnabled,
-                    attentionTrackingEnabled: store.user.attentionTrackingEnabled,
-                    dualTrackEnabled: store.user.dualTrackEnabled,
-                    secondTrackDay: nextSecond
-                )
+                store.user = store.user.updating(secondTrackDay: nextSecond)
             } else {
-                store.user = UserDTO(
-                    id: store.user.id,
-                    email: store.user.email,
-                    username: store.user.username,
-                    isPublic: store.user.isPublic,
-                    currentDay: max(store.user.currentDay, data.dayNumber + 1),
-                    aphorismsEnabled: store.user.aphorismsEnabled,
-                    attentionTrackingEnabled: store.user.attentionTrackingEnabled,
-                    dualTrackEnabled: store.user.dualTrackEnabled,
-                    secondTrackDay: store.user.secondTrackDay
+                let next = DurationRecovery.advanceProgression(
+                    sessionType: data.sessionType,
+                    completed: data.completed,
+                    state: DurationRecovery.ProgressionState(
+                        currentDay: store.user.currentDay,
+                        recovery: DurationRecovery.recoveryFields(from: store.user)
+                    )
                 )
+                store.user = store.user.updatingProgression(next)
             }
         }
 
@@ -322,17 +339,7 @@ actor UITestAPIStore {
     /// #240: opt into the dual-track fork (enable a second daily track).
     func enableDualTrack() throws -> UserDTO {
         try ensureAuthenticated()
-        store.user = UserDTO(
-            id: store.user.id,
-            email: store.user.email,
-            username: store.user.username,
-            isPublic: store.user.isPublic,
-            currentDay: store.user.currentDay,
-            aphorismsEnabled: store.user.aphorismsEnabled,
-            attentionTrackingEnabled: store.user.attentionTrackingEnabled,
-            dualTrackEnabled: true,
-            secondTrackDay: store.user.secondTrackDay
-        )
+        store.user = store.user.updating(dualTrackEnabled: true)
         persist()
         return store.user
     }
@@ -434,16 +441,11 @@ actor UITestAPIStore {
             nextAttentionTrackingEnabled = attentionTrackingEnabled
         }
 
-        store.user = UserDTO(
-            id: store.user.id,
-            email: store.user.email,
+        store.user = store.user.updating(
             username: nextUsername,
             isPublic: nextIsPublic,
-            currentDay: store.user.currentDay,
             aphorismsEnabled: nextAphorismsEnabled,
-            attentionTrackingEnabled: nextAttentionTrackingEnabled,
-            dualTrackEnabled: store.user.dualTrackEnabled,
-            secondTrackDay: store.user.secondTrackDay
+            attentionTrackingEnabled: nextAttentionTrackingEnabled
         )
         persist()
         return store.user

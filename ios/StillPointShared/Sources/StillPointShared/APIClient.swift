@@ -166,12 +166,19 @@ public actor APIClient {
         clearLocalSessionArtifacts()
     }
 
-    public func me() async throws -> UserDTO? {
+    public func me(today: String? = nil) async throws -> UserDTO? {
         if let uiTestAPIStore {
-            return try await uiTestAPIStore.me()
+            return try await uiTestAPIStore.me(today: today)
+        }
+        let path: String
+        if let today, !today.isEmpty, SessionCalendar.isValidSessionCalendarDate(today) {
+            let encoded = today.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? today
+            path = "/api/auth/me?date=\(encoded)"
+        } else {
+            path = "/api/auth/me"
         }
         do {
-            let response: UserResponse = try await get("/api/auth/me")
+            let response: UserResponse = try await get(path)
             return response.user
         } catch let error as APIError where error.status == 401 && error.code != "TOKEN_EXPIRED" {
             return nil
