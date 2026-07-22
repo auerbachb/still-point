@@ -387,6 +387,35 @@ final class StillPointAppUITests: XCTestCase {
     }
 
     @MainActor
+    func testGuidedExerciseOverlayOpensAndStartsExercise() throws {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            sessionSeconds: 600,
+            timerMultiplier: 2.0,
+            forceStartSession: true
+        )
+        app.launch()
+
+        waitForRoot("session", in: app, failureMessage: "Session screen did not appear", assertColdStart: false)
+
+        let guidedExerciseButton = app.buttons["session.guidedExerciseButton"]
+        XCTAssertTrue(guidedExerciseButton.waitForExistence(timeout: 8))
+        XCTAssertTrue(tapByStableCenter(guidedExerciseButton, in: app))
+
+        let overlay = app.otherElements["guidedExercise.overlay"]
+        XCTAssertTrue(overlay.waitForExistence(timeout: 5), "Guided exercise overlay should appear")
+
+        let option = app.buttons["guidedExercise.option.progressive-sensory"]
+        XCTAssertTrue(option.waitForExistence(timeout: 5))
+        XCTAssertTrue(tapByStableCenter(option, in: app))
+
+        XCTAssertTrue(app.staticTexts["guidedExercise.stepTitle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["guidedExercise.stepProgress"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["guidedExercise.stepPrompt"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testJournalAndBoardTabsReachable() throws {
         let app = makeApp(seedAuthenticated: true, resetStore: true)
         app.launch()

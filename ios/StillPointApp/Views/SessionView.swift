@@ -22,6 +22,7 @@ struct SessionView: View {
     @State private var gazeTrackingRanThisSession = false
     /// #563: ambient sound level sampler for solo sits.
     @State private var ambientSoundManager = AmbientSoundManager()
+    @State private var guidedExerciseVM = GuidedExerciseViewModel()
 
     init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
         self.appVM = appVM
@@ -128,6 +129,18 @@ struct SessionView: View {
                 .transition(.opacity)
             }
 
+            // Guided exercise overlay — sit timer keeps running underneath (#519)
+            if vm.showGuidedExercise {
+                GuidedExerciseOverlayView(
+                    vm: guidedExerciseVM,
+                    onClose: {
+                        guidedExerciseVM.reset()
+                        vm.closeGuidedExercise()
+                    }
+                )
+                .transition(.opacity)
+            }
+
             // Pre-session intro gates the countdown (#560) — topmost layer blocks chrome interaction.
             if vm.showIntroOverlay {
                 SessionIntroOverlayView(
@@ -228,7 +241,11 @@ struct SessionView: View {
                 inProgress: sessionInProgress
             )
         }
-        .onChange(of: vm.isAbandoned) { _, _ in
+        .onChange(of: vm.isAbandoned) { _, isAbandoned in
+            if isAbandoned {
+                guidedExerciseVM.reset()
+                vm.closeGuidedExercise()
+            }
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -240,6 +257,8 @@ struct SessionView: View {
         }
         .onChange(of: vm.isComplete) { _, isComplete in
             if isComplete {
+                guidedExerciseVM.reset()
+                vm.closeGuidedExercise()
                 let shouldIncludeGazeSummary = appVM.currentUser?.attentionTrackingEnabled == true
                     && gazeTrackingRanThisSession
                 let gazeLog = shouldIncludeGazeSummary ? attentionManager.attentionLog : nil
@@ -478,8 +497,21 @@ struct SessionView: View {
                 .accessibilityValue(attentionManager.currentAttentionState)
             }
 
-            if !vm.showPostDistractionCapture, vm.isActive || vm.isPaused {
+            if !vm.showPostDistractionCapture, !vm.showGuidedExercise, vm.isActive || vm.isPaused {
                 HStack(spacing: SPSpacing.s1) {
+                    if vm.isActive {
+                        Button {
+                            vm.openGuidedExercise()
+                        } label: {
+                            Text("Guided exercise")
+                                .font(SPFont.mono(12, weight: .medium))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .spCapsuleButtonStyle(.green, size: .fullWidth, minHeight: 44)
+                        }
+                        .accessibilityIdentifier("session.guidedExerciseButton")
+                    }
+
                     Button {
                         vm.openThoughtCapture()
                     } label: {
@@ -633,7 +665,7 @@ struct SessionView: View {
                 }
                 .accessibilityIdentifier("session.endEarlyButton")
 
-                if !(sessionInProgress && !vm.showPostDistractionCapture && (vm.isActive || vm.isPaused)) {
+                if !(sessionInProgress && !vm.showPostDistractionCapture && !vm.showGuidedExercise && (vm.isActive || vm.isPaused)) {
                     Button {
                         vm.openThoughtCapture()
                     } label: {
@@ -658,8 +690,8 @@ struct SessionView: View {
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
                 }
-                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
-                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
+                .disabled(vm.showPostDistractionCapture || vm.showGuidedExercise || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.showGuidedExercise || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
                 .accessibilityIdentifier("session.extendOneMinuteButton")
 
                 Button {
@@ -672,8 +704,8 @@ struct SessionView: View {
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                         .foregroundStyle(Color(SPColor.fg2))
                 }
-                .disabled(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive)
-                .opacity(vm.showPostDistractionCapture || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
+                .disabled(vm.showPostDistractionCapture || vm.showGuidedExercise || vm.isComplete || vm.isAbandoned || !vm.isActive)
+                .opacity(vm.showPostDistractionCapture || vm.showGuidedExercise || vm.isComplete || vm.isAbandoned || !vm.isActive ? 0.45 : 1)
                 .accessibilityIdentifier("session.extendFiveMinuteButton")
 
                 // Abandon

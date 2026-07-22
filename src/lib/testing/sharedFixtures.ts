@@ -121,6 +121,25 @@ export type PathwayFixture = {
   }>;
 };
 
+export type GuidedExerciseFixture = {
+  clampStepIndex: Array<{ index: number; stepCount: number; expected: number }>;
+  isLastStep: Array<{ index: number; stepCount: number; expected: boolean }>;
+  nextStepIndex: Array<{ index: number; stepCount: number; expected: number }>;
+  previousStepIndex: Array<{ index: number; expected: number }>;
+  stepProgressFraction: Array<{
+    index: number;
+    elapsedInStepMs: number;
+    stepDurationMs: number;
+    expected: number;
+  }>;
+  totalDurationMs: Array<{ stepDurationsMs: number[]; expected: number }>;
+  exerciseSummary: Array<{
+    id: "progressive-sensory" | "breathing-awareness" | "body-scan";
+    expectedStepCount: number;
+    expectedTotalDurationMs: number;
+  }>;
+};
+
 export type DurationForDayFixture = {
   constants: {
     baseDuration: number;
