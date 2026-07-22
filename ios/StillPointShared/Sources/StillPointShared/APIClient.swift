@@ -246,6 +246,16 @@ public actor APIClient {
         return (response.session, response.thoughts)
     }
 
+    /// #521: post-session focus/happiness ratings via PATCH /api/sessions/by-session/{sessionId}.
+    /// Mirrors web's touched-field payload logic: only fields set non-nil in `ratings` are sent.
+    public func updateSessionRatings(sessionId: String, ratings: SessionRatingsPatch) async throws -> SessionDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.updateSessionRatings(sessionId: sessionId, ratings: ratings)
+        }
+        let response: SessionResponse = try await patch("/api/sessions/by-session/\(sessionId)", body: ratings)
+        return response.session
+    }
+
     // MARK: - Thoughts
 
     public func getThoughts() async throws -> [ThoughtDTO] {

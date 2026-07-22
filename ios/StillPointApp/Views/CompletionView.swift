@@ -33,6 +33,15 @@ struct CompletionView: View {
     @State private var capturedPhoto: UIImage?
     @State private var showPhotoPicker = false
 
+    // Post-session ratings (#521)
+    @State private var focusRating: Double = 5
+    @State private var happinessRating: Double = 5
+    @State private var focusTouched = false
+    @State private var happinessTouched = false
+    @State private var ratingsSaved = false
+    @State private var isSavingRatings = false
+    @State private var ratingsSaveError: String?
+
     private var nextDuration: Int {
         DurationRecovery.previewNextStandardDuration(
             sessionType: sessionType,
@@ -261,6 +270,11 @@ struct CompletionView: View {
                     }
                 }
 
+                // Post-session ratings (#521)
+                if !sessionId.isEmpty {
+                    ratingsSection
+                }
+
                 // Progression preview
                 VStack(spacing: SPSpacing.s1) {
                     Text(isQuickSession ? "DAY \(dayNumber) UNCHANGED" : "TOMORROW")
@@ -402,6 +416,151 @@ struct CompletionView: View {
     private func removePhoto() {
         SessionPhotoStore.shared.delete(forSessionId: sessionId)
         capturedPhoto = nil
+    }
+
+    // MARK: - Ratings Section (#521)
+
+    @ViewBuilder
+    private var ratingsSection: some View {
+        VStack(alignment: .leading, spacing: SPSpacing.s2) {
+            Text("SESSION RATINGS")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .tracking(2)
+
+            ratingRow(
+                label: "FOCUS",
+                value: $focusRating,
+                onTouch: { focusTouched = true },
+                disabled: isSavingRatings || ratingsSaved
+            )
+            .accessibilityIdentifier("completion.focusSlider")
+
+            ratingRow(
+                label: "HAPPINESS",
+                value: $happinessRating,
+                onTouch: { happinessTouched = true },
+                disabled: isSavingRatings || ratingsSaved
+            )
+            .accessibilityIdentifier("completion.happinessSlider")
+
+            if ratingsSaved {
+                Text("ratings saved")
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(SPColor.green)
+                    .accessibilityIdentifier("completion.ratingsSavedIndicator")
+            } else {
+                Button {
+                    saveRatings()
+                } label: {
+                    HStack(spacing: SPSpacing.s1) {
+                        if isSavingRatings {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Color(SPColor.bg))
+                        }
+                        Text(isSavingRatings ? "Saving…" : "Save ratings")
+                    }
+                    .font(SPFont.serifItalic(18, weight: .light))
+                    .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
+                }
+                .disabled(isSavingRatings)
+                .accessibilityIdentifier("completion.saveRatingsButton")
+            }
+
+            if let ratingsSaveError {
+                VStack(alignment: .leading, spacing: SPSpacing.s1) {
+                    Text(ratingsSaveError)
+                        .font(SPFont.mono(11))
+                        .foregroundStyle(SPColor.dangerMuted)
+
+                    Button {
+                        saveRatings()
+                    } label: {
+                        Text("Retry")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .foregroundStyle(SPColor.dangerMuted)
+                    }
+                    .disabled(isSavingRatings)
+                }
+            }
+        }
+    }
+
+    private func ratingRow(
+        label: String,
+        value: Binding<Double>,
+        onTouch: @escaping () -> Void,
+        disabled: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: SPSpacing.s1) {
+            HStack {
+                Text(label)
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg4))
+                    .tracking(2)
+                Spacer()
+                Text("\(Int(value.wrappedValue))")
+                    .font(SPFont.mono(14))
+                    .foregroundStyle(Color(SPColor.fg))
+            }
+            Slider(value: value, in: 1...10, step: 1)
+                .tint(SPColor.green)
+                .disabled(disabled)
+                .onChange(of: value.wrappedValue) { _, _ in onTouch() }
+        }
+    }
+
+    private func saveRatings() {
+        guard !sessionId.isEmpty, !isSavingRatings, !ratingsSaved else { return }
+        isSavingRatings = true
+        ratingsSaveError = nil
+        Task { @MainActor in
+            // Replicate web's touched-field payload logic exactly:
+            // Only send ratings the user explicitly touched. If neither was
+            // touched, send both (user tapped Save with visible defaults —
+            // treat as intentional, mirroring web's CompletionScreen behaviour).
+            let patch: SessionRatingsPatch
+            if !focusTouched && !happinessTouched {
+                patch = SessionRatingsPatch(
+                    focusRating: Int(focusRating),
+                    happinessRating: Int(happinessRating)
+                )
+            } else {
+                patch = SessionRatingsPatch(
+                    focusRating: focusTouched ? Int(focusRating) : nil,
+                    happinessRating: happinessTouched ? Int(happinessRating) : nil
+                )
+            }
+            do {
+                _ = try await APIClient.shared.updateSessionRatings(sessionId: sessionId, ratings: patch)
+                isSavingRatings = false
+                ratingsSaved = true
+            } catch is CancellationError {
+                isSavingRatings = false
+            } catch let error as APIError {
+                isSavingRatings = false
+                ratingsSaveError = ratingsErrorMessage(for: error.status)
+            } catch {
+                isSavingRatings = false
+                ratingsSaveError = "Unable to save ratings — please try again"
+            }
+        }
+    }
+
+    private func ratingsErrorMessage(for status: Int) -> String {
+        switch status {
+        case 401:
+            return "Please log in again"
+        case 400:
+            return "Invalid rating value"
+        case 404:
+            return "Session not found — please try again"
+        case 0:
+            return "Unable to save ratings — please try again"
+        default:
+            return "Failed to save ratings"
+        }
     }
 
     private func statCard(
