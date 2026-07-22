@@ -8,6 +8,7 @@ const selectWhere = vi.fn();
 const selectFrom = vi.fn(() => ({ where: selectWhere }));
 const dbSelect = vi.fn(() => ({ from: selectFrom }));
 const sendApnsNotification = vi.fn();
+const getApnsConfigStatus = vi.fn(() => ({ configured: true, missing: [] as string[] }));
 
 vi.mock("@/db", () => ({
   db: {
@@ -30,6 +31,7 @@ vi.mock("@/db/schema", () => ({
 
 vi.mock("@/lib/apns", () => ({
   sendApnsNotification,
+  getApnsConfigStatus,
 }));
 
 const sendWebPushToUser = vi.fn();
@@ -49,6 +51,7 @@ describe("sendFriendRequestNotification", () => {
     tokenRows.length = 0;
     selectWhere.mockResolvedValue(tokenRows);
     sendApnsNotification.mockResolvedValue({ ok: true, status: 200 });
+    getApnsConfigStatus.mockReturnValue({ configured: true, missing: [] });
     sendWebPushToUser.mockResolvedValue({ delivered: false });
   });
 
@@ -116,6 +119,37 @@ describe("sendFriendRequestNotification", () => {
     });
 
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+  });
+
+  test("does not attempt an APNs send when APNs is not configured (#621)", async () => {
+    tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "production" });
+    getApnsConfigStatus.mockReturnValue({
+      configured: false,
+      missing: ["APNS_BUNDLE_ID", "APNS_TEAM_ID", "APNS_KEY_ID", "APNS_PRIVATE_KEY"],
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { sendPushNotificationToUser } = await import("./notifications");
+
+      const result = await sendPushNotificationToUser({
+        recipientUserId: "recipient-id",
+        payload: { aps: { alert: { title: "Title", body: "Body" } } },
+      });
+
+      expect(result.delivered).toBe(false);
+      expect(sendApnsNotification).not.toHaveBeenCalled();
+      // Token stays enabled — a config error is not an APNs rejection.
+      expect(dbUpdate).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        "APNs is not configured; skipping iOS push. Set the missing environment variables in this deployment.",
+        expect.objectContaining({
+          missing: ["APNS_BUNDLE_ID", "APNS_TEAM_ID", "APNS_KEY_ID", "APNS_PRIVATE_KEY"],
+          affectedTokens: 1,
+        }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   test("sends the daily reminder to APNs and Web Push", async () => {

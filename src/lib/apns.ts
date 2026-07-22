@@ -36,12 +36,36 @@ type ApnsConfig = {
 
 let cachedJwt: { token: string; expiresAt: number } | null = null;
 
+/** Environment variables required to authenticate with APNs (see docs/notifications.md).
+ *  Every environment that dispatches iOS push must set all four. */
+export const REQUIRED_APNS_ENV_VARS = [
+  "APNS_BUNDLE_ID",
+  "APNS_TEAM_ID",
+  "APNS_KEY_ID",
+  "APNS_PRIVATE_KEY",
+] as const;
+
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`${name} is not set`);
   }
   return value;
+}
+
+/**
+ * Non-throwing check of the APNs provider configuration. Lets callers surface a
+ * misconfigured environment with a single actionable signal, instead of letting
+ * getApnsConfig() throw once per device token deep inside the send loop where a
+ * per-token catch swallows it — the failure mode that left every scheduled push
+ * silently undelivered behind a cron 200 (#621).
+ */
+export function getApnsConfigStatus(): { configured: boolean; missing: string[] } {
+  const missing = REQUIRED_APNS_ENV_VARS.filter((name) => {
+    const value = process.env[name];
+    return value === undefined || value === "";
+  });
+  return { configured: missing.length === 0, missing };
 }
 
 function getApnsConfig(): ApnsConfig {
