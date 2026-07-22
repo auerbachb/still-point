@@ -1,0 +1,37 @@
+{
+  "algorithm": "guidedExercise",
+  "description": "Pure guided-exercise step math shared by web (src/lib/guidedExercise.ts) and iOS (StillPointShared/GuidedExerciseLogic.swift). Clamps indices, tracks per-step progress fraction, and summarizes exercise metadata.",
+  "clampStepIndex": [
+    { "index": -2, "stepCount": 5, "expected": 0 },
+    { "index": 2, "stepCount": 5, "expected": 2 },
+    { "index": 99, "stepCount": 5, "expected": 4 }
+  ],
+  "isLastStep": [
+    { "index": 3, "stepCount": 5, "expected": false },
+    { "index": 4, "stepCount": 5, "expected": true }
+  ],
+  "nextStepIndex": [
+    { "index": 0, "stepCount": 5, "expected": 1 },
+    { "index": 4, "stepCount": 5, "expected": 4 }
+  ],
+  "previousStepIndex": [
+    { "index": 0, "expected": 0 },
+    { "index": 2, "expected": 1 }
+  ],
+  "stepProgressFraction": [
+    { "index": 0, "elapsedInStepMs": 0, "stepDurationMs": 40000, "expected": 0 },
+    { "index": 0, "elapsedInStepMs": 20000, "stepDurationMs": 40000, "expected": 0.5 },
+    { "index": 0, "elapsedInStepMs": 40000, "stepDurationMs": 40000, "expected": 1 },
+    { "index": 0, "elapsedInStepMs": 80000, "stepDurationMs": 40000, "expected": 1 }
+  ],
+  "totalDurationMs": [
+    { "stepDurationsMs": [40000, 40000, 40000, 40000, 40000], "expected": 200000 }
+  ],
+  "exerciseSummary": [
+    {
+      "id": "breathing-awareness",
+      "expectedStepCount": 5,
+      "expectedTotalDurationMs": 205000
+    }
+  ]
+}

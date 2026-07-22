@@ -7,71 +7,158 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00386679CC1E82A3C3239347 /* 40.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8E485A2EFE80B9642BF0618D /* 40.mp3 */; };
+		00A58FE2EF380BBEB61E491E /* 28.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0314201FE7CD33DBFD6843D7 /* 28.mp3 */; };
+		03DEBC43F06C17F8DE0AB6C0 /* 37.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 07F9F5F5BD51497B5C18B28C /* 37.mp3 */; };
+		0B17114D37CC11469DEA86B2 /* 21.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 90C6C05A143348636C9A3EE4 /* 21.mp3 */; };
+		0E590C627527A50BBD5D2487 /* 42.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1C216B5EBA138904589C9092 /* 42.mp3 */; };
 		101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4976183C8621BCA485D0B82D /* BreathCountingView.swift */; };
-		C1D2E3F4A5B60718293A4B60 /* LogReasonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */; };
+		11D1CE5FE865B2A06615935A /* 55.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8EB9BD293D64683E1593C8E9 /* 55.mp3 */; };
 		13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */; };
+		13B76DCC001BF2D5903B71D0 /* 29.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = CD8F2BDE031426253D15325D /* 29.mp3 */; };
+		13ED52B747CBA05F9C319B13 /* SessionIntroOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */; };
+		14128F1D1515631B936676D7 /* 47.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 657B14DE776B226E709E5310 /* 47.mp3 */; };
+		14DD37B6F44770A1F6D9847C /* 38.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = E892E8EB42C0764E814EEA26 /* 38.mp3 */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
-		A1B2C3D4E5F60718293A4B5C /* UsernameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */; };
+		16D87676D7D5950871924E92 /* 54.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FE14509C600B7DF0C1CEFC5D /* 54.mp3 */; };
+		182B0397FC292338ECF26699 /* StillPointWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 07AE546FEA49290BBE163744 /* StillPointWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		18F95661598F458E0CCF7C21 /* AmbientSoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9AF24AE9DD231CBF53C30E /* AmbientSoundManager.swift */; };
 		1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */; };
+		1BD8CE95E2174A920AA3C67A /* 48.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 14F30B93AF7EDC292A87884F /* 48.mp3 */; };
 		1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */; };
+		1D776B46EF57E3973A212EBE /* 35.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8AFE37D74C08EB62742A3CC7 /* 35.mp3 */; };
+		1DBE74544D605FF3CA0A1C1D /* 5.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1822261A9F6811AE9984B37B /* 5.mp3 */; };
+		1E5365E85DAF7C7B46336A71 /* 57.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6290D6ED1CB92848B1ECFE90 /* 57.mp3 */; };
+		2387CAB41D16E36550FB047A /* 41.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 112EE9026F8169958E58EA43 /* 41.mp3 */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
+		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
+		2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */; };
+		30AEF9D9DF3820CF00E882E3 /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */; };
+		32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */; };
+		380184EFB74132B005AEB0B8 /* 2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8F148BF8102DAF3A29A0BB13 /* 2.mp3 */; };
 		39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF304356E66657666901E4F /* SessionStateBadge.swift */; };
+		3AD114B1095E5A14BABFA49B /* SPCapsuleButtonStyleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */; };
+		3B0DCBB737A17FDF8AF30A68 /* 53.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 085AB5EC3C680F94156BCA42 /* 53.mp3 */; };
+		3B9EB6E328C7AFFA6D553709 /* 45.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6F9B11790CB09A75A0B5631C /* 45.mp3 */; };
+		3D3782705E2C74F297F45CF1 /* 24.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 71997BDA906AB28487E78602 /* 24.mp3 */; };
+		3DD94CD008394385332E2476 /* 34.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 4E0BB1EDF1994530B03012DD /* 34.mp3 */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
+		3F857D13B6573BC89F19D5D6 /* 14.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 90E0B21C4EC373501602C81F /* 14.mp3 */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
+		438303F73906D6285D985654 /* 52.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C7E369849AAFAC053093EAF /* 52.mp3 */; };
 		47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */; };
+		496506D5912F476AED560B5F /* StillPointWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA70396ECA559FAC30FEC9B7 /* StillPointWidgetBundle.swift */; };
+		4A807BC7D119912827067A44 /* GuidedExerciseOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48301E50DF8979C80A0C0F15 /* GuidedExerciseOverlayView.swift */; };
+		4BBFBFEB5EB57F9D4F8A40CA /* 58.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 14E83A80D97C5CBCF7164533 /* 58.mp3 */; };
+		4C0DA031149E2F22DF91EE54 /* CameraPermissionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */; };
 		4D652980F04840078B8FC938 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F95E6E47148AEF494393FDB /* SessionView.swift */; };
+		4E04CA8D8B1F7A8F55B65756 /* 7.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 95B9BFB54C47EA75C997B1AC /* 7.mp3 */; };
+		4F2B9E1CBE25DC0E91860B2D /* LogReasonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4338DB1EB8862D368A1AC7 /* LogReasonView.swift */; };
+		504455A1DE35ADC2701C0808 /* 18.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = D42537E2971BBE032F2C6B88 /* 18.mp3 */; };
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */; };
+		51B53277A3BDDAB470D972A7 /* 13.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A4D5CDCC6607777AB0F9F27F /* 13.mp3 */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
+		55E69CE2B979C65A530CD865 /* 22.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDB6682B1106045ACD87DE8D /* 22.mp3 */; };
+		5B36B0EBF7D72B4EA03F659F /* LogReasonDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */; };
+		5D0BF8F8204BCF7693DFCE4D /* 50.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 863EFBE318A791C3784682DA /* 50.mp3 */; };
+		5D74CD8EC4D430316CD9EC77 /* 60.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 41013DBBC777DFEDFD21C36F /* 60.mp3 */; };
 		5E1134CA9CA16D2589A0FDDE /* BuddySessionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */; };
+		5E8A77767788F878D322C5FD /* 8.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7C825D8C3422EC8361A3BD6B /* 8.mp3 */; };
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
+		63EC131F3FAD3DFAFDE698B6 /* XCUIDevice+Portrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */; };
 		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
+		68C3A6205945A55E953DE283 /* AppBlockingBackgroundScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */; };
+		69607B53AA6B1E3D62AC7A15 /* 3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = F05568F31FE83D1EC32A9173 /* 3.mp3 */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
-		6C7683263FC34CA1A007E771 /* AppBlockingBackgroundScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F1C7246B41C426B1072571 /* AppBlockingBackgroundScheduler.swift */; };
 		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
-		A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */; };
+		70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
 		750987110FAE532744F6571E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 45BC84AB51307C865EF7257A /* README.md */; };
+		783596788FCBE118748CF294 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 359072B628F0A3E3329DF9D6 /* ARKit.framework */; };
+		797B745150CC15EBBD4151E8 /* 25.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A326B39E4201675CA4263C4D /* 25.mp3 */; };
+		7A35474775D311BBFEB53DE8 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = A693158BF7B588EA9D5744E5 /* StillPointShared */; };
+		7C61653E3A2AD035853FF50A /* 15.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5EF4763920AEA6F4AD6FB313 /* 15.mp3 */; };
+		7D69596D9288E07BD0028FFF /* 17.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 47548299197A3F6DEF4043C9 /* 17.mp3 */; };
+		7F195F0AC09CCB718C2C04AE /* 10.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 594426A2F95039E07CBF9536 /* 10.mp3 */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
 		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
 		840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */; };
+		84DD3D592ACAFBE5FC6AEC28 /* 6.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3CB4E2EFAF45CA35CD5F45C8 /* 6.mp3 */; };
+		876C14C4E33DCE5A9D4F15EB /* 32.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = D2EC092F3B8AAC729171318C /* 32.mp3 */; };
+		898E0D6ED681686E28EB329D /* PathwayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09DD5F417FDE26DAF6433E65 /* PathwayView.swift */; };
+		89ED5EFB8F1DDCD3BAC2E6D2 /* 56.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 17583EAA0BE13F36F1DF9877 /* 56.mp3 */; };
+		8A353E6C36EA771941CFF33D /* AttentionTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */; };
 		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
+		8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */; };
+		92415E1B8326C5322B4AF20F /* 59.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */; };
+		93184A5F531520F4C650ECFB /* 36.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0D147E22AE19B02C80DE77AF /* 36.mp3 */; };
+		9AA717BC9490BAAB97E1218E /* 49.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 256101C55C4E5EF9CE549FCA /* 49.mp3 */; };
+		9B4CD9DAB95BB371A571F154 /* SessionPhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03645CA6EFC379138C3D94C4 /* SessionPhotoPicker.swift */; };
+		9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7EFCCDBB888DA255AD6896 /* GoogleSignInController.swift */; };
+		9CE902087A2CF7769200A540 /* HabitWidgetEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D92202A5CCE1DD2D4C00E01 /* HabitWidgetEntryView.swift */; };
+		9D0DE97F38353C3C342B2BA1 /* HabitWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED37F3314647BC15A050C270 /* HabitWidget.swift */; };
 		9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D13B1D65F99CF21AA713D32 /* CompletionView.swift */; };
 		9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */; };
 		9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */; };
 		A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */; };
 		A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */; };
-		C498A1B2C3D4E5F60718293 /* SPCapsuleButtonStyleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */; };
-		C498B2C3D4E5F6071829A6 /* XCTestCase+StillPointUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */; };
+		AB66EBC7FF6443F7C6B2221D /* 9.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8DF4F7FCFF2ADC4C4AB58684 /* 9.mp3 */; };
 		AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
+		AF6B6BC3AFE6E7BF51EB55E4 /* 43.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 54816ED19E21CAB37F0AE81A /* 43.mp3 */; };
+		B0EED661A52F8EE674A6BD4D /* 46.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
-		A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */; };
-		B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */; };
-		D2E3F4A5B60718293A4B61C0 /* LogReasonDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */; };
 		B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */; };
 		B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */; };
+		B614E560871212CB45306015 /* 39.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C8331485909F3D66810F06CA /* 39.mp3 */; };
 		B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */; };
+		B8FE60A714EF9F3325870FC2 /* 12.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 17F8888BCB18E4FD3C7ABFF3 /* 12.mp3 */; };
+		BA8BA44730EBFB64490EC8D1 /* 30.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = CE56360FD9CD132827B311AF /* 30.mp3 */; };
+		BD23A540968EF65ED9D78BB9 /* SPCapsuleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */; };
+		BD77E7316F2586D24570DB43 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 3152E47B6A19C92FD8070D82 /* GoogleSignIn */; };
 		C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */; };
 		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
-		F8A2B3C4D5E60718293A4B5E /* SPCapsuleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */; };
+		C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */; };
+		C64F787BACC2BE769E52A7BF /* 20.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A67F4472FF0000695B602855 /* 20.mp3 */; };
+		C6CBC1A0A1BC305F8EFD1CBF /* 26.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 55FDA17DAB49084E87B6AAE7 /* 26.mp3 */; };
+		C8A1388B7E45541DD2FD6DCA /* 27.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 96564931B9635CCC906F2C4C /* 27.mp3 */; };
+		CB910C750763B49735066071 /* 16.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3BFF8666F7BA01638CB50293 /* 16.mp3 */; };
+		CE11A53881C4B7CC2D2C776A /* BuddyInviteTokenParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEAEBFB5D2DCD9FFD7B6D5FD /* BuddyInviteTokenParser.swift */; };
+		CF526A9B18E153EDADB31000 /* 1.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 512E6E655209E76A5E6B0DF3 /* 1.mp3 */; };
+		CF6E03014C3D3ABBAD63F539 /* 4.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C5A9C1CFF5807F87F6584765 /* 4.mp3 */; };
+		D27018D937B80F99F185D136 /* 44.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1459C04EDD81E916422ED7D0 /* 44.mp3 */; };
 		D3744C3003DA233DC0B74C99 /* BuddyFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */; };
 		D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */; };
 		D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */; };
 		DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
+		DDC0AA3B25A6D0AF5D2F52B7 /* 51.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = E17D1E13F75A9811452B4895 /* 51.mp3 */; };
+		DE4CACA493D76D725E84175E /* 31.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 06353C957A9C0111FE540DD9 /* 31.mp3 */; };
+		E0B7E8F73810CD267D2405FB /* NetworkReachabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */; };
+		E15A367CAC8FFA7D3A43A349 /* 11.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0E20E4DF9BB209813988B1F4 /* 11.mp3 */; };
 		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
 		E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */; };
 		E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */; };
+		E971A4F882A4A8C40CC14AAE /* 33.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5B4C67F97D99AD6F6B81630C /* 33.mp3 */; };
 		EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */; };
+		ECBA43498E873CC037F20AD8 /* 23.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5F29C698B66040CD6AE2303C /* 23.mp3 */; };
 		EE8F0D07AFA655F960F274F8 /* StillPointMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */; };
+		EEDB019C54A26A01C510C161 /* 19.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 44AE33840A7E2F2DC00B2CCF /* 19.mp3 */; };
 		F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EAF998E3470CBB4056699F /* BlockGridView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		21FB44130A5810ABD2004E5E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 17E69AC4DBE973C4774D38B6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6FCDDEE0D384FE437F7A9857;
+			remoteInfo = StillPointWidget;
+		};
 		540585E1D78B21D6A3B5B30D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 17E69AC4DBE973C4774D38B6 /* Project object */;
@@ -96,6 +183,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */,
+				182B0397FC292338ECF26699 /* StillPointWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -104,73 +192,153 @@
 
 /* Begin PBXFileReference section */
 		007BDD6AAA013A4DAE0AD04B /* BuddyActiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyActiveSessionView.swift; sourceTree = "<group>"; };
+		0314201FE7CD33DBFD6843D7 /* 28.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 28.mp3; sourceTree = "<group>"; };
+		03645CA6EFC379138C3D94C4 /* SessionPhotoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPhotoPicker.swift; sourceTree = "<group>"; };
+		06353C957A9C0111FE540DD9 /* 31.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 31.mp3; sourceTree = "<group>"; };
+		07AE546FEA49290BBE163744 /* StillPointWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		07F9F5F5BD51497B5C18B28C /* 37.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 37.mp3; sourceTree = "<group>"; };
+		085AB5EC3C680F94156BCA42 /* 53.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 53.mp3; sourceTree = "<group>"; };
+		09DD5F417FDE26DAF6433E65 /* PathwayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathwayView.swift; sourceTree = "<group>"; };
 		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
+		0D147E22AE19B02C80DE77AF /* 36.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 36.mp3; sourceTree = "<group>"; };
 		0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardViewModel.swift; sourceTree = "<group>"; };
 		0DAA0ED0064C69AE18FAD991 /* BuddyFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyFilterChips.swift; sourceTree = "<group>"; };
+		0E20E4DF9BB209813988B1F4 /* 11.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 11.mp3; sourceTree = "<group>"; };
 		0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarViewModel.swift; sourceTree = "<group>"; };
 		107CCEB76752E572D0D142EF /* StillPoint.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPoint.entitlements; sourceTree = "<group>"; };
+		112EE9026F8169958E58EA43 /* 41.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 41.mp3; sourceTree = "<group>"; };
+		1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetTimelineReloader.swift; sourceTree = "<group>"; };
+		1459C04EDD81E916422ED7D0 /* 44.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 44.mp3; sourceTree = "<group>"; };
 		14BEE5E52F5249E22EA4DB08 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointApp.swift; sourceTree = "<group>"; };
+		14E83A80D97C5CBCF7164533 /* 58.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 58.mp3; sourceTree = "<group>"; };
+		14F30B93AF7EDC292A87884F /* 48.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 48.mp3; sourceTree = "<group>"; };
+		17583EAA0BE13F36F1DF9877 /* 56.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 56.mp3; sourceTree = "<group>"; };
+		17F8888BCB18E4FD3C7ABFF3 /* 12.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 12.mp3; sourceTree = "<group>"; };
+		1822261A9F6811AE9984B37B /* 5.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 5.mp3; sourceTree = "<group>"; };
+		1C216B5EBA138904589C9092 /* 42.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 42.mp3; sourceTree = "<group>"; };
+		1D92202A5CCE1DD2D4C00E01 /* HabitWidgetEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidgetEntryView.swift; sourceTree = "<group>"; };
 		1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIdleTimerController.swift; sourceTree = "<group>"; };
 		1F75039BBEED880C73680860 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		256101C55C4E5EF9CE549FCA /* 49.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 49.mp3; sourceTree = "<group>"; };
+		2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPhotoStore.swift; sourceTree = "<group>"; };
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
 		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
+		359072B628F0A3E3329DF9D6 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = System/Library/Frameworks/ARKit.framework; sourceTree = SDKROOT; };
+		377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkReachabilityMonitor.swift; sourceTree = "<group>"; };
+		3BFF8666F7BA01638CB50293 /* 16.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 16.mp3; sourceTree = "<group>"; };
+		3CB4E2EFAF45CA35CD5F45C8 /* 6.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 6.mp3; sourceTree = "<group>"; };
 		3D00E2E996D254A5D3D96DF9 /* BuddySessionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionHubView.swift; sourceTree = "<group>"; };
 		3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIElement+TapAndType.swift"; sourceTree = "<group>"; };
-		A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIDevice+Portrait.swift"; sourceTree = "<group>"; };
+		41013DBBC777DFEDFD21C36F /* 60.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 60.mp3; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		4448B4F081A909461B669A8B /* StillPointApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointApp.entitlements; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
+		44AE33840A7E2F2DC00B2CCF /* 19.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 19.mp3; sourceTree = "<group>"; };
 		45BC84AB51307C865EF7257A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		47548299197A3F6DEF4043C9 /* 17.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 17.mp3; sourceTree = "<group>"; };
+		48301E50DF8979C80A0C0F15 /* GuidedExerciseOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedExerciseOverlayView.swift; sourceTree = "<group>"; };
 		48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionViewModel.swift; sourceTree = "<group>"; };
 		4976183C8621BCA485D0B82D /* BreathCountingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingView.swift; sourceTree = "<group>"; };
-		C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonView.swift; sourceTree = "<group>"; };
+		4E0BB1EDF1994530B03012DD /* 34.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 34.mp3; sourceTree = "<group>"; };
 		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		512E6E655209E76A5E6B0DF3 /* 1.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 1.mp3; sourceTree = "<group>"; };
+		517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyleUITests.swift; sourceTree = "<group>"; };
+		52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonDeepLinkParser.swift; sourceTree = "<group>"; };
+		54816ED19E21CAB37F0AE81A /* 43.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 43.mp3; sourceTree = "<group>"; };
+		55FDA17DAB49084E87B6AAE7 /* 26.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 26.mp3; sourceTree = "<group>"; };
 		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIntroOverlayView.swift; sourceTree = "<group>"; };
+		594426A2F95039E07CBF9536 /* 10.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 10.mp3; sourceTree = "<group>"; };
+		5B4C67F97D99AD6F6B81630C /* 33.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 33.mp3; sourceTree = "<group>"; };
+		5C7E369849AAFAC053093EAF /* 52.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 52.mp3; sourceTree = "<group>"; };
+		5EF4763920AEA6F4AD6FB313 /* 15.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 15.mp3; sourceTree = "<group>"; };
+		5F29C698B66040CD6AE2303C /* 23.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 23.mp3; sourceTree = "<group>"; };
+		6290D6ED1CB92848B1ECFE90 /* 57.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 57.mp3; sourceTree = "<group>"; };
+		6445C05A2B32B7969CE2E395 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		657B14DE776B226E709E5310 /* 47.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 47.mp3; sourceTree = "<group>"; };
 		69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
+		6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 59.mp3; sourceTree = "<group>"; };
 		6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
+		6F9B11790CB09A75A0B5631C /* 45.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 45.mp3; sourceTree = "<group>"; };
+		71997BDA906AB28487E78602 /* 24.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 24.mp3; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
+		7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
+		7C825D8C3422EC8361A3BD6B /* 8.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 8.mp3; sourceTree = "<group>"; };
 		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
 		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
 		7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
+		8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyle.swift; sourceTree = "<group>"; };
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
+		863EFBE318A791C3784682DA /* 50.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 50.mp3; sourceTree = "<group>"; };
 		8807A08DBDE8A121951350FD /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
+		8AFE37D74C08EB62742A3CC7 /* 35.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 35.mp3; sourceTree = "<group>"; };
+		8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedExerciseViewModel.swift; sourceTree = "<group>"; };
+		8DF4F7FCFF2ADC4C4AB58684 /* 9.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 9.mp3; sourceTree = "<group>"; };
+		8E485A2EFE80B9642BF0618D /* 40.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 40.mp3; sourceTree = "<group>"; };
+		8EB9BD293D64683E1593C8E9 /* 55.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 55.mp3; sourceTree = "<group>"; };
+		8F148BF8102DAF3A29A0BB13 /* 2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 2.mp3; sourceTree = "<group>"; };
+		90C6C05A143348636C9A3EE4 /* 21.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 21.mp3; sourceTree = "<group>"; };
+		90E0B21C4EC373501602C81F /* 14.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 14.mp3; sourceTree = "<group>"; };
+		92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCTestCase+StillPointUITest.swift"; sourceTree = "<group>"; };
 		92F0B6135A30B315B9962460 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
-		A3F1C7246B41C426B1072571 /* AppBlockingBackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingBackgroundScheduler.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 46.mp3; sourceTree = "<group>"; };
+		9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
+		95B9BFB54C47EA75C997B1AC /* 7.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 7.mp3; sourceTree = "<group>"; };
+		96564931B9635CCC906F2C4C /* 27.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 27.mp3; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		A326B39E4201675CA4263C4D /* 25.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 25.mp3; sourceTree = "<group>"; };
 		A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
+		A4D5CDCC6607777AB0F9F27F /* 13.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 13.mp3; sourceTree = "<group>"; };
+		A67F4472FF0000695B602855 /* 20.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 20.mp3; sourceTree = "<group>"; };
 		A67F64CE400EF98ED2925FF9 /* StillPointShared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointShared; path = StillPointShared; sourceTree = SOURCE_ROOT; };
+		A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionNotificationSuppressionController.swift; sourceTree = "<group>"; };
 		A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyVideoWebView.swift; sourceTree = "<group>"; };
 		AB8762D63FDB945A01DEA97F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingViewModel.swift; sourceTree = "<group>"; };
 		AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointAppUITests.swift; sourceTree = "<group>"; };
-		C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyleUITests.swift; sourceTree = "<group>"; };
-		C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCTestCase+StillPointUITest.swift"; sourceTree = "<group>"; };
 		AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
+		AEAEBFB5D2DCD9FFD7B6D5FD /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
 		B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
 		B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointMonitorExtension.swift; sourceTree = "<group>"; };
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
+		BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionTrackingManager.swift; sourceTree = "<group>"; };
 		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
 		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
+		C5A9C1CFF5807F87F6584765 /* 4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 4.mp3; sourceTree = "<group>"; };
 		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		C8331485909F3D66810F06CA /* 39.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 39.mp3; sourceTree = "<group>"; };
+		CA70396ECA559FAC30FEC9B7 /* StillPointWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointWidgetBundle.swift; sourceTree = "<group>"; };
+		CD8F2BDE031426253D15325D /* 29.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 29.mp3; sourceTree = "<group>"; };
 		CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
-		F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyle.swift; sourceTree = "<group>"; };
+		CE56360FD9CD132827B311AF /* 30.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 30.mp3; sourceTree = "<group>"; };
+		CF9AF24AE9DD231CBF53C30E /* AmbientSoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientSoundManager.swift; sourceTree = "<group>"; };
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2EC092F3B8AAC729171318C /* 32.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 32.mp3; sourceTree = "<group>"; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
+		D42537E2971BBE032F2C6B88 /* 18.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 18.mp3; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
-		B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
-		D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonDeepLinkParser.swift; sourceTree = "<group>"; };
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
+		E17D1E13F75A9811452B4895 /* 51.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 51.mp3; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingBackgroundScheduler.swift; sourceTree = "<group>"; };
+		E892E8EB42C0764E814EEA26 /* 38.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 38.mp3; sourceTree = "<group>"; };
+		EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPermissionHelper.swift; sourceTree = "<group>"; };
+		ED37F3314647BC15A050C270 /* HabitWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidget.swift; sourceTree = "<group>"; };
+		EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIDevice+Portrait.swift"; sourceTree = "<group>"; };
+		EF4338DB1EB8862D368A1AC7 /* LogReasonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonView.swift; sourceTree = "<group>"; };
+		F05568F31FE83D1EC32A9173 /* 3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 3.mp3; sourceTree = "<group>"; };
 		F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyWaitingRoomView.swift; sourceTree = "<group>"; };
+		F8F38A3AA15B49CF7B4F7900 /* StillPointWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointWidget.entitlements; sourceTree = "<group>"; };
+		FDB6682B1106045ACD87DE8D /* 22.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 22.mp3; sourceTree = "<group>"; };
 		FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
+		FE14509C600B7DF0C1CEFC5D /* 54.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 54.mp3; sourceTree = "<group>"; };
+		FF7EFCCDBB888DA255AD6896 /* GoogleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -179,6 +347,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */,
+				BD77E7316F2586D24570DB43 /* GoogleSignIn in Frameworks */,
+				783596788FCBE118748CF294 /* ARKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		92734BD20F70390D2D7465E5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A35474775D311BBFEB53DE8 /* StillPointShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -189,8 +367,8 @@
 			isa = PBXGroup;
 			children = (
 				45BC84AB51307C865EF7257A /* README.md */,
+				517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */,
 				AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */,
-				C498A1B2C3D4E5F60718294 /* SPCapsuleButtonStyleUITests.swift */,
 				54D40F602F07E94E9BD6CF37 /* Helpers */,
 				F0FD78DD2EB1220358FB4672 /* Snapshots */,
 			);
@@ -203,17 +381,18 @@
 				B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */,
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
 				4976183C8621BCA485D0B82D /* BreathCountingView.swift */,
-				C1D2E3F4A5B60718293A4B5F /* LogReasonView.swift */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
+				EF4338DB1EB8862D368A1AC7 /* LogReasonView.swift */,
 				A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */,
 				0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */,
 				C683A9F0586D58020E60DD87 /* RootView.swift */,
+				03645CA6EFC379138C3D94C4 /* SessionPhotoPicker.swift */,
 				2F95E6E47148AEF494393FDB /* SessionView.swift */,
 				D356465C1B0F69C57FE47A80 /* SettingsView.swift */,
 				44912B427658554F984CCC3A /* ThoughtJournalView.swift */,
-				F5E4D3C2B1A0918273645566 /* UsernameEditView.swift */,
+				7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */,
 				3CF33E14AFF118C76854F60A /* BuddyCalendar */,
 				8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */,
 			);
@@ -224,6 +403,7 @@
 			isa = PBXGroup;
 			children = (
 				9311B0CBDED4DF207E799ACC /* Assets.xcassets */,
+				6362DA3357055B7F76C4D262 /* VoiceCountdown */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -271,7 +451,10 @@
 			isa = PBXGroup;
 			children = (
 				85EAF998E3470CBB4056699F /* BlockGridView.swift */,
+				48301E50DF8979C80A0C0F15 /* GuidedExerciseOverlayView.swift */,
 				7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */,
+				09DD5F417FDE26DAF6433E65 /* PathwayView.swift */,
+				5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */,
 				71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */,
 			);
 			path = Components;
@@ -280,9 +463,9 @@
 		54D40F602F07E94E9BD6CF37 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
-				A7B8C9D0E1F2031425364759 /* XCUIDevice+Portrait.swift */,
+				92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */,
+				EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */,
 				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
-				C498B2C3D4E5F6071829A5 /* XCTestCase+StillPointUITest.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -290,20 +473,104 @@
 		551003AC2B5AD8A7B3C3D426 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
-				B1B2C3D4E5F60718293A4B5C /* BuddyInviteTokenParser.swift */,
-				D2E3F4A5B60718293A4B61BF /* LogReasonDeepLinkParser.swift */,
+				AEAEBFB5D2DCD9FFD7B6D5FD /* BuddyInviteTokenParser.swift */,
+				52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */,
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
-				A1B2C3D4E5F60718293A4B5C /* SessionDeepLinkParser.swift */,
+				9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */,
 			);
 			path = Navigation;
+			sourceTree = "<group>";
+		};
+		5EB15EE587DEBC9E1BCF04F1 /* StillPointWidget */ = {
+			isa = PBXGroup;
+			children = (
+				ED37F3314647BC15A050C270 /* HabitWidget.swift */,
+				1D92202A5CCE1DD2D4C00E01 /* HabitWidgetEntryView.swift */,
+				6445C05A2B32B7969CE2E395 /* Info.plist */,
+				F8F38A3AA15B49CF7B4F7900 /* StillPointWidget.entitlements */,
+				CA70396ECA559FAC30FEC9B7 /* StillPointWidgetBundle.swift */,
+			);
+			path = StillPointWidget;
+			sourceTree = "<group>";
+		};
+		6362DA3357055B7F76C4D262 /* VoiceCountdown */ = {
+			isa = PBXGroup;
+			children = (
+				512E6E655209E76A5E6B0DF3 /* 1.mp3 */,
+				8F148BF8102DAF3A29A0BB13 /* 2.mp3 */,
+				F05568F31FE83D1EC32A9173 /* 3.mp3 */,
+				C5A9C1CFF5807F87F6584765 /* 4.mp3 */,
+				1822261A9F6811AE9984B37B /* 5.mp3 */,
+				3CB4E2EFAF45CA35CD5F45C8 /* 6.mp3 */,
+				95B9BFB54C47EA75C997B1AC /* 7.mp3 */,
+				7C825D8C3422EC8361A3BD6B /* 8.mp3 */,
+				8DF4F7FCFF2ADC4C4AB58684 /* 9.mp3 */,
+				594426A2F95039E07CBF9536 /* 10.mp3 */,
+				0E20E4DF9BB209813988B1F4 /* 11.mp3 */,
+				17F8888BCB18E4FD3C7ABFF3 /* 12.mp3 */,
+				A4D5CDCC6607777AB0F9F27F /* 13.mp3 */,
+				90E0B21C4EC373501602C81F /* 14.mp3 */,
+				5EF4763920AEA6F4AD6FB313 /* 15.mp3 */,
+				3BFF8666F7BA01638CB50293 /* 16.mp3 */,
+				47548299197A3F6DEF4043C9 /* 17.mp3 */,
+				D42537E2971BBE032F2C6B88 /* 18.mp3 */,
+				44AE33840A7E2F2DC00B2CCF /* 19.mp3 */,
+				A67F4472FF0000695B602855 /* 20.mp3 */,
+				90C6C05A143348636C9A3EE4 /* 21.mp3 */,
+				FDB6682B1106045ACD87DE8D /* 22.mp3 */,
+				5F29C698B66040CD6AE2303C /* 23.mp3 */,
+				71997BDA906AB28487E78602 /* 24.mp3 */,
+				A326B39E4201675CA4263C4D /* 25.mp3 */,
+				55FDA17DAB49084E87B6AAE7 /* 26.mp3 */,
+				96564931B9635CCC906F2C4C /* 27.mp3 */,
+				0314201FE7CD33DBFD6843D7 /* 28.mp3 */,
+				CD8F2BDE031426253D15325D /* 29.mp3 */,
+				CE56360FD9CD132827B311AF /* 30.mp3 */,
+				06353C957A9C0111FE540DD9 /* 31.mp3 */,
+				D2EC092F3B8AAC729171318C /* 32.mp3 */,
+				5B4C67F97D99AD6F6B81630C /* 33.mp3 */,
+				4E0BB1EDF1994530B03012DD /* 34.mp3 */,
+				8AFE37D74C08EB62742A3CC7 /* 35.mp3 */,
+				0D147E22AE19B02C80DE77AF /* 36.mp3 */,
+				07F9F5F5BD51497B5C18B28C /* 37.mp3 */,
+				E892E8EB42C0764E814EEA26 /* 38.mp3 */,
+				C8331485909F3D66810F06CA /* 39.mp3 */,
+				8E485A2EFE80B9642BF0618D /* 40.mp3 */,
+				112EE9026F8169958E58EA43 /* 41.mp3 */,
+				1C216B5EBA138904589C9092 /* 42.mp3 */,
+				54816ED19E21CAB37F0AE81A /* 43.mp3 */,
+				1459C04EDD81E916422ED7D0 /* 44.mp3 */,
+				6F9B11790CB09A75A0B5631C /* 45.mp3 */,
+				94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */,
+				657B14DE776B226E709E5310 /* 47.mp3 */,
+				14F30B93AF7EDC292A87884F /* 48.mp3 */,
+				256101C55C4E5EF9CE549FCA /* 49.mp3 */,
+				863EFBE318A791C3784682DA /* 50.mp3 */,
+				E17D1E13F75A9811452B4895 /* 51.mp3 */,
+				5C7E369849AAFAC053093EAF /* 52.mp3 */,
+				085AB5EC3C680F94156BCA42 /* 53.mp3 */,
+				FE14509C600B7DF0C1CEFC5D /* 54.mp3 */,
+				8EB9BD293D64683E1593C8E9 /* 55.mp3 */,
+				17583EAA0BE13F36F1DF9877 /* 56.mp3 */,
+				6290D6ED1CB92848B1ECFE90 /* 57.mp3 */,
+				14E83A80D97C5CBCF7164533 /* 58.mp3 */,
+				6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */,
+				41013DBBC777DFEDFD21C36F /* 60.mp3 */,
+			);
+			path = VoiceCountdown;
 			sourceTree = "<group>";
 		};
 		6F81A1DEB3C67EC2415E179A /* Managers */ = {
 			isa = PBXGroup;
 			children = (
-				A3F1C7246B41C426B1072571 /* AppBlockingBackgroundScheduler.swift */,
+				CF9AF24AE9DD231CBF53C30E /* AmbientSoundManager.swift */,
+				E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */,
 				92F0B6135A30B315B9962460 /* AppBlockingManager.swift */,
+				BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */,
+				EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */,
 				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
+				A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */,
+				1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -316,6 +583,8 @@
 				489EB05EBE530B8F6E4F1C7F /* StillPointApp */,
 				00907B112AF3AFED14FA0192 /* StillPointAppUITests */,
 				71B26AFC0A48AD3E9373C0DA /* StillPointMonitor */,
+				5EB15EE587DEBC9E1BCF04F1 /* StillPointWidget */,
+				773F3E815525BED8F4293802 /* Frameworks */,
 				D6729D98E36CD4883502F855 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -338,6 +607,14 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		773F3E815525BED8F4293802 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				359072B628F0A3E3329DF9D6 /* ARKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */ = {
 			isa = PBXGroup;
 			children = (
@@ -354,6 +631,9 @@
 			isa = PBXGroup;
 			children = (
 				8807A08DBDE8A121951350FD /* AppleSignInController.swift */,
+				FF7EFCCDBB888DA255AD6896 /* GoogleSignInController.swift */,
+				377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */,
+				2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -362,7 +642,7 @@
 			isa = PBXGroup;
 			children = (
 				CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */,
-				F8A2B3C4D5E60718293A4B5F /* SPCapsuleButtonStyle.swift */,
+				8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -376,6 +656,7 @@
 				ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */,
 				0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */,
 				48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */,
+				8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
 				6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */,
 				FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */,
@@ -390,6 +671,7 @@
 				D15A7FF17302B1E2FD147920 /* StillPoint.app */,
 				E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */,
 				58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */,
+				07AE546FEA49290BBE163744 /* StillPointWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -419,14 +701,35 @@
 			);
 			dependencies = (
 				14A922200F707D6C907444EF /* PBXTargetDependency */,
+				9E03B6CB643D9EC3D9A866BE /* PBXTargetDependency */,
 			);
 			name = StillPoint;
 			packageProductDependencies = (
 				FE1475755D9C9BA63C80748F /* StillPointShared */,
+				3152E47B6A19C92FD8070D82 /* GoogleSignIn */,
 			);
 			productName = StillPoint;
 			productReference = D15A7FF17302B1E2FD147920 /* StillPoint.app */;
 			productType = "com.apple.product-type.application";
+		};
+		6FCDDEE0D384FE437F7A9857 /* StillPointWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D016316C3AA5F1535C1E1D2 /* Build configuration list for PBXNativeTarget "StillPointWidget" */;
+			buildPhases = (
+				FBC811A8F613649D09F8C5D9 /* Sources */,
+				92734BD20F70390D2D7465E5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StillPointWidget;
+			packageProductDependencies = (
+				A693158BF7B588EA9D5744E5 /* StillPointShared */,
+			);
+			productName = StillPointWidget;
+			productReference = 07AE546FEA49290BBE163744 /* StillPointWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		C9202FF3B9BAEE265E1F8CFA /* StillPointAppUITests */ = {
 			isa = PBXNativeTarget;
@@ -477,6 +780,10 @@
 						DevelopmentTeam = T5UU4BP6AV;
 						ProvisioningStyle = Automatic;
 					};
+					6FCDDEE0D384FE437F7A9857 = {
+						DevelopmentTeam = T5UU4BP6AV;
+						ProvisioningStyle = Automatic;
+					};
 					C9202FF3B9BAEE265E1F8CFA = {
 						TestTargetID = 1EC3D1ED76F9038154716BEC;
 					};
@@ -496,6 +803,7 @@
 			mainGroup = 70234ED5699E0294984184EC;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				D48F4ACCEE89340A99CDA970 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				33432E91F4550EE24838A4B5 /* XCLocalSwiftPackageReference "StillPointShared" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -506,6 +814,7 @@
 				1EC3D1ED76F9038154716BEC /* StillPoint */,
 				C9202FF3B9BAEE265E1F8CFA /* StillPointAppUITests */,
 				EC97B0CE4FB530B3C2368458 /* StillPointMonitor */,
+				6FCDDEE0D384FE437F7A9857 /* StillPointWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -515,6 +824,66 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF526A9B18E153EDADB31000 /* 1.mp3 in Resources */,
+				7F195F0AC09CCB718C2C04AE /* 10.mp3 in Resources */,
+				E15A367CAC8FFA7D3A43A349 /* 11.mp3 in Resources */,
+				B8FE60A714EF9F3325870FC2 /* 12.mp3 in Resources */,
+				51B53277A3BDDAB470D972A7 /* 13.mp3 in Resources */,
+				3F857D13B6573BC89F19D5D6 /* 14.mp3 in Resources */,
+				7C61653E3A2AD035853FF50A /* 15.mp3 in Resources */,
+				CB910C750763B49735066071 /* 16.mp3 in Resources */,
+				7D69596D9288E07BD0028FFF /* 17.mp3 in Resources */,
+				504455A1DE35ADC2701C0808 /* 18.mp3 in Resources */,
+				EEDB019C54A26A01C510C161 /* 19.mp3 in Resources */,
+				380184EFB74132B005AEB0B8 /* 2.mp3 in Resources */,
+				C64F787BACC2BE769E52A7BF /* 20.mp3 in Resources */,
+				0B17114D37CC11469DEA86B2 /* 21.mp3 in Resources */,
+				55E69CE2B979C65A530CD865 /* 22.mp3 in Resources */,
+				ECBA43498E873CC037F20AD8 /* 23.mp3 in Resources */,
+				3D3782705E2C74F297F45CF1 /* 24.mp3 in Resources */,
+				797B745150CC15EBBD4151E8 /* 25.mp3 in Resources */,
+				C6CBC1A0A1BC305F8EFD1CBF /* 26.mp3 in Resources */,
+				C8A1388B7E45541DD2FD6DCA /* 27.mp3 in Resources */,
+				00A58FE2EF380BBEB61E491E /* 28.mp3 in Resources */,
+				13B76DCC001BF2D5903B71D0 /* 29.mp3 in Resources */,
+				69607B53AA6B1E3D62AC7A15 /* 3.mp3 in Resources */,
+				BA8BA44730EBFB64490EC8D1 /* 30.mp3 in Resources */,
+				DE4CACA493D76D725E84175E /* 31.mp3 in Resources */,
+				876C14C4E33DCE5A9D4F15EB /* 32.mp3 in Resources */,
+				E971A4F882A4A8C40CC14AAE /* 33.mp3 in Resources */,
+				3DD94CD008394385332E2476 /* 34.mp3 in Resources */,
+				1D776B46EF57E3973A212EBE /* 35.mp3 in Resources */,
+				93184A5F531520F4C650ECFB /* 36.mp3 in Resources */,
+				03DEBC43F06C17F8DE0AB6C0 /* 37.mp3 in Resources */,
+				14DD37B6F44770A1F6D9847C /* 38.mp3 in Resources */,
+				B614E560871212CB45306015 /* 39.mp3 in Resources */,
+				CF6E03014C3D3ABBAD63F539 /* 4.mp3 in Resources */,
+				00386679CC1E82A3C3239347 /* 40.mp3 in Resources */,
+				2387CAB41D16E36550FB047A /* 41.mp3 in Resources */,
+				0E590C627527A50BBD5D2487 /* 42.mp3 in Resources */,
+				AF6B6BC3AFE6E7BF51EB55E4 /* 43.mp3 in Resources */,
+				D27018D937B80F99F185D136 /* 44.mp3 in Resources */,
+				3B9EB6E328C7AFFA6D553709 /* 45.mp3 in Resources */,
+				B0EED661A52F8EE674A6BD4D /* 46.mp3 in Resources */,
+				14128F1D1515631B936676D7 /* 47.mp3 in Resources */,
+				1BD8CE95E2174A920AA3C67A /* 48.mp3 in Resources */,
+				9AA717BC9490BAAB97E1218E /* 49.mp3 in Resources */,
+				1DBE74544D605FF3CA0A1C1D /* 5.mp3 in Resources */,
+				5D0BF8F8204BCF7693DFCE4D /* 50.mp3 in Resources */,
+				DDC0AA3B25A6D0AF5D2F52B7 /* 51.mp3 in Resources */,
+				438303F73906D6285D985654 /* 52.mp3 in Resources */,
+				3B0DCBB737A17FDF8AF30A68 /* 53.mp3 in Resources */,
+				16D87676D7D5950871924E92 /* 54.mp3 in Resources */,
+				11D1CE5FE865B2A06615935A /* 55.mp3 in Resources */,
+				89ED5EFB8F1DDCD3BAC2E6D2 /* 56.mp3 in Resources */,
+				1E5365E85DAF7C7B46336A71 /* 57.mp3 in Resources */,
+				4BBFBFEB5EB57F9D4F8A40CA /* 58.mp3 in Resources */,
+				92415E1B8326C5322B4AF20F /* 59.mp3 in Resources */,
+				84DD3D592ACAFBE5FC6AEC28 /* 6.mp3 in Resources */,
+				5D74CD8EC4D430316CD9EC77 /* 60.mp3 in Resources */,
+				4E04CA8D8B1F7A8F55B65756 /* 7.mp3 in Resources */,
+				5E8A77767788F878D322C5FD /* 8.mp3 in Resources */,
+				AB66EBC7FF6443F7C6B2221D /* 9.mp3 in Resources */,
 				3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -534,13 +903,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3AD114B1095E5A14BABFA49B /* SPCapsuleButtonStyleUITests.swift in Sources */,
 				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
-				C498A1B2C3D4E5F60718293 /* SPCapsuleButtonStyleUITests.swift in Sources */,
-				A7B8C9D0E1F2031425364758 /* XCUIDevice+Portrait.swift in Sources */,
+				8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */,
+				63EC131F3FAD3DFAFDE698B6 /* XCUIDevice+Portrait.swift in Sources */,
 				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
-				C498B2C3D4E5F6071829A6 /* XCTestCase+StillPointUITest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -548,46 +917,58 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6C7683263FC34CA1A007E771 /* AppBlockingBackgroundScheduler.swift in Sources */,
+				18F95661598F458E0CCF7C21 /* AmbientSoundManager.swift in Sources */,
+				68C3A6205945A55E953DE283 /* AppBlockingBackgroundScheduler.swift in Sources */,
 				6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */,
 				B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */,
 				A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */,
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
 				6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */,
+				8A353E6C36EA771941CFF33D /* AttentionTrackingManager.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
 				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
 				101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */,
-				C1D2E3F4A5B60718293A4B60 /* LogReasonView.swift in Sources */,
 				9FBE2F4A5E19FC2198A8E2AC /* BreathCountingViewModel.swift in Sources */,
 				47381BA7F1BB53B93A40989B /* BuddyActiveSessionView.swift in Sources */,
 				A21FE7A1E00EA88626526059 /* BuddyCalendarView.swift in Sources */,
 				D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */,
 				D3744C3003DA233DC0B74C99 /* BuddyFilterChips.swift in Sources */,
+				CE11A53881C4B7CC2D2C776A /* BuddyInviteTokenParser.swift in Sources */,
 				9F4E4B6270115FC333B22575 /* BuddySessionContainerView.swift in Sources */,
 				5E1134CA9CA16D2589A0FDDE /* BuddySessionHubView.swift in Sources */,
 				D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */,
 				B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */,
 				840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */,
+				4C0DA031149E2F22DF91EE54 /* CameraPermissionHelper.swift in Sources */,
 				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
 				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
-				F8A2B3C4D5E60718293A4B5E /* SPCapsuleButtonStyle.swift in Sources */,
 				5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */,
+				9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */,
+				4A807BC7D119912827067A44 /* GuidedExerciseOverlayView.swift in Sources */,
+				70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */,
 				74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */,
 				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,
 				1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */,
+				5B36B0EBF7D72B4EA03F659F /* LogReasonDeepLinkParser.swift in Sources */,
+				4F2B9E1CBE25DC0E91860B2D /* LogReasonView.swift in Sources */,
 				B106890588723F191CC4AEAA /* MainTabView.swift in Sources */,
-				A1B2C3D4E5F60718293A4B5D /* SessionDeepLinkParser.swift in Sources */,
-				B1B2C3D4E5F60718293A4B5D /* BuddyInviteTokenParser.swift in Sources */,
-				D2E3F4A5B60718293A4B61C0 /* LogReasonDeepLinkParser.swift in Sources */,
 				80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */,
+				E0B7E8F73810CD267D2405FB /* NetworkReachabilityMonitor.swift in Sources */,
 				13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */,
 				C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */,
+				898E0D6ED681686E28EB329D /* PathwayView.swift in Sources */,
 				DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */,
 				EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */,
 				15177B86F124B5A10AB03456 /* RootView.swift in Sources */,
+				BD23A540968EF65ED9D78BB9 /* SPCapsuleButtonStyle.swift in Sources */,
+				30AEF9D9DF3820CF00E882E3 /* SessionDeepLinkParser.swift in Sources */,
 				E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */,
+				13ED52B747CBA05F9C319B13 /* SessionIntroOverlayView.swift in Sources */,
+				2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */,
+				9B4CD9DAB95BB371A571F154 /* SessionPhotoPicker.swift in Sources */,
+				2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */,
 				39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */,
 				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
 				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
@@ -596,7 +977,8 @@
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
-				A1B2C3D4E5F60718293A4B5C /* UsernameEditView.swift in Sources */,
+				C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */,
+				32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -606,6 +988,16 @@
 			files = (
 				AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */,
 				EE8F0D07AFA655F960F274F8 /* StillPointMonitorExtension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FBC811A8F613649D09F8C5D9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D0DE97F38353C3C342B2BA1 /* HabitWidget.swift in Sources */,
+				9CE902087A2CF7769200A540 /* HabitWidgetEntryView.swift in Sources */,
+				496506D5912F476AED560B5F /* StillPointWidgetBundle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -622,6 +1014,11 @@
 			target = 1EC3D1ED76F9038154716BEC /* StillPoint */;
 			targetProxy = 540585E1D78B21D6A3B5B30D /* PBXContainerItemProxy */;
 		};
+		9E03B6CB643D9EC3D9A866BE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6FCDDEE0D384FE437F7A9857 /* StillPointWidget */;
+			targetProxy = 21FB44130A5810ABD2004E5E /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -636,8 +1033,11 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				GID_CLIENT_ID = "";
+				GID_REVERSED_CLIENT_ID = "";
+				GID_SERVER_CLIENT_ID = "";
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -670,6 +1070,31 @@
 			};
 			name = Release;
 		};
+		6111916D9D316FE375BF5A85 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointWidget/StillPointWidget.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
+				CURRENT_PROJECT_VERSION = 17;
+				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				INFOPLIST_FILE = StillPointWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.widget;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		79085E6777D72FCC1A887CA8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -681,8 +1106,11 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				GID_CLIENT_ID = "";
+				GID_REVERSED_CLIENT_ID = "";
+				GID_SERVER_CLIENT_ID = "";
 				INFOPLIST_FILE = StillPointApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -692,6 +1120,31 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint;
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint App Store";
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		856E98D3BA8521DE8B69FD96 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = StillPointWidget/StillPointWidget.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
+				CURRENT_PROJECT_VERSION = 17;
+				DEVELOPMENT_TEAM = T5UU4BP6AV;
+				INFOPLIST_FILE = StillPointWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.brettonauerbach.stillpoint.widget;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "StillPoint Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -722,7 +1175,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -866,7 +1319,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -892,6 +1345,15 @@
 			buildConfigurations = (
 				A826A78862E645F34283BFE2 /* Debug */,
 				F67C139DC441092F7DBC53D2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4D016316C3AA5F1535C1E1D2 /* Build configuration list for PBXNativeTarget "StillPointWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				856E98D3BA8521DE8B69FD96 /* Debug */,
+				6111916D9D316FE375BF5A85 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -932,7 +1394,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		D48F4ACCEE89340A99CDA970 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		3152E47B6A19C92FD8070D82 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D48F4ACCEE89340A99CDA970 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		A693158BF7B588EA9D5744E5 /* StillPointShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StillPointShared;
+		};
 		FE1475755D9C9BA63C80748F /* StillPointShared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StillPointShared;

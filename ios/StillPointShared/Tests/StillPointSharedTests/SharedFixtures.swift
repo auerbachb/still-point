@@ -171,6 +171,46 @@ struct PathwayFixture: Decodable {
     let buildPathway: [BuildPathwayCase]
 }
 
+struct GuidedExerciseFixture: Decodable {
+    struct IndexCase: Decodable {
+        let index: Int
+        let stepCount: Int
+        let expected: Int
+    }
+    struct PreviousIndexCase: Decodable {
+        let index: Int
+        let expected: Int
+    }
+    struct BoolCase: Decodable {
+        let index: Int
+        let stepCount: Int
+        let expected: Bool
+    }
+    struct ProgressCase: Decodable {
+        let index: Int
+        let elapsedInStepMs: Int
+        let stepDurationMs: Int
+        let expected: Double
+    }
+    struct TotalDurationCase: Decodable {
+        let stepDurationsMs: [Int]
+        let expected: Int
+    }
+    struct SummaryCase: Decodable {
+        let id: String
+        let expectedStepCount: Int
+        let expectedTotalDurationMs: Int
+    }
+
+    let clampStepIndex: [IndexCase]
+    let isLastStep: [BoolCase]
+    let nextStepIndex: [IndexCase]
+    let previousStepIndex: [PreviousIndexCase]
+    let stepProgressFraction: [ProgressCase]
+    let totalDurationMs: [TotalDurationCase]
+    let exerciseSummary: [SummaryCase]
+}
+
 struct DurationForDayFixture: Decodable {
     struct Constants: Decodable {
         let baseDuration: Int

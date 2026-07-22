@@ -8,7 +8,8 @@ import {
   stepProgressFraction,
   totalDurationMs,
 } from "./guidedExercise";
-import { GUIDED_EXERCISES, guidedExerciseById } from "./guidedExerciseContent";
+import { GUIDED_EXERCISES, guidedExerciseById, type GuidedExerciseStep } from "./guidedExerciseContent";
+import { loadSharedFixture, type GuidedExerciseFixture } from "./testing/sharedFixtures";
 
 describe("guidedExerciseContent", () => {
   it("defines all three exercise modes", () => {
@@ -76,5 +77,65 @@ describe("guidedExercise helpers", () => {
     const summary = exerciseSummary("breathing-awareness");
     expect(summary.stepCount).toBe(5);
     expect(summary.totalDurationMs).toBe(totalDurationMs(guidedExerciseById("breathing-awareness").steps));
+  });
+});
+
+describe("guidedExercise shared fixtures (#421)", () => {
+  const fixture = loadSharedFixture<GuidedExerciseFixture>("guidedExercise.json");
+
+  it("clampStepIndex matches golden cases", () => {
+    for (const testCase of fixture.clampStepIndex) {
+      expect(clampStepIndex(testCase.index, testCase.stepCount)).toBe(testCase.expected);
+    }
+  });
+
+  it("isLastStep matches golden cases", () => {
+    for (const testCase of fixture.isLastStep) {
+      expect(isLastStep(testCase.index, testCase.stepCount)).toBe(testCase.expected);
+    }
+  });
+
+  it("nextStepIndex matches golden cases", () => {
+    for (const testCase of fixture.nextStepIndex) {
+      expect(nextStepIndex(testCase.index, testCase.stepCount)).toBe(testCase.expected);
+    }
+  });
+
+  it("previousStepIndex matches golden cases", () => {
+    for (const testCase of fixture.previousStepIndex) {
+      expect(previousStepIndex(testCase.index)).toBe(testCase.expected);
+    }
+  });
+
+  it("stepProgressFraction matches golden cases", () => {
+    for (const testCase of fixture.stepProgressFraction) {
+      const step: GuidedExerciseStep = {
+        id: "fixture",
+        title: "Fixture",
+        prompt: "Fixture prompt for parity harness.",
+        durationMs: testCase.stepDurationMs,
+      };
+      expect(stepProgressFraction(testCase.index, testCase.elapsedInStepMs, step)).toBe(testCase.expected);
+    }
+  });
+
+  it("totalDurationMs matches golden cases", () => {
+    for (const testCase of fixture.totalDurationMs) {
+      const steps: GuidedExerciseStep[] = testCase.stepDurationsMs.map((durationMs, index) => ({
+        id: `s-${index}`,
+        title: "S",
+        prompt: "Step prompt for fixture.",
+        durationMs,
+      }));
+      expect(totalDurationMs(steps)).toBe(testCase.expected);
+    }
+  });
+
+  it("exerciseSummary matches golden cases", () => {
+    for (const testCase of fixture.exerciseSummary) {
+      const summary = exerciseSummary(testCase.id);
+      expect(summary.stepCount).toBe(testCase.expectedStepCount);
+      expect(summary.totalDurationMs).toBe(testCase.expectedTotalDurationMs);
+    }
   });
 });

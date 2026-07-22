@@ -41,6 +41,8 @@ final class SessionViewModel {
 
     // UI state — optional thought prompt after a distraction segment ends
     var showPostDistractionCapture = false
+    /// Opt-in guided exercise overlay while the sit timer keeps running (#519).
+    var showGuidedExercise = false
     /// Pre-session intro overlay; gates `start()` until dismissed (#560).
     var showIntroOverlay = false
     var controlsVisible = true
@@ -183,14 +185,14 @@ final class SessionViewModel {
     }
 
     func extendBonus(seconds: Int) {
-        guard seconds > 0, isActive, !isComplete, !isAbandoned, !showPostDistractionCapture else { return }
+        guard seconds > 0, isActive, !isComplete, !isAbandoned, !showPostDistractionCapture, !showGuidedExercise else { return }
         bonusSeconds += seconds
         userInteracted()
     }
 
     /// Hold to mark a distraction segment (`thinking`); release returns to aware (`clear`).
     func beginDistraction() {
-        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
+        guard isActive, mindState == "clear", !showPostDistractionCapture, !showGuidedExercise else { return }
         mindState = "thinking"
         distractionSegmentCount += 1
         mindStateLog.append(MindStateEntry(time: elapsed, state: "thinking"))
@@ -205,7 +207,7 @@ final class SessionViewModel {
 
     /// Hold to mark hyperfocus; counts toward awareness in `clearPercent`. Release returns to `clear`.
     func beginHyperfocus() {
-        guard isActive, mindState == "clear", !showPostDistractionCapture else { return }
+        guard isActive, mindState == "clear", !showPostDistractionCapture, !showGuidedExercise else { return }
         mindState = "hyperfocus"
         mindStateLog.append(MindStateEntry(time: elapsed, state: "hyperfocus"))
         userInteracted()
@@ -235,6 +237,17 @@ final class SessionViewModel {
 
     func dismissPostDistractionCapture() {
         showPostDistractionCapture = false
+    }
+
+    func openGuidedExercise() {
+        guard (isActive || isPaused), !isComplete, !isAbandoned else { return }
+        finalizeActiveHoldIfNeeded(at: elapsed)
+        showGuidedExercise = true
+        userInteracted()
+    }
+
+    func closeGuidedExercise() {
+        showGuidedExercise = false
     }
 
     func userInteracted() {
