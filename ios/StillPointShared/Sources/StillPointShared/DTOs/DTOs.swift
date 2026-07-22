@@ -171,6 +171,10 @@ public struct SessionDTO: Codable, Sendable {
     public let track: Track?
     /// #563: ambient sound level summary; nil when capture was off or mic was denied.
     public let ambientSoundSummary: AmbientSoundSummary?
+    /// #521: post-session self-report ratings (1–10); nil until set via the PATCH endpoint.
+    public let focusRating: Int?
+    /// #521: post-session self-report ratings (1–10); nil until set via the PATCH endpoint.
+    public let happinessRating: Int?
 
     public init(
         id: String,
@@ -189,7 +193,9 @@ public struct SessionDTO: Codable, Sendable {
         buddySessionId: String?,
         breathCount: Int? = nil,
         track: Track? = nil,
-        ambientSoundSummary: AmbientSoundSummary? = nil
+        ambientSoundSummary: AmbientSoundSummary? = nil,
+        focusRating: Int? = nil,
+        happinessRating: Int? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -208,6 +214,8 @@ public struct SessionDTO: Codable, Sendable {
         self.breathCount = breathCount
         self.track = track
         self.ambientSoundSummary = ambientSoundSummary
+        self.focusRating = focusRating
+        self.happinessRating = happinessRating
     }
 
     /// #612: decode defensively. Identity/structural fields stay strict — a row missing
@@ -239,12 +247,15 @@ public struct SessionDTO: Codable, Sendable {
         buddySessionId = try c.decodeIfPresent(String.self, forKey: .buddySessionId)
         breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
         ambientSoundSummary = try? c.decode(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
+        focusRating = try c.decodeIfPresent(Int.self, forKey: .focusRating)
+        happinessRating = try c.decodeIfPresent(Int.self, forKey: .happinessRating)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
         case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
         case createdAt, buddySessionId, breathCount, track, ambientSoundSummary
+        case focusRating, happinessRating
     }
 }
 
@@ -467,6 +478,31 @@ public struct BatchThoughtsRequest: Codable, Sendable {
         self.sessionId = sessionId
         self.dayNumber = dayNumber
         self.thoughts = thoughts
+    }
+}
+
+/// #521: nil-omitting patch for `PATCH /api/sessions/by-session/{sessionId}`.
+/// Mirrors the web's touched-field payload: only include a rating if it was
+/// explicitly set; omit nil fields so the server's partial-update logic is
+/// used correctly and no unintended default overwrites occur.
+public struct SessionRatingsPatch: Encodable, Sendable {
+    public let focusRating: Int?
+    public let happinessRating: Int?
+
+    public init(focusRating: Int? = nil, happinessRating: Int? = nil) {
+        self.focusRating = focusRating
+        self.happinessRating = happinessRating
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let focusRating { try c.encode(focusRating, forKey: .focusRating) }
+        if let happinessRating { try c.encode(happinessRating, forKey: .happinessRating) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case focusRating
+        case happinessRating
     }
 }
 
