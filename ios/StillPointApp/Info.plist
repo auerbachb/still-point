@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.brettonauerbach.stillpoint.app-block-refresh</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
@@ -46,17 +50,13 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Still Point uses the camera for partner video sessions and, when you opt in, gaze attention tracking during sits.</string>
+	<string>Still Point uses the camera for partner video sessions, gaze attention tracking during sits, and optionally to photograph your meditation environment at the end of a session.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Still Point needs microphone access for partner video sessions and to sample ambient sound levels during solo sits (no audio is stored).</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
 		<string>fetch</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.brettonauerbach.stillpoint.app-block-refresh</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

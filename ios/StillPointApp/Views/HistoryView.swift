@@ -1,9 +1,12 @@
 import SwiftUI
 import StillPointShared
+import UIKit
 
 struct HistoryView: View {
     let appVM: AppViewModel
     @State private var vm = HistoryViewModel()
+    /// Full-screen photo presented when the user taps a session thumbnail.
+    @State private var fullScreenPhoto: UIImage?
 
     private let weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"]
 
@@ -49,6 +52,36 @@ struct HistoryView: View {
         .task {
             await vm.load()
         }
+        .sheet(isPresented: Binding(
+            get: { fullScreenPhoto != nil },
+            set: { if !$0 { fullScreenPhoto = nil } }
+        )) {
+            if let photo = fullScreenPhoto {
+                fullScreenPhotoSheet(photo)
+            }
+        }
+    }
+
+    // MARK: - Full-screen photo sheet
+
+    private func fullScreenPhotoSheet(_ photo: UIImage) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button("Done") { fullScreenPhoto = nil }
+                    .font(SPFont.mono(13, weight: .medium))
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .padding()
+            }
+            Spacer()
+            Image(uiImage: photo)
+                .resizable()
+                .scaledToFit()
+                .padding(.horizontal, SPSpacing.s3)
+            Spacer()
+        }
+        .stillPointBackground()
+        .accessibilityIdentifier("history.fullScreenPhoto")
     }
 
     // MARK: - View Toggle
@@ -716,18 +749,38 @@ struct HistoryView: View {
             }
             .accessibilityIdentifier("history.session.\(session.id)")
 
-            if isExpanded, let thoughts = vm.sessionThoughts[session.id] {
+            if isExpanded {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(thoughts, id: \.id) { thought in
-                        HStack(alignment: .top, spacing: SPSpacing.s2) {
-                            Text(thought.timeInSession == -1 ? "note" : "@\(thought.timeInSession)s")
-                                .font(SPFont.mono(10))
-                                .foregroundStyle(SPColor.amberText)
-                                .frame(width: 44, alignment: .trailing)
+                    // Environment photo thumbnail (tap to enlarge)
+                    if let photo = vm.sessionPhotos[session.id] {
+                        Button {
+                            fullScreenPhoto = photo
+                        } label: {
+                            Image(uiImage: photo)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 120)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .clipped()
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, 2)
+                        .accessibilityIdentifier("history.session.\(session.id).photo")
+                    }
+                    // Captured thoughts
+                    if let thoughts = vm.sessionThoughts[session.id] {
+                        ForEach(thoughts, id: \.id) { thought in
+                            HStack(alignment: .top, spacing: SPSpacing.s2) {
+                                Text(thought.timeInSession == -1 ? "note" : "@\(thought.timeInSession)s")
+                                    .font(SPFont.mono(10))
+                                    .foregroundStyle(SPColor.amberText)
+                                    .frame(width: 44, alignment: .trailing)
 
-                            Text(thought.text)
-                                .font(SPFont.serifItalic(13))
-                                .foregroundStyle(Color(SPColor.fg3))
+                                Text(thought.text)
+                                    .font(SPFont.serifItalic(13))
+                                    .foregroundStyle(Color(SPColor.fg3))
+                            }
                         }
                     }
                 }
