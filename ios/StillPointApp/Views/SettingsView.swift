@@ -123,7 +123,7 @@ struct SettingsView: View {
                             Text("Hide distraction & hyperfocus controls")
                                 .font(SPFont.mono(13))
                                 .foregroundStyle(Color(SPColor.fg))
-                            Text("Remove hold buttons during sessions. The timer is unchanged.")
+                            Text("Remove hold buttons during solo sessions. The timer is unchanged.")
                                 .font(SPFont.serif(13, weight: .light))
                                 .foregroundStyle(Color(SPColor.fg4))
                         }

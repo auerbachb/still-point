@@ -221,6 +221,10 @@ final class AppViewModel {
             authStatusMessage = "Connection failed. Please try again."
             syncWidgetData()
         }
+        // #526: clear per-account unlock state on any unauthenticated redirect so the
+        // next sign-in always re-qualifies (mirrors clearOnLogout called by didLogout).
+        // The success path returns early above; only auth-redirect branches reach here.
+        trackingControlPrefsManager.clearOnLogout()
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
     }
 
