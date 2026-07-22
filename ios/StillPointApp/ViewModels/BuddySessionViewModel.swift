@@ -25,6 +25,11 @@ final class BuddySessionViewModel {
     var isSavingCompletion = false
     var completionSaveError: String?
 
+    /// #554: shared sound preferences, loaded from the same UserDefaults key as solo sessions.
+    var soundPrefs: AudioEngine.SoundPrefs = AudioEngine.loadPrefs()
+    /// Last second announced via voice countdown in the current active session window.
+    private var lastVoiceCountdownSec: Int = 0
+
     private var pollTask: Task<Void, Never>?
     private var activeAnchor: ActiveAnchor?
     private var lastActiveKey: String?
@@ -71,6 +76,8 @@ final class BuddySessionViewModel {
     func stopPolling() {
         pollTask?.cancel()
         pollTask = nil
+        AudioEngine.shared.cancelVoiceCountdownPlayback()
+        lastVoiceCountdownSec = 0
     }
 
     func refreshSnapshot() async {
@@ -179,6 +186,42 @@ final class BuddySessionViewModel {
         pendingThought = ""
     }
 
+    // MARK: - Sound Preferences (#554)
+
+    func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
+        soundPrefs[keyPath: keyPath].toggle()
+        AudioEngine.savePrefs(soundPrefs)
+        if !voiceCountdownWasEnabled && soundPrefs.voiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        } else if voiceCountdownWasEnabled && !soundPrefs.voiceCountdown {
+            // Voice countdown was just disabled — stop any in-flight clip.
+            lastVoiceCountdownSec = 0
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+        }
+    }
+
+    /// Called from `BuddyActiveSessionView`'s per-second timer.
+    /// Fires the voice countdown clip matching the current remaining seconds,
+    /// with the same clamp/dedup/reset semantics as the solo session path.
+    func handleVoiceCountdownTick(remaining: Int) {
+        let remainingDouble = Double(remaining)
+        guard soundPrefs.voiceCountdown else { return }
+
+        if VoiceCountdownLogic.shouldReset(remaining: remainingDouble) {
+            if lastVoiceCountdownSec != 0 {
+                lastVoiceCountdownSec = 0
+                AudioEngine.shared.cancelVoiceCountdownPlayback()
+            }
+        } else if let sec = VoiceCountdownLogic.announceSecond(
+            remaining: remainingDouble,
+            lastAnnouncedSec: lastVoiceCountdownSec
+        ) {
+            lastVoiceCountdownSec = sec
+            AudioEngine.shared.playVoiceCountdown(seconds: sec)
+        }
+    }
+
     func currentElapsedSeconds(at now: Date = Date()) -> Int {
         guard let anchor = activeAnchor else {
             return snapshot?.elapsedSeconds ?? 0
@@ -203,6 +246,8 @@ final class BuddySessionViewModel {
         isSavingCompletion = true
         completionSaveError = nil
         defer { isSavingCompletion = false }
+        AudioEngine.shared.cancelVoiceCountdownPlayback()
+        lastVoiceCountdownSec = 0
 
         finalizeOpenMindStateSegmentIfNeeded(duration: snapshot.durationSeconds)
 
@@ -257,6 +302,12 @@ final class BuddySessionViewModel {
                 capturedThoughts = []
                 pendingThought = ""
                 distractionSegmentCount = 0
+                // #554: new active session window — reset voice countdown so the first
+                // announcement in this window is not suppressed by a stale lastVoiceCountdownSec.
+                if lastVoiceCountdownSec != 0 {
+                    lastVoiceCountdownSec = 0
+                    AudioEngine.shared.cancelVoiceCountdownPlayback()
+                }
             }
 
             let serverNow = parseISO(snapshot.serverNow) ?? Date()

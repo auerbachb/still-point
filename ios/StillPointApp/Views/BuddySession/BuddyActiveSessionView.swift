@@ -33,7 +33,11 @@ struct BuddyActiveSessionView: View {
         .onReceive(timer) { value in
             now = value
             let remaining = vm.currentRemainingSeconds(at: value)
+            // #554: voice countdown — fires once per second in the final minute.
+            vm.handleVoiceCountdownTick(remaining: remaining)
             if remaining == 0 {
+                // Cancel any in-flight voice clip at session end (#554).
+                AudioEngine.shared.cancelVoiceCountdownPlayback()
                 guard !didRequestCompletionRefresh else { return }
                 didRequestCompletionRefresh = true
                 Task {
@@ -42,6 +46,14 @@ struct BuddyActiveSessionView: View {
             } else {
                 didRequestCompletionRefresh = false
             }
+        }
+        .onAppear {
+            if vm.soundPrefs.voiceCountdown {
+                AudioEngine.shared.preloadVoiceCountdown()
+            }
+        }
+        .onDisappear {
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
         }
         .alert("Leave shared session?", isPresented: $showExitConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -215,6 +227,15 @@ struct BuddyActiveSessionView: View {
                     .multilineTextAlignment(.center)
             }
 
+            // #554: voice countdown toggle — spoken numbers in the final minute.
+            HStack {
+                Spacer()
+                soundToggle("voice", isOn: vm.soundPrefs.voiceCountdown) {
+                    vm.toggleSound(\.voiceCountdown)
+                }
+                Spacer()
+            }
+
             Button {
                 showExitConfirm = true
             } label: {
@@ -227,6 +248,22 @@ struct BuddyActiveSessionView: View {
         .background(SPColor.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(SPColor.border1))
+    }
+
+    private func soundToggle(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.system(size: 12))
+                Text(label)
+                    .font(SPFont.mono(11))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isOn ? Color(SPColor.fg3) : Color(SPColor.fg4))
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("buddySession.soundToggle.\(label)")
     }
 
     private var hints: some View {

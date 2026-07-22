@@ -52,6 +52,8 @@ final class SessionViewModel {
     private var timer: AnyCancellable?
     private var lastTickSec = 0
     private var lastCompletedMinuteBlockIndex = -1
+    /// #554: last second announced via voice countdown; 0 means none yet this window.
+    private var lastVoiceCountdownSec = 0
     private var controlHideTimer: AnyCancellable?
     private let uiTestTimerMultiplier: Double
 
@@ -141,19 +143,25 @@ final class SessionViewModel {
                 elapsed: resumeElapsed,
                 totalSeconds: totalSeconds
             )
+            // Reset voice countdown state so resume re-announces the current second.
+            lastVoiceCountdownSec = 0
         } else {
             // Fresh session start: clear any carried timer/chime state.
             elapsed = 0
             pausedElapsed = 0
             lastTickSec = 0
             lastCompletedMinuteBlockIndex = -1
+            lastVoiceCountdownSec = 0
         }
 
         isActive = true
         isPaused = false
         startDate = Date().addingTimeInterval(-(pausedElapsed / uiTestTimerMultiplier))
-        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion {
+        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion || soundPrefs.voiceCountdown {
             AudioEngine.shared.warmUp()
+        }
+        if soundPrefs.voiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
         }
         startTimer()
         scheduleControlHide()
@@ -166,6 +174,7 @@ final class SessionViewModel {
         pausedElapsed = elapsed
         timer?.cancel()
         controlsVisible = true
+        AudioEngine.shared.cancelVoiceCountdownPlayback()
     }
 
     func resume() {
@@ -234,8 +243,18 @@ final class SessionViewModel {
     }
 
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
+        if !voiceCountdownWasEnabled && soundPrefs.voiceCountdown {
+            // Voice countdown was just enabled — prime the buffer cache.
+            AudioEngine.shared.preloadVoiceCountdown()
+        } else if voiceCountdownWasEnabled && !soundPrefs.voiceCountdown {
+            // Voice countdown was just disabled — reset dedup state so re-enabling
+            // during the same remaining second announces correctly (#554).
+            lastVoiceCountdownSec = 0
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+        }
     }
 
     /// End session early but keep the data
@@ -244,6 +263,7 @@ final class SessionViewModel {
         timer?.cancel()
         isActive = false
         isComplete = true
+        AudioEngine.shared.cancelVoiceCountdownPlayback()
         return (clearPercent, thoughtCount, capturedThoughts)
     }
 
@@ -254,6 +274,7 @@ final class SessionViewModel {
         isActive = false
         isAbandoned = true
         isComplete = true
+        AudioEngine.shared.cancelVoiceCountdownPlayback()
     }
 
     /// #557: stable local key for offline end-note sync during completion.
@@ -332,6 +353,9 @@ final class SessionViewModel {
             isActive = false
             completedNaturally = true
             isComplete = true
+            // Cancel any in-flight voice countdown clip before the completion cue.
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+            // Completion sound plays unconditionally even in voice countdown mode.
             if soundPrefs.completion {
                 AudioEngine.shared.playCompletion()
             }
@@ -342,11 +366,33 @@ final class SessionViewModel {
         pausedElapsed = newElapsed
 
         let currentSec = Int(newElapsed)
+        let currentRemaining = max(0.0, Double(totalSeconds) - newElapsed)
+        let voiceActive = soundPrefs.voiceCountdown && VoiceCountdownLogic.isActive(remaining: currentRemaining)
 
-        // Tick sound — once per second
+        // Voice countdown — fires once per second in the final minute.
+        // Mirrors BlockTimer.tsx: suppresses tick and per-minute chime while active.
+        if soundPrefs.voiceCountdown {
+            if VoiceCountdownLogic.shouldReset(remaining: currentRemaining) {
+                // Remaining went back above 60 s (e.g., bonus seconds added mid-final-minute).
+                if lastVoiceCountdownSec != 0 {
+                    lastVoiceCountdownSec = 0
+                    AudioEngine.shared.cancelVoiceCountdownPlayback()
+                }
+            } else if let sec = VoiceCountdownLogic.announceSecond(
+                remaining: currentRemaining,
+                lastAnnouncedSec: lastVoiceCountdownSec
+            ) {
+                lastVoiceCountdownSec = sec
+                AudioEngine.shared.playVoiceCountdown(seconds: sec)
+            }
+        }
+
+        // Tick sound — once per second; suppressed during voice countdown final minute.
         if soundPrefs.tick && currentSec > lastTickSec {
             lastTickSec = currentSec
-            AudioEngine.shared.playTick()
+            if !voiceActive {
+                AudioEngine.shared.playTick()
+            }
         }
 
         // Advance minute-block boundary progress independent of mute state.
@@ -357,7 +403,8 @@ final class SessionViewModel {
         )
         if chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex {
             lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
-            if soundPrefs.chime, let chimeCount = chimeUpdate.chimeCount {
+            // Per-minute chime suppressed during voice countdown final minute.
+            if soundPrefs.chime, let chimeCount = chimeUpdate.chimeCount, !voiceActive {
                 AudioEngine.shared.playChime(count: chimeCount)
             }
         }
