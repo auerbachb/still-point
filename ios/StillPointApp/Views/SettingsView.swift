@@ -117,6 +117,20 @@ struct SettingsView: View {
                         SessionIntroPrefs.setIntroOverlayHidden(!newValue)
                     }
 
+                    // #526: local hide preference for distraction/hyperfocus hold cluster.
+                    Toggle(isOn: Bindable(appVM.trackingControlPrefsManager).hideDistractionHyperfocusControls) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hide distraction & hyperfocus controls")
+                                .font(SPFont.mono(13))
+                                .foregroundStyle(Color(SPColor.fg))
+                            Text("Remove hold buttons during sessions. The timer is unchanged.")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
+                    .tint(SPColor.green)
+                    .accessibilityIdentifier("settings.hideDistractionHyperfocusToggle")
+
                     Toggle(isOn: $attentionTrackingEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Gaze attention tracking")

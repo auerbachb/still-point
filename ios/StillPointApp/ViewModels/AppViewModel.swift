@@ -83,6 +83,8 @@ final class AppViewModel {
     var buddyInviteError: String?
     /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
     private var isSavingBreathSession = false
+    /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
+    var trackingControlPrefsManager = TrackingControlPrefsManager()
     private var appBlockingManagerStorage: AppBlockingManager?
     var appBlockingManager: AppBlockingManager {
         if let appBlockingManagerStorage {
@@ -320,6 +322,8 @@ final class AppViewModel {
             LastAuthProvider.resetPersisted()
             currentView = .auth
             SessionNotificationSuppressionController.clearSuppressPreference()
+            // #526: reset account-scoped tracking unlock so the next sign-in re-qualifies.
+            trackingControlPrefsManager.clearOnLogout()
             syncWidgetData()
         }
     }
@@ -391,6 +395,8 @@ final class AppViewModel {
         guard !isSavingBreathSession else { return }
         guard let ownerUserId = currentUser?.id else { return }
         applyAppGateAfterSessionCompletion(unlock: true)
+        // #526: breath sessions always complete naturally; unlock if duration qualifies.
+        trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: true, duration: max(elapsedSeconds, 1))
         isSavingBreathSession = true
         defer { isSavingBreathSession = false }
 
@@ -545,6 +551,8 @@ final class AppViewModel {
             markPracticeDoneToday()
         }
         applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
+        // #526: unlock hold-cluster controls if this sit qualifies (completed + ≥ 300 s planned).
+        trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: unlockAppGate, duration: duration)
         currentView = .completion(
             sessionId: sessionId,
             clientSessionId: clientSessionId,
@@ -697,6 +705,10 @@ final class AppViewModel {
             )
             WidgetDataStore.save(snapshot)
             WidgetTimelineReloader.reloadHabitWidget()
+            // #526: backfill tracking-controls unlock from history so existing users
+            // who have a qualifying sit start in the unlocked state (mirrors web's
+            // syncTrackingUnlockFromSessions).
+            trackingControlPrefsManager.syncTrackingUnlockFromSessions(result.sessions)
         }
     }
 
