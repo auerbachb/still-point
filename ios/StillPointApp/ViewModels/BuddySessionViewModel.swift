@@ -192,9 +192,9 @@ final class BuddySessionViewModel {
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
-        if soundPrefs.voiceCountdown {
+        if !voiceCountdownWasEnabled && soundPrefs.voiceCountdown {
             AudioEngine.shared.preloadVoiceCountdown()
-        } else if voiceCountdownWasEnabled {
+        } else if voiceCountdownWasEnabled && !soundPrefs.voiceCountdown {
             // Voice countdown was just disabled — stop any in-flight clip.
             lastVoiceCountdownSec = 0
             AudioEngine.shared.cancelVoiceCountdownPlayback()
