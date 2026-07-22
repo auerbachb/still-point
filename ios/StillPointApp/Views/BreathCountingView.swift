@@ -7,15 +7,32 @@ import StillPointShared
 struct BreathCountingView: View {
     let appVM: AppViewModel
     @State private var vm = BreathCountingViewModel()
+    // iPad external-keyboard support (#529): tracks whether the full-screen breath
+    // surface holds keyboard focus. True on appear; becomes false when the user Tabs
+    // to the End button, at which point Space/Right Arrow activates End normally
+    // instead of recording a breath — mirrors web's `event.target` guard (#460).
+    @FocusState private var breathSurfaceFocused: Bool
 
     var body: some View {
         ZStack {
             // Full-screen tap target — a tap anywhere (eyes-closed) registers a breath.
+            // On iPad with an external keyboard, Space and Right Arrow also register a
+            // breath (parity with web breathKeyBinding.ts, PR #460). `phases: .down`
+            // suppresses auto-repeat so a held key counts exactly once, matching the
+            // web's `event.repeat` guard. The handler only fires when this surface has
+            // focus; when the user Tabs to End, the End button receives Space instead.
             SPColor.bg
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
+                .focusable()
+                .focusEffectDisabled()
+                .focused($breathSurfaceFocused)
                 .onTapGesture {
                     vm.recordTap()
+                }
+                .onKeyPress(keys: [.space, .rightArrow], phases: .down) { _ in
+                    vm.recordTap()
+                    return .handled
                 }
 
             // Centered status. Non-interactive so taps on the labels (especially the
@@ -82,6 +99,9 @@ struct BreathCountingView: View {
             }
         }
         .onAppear {
+            // Claim keyboard focus so hardware-key input works immediately on iPad
+            // without requiring the user to tap first.
+            breathSurfaceFocused = true
             syncSessionSideEffects(inProgress: vm.sessionInProgress)
         }
         .onDisappear {
