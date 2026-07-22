@@ -1,7 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deviceTokens } from "@/db/schema";
-import { type ApnsEnvironment, type ApnsPayload, sendApnsNotification } from "@/lib/apns";
+import {
+  type ApnsEnvironment,
+  type ApnsPayload,
+  getApnsConfigStatus,
+  sendApnsNotification,
+} from "@/lib/apns";
 import {
   buildDailyReminderPayload,
   buildDailyReminderWebPushPayload,
@@ -39,6 +44,20 @@ export async function sendPushNotificationToUser(params: {
     .where(and(eq(deviceTokens.userId, params.recipientUserId), eq(deviceTokens.enabled, true)));
 
   if (tokens.length === 0) {
+    return { delivered: false };
+  }
+
+  const apnsStatus = getApnsConfigStatus();
+  if (!apnsStatus.configured) {
+    // A missing APNs provider config makes getApnsConfig() throw once per token
+    // inside the loop below, where the per-token catch swallows it — so scheduled
+    // pushes fail silently behind a cron 200 (#621). Detect it up front and emit one
+    // loud, actionable line naming the vars to set, then stop rather than spamming
+    // stack traces. Tokens are left enabled (a config error is not an APNs rejection).
+    console.error(
+      "APNs is not configured; skipping iOS push. Set the missing environment variables in this deployment.",
+      { missing: apnsStatus.missing, affectedTokens: tokens.length },
+    );
     return { delivered: false };
   }
 

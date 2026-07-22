@@ -33,6 +33,7 @@ vi.mock("jose", async (importOriginal) => {
 });
 
 import {
+  getApnsConfigStatus,
   hashDeviceToken,
   isValidDeviceToken,
   resetApnsProviderTokenCacheForTests,
@@ -99,6 +100,51 @@ describe("apns helpers (#539)", () => {
 
   test("resetApnsProviderTokenCacheForTests clears cached provider JWT", () => {
     expect(() => resetApnsProviderTokenCacheForTests()).not.toThrow();
+  });
+});
+
+describe("getApnsConfigStatus (#621)", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  test("reports configured when all four APNs vars are present", () => {
+    process.env = {
+      ...originalEnv,
+      APNS_BUNDLE_ID: "com.example.stillpoint",
+      APNS_TEAM_ID: "TEAM123456",
+      APNS_KEY_ID: "KEY123456",
+      APNS_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\ntest\\n-----END PRIVATE KEY-----",
+    };
+    expect(getApnsConfigStatus()).toEqual({ configured: true, missing: [] });
+  });
+
+  test("lists every missing var and reports not configured", () => {
+    process.env = { ...originalEnv };
+    delete process.env.APNS_BUNDLE_ID;
+    delete process.env.APNS_TEAM_ID;
+    delete process.env.APNS_KEY_ID;
+    delete process.env.APNS_PRIVATE_KEY;
+    expect(getApnsConfigStatus()).toEqual({
+      configured: false,
+      missing: ["APNS_BUNDLE_ID", "APNS_TEAM_ID", "APNS_KEY_ID", "APNS_PRIVATE_KEY"],
+    });
+  });
+
+  test("treats an empty-string var as missing", () => {
+    process.env = {
+      ...originalEnv,
+      APNS_BUNDLE_ID: "com.example.stillpoint",
+      APNS_TEAM_ID: "TEAM123456",
+      APNS_KEY_ID: "KEY123456",
+      APNS_PRIVATE_KEY: "",
+    };
+    expect(getApnsConfigStatus()).toEqual({
+      configured: false,
+      missing: ["APNS_PRIVATE_KEY"],
+    });
   });
 });
 
