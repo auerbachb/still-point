@@ -173,7 +173,7 @@ Notifications for the whole App ID group (including the web Services ID flow) ar
 
 ### End-to-end verification
 
-On a device signed in with Apple: **Settings → [your name] → Sign-In & Security → Sign in with Apple → Still Point → Stop Using Apple ID** (or [account.apple.com](https://account.apple.com) → Sign-In and Security). Within ~30s expect:
+On a device signed in with Apple: **Settings → [your name] → Sign-In & Security → Sign in with Apple → Still Point → Stop Using Apple ID** (or [account.apple.com](http://web.archive.org/web/20260720191728/https://account.apple.com/) → Sign-In and Security). Within ~30s expect:
 
 - a `consent-revoked` row in `apple_notification_log` with `action_taken = apple_link_removed`, and the user's `oauth_accounts` Apple row gone;
 - for an Apple ID **account deletion**, an `account-delete`/`account-deleted` row with `action_taken = account_deleted`, the `users` row gone, and an `account_deletion_log` entry.
