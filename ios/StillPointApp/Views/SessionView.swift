@@ -100,7 +100,13 @@ struct SessionView: View {
                     .opacity(secondaryChromeDimmed ? 0.32 : 1)
                     .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
                 if sessionInProgress {
-                    thumbReachHoldControls
+                    // #526: show hold cluster only when unlocked and not hidden by the user.
+                    if appVM.trackingControlPrefsManager.showDistractionHyperfocusCluster {
+                        thumbReachHoldControls
+                    } else if !appVM.trackingControlPrefsManager.trackingControlsUnlocked {
+                        trackingUnlockExplainer
+                    }
+                    // else: unlocked but hidden by user preference — show nothing.
                 }
                 Color.clear
                     .frame(width: 1, height: 1)
@@ -629,6 +635,26 @@ struct SessionView: View {
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    // MARK: - Pre-unlock Explainer (#526)
+
+    /// Shown in place of `thumbReachHoldControls` until the user completes a qualifying
+    /// 5+ minute sit. Mirrors web's copy and placement in `SessionView.tsx`.
+    private var trackingUnlockExplainer: some View {
+        Text("Distraction and hyperfocus tracking unlock after you complete one sit of five minutes or longer.")
+            .font(SPFont.mono(11))
+            .foregroundStyle(Color(SPColor.fg4))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, SPSpacing.s4)
+            .padding(.vertical, SPSpacing.s3)
+            .frame(maxWidth: .infinity)
+            .background(
+                SPColor.bg.opacity(0.95)
+                    .background(.ultraThinMaterial)
+                    .ignoresSafeArea(edges: .bottom)
+            )
+            .accessibilityIdentifier("session.trackingUnlockExplainer")
     }
 
     // MARK: - Control Panel
