@@ -45,8 +45,9 @@ type AuthedContext = {
 
 type MockApiState = {
   authenticated: boolean;
-  /** Set to true after DELETE /api/account to model permanent deletion (prevents re-login). */
-  accountDeleted: boolean;
+  /** Email of the deleted account; null when no account has been deleted.
+   * Scoped per-email so only the deleted identity is locked out, not all future logins. */
+  deletedEmail: string | null;
   user: UserRecord;
   credentials: AuthedContext;
   resetToken: string | null;
@@ -116,6 +117,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         currentDay: 1,
       };
       state.authenticated = true;
+      state.deletedEmail = null; // reset deletion state on fresh signup
       return json(route, 200, { user: state.user });
     }
 
@@ -123,7 +125,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
       const email = String(body.email ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
-      if (state.accountDeleted) {
+      if (state.deletedEmail && email === state.deletedEmail) {
         return json(route, 410, { error: DELETED_ACCOUNT_MESSAGE });
       }
       if (email !== state.credentials.email || password !== state.credentials.password) {
@@ -260,9 +262,9 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
 
     if (pathname === "/api/account" && method === "DELETE") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      // Model permanent deletion: clear all account data and prevent re-login.
+      // Model deletion: clear all account data and prevent re-login for this specific email.
+      state.deletedEmail = state.credentials.email;
       state.authenticated = false;
-      state.accountDeleted = true;
       state.sessions = [];
       state.thoughts = [];
       state.resetToken = null;
@@ -296,7 +298,7 @@ export const test = base.extend<AuthFixture>({
     const credentials = uniqueIdentity();
     const state: MockApiState = {
       authenticated: false,
-      accountDeleted: false,
+      deletedEmail: null,
       credentials,
       user: {
         id: `user-${Date.now()}`,
