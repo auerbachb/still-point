@@ -1,6 +1,7 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
 import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
+import { DELETED_ACCOUNT_MESSAGE } from "../../src/lib/authErrors";
 import { isValidUsername, USERNAME_ERROR } from "../../src/lib/username";
 import { tap } from "../utils/mobile-helpers";
 
@@ -44,6 +45,8 @@ type AuthedContext = {
 
 type MockApiState = {
   authenticated: boolean;
+  /** Set to true after DELETE /api/account to model permanent deletion (prevents re-login). */
+  accountDeleted: boolean;
   user: UserRecord;
   credentials: AuthedContext;
   resetToken: string | null;
@@ -120,6 +123,9 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
       const email = String(body.email ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
+      if (state.accountDeleted) {
+        return json(route, 410, { error: DELETED_ACCOUNT_MESSAGE });
+      }
       if (email !== state.credentials.email || password !== state.credentials.password) {
         return json(route, 401, { error: "Invalid credentials" });
       }
@@ -252,6 +258,17 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       return json(route, 200, { thoughts });
     }
 
+    if (pathname === "/api/account" && method === "DELETE") {
+      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
+      // Model permanent deletion: clear all account data and prevent re-login.
+      state.authenticated = false;
+      state.accountDeleted = true;
+      state.sessions = [];
+      state.thoughts = [];
+      state.resetToken = null;
+      return json(route, 200, { ok: true });
+    }
+
     if (pathname === "/api/thoughts/batch" && method === "POST") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
       const body = request.postDataJSON() as
@@ -279,6 +296,7 @@ export const test = base.extend<AuthFixture>({
     const credentials = uniqueIdentity();
     const state: MockApiState = {
       authenticated: false,
+      accountDeleted: false,
       credentials,
       user: {
         id: `user-${Date.now()}`,
