@@ -292,6 +292,7 @@ public final class AudioEngine: @unchecked Sendable {
             player = existing
         } else {
             let node = AVAudioPlayerNode()
+            player = node
             voicePlayerNode = node
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
