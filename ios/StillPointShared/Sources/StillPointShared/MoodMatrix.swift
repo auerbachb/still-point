@@ -28,6 +28,23 @@ public struct MoodMatrixEntry: Codable, Sendable, Equatable {
         self.before = before
         self.after = after
     }
+
+    /// Server validation requires both `before` and `after` keys (null allowed).
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(before, forKey: .before)
+        try container.encode(after, forKey: .after)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        before = try container.decodeIfPresent(Int.self, forKey: .before)
+        after = try container.decodeIfPresent(Int.self, forKey: .after)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case before, after
+    }
 }
 
 public enum MoodMatrixLogic {
@@ -55,7 +72,7 @@ public enum MoodMatrixLogic {
         MoodKey(rawValue: key) != nil
     }
 
-    /// Clamps integer mood cells to 1…5; non-integers and out-of-range values become nil.
+    /// Clamps integer mood cells to 1…5; out-of-range values become nil.
     public static func clampMoodValue(_ value: Int?) -> Int? {
         guard let value else { return nil }
         guard value >= 1, value <= 5 else { return nil }

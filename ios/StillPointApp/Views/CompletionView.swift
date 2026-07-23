@@ -803,11 +803,7 @@ struct CompletionView: View {
         do {
             let (session, _) = try await APIClient.shared.getSessionBySessionId(sessionId)
             if let stored = session.moodMatrix {
-                let sanitized = MoodMatrixLogic.sanitizedStored(stored)
-                moodMatrix = sanitized
-                if MoodMatrixLogic.isTouched(sanitized) {
-                    moodMatrixSaved = true
-                }
+                moodMatrix = MoodMatrixLogic.sanitizedStored(stored)
             }
         } catch {
             // Non-blocking: recap still works when reload fails.

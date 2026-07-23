@@ -39,9 +39,12 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
 
-        XCTAssertEqual((matrix["energy"] as? [String: Int])?["before"], 2)
-        XCTAssertNil((matrix["energy"] as? [String: Int?])?["after"] as? Int)
-        XCTAssertEqual((matrix["overall"] as? [String: Int])?["after"], 5)
+        let energy = try XCTUnwrap(matrix["energy"] as? [String: Any])
+        XCTAssertEqual(energy["before"] as? Int, 2)
+        XCTAssertTrue(energy["after"] is NSNull)
+        let overall = try XCTUnwrap(matrix["overall"] as? [String: Any])
+        XCTAssertTrue(overall["before"] is NSNull)
+        XCTAssertEqual(overall["after"] as? Int, 5)
     }
 
     func testPatchEncodesMinAndMaxBoundaries() throws {
