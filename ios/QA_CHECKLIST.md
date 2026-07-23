@@ -1,8 +1,10 @@
 # iOS Release Candidate QA Checklist (Issue #210)
 
 Release candidate: 1.0.3 (17)
-Last updated: 2026-07-21
+Last updated: 2026-07-23
 QA owner: iOS QA DRI
+
+> **Issue #438 (on-device TestFlight QA):** Structured pass/fail checklist with AC mapping, config pre-checks, and adjacent-feature matrix → [`ios/QA_ISSUE_438_CHECKLIST.md`](QA_ISSUE_438_CHECKLIST.md). Do **not** close #438 until all five device AC rows pass on a build cut **after** #433 (not Build 11 / v1.0.3).
 
 ## 1) Smoke + regression pass
 
