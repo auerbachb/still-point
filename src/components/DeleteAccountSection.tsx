@@ -80,6 +80,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
       {!confirming ? (
         <button
           type="button"
+          data-testid="delete-account-trigger"
           onClick={() => {
             setConfirming(true);
             setError(null);
@@ -106,6 +107,7 @@ export function DeleteAccountSection({ onDeleted }: DeleteAccountSectionProps) {
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
             type="button"
+            data-testid="delete-account-confirm"
             onClick={handleDeleteAccount}
             disabled={deleting}
             style={{

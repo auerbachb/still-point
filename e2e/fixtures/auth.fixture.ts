@@ -1,6 +1,7 @@
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
 import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
+import { DELETED_ACCOUNT_MESSAGE } from "../../src/lib/authErrors";
 import { isValidUsername, USERNAME_ERROR } from "../../src/lib/username";
 import { tap } from "../utils/mobile-helpers";
 
@@ -44,6 +45,12 @@ type AuthedContext = {
 
 type MockApiState = {
   authenticated: boolean;
+  /** Set of emails whose accounts have been deleted.
+   * Mirrors the real `accountDeletionLog` table: emails accumulate on delete and
+   * are only removed when the same email re-registers (because the backend only
+   * applies the 410 guard when the user row doesn't exist — a fresh signup creates
+   * a new row so subsequent logins succeed). */
+  deletedEmails: Set<string>;
   user: UserRecord;
   credentials: AuthedContext;
   resetToken: string | null;
@@ -113,6 +120,11 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         currentDay: 1,
       };
       state.authenticated = true;
+      // Mirror real backend: signing up with a previously-deleted email succeeds
+      // (the signup route doesn't check accountDeletionLog) and subsequent logins
+      // also succeed because the user row now exists again. Remove only this
+      // specific email — other deleted emails remain locked out.
+      state.deletedEmails.delete(email);
       return json(route, 200, { user: state.user });
     }
 
@@ -120,6 +132,9 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
       const email = String(body.email ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
+      if (state.deletedEmails.has(email)) {
+        return json(route, 410, { error: DELETED_ACCOUNT_MESSAGE });
+      }
       if (email !== state.credentials.email || password !== state.credentials.password) {
         return json(route, 401, { error: "Invalid credentials" });
       }
@@ -252,6 +267,18 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       return json(route, 200, { thoughts });
     }
 
+    if (pathname === "/api/account" && method === "DELETE") {
+      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
+      // Model deletion: clear all account data and add this email to the deleted set.
+      // Other emails already in the set remain unaffected.
+      state.deletedEmails.add(state.credentials.email);
+      state.authenticated = false;
+      state.sessions = [];
+      state.thoughts = [];
+      state.resetToken = null;
+      return json(route, 200, { ok: true });
+    }
+
     if (pathname === "/api/thoughts/batch" && method === "POST") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
       const body = request.postDataJSON() as
@@ -279,6 +306,7 @@ export const test = base.extend<AuthFixture>({
     const credentials = uniqueIdentity();
     const state: MockApiState = {
       authenticated: false,
+      deletedEmails: new Set<string>(),
       credentials,
       user: {
         id: `user-${Date.now()}`,
