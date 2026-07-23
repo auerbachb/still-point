@@ -45,9 +45,12 @@ type AuthedContext = {
 
 type MockApiState = {
   authenticated: boolean;
-  /** Email of the deleted account; null when no account has been deleted.
-   * Scoped per-email so only the deleted identity is locked out, not all future logins. */
-  deletedEmail: string | null;
+  /** Set of emails whose accounts have been deleted.
+   * Mirrors the real `accountDeletionLog` table: emails accumulate on delete and
+   * are only removed when the same email re-registers (because the backend only
+   * applies the 410 guard when the user row doesn't exist — a fresh signup creates
+   * a new row so subsequent logins succeed). */
+  deletedEmails: Set<string>;
   user: UserRecord;
   credentials: AuthedContext;
   resetToken: string | null;
@@ -117,7 +120,11 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
         currentDay: 1,
       };
       state.authenticated = true;
-      state.deletedEmail = null; // reset deletion state on fresh signup
+      // Mirror real backend: signing up with a previously-deleted email succeeds
+      // (the signup route doesn't check accountDeletionLog) and subsequent logins
+      // also succeed because the user row now exists again. Remove only this
+      // specific email — other deleted emails remain locked out.
+      state.deletedEmails.delete(email);
       return json(route, 200, { user: state.user });
     }
 
@@ -125,7 +132,7 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
       const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
       const email = String(body.email ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
-      if (state.deletedEmail && email === state.deletedEmail) {
+      if (state.deletedEmails.has(email)) {
         return json(route, 410, { error: DELETED_ACCOUNT_MESSAGE });
       }
       if (email !== state.credentials.email || password !== state.credentials.password) {
@@ -262,8 +269,9 @@ async function installMockApiRoutes(page: Page, state: MockApiState) {
 
     if (pathname === "/api/account" && method === "DELETE") {
       if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      // Model deletion: clear all account data and prevent re-login for this specific email.
-      state.deletedEmail = state.credentials.email;
+      // Model deletion: clear all account data and add this email to the deleted set.
+      // Other emails already in the set remain unaffected.
+      state.deletedEmails.add(state.credentials.email);
       state.authenticated = false;
       state.sessions = [];
       state.thoughts = [];
@@ -298,7 +306,7 @@ export const test = base.extend<AuthFixture>({
     const credentials = uniqueIdentity();
     const state: MockApiState = {
       authenticated: false,
-      deletedEmail: null,
+      deletedEmails: new Set<string>(),
       credentials,
       user: {
         id: `user-${Date.now()}`,
