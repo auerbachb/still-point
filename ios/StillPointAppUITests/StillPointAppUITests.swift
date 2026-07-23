@@ -192,7 +192,8 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["completion.durationLabel"].exists)
 
         let returnButton = app.buttons["completion.returnButton"]
-        tapByStableCenter(returnButton, in: app)
+        scrollElementIntoVisibleFrame(returnButton, in: app)
+        XCTAssertTrue(tapByStableCenter(returnButton, in: app, timeout: 12))
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
 
         terminateAppReliably(app)
