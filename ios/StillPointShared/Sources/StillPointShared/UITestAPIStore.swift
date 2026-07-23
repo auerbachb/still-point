@@ -391,6 +391,44 @@ actor UITestAPIStore {
         return updated
     }
 
+    /// #635: merge mood matrix rows (mirrors PATCH /api/sessions/by-session/{id} merge semantics).
+    func updateSessionMoodMatrix(sessionId: String, patch: MoodMatrixPatch) throws -> SessionDTO {
+        try ensureAuthenticated()
+
+        guard let idx = store.sessions.firstIndex(where: { $0.id == sessionId }) else {
+            throw APIError(status: 404, message: "Session not found")
+        }
+
+        let existing = store.sessions[idx]
+        let prior = existing.moodMatrix ?? [:]
+        let merged = prior.merging(patch.entries) { _, new in new }
+        let updated = SessionDTO(
+            id: existing.id,
+            dayNumber: existing.dayNumber,
+            sessionType: existing.sessionType,
+            duration: existing.duration,
+            bonusSeconds: existing.bonusSeconds,
+            completed: existing.completed,
+            actualTime: existing.actualTime,
+            clearPercent: existing.clearPercent,
+            thoughtCount: existing.thoughtCount,
+            mindStateLog: existing.mindStateLog,
+            attentionLog: existing.attentionLog,
+            sessionDate: existing.sessionDate,
+            createdAt: existing.createdAt,
+            buddySessionId: existing.buddySessionId,
+            breathCount: existing.breathCount,
+            track: existing.track,
+            ambientSoundSummary: existing.ambientSoundSummary,
+            focusRating: existing.focusRating,
+            happinessRating: existing.happinessRating,
+            moodMatrix: merged.isEmpty ? nil : merged
+        )
+        store.sessions[idx] = updated
+        persist()
+        return updated
+    }
+
     // MARK: - Thoughts
 
     func getThoughts() throws -> [ThoughtDTO] {

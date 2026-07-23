@@ -256,6 +256,15 @@ public actor APIClient {
         return response.session
     }
 
+    /// #635: before/after mood matrix via PATCH /api/sessions/by-session/{sessionId}.
+    public func updateSessionMoodMatrix(sessionId: String, patch moodPatch: MoodMatrixPatch) async throws -> SessionDTO {
+        if let uiTestAPIStore {
+            return try await uiTestAPIStore.updateSessionMoodMatrix(sessionId: sessionId, patch: moodPatch)
+        }
+        let response: SessionResponse = try await patch("/api/sessions/by-session/\(sessionId)", body: moodPatch)
+        return response.session
+    }
+
     // MARK: - Thoughts
 
     public func getThoughts() async throws -> [ThoughtDTO] {
