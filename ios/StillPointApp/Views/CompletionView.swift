@@ -800,6 +800,9 @@ struct CompletionView: View {
     @MainActor
     private func loadPersistedSessionData() async {
         guard !sessionId.isEmpty else { return }
+        moodMatrix = [:]
+        moodMatrixSaved = false
+        moodMatrixSaveError = nil
         do {
             let (session, _) = try await APIClient.shared.getSessionBySessionId(sessionId)
             if let stored = session.moodMatrix {
