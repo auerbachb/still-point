@@ -6,9 +6,10 @@ public enum AttentionTrackingLogic {
     public static let sustainedThreshold: TimeInterval = 0.5
 
     /// Classify a raw `ARFaceAnchor.lookAtPoint` sample as attentive or away.
-    /// `lookAtPoint` is in face-anchor space: negative Z generally means toward the device.
+    /// `lookAtPoint` is in face-anchor space: positive Z means toward the device
+    /// (Apple-documented convention for ARFaceAnchor coordinate space).
     public static func classifyGaze(lookAtX: Float, lookAtY: Float, lookAtZ: Float) -> String {
-        let towardDevice = lookAtZ < -0.12
+        let towardDevice = lookAtZ > 0.12
         let centered = abs(lookAtX) < 0.18 && abs(lookAtY) < 0.18
         return (towardDevice && centered) ? "attentive" : "away"
     }

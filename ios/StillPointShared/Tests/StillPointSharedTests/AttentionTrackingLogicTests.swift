@@ -3,19 +3,22 @@ import XCTest
 
 final class AttentionTrackingLogicTests: XCTestCase {
     func testClassifyGazeAttentiveWhenLookingAtDevice() {
+        // Positive Z = toward device (Apple-documented ARFaceAnchor convention).
         XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.02, lookAtY: -0.03, lookAtZ: -0.25),
+            AttentionTrackingLogic.classifyGaze(lookAtX: 0.02, lookAtY: -0.03, lookAtZ: 0.25),
             "attentive"
         )
     }
 
     func testClassifyGazeAwayWhenLookingOffScreen() {
+        // Toward device but X is too far off-center.
         XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.4, lookAtY: 0.0, lookAtZ: -0.25),
+            AttentionTrackingLogic.classifyGaze(lookAtX: 0.4, lookAtY: 0.0, lookAtZ: 0.25),
             "away"
         )
+        // Negative Z = gaze directed away from the device entirely.
         XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.0, lookAtY: 0.0, lookAtZ: 0.1),
+            AttentionTrackingLogic.classifyGaze(lookAtX: 0.0, lookAtY: 0.0, lookAtZ: -0.25),
             "away"
         )
     }
