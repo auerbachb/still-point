@@ -447,6 +447,54 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.textFields["auth.emailField"].waitForExistence(timeout: 5))
     }
 
+    /// Account deletion flow: authenticated user navigates to Settings, taps Delete Account,
+    /// confirms through the two-step dialog, and lands on the unauthenticated auth screen.
+    ///
+    /// **Canonical path:** Native flow — SettingsView "Delete Account" button →
+    /// confirmation dialog ("Continue") → final alert ("Delete Account") → `didLogout()` →
+    /// auth screen. The UITestAPIStore mock handles the deletion in-process (no real
+    /// network call) — non-production semantics are guaranteed by the mock store.
+    ///
+    /// **Local run command:**
+    /// ```
+    /// bash scripts/e2e/run-ios-tests.sh critical
+    /// # or for this test only:
+    /// xcodebuild test \
+    ///   -project ios/StillPoint.xcodeproj \
+    ///   -scheme StillPoint \
+    ///   -destination "platform=iOS Simulator,name=iPhone 17,OS=latest" \
+    ///   -only-testing:"StillPointAppUITests/StillPointAppUITests/testAccountDeletionFlow"
+    /// ```
+    @MainActor
+    func testAccountDeletionFlow() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+        openTab(identifier: "tab.settings", in: app, waitingFor: app.staticTexts["settings.title"])
+
+        let deleteAccountButton = app.buttons["settings.deleteAccountButton"]
+        XCTAssertTrue(deleteAccountButton.waitForExistence(timeout: 5))
+        scrollElementIntoVisibleFrame(deleteAccountButton, in: app)
+        tapByStableCenter(deleteAccountButton, in: app)
+
+        // Step 1: Confirmation dialog — "Delete your account?"
+        let continueButton = app.buttons["Continue"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5), "Account deletion confirmation dialog did not appear")
+        continueButton.tap()
+
+        // Step 2: Final alert — "Final confirmation"
+        let finalDeleteButton = app.alerts.firstMatch.buttons["Delete Account"]
+        XCTAssertTrue(finalDeleteButton.waitForExistence(timeout: 5), "Final account deletion alert did not appear")
+        finalDeleteButton.tap()
+
+        XCTAssertTrue(
+            app.otherElements["root.currentView.auth"].waitForExistence(timeout: 15),
+            "Auth screen should appear after account deletion"
+        )
+        XCTAssertTrue(app.textFields["auth.emailField"].waitForExistence(timeout: 5))
+    }
+
     @MainActor
     func testGuidedExerciseOverlayOpensAndStartsExercise() throws {
         let app = makeApp(
