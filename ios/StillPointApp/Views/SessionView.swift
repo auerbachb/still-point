@@ -204,8 +204,16 @@ struct SessionView: View {
                 gazeTrackingRanThisSession = true
             }
             guard appVM.currentUser?.attentionTrackingEnabled == true else { return }
-            guard sessionInProgress, !vm.showIntroOverlay else { return }
-            presentAttentionStatusAlert(for: status)
+            // Surface permission/failure/unsupported alerts regardless of whether the
+            // session is still in progress; a status change at a session boundary would
+            // otherwise be silently swallowed by the sessionInProgress guard (#628).
+            guard !vm.showIntroOverlay else { return }
+            switch status {
+            case .unsupported, .permissionDenied, .failed:
+                presentAttentionStatusAlert(for: status)
+            case .idle, .running, .paused:
+                break
+            }
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
             SessionIdleTimerController.syncLocalSession(
