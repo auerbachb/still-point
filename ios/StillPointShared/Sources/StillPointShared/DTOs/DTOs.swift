@@ -175,6 +175,8 @@ public struct SessionDTO: Codable, Sendable {
     public let focusRating: Int?
     /// #521: post-session self-report ratings (1–10); nil until set via the PATCH endpoint.
     public let happinessRating: Int?
+    /// #472 / #635: before/after mood matrix (1–5 per cell); nil until set via PATCH.
+    public let moodMatrix: [String: MoodMatrixEntry]?
 
     public init(
         id: String,
@@ -195,7 +197,8 @@ public struct SessionDTO: Codable, Sendable {
         track: Track? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil,
         focusRating: Int? = nil,
-        happinessRating: Int? = nil
+        happinessRating: Int? = nil,
+        moodMatrix: [String: MoodMatrixEntry]? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -216,6 +219,7 @@ public struct SessionDTO: Codable, Sendable {
         self.ambientSoundSummary = ambientSoundSummary
         self.focusRating = focusRating
         self.happinessRating = happinessRating
+        self.moodMatrix = moodMatrix
     }
 
     /// #612: decode defensively. Identity/structural fields stay strict — a row missing
@@ -249,13 +253,14 @@ public struct SessionDTO: Codable, Sendable {
         ambientSoundSummary = try? c.decode(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
         focusRating = try c.decodeIfPresent(Int.self, forKey: .focusRating)
         happinessRating = try c.decodeIfPresent(Int.self, forKey: .happinessRating)
+        moodMatrix = try? c.decode([String: MoodMatrixEntry].self, forKey: .moodMatrix)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
         case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
         case createdAt, buddySessionId, breathCount, track, ambientSoundSummary
-        case focusRating, happinessRating
+        case focusRating, happinessRating, moodMatrix
     }
 }
 

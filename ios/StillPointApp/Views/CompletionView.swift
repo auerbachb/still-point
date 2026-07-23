@@ -42,6 +42,17 @@ struct CompletionView: View {
     @State private var isSavingRatings = false
     @State private var ratingsSaveError: String?
 
+    // Before/after mood matrix (#472 / #635)
+    @State private var moodMatrix: [MoodKey: MoodMatrixEntry] = [:]
+    @State private var moodMatrixSaved = false
+    @State private var isSavingMoodMatrix = false
+    @State private var moodMatrixSaveError: String?
+
+    private enum MoodMatrixColumn {
+        case before
+        case after
+    }
+
     private var nextDuration: Int {
         DurationRecovery.previewNextStandardDuration(
             sessionType: sessionType,
@@ -273,6 +284,7 @@ struct CompletionView: View {
                 // Post-session ratings (#521)
                 if !sessionId.isEmpty {
                     ratingsSection
+                    moodMatrixSection
                 }
 
                 // Progression preview
@@ -332,6 +344,9 @@ struct CompletionView: View {
             SessionPhotoPicker { image in
                 handlePhotoSelected(image)
             }
+        }
+        .task(id: sessionId) {
+            await loadPersistedSessionData()
         }
     }
 
@@ -560,6 +575,242 @@ struct CompletionView: View {
             return "Unable to save ratings — please try again"
         default:
             return "Failed to save ratings"
+        }
+    }
+
+    // MARK: - Mood Matrix Section (#472 / #635)
+
+    @ViewBuilder
+    private var moodMatrixSection: some View {
+        VStack(alignment: .leading, spacing: SPSpacing.s2) {
+            Text("MOOD SHIFT")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .tracking(2)
+
+            if moodMatrixSaved {
+                Text("mood saved")
+                    .font(SPFont.mono(11, weight: .medium))
+                    .foregroundStyle(SPColor.green)
+                    .accessibilityIdentifier("completion.moodMatrixSavedIndicator")
+            } else {
+                moodMatrixColumnHeaders
+                moodMatrixScaleHints
+
+                VStack(spacing: SPSpacing.s2) {
+                    ForEach(MoodKey.allCases, id: \.self) { key in
+                        moodMatrixRow(for: key)
+                    }
+                }
+
+                if MoodMatrixLogic.isTouched(moodMatrix) {
+                    Button {
+                        saveMoodMatrix()
+                    } label: {
+                        HStack(spacing: SPSpacing.s1) {
+                            if isSavingMoodMatrix {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Color(SPColor.bg))
+                            }
+                            Text(isSavingMoodMatrix ? "Saving…" : (moodMatrixSaveError == nil ? "Save mood" : "Retry"))
+                        }
+                        .font(SPFont.serifItalic(18, weight: .light))
+                        .spCapsuleButtonStyle(
+                            moodMatrixSaveError == nil ? .neutral : .greenSolid,
+                            size: .fullWidth,
+                            prominent: true
+                        )
+                    }
+                    .disabled(isSavingMoodMatrix)
+                    .accessibilityIdentifier("completion.saveMoodMatrixButton")
+                }
+
+                if let moodMatrixSaveError {
+                    Text(moodMatrixSaveError)
+                        .font(SPFont.mono(11))
+                        .foregroundStyle(SPColor.dangerMuted)
+                }
+            }
+        }
+    }
+
+    private var moodMatrixColumnHeaders: some View {
+        HStack(spacing: SPSpacing.s2) {
+            Text("")
+                .frame(width: 56, alignment: .trailing)
+            Text("BEFORE")
+                .font(SPFont.mono(10, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .tracking(1.4)
+                .frame(maxWidth: .infinity)
+            Text("AFTER")
+                .font(SPFont.mono(10, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg4))
+                .tracking(1.4)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var moodMatrixScaleHints: some View {
+        HStack(spacing: SPSpacing.s2) {
+            Text("")
+                .frame(width: 56)
+            ForEach(0..<2, id: \.self) { _ in
+                HStack {
+                    Text("low")
+                    Spacer()
+                    Text("high")
+                }
+                .font(SPFont.mono(9))
+                .foregroundStyle(Color(SPColor.fg4))
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func moodMatrixRow(for key: MoodKey) -> some View {
+        let entry = moodMatrix[key] ?? MoodMatrixEntry()
+        return HStack(spacing: SPSpacing.s2) {
+            Text(key.label.uppercased())
+                .font(SPFont.mono(10, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg3))
+                .tracking(1)
+                .frame(width: 56, alignment: .trailing)
+
+            moodMatrixTapRow(
+                moodKey: key,
+                column: .before,
+                selected: entry.before,
+                disabled: isSavingMoodMatrix
+            )
+            .frame(maxWidth: .infinity)
+
+            moodMatrixTapRow(
+                moodKey: key,
+                column: .after,
+                selected: entry.after,
+                disabled: isSavingMoodMatrix
+            )
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func moodMatrixTapRow(
+        moodKey: MoodKey,
+        column: MoodMatrixColumn,
+        selected: Int?,
+        disabled: Bool
+    ) -> some View {
+        HStack(spacing: 4) {
+            ForEach(1...5, id: \.self) { level in
+                Button {
+                    toggleMoodCell(key: moodKey, column: column, level: level)
+                } label: {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(moodBoxFill(selected: selected == level, level: level))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(
+                                    selected == level ? SPColor.greenBorderSubtle : SPColor.border2,
+                                    lineWidth: 1
+                                )
+                        )
+                        .overlay {
+                            if selected == level {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(SPColor.green.opacity(0.35 + Double(level) * 0.12))
+                                    .frame(width: 10, height: 10)
+                            }
+                        }
+                        .frame(width: 28, height: 28)
+                }
+                .disabled(disabled)
+                .accessibilityIdentifier(moodMatrixAccessibilityId(moodKey: moodKey, column: column, level: level))
+            }
+        }
+    }
+
+    private func moodBoxFill(selected: Bool, level: Int) -> Color {
+        if selected {
+            return SPColor.green.opacity(0.08 + Double(level) * 0.07)
+        }
+        return Color(SPColor.surface1)
+    }
+
+    private func moodMatrixAccessibilityId(moodKey: MoodKey, column: MoodMatrixColumn, level: Int) -> String {
+        let side = column == .before ? "before" : "after"
+        return "completion.moodMatrix.\(moodKey.rawValue).\(side).\(level)"
+    }
+
+    private func toggleMoodCell(key: MoodKey, column: MoodMatrixColumn, level: Int) {
+        let entry = moodMatrix[key] ?? MoodMatrixEntry()
+        let newBefore: Int?
+        let newAfter: Int?
+        switch column {
+        case .before:
+            newBefore = entry.before == level ? nil : level
+            newAfter = entry.after
+        case .after:
+            newBefore = entry.before
+            newAfter = entry.after == level ? nil : level
+        }
+        moodMatrix[key] = MoodMatrixEntry(before: newBefore, after: newAfter)
+        moodMatrixSaveError = nil
+    }
+
+    private func saveMoodMatrix() {
+        guard !sessionId.isEmpty, !isSavingMoodMatrix, !moodMatrixSaved else { return }
+        guard MoodMatrixLogic.isTouched(moodMatrix) else { return }
+        isSavingMoodMatrix = true
+        moodMatrixSaveError = nil
+        let patch = MoodMatrixPatch(from: moodMatrix)
+        Task { @MainActor in
+            do {
+                _ = try await APIClient.shared.updateSessionMoodMatrix(sessionId: sessionId, patch: patch)
+                isSavingMoodMatrix = false
+                moodMatrixSaved = true
+            } catch is CancellationError {
+                isSavingMoodMatrix = false
+            } catch let error as APIError {
+                isSavingMoodMatrix = false
+                moodMatrixSaveError = moodMatrixErrorMessage(for: error.status)
+            } catch {
+                isSavingMoodMatrix = false
+                moodMatrixSaveError = "Unable to save mood — please try again"
+            }
+        }
+    }
+
+    private func moodMatrixErrorMessage(for status: Int) -> String {
+        switch status {
+        case 401:
+            return "Please log in again"
+        case 400:
+            return "Invalid mood value"
+        case 404:
+            return "Session not found — please try again"
+        case 0:
+            return "Unable to save mood — please try again"
+        default:
+            return "Failed to save mood"
+        }
+    }
+
+    @MainActor
+    private func loadPersistedSessionData() async {
+        guard !sessionId.isEmpty else { return }
+        do {
+            let (session, _) = try await APIClient.shared.getSessionBySessionId(sessionId)
+            if let stored = session.moodMatrix {
+                let sanitized = MoodMatrixLogic.sanitizedStored(stored)
+                moodMatrix = sanitized
+                if MoodMatrixLogic.isTouched(sanitized) {
+                    moodMatrixSaved = true
+                }
+            }
+        } catch {
+            // Non-blocking: recap still works when reload fails.
         }
     }
 
