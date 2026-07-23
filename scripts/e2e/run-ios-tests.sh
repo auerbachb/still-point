@@ -102,6 +102,7 @@ resolve_test_target() {
       echo "StillPointAppUITests/StillPointAppUITests/testLaunchLoginCompleteSessionAndHistoryPersistence"
       ;;
     critical)
+      echo "StillPointAppUITests/StillPointAppUITests/testAccountDeletionFlow"
       echo "StillPointAppUITests/StillPointAppUITests/testHistoryAndSettingsNavigationSmoke"
       echo "StillPointAppUITests/StillPointAppUITests/testJournalAndBoardTabsReachable"
       echo "StillPointAppUITests/StillPointAppUITests/testLaunchOfflineShowsUserVisibleMessage"

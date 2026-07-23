@@ -332,6 +332,7 @@ struct SettingsView: View {
                     .spCapsuleButtonStyle(.danger, size: .fullWidth)
                 }
                 .disabled(isDeletingAccount)
+                .accessibilityIdentifier("settings.deleteAccountButton")
                 .confirmationDialog(
                     "Delete your account?",
                     isPresented: $showDeleteAccountDialog,
