@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BLOCK_DURATION, type SessionType } from "@/lib/constants";
 import { RatingSlider } from "@/components/RatingSlider";
+import { MoodMatrix, type MoodMatrixValue, isMoodMatrixTouched, buildMoodMatrixPayload } from "@/components/MoodMatrix";
 
 type CompletionScreenProps = {
   dayNumber: number;
@@ -21,6 +22,9 @@ type CompletionScreenProps = {
    *  no persisted session to attach ratings to. Only touched slider values are
    *  included in the payload; untouched ones are omitted for partial-update. */
   onSaveRatings?: (ratings: { focusRating?: number; happinessRating?: number }) => Promise<void>;
+  /** #472: before/after mood matrix; omitted when there is no persisted session.
+   *  Payload only includes rows the user actually tapped. */
+  onSaveMoodMatrix?: (matrix: Record<string, { before: number | null; after: number | null }>) => Promise<void>;
   /** Tighten vertical spacing for narrow-viewport mobile layouts (#473). */
   compact?: boolean;
 };
@@ -39,6 +43,7 @@ export function CompletionScreen({
   onReturn,
   onSaveNote,
   onSaveRatings,
+  onSaveMoodMatrix,
   compact = false,
 }: CompletionScreenProps) {
   const [note, setNote] = useState("");
@@ -52,6 +57,11 @@ export function CompletionScreen({
   const [ratingsSaved, setRatingsSaved] = useState(false);
   const [savingRatings, setSavingRatings] = useState(false);
   const [ratingsSaveError, setRatingsSaveError] = useState(false);
+  // #472: mood matrix state
+  const [moodMatrix, setMoodMatrix] = useState<MoodMatrixValue>({});
+  const [moodMatrixSaved, setMoodMatrixSaved] = useState(false);
+  const [savingMoodMatrix, setSavingMoodMatrix] = useState(false);
+  const [moodMatrixSaveError, setMoodMatrixSaveError] = useState(false);
   const isQuick = sessionType === "quick";
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
   const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
@@ -321,6 +331,89 @@ export function CompletionScreen({
               >
                 {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
               </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Mood matrix (#472) */}
+      {onSaveMoodMatrix && (
+        <div style={{
+          width: "100%", maxWidth: "min(420px, calc(100vw - 40px))",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: "14px",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px", color: "var(--fg-3)",
+            letterSpacing: "0.12em", textTransform: "uppercase",
+            alignSelf: "flex-start",
+          }}>
+            Mood Shift
+          </div>
+
+          {moodMatrixSaved ? (
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--accent-green-dim)",
+              letterSpacing: "0.09em",
+            }}>
+              mood saved
+            </div>
+          ) : (
+            <>
+              <MoodMatrix
+                value={moodMatrix}
+                onChange={setMoodMatrix}
+                disabled={savingMoodMatrix}
+              />
+              {moodMatrixSaveError && (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px", color: "var(--accent-danger)",
+                    letterSpacing: "0.09em",
+                  }}
+                >
+                  failed to save — tap to retry
+                </div>
+              )}
+              {isMoodMatrixTouched(moodMatrix) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSavingMoodMatrix(true);
+                    try {
+                      setMoodMatrixSaveError(false);
+                      await onSaveMoodMatrix(buildMoodMatrixPayload(moodMatrix));
+                      setMoodMatrixSaved(true);
+                    } catch (err) {
+                      console.error("Failed to save mood matrix:", err);
+                      setMoodMatrixSaveError(true);
+                    } finally {
+                      setSavingMoodMatrix(false);
+                    }
+                  }}
+                  disabled={savingMoodMatrix}
+                  style={{
+                    background: "none",
+                    border: moodMatrixSaveError
+                      ? "1px solid var(--accent-danger-border)"
+                      : "1px solid var(--accent-green-border)",
+                    color: moodMatrixSaveError
+                      ? "var(--accent-danger)"
+                      : "var(--accent-green-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
+                    padding: "8px 24px", borderRadius: "20px",
+                    cursor: savingMoodMatrix ? "default" : "pointer",
+                    opacity: savingMoodMatrix ? 0.5 : 1,
+                  }}
+                >
+                  {savingMoodMatrix ? "saving..." : moodMatrixSaveError ? "retry" : "save mood"}
+                </button>
+              )}
             </>
           )}
         </div>

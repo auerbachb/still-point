@@ -75,6 +75,8 @@ export type Session = {
   /** #109: post-session self-report ratings (1-10), null until rated. */
   focusRating?: number | null;
   happinessRating?: number | null;
+  /** #472: before/after mood matrix (1–5 per cell), null until submitted. */
+  moodMatrix?: Record<string, { before: number | null; after: number | null }> | null;
 };
 
 export type Thought = {
@@ -243,10 +245,15 @@ export const api = {
   getSession: (dayNumber: number) =>
     request<{ session: Session; thoughts: Thought[] }>(`/api/sessions/${dayNumber}`),
 
-  /** #109: post-hoc ratings update from the CompletionScreen sliders. */
+  /** #109/#472: post-hoc ratings + mood-matrix update from the CompletionScreen. */
   updateSessionRatings: (
     sessionId: string,
-    data: { focusRating?: number; happinessRating?: number },
+    data: {
+      focusRating?: number;
+      happinessRating?: number;
+      /** #472: mood matrix payload — partial keys allowed. */
+      moodMatrix?: Record<string, { before: number | null; after: number | null }>;
+    },
   ) =>
     request<{ session: Session }>(`/api/sessions/by-session/${sessionId}`, {
       method: "PATCH",

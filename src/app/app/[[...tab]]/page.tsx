@@ -962,6 +962,9 @@ export default function StillPoint() {
           onSaveRatings={completionData.sessionId && !completionData.isPendingSync ? async (ratings) => {
             await api.updateSessionRatings(completionData.sessionId!, ratings);
           } : undefined}
+          onSaveMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async (matrix) => {
+            await api.updateSessionRatings(completionData.sessionId!, { moodMatrix: matrix });
+          } : undefined}
           compact={isMobile}
         />
       )}

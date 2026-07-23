@@ -10,8 +10,52 @@ type RouteContext = RouteParams<{ sessionId: string }>;
 
 const RATING_FIELDS = ["focusRating", "happinessRating"] as const;
 
+/** Valid mood keys for the before/after matrix (#472). */
+export const MOOD_MATRIX_KEYS = ["calm", "focus", "energy", "anxiety", "overall"] as const;
+export type MoodMatrixKey = (typeof MOOD_MATRIX_KEYS)[number];
+
 function isValidRating(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 10;
+}
+
+/** Mood matrix cells use a 1–5 scale (compact 5-box tap UI). */
+function isValidMoodValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+function isValidMoodEntry(entry: unknown): entry is { before: number | null; after: number | null } {
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return false;
+  const e = entry as Record<string, unknown>;
+  const beforeOk = e.before === null || isValidMoodValue(e.before);
+  const afterOk = e.after === null || isValidMoodValue(e.after);
+  return beforeOk && afterOk && (e.before !== null || e.after !== null);
+}
+
+/** Validate a full moodMatrix payload object. Returns an error string or null. */
+function validateMoodMatrix(
+  value: unknown,
+): { validated: Record<string, { before: number | null; after: number | null }> } | { error: string } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "moodMatrix must be a JSON object" };
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  if (keys.length === 0) {
+    return { error: "moodMatrix must have at least one mood entry" };
+  }
+  const validated: Record<string, { before: number | null; after: number | null }> = {};
+  for (const key of keys) {
+    if (!(MOOD_MATRIX_KEYS as readonly string[]).includes(key)) {
+      return { error: `Unknown mood key: ${key}` };
+    }
+    if (!isValidMoodEntry(obj[key])) {
+      return {
+        error: `Invalid mood entry for ${key}: each entry must have before/after (1-5 or null, at least one non-null)`,
+      };
+    }
+    validated[key] = obj[key] as { before: number | null; after: number | null };
+  }
+  return { validated };
 }
 
 export const GET = withApiHandler(
@@ -84,7 +128,11 @@ export const PATCH = withApiHandler(
     if (body === null || typeof body !== "object" || Array.isArray(body)) {
       return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
     }
-    const updates: Partial<Record<(typeof RATING_FIELDS)[number], number>> = {};
+    const updates: Partial<
+      Record<(typeof RATING_FIELDS)[number], number> & {
+        moodMatrix: Record<string, { before: number | null; after: number | null }>;
+      }
+    > = {};
     const bodyObj = body as Record<string, unknown>;
 
     for (const field of RATING_FIELDS) {
@@ -93,6 +141,15 @@ export const PATCH = withApiHandler(
         return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 });
       }
       updates[field] = bodyObj[field] as number;
+    }
+
+    // #472: mood matrix — validate and merge with existing session data.
+    if (bodyObj.moodMatrix !== undefined) {
+      const result = validateMoodMatrix(bodyObj.moodMatrix);
+      if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      updates.moodMatrix = result.validated;
     }
 
     if (Object.keys(updates).length === 0) {
