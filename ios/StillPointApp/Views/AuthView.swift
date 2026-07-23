@@ -34,6 +34,7 @@ struct AuthView: View {
                     toggleButton("Sign Up", isSelected: vm.isSignUp) {
                         withAnimation { vm.isSignUp = true }
                     }
+                    .accessibilityIdentifier("auth.signUpToggleButton")
                 }
                 .background(SPColor.surface1)
                 .clipShape(Capsule())
