@@ -2,9 +2,9 @@
 
 This file documents **positioning and parity** for App Store Connect. The **machine-deliverable** strings (name, subtitle, description, keywords, release notes, URLs, review notes) live under [`../fastlane/metadata/`](../fastlane/metadata/) as `deliver` locale files (`en-US` is canonical). Reconcile App Store Connect with those files when preparing a submission. If the live storefront differs, update ASC or the `fastlane/metadata` files (and this doc if narrative context changes) and note the change in release notes or the PR that touched copy.
 
-## Manual fix (issue #195)
+## Manual fix (issues #195, #314)
 
-The App Store **subtitle** must spell **meditate** correctly (not `medite`). In App Store Connect, open **Still Point Timer** → **App Information** / the target **version** → check **Subtitle**, **Description**, **Keywords**, and **What’s New** for the same typo.
+The App Store **subtitle** must spell **meditate** correctly (not `medite`). In App Store Connect, open **Still Point Timer** → **App Information** / the target **version** → check **Subtitle**, **Description**, **Keywords**, and **What's New** for the same typo. The repo-side strings are correct; the remaining ASC edit is tracked in [#314](https://github.com/auerbachb/still-point/issues/314) and the [submission runbook](../../docs/operations/ios-app-store-submission.md#subtitle-typo--asc-only-fix-314).
 
 ## App identity
 
@@ -35,7 +35,7 @@ These strings already ship on the marketing site and are safe references for **D
 
 ## Release notes
 
-Use the template in [`ios/RELEASING.md`](../RELEASING.md) (section *App Store metadata and release notes checklist*) for version-specific “What’s New” text; keep spelling consistent with this doc.
+Use the template in [`ios/RELEASING.md`](../RELEASING.md) (section *App Store metadata and release notes checklist*) for version-specific "What's New" text; keep spelling consistent with this doc.
 
 ## Related runbooks
 
