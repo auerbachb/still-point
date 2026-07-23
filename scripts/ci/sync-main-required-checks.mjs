@@ -40,8 +40,8 @@ function ghJson(args) {
   return JSON.parse(out);
 }
 
-function ghApiPut(path, body) {
-  execFileSync("gh", ["api", "-X", "PUT", path, "--input", "-"], {
+function ghApiPatch(path, body) {
+  execFileSync("gh", ["api", "-X", "PATCH", path, "--input", "-"], {
     input: JSON.stringify(body),
     stdio: ["pipe", "inherit", "inherit"],
   });
@@ -137,7 +137,7 @@ function main() {
     return;
   }
 
-  ghApiPut(
+  ghApiPatch(
     `repos/{owner}/{repo}/branches/${BRANCH}/protection/required_status_checks`,
     payload,
   );
