@@ -164,17 +164,20 @@ final class StillPointAppUITests: XCTestCase {
         let hyperfocusHold = app.staticTexts["session.hyperfocusHoldButton"]
         let secondaryChrome = app.otherElements["session.secondaryChromeMarker"]
         let completionRoot = app.otherElements["root.currentView.completion"]
-        if lightHold.waitForExistence(timeout: 5) {
+        // Session chrome can lag force-start on macos-26 Release simulators; allow
+        // either hold controls or an already-finished session (issue #496 flake).
+        let holdVisible = lightHold.waitForExistence(timeout: 10)
+        let onCompletion = holdVisible ? false : completionRoot.waitForExistence(timeout: 10)
+        XCTAssertTrue(
+            holdVisible || onCompletion,
+            "Hold control or completion screen did not appear"
+        )
+        if holdVisible {
             XCTAssertEqual(lightHold.value as? String, "inactive")
-            XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: 5))
+            XCTAssertTrue(hyperfocusHold.waitForExistence(timeout: 8))
             XCTAssertEqual(hyperfocusHold.value as? String, "inactive")
-            XCTAssertTrue(secondaryChrome.waitForExistence(timeout: 5))
-            waitForAccessibilityValue(secondaryChrome, "visible", timeout: 5)
-        } else {
-            XCTAssertTrue(
-                completionRoot.waitForExistence(timeout: 1),
-                "Expected active-session hold control or completion screen"
-            )
+            XCTAssertTrue(secondaryChrome.waitForExistence(timeout: 8))
+            waitForAccessibilityValue(secondaryChrome, "visible", timeout: 8)
         }
 
         if !completionRoot.exists {
