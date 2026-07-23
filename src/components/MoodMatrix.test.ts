@@ -1,7 +1,7 @@
 /**
  * Issue #472 — before/after mood matrix.
  *
- * Unit tests for the helper functions in MoodMatrix.tsx:
+ * Unit tests for the helper functions in @/lib/moodMatrix:
  *   - isMoodMatrixTouched: detects whether any cell has been selected
  *   - buildMoodMatrixPayload: strips untouched rows before sending to the API
  */

@@ -297,7 +297,7 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
     expect(res.status).toBe(400);
   });
 
-  test("a later PATCH overwrites the stored moodMatrix", async () => {
+  test("a later PATCH merges with the stored moodMatrix", async () => {
     await PATCH(
       patchRequest(sessionId, { moodMatrix: { calm: { before: 1, after: 2 } } }),
       { params: Promise.resolve({ sessionId }) },
@@ -309,6 +309,9 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.session.moodMatrix).toEqual({ focus: { before: 4, after: 5 } });
+    expect(json.session.moodMatrix).toEqual({
+      calm: { before: 1, after: 2 },
+      focus: { before: 4, after: 5 },
+    });
   });
 });

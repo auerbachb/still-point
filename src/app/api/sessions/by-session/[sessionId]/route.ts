@@ -140,13 +140,27 @@ export const PATCH = withApiHandler(
       updates[field] = bodyObj[field] as number;
     }
 
-    // #472: mood matrix — validate and merge with existing session data.
+    // #472: mood matrix — validate incoming rows and merge with persisted data.
     if (bodyObj.moodMatrix !== undefined) {
       const result = validateMoodMatrix(bodyObj.moodMatrix);
       if ("error" in result) {
         return NextResponse.json({ error: result.error }, { status: 400 });
       }
-      updates.moodMatrix = result.validated;
+
+      const [existing] = await db
+        .select({ moodMatrix: sessions.moodMatrix })
+        .from(sessions)
+        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.user.userId)))
+        .limit(1);
+
+      if (!existing) {
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+
+      const prior =
+        (existing.moodMatrix as Record<string, { before: number | null; after: number | null }> | null) ??
+        {};
+      updates.moodMatrix = { ...prior, ...result.validated };
     }
 
     if (Object.keys(updates).length === 0) {

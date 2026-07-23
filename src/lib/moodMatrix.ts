@@ -17,6 +17,8 @@ export const MOOD_LABELS: Record<MoodKey, string> = {
 
 export type MoodEntry = { before: number | null; after: number | null };
 export type MoodMatrixValue = Partial<Record<MoodKey, MoodEntry>>;
+/** Persisted / API mood-matrix shape — only touched rows are present. */
+export type MoodMatrixPayload = Partial<Record<MoodKey, MoodEntry>>;
 
 /** Returns true if the matrix contains at least one non-null cell. */
 export function isMoodMatrixTouched(value: MoodMatrixValue): boolean {

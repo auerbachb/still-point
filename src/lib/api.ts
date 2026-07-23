@@ -1,3 +1,5 @@
+import type { MoodMatrixPayload } from "@/lib/moodMatrix";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -76,7 +78,7 @@ export type Session = {
   focusRating?: number | null;
   happinessRating?: number | null;
   /** #472: before/after mood matrix (1–5 per cell), null until submitted. */
-  moodMatrix?: Record<string, { before: number | null; after: number | null }> | null;
+  moodMatrix?: MoodMatrixPayload | null;
 };
 
 export type Thought = {
@@ -252,7 +254,7 @@ export const api = {
       focusRating?: number;
       happinessRating?: number;
       /** #472: mood matrix payload — partial keys allowed. */
-      moodMatrix?: Record<string, { before: number | null; after: number | null }>;
+      moodMatrix?: MoodMatrixPayload;
     },
   ) =>
     request<{ session: Session }>(`/api/sessions/by-session/${sessionId}`, {
