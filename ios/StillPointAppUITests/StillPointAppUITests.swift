@@ -44,6 +44,67 @@ final class StillPointAppUITests: XCTestCase {
         )
     }
 
+    /// Signup happy path: unique per-run credentials, sign up toggle, full form submission,
+    /// assert authenticated home shell appears.
+    ///
+    /// **Credential uniqueness:** email and username are prefixed with the first 8 hex characters
+    /// of a per-run UUID so repeated simulator runs never collide in the mock backend.
+    /// The mock `UITestAPIStore.signup()` accepts any well-formed credentials and does not
+    /// persist state between process launches, so real-server uniqueness is not required here.
+    ///
+    /// **Local run command:**
+    /// ```
+    /// bash scripts/e2e/run-ios-tests.sh critical
+    /// # or for this test only:
+    /// xcodebuild test \
+    ///   -project ios/StillPoint.xcodeproj \
+    ///   -scheme StillPoint \
+    ///   -destination "platform=iOS Simulator,name=iPhone 17,OS=latest" \
+    ///   -only-testing:"StillPointAppUITests/StillPointAppUITests/testSignupHappyPath"
+    /// ```
+    @MainActor
+    func testSignupHappyPath() throws {
+        // Unique per-run credentials via UUID prefix (hex a–f, 0–9; satisfies username regex).
+        let uniqueId = String(UUID().uuidString.prefix(8)).lowercased()
+        let email = "signup.\(uniqueId)@stillpoint.test"
+        let username = "sp_\(uniqueId)" // 11 chars, matches ^[a-zA-Z0-9_]+$
+        let password = "testPass8!"
+
+        let app = makeApp(seedAuthenticated: false, resetStore: true)
+        app.launch()
+
+        waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear", assertColdStart: false)
+
+        // Switch to Sign Up mode
+        let signUpToggle = app.buttons["auth.signUpToggleButton"]
+        XCTAssertTrue(signUpToggle.waitForExistence(timeout: 5), "Sign Up toggle did not appear")
+        tapByStableCenter(signUpToggle, in: app)
+
+        // Fill signup form
+        let emailField = app.textFields["auth.emailField"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
+        emailField.tapAndType(email, in: app)
+
+        let usernameField = app.textFields["auth.usernameField"]
+        XCTAssertTrue(usernameField.waitForExistence(timeout: 5), "Username field did not appear after switching to Sign Up mode")
+        usernameField.tapAndType(username, in: app)
+
+        let passwordField = app.secureTextFields["auth.passwordField"]
+        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
+        passwordField.tapAndType(password, in: app)
+
+        dismissKeyboardIfPresent(in: app)
+
+        let submitButton = app.buttons["auth.submitButton"]
+        XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
+        tapByStableCenter(submitButton, in: app)
+
+        XCTAssertTrue(
+            app.otherElements["root.currentView.home"].waitForExistence(timeout: 25),
+            "Authenticated home shell did not appear after signup"
+        )
+    }
+
     @MainActor
     func testLaunchLoginCompleteSessionAndHistoryPersistence() throws {
         let app = makeApp(

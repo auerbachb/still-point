@@ -107,6 +107,7 @@ resolve_test_target() {
       echo "StillPointAppUITests/StillPointAppUITests/testLaunchOfflineShowsUserVisibleMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testLogoutReturnsToAuthScreen"
       echo "StillPointAppUITests/StillPointAppUITests/testPasswordResetEntryIsDiscoverable"
+      echo "StillPointAppUITests/StillPointAppUITests/testSignupHappyPath"
       echo "StillPointAppUITests/StillPointAppUITests/testSettingsUsernameConflictShowsTakenMessage"
       echo "StillPointAppUITests/StillPointAppUITests/testSettingsUsernameInlineEditSucceeds"
       echo "StillPointAppUITests/StillPointAppUITests/testSettingsUsernameValidationError"
