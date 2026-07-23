@@ -4,15 +4,12 @@ import { sessions, thoughts } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
+import { MOOD_KEYS } from "@/lib/moodMatrix";
 import { eq, and, asc } from "drizzle-orm";
 
 type RouteContext = RouteParams<{ sessionId: string }>;
 
 const RATING_FIELDS = ["focusRating", "happinessRating"] as const;
-
-/** Valid mood keys for the before/after matrix (#472). */
-export const MOOD_MATRIX_KEYS = ["calm", "focus", "energy", "anxiety", "overall"] as const;
-export type MoodMatrixKey = (typeof MOOD_MATRIX_KEYS)[number];
 
 function isValidRating(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 10;
@@ -45,7 +42,7 @@ function validateMoodMatrix(
   }
   const validated: Record<string, { before: number | null; after: number | null }> = {};
   for (const key of keys) {
-    if (!(MOOD_MATRIX_KEYS as readonly string[]).includes(key)) {
+    if (!(MOOD_KEYS as readonly string[]).includes(key)) {
       return { error: `Unknown mood key: ${key}` };
     }
     if (!isValidMoodEntry(obj[key])) {
