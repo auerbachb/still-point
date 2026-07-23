@@ -526,6 +526,7 @@ function mapSessionRow(row: Record<string, unknown>): typeof sessions.$inferSele
     sessionDate: String(row.session_date),
     focusRating: row.focus_rating == null ? null : Number(row.focus_rating),
     happinessRating: row.happiness_rating == null ? null : Number(row.happiness_rating),
+    moodMatrix: row.mood_matrix as typeof sessions.$inferSelect["moodMatrix"],
     createdAt: new Date(String(row.created_at)),
   };
 }

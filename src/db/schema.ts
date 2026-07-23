@@ -394,6 +394,11 @@ export const sessions = pgTable("sessions", {
    *  by-session PATCH route from the CompletionScreen sliders. */
   focusRating: integer("focus_rating"),
   happinessRating: integer("happiness_rating"),
+  /** #472: before/after mood matrix captured retrospectively at the recap.
+   *  Shape: { [moodKey: string]: { before: number | null; after: number | null } }
+   *  where values are 1–5. Validated at the application layer (PATCH route).
+   *  Null until at least one matrix cell is saved. */
+  moodMatrix: jsonb("mood_matrix").$type<Record<string, { before: number | null; after: number | null }>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdx: index("idx_sessions_user").on(table.userId, table.dayNumber),

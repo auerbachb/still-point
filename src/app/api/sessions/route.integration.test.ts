@@ -29,7 +29,7 @@ const EXPECTED_SESSION_KEYS = [
 ].sort();
 
 /** Columns that must never reach the client from the history list. */
-const LEAKED_KEYS = ["userId", "clientSessionId", "focusRating", "happinessRating"] as const;
+const LEAKED_KEYS = ["userId", "clientSessionId", "focusRating", "happinessRating", "moodMatrix"] as const;
 
 /** Keys the iOS StatsDTO decodes; the stats object must carry all of them. */
 const REQUIRED_STATS_KEYS = [
@@ -64,6 +64,7 @@ async function seedSession() {
     // Set the PII / by-session-only columns so we can prove the projection drops them.
     focusRating: 7,
     happinessRating: 9,
+    moodMatrix: { calm: { before: 2, after: 4 } },
   });
 }
 
