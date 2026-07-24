@@ -543,6 +543,9 @@ actor UITestAPIStore {
         let current = notificationPreferences
         var quietStart = current.quietHoursStart
         var quietEnd = current.quietHoursEnd
+        var callPhone = current.callPhoneNumber
+        var callWindowStart = current.callWindowStart
+        var callWindowStop = current.callWindowStop
         if let quietHoursStart = patch.quietHoursStart {
             switch quietHoursStart {
             case .none: quietStart = nil
@@ -555,6 +558,49 @@ actor UITestAPIStore {
             case .some(let value): quietEnd = value
             }
         }
+        if let callPhoneNumber = patch.callPhoneNumber {
+            switch callPhoneNumber {
+            case .none: callPhone = nil
+            case .some(let value): callPhone = value
+            }
+        }
+        if let callWindowStartPatch = patch.callWindowStart {
+            switch callWindowStartPatch {
+            case .none: callWindowStart = nil
+            case .some(let value): callWindowStart = value
+            }
+        }
+        if let callWindowStopPatch = patch.callWindowStop {
+            switch callWindowStopPatch {
+            case .none: callWindowStop = nil
+            case .some(let value): callWindowStop = value
+            }
+        }
+
+        let nextCallOptIn = patch.callOptIn ?? current.callOptIn
+        if nextCallOptIn {
+            guard let phone = callPhone,
+                  phone.hasPrefix("+"),
+                  phone.count >= 8,
+                  let start = callWindowStart,
+                  let stop = callWindowStop,
+                  start != stop else {
+                throw APIError(
+                    status: 400,
+                    message: "callOptIn requires callPhoneNumber plus callWindowStart and callWindowStop",
+                    code: "VALIDATION_ERROR"
+                )
+            }
+        }
+        let nextCallConsentAt: String? = {
+            if patch.callOptIn == true && !current.callOptIn {
+                return ISO8601DateFormatter().string(from: Date())
+            }
+            if patch.callOptIn == false {
+                return nil
+            }
+            return current.callConsentAt
+        }()
 
         let next = NotificationPreferencesDTO(
             pushEnabled: patch.pushEnabled ?? current.pushEnabled,
@@ -567,6 +613,11 @@ actor UITestAPIStore {
             dailyReminderFrequency: patch.dailyReminderFrequency ?? current.dailyReminderFrequency,
             quietHoursStart: quietStart,
             quietHoursEnd: quietEnd,
+            callOptIn: nextCallOptIn,
+            callPhoneNumber: callPhone,
+            callConsentAt: nextCallConsentAt,
+            callWindowStart: callWindowStart,
+            callWindowStop: callWindowStop,
             tz: patch.tz ?? current.tz,
             updatedAt: current.updatedAt
         )

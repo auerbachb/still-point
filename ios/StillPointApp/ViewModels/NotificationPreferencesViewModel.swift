@@ -13,6 +13,8 @@ final class NotificationPreferencesViewModel {
     var suppressDuringSession = false
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
+    var callOptInEnabled = false
+    var callPhoneNumber = ""
     var timezoneDisplay = "UTC"
 
     var isLoading = false
@@ -26,6 +28,8 @@ final class NotificationPreferencesViewModel {
     var reminderTime = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
     var quietStartTime = Calendar.current.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
     var quietEndTime = Calendar.current.date(from: DateComponents(hour: 7, minute: 0)) ?? Date()
+    var callWindowStartTime = Calendar.current.date(from: DateComponents(hour: 18, minute: 0)) ?? Date()
+    var callWindowStopTime = Calendar.current.date(from: DateComponents(hour: 21, minute: 0)) ?? Date()
 
     func load() async {
         guard !isLoading else { return }
@@ -135,6 +139,28 @@ final class NotificationPreferencesViewModel {
         await persist(patch: NotificationPreferencesPatch(failureReasonReminderEnabled: enabled))
     }
 
+    func persistCallOptInToggle(enabled: Bool) async {
+        callOptInEnabled = enabled
+        if enabled {
+            return
+        }
+        await persist(patch: NotificationPreferencesPatch(callOptIn: false))
+    }
+
+    func persistCallSettingsIfReady() async {
+        guard callOptInEnabled else { return }
+        let phone = normalizedCallPhoneNumber()
+        guard phone.hasPrefix("+"), phone.count >= 8 else { return }
+        await persist(
+            patch: NotificationPreferencesPatch(
+                callOptIn: true,
+                callPhoneNumber: .some(phone),
+                callWindowStart: .some(formatHHMM(callWindowStartTime)),
+                callWindowStop: .some(formatHHMM(callWindowStopTime))
+            )
+        )
+    }
+
     func persistTimezone(_ tz: String) async {
         timezoneDisplay = tz
         await persist(patch: NotificationPreferencesPatch(tz: tz))
@@ -186,6 +212,27 @@ final class NotificationPreferencesViewModel {
         if let end = dto.quietHoursEnd, let parsed = parseHHMM(end) {
             quietEndTime = parsed
         }
+        callOptInEnabled = dto.callOptIn
+        callPhoneNumber = dto.callPhoneNumber ?? ""
+        if let start = dto.callWindowStart, let parsed = parseHHMM(start) {
+            callWindowStartTime = parsed
+        }
+        if let stop = dto.callWindowStop, let parsed = parseHHMM(stop) {
+            callWindowStopTime = parsed
+        }
+    }
+
+    private func normalizedCallPhoneNumber() -> String {
+        let trimmed = callPhoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = trimmed.filter(\.isNumber)
+        guard !digits.isEmpty else { return trimmed }
+        if trimmed.hasPrefix("+") {
+            return "+\(digits)"
+        }
+        if digits.count == 10 {
+            return "+1\(digits)"
+        }
+        return "+\(digits)"
     }
 
     private func formatHHMM(_ date: Date) -> String {
