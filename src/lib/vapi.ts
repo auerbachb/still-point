@@ -9,6 +9,7 @@ export const REQUIRED_VAPI_ENV_VARS = [
 ] as const;
 
 const VAPI_CALL_URL = "https://api.vapi.ai/call";
+const VAPI_REQUEST_TIMEOUT_MS = 10_000;
 
 export type MissedSitCallContext = {
   userName: string;
@@ -95,6 +96,7 @@ export async function initiateMissedSitCall(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(VAPI_REQUEST_TIMEOUT_MS),
     });
 
     const body = await response.json().catch(() => ({})) as { id?: string; message?: string };
@@ -124,15 +126,19 @@ export async function initiateMissedSitCall(
       return { ok: false, reason, attemptId };
     }
 
-    const attemptId = await logCallAttempt({
-      userId: params.userId,
-      phoneNumber: params.phoneNumber,
-      windowKey: params.windowKey,
-      status: "initiated",
-      vapiCallId: callId,
-    });
-
-    return { ok: true, callId, attemptId };
+    try {
+      const attemptId = await logCallAttempt({
+        userId: params.userId,
+        phoneNumber: params.phoneNumber,
+        windowKey: params.windowKey,
+        status: "initiated",
+        vapiCallId: callId,
+      });
+      return { ok: true, callId, attemptId };
+    } catch (logError) {
+      console.error("Vapi call placed but call_attempts insert failed:", logError);
+      return { ok: true, callId };
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Vapi call request failed";
     const attemptId = await logCallAttempt({
