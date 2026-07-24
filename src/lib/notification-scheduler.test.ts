@@ -12,11 +12,8 @@ const sendDailyReminderNotification = vi.fn();
 const sendMissADayNotification = vi.fn();
 const sendFailureReasonReminderNotification = vi.fn();
 
-const dbSelect = vi.fn(() => ({
-  from: vi.fn(() => ({
-    where: vi.fn(() => Promise.resolve(preferenceRows)),
-  })),
-}));
+const dbSelect = vi.fn();
+let callCandidateRows: Array<Record<string, unknown>> = [];
 
 vi.mock("@/db", () => ({
   db: {
@@ -27,10 +24,11 @@ vi.mock("@/db", () => ({
 }));
 
 vi.mock("@/db/schema", () => ({
-  notificationPreferences: { table: "notification_preferences" },
+  notificationPreferences: { table: "notification_preferences", callOptIn: "callOptIn" },
   notificationDispatches: { table: "notification_dispatches" },
   sessions: { table: "sessions" },
   failureReasons: { table: "failure_reasons" },
+  users: { table: "users", username: "username" },
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -57,6 +55,12 @@ vi.mock("@/lib/notifications/failure-reason", () => ({
   hasFailureReasonForDate,
 }));
 
+const initiateMissedSitCall = vi.fn();
+
+vi.mock("@/lib/vapi", () => ({
+  initiateMissedSitCall,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -80,6 +84,15 @@ describe("notification scheduler", () => {
     vi.clearAllMocks();
     vi.resetModules();
     preferenceRows = [basePrefs];
+    callCandidateRows = [];
+    dbSelect.mockImplementation(() => ({
+      from: vi.fn(() => ({
+        innerJoin: vi.fn(() => ({
+          where: vi.fn(() => Promise.resolve(callCandidateRows)),
+        })),
+        where: vi.fn(() => Promise.resolve(preferenceRows)),
+      })),
+    }));
     sendDailyReminderNotification.mockReset();
     sendMissADayNotification.mockReset();
     sendFailureReasonReminderNotification.mockReset();
@@ -92,6 +105,35 @@ describe("notification scheduler", () => {
     userCompletedSessionOnDate.mockResolvedValue(false);
     hasFailureReasonForDate.mockResolvedValue(false);
     loadUserStreak.mockResolvedValue(0);
+    initiateMissedSitCall.mockResolvedValue({ ok: true, callId: "call-1", attemptId: "attempt-1" });
+  });
+
+  test("listHourlyCallSlotMinutes returns hourly bounds inclusive", async () => {
+    const { listHourlyCallSlotMinutes } = await import("./notification-scheduler");
+    expect(listHourlyCallSlotMinutes("18:00", "21:00")).toEqual([18 * 60, 19 * 60, 20 * 60, 21 * 60]);
+  });
+
+  test("evaluateMissedSitCallDue matches hourly slot within cron window", async () => {
+    const { evaluateMissedSitCallDue } = await import("./notification-scheduler");
+    const result = evaluateMissedSitCallDue(18 * 60 + 2, "18:00", "21:00");
+    expect(result).toEqual({ due: true, slotMinutes: 18 * 60, dayOffset: 0 });
+  });
+
+  test("dispatchDueNotifications initiates missed-sit call when due", async () => {
+    callCandidateRows = [{
+      userId: "user-1",
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "18:00",
+      callWindowStop: "21:00",
+      tz: "UTC",
+      username: "Alex",
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(new Date("2026-05-29T18:02:00.000Z"));
+
+    expect(result.callsInitiated).toBe(1);
+    expect(initiateMissedSitCall).toHaveBeenCalled();
   });
 
   test("claimNotificationDispatch is idempotent on conflict", async () => {

@@ -1,6 +1,6 @@
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
-import { notificationDispatches, notificationPreferences } from "@/db/schema";
+import { notificationDispatches, notificationPreferences, users } from "@/db/schema";
 import type { DailyReminderFrequency } from "@/lib/notification-preferences";
 import {
   hasMissADayDispatchForDate,
@@ -17,6 +17,9 @@ import {
   sendFailureReasonReminderNotification,
   sendMissADayNotification,
 } from "@/lib/notifications";
+import { initiateMissedSitCall } from "@/lib/vapi";
+
+export const MISSED_SIT_CALL_NOTIFICATION_TYPE = "missed_sit_call";
 
 /** Five-minute lookback for each cron tick. See docs/notifications.md § Scheduler
  *  for the DST spring-forward gap: a reminder inside the skipped local hour (e.g.
@@ -189,6 +192,54 @@ export function evaluateReminderDispatchWindow(
   return { due: true, dayOffset };
 }
 
+export function listHourlyCallSlotMinutes(windowStart: string, windowStop: string): number[] {
+  const start = parseReminderMinutes(windowStart);
+  const stop = parseReminderMinutes(windowStop);
+  const dayMinutes = 24 * 60;
+  const slots: number[] = [];
+
+  if (start === stop) {
+    return slots;
+  }
+  if (start < stop) {
+    for (let minute = start; minute <= stop; minute += 60) {
+      slots.push(minute);
+    }
+    return slots;
+  }
+
+  for (let minute = start; minute < dayMinutes; minute += 60) {
+    slots.push(minute);
+  }
+  for (let minute = 0; minute <= stop; minute += 60) {
+    slots.push(minute);
+  }
+  return slots;
+}
+
+export function missedSitCallWindowKey(dateKey: string, slotMinutes: number): string {
+  const hour = Math.floor(slotMinutes / 60);
+  return `${dateKey}T${String(hour).padStart(2, "0")}`;
+}
+
+export function evaluateMissedSitCallDue(
+  localMinutes: number,
+  windowStart: string,
+  windowStop: string,
+): { due: boolean; slotMinutes: number | null; dayOffset: 0 | -1 } {
+  for (const slotMinutes of listHourlyCallSlotMinutes(windowStart, windowStop)) {
+    const window = isWithinCronWindow(localMinutes, slotMinutes);
+    if (window.within) {
+      return {
+        due: true,
+        slotMinutes,
+        dayOffset: window.dayOffset,
+      };
+    }
+  }
+  return { due: false, slotMinutes: null, dayOffset: 0 };
+}
+
 function frequencyAllowsSend(
   frequency: DailyReminderFrequency,
   intendedDateKey: string,
@@ -267,6 +318,34 @@ async function releaseFailureReasonClaim(userId: string, windowKey: string): Pro
     );
 }
 
+async function releaseMissedSitCallClaim(userId: string, windowKey: string): Promise<void> {
+  await db
+    .delete(notificationDispatches)
+    .where(
+      and(
+        eq(notificationDispatches.userId, userId),
+        eq(notificationDispatches.notificationType, MISSED_SIT_CALL_NOTIFICATION_TYPE),
+        eq(notificationDispatches.windowKey, windowKey),
+      ),
+    );
+}
+
+async function countDaysMissed(userId: string, anchorDateKey: string): Promise<number> {
+  if (await userCompletedSessionOnDate(userId, anchorDateKey)) {
+    return 0;
+  }
+  let days = 1;
+  let dateKey = addCalendarDays(anchorDateKey, -1);
+  while (!(await userCompletedSessionOnDate(userId, dateKey))) {
+    days += 1;
+    dateKey = addCalendarDays(dateKey, -1);
+    if (days >= 14) {
+      break;
+    }
+  }
+  return days;
+}
+
 /**
  * Failure-reason reminder (#441): fixed 8 PM local nudge to log why the user could
  * not meditate. Yesterday's missed day takes priority over today, so the morning-after
@@ -341,10 +420,12 @@ function addCalendarDays(dateKey: string, deltaDays: number): string {
 
 export async function dispatchDueNotifications(now: Date = new Date()): Promise<{
   scanned: number;
+  callCandidatesScanned: number;
   sent: number;
   skipped: number;
   missADaySent: number;
   failureReasonSent: number;
+  callsInitiated: number;
 }> {
   const candidates = await db
     .select()
@@ -364,6 +445,7 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   let skipped = 0;
   let missADaySent = 0;
   let failureReasonSent = 0;
+  let callsInitiated = 0;
 
   for (const prefs of candidates) {
     try {
@@ -515,5 +597,84 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
     }
   }
 
-  return { scanned: candidates.length, sent, skipped, missADaySent, failureReasonSent };
+  const callCandidates = await db
+    .select({
+      userId: notificationPreferences.userId,
+      callPhoneNumber: notificationPreferences.callPhoneNumber,
+      callWindowStart: notificationPreferences.callWindowStart,
+      callWindowStop: notificationPreferences.callWindowStop,
+      tz: notificationPreferences.tz,
+      username: users.username,
+    })
+    .from(notificationPreferences)
+    .innerJoin(users, eq(notificationPreferences.userId, users.id))
+    .where(eq(notificationPreferences.callOptIn, true));
+
+  for (const prefs of callCandidates) {
+    try {
+      if (!prefs.callPhoneNumber || !prefs.callWindowStart || !prefs.callWindowStop) {
+        continue;
+      }
+
+      const local = getLocalParts(now, prefs.tz);
+      const { due, slotMinutes, dayOffset } = evaluateMissedSitCallDue(
+        local.minutesSinceMidnight,
+        prefs.callWindowStart,
+        prefs.callWindowStop,
+      );
+      if (!due || slotMinutes === null) {
+        continue;
+      }
+
+      const intendedDateKey = addCalendarDays(local.dateKey, dayOffset);
+      if (await userCompletedSessionOnDate(prefs.userId, intendedDateKey)) {
+        continue;
+      }
+
+      const windowKey = missedSitCallWindowKey(intendedDateKey, slotMinutes);
+      const claimed = await claimNotificationDispatch({
+        userId: prefs.userId,
+        notificationType: MISSED_SIT_CALL_NOTIFICATION_TYPE,
+        windowKey,
+      });
+      if (!claimed) {
+        continue;
+      }
+
+      try {
+        const [currentStreak, daysMissed] = await Promise.all([
+          loadUserStreak(prefs.userId, intendedDateKey),
+          countDaysMissed(prefs.userId, intendedDateKey),
+        ]);
+        const result = await initiateMissedSitCall({
+          userId: prefs.userId,
+          phoneNumber: prefs.callPhoneNumber,
+          windowKey,
+          context: {
+            userName: prefs.username,
+            currentStreak,
+            daysMissed,
+          },
+        });
+        if (result.ok) {
+          callsInitiated += 1;
+        }
+      } catch (callError) {
+        console.error(`Failed to initiate missed-sit call for user ${prefs.userId}:`, callError);
+        await releaseMissedSitCallClaim(prefs.userId, windowKey);
+      }
+    } catch (error) {
+      console.error(`Missed-sit call scheduler error for user ${prefs.userId}:`, error);
+    }
+  }
+
+  return {
+    scanned: candidates.length,
+    callCandidatesScanned: callCandidates.length,
+    sent,
+    skipped,
+    missADaySent,
+    failureReasonSent,
+    callsInitiated,
+  };
 }
