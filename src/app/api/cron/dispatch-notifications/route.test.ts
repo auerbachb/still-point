@@ -36,7 +36,7 @@ describe("/api/cron/dispatch-notifications", () => {
 
   test("dispatches when authorized and reports APNs configured", async () => {
     vi.stubEnv("CRON_SECRET", "test-secret");
-    dispatchDueNotifications.mockResolvedValue({ scanned: 2, sent: 1, skipped: 1 });
+    dispatchDueNotifications.mockResolvedValue({ scanned: 2, sent: 1, skipped: 1, callsInitiated: 0, callCandidatesScanned: 1 });
 
     const { GET } = await import("./route");
     const response = await GET(
@@ -50,8 +50,10 @@ describe("/api/cron/dispatch-notifications", () => {
       ok: true,
       apnsConfigured: true,
       scanned: 2,
+      callCandidatesScanned: 1,
       sent: 1,
       skipped: 1,
+      callsInitiated: 0,
     });
     vi.unstubAllEnvs();
   });

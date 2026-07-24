@@ -24,11 +24,12 @@ flowchart LR
 
 | Table | Purpose |
 |-------|---------|
-| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session` |
+| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, missed-sit call opt-in (`call_opt_in`, `call_phone_number`, `call_consent_at`, `call_window_start`, `call_window_stop`), IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session` |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
+| `call_attempts` | Outbound missed-sit Vapi call log (#599): phone, window key, status, optional `vapi_call_id` |
 | `web_push_subscriptions` | Browser push endpoints (#347) |
 
-Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`.
+Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`.
 
 ## API
 
@@ -40,12 +41,15 @@ Returns defaults (created on first read) for the authenticated user.
 
 Partial update. Supported fields:
 
-- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled`, `friendRequestNotificationsEnabled`, `suppressDuringSession` (boolean)
+- `pushEnabled`, `dailyReminderEnabled`, `missADayEnabled`, `friendRequestNotificationsEnabled`, `suppressDuringSession`, `callOptIn` (boolean)
+- `callPhoneNumber` (E.164, e.g. `+15551234567`), `callWindowStart`, `callWindowStop` (`HH:MM` 24h; window fields nullable)
 - `dailyReminderTime`, `quietHoursStart`, `quietHoursEnd` (`HH:MM` 24h; quiet hours nullable)
 - `dailyReminderFrequency`: `daily` | `every_other` | `weekly`
 - `tz`: IANA timezone string
 
 Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or both set to `null`).
+
+Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart` and `callWindowStop` (updated together). Consent timestamp `callConsentAt` is set on opt-in and cleared on opt-out. Call window fields must differ (`start !== stop`).
 
 ### Web Push device registration
 
@@ -73,8 +77,17 @@ Because a thrown provider-config error is caught per-token and never re-raised, 
 | Daily practice reminder | #346 | `daily_reminder` | `stillpoint://home` | `pushEnabled` + `dailyReminderEnabled` + quiet hours + frequency |
 | Friend request | #359 | `friend_request` | `stillpoint://home` | `pushEnabled` + `friendRequestNotificationsEnabled` |
 | Failure-reason reminder | #441 | `failure_reason_reminder` | `stillpoint://log-reason?date=YYYY-MM-DD` | `pushEnabled` + `failureReasonReminderEnabled` |
+| Missed-sit phone call | #599 | `missed_sit_call` | _(outbound Vapi call — no push)_ | `callOptIn` + phone + `[callWindowStart, callWindowStop]` |
 
 Miss-a-day wins over daily reminder when both would fire in the same cron window (user missed yesterday and has not sat today).
+
+### Missed-sit phone call (#599)
+
+- Opt-in off by default; requires E.164 phone + local call window `[X, Y]`
+- Hourly outbound Vapi calls from X through Y while the user has not completed a qualifying sit that local day
+- Completing any qualifying sit cancels remaining calls for that day
+- Idempotency `window_key` = `{localDate}T{hour}` (hour-granular, e.g. `2026-05-29T18`)
+- Attempts logged in `call_attempts`; Vapi env vars (`VAPI_API_KEY`, `VAPI_ASSISTANT_ID`, `VAPI_PHONE_NUMBER_ID`) required for live calls only
 
 ### Miss-a-day (#247)
 
@@ -139,6 +152,7 @@ held until the sit truly completes or is abandoned.
 - **Quiet hours:** skipped when local time is inside the configured range (overnight ranges supported)
 - **Frequency:** `daily` = one send per local date; `every_other` = even day index; `weekly` = Mondays (local)
 - **Dedup:** `claimNotificationDispatch` is the source of truth per `(user_id, notification_type, window_key)`
+- **Missed-sit calls:** separate candidate query for `call_opt_in` users; cron JSON includes `callsInitiated` and `callCandidatesScanned`
 - **DST spring-forward gap (#531):** reminders scheduled inside the skipped local hour on spring-forward night (e.g. 02:30 `America/New_York`) are not delivered — cron ticks land at 01:55 then 03:00, both outside the 5-minute window. This is a once-per-year-per-timezone edge case; no catch-up pass is implemented yet.
 
 ## Settings UI (#359)
@@ -146,7 +160,7 @@ held until the sit truly completes or is abandoned.
 - **iOS:** Settings → **Notifications** (`NavigationLink` → `NotificationsSettingsView`)
 - **Web:** Settings → **Notifications** → `/app/settings/notifications`
 
-Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Miss a day → Friend activity → During sessions.
+Section order (parity): Push on this device → Daily practice reminder → Quiet hours → Missed-sit phone call → Miss a day → Friend activity → During sessions.
 
 Master push off disables dependent controls in the UI and persists `pushEnabled: false` (and unsubscribes web push / disables iOS token as before). Other preference toggles are preserved while push is off.
 
@@ -180,3 +194,4 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - #247 — Miss-a-day notifications
 - #359 — Unified Notifications settings screen
 - #431 — Suppress notifications during a meditation session
+- #599 — Missed-sit outbound Vapi phone calls
