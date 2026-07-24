@@ -111,6 +111,21 @@ export const notificationPreferences = pgTable("notification_preferences", {
   ),
 }));
 
+/** #599: log of outbound missed-sit Vapi call attempts. */
+export const callAttempts = pgTable("call_attempts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  vapiCallId: varchar("vapi_call_id", { length: 64 }),
+  phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
+  /** Hour-granular dedup key, e.g. 2026-05-29T14 in the user's timezone. */
+  windowKey: varchar("window_key", { length: 32 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull(),
+  errorMessage: varchar("error_message", { length: 500 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userWindowIdx: index("call_attempts_user_window_idx").on(table.userId, table.windowKey),
+}));
+
 /** Idempotent send ledger: one row per user/type/window (#345). */
 export const notificationDispatches = pgTable("notification_dispatches", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -511,6 +526,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [notificationPreferences.userId],
   }),
   notificationDispatches: many(notificationDispatches),
+  callAttempts: many(callAttempts),
   failureReasons: many(failureReasons),
   oauthAccounts: many(oauthAccounts),
   googleOAuthToken: one(googleOAuthTokens, {
@@ -530,6 +546,10 @@ export const notificationPreferencesRelations = relations(notificationPreference
 
 export const notificationDispatchesRelations = relations(notificationDispatches, ({ one }) => ({
   user: one(users, { fields: [notificationDispatches.userId], references: [users.id] }),
+}));
+
+export const callAttemptsRelations = relations(callAttempts, ({ one }) => ({
+  user: one(users, { fields: [callAttempts.userId], references: [users.id] }),
 }));
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
