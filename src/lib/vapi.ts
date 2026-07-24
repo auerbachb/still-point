@@ -25,7 +25,7 @@ export type InitiateMissedSitCallParams = {
 };
 
 export type InitiateMissedSitCallResult =
-  | { ok: true; callId: string; attemptId: string }
+  | { ok: true; callId: string; attemptId?: string }
   | { ok: false; reason: string; attemptId?: string };
 
 export function getVapiConfigStatus(): { configured: boolean; missing: string[] } {
