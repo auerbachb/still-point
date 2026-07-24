@@ -19,6 +19,9 @@ struct NotificationsSettingsView: View {
                     sectionHeader("Quiet hours")
                     quietHoursSection
 
+                    sectionHeader("Missed-sit phone call")
+                    missedSitCallSection
+
                     sectionHeader("Miss a day")
                     missADayToggle
 
@@ -213,6 +216,77 @@ struct NotificationsSettingsView: View {
                 Task { await notificationPrefs.persistQuietHoursTimes() }
             }
             .accessibilityIdentifier("notifications.quietHoursEndPicker")
+        }
+    }
+
+    @ViewBuilder
+    private var missedSitCallSection: some View {
+        Toggle(isOn: Binding(
+            get: { notificationPrefs.callOptInEnabled },
+            set: { newValue in
+                Task { await notificationPrefs.persistCallOptInToggle(enabled: newValue) }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Phone call when you miss a sit")
+                    .font(SPFont.mono(13))
+                    .foregroundStyle(Color(SPColor.fg))
+                Text("A voice check-in if you haven't meditated by your chosen time")
+                    .font(SPFont.serif(13, weight: .light))
+                    .foregroundStyle(Color(SPColor.fg4))
+            }
+        }
+        .tint(SPColor.green)
+        .disabled(notificationPrefs.isSaving)
+        .accessibilityIdentifier("notifications.callOptInToggle")
+
+        if notificationPrefs.callOptInEnabled {
+            TextField("Phone number (+1…)", text: $notificationPrefs.callPhoneNumber)
+                .font(SPFont.mono(13))
+                .keyboardType(.phonePad)
+                .textContentType(.telephoneNumber)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .disabled(notificationPrefs.isSaving)
+                .onSubmit {
+                    Task { await notificationPrefs.persistCallPhoneNumber() }
+                }
+                .accessibilityIdentifier("notifications.callPhoneNumberField")
+
+            DatePicker(
+                "Call from",
+                selection: Binding(
+                    get: { notificationPrefs.callWindowStartTime },
+                    set: { notificationPrefs.callWindowStartTime = $0 }
+                ),
+                displayedComponents: .hourAndMinute
+            )
+            .font(SPFont.mono(13))
+            .disabled(notificationPrefs.isSaving)
+            .onChange(of: notificationPrefs.callWindowStartTime) { _, _ in
+                Task { await notificationPrefs.persistCallWindowTimes() }
+            }
+            .accessibilityIdentifier("notifications.callWindowStartPicker")
+
+            DatePicker(
+                "Call until",
+                selection: Binding(
+                    get: { notificationPrefs.callWindowStopTime },
+                    set: { notificationPrefs.callWindowStopTime = $0 }
+                ),
+                displayedComponents: .hourAndMinute
+            )
+            .font(SPFont.mono(13))
+            .disabled(notificationPrefs.isSaving)
+            .onChange(of: notificationPrefs.callWindowStopTime) { _, _ in
+                Task { await notificationPrefs.persistCallWindowTimes() }
+            }
+            .accessibilityIdentifier("notifications.callWindowStopPicker")
+
+            Text("By enabling, you consent to receive automated motivational check-in calls at the phone number above during your chosen window.")
+                .font(SPFont.serif(12, weight: .light))
+                .foregroundStyle(Color(SPColor.fg4))
+                .accessibilityIdentifier("notifications.callConsentCopy")
         }
     }
 

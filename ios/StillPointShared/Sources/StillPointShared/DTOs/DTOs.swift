@@ -785,6 +785,12 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
     public let dailyReminderFrequency: DailyReminderFrequency
     public let quietHoursStart: String?
     public let quietHoursEnd: String?
+    /// Opt-in (#599): outbound missed-sit voice call via Vapi.
+    public let callOptIn: Bool
+    public let callPhoneNumber: String?
+    public let callConsentAt: String?
+    public let callWindowStart: String?
+    public let callWindowStop: String?
     public let tz: String
     public let updatedAt: String?
 
@@ -799,6 +805,11 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         dailyReminderFrequency: DailyReminderFrequency,
         quietHoursStart: String?,
         quietHoursEnd: String?,
+        callOptIn: Bool = false,
+        callPhoneNumber: String? = nil,
+        callConsentAt: String? = nil,
+        callWindowStart: String? = nil,
+        callWindowStop: String? = nil,
         tz: String,
         updatedAt: String? = nil
     ) {
@@ -812,6 +823,11 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         self.dailyReminderFrequency = dailyReminderFrequency
         self.quietHoursStart = quietHoursStart
         self.quietHoursEnd = quietHoursEnd
+        self.callOptIn = callOptIn
+        self.callPhoneNumber = callPhoneNumber
+        self.callConsentAt = callConsentAt
+        self.callWindowStart = callWindowStart
+        self.callWindowStop = callWindowStop
         self.tz = tz
         self.updatedAt = updatedAt
     }
@@ -830,6 +846,11 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         dailyReminderFrequency = try c.decode(DailyReminderFrequency.self, forKey: .dailyReminderFrequency)
         quietHoursStart = try c.decodeIfPresent(String.self, forKey: .quietHoursStart)
         quietHoursEnd = try c.decodeIfPresent(String.self, forKey: .quietHoursEnd)
+        callOptIn = try c.decodeIfPresent(Bool.self, forKey: .callOptIn) ?? false
+        callPhoneNumber = try c.decodeIfPresent(String.self, forKey: .callPhoneNumber)
+        callConsentAt = try c.decodeIfPresent(String.self, forKey: .callConsentAt)
+        callWindowStart = try c.decodeIfPresent(String.self, forKey: .callWindowStart)
+        callWindowStop = try c.decodeIfPresent(String.self, forKey: .callWindowStop)
         tz = try c.decode(String.self, forKey: .tz)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
     }
@@ -845,6 +866,11 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         case dailyReminderFrequency
         case quietHoursStart
         case quietHoursEnd
+        case callOptIn
+        case callPhoneNumber
+        case callConsentAt
+        case callWindowStart
+        case callWindowStop
         case tz
         case updatedAt
     }
@@ -865,6 +891,10 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
     public var dailyReminderFrequency: DailyReminderFrequency?
     public var quietHoursStart: String??
     public var quietHoursEnd: String??
+    public var callOptIn: Bool?
+    public var callPhoneNumber: String??
+    public var callWindowStart: String??
+    public var callWindowStop: String??
     public var tz: String?
 
     public init(
@@ -878,6 +908,10 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         dailyReminderFrequency: DailyReminderFrequency? = nil,
         quietHoursStart: String?? = nil,
         quietHoursEnd: String?? = nil,
+        callOptIn: Bool? = nil,
+        callPhoneNumber: String?? = nil,
+        callWindowStart: String?? = nil,
+        callWindowStop: String?? = nil,
         tz: String? = nil
     ) {
         self.pushEnabled = pushEnabled
@@ -890,6 +924,10 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         self.dailyReminderFrequency = dailyReminderFrequency
         self.quietHoursStart = quietHoursStart
         self.quietHoursEnd = quietHoursEnd
+        self.callOptIn = callOptIn
+        self.callPhoneNumber = callPhoneNumber
+        self.callWindowStart = callWindowStart
+        self.callWindowStop = callWindowStop
         self.tz = tz
     }
 
@@ -919,6 +957,25 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
             case .some(let value): try c.encode(value, forKey: .quietHoursEnd)
             }
         }
+        if let callOptIn { try c.encode(callOptIn, forKey: .callOptIn) }
+        if let callPhoneNumber {
+            switch callPhoneNumber {
+            case .none: try c.encodeNil(forKey: .callPhoneNumber)
+            case .some(let value): try c.encode(value, forKey: .callPhoneNumber)
+            }
+        }
+        if let callWindowStart {
+            switch callWindowStart {
+            case .none: try c.encodeNil(forKey: .callWindowStart)
+            case .some(let value): try c.encode(value, forKey: .callWindowStart)
+            }
+        }
+        if let callWindowStop {
+            switch callWindowStop {
+            case .none: try c.encodeNil(forKey: .callWindowStop)
+            case .some(let value): try c.encode(value, forKey: .callWindowStop)
+            }
+        }
         if let tz { try c.encode(tz, forKey: .tz) }
     }
 
@@ -933,6 +990,10 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
         case dailyReminderFrequency
         case quietHoursStart
         case quietHoursEnd
+        case callOptIn
+        case callPhoneNumber
+        case callWindowStart
+        case callWindowStop
         case tz
     }
 }
