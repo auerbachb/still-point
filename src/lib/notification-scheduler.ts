@@ -331,12 +331,15 @@ async function releaseMissedSitCallClaim(userId: string, windowKey: string): Pro
 }
 
 async function countDaysMissed(userId: string, anchorDateKey: string): Promise<number> {
-  let days = 0;
-  let dateKey = anchorDateKey;
+  if (await userCompletedSessionOnDate(userId, anchorDateKey)) {
+    return 0;
+  }
+  let days = 1;
+  let dateKey = addCalendarDays(anchorDateKey, -1);
   while (!(await userCompletedSessionOnDate(userId, dateKey))) {
     days += 1;
     dateKey = addCalendarDays(dateKey, -1);
-    if (days > 90) {
+    if (days >= 14) {
       break;
     }
   }
@@ -417,6 +420,7 @@ function addCalendarDays(dateKey: string, deltaDays: number): string {
 
 export async function dispatchDueNotifications(now: Date = new Date()): Promise<{
   scanned: number;
+  callCandidatesScanned: number;
   sent: number;
   skipped: number;
   missADaySent: number;
@@ -613,10 +617,6 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       const local = getLocalParts(now, prefs.tz);
-      if (await userCompletedSessionOnDate(prefs.userId, local.dateKey)) {
-        continue;
-      }
-
       const { due, slotMinutes, dayOffset } = evaluateMissedSitCallDue(
         local.minutesSinceMidnight,
         prefs.callWindowStart,
@@ -627,6 +627,10 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       const intendedDateKey = addCalendarDays(local.dateKey, dayOffset);
+      if (await userCompletedSessionOnDate(prefs.userId, intendedDateKey)) {
+        continue;
+      }
+
       const windowKey = missedSitCallWindowKey(intendedDateKey, slotMinutes);
       const claimed = await claimNotificationDispatch({
         userId: prefs.userId,
@@ -654,8 +658,6 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
         });
         if (result.ok) {
           callsInitiated += 1;
-        } else {
-          await releaseMissedSitCallClaim(prefs.userId, windowKey);
         }
       } catch (callError) {
         console.error(`Failed to initiate missed-sit call for user ${prefs.userId}:`, callError);
@@ -667,7 +669,8 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   }
 
   return {
-    scanned: candidates.length + callCandidates.length,
+    scanned: candidates.length,
+    callCandidatesScanned: callCandidates.length,
     sent,
     skipped,
     missADaySent,
