@@ -83,6 +83,16 @@ export const notificationPreferences = pgTable("notification_preferences", {
   dailyReminderFrequency: varchar("daily_reminder_frequency", { length: 20 }).default("daily").notNull(),
   quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
   quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
+  /** Opt-in (#599): outbound missed-sit voice call via Vapi. Off by default. */
+  callOptIn: boolean("call_opt_in").default(false).notNull(),
+  /** E.164 phone number for missed-sit calls, e.g. +15551234567 */
+  callPhoneNumber: varchar("call_phone_number", { length: 20 }),
+  /** When the user last opted in to missed-sit calls; cleared on opt-out. */
+  callConsentAt: timestamp("call_consent_at", { withTimezone: true }),
+  /** Local call window start as HH:MM (24h). */
+  callWindowStart: varchar("call_window_start", { length: 5 }),
+  /** Local call window stop as HH:MM (24h). */
+  callWindowStop: varchar("call_window_stop", { length: 5 }),
   /** IANA timezone, e.g. America/New_York */
   tz: varchar("tz", { length: 64 }).default("UTC").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

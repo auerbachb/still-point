@@ -31,6 +31,11 @@ vi.mock("@/db/schema", () => ({
     dailyReminderFrequency: "dailyReminderFrequency",
     quietHoursStart: "quietHoursStart",
     quietHoursEnd: "quietHoursEnd",
+    callOptIn: "callOptIn",
+    callPhoneNumber: "callPhoneNumber",
+    callConsentAt: "callConsentAt",
+    callWindowStart: "callWindowStart",
+    callWindowStop: "callWindowStop",
     tz: "tz",
     createdAt: "createdAt",
     updatedAt: "updatedAt",
@@ -67,9 +72,14 @@ const samplePrefs = {
   suppressDuringSession: false,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as const,
-  quietHoursStart: null,
-  quietHoursEnd: null,
-  tz: "America/New_York",
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    callOptIn: false,
+    callPhoneNumber: null,
+    callConsentAt: null,
+    callWindowStart: null,
+    callWindowStop: null,
+    tz: "America/New_York",
   createdAt: new Date("2026-05-29T12:00:00.000Z"),
   updatedAt: new Date("2026-05-29T12:00:00.000Z"),
 };
@@ -195,6 +205,75 @@ describe("/api/notifications/preferences", () => {
 
     expect(response.status).toBe(400);
     expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  test("PATCH rejects callOptIn without phone and window", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ callOptIn: true }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(400);
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  test("PATCH sets consent timestamp when enabling call opt-in", async () => {
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({
+          callOptIn: true,
+          callPhoneNumber: "+15551234567",
+          callWindowStart: "09:00",
+          callWindowStop: "17:00",
+        }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callOptIn: true,
+        callPhoneNumber: "+15551234567",
+        callWindowStart: "09:00",
+        callWindowStop: "17:00",
+        callConsentAt: expect.any(Date),
+      }),
+    );
+  });
+
+  test("PATCH clears consent when opting out of calls", async () => {
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      ...samplePrefs,
+      callOptIn: true,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: new Date("2026-05-29T12:00:00.000Z"),
+    });
+
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ callOptIn: false }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callOptIn: false,
+        callConsentAt: null,
+      }),
+    );
   });
 
   test("GET returns 401 when unauthenticated", async () => {

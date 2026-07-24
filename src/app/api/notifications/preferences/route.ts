@@ -9,6 +9,9 @@ import {
   isValidFrequency,
   isValidReminderTime,
   isValidTimezone,
+  isValidE164PhoneNumber,
+  isValidCallWindow,
+  callOptInRequirementsMet,
   asNotificationPreferencesRow,
   serializeNotificationPreferences,
 } from "@/lib/notification-preferences";
@@ -105,6 +108,41 @@ export const PATCH = withApiHandler("Notification preferences PATCH", async (req
     hasUpdate = true;
   }
 
+  if (typeof body.callOptIn === "boolean") {
+    updates.callOptIn = body.callOptIn;
+    hasUpdate = true;
+  }
+  if (body.callPhoneNumber === null) {
+    updates.callPhoneNumber = null;
+    hasUpdate = true;
+  } else if (typeof body.callPhoneNumber === "string") {
+    if (!isValidE164PhoneNumber(body.callPhoneNumber)) {
+      return NextResponse.json({ error: "callPhoneNumber must be E.164 format, e.g. +15551234567" }, { status: 400 });
+    }
+    updates.callPhoneNumber = body.callPhoneNumber;
+    hasUpdate = true;
+  }
+  if (body.callWindowStart === null) {
+    updates.callWindowStart = null;
+    hasUpdate = true;
+  } else if (typeof body.callWindowStart === "string") {
+    if (!isValidReminderTime(body.callWindowStart)) {
+      return NextResponse.json({ error: "callWindowStart must be HH:MM (24h)" }, { status: 400 });
+    }
+    updates.callWindowStart = body.callWindowStart;
+    hasUpdate = true;
+  }
+  if (body.callWindowStop === null) {
+    updates.callWindowStop = null;
+    hasUpdate = true;
+  } else if (typeof body.callWindowStop === "string") {
+    if (!isValidReminderTime(body.callWindowStop)) {
+      return NextResponse.json({ error: "callWindowStop must be HH:MM (24h)" }, { status: 400 });
+    }
+    updates.callWindowStop = body.callWindowStop;
+    hasUpdate = true;
+  }
+
   if (!hasUpdate) {
     return NextResponse.json({ error: "No supported preference fields provided" }, { status: 400 });
   }
@@ -118,7 +156,47 @@ export const PATCH = withApiHandler("Notification preferences PATCH", async (req
     );
   }
 
-  await getOrCreateNotificationPreferences(auth.user.userId);
+  const callStartTouched = Object.prototype.hasOwnProperty.call(updates, "callWindowStart");
+  const callStopTouched = Object.prototype.hasOwnProperty.call(updates, "callWindowStop");
+  if (callStartTouched !== callStopTouched) {
+    return NextResponse.json(
+      { error: "callWindowStart and callWindowStop must be updated together" },
+      { status: 400 },
+    );
+  }
+
+  const existing = await getOrCreateNotificationPreferences(auth.user.userId);
+  const mergedCallFields = {
+    callPhoneNumber: (updates.callPhoneNumber as string | null | undefined) ?? existing.callPhoneNumber,
+    callWindowStart: (updates.callWindowStart as string | null | undefined) ?? existing.callWindowStart,
+    callWindowStop: (updates.callWindowStop as string | null | undefined) ?? existing.callWindowStop,
+  };
+  const nextCallOptIn = typeof updates.callOptIn === "boolean" ? updates.callOptIn : existing.callOptIn;
+
+  if (callStartTouched && callStopTouched) {
+    const start = updates.callWindowStart as string | null;
+    const stop = updates.callWindowStop as string | null;
+    if (start !== null && stop !== null && !isValidCallWindow(start, stop)) {
+      return NextResponse.json(
+        { error: "callWindowStart and callWindowStop must differ and be valid HH:MM times" },
+        { status: 400 },
+      );
+    }
+  }
+
+  if (nextCallOptIn) {
+    if (!callOptInRequirementsMet(mergedCallFields)) {
+      return NextResponse.json(
+        { error: "callOptIn requires callPhoneNumber plus callWindowStart and callWindowStop" },
+        { status: 400 },
+      );
+    }
+    if (!existing.callOptIn) {
+      updates.callConsentAt = new Date();
+    }
+  } else if (existing.callOptIn || updates.callOptIn === false) {
+    updates.callConsentAt = null;
+  }
 
   const [updated] = await db
     .update(notificationPreferences)
