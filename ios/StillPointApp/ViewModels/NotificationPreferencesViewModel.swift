@@ -142,35 +142,19 @@ final class NotificationPreferencesViewModel {
     func persistCallOptInToggle(enabled: Bool) async {
         callOptInEnabled = enabled
         if enabled {
-            await persist(
-                patch: NotificationPreferencesPatch(
-                    callOptIn: true,
-                    callPhoneNumber: .some(normalizedCallPhoneNumber()),
-                    callWindowStart: .some(formatHHMM(callWindowStartTime)),
-                    callWindowStop: .some(formatHHMM(callWindowStopTime))
-                )
-            )
-        } else {
-            await persist(patch: NotificationPreferencesPatch(callOptIn: false))
+            return
         }
+        await persist(patch: NotificationPreferencesPatch(callOptIn: false))
     }
 
-    func persistCallPhoneNumber() async {
+    func persistCallSettingsIfReady() async {
         guard callOptInEnabled else { return }
+        let phone = normalizedCallPhoneNumber()
+        guard phone.hasPrefix("+"), phone.count >= 8 else { return }
         await persist(
             patch: NotificationPreferencesPatch(
-                callPhoneNumber: .some(normalizedCallPhoneNumber()),
-                callWindowStart: .some(formatHHMM(callWindowStartTime)),
-                callWindowStop: .some(formatHHMM(callWindowStopTime))
-            )
-        )
-    }
-
-    func persistCallWindowTimes() async {
-        guard callOptInEnabled else { return }
-        await persist(
-            patch: NotificationPreferencesPatch(
-                callPhoneNumber: .some(normalizedCallPhoneNumber()),
+                callOptIn: true,
+                callPhoneNumber: .some(phone),
                 callWindowStart: .some(formatHHMM(callWindowStartTime)),
                 callWindowStop: .some(formatHHMM(callWindowStopTime))
             )
@@ -240,11 +224,11 @@ final class NotificationPreferencesViewModel {
 
     private func normalizedCallPhoneNumber() -> String {
         let trimmed = callPhoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("+") {
-            return trimmed
-        }
         let digits = trimmed.filter(\.isNumber)
         guard !digits.isEmpty else { return trimmed }
+        if trimmed.hasPrefix("+") {
+            return "+\(digits)"
+        }
         if digits.count == 10 {
             return "+1\(digits)"
         }

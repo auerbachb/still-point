@@ -18,10 +18,14 @@ struct NotificationsSettingsView: View {
 
                     sectionHeader("Quiet hours")
                     quietHoursSection
+                }
+                .disabled(!notificationPrefs.pushEnabled || notificationPrefs.isSaving)
 
-                    sectionHeader("Missed-sit phone call")
-                    missedSitCallSection
+                sectionHeader("Missed-sit phone call")
+                missedSitCallSection
+                    .disabled(notificationPrefs.isSaving)
 
+                Group {
                     sectionHeader("Miss a day")
                     missADayToggle
 
@@ -249,7 +253,10 @@ struct NotificationsSettingsView: View {
                 .textInputAutocapitalization(.never)
                 .disabled(notificationPrefs.isSaving)
                 .onSubmit {
-                    Task { await notificationPrefs.persistCallPhoneNumber() }
+                    Task { await notificationPrefs.persistCallSettingsIfReady() }
+                }
+                .onChange(of: notificationPrefs.callPhoneNumber) { _, _ in
+                    Task { await notificationPrefs.persistCallSettingsIfReady() }
                 }
                 .accessibilityIdentifier("notifications.callPhoneNumberField")
 
@@ -264,7 +271,7 @@ struct NotificationsSettingsView: View {
             .font(SPFont.mono(13))
             .disabled(notificationPrefs.isSaving)
             .onChange(of: notificationPrefs.callWindowStartTime) { _, _ in
-                Task { await notificationPrefs.persistCallWindowTimes() }
+                Task { await notificationPrefs.persistCallSettingsIfReady() }
             }
             .accessibilityIdentifier("notifications.callWindowStartPicker")
 
@@ -279,7 +286,7 @@ struct NotificationsSettingsView: View {
             .font(SPFont.mono(13))
             .disabled(notificationPrefs.isSaving)
             .onChange(of: notificationPrefs.callWindowStopTime) { _, _ in
-                Task { await notificationPrefs.persistCallWindowTimes() }
+                Task { await notificationPrefs.persistCallSettingsIfReady() }
             }
             .accessibilityIdentifier("notifications.callWindowStopPicker")
 

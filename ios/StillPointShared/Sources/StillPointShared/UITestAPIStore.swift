@@ -578,6 +578,20 @@ actor UITestAPIStore {
         }
 
         let nextCallOptIn = patch.callOptIn ?? current.callOptIn
+        if nextCallOptIn {
+            guard let phone = callPhone,
+                  phone.hasPrefix("+"),
+                  phone.count >= 8,
+                  let start = callWindowStart,
+                  let stop = callWindowStop,
+                  start != stop else {
+                throw APIError(
+                    status: 400,
+                    message: "callOptIn requires callPhoneNumber plus callWindowStart and callWindowStop",
+                    code: "VALIDATION_ERROR"
+                )
+            }
+        }
         let nextCallConsentAt: String? = {
             if patch.callOptIn == true && !current.callOptIn {
                 return ISO8601DateFormatter().string(from: Date())
