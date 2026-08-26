@@ -145,8 +145,44 @@ if ! BODY="$(gh pr view "$PR_NUM" --json body --jq '.body // ""' 2>"$GH_STDERR")
   exit 4
 fi
 
+# Drop fenced code blocks from a Markdown body, so documentation *examples* are
+# not read as real closing references. ac-gate.sh treats fenced content as inert;
+# without the same treatment here a prose sample such as a fenced "Closes #123"
+# would be returned as a genuine closing reference, and the gate would then
+# classify a valid deferred tracking issue #123 as self-referential and fail a PR
+# that is actually well-formed. Same CommonMark rules as ac-gate.sh: 3+ backticks
+# or tildes, indented at most three spaces, closing only on a run of the same
+# character at least as long with nothing trailing.
+_strip_fenced_blocks() {
+  local line fence_char="" fence_len=0 marker info close_re
+  local open_re='^[[:space:]]{0,3}(`{3,}|~{3,})(.*)$'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    if [[ -z "$fence_char" ]]; then
+      if [[ "$line" =~ $open_re ]]; then
+        marker="${BASH_REMATCH[1]}"
+        info="${BASH_REMATCH[2]}"
+        if [[ "${marker:0:1}" != '`' || "$info" != *'`'* ]]; then
+          fence_char="${marker:0:1}"
+          fence_len="${#marker}"
+          continue
+        fi
+      fi
+      printf '%s\n' "$line"
+    else
+      close_re="^[[:space:]]{0,3}${fence_char}{${fence_len},}[[:space:]]*$"
+      if [[ "$line" =~ $close_re ]]; then
+        fence_char=""
+        fence_len=0
+      fi
+    fi
+  done
+}
+
 # --- extract issue number(s) ---
 if [[ "$ALL_MODE" -eq 1 ]]; then
+  # Examples inside fenced blocks are not closing references (see above).
+  BODY="$(printf '%s\n' "$BODY" | _strip_fenced_blocks)"
   # --all mode: collect every closing reference that targets the current repository.
   #
   # Pass 1: bare `#N` form. The leading `(^|[^[:alnum:]_])` is a left word-boundary.

@@ -658,6 +658,27 @@ public enum WidgetDataStore {
             copy.completedDates = data.completedDates.filter { window.contains($0) }
             copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
         }
+        // A snapshot written before #671 carries a historical `streak` but no
+        // `completedDates` and no server anchor: both decode to their absent
+        // defaults ([] and nil). Recomputing from that would return 0 -- not
+        // because the streak lapsed, but because the evidence was never stored --
+        // so every existing user's widget would read zero from the moment they
+        // upgraded until the app next foregrounded and refetched. The widget is
+        // exactly the surface that renders *without* the app opening, so that is
+        // a visible regression, and in a change whose whole purpose is to stop
+        // the streak being wrong.
+        //
+        // "No history and no anchor" is therefore treated as unknown history
+        // rather than empty history, and the stored value is kept until an
+        // authoritative fetch stores real completion dates. This does not weaken
+        // the #671 invariant: that invariant governs a streak displayed *beside a
+        // row*, and a snapshot with no completion history draws no marks to
+        // contradict. Any snapshot written by this version records
+        // `completedDates`, so a genuine lapse still recomputes to 0 through the
+        // normal path below.
+        let hasHistoryToRecomputeFrom = !copy.completedDayUnion.isEmpty || copy.serverStreak != nil
+        guard hasHistoryToRecomputeFrom else { return copy }
+
         // The snapshot is its own "previous": its stored streak is the only record
         // of days older than the window until the next authoritative fetch. A nil
         // `userId` fails the same-account check inside `resolvedStreak`, so an

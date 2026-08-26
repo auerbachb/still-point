@@ -406,6 +406,58 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertTrue(decoded.practiceDoneToday, "legacy blobs fall back to primaryDoneToday")
     }
 
+    /// A pre-#671 snapshot has a real `streak` but no stored history to justify
+    /// it. Recomputing would read 0 -- not a lapse, just missing evidence -- and
+    /// zero every existing user's widget the moment they upgraded, before the
+    /// app next foregrounded. Unknown history must not be read as empty history.
+    func testLegacySnapshotKeepsItsStreakUntilHistoryIsStored() throws {
+        let ref = Date(timeIntervalSince1970: 1_700_000_000)
+        let legacy: [String: Any] = [
+            "isLoggedIn": true,
+            "userId": "u1",
+            "currentDay": 10,
+            "secondTrackDay": 2,
+            "dualTrackEnabled": false,
+            "primaryDoneToday": false,
+            "secondDoneToday": false,
+            "streak": 42,
+            "lastUpdated": ref.timeIntervalSinceReferenceDate
+        ]
+        let data = try JSONSerialization.data(withJSONObject: legacy)
+        let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
+        XCTAssertEqual(decoded.completedDates, [], "precondition: legacy blob stores no history")
+        XCTAssertNil(decoded.serverStreak, "precondition: legacy blob stores no anchor")
+
+        // `now` is far past lastUpdated, so the rollover branch also runs.
+        let shown = WidgetDataStore.normalizedForDisplay(decoded, now: Date())
+        XCTAssertEqual(shown.streak, 42, "legacy streak must survive until real history is stored")
+        XCTAssertFalse(shown.practiceDoneToday, "stale done-today flags are still cleared")
+    }
+
+    /// The guard above must not become a way for a genuine lapse to persist: a
+    /// snapshot written by *this* version always records `completedDates`, so an
+    /// empty-but-present history alongside a server anchor still recomputes.
+    func testEmptyHistoryWithAnchorStillRecomputesToZero() {
+        let now = Date()
+        let data = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 10,
+            secondTrackDay: 2,
+            dualTrackEnabled: false,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            streak: 42,
+            completedDates: [],
+            serverStreak: 3,
+            serverStreakDate: localDay(-30, from: now),
+            lastUpdated: now
+        )
+        let shown = WidgetDataStore.normalizedForDisplay(data, now: now)
+        XCTAssertEqual(shown.streak, 0, "a lapsed run with no corroborating history reads zero")
+    }
+
     func testRecentCompletedPracticeDatesFiltersTypeTrackAndWindow() {
         let now = Date()
         let today = localDay(0, from: now)
