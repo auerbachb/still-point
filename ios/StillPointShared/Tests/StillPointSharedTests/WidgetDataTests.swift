@@ -458,6 +458,77 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(shown.streak, 0, "a lapsed run with no corroborating history reads zero")
     }
 
+    /// The legacy carry-forward must key off *provenance*, not emptiness. A
+    /// snapshot written by this version that has lapsed past the window prunes
+    /// to exactly the shape of a legacy blob — no history, no anchor — and must
+    /// still recompute to 0, or #671 is back: a stale streak beside a blank row.
+    /// This is the case the 640-case property sweep caught; pinned by name here
+    /// so the distinction cannot regress silently.
+    func testEmptyHistoryWithoutAnchorRecomputesToZeroWhenHistoryWasRecorded() {
+        let now = Date()
+        let lapsed = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 10,
+            secondTrackDay: 2,
+            dualTrackEnabled: false,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            streak: 42,
+            completedDates: [],
+            serverStreak: nil,
+            serverStreakDate: nil,
+            lastUpdated: now
+        )
+        XCTAssertFalse(lapsed.historyIsUnknown, "precondition: this version records history")
+
+        let shown = WidgetDataStore.normalizedForDisplay(lapsed, now: now)
+        XCTAssertEqual(shown.weekMarks(now: now).filter(\.done).count, 0, "precondition: the row is blank")
+        XCTAssertEqual(shown.streak, 0, "a blank row may never carry a streak")
+    }
+
+    /// The two shapes are indistinguishable by content, so assert directly that
+    /// decoding is what separates them: keys absent means unknown, keys present
+    /// (even empty) means recorded.
+    func testHistoryIsUnknownTracksKeyPresenceNotEmptiness() throws {
+        let ref = Date(timeIntervalSince1970: 1_700_000_000)
+        var blob: [String: Any] = [
+            "isLoggedIn": true,
+            "userId": "u1",
+            "currentDay": 10,
+            "secondTrackDay": 2,
+            "dualTrackEnabled": false,
+            "primaryDoneToday": false,
+            "secondDoneToday": false,
+            "streak": 42,
+            "lastUpdated": ref.timeIntervalSinceReferenceDate
+        ]
+
+        let legacy = try JSONDecoder().decode(
+            WidgetData.self,
+            from: try JSONSerialization.data(withJSONObject: blob)
+        )
+        XCTAssertTrue(legacy.historyIsUnknown, "no history keys at all means unknown history")
+
+        // Same empty history, but explicitly recorded by the writer.
+        blob["completedDates"] = [String]()
+        let recorded = try JSONDecoder().decode(
+            WidgetData.self,
+            from: try JSONSerialization.data(withJSONObject: blob)
+        )
+        XCTAssertFalse(recorded.historyIsUnknown, "an explicitly empty history is known, not unknown")
+        XCTAssertEqual(
+            WidgetDataStore.normalizedForDisplay(recorded, now: Date()).streak,
+            0,
+            "a recorded empty history is a lapse and must recompute to zero"
+        )
+
+        // Provenance is never written back: re-encoding clears it.
+        let roundTripped = try JSONDecoder().decode(WidgetData.self, from: try JSONEncoder().encode(legacy))
+        XCTAssertFalse(roundTripped.historyIsUnknown, "saving a snapshot records its history")
+    }
+
     func testRecentCompletedPracticeDatesFiltersTypeTrackAndWindow() {
         let now = Date()
         let today = localDay(0, from: now)

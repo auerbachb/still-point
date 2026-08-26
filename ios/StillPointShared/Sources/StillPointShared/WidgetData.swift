@@ -79,6 +79,21 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// row so later days can extend it without a second fetch.
     public var serverStreakDate: String?
     public var lastUpdated: Date
+    /// True only for a blob persisted *before* #671 shipped: one whose
+    /// `completedDates` and `serverStreak` keys are both absent, so it records a
+    /// `streak` with no evidence behind it. Distinguishes **unknown** history
+    /// ("this writer never stored any") from **known-empty** history ("this
+    /// writer stored history and it is empty" — a genuine lapse). Both decode to
+    /// `completedDates == []`, so `isEmpty` alone cannot tell them apart, and
+    /// conflating them either zeroes every upgrading user's streak or lets a
+    /// real lapse keep a stale one.
+    ///
+    /// Provenance, not content: set only by `init(from:)`, absent from
+    /// `CodingKeys` so it is never written back, and always `false` for a
+    /// snapshot this version constructs — including every `makeSnapshot` result.
+    /// A legacy blob therefore self-heals to `false` the first time the app
+    /// writes real history.
+    public private(set) var historyIsUnknown: Bool = false
 
     public init(
         isLoggedIn: Bool,
@@ -151,6 +166,14 @@ public struct WidgetData: Codable, Sendable, Equatable {
         serverStreak = try c.decodeIfPresent(Int.self, forKey: .serverStreak)
         serverStreakDate = try c.decodeIfPresent(String.self, forKey: .serverStreakDate)
         lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
+        // Key *absence* — not an empty value — is what marks a pre-#671 writer.
+        // `contains` is the only signal that survives `decodeIfPresent`'s
+        // `?? []`, so it is captured here rather than inferred later. Any history
+        // key at all, either track's, means the writer recorded history: a #684
+        // snapshot always writes both, so it is never mistaken for a legacy blob.
+        historyIsUnknown = !c.contains(.completedDates)
+            && !c.contains(.secondCompletedDates)
+            && !c.contains(.serverStreak)
     }
 
     public static let loggedOut = WidgetData(
@@ -659,25 +682,29 @@ public enum WidgetDataStore {
             copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
         }
         // A snapshot written before #671 carries a historical `streak` but no
-        // `completedDates` and no server anchor: both decode to their absent
-        // defaults ([] and nil). Recomputing from that would return 0 -- not
-        // because the streak lapsed, but because the evidence was never stored --
-        // so every existing user's widget would read zero from the moment they
-        // upgraded until the app next foregrounded and refetched. The widget is
-        // exactly the surface that renders *without* the app opening, so that is
-        // a visible regression, and in a change whose whole purpose is to stop
-        // the streak being wrong.
+        // stored evidence for it: its `completedDates` and `serverStreak` keys
+        // are both absent, so they decode to `[]` and `nil`. Recomputing from
+        // that reads 0 -- not because the streak lapsed, but because the
+        // evidence was never recorded -- which would zero every existing user's
+        // widget the moment they upgraded, before the app next foregrounded.
+        // The widget is exactly the surface that renders *without* the app
+        // opening, so that is a visible regression in a change whose whole
+        // purpose is to stop the streak being wrong.
         //
-        // "No history and no anchor" is therefore treated as unknown history
-        // rather than empty history, and the stored value is kept until an
-        // authoritative fetch stores real completion dates. This does not weaken
-        // the #671 invariant: that invariant governs a streak displayed *beside a
-        // row*, and a snapshot with no completion history draws no marks to
-        // contradict. Any snapshot written by this version records
-        // `completedDates`, so a genuine lapse still recomputes to 0 through the
-        // normal path below.
-        let hasHistoryToRecomputeFrom = !copy.completedDayUnion.isEmpty || copy.serverStreak != nil
-        guard hasHistoryToRecomputeFrom else { return copy }
+        // The distinction has to come from `historyIsUnknown`, which records
+        // whether those keys were *present* at decode time. An `isEmpty` test
+        // cannot make it: a snapshot written by this version also prunes to an
+        // empty history once the user lapses past the window, and treating that
+        // as "unknown" would keep a stale streak beside a blank row -- bug #671
+        // itself. Provenance separates them; emptiness does not.
+        //
+        // Belt and braces: even for a legacy blob, skip recomputation only while
+        // there is genuinely nothing to recompute from. Any evidence at all,
+        // from either track or from the anchor, goes down the normal path.
+        let historyIsUnrecorded = copy.historyIsUnknown
+            && copy.completedDayUnion.isEmpty
+            && copy.serverStreak == nil
+        guard !historyIsUnrecorded else { return copy }
 
         // The snapshot is its own "previous": its stored streak is the only record
         // of days older than the window until the next authoritative fetch. A nil
