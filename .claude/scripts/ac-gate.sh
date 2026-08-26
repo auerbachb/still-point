@@ -250,7 +250,11 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   fi
 
   # --- unchecked box detection (`- [ ]` with optional leading whitespace) ---
-  if printf '%s' "$line" | grep -qE '^[[:space:]]*-[[:space:]]\[ \]'; then
+  # All three CommonMark bullet markers count. GitHub renders `* [ ]` and
+  # `+ [ ]` as task-list items exactly like `- [ ]`, so matching only `-` let an
+  # unchecked criterion written with either of the other two markers through the
+  # gate unseen — the same silent-bypass class as the heading handling above.
+  if printf '%s' "$line" | grep -qE '^[[:space:]]*[-*+][[:space:]]\[ \]'; then
     case "$STATE" in
       ac|testplan|malformed_postmerge)
         HAS_UNCHECKED_INSCOPE=1
