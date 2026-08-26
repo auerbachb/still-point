@@ -189,14 +189,34 @@ final class BuddySessionViewModel {
     // MARK: - Sound Preferences (#554)
 
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
-        if !voiceCountdownWasEnabled && soundPrefs.voiceCountdown {
+
+        let effects = SoundToggleLogic.effects(
+            toggledKeyWasEnabled: toggledKeyWasEnabled,
+            toggledKeyIsEnabled: soundPrefs[keyPath: keyPath],
+            voiceCountdownWasEnabled: voiceCountdownWasEnabled,
+            voiceCountdownIsEnabled: soundPrefs.voiceCountdown
+        )
+
+        if effects.warmUp {
+            // #667: this view model never warms the engine anywhere, so a buddy sit
+            // could leave the audio session inactive for its whole run. Reactivate on
+            // any off→on toggle so the re-enabled sound is audible.
+            AudioEngine.shared.warmUp()
+        }
+        if effects.preloadVoiceCountdown {
             AudioEngine.shared.preloadVoiceCountdown()
-        } else if voiceCountdownWasEnabled && !soundPrefs.voiceCountdown {
-            // Voice countdown was just disabled — stop any in-flight clip.
+        }
+        if effects.resetVoiceDedup {
+            // Voice countdown was just disabled — reset dedup state so re-enabling
+            // during the same remaining second announces correctly (#554).
             lastVoiceCountdownSec = 0
+        }
+        if effects.cancelVoiceCountdown {
+            // Stop any in-flight clip.
             AudioEngine.shared.cancelVoiceCountdownPlayback()
         }
     }
