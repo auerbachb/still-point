@@ -278,8 +278,13 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
     # indent handling above was added to close.
     heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}#{1,2}[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
 
-    # Case-insensitive match for in-scope sections
-    heading_lower="$(printf '%s' "$heading" | tr '[:upper:]' '[:lower:]')"
+    # Case-insensitive match for in-scope sections.
+    # ASCII ranges deliberately, not '[:upper:]'/'[:lower:]' (shellcheck
+    # SC2018/SC2019): the headings matched below are fixed ASCII keywords, and
+    # locale-aware folding would map 'I' to a dotless 'ı' under a Turkish
+    # locale, so '## ACCEPTANCE CRITERIA' would stop matching. ASCII folding
+    # keeps the gate locale-independent, which matters for a CI check.
+    heading_lower="$(printf '%s' "$heading" | LC_ALL=C tr 'A-Z' 'a-z')"
 
     case "$heading_lower" in
       "acceptance criteria")

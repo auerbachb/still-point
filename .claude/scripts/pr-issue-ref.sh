@@ -179,10 +179,16 @@ _strip_fenced_blocks() {
   done
 }
 
+# Examples inside fenced blocks are not closing references in EITHER mode (see
+# above). Stripped once here rather than inside the --all branch: the default
+# path ran its own matcher against the raw body, so a fenced `Closes #123`
+# sample was still returned as a genuine closing reference to every
+# default-mode consumer -- the same false-positive --all was fixed for, left
+# behind on the sibling path.
+BODY="$(printf '%s\n' "$BODY" | _strip_fenced_blocks)"
+
 # --- extract issue number(s) ---
 if [[ "$ALL_MODE" -eq 1 ]]; then
-  # Examples inside fenced blocks are not closing references (see above).
-  BODY="$(printf '%s\n' "$BODY" | _strip_fenced_blocks)"
   # --all mode: collect every closing reference that targets the current repository.
   #
   # Pass 1: bare `#N` form. The leading `(^|[^[:alnum:]_])` is a left word-boundary.
