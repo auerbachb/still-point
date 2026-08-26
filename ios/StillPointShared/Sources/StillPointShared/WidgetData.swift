@@ -51,6 +51,11 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// Track Two's equivalent is `secondDoneToday`; day continuity uses the union
     /// of both (see `isDayKeptToday(at:)`).
     public var practiceDoneToday: Bool
+    /// Streak the widget renders. Always derived from the completion history the
+    /// rows are drawn from (`completedDates` ∪ `secondCompletedDates`, plus the
+    /// extensions below) by `WidgetDataStore.reconciledStreak` — never
+    /// accumulated from snapshot-to-snapshot flag transitions (#671), so it can
+    /// never contradict the weekday row(s) rendered beside it.
     public var streak: Int
     /// #84 follow-up: ISO local-day strings (`yyyy-MM-dd`) within the trailing
     /// 7-day window on which **Track One** practice was completed. Drives the
@@ -64,6 +69,15 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// to a two-a-day schedule carry no second-track sit, so they render on the
     /// Track One row only. Legacy snapshots decode this as empty.
     public var secondCompletedDates: [String]
+    /// #671: server-computed `stats.streak` from `/api/sessions`, the only source
+    /// that knows about days older than the trailing-7 window the rows render.
+    /// Used solely to *extend* a run the rows already corroborate — never to
+    /// contradict them. Nil when no authoritative fetch has landed yet.
+    public var serverStreak: Int?
+    /// #671: the ISO local day `serverStreak` counts through (the most recent
+    /// completed standard sit at fetch time). Anchors the server total onto the
+    /// row so later days can extend it without a second fetch.
+    public var serverStreakDate: String?
     public var lastUpdated: Date
 
     public init(
@@ -81,6 +95,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: Int,
         completedDates: [String] = [],
         secondCompletedDates: [String] = [],
+        serverStreak: Int? = nil,
+        serverStreakDate: String? = nil,
         lastUpdated: Date
     ) {
         self.isLoggedIn = isLoggedIn
@@ -97,6 +113,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
         self.streak = streak
         self.completedDates = completedDates
         self.secondCompletedDates = secondCompletedDates
+        self.serverStreak = serverStreak
+        self.serverStreakDate = serverStreakDate
         self.lastUpdated = lastUpdated
     }
 
@@ -104,7 +122,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
         case isLoggedIn, userId, currentDay, secondTrackDay, dualTrackEnabled
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
         case primaryDoneToday, secondDoneToday, practiceDoneToday, streak
-        case completedDates, secondCompletedDates, lastUpdated
+        case completedDates, secondCompletedDates
+        case serverStreak, serverStreakDate, lastUpdated
     }
 
     /// Custom decoder so blobs persisted before `completedDates` /
@@ -129,6 +148,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
         // Pre-#684 snapshots have no Track Two history: their `completedDates`
         // stay Track One and Track Two starts empty (no back-fill, no migration).
         secondCompletedDates = try c.decodeIfPresent([String].self, forKey: .secondCompletedDates) ?? []
+        serverStreak = try c.decodeIfPresent(Int.self, forKey: .serverStreak)
+        serverStreakDate = try c.decodeIfPresent(String.self, forKey: .serverStreakDate)
         lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
     }
 
@@ -161,7 +182,8 @@ public struct WidgetData: Codable, Sendable, Equatable {
     }
 
     /// Local days in the trailing window on which **either** track recorded a
-    /// completed sit — the set day continuity and the streak walk over (#684).
+    /// completed sit — the set day continuity and the streak walk over (#684),
+    /// and therefore the evidence the displayed streak must agree with (#671).
     public var completedDayUnion: Set<String> {
         Set(completedDates).union(secondCompletedDates)
     }
@@ -202,6 +224,10 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// is checked when **either** track completed a sit, matching the day-credit
     /// rule in `isDayKeptToday(at:)`. Single-track users have no Track Two
     /// history, so this is identical to their Track One row.
+    ///
+    /// #671 reads the streak off exactly this row: on a two-a-day schedule the
+    /// two rendered rows show, between them, precisely the days this union row
+    /// marks, so "the run the row draws" is well-defined for both layouts.
     public func weekMarks(now: Date = Date(), calendar: Calendar = .current) -> [WidgetDayMark] {
         weekMarks(
             completed: completedDayUnion,
@@ -248,7 +274,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         let start = calendar.startOfDay(for: now)
         let letters = WidgetData.narrowWeekdaySymbols(calendar: calendar)
         let names = WidgetData.fullWeekdaySymbols(calendar: calendar)
-        return (0..<7).reversed().compactMap { offset -> WidgetDayMark? in
+        return (0..<WidgetDataStore.historyWindowDays).reversed().compactMap { offset -> WidgetDayMark? in
             guard let date = calendar.date(byAdding: .day, value: -offset, to: start) else { return nil }
             let iso = WidgetDataStore.localDayString(date, calendar: calendar)
             let isToday = offset == 0
@@ -258,6 +284,53 @@ public struct WidgetData: Codable, Sendable, Equatable {
             let name = names.isEmpty ? "" : names[(weekday - 1) % names.count]
             return WidgetDayMark(iso: iso, letter: letter, weekdayName: name, done: done, isToday: isToday)
         }
+    }
+
+    /// Whether the weekday row's trailing column (today) renders as completed.
+    /// Mirrors exactly what `weekMarks(now:)` decides — the union of both tracks
+    /// under the #684 day-credit rule — so streak derivation and the rendered
+    /// row(s) can never disagree about today (#671).
+    public func isTodayMarkedDone(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        completedDayUnion.contains(WidgetDataStore.localDayString(now, calendar: calendar))
+            || isDayKeptToday(at: now)
+    }
+
+    /// #671: the run of consecutive kept days the weekday row *itself* shows,
+    /// ending on today — or on yesterday when today is still pending. Read
+    /// straight off `weekMarks(now:)` so it is, by construction, the number a
+    /// person counts off the row with their finger. On a two-a-day schedule that
+    /// row is the union of the two rendered rows, matching the day-credit rule.
+    /// Bounded by the 7-day window; `streak` may legitimately exceed it (see
+    /// `serverStreak`), but can never fall below it.
+    public func weekRowStreak(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        WidgetData.rowRun(in: weekMarks(now: now, calendar: calendar))
+    }
+
+    /// True when `weekRowStreak` runs off the oldest column of the row, i.e. the
+    /// row cannot see where the streak actually began. Only then may a larger
+    /// `streak` be shown without contradicting the row.
+    public func weekRowStreakReachesWindowEdge(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let marks = weekMarks(now: now, calendar: calendar)
+        let run = WidgetData.rowRun(in: marks)
+        guard run > 0 else { return false }
+        let pendingToday = marks.last.map { !$0.done } ?? false
+        return run + (pendingToday ? 1 : 0) >= marks.count
+    }
+
+    /// Walk the rendered marks newest → oldest, counting completed days until a
+    /// missed one. A pending *today* is skipped rather than treated as a break.
+    private static func rowRun(in marks: [WidgetDayMark]) -> Int {
+        var run = 0
+        for mark in marks.reversed() {
+            if mark.done {
+                run += 1
+            } else if mark.isToday {
+                continue
+            } else {
+                break
+            }
+        }
+        return run
     }
 
     /// Narrow standalone weekday initials indexed by `weekday - 1` (1 = Sunday).
@@ -296,11 +369,15 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: 12,
         completedDates: WidgetDataStore.previewCompletedDates(),
         secondCompletedDates: [],
+        // Anchored on yesterday so the 12 stays compatible with the 6-day row.
+        serverStreak: 12,
+        serverStreakDate: WidgetDataStore.previewCompletedDates().last,
         lastUpdated: Date()
     )
 
     /// #684: two-a-day gallery / Xcode preview fixture — Track Two has a shorter
-    /// history than Track One, the way a mid-week switch actually looks.
+    /// history than Track One, the way a mid-week switch actually looks. The
+    /// union of the two rows is still the unbroken run `streak` claims (#671).
     public static let previewDualTrack = WidgetData(
         isLoggedIn: true,
         userId: "preview-dual",
@@ -313,11 +390,16 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: 12,
         completedDates: WidgetDataStore.previewCompletedDates(),
         secondCompletedDates: WidgetDataStore.previewSecondCompletedDates(),
+        serverStreak: 12,
+        serverStreakDate: WidgetDataStore.previewCompletedDates().last,
         lastUpdated: Date()
     )
 }
 
 public enum WidgetDataStore {
+    /// Length of the trailing history window the widget keeps and renders.
+    public static let historyWindowDays = 7
+
     public static var sharedDefaults: UserDefaults? {
         UserDefaults(suiteName: WidgetAppGroup.id)
     }
@@ -344,6 +426,34 @@ public enum WidgetDataStore {
         sharedDefaults?.removeObject(forKey: WidgetAppGroup.dataKey)
     }
 
+    /// Why the app is about to render a signed-out widget snapshot.
+    public enum SignedOutCause: Sendable, Equatable {
+        /// The user signed out, or the server authoritatively reported no session.
+        case signedOut
+        /// Credentials were rejected (HTTP 401) — the session is genuinely over.
+        case unauthorized
+        /// The server answered, but with an error that says nothing about auth.
+        case serverError
+        /// The server could not be reached at all (offline cold start).
+        case unreachable
+    }
+
+    /// #671 (symptom 2 — "the week resets"): only an authoritative sign-out may
+    /// wipe the shared snapshot. A launch that simply can't reach the server is
+    /// not a sign-out, and clearing there destroys the widget's only copy of the
+    /// week: the rows go blank, and once history is refetched the streak has
+    /// already restarted from 1 because there is no longer a prior snapshot to
+    /// build on. Keeping the blob costs nothing — `normalizedForDisplay` bounds
+    /// and re-derives it on every read.
+    public static func shouldClearStoredSnapshot(on cause: SignedOutCause) -> Bool {
+        switch cause {
+        case .signedOut, .unauthorized:
+            return true
+        case .serverError, .unreachable:
+            return false
+        }
+    }
+
     /// Build a widget snapshot from in-memory app state, adjusting streak without
     /// extra network calls by comparing against the last persisted snapshot.
     ///
@@ -354,6 +464,13 @@ public enum WidgetDataStore {
     /// sync path never wipes history it can't recompute. Today is folded into a
     /// track only when that track's own "done today" flag is set, so completing
     /// either sit checks that row's box immediately (#684).
+    ///
+    /// #671: the streak is then *derived* from the union of those sets — the
+    /// same evidence the rows draw — rather than accumulated from flag
+    /// transitions, so a day the app never observed can no longer be silently
+    /// dropped. It is extended past the window edge only by the server anchor or
+    /// the previous snapshot's carried value, and only while the rows corroborate
+    /// an unbroken run all the way back to that edge.
     public static func makeSnapshot(
         user: UserDTO?,
         primaryDoneToday: Bool,
@@ -362,28 +479,29 @@ public enum WidgetDataStore {
         now: Date = Date(),
         previous: WidgetData? = nil,
         completedPracticeDates: Set<String>? = nil,
-        secondCompletedPracticeDates: Set<String>? = nil
+        secondCompletedPracticeDates: Set<String>? = nil,
+        serverStreak: Int? = nil,
+        serverStreakDate: String? = nil
     ) -> WidgetData {
         guard let user else {
             return .loggedOut
         }
 
-        let prior = previous ?? load()
-        // Carry forward what we already knew; drop the other account's history.
-        let sameAccount: Bool = {
-            guard let prior, prior.isLoggedIn else { return false }
-            return prior.userId == user.id
-        }()
+        // Nil unless the stored snapshot belongs to this same signed-in account —
+        // another account's history and streak must never carry over.
+        let prior = (previous ?? load()).flatMap { snapshot in
+            snapshot.isLoggedIn && snapshot.userId == user.id ? snapshot : nil
+        }
 
-        let window = Set(localDayStrings(lastN: 7, endingAt: now))
+        let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now))
         var dates = windowedDates(
             authoritative: completedPracticeDates,
-            carriedForward: sameAccount ? prior?.completedDates : nil,
+            carriedForward: prior?.completedDates,
             window: window
         )
         var secondDates = windowedDates(
             authoritative: secondCompletedPracticeDates,
-            carriedForward: sameAccount ? prior?.secondCompletedDates : nil,
+            carriedForward: prior?.secondCompletedDates,
             window: window
         )
         // Fold today in only on the synchronous fast path (no session set), where
@@ -399,16 +517,36 @@ public enum WidgetDataStore {
             secondDates.insert(today)
         }
 
+        // The authoritative fetch supplies a fresh (streak, anchor) pair; the fast,
+        // network-free path reuses the one already stored for this same account so
+        // a sit today still extends a streak older than the 7-day rows.
+        let resolvedServerStreak: Int?
+        let resolvedServerStreakDate: String?
+        if serverStreak != nil || serverStreakDate != nil {
+            resolvedServerStreak = serverStreak
+            resolvedServerStreakDate = serverStreakDate
+        } else if let prior {
+            resolvedServerStreak = prior.serverStreak
+            resolvedServerStreakDate = prior.serverStreakDate
+        } else {
+            resolvedServerStreak = nil
+            resolvedServerStreakDate = nil
+        }
+
         // Day-credit rule (#684; cross-surface policy tracked in #679): the day is
         // kept when AT LEAST ONE track finished a sit. On a two-a-day schedule
-        // either session alone preserves continuity — only a zero-sit day breaks it.
-        let dayKeptToday = practiceDoneToday || secondDoneToday
+        // either session alone preserves continuity — only a zero-sit day breaks
+        // it. This matches exactly what `weekMarks(now:)` renders for today.
+        let union = dates.union(secondDates)
+        let dayKeptToday = union.contains(today) || practiceDoneToday || secondDoneToday
         let streak = resolvedStreak(
             userId: user.id,
             dayKeptToday: dayKeptToday,
             previous: prior,
             now: now,
-            completedDays: dates.union(secondDates)
+            completedDays: union,
+            serverStreak: resolvedServerStreak,
+            serverStreakDate: resolvedServerStreakDate
         )
 
         return WidgetData(
@@ -426,12 +564,14 @@ public enum WidgetDataStore {
             streak: streak,
             completedDates: dates.sorted(),
             secondCompletedDates: secondDates.sorted(),
+            serverStreak: resolvedServerStreak,
+            serverStreakDate: resolvedServerStreakDate,
             lastUpdated: now
         )
     }
 
     /// Authoritative set when supplied, else the carried-forward one, always
-    /// clipped to the trailing window the row can render.
+    /// clipped to the trailing window the rows can render.
     private static func windowedDates(
         authoritative: Set<String>?,
         carriedForward: [String]?,
@@ -482,7 +622,7 @@ public enum WidgetDataStore {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> (primary: Set<String>, second: Set<String>) {
-        let window = Set(localDayStrings(lastN: 7, endingAt: now, calendar: calendar))
+        let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now, calendar: calendar))
         var primary = Set<String>()
         var second = Set<String>()
         for session in sessions where window.contains(session.sessionDate) {
@@ -496,114 +636,175 @@ public enum WidgetDataStore {
         return (primary: primary, second: second)
     }
 
-    /// Normalize persisted data for widget display, clearing stale "done today"
-    /// flags and re-resolving streak after local midnight without an app sync.
+    /// Normalize persisted data for widget display: clear stale "done today"
+    /// flags after local midnight, prune both tracks' history to the renderable
+    /// window, and re-derive the streak from that history.
+    ///
+    /// #671: the streak is recomputed on *every* display (not only on a day
+    /// rollover) so the number beside the rows is always the number they imply.
+    /// The old rollover branch zeroed the streak whenever the previous snapshot's
+    /// `practiceDoneToday` was false, wiping an intact streak the history plainly
+    /// showed.
     public static func normalizedForDisplay(_ data: WidgetData, now: Date = Date()) -> WidgetData {
         guard data.isLoggedIn else { return data }
-        guard !isSameLocalDay(data.lastUpdated, now) else { return data }
 
         var copy = data
-        copy.primaryDoneToday = false
-        copy.secondDoneToday = false
-        copy.practiceDoneToday = false
-        // Keep completion history bounded to the window the rows can render.
-        let window = Set(localDayStrings(lastN: 7, endingAt: now))
-        copy.completedDates = data.completedDates.filter { window.contains($0) }
-        copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
-        if let userId = data.userId {
-            // Re-resolve under the same day-credit rule the app uses, so a widget
-            // left untouched across several days drops a genuinely broken streak.
-            copy.streak = resolvedStreak(
-                userId: userId,
-                dayKeptToday: false,
-                previous: data,
-                now: now,
-                completedDays: Set(copy.completedDates).union(copy.secondCompletedDates)
-            )
-        } else {
-            copy.streak = data.anyTrackDoneToday ? max(data.streak, 0) : 0
+        if !isSameLocalDay(data.lastUpdated, now) {
+            copy.primaryDoneToday = false
+            copy.secondDoneToday = false
+            copy.practiceDoneToday = false
+            // Keep completion history bounded to the window the rows can render.
+            let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now))
+            copy.completedDates = data.completedDates.filter { window.contains($0) }
+            copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
         }
+        // The snapshot is its own "previous": its stored streak is the only record
+        // of days older than the window until the next authoritative fetch. A nil
+        // `userId` fails the same-account check inside `resolvedStreak`, so an
+        // unattributed blob carries nothing forward.
+        copy.streak = resolvedStreak(
+            userId: data.userId ?? "",
+            dayKeptToday: copy.isTodayMarkedDone(now: now),
+            previous: data,
+            now: now,
+            completedDays: copy.completedDayUnion,
+            serverStreak: copy.serverStreak,
+            serverStreakDate: copy.serverStreakDate
+        )
         return copy
     }
 
-    /// Resolve the widget streak under the #684 day-credit rule: a local day
-    /// counts when **at least one** track completed a sit that day.
+    /// The run of consecutive kept days ending today — or ending yesterday when
+    /// today is still pending — implied by `completedDates`. This is the same run
+    /// the weekday row draws, so the two can never disagree (#671).
+    public static func historyStreak(
+        completedDates: [String],
+        practiceDoneToday: Bool = false,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        historyRun(
+            days: windowDays(now: now, calendar: calendar),
+            completedDates: completedDates,
+            practiceDoneToday: practiceDoneToday
+        ).length
+    }
+
+    /// The streak the widget displays: the run its own row shows, extended past
+    /// the oldest column by history the row cannot see — and only when the row
+    /// corroborates an unbroken run all the way back to that column.
     ///
-    /// Two independent estimates are combined:
+    /// Two extension sources, both bounded by that same guard:
     ///
-    /// 1. A backward walk over `completedDays` (the union of both tracks) from
-    ///    today — or yesterday when today is still open. This is real evidence,
-    ///    and it is what catches a multi-day gap the carried-forward value used
-    ///    to paper over. It is only a **lower** bound, because the set is pruned
-    ///    to the trailing 7-day window the rows render.
-    /// 2. The carried-forward streak from the previous snapshot, which knows
-    ///    about history older than that window.
+    /// 1. `serverStreak` anchored on `serverStreakDate` (#671) — the
+    ///    server-computed `stats.streak`, anchored onto a day inside the
+    ///    corroborated run so later days extend it without a second fetch.
+    /// 2. `carriedStreak` (#684) — the previous snapshot's own value, which knows
+    ///    about days older than the window when no anchor has been stored yet.
     ///
-    /// The larger wins: the walk can only *raise* a stale carried value, and a
-    /// real gap zeroes both.
+    /// Recomputing locally keeps the number correct offline and after a day
+    /// rollover; both extensions are reconciliation inputs, never overrides. A
+    /// visible gap in the row therefore always wins: `/api/sessions` reports the
+    /// run ending at the *latest recorded* day, which stays non-zero long after a
+    /// streak has actually lapsed, and a carried value knows nothing about the
+    /// days it skipped.
+    public static func reconciledStreak(
+        completedDates: [String],
+        practiceDoneToday: Bool = false,
+        serverStreak: Int?,
+        serverStreakDate: String?,
+        carriedStreak: Int? = nil,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        let days = windowDays(now: now, calendar: calendar)
+        let run = historyRun(
+            days: days,
+            completedDates: completedDates,
+            practiceDoneToday: practiceDoneToday
+        )
+        guard run.length > 0 else { return 0 }
+        // The row itself shows where the streak broke — nothing may extend it.
+        guard run.startOffset + run.length >= days.count else { return run.length }
+
+        var extended = run.length
+        if let serverStreak, serverStreak > 0, let serverStreakDate,
+           let anchorOffset = days.firstIndex(of: serverStreakDate),
+           anchorOffset >= run.startOffset,
+           anchorOffset < run.startOffset + run.length {
+            // Days completed since the server counted, all inside the corroborated run.
+            let daysSinceAnchor = anchorOffset - run.startOffset
+            extended = max(extended, serverStreak + daysSinceAnchor)
+        }
+        if let carriedStreak, carriedStreak > 0 {
+            extended = max(extended, carriedStreak)
+        }
+        return extended
+    }
+
+    /// Resolve the widget streak under the #684 day-credit rule — a local day
+    /// counts when **at least one** track completed a sit that day — subject to
+    /// the #671 invariant that the number may never contradict the rendered rows.
+    ///
+    /// `completedDays` is the union of both tracks' history: exactly what
+    /// `WidgetData.weekMarks(now:)` renders. The previous snapshot's streak is
+    /// offered as an extension candidate only; `reconciledStreak` admits it just
+    /// when the run reaches the oldest column, i.e. when the rows cannot see
+    /// where the streak began.
     public static func resolvedStreak(
         userId: String,
         dayKeptToday: Bool,
         previous: WidgetData?,
         now: Date = Date(),
         completedDays: Set<String> = [],
+        serverStreak: Int? = nil,
+        serverStreakDate: String? = nil,
         calendar: Calendar = .current
     ) -> Int {
-        let today = localDayString(now, calendar: calendar)
-        var days = completedDays
-        if dayKeptToday {
-            days.insert(today)
+        // Another account's history and streak must never carry over.
+        let sameAccount = previous.flatMap { snapshot in
+            snapshot.isLoggedIn && snapshot.userId == userId ? snapshot : nil
         }
-        let walked = consecutiveKeptDays(endingAt: today, in: days)
-        let carried = carriedStreak(
-            userId: userId,
-            dayKeptToday: dayKeptToday,
-            previous: previous,
+        return reconciledStreak(
+            completedDates: Array(completedDays),
+            practiceDoneToday: dayKeptToday,
+            serverStreak: serverStreak,
+            serverStreakDate: serverStreakDate,
+            carriedStreak: carriedStreak(
+                dayKeptToday: dayKeptToday,
+                previous: sameAccount,
+                now: now,
+                calendar: calendar
+            ),
             now: now,
             calendar: calendar
         )
-        return max(walked, carried)
-    }
-
-    /// Consecutive kept days ending at `today`, or at yesterday when today has no
-    /// sit yet (today is still open, so it can't break the streak). Modeled on
-    /// `SessionStatistics.calculateStats`'s backward walk.
-    private static func consecutiveKeptDays(endingAt today: String, in days: Set<String>) -> Int {
-        var cursor: String
-        if days.contains(today) {
-            cursor = today
-        } else {
-            let yesterday = SessionCalendar.addDays(toIsoDate: today, deltaDays: -1)
-            guard yesterday != today, days.contains(yesterday) else { return 0 }
-            cursor = yesterday
-        }
-
-        var count = 0
-        while days.contains(cursor) {
-            count += 1
-            let previousDay = SessionCalendar.addDays(toIsoDate: cursor, deltaDays: -1)
-            if previousDay == cursor { break }
-            cursor = previousDay
-        }
-        return count
     }
 
     /// Carry the previous snapshot's streak forward across local days, so a
-    /// streak longer than the 7-day history window survives. Resets on account
-    /// switch, and on any gap of two or more days with no recorded sit.
+    /// streak longer than the 7-day history window survives (#684). Resets on any
+    /// gap of two or more days with no recorded sit. Callers must have already
+    /// confirmed the snapshot belongs to the same account.
+    ///
+    /// This is a *candidate*, not the answer: `reconciledStreak` discards it the
+    /// moment the rendered row shows where the run actually broke (#671).
     private static func carriedStreak(
-        userId: String,
         dayKeptToday: Bool,
         previous: WidgetData?,
         now: Date,
         calendar: Calendar
     ) -> Int {
-        guard let previous, previous.isLoggedIn, previous.userId == userId else {
+        guard let previous, previous.isLoggedIn else {
             return dayKeptToday ? 1 : 0
         }
 
         let priorStreak = max(previous.streak, 0)
-        let priorDayKept = previous.anyTrackDoneToday
+        // Was the previous snapshot's *own* local day already counted? The flags
+        // alone are not enough: the authoritative fetch path records the day in
+        // history while leaving a track's flag false, and reading only the flag
+        // there would count that day a second time on the next display.
+        let priorDay = localDayString(previous.lastUpdated, calendar: calendar)
+        let priorDayKept = previous.anyTrackDoneToday || previous.completedDayUnion.contains(priorDay)
         let elapsed = SessionCalendar.daysBetweenInclusive(
             fromIso: localDayString(previous.lastUpdated, calendar: calendar),
             toIso: localDayString(now, calendar: calendar)
@@ -621,6 +822,56 @@ public enum WidgetDataStore {
             return dayKeptToday ? 1 : 0
         }
         return dayKeptToday ? priorStreak + 1 : priorStreak
+    }
+
+    /// The local day the server-computed `stats.streak` counts through: the most
+    /// recent completed **standard** sit, matching the web's `calculateSessionStats`
+    /// (which counts standard sessions only). Nil when there is no such sit.
+    ///
+    /// Deliberately track-agnostic: under the #684 day-credit rule a second-track
+    /// standard sit keeps its day and is drawn on the Track Two row, so an anchor
+    /// landing there is corroborated by the rendered rows. The remaining
+    /// cross-surface gap — the server counts standard sits only, while the rows
+    /// also count quick and breath — is tracked in #679.
+    public static func serverStreakAnchorDate(from sessions: [SessionDTO]) -> String? {
+        var latest: String?
+        for session in sessions where session.completed && session.sessionType == .standard {
+            if let current = latest, session.sessionDate <= current { continue }
+            latest = session.sessionDate
+        }
+        return latest
+    }
+
+    /// Offsets are counted back from today: `startOffset` 0 means the run ends
+    /// today, 1 means it ends yesterday (today still pending).
+    private struct HistoryRun {
+        let length: Int
+        let startOffset: Int
+    }
+
+    /// The renderable window newest → oldest, so an array index *is* the day's
+    /// offset back from today.
+    private static func windowDays(now: Date, calendar: Calendar) -> [String] {
+        Array(localDayStrings(lastN: historyWindowDays, endingAt: now, calendar: calendar).reversed())
+    }
+
+    private static func historyRun(
+        days: [String],
+        completedDates: [String],
+        practiceDoneToday: Bool
+    ) -> HistoryRun {
+        guard let today = days.first else { return HistoryRun(length: 0, startOffset: 0) }
+        var completed = Set(completedDates)
+        if practiceDoneToday { completed.insert(today) }
+
+        let startOffset = completed.contains(today) ? 0 : 1
+        var length = 0
+        var offset = startOffset
+        while offset < days.count, completed.contains(days[offset]) {
+            length += 1
+            offset += 1
+        }
+        return HistoryRun(length: length, startOffset: startOffset)
     }
 
     public static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
@@ -652,14 +903,15 @@ public enum WidgetDataStore {
         }
     }
 
-    /// Four of the six prior days marked complete, for gallery/Xcode previews.
+    /// The six prior days marked complete, for gallery/Xcode previews. An
+    /// unbroken trailing run so the preview streak can't contradict the row.
     public static func previewCompletedDates(now: Date = Date()) -> [String] {
-        let recent = localDayStrings(lastN: 7, endingAt: now)
-        return Array(recent.dropLast().suffix(4))
+        Array(localDayStrings(lastN: historyWindowDays, endingAt: now).dropLast())
     }
 
-    /// Two of the four prior days marked complete on Track Two, so the dual-track
-    /// preview shows a shorter second-track history than Track One (#684).
+    /// The two most recent of those days on Track Two, so the dual-track preview
+    /// shows a shorter second-track history than Track One (#684) while the union
+    /// of the two rows stays the unbroken run the preview streak claims.
     public static func previewSecondCompletedDates(now: Date = Date()) -> [String] {
         Array(previewCompletedDates(now: now).suffix(2))
     }

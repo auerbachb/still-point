@@ -204,13 +204,7 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}##[[:space:]]'; then
     # Strip leading indent, the '##' marker, surrounding whitespace. Case is
     # preserved: the exemption heading is matched case-sensitively below.
-    # CommonMark also allows an optional closing sequence ('## Test Plan ##'):
-    # a run of '#' preceded by whitespace at end of line. Leaving it attached
-    # made the heading text 'Test Plan ##', so the line fell through to the
-    # '*)' default (STATE=other) and its unchecked boxes escaped Stage 1
-    # entirely. The leading-whitespace requirement keeps '## C#' intact, which
-    # CommonMark treats as content rather than a closing sequence.
-    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
+    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]*$//')"
 
     # Case-insensitive match for in-scope sections
     heading_lower="$(printf '%s' "$heading" | tr 'A-Z' 'a-z')"
