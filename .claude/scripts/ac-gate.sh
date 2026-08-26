@@ -181,6 +181,8 @@ PENDING_SECTIONS=""
 # Empty FENCE_CHAR means "not inside a fence". See the fence guard in the loop.
 FENCE_CHAR=""
 FENCE_LEN=0
+# Single-quoted so the backticks are literal and never command-substituted.
+_FENCE_OPEN_RE='^[[:space:]]{0,3}(`{3,}|~{3,})(.*)$'
 
 # Records a completed postmerge section that carried unchecked boxes, so Stage 2
 # can validate it. Called before any state transition away from "postmerge", and
@@ -210,11 +212,24 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # no headings, no task items, no tracking-issue lines.
   #
   # CommonMark: a fence opens with 3+ backticks or tildes, indented at most 3
-  # spaces, optionally followed by an info string. It closes with the same
-  # character, at least as long, and no trailing content. Backtick fences may
-  # not carry a backtick in the info string; tilde fences may carry anything.
+  # spaces, optionally followed by an info string. It closes with a run of the
+  # SAME character, at least as long as the opener, and nothing else on the
+  # line. Backtick fences may not carry a backtick in the info string; tilde
+  # fences may carry anything.
+  #
+  # The closing run is matched against the OPEN fence character specifically,
+  # never a combined '[`~]+' class. A combined class validated only the first
+  # character and the total length, so a mixed run such as '~~~```' closed a
+  # tilde fence -- which CommonMark does not allow, and which re-opens the
+  # laundering bypass by ending the block early and turning the rest of the
+  # sample back into "real" content.
+  #
+  # Both runs use an explicit {3,} / {FENCE_LEN,} quantifier. A repeated
+  # literal ('```'+) does match three-or-more, since the '+' binds only to the
+  # final backtick, but it reads as though it meant multiples of three; the
+  # quantifier says what is meant.
   if [[ -z "$FENCE_CHAR" ]]; then
-    if [[ "$line" =~ ^[[:space:]]{0,3}('```'+|'~~~'+)(.*)$ ]]; then
+    if [[ "$line" =~ $_FENCE_OPEN_RE ]]; then
       _marker="${BASH_REMATCH[1]}"
       _info="${BASH_REMATCH[2]}"
       # A backtick fence's info string cannot contain a backtick (CommonMark),
@@ -226,12 +241,11 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
     fi
     [[ -n "$FENCE_CHAR" ]] && continue
   else
-    if [[ "$line" =~ ^[[:space:]]{0,3}([\`~]+)[[:space:]]*$ ]]; then
-      _marker="${BASH_REMATCH[1]}"
-      if [[ "${_marker:0:1}" == "$FENCE_CHAR" && "${#_marker}" -ge "$FENCE_LEN" ]]; then
-        FENCE_CHAR=""
-        FENCE_LEN=0
-      fi
+    # Same character, at least as long as the opener, nothing trailing.
+    _close_re="^[[:space:]]{0,3}${FENCE_CHAR}{${FENCE_LEN},}[[:space:]]*$"
+    if [[ "$line" =~ $_close_re ]]; then
+      FENCE_CHAR=""
+      FENCE_LEN=0
     fi
     continue
   fi
