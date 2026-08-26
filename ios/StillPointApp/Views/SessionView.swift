@@ -7,8 +7,9 @@ struct SessionView: View {
     private static let bottomOverlayReserveWithControls: CGFloat = 300
     /// Minimum vertical hit target for hold-to-track controls (Apple HIG ~44pt+).
     private static let thumbReachHoldMinHeight: CGFloat = 56
-    /// Minimum tap target for sound toggles (Apple HIG 44pt).
-    private static let soundToggleMinSize: CGFloat = 44
+    /// Minimum tap target for sound toggles and the bottom-bar icon buttons
+    /// (Apple HIG 44pt). Shared with web through `SoundToggleAppearance` (#668).
+    private static let minTapTarget = CGFloat(SoundToggleAppearance.minimumTapTarget)
 
     /// #669: long-press duration that opens thought capture from the minimal view.
     private static let minimalViewCapturePressDuration: Double = 0.5
@@ -660,7 +661,7 @@ struct SessionView: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(Color(SPColor.fg4))
-                            .frame(width: Self.soundToggleMinSize, height: Self.soundToggleMinSize)
+                            .frame(width: Self.minTapTarget, height: Self.minTapTarget)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Capture intrusive thought help")
@@ -682,7 +683,7 @@ struct SessionView: View {
                         Image(systemName: "arrow.down.right.and.arrow.up.left")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(Color(SPColor.fg3))
-                            .frame(width: Self.soundToggleMinSize, height: Self.soundToggleMinSize)
+                            .frame(width: Self.minTapTarget, height: Self.minTapTarget)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Show only the timer")
@@ -887,8 +888,10 @@ struct SessionView: View {
                 .accessibilityIdentifier("session.abandonButton")
             }
 
-            // Sound toggles
-            HStack(spacing: SPSpacing.s3) {
+            // Sound toggles. #668: the pills are wider than the bare words they
+            // replaced, so the row tightens to s1 to keep all four on one line on
+            // the narrowest supported iPhone.
+            HStack(spacing: SPSpacing.s1) {
                 soundToggle("tick", isOn: vm.soundPrefs.tick) {
                     vm.toggleSound(\.tick)
                 }
@@ -913,20 +916,43 @@ struct SessionView: View {
         )
     }
 
+    /// #668: a real pill button rather than a bare word.
+    ///
+    /// On/off is carried by three redundant channels — fill, border, and the
+    /// speaker icon — so the state reads at a glance instead of resting on a
+    /// shift between two muted greys. `SoundToggleAppearance` owns those rules and
+    /// web reads the same ones, so the two clients stay in step. The pill itself
+    /// is 44pt tall, so the visible control *is* the tap target.
     private func soundToggle(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+        let appearance = SoundToggleAppearance.appearance(isOn: isOn)
+
+        return Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: appearance.systemImageName)
                     .font(.system(size: 12))
                 Text(label)
                     .font(SPFont.mono(11))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(isOn ? Color(SPColor.fg3) : Color(SPColor.fg4))
-            .frame(minWidth: Self.soundToggleMinSize, minHeight: Self.soundToggleMinSize)
-            .contentShape(Rectangle())
+            .foregroundStyle(isOn ? Color(SPColor.fg2) : Color(SPColor.fg4))
+            .padding(.horizontal, SPSpacing.s2)
+            .frame(minHeight: Self.minTapTarget)
+            .background(appearance.isFilled ? SPColor.surface3 : Color.clear)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(
+                    appearance.hasProminentBorder ? SPColor.border2 : SPColor.border1
+                )
+            )
+            .contentShape(Capsule())
         }
-        .accessibilityIdentifier("session.soundToggle.\(label)")
+        .animation(.easeInOut(duration: 0.2), value: isOn)
+        .accessibilityIdentifier(SoundToggleAppearance.accessibilityIdentifier(label: label))
+        // VoiceOver reads "tick sound, on, button" — the state is announced, not
+        // left to the colour of the pill.
+        .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label)))
+        .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
     }
 
     // MARK: - Completion Handler
