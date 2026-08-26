@@ -256,16 +256,35 @@ final class SessionViewModel {
     }
 
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
-        if !voiceCountdownWasEnabled && soundPrefs.voiceCountdown {
+
+        let effects = SoundToggleLogic.effects(
+            toggledKeyWasEnabled: toggledKeyWasEnabled,
+            toggledKeyIsEnabled: soundPrefs[keyPath: keyPath],
+            voiceCountdownWasEnabled: voiceCountdownWasEnabled,
+            voiceCountdownIsEnabled: soundPrefs.voiceCountdown
+        )
+
+        if effects.warmUp {
+            // #667: `start()` only warms the engine when a sound is already on, so a
+            // sit begun with everything off leaves the audio session inactive.
+            // Reactivate it here so the re-enabled sound is audible at its next
+            // scheduled play point — no restart required.
+            AudioEngine.shared.warmUp()
+        }
+        if effects.preloadVoiceCountdown {
             // Voice countdown was just enabled — prime the buffer cache.
             AudioEngine.shared.preloadVoiceCountdown()
-        } else if voiceCountdownWasEnabled && !soundPrefs.voiceCountdown {
+        }
+        if effects.resetVoiceDedup {
             // Voice countdown was just disabled — reset dedup state so re-enabling
             // during the same remaining second announces correctly (#554).
             lastVoiceCountdownSec = 0
+        }
+        if effects.cancelVoiceCountdown {
             AudioEngine.shared.cancelVoiceCountdownPlayback()
         }
     }
