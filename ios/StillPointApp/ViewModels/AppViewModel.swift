@@ -386,10 +386,18 @@ final class AppViewModel {
             }
         } catch {
             // Non-fatal: fail closed so stale "done today" badges do not leak.
+            // Only the server-derived Home badges are cleared. The widget
+            // practice flags are local truth — a sit finished on this device,
+            // possibly offline and still queued for sync — and a failed status
+            // request is not the server contradicting them, just an absent
+            // answer. Clearing them here (and persisting that at the
+            // `syncWidgetData()` below) dropped a mark the user had already
+            // earned, and could break the day's streak until sync succeeded.
+            // Note the success path above only ever raises these flags, never
+            // lowers them; the failure path must not be the one exception.
+            // Midnight rollover is already handled at the top of this method.
             primaryDoneToday = false
             secondDoneToday = false
-            practiceDoneToday = false
-            secondPracticeDoneToday = false
         }
         syncWidgetData()
         refreshWidgetWeekHistory()
