@@ -196,13 +196,22 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # Strip CRLF (defensive: body from gh may carry Windows line endings)
   line="${raw_line%$'\r'}"
 
-  # --- level-2 heading detection ---
+  # --- section heading detection (level 1 and 2) ---
   # Markdown allows up to three leading spaces before the marker and arbitrary
   # whitespace after it. Accepting only '^## ' let an indented '## Test Plan'
   # go unrecognised, so its unchecked boxes bypassed the gate entirely — and it
   # diverged from ac-checkboxes.sh, which accepts the indented forms.
-  if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}##[[:space:]]'; then
-    # Strip leading indent, the '##' marker, surrounding whitespace, and any
+  #
+  # Level 1 counts as a section boundary too. Matching '##' alone meant a level-1
+  # heading did not end the current section: a body with '## Test plan' followed
+  # by '# Notes' stayed in the testplan state, so unchecked boxes under Notes
+  # were failed as in-scope Test Plan items. '#{1,2}' also lets a level-1
+  # '# Acceptance criteria' open a section, which is the gate's intent.
+  # Level 3+ must NOT match, because sub-headings inside a section are expected;
+  # '#{1,2}[[:space:]]' excludes them naturally, since for '### Foo' the third
+  # '#' is not whitespace.
+  if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}#{1,2}[[:space:]]'; then
+    # Strip leading indent, the heading marker, surrounding whitespace, and any
     # optional ATX closing sequence. Case is preserved: the exemption heading is
     # matched case-sensitively below.
     #
@@ -213,7 +222,7 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
     # '## Test Plan ##' fell through to the "other" state and its unchecked
     # boxes bypassed the gate entirely — the same class of silent bypass the
     # indent handling above was added to close.
-    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
+    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}#{1,2}[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
 
     # Case-insensitive match for in-scope sections
     heading_lower="$(printf '%s' "$heading" | tr 'A-Z' 'a-z')"
