@@ -10,8 +10,19 @@ struct SessionView: View {
     /// Minimum tap target for sound toggles (Apple HIG 44pt).
     private static let soundToggleMinSize: CGFloat = 44
 
+    /// #669: long-press duration that opens thought capture from the minimal view.
+    private static let minimalViewCapturePressDuration: Double = 0.5
+    /// #669: no bottom chrome to clear in minimal view, so the capture card sits low.
+    private static let minimalViewCaptureBottomPadding: CGFloat = 80
+
     let appVM: AppViewModel
     @State private var vm: SessionViewModel
+    /// #669 "just the timer": seeded from the persisted preference so the choice
+    /// carries into the next sit, and written back whenever it is toggled.
+    @State private var minimalView: Bool
+    /// Drives the fade-out "tap to come back" hint each time minimal view is entered.
+    @State private var minimalHintVisible = false
+    @State private var minimalHintToken = 0
     @State private var showSaveError = false
     @State private var showCaptureHelper = false
     @State private var showAttentionUnsupportedAlert = false
@@ -35,6 +46,9 @@ struct SessionView: View {
             track: track,
             recovery: recovery
         ))
+        // #669: restore the last-used view mode before the first frame so a sit
+        // that should start minimal never flashes the full screen first.
+        self._minimalView = State(initialValue: MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 
     var body: some View {
@@ -47,6 +61,10 @@ struct SessionView: View {
                 VStack(spacing: 0) {
                     // Main content — fits in viewport above controls
                     VStack(spacing: SPSpacing.s3) {
+                        if minimalView {
+                            Spacer(minLength: 0)
+                        }
+
                         // Timer display
                         Text(vm.timeString)
                             .font(SPFont.timerDisplay)
@@ -58,32 +76,39 @@ struct SessionView: View {
                             .accessibilityIdentifier("session.timerLabel")
                             .accessibilityLabel("Time remaining \(vm.timeString)")
 
-                        // 60-second progress bar
-                        progressBar
+                        // #669: minimal view is the countdown alone — everything below
+                        // it is chrome and goes away until the user taps to come back.
+                        if minimalView {
+                            minimalViewHint
+                            Spacer(minLength: 0)
+                        } else {
+                            // 60-second progress bar
+                            progressBar
 
-                        // Block grid — dynamic sizing to fill available space
-                        BlockGridView(
-                            blocks: vm.blocks,
-                            elapsed: vm.elapsed,
-                            totalSeconds: vm.totalSeconds,
-                            availableHeight: contentHeight * 0.4,
-                            availableWidth: geo.size.width - SPSpacing.s2 * 2
-                        )
-                        .padding(.horizontal, SPSpacing.s2)
+                            // Block grid — dynamic sizing to fill available space
+                            BlockGridView(
+                                blocks: vm.blocks,
+                                elapsed: vm.elapsed,
+                                totalSeconds: vm.totalSeconds,
+                                availableHeight: contentHeight * 0.4,
+                                availableWidth: geo.size.width - SPSpacing.s2 * 2
+                            )
+                            .padding(.horizontal, SPSpacing.s2)
 
-                        // Mind state bar
-                        MindStateBarView(
-                            elapsed: vm.elapsed,
-                            totalSeconds: vm.totalSeconds,
-                            mindStateLog: vm.mindStateLog,
-                            currentMindState: vm.mindState
-                        )
+                            // Mind state bar
+                            MindStateBarView(
+                                elapsed: vm.elapsed,
+                                totalSeconds: vm.totalSeconds,
+                                mindStateLog: vm.mindStateLog,
+                                currentMindState: vm.mindState
+                            )
 
-                        // Status label
-                        Text(vm.statusLabel.uppercased())
-                            .font(SPFont.mono(14))
-                            .foregroundStyle(Color(SPColor.fg3))
-                            .tracking(2)
+                            // Status label
+                            Text(vm.statusLabel.uppercased())
+                                .font(SPFont.mono(14))
+                                .foregroundStyle(Color(SPColor.fg3))
+                                .tracking(2)
+                        }
                     }
                     .frame(height: contentHeight)
                     .padding(.top, SPSpacing.s1)
@@ -91,31 +116,34 @@ struct SessionView: View {
             }
 
             // Bottom chrome: secondary controls above; primary hold targets pinned to thumb-reach zone.
-            VStack(spacing: 0) {
-                Spacer()
-                if sessionInProgress {
-                    sessionTrackingInfoBar
-                }
-                controlPanel
-                    .opacity(secondaryChromeDimmed ? 0.32 : 1)
-                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
-                if sessionInProgress {
-                    // #526: show hold cluster only when unlocked and not hidden by the user.
-                    if appVM.trackingControlPrefsManager.showDistractionHyperfocusCluster {
-                        thumbReachHoldControls
-                    } else if !appVM.trackingControlPrefsManager.trackingControlsUnlocked {
-                        trackingUnlockExplainer
+            // #669: all of it is hidden in minimal view.
+            if !minimalView {
+                VStack(spacing: 0) {
+                    Spacer()
+                    if sessionInProgress {
+                        sessionTrackingInfoBar
                     }
-                    // else: unlocked but hidden by user preference — show nothing.
+                    controlPanel
+                        .opacity(secondaryChromeDimmed ? 0.32 : 1)
+                        .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
+                    if sessionInProgress {
+                        // #526: show hold cluster only when unlocked and not hidden by the user.
+                        if appVM.trackingControlPrefsManager.showDistractionHyperfocusCluster {
+                            thumbReachHoldControls
+                        } else if !appVM.trackingControlPrefsManager.trackingControlsUnlocked {
+                            trackingUnlockExplainer
+                        }
+                        // else: unlocked but hidden by user preference — show nothing.
+                    }
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityIdentifier("session.secondaryChromeMarker")
+                        .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
                 }
-                Color.clear
-                    .frame(width: 1, height: 1)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityIdentifier("session.secondaryChromeMarker")
-                    .accessibilityValue(secondaryChromeDimmed ? "dimmed" : "visible")
+                .allowsHitTesting(!vm.showIntroOverlay)
+                .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
             }
-            .allowsHitTesting(!vm.showIntroOverlay)
-            .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
 
             // Thought capture after releasing a distraction hold
             if vm.showPostDistractionCapture {
@@ -156,8 +184,35 @@ struct SessionView: View {
                 .transition(.opacity)
             }
         }
+        // #669: while minimal the whole screen is the affordance — a tap brings the
+        // session screen back, a long press opens thought capture *without* leaving
+        // minimal view. Tap-anywhere is not a capture gesture in the full view
+        // either, so the two never compete for the same tap.
         .onTapGesture {
-            vm.userInteracted()
+            if minimalView, minimalGesturesEnabled {
+                setMinimalView(false)
+            } else {
+                vm.userInteracted()
+            }
+        }
+        // `including: .subviews` makes this recognizer inert outside minimal view, so it
+        // can never compete with the hold-to-track drag gestures in the full screen.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: Self.minimalViewCapturePressDuration)
+                .onEnded { _ in
+                    guard minimalView, minimalGesturesEnabled else { return }
+                    vm.openThoughtCapture()
+                },
+            including: minimalView ? .all : .subviews
+        )
+        .task(id: MinimalHintTrigger(token: minimalHintToken, introVisible: vm.showIntroOverlay)) {
+            guard minimalView, !vm.showIntroOverlay else { return }
+            minimalHintVisible = true
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.7)) {
+                minimalHintVisible = false
+            }
         }
         .onAppear {
             let skipIntro = ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1"
@@ -427,15 +482,77 @@ struct SessionView: View {
     }
 
     private var bottomOverlayReserve: CGFloat {
-        Self.bottomOverlayReserveWithControls
+        // #669: minimal view has no bottom chrome, so the timer gets the whole screen.
+        minimalView ? 0 : Self.bottomOverlayReserveWithControls
     }
 
     private var thoughtCaptureBottomPadding: CGFloat {
         // Keep capture card stable while typing even if controls auto-hide.
+        if minimalView {
+            return Self.minimalViewCaptureBottomPadding
+        }
         if vm.showPostDistractionCapture {
             return Self.bottomOverlayReserveWithControls + SPSpacing.s2
         }
         return bottomOverlayReserve + SPSpacing.s2
+    }
+
+    // MARK: - Minimal View (#669)
+
+    /// Identity for the minimal-view hint task. Re-runs on every entry *and* once the
+    /// intro overlay clears, so a sit restored straight into minimal view from the
+    /// persisted preference still gets its "how to come back" hint — the overlay is
+    /// up when the view first appears, and the hint would otherwise never flash.
+    private struct MinimalHintTrigger: Equatable {
+        let token: Int
+        let introVisible: Bool
+    }
+
+    /// Screen-wide tap/long-press only apply while a sit is running with no overlay on top.
+    private var minimalGesturesEnabled: Bool {
+        sessionInProgress
+            && !vm.showPostDistractionCapture
+            && !vm.showGuidedExercise
+            && !vm.showIntroOverlay
+    }
+
+    /// Enters or leaves minimal view and persists the choice for the next sit.
+    private func setMinimalView(_ enabled: Bool) {
+        guard minimalView != enabled else { return }
+        if enabled {
+            // The hold targets are about to be removed from the hierarchy, so their
+            // `DragGesture.onEnded` would never fire for a hold that is active right
+            // now (two-finger: hold with one thumb, tap the toggle with the other) —
+            // the sit would stay stuck in `thinking`/`hyperfocus` and skew
+            // `clearPercent`. Both calls are guarded no-ops when nothing is held.
+            // Mirrors web's `enterMinimalView`, which finalizes the same way.
+            vm.endDistraction()
+            vm.endHyperfocus()
+        }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            minimalView = enabled
+        }
+        MinimalSessionViewPrefs.setMinimalSessionViewEnabled(enabled)
+        if enabled {
+            // Re-flash the "how to get back" hint on every entry.
+            minimalHintVisible = false
+            minimalHintToken += 1
+        } else {
+            minimalHintVisible = false
+            vm.userInteracted()
+        }
+    }
+
+    /// Fades out after a few seconds so the minimal screen really is just the timer.
+    private var minimalViewHint: some View {
+        Text("Tap anywhere to bring the session back · press and hold to capture a note")
+            .font(SPFont.mono(11))
+            .foregroundStyle(Color(SPColor.fg4))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, SPSpacing.s4)
+            .opacity(minimalHintVisible ? 1 : 0)
+            .accessibilityIdentifier("session.minimalViewHint")
+            .accessibilityHidden(!minimalHintVisible)
     }
 
     private var secondaryChromeDimmed: Bool {
@@ -556,6 +673,20 @@ struct SessionView: View {
                             .frame(maxWidth: 280)
                             .presentationCompactAdaptation(.popover)
                     }
+
+                    // #669: collapse to the countdown alone. Kept as an icon so it
+                    // stays an affordance rather than becoming more chrome.
+                    Button {
+                        setMinimalView(true)
+                    } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color(SPColor.fg3))
+                            .frame(width: Self.soundToggleMinSize, height: Self.soundToggleMinSize)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Show only the timer")
+                    .accessibilityIdentifier("session.minimalViewToggle")
                 }
                 .opacity(vm.isActive && !vm.controlsVisible ? 0.48 : 0.88)
                 .animation(.easeInOut(duration: 0.3), value: vm.controlsVisible)
