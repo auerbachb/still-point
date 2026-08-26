@@ -565,7 +565,14 @@ final class AppViewModel {
         // #684: every counted sit now earns widget credit on its own track — a
         // second-track standard sit checks the Track Two row instead of being
         // dropped, so partial two-a-day days are visible immediately.
-        markPracticeDoneToday(sessionType: sessionType, track: track)
+        // Gated on `unlockAppGate` (== the sit ran to its planned end):
+        // `endEarly()` leaves `completedNaturally` false while still setting
+        // `isComplete`, so it reaches this call site too. Crediting there would
+        // check a weekday row — and extend the streak — for a sit the user cut
+        // short.
+        if unlockAppGate {
+            markPracticeDoneToday(sessionType: sessionType, track: track)
+        }
         applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
         // #526: unlock hold-cluster controls if this sit qualifies (completed + ≥ 300 s planned).
         trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: unlockAppGate, duration: duration)
@@ -754,7 +761,18 @@ final class AppViewModel {
             }
         }
         // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay
-        // server-derived: this path also runs for a sit the user exited early.
+        // server-derived — this flag is the widget's own fast, network-free
+        // path, and the two are refreshed from different sources.
+        //
+        // Drop any in-flight `refreshWidgetWeekHistory()` fetch first (same
+        // pattern as `didLogout()`): a `getSessions()` call that started before
+        // this sit finished returns without it, and its unconditional
+        // `WidgetDataStore.save` would clobber the snapshot written just below,
+        // un-checking the row we are here to check. Clearing the throttle key
+        // lets the next `refreshTracksDoneToday()` re-fetch and backfill from
+        // history once `returnHome()` has flushed the sit to the server.
+        widgetHistoryTask?.cancel()
+        widgetHistoryRefreshKey = nil
         syncWidgetData()
     }
 }
