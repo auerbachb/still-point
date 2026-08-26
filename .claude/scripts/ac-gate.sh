@@ -177,6 +177,10 @@ HAS_UNCHECKED_INSCOPE=0
 HAS_UNCHECKED_EXEMPT=0
 TRACKING_ISSUE=""
 PENDING_SECTIONS=""
+# Open fenced-code block, if any: the fence character (` or ~) and its length.
+# Empty FENCE_CHAR means "not inside a fence". See the fence guard in the loop.
+FENCE_CHAR=""
+FENCE_LEN=0
 
 # Records a completed postmerge section that carried unchecked boxes, so Stage 2
 # can validate it. Called before any state transition away from "postmerge", and
@@ -195,6 +199,42 @@ _commit_postmerge() {
 while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # Strip CRLF (defensive: body from gh may carry Windows line endings)
   line="${raw_line%$'\r'}"
+
+  # --- fenced code blocks are inert ---
+  # Everything below treats the body as prose. Without fence tracking a PR could
+  # paste a fenced *example* containing '## Post-merge verification' and a
+  # 'Tracking issue: #N' line, which the parser would honour as a real exemption
+  # region -- shifting genuine unchecked criteria that follow the fence into the
+  # exempt state and passing a gate that should fail. Since the gate is a
+  # required check, that is a bypass, so fenced content is skipped entirely:
+  # no headings, no task items, no tracking-issue lines.
+  #
+  # CommonMark: a fence opens with 3+ backticks or tildes, indented at most 3
+  # spaces, optionally followed by an info string. It closes with the same
+  # character, at least as long, and no trailing content. Backtick fences may
+  # not carry a backtick in the info string; tilde fences may carry anything.
+  if [[ -z "$FENCE_CHAR" ]]; then
+    if [[ "$line" =~ ^[[:space:]]{0,3}('```'+|'~~~'+)(.*)$ ]]; then
+      _marker="${BASH_REMATCH[1]}"
+      _info="${BASH_REMATCH[2]}"
+      # A backtick fence's info string cannot contain a backtick (CommonMark),
+      # so '``` ``` ```' inline-code prose does not open a block.
+      if [[ "${_marker:0:1}" != '`' || "$_info" != *'`'* ]]; then
+        FENCE_CHAR="${_marker:0:1}"
+        FENCE_LEN="${#_marker}"
+      fi
+    fi
+    [[ -n "$FENCE_CHAR" ]] && continue
+  else
+    if [[ "$line" =~ ^[[:space:]]{0,3}([\`~]+)[[:space:]]*$ ]]; then
+      _marker="${BASH_REMATCH[1]}"
+      if [[ "${_marker:0:1}" == "$FENCE_CHAR" && "${#_marker}" -ge "$FENCE_LEN" ]]; then
+        FENCE_CHAR=""
+        FENCE_LEN=0
+      fi
+    fi
+    continue
+  fi
 
   # --- section heading detection (level 1 and 2) ---
   # Markdown allows up to three leading spaces before the marker and arbitrary
