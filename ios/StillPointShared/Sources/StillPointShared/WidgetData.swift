@@ -15,7 +15,7 @@ public struct WidgetDayMark: Sendable, Equatable, Identifiable {
     public let letter: String
     /// Full weekday name (e.g. `Monday`) for the VoiceOver label.
     public let weekdayName: String
-    /// True when any counted practice (standard, quick, or breath) was completed on `iso`.
+    /// True when the sit this row represents was completed on `iso`.
     public let done: Bool
     /// True for the trailing column (the caller's local "today").
     public let isToday: Bool
@@ -44,16 +44,26 @@ public struct WidgetData: Codable, Sendable, Equatable {
     public var recoveryTotalSteps: Int?
     public var primaryDoneToday: Bool
     public var secondDoneToday: Bool
-    /// True when any counted practice (standard primary, quick, or breath) was
-    /// completed today. Drives widget streak + weekday row. Legacy snapshots
-    /// without this field decode using `primaryDoneToday` (#589).
+    /// True when any counted **Track One** practice (primary standard, quick, or
+    /// breath) was completed today. Drives the Track One weekday row. Legacy
+    /// snapshots without this field decode using `primaryDoneToday` (#589).
+    ///
+    /// Track Two's equivalent is `secondDoneToday`; day continuity uses the union
+    /// of both (see `isDayKeptToday(at:)`).
     public var practiceDoneToday: Bool
     public var streak: Int
     /// #84 follow-up: ISO local-day strings (`yyyy-MM-dd`) within the trailing
-    /// 7-day window on which counted practice was completed. Drives the
+    /// 7-day window on which **Track One** practice was completed. Drives the
     /// Duolingo-style weekday checkmark row. Decoded permissively so snapshots
     /// written before this field shipped (build 15) still load.
     public var completedDates: [String]
+    /// #684: the same trailing 7-day window for **Track Two** (second-track
+    /// standard sits), rendered as its own row when `dualTrackEnabled` is true.
+    ///
+    /// Deliberately **not** back-filled: days practised before the user switched
+    /// to a two-a-day schedule carry no second-track sit, so they render on the
+    /// Track One row only. Legacy snapshots decode this as empty.
+    public var secondCompletedDates: [String]
     public var lastUpdated: Date
 
     public init(
@@ -70,6 +80,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         practiceDoneToday: Bool = false,
         streak: Int,
         completedDates: [String] = [],
+        secondCompletedDates: [String] = [],
         lastUpdated: Date
     ) {
         self.isLoggedIn = isLoggedIn
@@ -85,17 +96,20 @@ public struct WidgetData: Codable, Sendable, Equatable {
         self.practiceDoneToday = practiceDoneToday
         self.streak = streak
         self.completedDates = completedDates
+        self.secondCompletedDates = secondCompletedDates
         self.lastUpdated = lastUpdated
     }
 
     private enum CodingKeys: String, CodingKey {
         case isLoggedIn, userId, currentDay, secondTrackDay, dualTrackEnabled
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
-        case primaryDoneToday, secondDoneToday, practiceDoneToday, streak, completedDates, lastUpdated
+        case primaryDoneToday, secondDoneToday, practiceDoneToday, streak
+        case completedDates, secondCompletedDates, lastUpdated
     }
 
-    /// Custom decoder so blobs persisted before `completedDates` existed still
-    /// load (the synthesized decoder would throw on the missing key).
+    /// Custom decoder so blobs persisted before `completedDates` /
+    /// `secondCompletedDates` existed still load (the synthesized decoder would
+    /// throw on the missing key).
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         isLoggedIn = try c.decode(Bool.self, forKey: .isLoggedIn)
@@ -112,6 +126,9 @@ public struct WidgetData: Codable, Sendable, Equatable {
             ?? primaryDoneToday
         streak = try c.decode(Int.self, forKey: .streak)
         completedDates = try c.decodeIfPresent([String].self, forKey: .completedDates) ?? []
+        // Pre-#684 snapshots have no Track Two history: their `completedDates`
+        // stay Track One and Track Two starts empty (no back-fill, no migration).
+        secondCompletedDates = try c.decodeIfPresent([String].self, forKey: .secondCompletedDates) ?? []
         lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
     }
 
@@ -126,6 +143,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         practiceDoneToday: false,
         streak: 0,
         completedDates: [],
+        secondCompletedDates: [],
         lastUpdated: .distantPast
     )
 
@@ -142,23 +160,91 @@ public struct WidgetData: Codable, Sendable, Equatable {
         )
     }
 
+    /// Local days in the trailing window on which **either** track recorded a
+    /// completed sit — the set day continuity and the streak walk over (#684).
+    public var completedDayUnion: Set<String> {
+        Set(completedDates).union(secondCompletedDates)
+    }
+
+    /// Flag-only "at least one track finished a sit" for the day this snapshot
+    /// was written. Freshness-checked variants: `isDayKeptToday(at:)`.
+    public var anyTrackDoneToday: Bool {
+        practiceDoneToday || secondDoneToday
+    }
+
     /// Whether the user has finished today's primary standard sit.
     public func isPrimaryCompleteForToday(at now: Date = Date()) -> Bool {
         primaryDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
     }
 
-    /// Whether the user has logged any counted practice today (standard primary,
-    /// quick, or breath).
+    /// Whether the user has finished today's second-track standard sit (#684).
+    public func isSecondCompleteForToday(at now: Date = Date()) -> Bool {
+        secondDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
+    }
+
+    /// Whether the user has logged any counted Track One practice today
+    /// (primary standard, quick, or breath).
     public func isPracticeCompleteForToday(at now: Date = Date()) -> Bool {
         practiceDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
     }
 
+    /// **Day-credit rule (#684; cross-surface policy tracked in #679):** a local
+    /// day is *kept* when **at least one** track recorded a completed sit that
+    /// day. On a two-a-day schedule, finishing either session preserves
+    /// continuity; only a day with zero sits breaks the streak. A partial day
+    /// counts exactly like a full day — one day is one unit.
+    public func isDayKeptToday(at now: Date = Date()) -> Bool {
+        isPracticeCompleteForToday(at: now) || isSecondCompleteForToday(at: now)
+    }
+
     /// Trailing 7-day window (oldest → newest, ending on the caller's local
-    /// "today") of weekday marks for the Duolingo-style row. `now`'s column is
-    /// checked when either `completedDates` records it or counted practice is
-    /// already complete today.
+    /// "today") of weekday marks for the single-row (single-track) layout. A day
+    /// is checked when **either** track completed a sit, matching the day-credit
+    /// rule in `isDayKeptToday(at:)`. Single-track users have no Track Two
+    /// history, so this is identical to their Track One row.
     public func weekMarks(now: Date = Date(), calendar: Calendar = .current) -> [WidgetDayMark] {
-        let completed = Set(completedDates)
+        weekMarks(
+            completed: completedDayUnion,
+            doneToday: isDayKeptToday(at: now),
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Trailing 7-day window of weekday marks for one track's own row (#684).
+    /// Each row reflects only its own track's completions, so the two rows show
+    /// which individual session was hit and which was missed.
+    public func weekMarks(
+        for track: Track,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [WidgetDayMark] {
+        switch track {
+        case .primary:
+            return weekMarks(
+                completed: Set(completedDates),
+                doneToday: isPracticeCompleteForToday(at: now),
+                now: now,
+                calendar: calendar
+            )
+        case .second:
+            return weekMarks(
+                completed: Set(secondCompletedDates),
+                doneToday: isSecondCompleteForToday(at: now),
+                now: now,
+                calendar: calendar
+            )
+        }
+    }
+
+    /// Shared row builder: `doneToday` is the fallback for today's column when
+    /// the snapshot's date set hasn't been rewritten yet (fast sync path).
+    private func weekMarks(
+        completed: Set<String>,
+        doneToday: Bool,
+        now: Date,
+        calendar: Calendar
+    ) -> [WidgetDayMark] {
         let start = calendar.startOfDay(for: now)
         let letters = WidgetData.narrowWeekdaySymbols(calendar: calendar)
         let names = WidgetData.fullWeekdaySymbols(calendar: calendar)
@@ -166,7 +252,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: start) else { return nil }
             let iso = WidgetDataStore.localDayString(date, calendar: calendar)
             let isToday = offset == 0
-            let done = completed.contains(iso) || (isToday && isPracticeCompleteForToday(at: now))
+            let done = completed.contains(iso) || (isToday && doneToday)
             let weekday = calendar.component(.weekday, from: date)
             let letter = letters.isEmpty ? "" : letters[(weekday - 1) % letters.count]
             let name = names.isEmpty ? "" : names[(weekday - 1) % names.count]
@@ -192,7 +278,12 @@ public struct WidgetData: Codable, Sendable, Equatable {
         return symbols ?? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     }
 
-    /// Widget gallery / Xcode preview fixture.
+    /// Widget gallery / Xcode preview fixture (single-track).
+    ///
+    /// Left single-track on purpose: `secondCompletedDates` is only meaningful
+    /// when `dualTrackEnabled` is true, and seeding it here would double-check
+    /// the single row through the day-credit union. The two-row preview lives in
+    /// `previewDualTrack`.
     public static let preview = WidgetData(
         isLoggedIn: true,
         userId: "preview",
@@ -204,6 +295,24 @@ public struct WidgetData: Codable, Sendable, Equatable {
         practiceDoneToday: false,
         streak: 12,
         completedDates: WidgetDataStore.previewCompletedDates(),
+        secondCompletedDates: [],
+        lastUpdated: Date()
+    )
+
+    /// #684: two-a-day gallery / Xcode preview fixture — Track Two has a shorter
+    /// history than Track One, the way a mid-week switch actually looks.
+    public static let previewDualTrack = WidgetData(
+        isLoggedIn: true,
+        userId: "preview-dual",
+        currentDay: 24,
+        secondTrackDay: 8,
+        dualTrackEnabled: true,
+        primaryDoneToday: false,
+        secondDoneToday: false,
+        practiceDoneToday: false,
+        streak: 12,
+        completedDates: WidgetDataStore.previewCompletedDates(),
+        secondCompletedDates: WidgetDataStore.previewSecondCompletedDates(),
         lastUpdated: Date()
     )
 }
@@ -238,11 +347,13 @@ public enum WidgetDataStore {
     /// Build a widget snapshot from in-memory app state, adjusting streak without
     /// extra network calls by comparing against the last persisted snapshot.
     ///
-    /// `completedPracticeDates`, when supplied (from a real `getSessions()` fetch),
-    /// becomes the authoritative 7-day completion set. When omitted, the prior
-    /// snapshot's dates are carried forward so the fast, network-free sync path
-    /// never wipes history it can't recompute. Today is always folded in when
-    /// counted practice is done, so completing a sit checks today's box immediately.
+    /// `completedPracticeDates` / `secondCompletedPracticeDates`, when supplied
+    /// (from a real `getSessions()` fetch), become the authoritative 7-day
+    /// completion sets for Track One and Track Two respectively. When omitted,
+    /// the prior snapshot's dates are carried forward so the fast, network-free
+    /// sync path never wipes history it can't recompute. Today is folded into a
+    /// track only when that track's own "done today" flag is set, so completing
+    /// either sit checks that row's box immediately (#684).
     public static func makeSnapshot(
         user: UserDTO?,
         primaryDoneToday: Bool,
@@ -250,38 +361,55 @@ public enum WidgetDataStore {
         practiceDoneToday: Bool,
         now: Date = Date(),
         previous: WidgetData? = nil,
-        completedPracticeDates: Set<String>? = nil
+        completedPracticeDates: Set<String>? = nil,
+        secondCompletedPracticeDates: Set<String>? = nil
     ) -> WidgetData {
         guard let user else {
             return .loggedOut
         }
 
         let prior = previous ?? load()
-        let streak = resolvedStreak(
-            userId: user.id,
-            practiceDoneToday: practiceDoneToday,
-            previous: prior,
-            now: now
-        )
+        // Carry forward what we already knew; drop the other account's history.
+        let sameAccount: Bool = {
+            guard let prior, prior.isLoggedIn else { return false }
+            return prior.userId == user.id
+        }()
 
         let window = Set(localDayStrings(lastN: 7, endingAt: now))
-        var dates: Set<String>
-        if let completedPracticeDates {
-            dates = completedPracticeDates.intersection(window)
-        } else if let prior, prior.isLoggedIn, prior.userId == user.id {
-            // Carry forward what we already knew; drop the other account's history.
-            dates = Set(prior.completedDates).intersection(window)
-        } else {
-            dates = []
-        }
+        var dates = windowedDates(
+            authoritative: completedPracticeDates,
+            carriedForward: sameAccount ? prior?.completedDates : nil,
+            window: window
+        )
+        var secondDates = windowedDates(
+            authoritative: secondCompletedPracticeDates,
+            carriedForward: sameAccount ? prior?.secondCompletedDates : nil,
+            window: window
+        )
         // Fold today in only on the synchronous fast path (no session set), where
-        // `practiceDoneToday` is always same-day fresh. The authoritative path
-        // already carries today's real completion in `completedPracticeDates`, so
-        // trusting a possibly-stale flag there could wrongly check a new day if the
-        // async fetch crossed local midnight.
+        // the "done today" flags are always same-day fresh. The authoritative path
+        // already carries today's real completion in the supplied set, so trusting
+        // a possibly-stale flag there could wrongly check a new day if the async
+        // fetch crossed local midnight.
+        let today = localDayString(now)
         if completedPracticeDates == nil, practiceDoneToday {
-            dates.insert(localDayString(now))
+            dates.insert(today)
         }
+        if secondCompletedPracticeDates == nil, secondDoneToday {
+            secondDates.insert(today)
+        }
+
+        // Day-credit rule (#684; cross-surface policy tracked in #679): the day is
+        // kept when AT LEAST ONE track finished a sit. On a two-a-day schedule
+        // either session alone preserves continuity — only a zero-sit day breaks it.
+        let dayKeptToday = practiceDoneToday || secondDoneToday
+        let streak = resolvedStreak(
+            userId: user.id,
+            dayKeptToday: dayKeptToday,
+            previous: prior,
+            now: now,
+            completedDays: dates.union(secondDates)
+        )
 
         return WidgetData(
             isLoggedIn: true,
@@ -297,37 +425,75 @@ public enum WidgetDataStore {
             practiceDoneToday: practiceDoneToday,
             streak: streak,
             completedDates: dates.sorted(),
+            secondCompletedDates: secondDates.sorted(),
             lastUpdated: now
         )
     }
 
-    /// Whether a completed session counts toward widget streak / weekday marks.
-    public static func sessionCountsForWidgetPractice(_ session: SessionDTO) -> Bool {
+    /// Authoritative set when supplied, else the carried-forward one, always
+    /// clipped to the trailing window the row can render.
+    private static func windowedDates(
+        authoritative: Set<String>?,
+        carriedForward: [String]?,
+        window: Set<String>
+    ) -> Set<String> {
+        if let authoritative {
+            return authoritative.intersection(window)
+        }
+        if let carriedForward {
+            return Set(carriedForward).intersection(window)
+        }
+        return []
+    }
+
+    /// Whether a completed session counts toward the given track's widget row.
+    ///
+    /// Track One counts primary standard sits plus quick and breath sits (#589);
+    /// Track Two counts second-track standard sits (#684). A session with no
+    /// `track` predates the dual-track fork and is treated as primary.
+    public static func sessionCountsForWidgetPractice(_ session: SessionDTO, track: Track) -> Bool {
         guard session.completed else { return false }
-        switch session.sessionType {
-        case .quick, .breath:
-            return true
-        case .standard:
-            return (session.track ?? .primary) == .primary
+        switch track {
+        case .primary:
+            switch session.sessionType {
+            case .quick, .breath:
+                return true
+            case .standard:
+                return (session.track ?? .primary) == .primary
+            }
+        case .second:
+            guard session.sessionType == .standard else { return false }
+            return session.track == .second
         }
     }
 
-    /// The set of local days in the trailing 7-day window on which counted
-    /// practice was recorded: primary standard sits, quick sits, and breath sits.
-    /// Pure and network-free so it's unit-testable; the caller supplies sessions.
+    /// Track One convenience overload, preserving the pre-#684 call shape.
+    public static func sessionCountsForWidgetPractice(_ session: SessionDTO) -> Bool {
+        sessionCountsForWidgetPractice(session, track: .primary)
+    }
+
+    /// The local days in the trailing 7-day window on which each track recorded
+    /// counted practice — Track One (primary standard, quick, breath) and Track
+    /// Two (second-track standard). Pure and network-free so it's unit-testable;
+    /// the caller supplies sessions. The window is the same for both rows; only
+    /// the completion source is split by track (#684).
     public static func recentCompletedPracticeDates(
         from sessions: [SessionDTO],
         now: Date = Date(),
         calendar: Calendar = .current
-    ) -> Set<String> {
+    ) -> (primary: Set<String>, second: Set<String>) {
         let window = Set(localDayStrings(lastN: 7, endingAt: now, calendar: calendar))
-        var result = Set<String>()
-        for session in sessions where sessionCountsForWidgetPractice(session) {
-            if window.contains(session.sessionDate) {
-                result.insert(session.sessionDate)
+        var primary = Set<String>()
+        var second = Set<String>()
+        for session in sessions where window.contains(session.sessionDate) {
+            if sessionCountsForWidgetPractice(session, track: .primary) {
+                primary.insert(session.sessionDate)
+            }
+            if sessionCountsForWidgetPractice(session, track: .second) {
+                second.insert(session.sessionDate)
             }
         }
-        return result
+        return (primary: primary, second: second)
     }
 
     /// Normalize persisted data for widget display, clearing stale "done today"
@@ -340,47 +506,121 @@ public enum WidgetDataStore {
         copy.primaryDoneToday = false
         copy.secondDoneToday = false
         copy.practiceDoneToday = false
-        if data.practiceDoneToday {
-            copy.streak = max(data.streak, 0)
-        } else {
-            copy.streak = 0
-        }
-        // Keep completion history bounded to the window the row can render.
+        // Keep completion history bounded to the window the rows can render.
         let window = Set(localDayStrings(lastN: 7, endingAt: now))
         copy.completedDates = data.completedDates.filter { window.contains($0) }
+        copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
+        if let userId = data.userId {
+            // Re-resolve under the same day-credit rule the app uses, so a widget
+            // left untouched across several days drops a genuinely broken streak.
+            copy.streak = resolvedStreak(
+                userId: userId,
+                dayKeptToday: false,
+                previous: data,
+                now: now,
+                completedDays: Set(copy.completedDates).union(copy.secondCompletedDates)
+            )
+        } else {
+            copy.streak = data.anyTrackDoneToday ? max(data.streak, 0) : 0
+        }
         return copy
     }
 
-    /// Increment streak once per local day when counted practice flips to done.
-    /// Preserves the last known streak across launches; resets on account switch.
+    /// Resolve the widget streak under the #684 day-credit rule: a local day
+    /// counts when **at least one** track completed a sit that day.
+    ///
+    /// Two independent estimates are combined:
+    ///
+    /// 1. A backward walk over `completedDays` (the union of both tracks) from
+    ///    today — or yesterday when today is still open. This is real evidence,
+    ///    and it is what catches a multi-day gap the carried-forward value used
+    ///    to paper over. It is only a **lower** bound, because the set is pruned
+    ///    to the trailing 7-day window the rows render.
+    /// 2. The carried-forward streak from the previous snapshot, which knows
+    ///    about history older than that window.
+    ///
+    /// The larger wins: the walk can only *raise* a stale carried value, and a
+    /// real gap zeroes both.
     public static func resolvedStreak(
         userId: String,
-        practiceDoneToday: Bool,
+        dayKeptToday: Bool,
         previous: WidgetData?,
-        now: Date = Date()
+        now: Date = Date(),
+        completedDays: Set<String> = [],
+        calendar: Calendar = .current
+    ) -> Int {
+        let today = localDayString(now, calendar: calendar)
+        var days = completedDays
+        if dayKeptToday {
+            days.insert(today)
+        }
+        let walked = consecutiveKeptDays(endingAt: today, in: days)
+        let carried = carriedStreak(
+            userId: userId,
+            dayKeptToday: dayKeptToday,
+            previous: previous,
+            now: now,
+            calendar: calendar
+        )
+        return max(walked, carried)
+    }
+
+    /// Consecutive kept days ending at `today`, or at yesterday when today has no
+    /// sit yet (today is still open, so it can't break the streak). Modeled on
+    /// `SessionStatistics.calculateStats`'s backward walk.
+    private static func consecutiveKeptDays(endingAt today: String, in days: Set<String>) -> Int {
+        var cursor: String
+        if days.contains(today) {
+            cursor = today
+        } else {
+            let yesterday = SessionCalendar.addDays(toIsoDate: today, deltaDays: -1)
+            guard yesterday != today, days.contains(yesterday) else { return 0 }
+            cursor = yesterday
+        }
+
+        var count = 0
+        while days.contains(cursor) {
+            count += 1
+            let previousDay = SessionCalendar.addDays(toIsoDate: cursor, deltaDays: -1)
+            if previousDay == cursor { break }
+            cursor = previousDay
+        }
+        return count
+    }
+
+    /// Carry the previous snapshot's streak forward across local days, so a
+    /// streak longer than the 7-day history window survives. Resets on account
+    /// switch, and on any gap of two or more days with no recorded sit.
+    private static func carriedStreak(
+        userId: String,
+        dayKeptToday: Bool,
+        previous: WidgetData?,
+        now: Date,
+        calendar: Calendar
     ) -> Int {
         guard let previous, previous.isLoggedIn, previous.userId == userId else {
-            return practiceDoneToday ? 1 : 0
+            return dayKeptToday ? 1 : 0
         }
 
-        if practiceDoneToday && !previous.practiceDoneToday {
-            return max(previous.streak, 0) + 1
+        let priorStreak = max(previous.streak, 0)
+        let priorDayKept = previous.anyTrackDoneToday
+        let elapsed = SessionCalendar.daysBetweenInclusive(
+            fromIso: localDayString(previous.lastUpdated, calendar: calendar),
+            toIso: localDayString(now, calendar: calendar)
+        )
+
+        if elapsed <= 0 {
+            // Same local day (or a backwards clock): count the day once, when it
+            // first flips to kept.
+            return dayKeptToday && !priorDayKept ? priorStreak + 1 : priorStreak
         }
 
-        if practiceDoneToday && !isSameLocalDay(previous.lastUpdated, now) {
-            // New local day and today is already complete (e.g. cold start after sync).
-            return max(previous.streak, 0) + 1
+        // #684: two or more days without a recorded sit break the streak. The old
+        // carry-forward preserved it no matter how long the app had been closed.
+        guard elapsed == 1, priorDayKept else {
+            return dayKeptToday ? 1 : 0
         }
-
-        if !practiceDoneToday && !isSameLocalDay(previous.lastUpdated, now) {
-            // New day before today's sit: keep streak when yesterday was completed.
-            if previous.practiceDoneToday {
-                return max(previous.streak, 0)
-            }
-            return 0
-        }
-
-        return max(previous.streak, 0)
+        return dayKeptToday ? priorStreak + 1 : priorStreak
     }
 
     public static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
@@ -416,5 +656,11 @@ public enum WidgetDataStore {
     public static func previewCompletedDates(now: Date = Date()) -> [String] {
         let recent = localDayStrings(lastN: 7, endingAt: now)
         return Array(recent.dropLast().suffix(4))
+    }
+
+    /// Two of the four prior days marked complete on Track Two, so the dual-track
+    /// preview shows a shorter second-track history than Track One (#684).
+    public static func previewSecondCompletedDates(now: Date = Date()) -> [String] {
+        Array(previewCompletedDates(now: now).suffix(2))
     }
 }
