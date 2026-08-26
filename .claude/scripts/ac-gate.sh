@@ -202,9 +202,18 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # go unrecognised, so its unchecked boxes bypassed the gate entirely — and it
   # diverged from ac-checkboxes.sh, which accepts the indented forms.
   if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}##[[:space:]]'; then
-    # Strip leading indent, the '##' marker, surrounding whitespace. Case is
-    # preserved: the exemption heading is matched case-sensitively below.
-    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]*$//')"
+    # Strip leading indent, the '##' marker, surrounding whitespace, and any
+    # optional ATX closing sequence. Case is preserved: the exemption heading is
+    # matched case-sensitively below.
+    #
+    # The closing-hash strip requires at least one space before the run of '#'
+    # because that is what makes it a *closing sequence* rather than heading
+    # text: CommonMark renders '## Test Plan ##' identically to '## Test Plan',
+    # but '## C#' is a heading whose text really does end in '#'. Without this,
+    # '## Test Plan ##' fell through to the "other" state and its unchecked
+    # boxes bypassed the gate entirely — the same class of silent bypass the
+    # indent handling above was added to close.
+    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
 
     # Case-insensitive match for in-scope sections
     heading_lower="$(printf '%s' "$heading" | tr 'A-Z' 'a-z')"
