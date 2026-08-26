@@ -279,7 +279,7 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
     heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}#{1,2}[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
 
     # Case-insensitive match for in-scope sections
-    heading_lower="$(printf '%s' "$heading" | tr 'A-Z' 'a-z')"
+    heading_lower="$(printf '%s' "$heading" | tr '[:upper:]' '[:lower:]')"
 
     case "$heading_lower" in
       "acceptance criteria")
@@ -317,7 +317,15 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # `+ [ ]` as task-list items exactly like `- [ ]`, so matching only `-` let an
   # unchecked criterion written with either of the other two markers through the
   # gate unseen — the same silent-bypass class as the heading handling above.
-  if printf '%s' "$line" | grep -qE '^[[:space:]]*[-*+][[:space:]]\[ \]'; then
+  #
+  # The gap after the marker is 1-4 whitespace, not exactly 1. CommonMark lets a
+  # list item's content be indented up to four columns past its marker, so
+  # '-  [ ] item' renders as a real checkbox on GitHub; requiring a single space
+  # let that form bypass the gate. Four is the upper bound on purpose: at five
+  # the content becomes an indented code block relative to the marker and no
+  # longer renders as a task item, so matching further would fail PRs over
+  # inert sample text.
+  if printf '%s' "$line" | grep -qE '^[[:space:]]*[-*+][[:space:]]{1,4}\[ \]'; then
     case "$STATE" in
       ac|testplan|malformed_postmerge)
         HAS_UNCHECKED_INSCOPE=1
