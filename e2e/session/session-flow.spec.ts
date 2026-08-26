@@ -121,6 +121,49 @@ test.describe("mobile session flow", () => {
     await expect(page.getByRole("button", { name: /light distraction/i })).toHaveCount(0);
   });
 
+  test("minimal view collapses the sit to the timer and a tap brings it back", async ({
+    page,
+    ensureLoggedIn,
+  }) => {
+    await seedTrackingControlsUnlocked(page);
+    await ensureLoggedIn();
+    await applyTrackingControlsUnlocked(page);
+    await tap(page.getByRole("button", { name: "Begin" }));
+
+    const sessionRoot = page.locator("[data-session-view-mode]");
+    const trackingLayer = page.locator('[data-session-tracking-layer="persistent"]');
+    const secondaryChrome = page.locator('[data-session-chrome="secondary"]');
+    const timerDigits = page.locator("[data-session-timer-digits]");
+    const readStoredPref = () =>
+      page.evaluate(() => localStorage.getItem("stillpoint_minimal_session_view"));
+
+    await expect(sessionRoot).toHaveAttribute("data-session-view-mode", "full");
+    await expect(trackingLayer).toBeVisible();
+
+    await tapWithControlReveal(page, page.getByRole("button", { name: "Show only the timer" }));
+
+    // Everything but the countdown is gone.
+    await expect(sessionRoot).toHaveAttribute("data-session-view-mode", "minimal");
+    await expect(timerDigits).toBeVisible();
+    await expect(trackingLayer).toHaveCount(0);
+    await expect(secondaryChrome).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /light distraction/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^\+1 min$/ })).toHaveCount(0);
+    // Remembered for the next sit.
+    expect(await readStoredPref()).toBe("true");
+
+    // Tap anywhere restores the full screen, sit still running.
+    await page.tap("body");
+    await expect(sessionRoot).toHaveAttribute("data-session-view-mode", "full");
+    await expect(trackingLayer).toBeVisible();
+    await expect(secondaryChrome).toBeVisible();
+    await expect(page.getByRole("button", { name: /light distraction/i })).toBeVisible();
+    expect(await readStoredPref()).toBe("false");
+
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+    await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
+  });
+
   test("pull-to-refresh style overscroll does not break active session", async ({ page, ensureLoggedIn }) => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();

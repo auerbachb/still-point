@@ -18,6 +18,16 @@ import {
   useTrackingControlsUnlocked,
 } from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
+import { saveMinimalSessionViewPref } from "@/lib/minimalSessionViewPrefs";
+import { useMinimalSessionViewPref } from "@/lib/useMinimalSessionView";
+import {
+  MINIMAL_VIEW_LONG_PRESS_MS,
+  beginMinimalViewPress,
+  isPressPointer,
+  pressMovedBeyondTolerance,
+  resolveMinimalViewRelease,
+  type MinimalViewPress,
+} from "@/lib/minimalSessionGestures";
 import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
@@ -97,6 +107,13 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const [wasPausedInSession, setWasPausedInSession] = useState(false);
   const [showGuidedExercise, setShowGuidedExercise] = useState(false);
   const guidedExerciseTriggerRef = useRef<HTMLButtonElement>(null);
+  /**
+   * #669: "just the timer". The persisted preference is the live source of truth,
+   * so toggling both restyles this sit and is remembered for the next one.
+   */
+  const minimalView = useMinimalSessionViewPref();
+  /** Keeps the screen-reader/keyboard escape hatch invisible until it is focused. */
+  const [minimalExitFocused, setMinimalExitFocused] = useState(false);
   /** Live opt-in Settings pref; pause/complete/abandon drop `isActive` and toggle-off releases too. */
   const keepScreenAwakePref = useKeepScreenAwakePref();
   const trackingControlsUnlocked = useTrackingControlsUnlocked();
@@ -261,10 +278,112 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     finalizeActiveHold(elapsedRef.current);
   };
 
-  const handleOpenThoughtCapture = () => {
+  /** Stable so the minimal-view long press can depend on it without re-subscribing. */
+  const handleOpenThoughtCapture = useCallback(() => {
     finalizeActiveHold(elapsedRef.current);
     setShowPostDistractionCapture(true);
-  };
+  }, [finalizeActiveHold]);
+
+  const exitMinimalView = useCallback(() => {
+    // The exit button unmounts with minimal view, so its `onBlur` may never fire.
+    // Left set, the next entry into minimal view would render the button in its
+    // visible state — new chrome on a screen that is meant to be just the timer.
+    setMinimalExitFocused(false);
+    saveMinimalSessionViewPref(false);
+  }, []);
+
+  const enterMinimalView = useCallback(() => {
+    finalizeActiveHold(elapsedRef.current);
+    resetHoldTracking();
+    saveMinimalSessionViewPref(true);
+  }, [finalizeActiveHold, resetHoldTracking]);
+
+  /**
+   * #669: while minimal, the whole screen is the affordance — a tap restores the
+   * full session screen, a long press opens thought capture *without* leaving
+   * minimal view, and a drag (scroll) does neither. Escape also restores, for
+   * keyboard users who cannot long-press.
+   *
+   * The tap and the capture gesture never collide: tap-anywhere is not a capture
+   * gesture in the full view either, so capture keeps its own distinct gesture.
+   */
+  useEffect(() => {
+    if (!minimalView || sessionFinished || showPostDistractionCapture || showGuidedExercise) return;
+
+    let press: MinimalViewPress | null = null;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearLongPressTimer = () => {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = null;
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      // Right/middle click opens a context menu — it must not drop the sit out of
+      // minimal view. Touch and pen both report button 0 here.
+      if (e.button !== 0) return;
+      // First finger down owns the gesture; a second one is ignored until it ends.
+      if (press) return;
+      press = beginMinimalViewPress(e.pointerId, e.clientX, e.clientY);
+      clearLongPressTimer();
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        if (!press || press.consumed) return;
+        press.consumed = true;
+        handleOpenThoughtCapture();
+      }, MINIMAL_VIEW_LONG_PRESS_MS);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!press || press.consumed || !isPressPointer(press, e.pointerId)) return;
+      if (pressMovedBeyondTolerance(press, e.clientX, e.clientY)) {
+        press.consumed = true;
+        clearLongPressTimer();
+      }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      // Same mouse pointer id carries every button; only the one that opened the
+      // press resolves it.
+      if (e.button !== 0) return;
+      if (!isPressPointer(press, e.pointerId)) return;
+      clearLongPressTimer();
+      const action = resolveMinimalViewRelease(press);
+      press = null;
+      if (action === "exit") exitMinimalView();
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      if (!isPressPointer(press, e.pointerId)) return;
+      clearLongPressTimer();
+      press = null;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") exitMinimalView();
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      clearLongPressTimer();
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [
+    minimalView,
+    sessionFinished,
+    showPostDistractionCapture,
+    showGuidedExercise,
+    exitMinimalView,
+    handleOpenThoughtCapture,
+  ]);
 
   const handleSaveThought = (text: string) => {
     setSessionThoughts(prev => [...prev, { timeInSession: Math.round(elapsedRef.current), text }]);
@@ -345,7 +464,39 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
   const capturedCount = sessionThoughts.length;
   const sessionChromeDimmed = isActive && !controlsVisible;
-  const showSessionTrackingLayer = isActive || wasPausedInSession;
+  const showSessionTrackingLayer = (isActive || wasPausedInSession) && !minimalView;
+  /** Off-screen until focused: the keyboard/screen-reader way out of minimal view. */
+  const minimalExitButtonStyle: CSSProperties = minimalExitFocused
+    ? {
+        position: "fixed",
+        top: "12px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10,
+        background: "var(--surface-1)",
+        border: "1px solid var(--border-2)",
+        color: "var(--fg-3)",
+        ...mono,
+        fontSize: "11px",
+        letterSpacing: "0.15em",
+        textTransform: "uppercase",
+        padding: "14px 24px",
+        minHeight: "44px",
+        borderRadius: "20px",
+        cursor: "pointer",
+      }
+    : {
+        position: "absolute",
+        width: "1px",
+        height: "1px",
+        padding: 0,
+        margin: "-1px",
+        overflow: "hidden",
+        clipPath: "inset(50%)",
+        whiteSpace: "nowrap",
+        border: 0,
+        background: "none",
+      };
   /** Capture stays in the persistent tracking layer while running so it is never hidden with secondary chrome. */
   const captureNoteButtonStyle: CSSProperties = {
     background: "none",
@@ -388,7 +539,17 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   };
 
   return (
-    <div style={{ animation: "fadeIn 0.8s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div
+      data-session-view-mode={minimalView ? "minimal" : "full"}
+      style={{
+        animation: "fadeIn 0.8s ease",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        // Minimal view drops every row below the countdown, so centre what is left.
+        ...(minimalView ? { justifyContent: "center", minHeight: "60vh" } : null),
+      }}
+    >
       <GuidedExerciseOverlay open={showGuidedExercise} onClose={closeGuidedExercise} />
       <BlockTimer
         totalSeconds={totalSeconds}
@@ -398,7 +559,52 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         mindStateLog={mindStateLog}
         onElapsedChange={handleElapsedChange}
         soundPrefs={soundPrefs}
+        minimal={minimalView}
       />
+
+      {minimalView && (
+        <button
+          type="button"
+          data-minimal-view-exit
+          onClick={exitMinimalView}
+          onFocus={() => setMinimalExitFocused(true)}
+          onBlur={() => setMinimalExitFocused(false)}
+          style={minimalExitButtonStyle}
+        >
+          show session controls
+        </button>
+      )}
+
+      {minimalView && !showPostDistractionCapture && (
+        <FlashHint style={{ marginTop: "24px", width: "100%" }}>
+          <p
+            data-minimal-view-hint
+            style={{
+              margin: 0,
+              textAlign: "center",
+              ...mono,
+              fontSize: "10px",
+              color: "var(--fg-4)",
+              letterSpacing: "0.08em",
+              lineHeight: 1.5,
+              padding: "0 20px",
+            }}
+          >
+            {isMobile
+              ? "Tap anywhere to bring the session back · press and hold to capture a note"
+              : "Tap anywhere or press Esc to bring the session back · press and hold to capture a note"}
+          </p>
+        </FlashHint>
+      )}
+
+      {minimalView && showPostDistractionCapture && (
+        <div
+          data-no-space-distraction
+          style={{ marginTop: "28px", width: "100%", display: "flex", justifyContent: "center" }}
+        >
+          <ThoughtCapture onSave={handleSaveThought} onCancel={handleDismissPostCapture} />
+        </div>
+      )}
 
       {showSessionTrackingLayer && (
         <div
@@ -631,6 +837,20 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
               >
                 capture note
               </button>
+              <button
+                type="button"
+                onClick={enterMinimalView}
+                aria-label="Show only the timer"
+                data-minimal-view-enter
+                style={{
+                  ...captureNoteButtonStyle,
+                  borderColor: "var(--border-2)",
+                  color: "var(--fg-3)",
+                  opacity: sessionChromeDimmed ? 0.48 : 0.88,
+                }}
+              >
+                just the timer
+              </button>
             </div>
           )}
 
@@ -645,7 +865,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         </div>
       )}
 
-      {!sessionFinished && !showPostDistractionCapture && (
+      {!sessionFinished && !showPostDistractionCapture && !minimalView && (
         <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: isMobile ? "12px" : "20px", flexWrap: "wrap" }}>
           <button
             type="button"
@@ -694,6 +914,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         </div>
       )}
 
+      {!minimalView && (
       <div
         data-session-chrome="secondary"
         data-visibility={sessionChromeDimmed ? "dimmed" : "visible"}
@@ -813,6 +1034,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

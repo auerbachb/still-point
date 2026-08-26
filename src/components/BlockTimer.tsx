@@ -30,6 +30,13 @@ type BlockTimerProps = {
     serverNow: string;
     durationSeconds: number;
   };
+  /**
+   * #669 "just the timer": render the numeric countdown alone — no mind-state bar,
+   * progress bar, block grid, or show/hide toggle. The clock, sounds, and
+   * completion callback are unaffected, so the sit runs exactly as it does in the
+   * full view.
+   */
+  minimal?: boolean;
 };
 
 type BlockDef = {
@@ -50,6 +57,7 @@ export function BlockTimer({
   soundPrefs,
   controlledElapsed,
   syncClock,
+  minimal = false,
 }: BlockTimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -373,6 +381,11 @@ export function BlockTimer({
   const boxesAreaViewportInset = boxesAreaMaxPx > 500 ? 24 : 40;
   const boxesAreaWidth = `min(${boxesAreaMaxPx}px, calc(100vw - ${boxesAreaViewportInset}px))`;
 
+  // #669: minimal view *is* the countdown, so the "hide numerical timer" display
+  // preference is bypassed while minimal — honouring it there would leave a blank
+  // screen with no way to read the sit. The stored preference is left untouched.
+  const digitsVisible = minimal || showTimer;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? "18px" : "32px" }}>
       <div
@@ -385,7 +398,8 @@ export function BlockTimer({
         }}
       >
         <div
-          aria-hidden={!showTimer}
+          data-session-timer-digits
+          aria-hidden={!digitsVisible}
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: isMobile ? "min(72px, 19vw)" : "min(120px, 18vw)",
@@ -394,13 +408,14 @@ export function BlockTimer({
             color: elapsed >= totalSeconds ? "var(--accent-green)" : "var(--fg)",
             textShadow: elapsed >= totalSeconds ? "0 0 40px var(--accent-green-glow)" : "none",
             transition: "color 0.8s, text-shadow 0.8s, opacity 0.25s ease",
-            opacity: showTimer ? 1 : 0,
+            opacity: digitsVisible ? 1 : 0,
             minHeight: "1em",
             userSelect: "none",
           }}
         >
           {minutes}:{seconds.toString().padStart(2, "0")}
         </div>
+        {!minimal && (
         <button
           type="button"
           aria-pressed={showTimer}
@@ -429,8 +444,10 @@ export function BlockTimer({
         >
           {showTimer ? "hide" : "show"}
         </button>
+        )}
       </div>
 
+      {!minimal && (
       <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
         <MindStateBar
           elapsed={elapsed}
@@ -457,8 +474,9 @@ export function BlockTimer({
           </div>
         </div>
       </div>
+      )}
 
-      {useMinuteBlocks ? (
+      {minimal ? null : useMinuteBlocks ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
           <div style={{
             display: "flex", flexWrap: "wrap", gap: blockGap,

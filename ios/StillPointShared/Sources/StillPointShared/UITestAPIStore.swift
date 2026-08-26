@@ -69,6 +69,9 @@ actor UITestAPIStore {
             defaults.removeObject(forKey: defaultsKey)
             AudioEngine.resetPersistedPrefs()
             SessionIntroPrefs.resetPersistedPrefs()
+            // #669: a leftover minimal-view preference would start every subsequent
+            // UI test with the session chrome collapsed to the countdown alone.
+            MinimalSessionViewPrefs.resetPersistedPrefs()
             LastAuthProvider.resetPersisted()
             // Flush the in-memory cache to cfprefsd so the immediately
             // following read sees the cleared state. Issue #266 follow-up.
