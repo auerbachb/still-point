@@ -221,12 +221,20 @@ final class AppViewModel {
                 return
             }
             // `me()` swallows a 401 that is *not* `TOKEN_EXPIRED` and returns nil:
-            // the server answered, and the answer was "no session". Authoritative.
+            // the server answered, and the answer was "no session". Authoritative —
+            // but only for the session that asked. `checkAuth()` runs on every scene
+            // activation, so an older overlapping call must not sign out the account
+            // that has signed in since.
+            guard generation == authGeneration else { return }
             applySignedOut(cause: .signedOut, message: nil)
         } catch {
             // #665: a failed request is not a sign-out. `OfflineAuth` makes that
             // call once, in the taxonomy #676 gave the widget, so the app and the
             // widget can never disagree about what "signed out" means.
+            // Same reasoning as the nil branch: a transport failure belonging to a
+            // superseded call must not drag the current session into offline mode
+            // or sign it out.
+            guard generation == authGeneration else { return }
             let cachedUser = CachedIdentityStore.load()
             let outcome = OfflineAuth.outcome(for: error, hasCachedIdentity: cachedUser != nil)
             // Matching on the pair keeps the cached user's presence and the
@@ -262,7 +270,14 @@ final class AppViewModel {
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
     private func applyAuthenticatedUser(_ user: UserDTO) {
-        authGeneration &+= 1
+        // Only an actual *transition* invalidates in-flight work. Re-confirming the
+        // same account (a reconnect refresh, a settings PATCH round-trip) is not a
+        // transition, and bumping for it was wrong twice over: it made every
+        // post-adoption `generation == authGeneration` check unsatisfiable, and it
+        // let an unrelated settings save cancel identity work that was still valid.
+        // A sign-out sets `currentUser = nil` and bumps, so a sign-out/sign-in cycle
+        // on the *same* account still bumps twice and stale work is still rejected.
+        if currentUser?.id != user.id { authGeneration &+= 1 }
         currentUser = user
         CachedIdentityStore.save(user)
         isOfflineMode = false
@@ -299,7 +314,8 @@ final class AppViewModel {
     /// a network, and consuming a pending invite here would burn the token on a
     /// request that cannot succeed. `refreshAfterReconnect()` picks both up.
     private func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
-        authGeneration &+= 1
+        // Transition-only, matching `applyAuthenticatedUser`.
+        if currentUser?.id != user.id { authGeneration &+= 1 }
         currentUser = user
         isOfflineMode = true
         resetTrackCompletionBadges()
@@ -344,6 +360,15 @@ final class AppViewModel {
         offlineCatchUpTask = nil
         reconnectTask?.cancel()
         reconnectTask = nil
+        // The widget history backfill is identity-scoped too. Its own key check is
+        // `"userId|localDay"`, which a sign-out and sign-in on the *same* account
+        // within the same day would satisfy — so a late response could land in the
+        // freshly rebuilt snapshot. Clearing the key also forces a re-backfill
+        // rather than leaving the row blank. `didLogout` cancelled this already;
+        // `applySignedOut` did not, which is the gap this closes.
+        widgetHistoryTask?.cancel()
+        widgetHistoryTask = nil
+        widgetHistoryRefreshKey = nil
     }
 
     /// #665: non-`async` entry point for the reconnect refresh so the view layer
@@ -503,9 +528,8 @@ final class AppViewModel {
         // `clearQueue()` await below — the moment sign-out is known is the moment a
         // response for the old session stops being allowed to write anything (#665).
         authGeneration &+= 1
+        // Cancels the widget history backfill and clears its key too.
         cancelIdentityScopedTasks()
-        widgetHistoryTask?.cancel()
-        widgetHistoryRefreshKey = nil
         Task { @MainActor in
             try? await SessionSyncCoordinator.shared.clearQueue()
             currentUser = nil
