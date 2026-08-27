@@ -183,6 +183,12 @@ final class AppViewModel {
 
     func checkAuth() async {
         let startedAt = Date()
+        // Not only the cold-start path: `RootView` also runs this on every
+        // `scenePhase == .active`, so it re-validates an *existing* session as
+        // often as it establishes a new one. A sign-out landing while `me()` is
+        // suspended would otherwise let the late response re-adopt the old account
+        // and route back into the authenticated UI (#665).
+        let generation = authGeneration
         isLoading = true
         defer {
             isLoading = false
@@ -199,6 +205,7 @@ final class AppViewModel {
 
         do {
             if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
+                guard generation == authGeneration else { return }
                 applyAuthenticatedUser(user)
                 resetTrackCompletionBadges()
                 currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
@@ -470,10 +477,16 @@ final class AppViewModel {
     /// `PushNotificationCoordinator.willPresent` reflects current server truth
     /// even before the Notifications screen is opened this launch (#431).
     private func hydrateNotificationSuppressionPreference() {
-        Task {
-            if let prefs = try? await APIClient.shared.getNotificationPreferences() {
-                SessionNotificationSuppressionController.setSuppressPreferenceEnabled(prefs.suppressDuringSession)
-            }
+        // Same class as the flagged sites, guarded pre-emptively: this reads a
+        // per-account server preference and applies it to a device-global
+        // controller, so a response arriving after a sign-out would push the old
+        // account's setting onto whoever is signed in next (#665).
+        let generation = authGeneration
+        Task { [weak self] in
+            guard let self else { return }
+            guard let prefs = try? await APIClient.shared.getNotificationPreferences() else { return }
+            guard generation == self.authGeneration else { return }
+            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(prefs.suppressDuringSession)
         }
     }
 
@@ -530,8 +543,13 @@ final class AppViewModel {
 
     /// #240: opt into the dual-track fork, then refresh local user + badges.
     func enableDualTrack() async {
+        // Same identity-lifetime guard as the other sites that adopt a server
+        // response: without it, a sign-out mid-request lets the old account's
+        // returned UserDTO replace the active account and be persisted (#665).
+        let generation = authGeneration
         do {
             let updated = try await APIClient.shared.enableDualTrack()
+            guard generation == authGeneration else { return }
             applyAuthenticatedUser(updated)
             await refreshTracksDoneToday()
         } catch {
@@ -804,6 +822,12 @@ final class AppViewModel {
         if let ownerUserId = currentUser?.id {
             do {
                 _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
+                // The flush is a suspension point; don't follow it with a prune for
+                // a session that has since been replaced. Both calls are explicitly
+                // scoped to the `ownerUserId` captured before the await, so neither
+                // can touch another account's rows — this only stops us doing more
+                // work on behalf of a session that is over.
+                guard generation == authGeneration else { return }
                 try await SessionSyncCoordinator.shared.pruneCompletedEntries(ownerUserId: ownerUserId)
             } catch {
                 print("Failed to flush offline session queue: \(error)")
