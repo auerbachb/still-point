@@ -377,12 +377,20 @@ final class AppViewModel {
     /// late result harmless; cancelling is how we stop paying for it at all.
     private var offlineCatchUpTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    private var loginCatchUpTask: Task<Void, Never>?
+    /// Buddy invite join/consume. One property: these are alternative routes into
+    /// the same invite flow and never need to run concurrently.
+    private var buddyInviteTask: Task<Void, Never>?
 
     private func cancelIdentityScopedTasks() {
         offlineCatchUpTask?.cancel()
         offlineCatchUpTask = nil
         reconnectTask?.cancel()
         reconnectTask = nil
+        loginCatchUpTask?.cancel()
+        loginCatchUpTask = nil
+        buddyInviteTask?.cancel()
+        buddyInviteTask = nil
         // The widget history backfill is identity-scoped too. Its own key check is
         // `"userId|localDay"`, which a sign-out and sign-in on the *same* account
         // within the same day would satisfy — so a late response could land in the
@@ -508,6 +516,10 @@ final class AppViewModel {
 
     func didLogin(user: UserDTO) {
         applyAuthenticatedUser(user)
+        // Re-captured after adoption, same rule as `checkAuth()`: signing in is
+        // itself the transition, so the generation to defend is the one that exists
+        // once this user is adopted.
+        let adopted = authGeneration
         resetTrackCompletionBadges()
         currentView = .home
         // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
@@ -516,12 +528,20 @@ final class AppViewModel {
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         hydrateNotificationSuppressionPreference()
-        Task {
-            await refreshTracksDoneToday()
-            syncWidgetData()
-            await consumePendingBuddyInviteIfNeeded()
-            await consumePendingSessionDeepLinkIfNeeded()
-            await consumePendingLogReasonIfNeeded()
+        // Retained and generation-guarded like the other identity-scoped catch-ups.
+        // `refreshTracksDoneToday()` self-guards, but it returns silently either
+        // way, so the caller cannot infer from it whether the session survived —
+        // hence the explicit re-check before the widget sync and the three
+        // non-idempotent consumptions.
+        loginCatchUpTask?.cancel()
+        loginCatchUpTask = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshTracksDoneToday()
+            guard adopted == self.authGeneration else { return }
+            self.syncWidgetData()
+            await self.consumePendingBuddyInviteIfNeeded()
+            await self.consumePendingSessionDeepLinkIfNeeded()
+            await self.consumePendingLogReasonIfNeeded()
         }
     }
 
@@ -761,7 +781,17 @@ final class AppViewModel {
 
     func leaveBuddySession() {
         currentView = .home
-        Task { await consumePendingBuddyInviteIfNeeded() }
+        // Retained and guarded like the other identity-scoped work: the task body
+        // runs on a later main-actor turn, and consuming an invite is not
+        // idempotent, so a sign-out in between must not let it burn the token
+        // against whoever is signed in next (#665).
+        let adopted = authGeneration
+        buddyInviteTask?.cancel()
+        buddyInviteTask = Task { [weak self] in
+            guard let self else { return }
+            guard adopted == self.authGeneration else { return }
+            await self.consumePendingBuddyInviteIfNeeded()
+        }
     }
 
     func handleIncomingURL(_ url: URL) {
@@ -782,7 +812,15 @@ final class AppViewModel {
             pendingBuddyInviteToken = token
             return
         }
-        Task { await joinBuddySession(token: token) }
+        // Same reasoning as `leaveBuddySession()`: joining is a non-idempotent
+        // network action, so it must not run for a session that replaced this one.
+        let adopted = authGeneration
+        buddyInviteTask?.cancel()
+        buddyInviteTask = Task { [weak self] in
+            guard let self else { return }
+            guard adopted == self.authGeneration else { return }
+            await self.joinBuddySession(token: token)
+        }
     }
 
     func handlePushDeepLink(_ url: URL) {
