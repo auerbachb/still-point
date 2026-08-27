@@ -378,6 +378,13 @@ final class AppViewModel {
             PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
             hydrateNotificationSuppressionPreference()
             await refreshTracksDoneToday()
+            // Re-checked again here: `refreshTracksDoneToday()` is itself a
+            // suspension point, so the session can end between the check above and
+            // this line. Consuming the invite is not idempotent — it burns the
+            // token and joins a session — so it must not run for a session that has
+            // since been replaced. (`consumePendingBuddyInviteIfNeeded`'s own
+            // `currentUser != nil` test cannot tell a new account from the old one.)
+            guard generation == authGeneration else { return }
             await consumePendingBuddyInviteIfNeeded()
         } catch let apiError as APIError where apiError.status == 401 {
             // The cached identity outlived the server session — the accepted cost
@@ -788,6 +795,12 @@ final class AppViewModel {
     func returnHome() async {
         currentView = .home
         selectedTab = 0
+        // Same hazard as `refreshAfterReconnect` (#665): the queue flush and the
+        // `me()` request below are both suspension points, so a sign-out or account
+        // switch can land mid-flight and a late response would otherwise restore the
+        // previous `currentUser` and re-save its cached identity after the session
+        // was invalidated.
+        let generation = authGeneration
         if let ownerUserId = currentUser?.id {
             do {
                 _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
@@ -797,9 +810,14 @@ final class AppViewModel {
             }
         }
         if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
+            guard generation == authGeneration else { return }
             applyAuthenticatedUser(user)
         }
         await refreshTracksDoneToday()
+        // As in `refreshAfterReconnect`: re-checked because the refresh above is a
+        // suspension point, and consuming the invite burns a token against whatever
+        // session is live when it runs.
+        guard generation == authGeneration else { return }
         await consumePendingBuddyInviteIfNeeded()
         await consumePendingLogReasonIfNeeded()
     }
