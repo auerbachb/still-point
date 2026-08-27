@@ -176,7 +176,12 @@ struct SettingsView: View {
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
-                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    attentionTrackingEnabled = !newValue
+                                }
                             } catch {
                                 attentionTrackingEnabled = !newValue
                             }
@@ -222,7 +227,12 @@ struct SettingsView: View {
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
-                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    ambientSoundEnabled = !newValue
+                                }
                             } catch {
                                 ambientSoundEnabled = !newValue
                             }
@@ -273,7 +283,12 @@ struct SettingsView: View {
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
-                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    isPublic = !newValue
+                                }
                             } catch {
                                 // Revert on failure
                                 isPublic = !newValue
@@ -321,7 +336,12 @@ struct SettingsView: View {
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
-                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    aphorismsEnabled = !newValue
+                                }
                             } catch {
                                 // Revert on failure
                                 aphorismsEnabled = !newValue

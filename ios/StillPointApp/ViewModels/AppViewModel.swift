@@ -213,6 +213,12 @@ final class AppViewModel {
             if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
                 guard generation == authGeneration else { return }
                 applyAuthenticatedUser(user)
+                // Re-captured deliberately. Adopting the user is itself an expected
+                // transition on a cold start (nil -> user), so the entry generation
+                // is stale from here on *by design* and reusing it below would skip
+                // the side effects on every launch. The entry capture protects the
+                // decision to adopt; this one protects everything after it.
+                let adopted = authGeneration
                 resetTrackCompletionBadges()
                 currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
                 authStatusMessage = nil
@@ -225,7 +231,7 @@ final class AppViewModel {
                 // identity-scoped side effect — the widget snapshot and three
                 // non-idempotent deep-link/invite consumptions — so none of it may
                 // run for a session that has since been replaced.
-                guard generation == authGeneration else { return }
+                guard adopted == authGeneration else { return }
                 syncWidgetData()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
@@ -424,6 +430,10 @@ final class AppViewModel {
             }
             guard generation == authGeneration else { return }
             applyAuthenticatedUser(user)
+            // Re-captured after adoption, as in `checkAuth()`: if the reconnect ever
+            // returns a different account, that adoption is a legitimate transition
+            // and the work below belongs to the account we just adopted.
+            let adopted = authGeneration
             PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
             hydrateNotificationSuppressionPreference()
             await refreshTracksDoneToday()
@@ -433,7 +443,7 @@ final class AppViewModel {
             // token and joins a session — so it must not run for a session that has
             // since been replaced. (`consumePendingBuddyInviteIfNeeded`'s own
             // `currentUser != nil` test cannot tell a new account from the old one.)
-            guard generation == authGeneration else { return }
+            guard adopted == authGeneration else { return }
             await consumePendingBuddyInviteIfNeeded()
         } catch let apiError as APIError where apiError.status == 401 {
             // The cached identity outlived the server session — the accepted cost
@@ -540,18 +550,23 @@ final class AppViewModel {
     /// - Parameter generation: `identityGeneration` as it was when the request
     ///   started. Required rather than defaulted so a new call site cannot forget
     ///   it and silently reintroduce the stale-write bug.
-    func applySettingsUser(_ user: UserDTO, startedAtGeneration generation: Int) {
+    /// - Returns: whether the response was adopted. Callers that show success UI
+    ///   must branch on this — a silently discarded response would otherwise be
+    ///   reported to the user as a saved change.
+    @discardableResult
+    func applySettingsUser(_ user: UserDTO, startedAtGeneration generation: Int) -> Bool {
         // The id check below cannot tell "same account throughout" from "signed out
         // and signed back in as the same account" — and in the second case a
         // response from the previous session would overwrite newer local fields,
         // clear offline mode, and persist stale data to the cache. That is the case
         // this generation check exists for (#665).
-        guard generation == authGeneration else { return }
-        guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return }
+        guard generation == authGeneration else { return false }
+        guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return false }
         // Server-confirmed (a settings PATCH round-tripped), so the local copy is
         // refreshed too — otherwise a rename or track opt-in would vanish on the
         // next offline launch (#665).
         applyAuthenticatedUser(user)
+        return true
     }
 
     func didLogout() {
@@ -888,15 +903,19 @@ final class AppViewModel {
                 print("Failed to flush offline session queue: \(error)")
             }
         }
+        // Starts equal to the entry capture and is refreshed if we adopt a user, so
+        // an expected adoption is never mistaken for the session being replaced.
+        var adopted = generation
         if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
             guard generation == authGeneration else { return }
             applyAuthenticatedUser(user)
+            adopted = authGeneration
         }
         await refreshTracksDoneToday()
         // As in `refreshAfterReconnect`: re-checked because the refresh above is a
         // suspension point, and consuming the invite burns a token against whatever
         // session is live when it runs.
-        guard generation == authGeneration else { return }
+        guard adopted == authGeneration else { return }
         await consumePendingBuddyInviteIfNeeded()
         await consumePendingLogReasonIfNeeded()
     }
