@@ -243,9 +243,19 @@ final class AppViewModel {
         (error as? APIError)?.message ?? "Connection failed. Please try again."
     }
 
+    /// Bumped on every identity transition — adopt, offline-adopt, sign-out,
+    /// logout. `@MainActor` serializes these mutations but an `await` is still a
+    /// suspension point, so a request that started under one identity can land
+    /// after another has taken over. Anything that applies a network result to
+    /// identity-scoped state captures this before its `await` and re-checks after,
+    /// rather than re-reading `currentUser` (which cannot distinguish "same user
+    /// throughout" from "signed out and back in").
+    private var authGeneration: Int = 0
+
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
     private func applyAuthenticatedUser(_ user: UserDTO) {
+        authGeneration &+= 1
         currentUser = user
         CachedIdentityStore.save(user)
         isOfflineMode = false
@@ -259,6 +269,8 @@ final class AppViewModel {
     /// Before #665 every failure path ran this teardown, so a dropped connection
     /// wiped state the server never contradicted.
     private func applySignedOut(cause: WidgetDataStore.SignedOutCause, message: String?) {
+        authGeneration &+= 1
+        cancelIdentityScopedTasks()
         currentUser = nil
         isOfflineMode = false
         currentView = .auth
@@ -280,6 +292,7 @@ final class AppViewModel {
     /// a network, and consuming a pending invite here would burn the token on a
     /// request that cannot succeed. `refreshAfterReconnect()` picks both up.
     private func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
+        authGeneration &+= 1
         currentUser = user
         isOfflineMode = true
         resetTrackCompletionBadges()
@@ -300,10 +313,41 @@ final class AppViewModel {
         // Local-only deep links still route; the buddy invite is network-bound.
         await consumePendingSessionDeepLinkIfNeeded()
         await consumePendingLogReasonIfNeeded()
-        // Fire-and-forget: if connectivity is actually back by the time this runs,
-        // the Home badges and widget history catch up on their own; if not, it fails
-        // closed on its own without having delayed anything.
-        Task { await refreshTracksDoneToday() }
+        // Detached from the launch path: if connectivity is actually back by the
+        // time this runs, the Home badges and widget history catch up on their own;
+        // if not, it fails closed without having delayed anything. Retained (not
+        // fire-and-forget) so sign-out can cancel it, and `refreshTracksDoneToday()`
+        // re-checks `authGeneration` after its await so a late response can never
+        // write another account's badges or widget snapshot.
+        offlineCatchUpTask?.cancel()
+        offlineCatchUpTask = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshTracksDoneToday()
+        }
+    }
+
+    /// In-flight identity-scoped background work, cancelled the moment the session
+    /// they were started for ends. The `authGeneration` re-checks are what make a
+    /// late result harmless; cancelling is how we stop paying for it at all.
+    private var offlineCatchUpTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+
+    private func cancelIdentityScopedTasks() {
+        offlineCatchUpTask?.cancel()
+        offlineCatchUpTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+    }
+
+    /// #665: non-`async` entry point for the reconnect refresh so the view layer
+    /// hands ownership of the task to the view model instead of spawning an
+    /// unstructured one it cannot cancel.
+    func refreshAfterReconnectInBackground() {
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshAfterReconnect()
+        }
     }
 
     /// #665: reconcile with the server once connectivity returns.
@@ -318,11 +362,18 @@ final class AppViewModel {
     /// `NetworkReachabilityMonitor` flushes the write queue on the same transition.
     func refreshAfterReconnect() async {
         guard currentUser != nil, currentView != .auth else { return }
+        // Captured before the await: signing out (or switching accounts) while
+        // `me()` is in flight must not let the response reinstate the old session.
+        // Applying it would resurrect a signed-out account *and* re-save the cached
+        // identity `applySignedOut` just tore down via `clearIfAuthoritative` (#676).
+        let generation = authGeneration
         do {
             guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+                guard generation == authGeneration else { return }
                 applySignedOut(cause: .signedOut, message: nil)
                 return
             }
+            guard generation == authGeneration else { return }
             applyAuthenticatedUser(user)
             PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
             hydrateNotificationSuppressionPreference()
@@ -331,7 +382,10 @@ final class AppViewModel {
         } catch let apiError as APIError where apiError.status == 401 {
             // The cached identity outlived the server session — the accepted cost
             // of sitting offline on a stale copy. Sign in again, now, rather than
-            // having been signed out back when the network dropped.
+            // having been signed out back when the network dropped. Generation-
+            // guarded like the success path: a 401 for the *previous* session must
+            // not sign out an account that has since signed in.
+            guard generation == authGeneration else { return }
             applySignedOut(cause: .unauthorized, message: apiError.message)
         } catch {
             // Still no usable answer: stay on local state, say nothing.
@@ -425,6 +479,11 @@ final class AppViewModel {
     }
 
     func didLogout() {
+        // Invalidate in-flight identity-scoped work synchronously, before the
+        // `clearQueue()` await below — the moment sign-out is known is the moment a
+        // response for the old session stops being allowed to write anything (#665).
+        authGeneration &+= 1
+        cancelIdentityScopedTasks()
         widgetHistoryTask?.cancel()
         widgetHistoryRefreshKey = nil
         Task { @MainActor in
@@ -477,6 +536,12 @@ final class AppViewModel {
     /// server-side filtered query.
     func refreshTracksDoneToday() async {
         guard currentUser != nil else { return }
+        // Captured before the request: the `currentUser` check above only holds at
+        // entry, and everything below the await writes identity-scoped state
+        // (Home badges, the widget snapshot, the week history). Re-checked after,
+        // so a response that outlived its session cannot repaint badges or persist
+        // a widget snapshot for an account that has signed out or been switched.
+        let generation = authGeneration
         let now = Date()
         let prior = WidgetDataStore.load()
         if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
@@ -490,6 +555,7 @@ final class AppViewModel {
         let today = dateFormatter.string(from: Date())
         do {
             let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
+            guard generation == authGeneration else { return }
             primaryDoneToday = tracksDoneToday.primary
             secondDoneToday = tracksDoneToday.second
             if primaryDoneToday {
@@ -510,9 +576,12 @@ final class AppViewModel {
             // Note the success path above only ever raises these flags, never
             // lowers them; the failure path must not be the one exception.
             // Midnight rollover is already handled at the top of this method.
+            guard generation == authGeneration else { return }
             primaryDoneToday = false
             secondDoneToday = false
         }
+        // Both branches above return early on a generation change, so reaching
+        // here means the session that started this request is still the live one.
         syncWidgetData()
         refreshWidgetWeekHistory()
     }
