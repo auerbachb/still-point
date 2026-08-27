@@ -719,8 +719,16 @@ final class AppViewModel {
             // lowers them; the failure path must not be the one exception.
             // Midnight rollover is already handled at the top of this method.
             guard generation == authGeneration else { return }
-            primaryDoneToday = false
-            secondDoneToday = false
+            // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
+            // deliberately keeps the badges when a session is running, and it
+            // schedules this catch-up moments later against the same dead network
+            // — so clearing here would undo that preservation for the very sit it
+            // was meant to protect. Outside a session the reset stands, and the
+            // next successful refresh restores the truth either way.
+            if !isInSession {
+                primaryDoneToday = false
+                secondDoneToday = false
+            }
         }
         // Both branches above return early on a generation change, so reaching
         // here means the session that started this request is still the live one.
