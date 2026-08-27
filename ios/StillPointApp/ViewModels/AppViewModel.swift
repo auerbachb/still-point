@@ -211,7 +211,14 @@ final class AppViewModel {
 
         do {
             if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
-                guard generation == authGeneration else { return }
+                // Paired with the check ID for the same reason as the terminal
+                // branches below. Adopting the user is idempotent, but the route
+                // reset and the badge reset under it are not: `RootView` starts a
+                // check from both `.task` and `scenePhase == .active`, and since
+                // re-confirming the same account does not move the generation, an
+                // older call landing after the newest one finished would send a
+                // user who has since navigated back to the initial view.
+                guard generation == authGeneration, checkID == activeAuthCheckID else { return }
                 applyAuthenticatedUser(user)
                 // Re-captured deliberately. Adopting the user is itself an expected
                 // transition on a cold start (nil -> user), so the entry generation
@@ -351,8 +358,18 @@ final class AppViewModel {
         if currentUser?.id != user.id { authGeneration &+= 1 }
         currentUser = user
         isOfflineMode = true
-        resetTrackCompletionBadges()
-        currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
+        // `checkAuth()` runs on every scene activation, so this path is reached
+        // mid-sit whenever the app is foregrounded on a bad connection. Routing to
+        // the initial authenticated view there would eject the user from a session
+        // in progress, so the route — and the badge reset that goes with it — is
+        // preserved while one is running. Matches `refreshAfterReconnect()`, which
+        // never touches the route, and the `isInSession` checks the deep-link entry
+        // points already make. Going offline is still recorded either way: the
+        // identity, the offline flag, and the status line below are unconditional.
+        if !isInSession {
+            resetTrackCompletionBadges()
+            currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
+        }
         // Not an error the user must act on — the offline indicator says it instead.
         authStatusMessage = nil
         // Paint from local state immediately. Nothing here may `await` a request we
