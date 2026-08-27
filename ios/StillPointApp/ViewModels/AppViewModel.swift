@@ -233,7 +233,7 @@ final class AppViewModel {
                 // run for a session that has since been replaced.
                 guard adopted == authGeneration else { return }
                 syncWidgetData()
-                await consumePendingBuddyInviteIfNeeded()
+                await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
                 await consumePendingSessionDeepLinkIfNeeded()
                 await consumePendingLogReasonIfNeeded()
                 return
@@ -243,16 +243,26 @@ final class AppViewModel {
             // but only for the session that asked. `checkAuth()` runs on every scene
             // activation, so an older overlapping call must not sign out the account
             // that has signed in since.
-            guard generation == authGeneration else { return }
+            //
+            // The generation alone cannot express that. Re-confirming the *same*
+            // account is deliberately not a transition (`applyAuthenticatedUser`),
+            // so once a newer check has confirmed this user the generation is
+            // unchanged and an older check's "no session" would still pass this
+            // guard. `activeAuthCheckID` is the value that distinguishes newest
+            // from superseded — the same reason it gates the overlay above — so a
+            // stale answer can no longer sign the live account out.
+            guard generation == authGeneration, checkID == activeAuthCheckID else { return }
             applySignedOut(cause: .signedOut, message: nil)
         } catch {
             // #665: a failed request is not a sign-out. `OfflineAuth` makes that
             // call once, in the taxonomy #676 gave the widget, so the app and the
             // widget can never disagree about what "signed out" means.
-            // Same reasoning as the nil branch: a transport failure belonging to a
-            // superseded call must not drag the current session into offline mode
-            // or sign it out.
-            guard generation == authGeneration else { return }
+            // Same reasoning as the nil branch, including the check-ID half: a
+            // transport failure belonging to a superseded call must not drag the
+            // current session into offline mode or sign it out, and after a newer
+            // check has re-confirmed the same account the generation no longer
+            // moves to say so.
+            guard generation == authGeneration, checkID == activeAuthCheckID else { return }
             let cachedUser = CachedIdentityStore.load()
             let outcome = OfflineAuth.outcome(for: error, hasCachedIdentity: cachedUser != nil)
             // Matching on the pair keeps the cached user's presence and the
@@ -452,7 +462,7 @@ final class AppViewModel {
             // since been replaced. (`consumePendingBuddyInviteIfNeeded`'s own
             // `currentUser != nil` test cannot tell a new account from the old one.)
             guard adopted == authGeneration else { return }
-            await consumePendingBuddyInviteIfNeeded()
+            await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
         } catch let apiError as APIError where apiError.status == 401 {
             // The cached identity outlived the server session — the accepted cost
             // of sitting offline on a stale copy. Sign in again, now, rather than
@@ -539,7 +549,7 @@ final class AppViewModel {
             await self.refreshTracksDoneToday()
             guard adopted == self.authGeneration else { return }
             self.syncWidgetData()
-            await self.consumePendingBuddyInviteIfNeeded()
+            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
             await self.consumePendingSessionDeepLinkIfNeeded()
             await self.consumePendingLogReasonIfNeeded()
         }
@@ -790,7 +800,7 @@ final class AppViewModel {
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
             guard adopted == self.authGeneration else { return }
-            await self.consumePendingBuddyInviteIfNeeded()
+            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
         }
     }
 
@@ -819,7 +829,7 @@ final class AppViewModel {
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
             guard adopted == self.authGeneration else { return }
-            await self.joinBuddySession(token: token)
+            await self.joinBuddySession(token: token, startedAtGeneration: adopted)
         }
     }
 
@@ -954,25 +964,45 @@ final class AppViewModel {
         // suspension point, and consuming the invite burns a token against whatever
         // session is live when it runs.
         guard adopted == authGeneration else { return }
-        await consumePendingBuddyInviteIfNeeded()
+        await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
         await consumePendingLogReasonIfNeeded()
     }
 
-    private func consumePendingBuddyInviteIfNeeded() async {
+    /// - Parameter generation: `authGeneration` as it was when the caller decided
+    ///   to consume the invite, threaded through to the join so the network result
+    ///   is checked against the identity that asked for it.
+    private func consumePendingBuddyInviteIfNeeded(startedAtGeneration generation: Int) async {
         guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
         pendingBuddyInviteToken = nil
-        await joinBuddySession(token: token)
+        await joinBuddySession(token: token, startedAtGeneration: generation)
     }
 
-    private func joinBuddySession(token: String) async {
+    /// - Parameter generation: `authGeneration` at the point the join was decided.
+    ///   Required rather than defaulted, matching `applySettingsUser`, so a new
+    ///   call site cannot forget it and silently reintroduce the stale-write bug.
+    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async {
         do {
             let sessionId = try await APIClient.shared.joinBuddySession(token: token)
+            // The request is a suspension point like every other identity-scoped
+            // network call here. The pre-task guards only decided whether to
+            // *start* the join; a sign-out or account switch landing while it was
+            // in flight must not route the replacement account into this session
+            // (#665).
+            guard generation == authGeneration else { return }
             buddyInviteError = nil
             currentView = .buddySession(sessionId: sessionId)
-        } catch let error as APIError {
-            buddyInviteError = error.message
         } catch {
-            buddyInviteError = "Could not open buddy invite."
+            // The failure path needs the same guard — including for the
+            // cancellation error that a sign-out's own `cancelIdentityScopedTasks`
+            // produces. Cancellation is cooperative and does not by itself stop the
+            // post-await mutation, so without this the previous session's failure
+            // would surface as an invite error on whoever is signed in next.
+            guard generation == authGeneration else { return }
+            if let apiError = error as? APIError {
+                buddyInviteError = apiError.message
+            } else {
+                buddyInviteError = "Could not open buddy invite."
+            }
         }
     }
 
