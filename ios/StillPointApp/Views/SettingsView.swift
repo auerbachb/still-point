@@ -166,8 +166,11 @@ struct SettingsView: View {
                                 }
                             }
                             do {
+                                // Captured before the await: a response that outlived a
+                                // sign-out must not be applied to the next session (#665).
+                                let identityAtStart = appVM.identityGeneration
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
                                 attentionTrackingEnabled = !newValue
                             }
@@ -203,8 +206,11 @@ struct SettingsView: View {
                                 }
                             }
                             do {
+                                // Captured before the await: a response that outlived a
+                                // sign-out must not be applied to the next session (#665).
+                                let identityAtStart = appVM.identityGeneration
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
                                 ambientSoundEnabled = !newValue
                             }
@@ -245,8 +251,11 @@ struct SettingsView: View {
                         Task {
                             defer { isUpdating = false }
                             do {
+                                // Captured before the await: a response that outlived a
+                                // sign-out must not be applied to the next session (#665).
+                                let identityAtStart = appVM.identityGeneration
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
-                                appVM.applySettingsUser(updated)
+                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
                                 // Revert on failure
                                 isPublic = !newValue
@@ -284,8 +293,11 @@ struct SettingsView: View {
                         Task {
                             defer { isUpdatingAphorisms = false }
                             do {
+                                // Captured before the await: a response that outlived a
+                                // sign-out must not be applied to the next session (#665).
+                                let identityAtStart = appVM.identityGeneration
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
                                 // Revert on failure
                                 aphorismsEnabled = !newValue

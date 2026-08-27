@@ -515,7 +515,21 @@ final class AppViewModel {
         }
     }
 
-    func applySettingsUser(_ user: UserDTO) {
+    /// Snapshot of the live identity, taken by a caller that will apply a response
+    /// later. Capture this *before* an `await`, hand it back to
+    /// `applySettingsUser(_:startedAtGeneration:)`.
+    var identityGeneration: Int { authGeneration }
+
+    /// - Parameter generation: `identityGeneration` as it was when the request
+    ///   started. Required rather than defaulted so a new call site cannot forget
+    ///   it and silently reintroduce the stale-write bug.
+    func applySettingsUser(_ user: UserDTO, startedAtGeneration generation: Int) {
+        // The id check below cannot tell "same account throughout" from "signed out
+        // and signed back in as the same account" — and in the second case a
+        // response from the previous session would overwrite newer local fields,
+        // clear offline mode, and persist stale data to the cache. That is the case
+        // this generation check exists for (#665).
+        guard generation == authGeneration else { return }
         guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return }
         // Server-confirmed (a settings PATCH round-tripped), so the local copy is
         // refreshed too — otherwise a rename or track opt-in would vanish on the
