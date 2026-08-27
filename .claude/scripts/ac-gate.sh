@@ -177,6 +177,12 @@ HAS_UNCHECKED_INSCOPE=0
 HAS_UNCHECKED_EXEMPT=0
 TRACKING_ISSUE=""
 PENDING_SECTIONS=""
+# Open fenced-code block, if any: the fence character (` or ~) and its length.
+# Empty FENCE_CHAR means "not inside a fence". See the fence guard in the loop.
+FENCE_CHAR=""
+FENCE_LEN=0
+# Single-quoted so the backticks are literal and never command-substituted.
+_FENCE_OPEN_RE='^[[:space:]]{0,3}(`{3,}|~{3,})(.*)$'
 
 # Records a completed postmerge section that carried unchecked boxes, so Stage 2
 # can validate it. Called before any state transition away from "postmerge", and
@@ -196,24 +202,89 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   # Strip CRLF (defensive: body from gh may carry Windows line endings)
   line="${raw_line%$'\r'}"
 
-  # --- level-2 heading detection ---
+  # --- fenced code blocks are inert ---
+  # Everything below treats the body as prose. Without fence tracking a PR could
+  # paste a fenced *example* containing '## Post-merge verification' and a
+  # 'Tracking issue: #N' line, which the parser would honour as a real exemption
+  # region -- shifting genuine unchecked criteria that follow the fence into the
+  # exempt state and passing a gate that should fail. Since the gate is a
+  # required check, that is a bypass, so fenced content is skipped entirely:
+  # no headings, no task items, no tracking-issue lines.
+  #
+  # CommonMark: a fence opens with 3+ backticks or tildes, indented at most 3
+  # spaces, optionally followed by an info string. It closes with a run of the
+  # SAME character, at least as long as the opener, and nothing else on the
+  # line. Backtick fences may not carry a backtick in the info string; tilde
+  # fences may carry anything.
+  #
+  # The closing run is matched against the OPEN fence character specifically,
+  # never a combined '[`~]+' class. A combined class validated only the first
+  # character and the total length, so a mixed run such as '~~~```' closed a
+  # tilde fence -- which CommonMark does not allow, and which re-opens the
+  # laundering bypass by ending the block early and turning the rest of the
+  # sample back into "real" content.
+  #
+  # Both runs use an explicit {3,} / {FENCE_LEN,} quantifier. A repeated
+  # literal ('```'+) does match three-or-more, since the '+' binds only to the
+  # final backtick, but it reads as though it meant multiples of three; the
+  # quantifier says what is meant.
+  if [[ -z "$FENCE_CHAR" ]]; then
+    if [[ "$line" =~ $_FENCE_OPEN_RE ]]; then
+      _marker="${BASH_REMATCH[1]}"
+      _info="${BASH_REMATCH[2]}"
+      # A backtick fence's info string cannot contain a backtick (CommonMark),
+      # so '``` ``` ```' inline-code prose does not open a block.
+      if [[ "${_marker:0:1}" != '`' || "$_info" != *'`'* ]]; then
+        FENCE_CHAR="${_marker:0:1}"
+        FENCE_LEN="${#_marker}"
+      fi
+    fi
+    [[ -n "$FENCE_CHAR" ]] && continue
+  else
+    # Same character, at least as long as the opener, nothing trailing.
+    _close_re="^[[:space:]]{0,3}${FENCE_CHAR}{${FENCE_LEN},}[[:space:]]*$"
+    if [[ "$line" =~ $_close_re ]]; then
+      FENCE_CHAR=""
+      FENCE_LEN=0
+    fi
+    continue
+  fi
+
+  # --- section heading detection (level 1 and 2) ---
   # Markdown allows up to three leading spaces before the marker and arbitrary
   # whitespace after it. Accepting only '^## ' let an indented '## Test Plan'
   # go unrecognised, so its unchecked boxes bypassed the gate entirely — and it
   # diverged from ac-checkboxes.sh, which accepts the indented forms.
-  if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}##[[:space:]]'; then
-    # Strip leading indent, the '##' marker, surrounding whitespace. Case is
-    # preserved: the exemption heading is matched case-sensitively below.
-    # CommonMark also allows an optional closing sequence ('## Test Plan ##'):
-    # a run of '#' preceded by whitespace at end of line. Leaving it attached
-    # made the heading text 'Test Plan ##', so the line fell through to the
-    # '*)' default (STATE=other) and its unchecked boxes escaped Stage 1
-    # entirely. The leading-whitespace requirement keeps '## C#' intact, which
-    # CommonMark treats as content rather than a closing sequence.
-    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}##[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
+  #
+  # Level 1 counts as a section boundary too. Matching '##' alone meant a level-1
+  # heading did not end the current section: a body with '## Test plan' followed
+  # by '# Notes' stayed in the testplan state, so unchecked boxes under Notes
+  # were failed as in-scope Test Plan items. '#{1,2}' also lets a level-1
+  # '# Acceptance criteria' open a section, which is the gate's intent.
+  # Level 3+ must NOT match, because sub-headings inside a section are expected;
+  # '#{1,2}[[:space:]]' excludes them naturally, since for '### Foo' the third
+  # '#' is not whitespace.
+  if printf '%s' "$line" | grep -qE '^[[:space:]]{0,3}#{1,2}[[:space:]]'; then
+    # Strip leading indent, the heading marker, surrounding whitespace, and any
+    # optional ATX closing sequence. Case is preserved: the exemption heading is
+    # matched case-sensitively below.
+    #
+    # The closing-hash strip requires at least one space before the run of '#'
+    # because that is what makes it a *closing sequence* rather than heading
+    # text: CommonMark renders '## Test Plan ##' identically to '## Test Plan',
+    # but '## C#' is a heading whose text really does end in '#'. Without this,
+    # '## Test Plan ##' fell through to the "other" state and its unchecked
+    # boxes bypassed the gate entirely — the same class of silent bypass the
+    # indent handling above was added to close.
+    heading="$(printf '%s' "$line" | sed -E 's/^[[:space:]]{0,3}#{1,2}[[:space:]]+//; s/[[:space:]]+#+[[:space:]]*$//; s/[[:space:]]*$//')"
 
-    # Case-insensitive match for in-scope sections
-    heading_lower="$(printf '%s' "$heading" | tr 'A-Z' 'a-z')"
+    # Case-insensitive match for in-scope sections.
+    # ASCII ranges deliberately, not '[:upper:]'/'[:lower:]' (shellcheck
+    # SC2018/SC2019): the headings matched below are fixed ASCII keywords, and
+    # locale-aware folding would map 'I' to a dotless 'ı' under a Turkish
+    # locale, so '## ACCEPTANCE CRITERIA' would stop matching. ASCII folding
+    # keeps the gate locale-independent, which matters for a CI check.
+    heading_lower="$(printf '%s' "$heading" | LC_ALL=C tr 'A-Z' 'a-z')"
 
     case "$heading_lower" in
       "acceptance criteria")
@@ -247,7 +318,19 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   fi
 
   # --- unchecked box detection (`- [ ]` with optional leading whitespace) ---
-  if printf '%s' "$line" | grep -qE '^[[:space:]]*-[[:space:]]\[ \]'; then
+  # All three CommonMark bullet markers count. GitHub renders `* [ ]` and
+  # `+ [ ]` as task-list items exactly like `- [ ]`, so matching only `-` let an
+  # unchecked criterion written with either of the other two markers through the
+  # gate unseen — the same silent-bypass class as the heading handling above.
+  #
+  # The gap after the marker is 1-4 whitespace, not exactly 1. CommonMark lets a
+  # list item's content be indented up to four columns past its marker, so
+  # '-  [ ] item' renders as a real checkbox on GitHub; requiring a single space
+  # let that form bypass the gate. Four is the upper bound on purpose: at five
+  # the content becomes an indented code block relative to the marker and no
+  # longer renders as a task item, so matching further would fail PRs over
+  # inert sample text.
+  if printf '%s' "$line" | grep -qE '^[[:space:]]*[-*+][[:space:]]{1,4}\[ \]'; then
     case "$STATE" in
       ac|testplan|malformed_postmerge)
         HAS_UNCHECKED_INSCOPE=1

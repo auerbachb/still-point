@@ -1,5 +1,14 @@
 on:
-  pull_request: {}
+  # `edited` is load-bearing, not decorative. The gate reads the PR *body*, and
+  # the documented way to clear a failure is to tick the boxes or add a tracking
+  # issue — both body-only edits. Under the default activity types
+  # (opened/synchronize/reopened) such an edit never re-runs the check, so a
+  # failed required gate would stay red until an unrelated push happened to
+  # arrive. `ready_for_review` covers a draft whose body was written before it
+  # was marked ready. Listing `types` overrides the defaults, so the three
+  # default events must be named explicitly here too.
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
 
 permissions:
   contents: read

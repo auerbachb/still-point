@@ -216,15 +216,19 @@ final class AppViewModel {
         } catch let apiError as APIError where apiError.status == 401 && apiError.code == "TOKEN_EXPIRED" {
             currentView = .auth
             authStatusMessage = apiError.message
-            syncWidgetData()
+            syncWidgetData(signedOutCause: .unauthorized)
         } catch let apiError as APIError {
             currentView = .auth
             authStatusMessage = apiError.message
-            syncWidgetData()
+            // #671: only a 401 proves we're signed out. A 500 (or any other server
+            // error) must not wipe the widget's stored week.
+            syncWidgetData(signedOutCause: apiError.status == 401 ? .unauthorized : .serverError)
         } catch {
             currentView = .auth
             authStatusMessage = "Connection failed. Please try again."
-            syncWidgetData()
+            // #671: an unreachable server is not a sign-out — keep the last known
+            // history so a cold start with no network still renders the real week.
+            syncWidgetData(signedOutCause: .unreachable)
         }
         // #526: clear per-account unlock state on any unauthenticated redirect so the
         // next sign-in always re-qualifies (mirrors clearOnLogout called by didLogout).
@@ -674,7 +678,11 @@ final class AppViewModel {
 
     /// Persist a widget snapshot to the App Group container and reload timelines.
     /// Called from auth + session-completion flows; no extra API calls.
-    private func syncWidgetData() {
+    ///
+    /// `signedOutCause` distinguishes a real sign-out (wipe the shared blob) from
+    /// merely failing to reach the server at cold start — see #671 and
+    /// `WidgetDataStore.shouldClearStoredSnapshot(on:)`.
+    private func syncWidgetData(signedOutCause: WidgetDataStore.SignedOutCause = .signedOut) {
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
@@ -686,8 +694,12 @@ final class AppViewModel {
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)
-        } else {
+        } else if WidgetDataStore.shouldClearStoredSnapshot(on: signedOutCause) {
             WidgetDataStore.clear()
+            // #671: the next sign-in must re-backfill the week. Without this the
+            // once-per-account-per-day throttle below would suppress the fetch for
+            // the rest of the day, leaving the row blank on a sign-out/sign-in.
+            widgetHistoryRefreshKey = nil
         }
         WidgetTimelineReloader.reloadHabitWidget()
     }
@@ -709,7 +721,9 @@ final class AppViewModel {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
               let user = currentUser else { return }
         // Throttle: `/api/sessions` returns the full history, so skip the re-fetch
-        // when we've already backfilled for this account today.
+        // when we've already backfilled for this account today. `syncWidgetData`
+        // resets the key whenever it clears the stored snapshot (#671), so a
+        // sign-out/sign-in always re-backfills rather than showing a blank row.
         let refreshKey = "\(user.id)|\(WidgetDataStore.localDayString(Date()))"
         guard widgetHistoryRefreshKey != refreshKey else { return }
         widgetHistoryRefreshKey = refreshKey
@@ -733,6 +747,11 @@ final class AppViewModel {
             let today = WidgetDataStore.localDayString(now)
             let doneToday = completed.primary.contains(today)
             let secondDone = completed.second.contains(today)
+            // #671: keep the server-computed streak (the same number the app and
+            // web history show) instead of discarding it — it's the only source
+            // that knows about days older than the widget's trailing-7 row. It is
+            // anchored onto a day, so it can only ever extend a run both rows
+            // already corroborate (#684 day-credit rule: either track keeps a day).
             let snapshot = WidgetDataStore.makeSnapshot(
                 user: current,
                 primaryDoneToday: primaryDoneToday,
@@ -740,7 +759,9 @@ final class AppViewModel {
                 practiceDoneToday: doneToday,
                 now: now,
                 completedPracticeDates: completed.primary,
-                secondCompletedPracticeDates: completed.second
+                secondCompletedPracticeDates: completed.second,
+                serverStreak: result.stats.streak,
+                serverStreakDate: WidgetDataStore.serverStreakAnchorDate(from: result.sessions)
             )
             WidgetDataStore.save(snapshot)
             WidgetTimelineReloader.reloadHabitWidget()
