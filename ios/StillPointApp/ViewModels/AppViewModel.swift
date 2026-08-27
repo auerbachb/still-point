@@ -108,8 +108,13 @@ final class AppViewModel {
     /// #240: per-track "completed a standard sit today", drives the Home badges.
     var primaryDoneToday = false
     var secondDoneToday = false
-    /// Any counted practice today (standard primary, quick, or breath) for the widget.
+    /// Any counted Track One practice today (standard primary, quick, or breath)
+    /// for the widget. Deliberately separate from `primaryDoneToday`: the Home
+    /// badges are server-derived, while this drives the widget's weekday row.
     var practiceDoneToday = false
+    /// #684: the Track Two equivalent — a second-track standard sit today. Feeds
+    /// the widget's second weekday row without touching the Home badge above.
+    var secondPracticeDoneToday = false
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -336,6 +341,7 @@ final class AppViewModel {
         primaryDoneToday = false
         secondDoneToday = false
         practiceDoneToday = false
+        secondPracticeDoneToday = false
     }
 
     func beginSession(type: SessionType = .standard, track: Track = .primary) {
@@ -361,6 +367,7 @@ final class AppViewModel {
         let prior = WidgetDataStore.load()
         if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
             practiceDoneToday = false
+            secondPracticeDoneToday = false
         }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -374,11 +381,23 @@ final class AppViewModel {
             if primaryDoneToday {
                 practiceDoneToday = true
             }
+            if secondDoneToday {
+                secondPracticeDoneToday = true
+            }
         } catch {
             // Non-fatal: fail closed so stale "done today" badges do not leak.
+            // Only the server-derived Home badges are cleared. The widget
+            // practice flags are local truth — a sit finished on this device,
+            // possibly offline and still queued for sync — and a failed status
+            // request is not the server contradicting them, just an absent
+            // answer. Clearing them here (and persisting that at the
+            // `syncWidgetData()` below) dropped a mark the user had already
+            // earned, and could break the day's streak until sync succeeded.
+            // Note the success path above only ever raises these flags, never
+            // lowers them; the failure path must not be the one exception.
+            // Midnight rollover is already handled at the top of this method.
             primaryDoneToday = false
             secondDoneToday = false
-            practiceDoneToday = false
         }
         syncWidgetData()
         refreshWidgetWeekHistory()
@@ -432,7 +451,7 @@ final class AppViewModel {
                 ownerUserId: ownerUserId,
                 thoughts: []
             )
-            markPracticeDoneToday()
+            markPracticeDoneToday(sessionType: .breath, track: .primary)
             currentView = .home
         } catch {
             print("Failed to persist breath session locally: \(error)")
@@ -551,8 +570,16 @@ final class AppViewModel {
         attentionElapsed: Double? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil
     ) {
-        if countsForWidgetPractice(sessionType: sessionType, track: track) {
-            markPracticeDoneToday()
+        // #684: every counted sit now earns widget credit on its own track — a
+        // second-track standard sit checks the Track Two row instead of being
+        // dropped, so partial two-a-day days are visible immediately.
+        // Gated on `unlockAppGate` (== the sit ran to its planned end):
+        // `endEarly()` leaves `completedNaturally` false while still setting
+        // `isComplete`, so it reaches this call site too. Crediting there would
+        // check a weekday row — and extend the streak — for a sit the user cut
+        // short.
+        if unlockAppGate {
+            markPracticeDoneToday(sessionType: sessionType, track: track)
         }
         applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
         // #526: unlock hold-cluster controls if this sit qualifies (completed + ≥ 300 s planned).
@@ -651,7 +678,10 @@ final class AppViewModel {
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
-            secondDoneToday: secondDoneToday,
+            // #684: the widget's Track Two row is driven by the practice flag, not
+            // the server-derived Home badge, so a just-finished sit checks today
+            // immediately on the fast (network-free) path.
+            secondDoneToday: secondPracticeDoneToday,
             practiceDoneToday: practiceDoneToday
         )
         if snapshot.isLoggedIn {
@@ -695,17 +725,22 @@ final class AppViewModel {
             guard !Task.isCancelled,
                   let current = currentUser, current.id == user.id else { return }
             let now = Date()
+            // #684: one completed-date set per track, so each weekday row is
+            // backfilled from that track's own sits.
             let completed = WidgetDataStore.recentCompletedPracticeDates(from: result.sessions, now: now)
             // Derive today's completion from the fetched sessions (consistent with
-            // `now`) rather than the in-memory flag, which could be stale past midnight.
-            let doneToday = completed.contains(WidgetDataStore.localDayString(now))
+            // `now`) rather than the in-memory flags, which could be stale past midnight.
+            let today = WidgetDataStore.localDayString(now)
+            let doneToday = completed.primary.contains(today)
+            let secondDone = completed.second.contains(today)
             let snapshot = WidgetDataStore.makeSnapshot(
                 user: current,
                 primaryDoneToday: primaryDoneToday,
-                secondDoneToday: secondDoneToday,
+                secondDoneToday: secondDone,
                 practiceDoneToday: doneToday,
                 now: now,
-                completedPracticeDates: completed
+                completedPracticeDates: completed.primary,
+                secondCompletedPracticeDates: completed.second
             )
             WidgetDataStore.save(snapshot)
             WidgetTimelineReloader.reloadHabitWidget()
@@ -716,19 +751,36 @@ final class AppViewModel {
         }
     }
 
-    /// Mark today as having counted practice and push an immediate widget snapshot.
+    /// Mark today as done on the completed sit's own track and push an immediate
+    /// widget snapshot, so that session's weekday row checks today right away
+    /// rather than waiting for the other session (#684).
     /// Shared touchpoint with #590 completion-handler work — rebase carefully.
-    private func markPracticeDoneToday() {
-        practiceDoneToday = true
-        syncWidgetData()
-    }
-
-    private func countsForWidgetPractice(sessionType: SessionType, track: Track) -> Bool {
+    private func markPracticeDoneToday(sessionType: SessionType, track: Track) {
         switch sessionType {
         case .quick, .breath:
-            return true
+            // Quick and breath sits are Track One practice whichever track the
+            // user launched them from — they have no second-track counterpart.
+            practiceDoneToday = true
         case .standard:
-            return track == .primary
+            if track == .second {
+                secondPracticeDoneToday = true
+            } else {
+                practiceDoneToday = true
+            }
         }
+        // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay
+        // server-derived — this flag is the widget's own fast, network-free
+        // path, and the two are refreshed from different sources.
+        //
+        // Drop any in-flight `refreshWidgetWeekHistory()` fetch first (same
+        // pattern as `didLogout()`): a `getSessions()` call that started before
+        // this sit finished returns without it, and its unconditional
+        // `WidgetDataStore.save` would clobber the snapshot written just below,
+        // un-checking the row we are here to check. Clearing the throttle key
+        // lets the next `refreshTracksDoneToday()` re-fetch and backfill from
+        // history once `returnHome()` has flushed the sit to the server.
+        widgetHistoryTask?.cancel()
+        widgetHistoryRefreshKey = nil
+        syncWidgetData()
     }
 }
