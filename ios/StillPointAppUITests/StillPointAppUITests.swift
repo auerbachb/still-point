@@ -354,6 +354,14 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(submitButton.isHittable, "Submit should remain reachable with keyboard visible")
     }
 
+    /// Offline launch with *nothing cached locally* — a first run in a dead zone.
+    ///
+    /// #665 made a dropped connection stop signing the user out, but only where
+    /// there is a local identity to fall back on. `resetStore: true` wipes the
+    /// session artifacts, and since #665 that includes the cached `UserDTO`, so
+    /// this launch genuinely has no idea who the user is: sign-in with a
+    /// connection message stays the only honest destination. The cached-identity
+    /// counterpart is device-manual (Airplane Mode matrix).
     @MainActor
     func testLaunchOfflineShowsUserVisibleMessage() throws {
         let app = makeApp(

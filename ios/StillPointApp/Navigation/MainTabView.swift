@@ -41,6 +41,16 @@ struct MainTabView: View {
                 .tag(4)
         }
         .tint(SPColor.green)
+        // #665: shown across every tab while the app runs from cached identity and
+        // state; it clears the moment a `me()` succeeds. Scoped to the tabbed
+        // shell on purpose — an active sit stays free of chrome.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if appVM.isOfflineMode {
+                OfflineIndicatorView()
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: appVM.isOfflineMode)
         .onAppear {
             Self.configureTabBarAppearance()
         }

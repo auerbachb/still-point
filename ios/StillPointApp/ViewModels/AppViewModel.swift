@@ -77,6 +77,10 @@ final class AppViewModel {
     /// app-gate pill) can navigate to a tab. 0 = Home … 4 = Settings.
     var selectedTab: Int = AppViewModel.defaultSelectedTab()
     var currentUser: UserDTO?
+    /// #665: true while the app is running from its local copy of identity and
+    /// state because the server could not be reached. Drives the offline
+    /// indicator; any successful `me()` clears it.
+    var isOfflineMode = false
     var isLoading = true
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
@@ -195,7 +199,7 @@ final class AppViewModel {
 
         do {
             if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
-                currentUser = user
+                applyAuthenticatedUser(user)
                 resetTrackCompletionBadges()
                 currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
                 authStatusMessage = nil
@@ -208,33 +212,130 @@ final class AppViewModel {
                 await consumePendingSessionDeepLinkIfNeeded()
                 await consumePendingLogReasonIfNeeded()
                 return
-            } else {
-                currentView = .auth
-                authStatusMessage = nil
-                syncWidgetData()
             }
-        } catch let apiError as APIError where apiError.status == 401 && apiError.code == "TOKEN_EXPIRED" {
-            currentView = .auth
-            authStatusMessage = apiError.message
-            syncWidgetData(signedOutCause: .unauthorized)
-        } catch let apiError as APIError {
-            currentView = .auth
-            authStatusMessage = apiError.message
-            // #671: only a 401 proves we're signed out. A 500 (or any other server
-            // error) must not wipe the widget's stored week.
-            syncWidgetData(signedOutCause: apiError.status == 401 ? .unauthorized : .serverError)
+            // `me()` swallows a 401 that is *not* `TOKEN_EXPIRED` and returns nil:
+            // the server answered, and the answer was "no session". Authoritative.
+            applySignedOut(cause: .signedOut, message: nil)
         } catch {
-            currentView = .auth
-            authStatusMessage = "Connection failed. Please try again."
-            // #671: an unreachable server is not a sign-out — keep the last known
-            // history so a cold start with no network still renders the real week.
-            syncWidgetData(signedOutCause: .unreachable)
+            // #665: a failed request is not a sign-out. `OfflineAuth` makes that
+            // call once, in the taxonomy #676 gave the widget, so the app and the
+            // widget can never disagree about what "signed out" means.
+            let cachedUser = CachedIdentityStore.load()
+            let outcome = OfflineAuth.outcome(for: error, hasCachedIdentity: cachedUser != nil)
+            // Matching on the pair keeps the cached user's presence and the
+            // outcome from drifting apart: without an identity to render there is
+            // nothing to fall back to, whatever the outcome says.
+            switch (outcome, cachedUser) {
+            case let (.offline(cause), .some(user)):
+                await enterOfflineMode(user: user, cause: cause)
+                lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                return
+            case (.offline, .none), (.signedOut, _):
+                applySignedOut(cause: outcome.cause, message: Self.authStatusMessage(for: error))
+            }
         }
-        // #526: clear per-account unlock state on any unauthenticated redirect so the
-        // next sign-in always re-qualifies (mirrors clearOnLogout called by didLogout).
-        // The success path returns early above; only auth-redirect branches reach here.
-        trackingControlPrefsManager.clearOnLogout()
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+    }
+
+    /// Status line for a route to sign-in. Unchanged from the pre-#665 behavior:
+    /// whatever the server said, else the generic connection copy.
+    private static func authStatusMessage(for error: Error) -> String? {
+        (error as? APIError)?.message ?? "Connection failed. Please try again."
+    }
+
+    /// Single place a server-confirmed user is adopted — in memory *and* in the
+    /// local copy that survives a launch with no network (#665).
+    private func applyAuthenticatedUser(_ user: UserDTO) {
+        currentUser = user
+        CachedIdentityStore.save(user)
+        isOfflineMode = false
+    }
+
+    /// Route to sign-in.
+    ///
+    /// Local state — the cached identity and the per-account tracking unlock — is
+    /// torn down only for a cause authoritative enough to prove the session is
+    /// over, which is the same predicate guarding the widget's stored week (#676).
+    /// Before #665 every failure path ran this teardown, so a dropped connection
+    /// wiped state the server never contradicted.
+    private func applySignedOut(cause: WidgetDataStore.SignedOutCause, message: String?) {
+        currentUser = nil
+        isOfflineMode = false
+        currentView = .auth
+        authStatusMessage = message
+        if CachedIdentityStore.clearIfAuthoritative(on: cause) {
+            // #526: reset account-scoped unlock so the next sign-in re-qualifies
+            // (mirrors the clearOnLogout called by didLogout).
+            trackingControlPrefsManager.clearOnLogout()
+        }
+        syncWidgetData(signedOutCause: cause)
+    }
+
+    /// #665: run the app from what the device already knows.
+    ///
+    /// Mirrors the success path minus the parts that need the server to be
+    /// believed. `refreshTracksDoneToday()` is still called: it fails closed on its
+    /// own, and it is what pushes a fresh widget snapshot. Push registration and
+    /// the buddy-invite handoff are deliberately skipped — both are doomed without
+    /// a network, and consuming a pending invite here would burn the token on a
+    /// request that cannot succeed. `refreshAfterReconnect()` picks both up.
+    private func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
+        currentUser = user
+        isOfflineMode = true
+        resetTrackCompletionBadges()
+        currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
+        // Not an error the user must act on — the offline indicator says it instead.
+        authStatusMessage = nil
+        // Paint from local state immediately. Nothing here may `await` a request we
+        // already know is failing: `checkAuth`'s `defer` only drops the cold-start
+        // overlay once this returns, so on flaky wifi (as opposed to Airplane Mode,
+        // which fails instantly) a blocking call would hold the launch for a full
+        // URLSession timeout — the offline launch has to be fast, not just correct.
+        //
+        // We are signed in, so this saves rather than clears — but the real cause is
+        // passed rather than the `.signedOut` default so that if the snapshot ever
+        // did come back logged-out, it could not wipe the widget's week on a failure
+        // the server never confirmed (#676).
+        syncWidgetData(signedOutCause: cause)
+        // Local-only deep links still route; the buddy invite is network-bound.
+        await consumePendingSessionDeepLinkIfNeeded()
+        await consumePendingLogReasonIfNeeded()
+        // Fire-and-forget: if connectivity is actually back by the time this runs,
+        // the Home badges and widget history catch up on their own; if not, it fails
+        // closed on its own without having delayed anything.
+        Task { await refreshTracksDoneToday() }
+    }
+
+    /// #665: reconcile with the server once connectivity returns.
+    ///
+    /// Deliberately narrow. It refreshes identity and today's state *in place* and
+    /// never re-routes on success — re-running `checkAuth()` here would flash the
+    /// cold-start overlay and send the user back to Home, which is exactly the
+    /// user-visible reset offline-first exists to avoid (and would eject someone
+    /// mid-sit). Only an authoritative rejection moves anyone to sign-in.
+    ///
+    /// The queued-sit upload is the other half and already exists (#557):
+    /// `NetworkReachabilityMonitor` flushes the write queue on the same transition.
+    func refreshAfterReconnect() async {
+        guard currentUser != nil, currentView != .auth else { return }
+        do {
+            guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+                applySignedOut(cause: .signedOut, message: nil)
+                return
+            }
+            applyAuthenticatedUser(user)
+            PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
+            hydrateNotificationSuppressionPreference()
+            await refreshTracksDoneToday()
+            await consumePendingBuddyInviteIfNeeded()
+        } catch let apiError as APIError where apiError.status == 401 {
+            // The cached identity outlived the server session — the accepted cost
+            // of sitting offline on a stale copy. Sign in again, now, rather than
+            // having been signed out back when the network dropped.
+            applySignedOut(cause: .unauthorized, message: apiError.message)
+        } catch {
+            // Still no usable answer: stay on local state, say nothing.
+        }
     }
 
     private func viewSlug(_ view: AppView) -> String {
@@ -286,7 +387,7 @@ final class AppViewModel {
     }
 
     func didLogin(user: UserDTO) {
-        currentUser = user
+        applyAuthenticatedUser(user)
         resetTrackCompletionBadges()
         currentView = .home
         // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
@@ -317,7 +418,10 @@ final class AppViewModel {
 
     func applySettingsUser(_ user: UserDTO) {
         guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return }
-        currentUser = user
+        // Server-confirmed (a settings PATCH round-tripped), so the local copy is
+        // refreshed too — otherwise a rename or track opt-in would vanish on the
+        // next offline launch (#665).
+        applyAuthenticatedUser(user)
     }
 
     func didLogout() {
@@ -326,6 +430,12 @@ final class AppViewModel {
         Task { @MainActor in
             try? await SessionSyncCoordinator.shared.clearQueue()
             currentUser = nil
+            isOfflineMode = false
+            // #665: a real sign-out is the one thing that must take the local copy
+            // of identity with it. `APIClient.logout()` also clears it (in a
+            // `defer`, so an offline sign-out still does), but didLogout is reachable
+            // on its own — belt and braces rather than a single fragile path.
+            CachedIdentityStore.clear()
             pendingBuddyInviteToken = nil
             pendingSessionDeepLink = nil
             pendingLogReasonDate = nil
@@ -356,7 +466,7 @@ final class AppViewModel {
     func enableDualTrack() async {
         do {
             let updated = try await APIClient.shared.enableDualTrack()
-            currentUser = updated
+            applyAuthenticatedUser(updated)
             await refreshTracksDoneToday()
         } catch {
             print("Failed to enable dual track: \(error)")
@@ -618,7 +728,7 @@ final class AppViewModel {
             }
         }
         if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
-            currentUser = user
+            applyAuthenticatedUser(user)
         }
         await refreshTracksDoneToday()
         await consumePendingBuddyInviteIfNeeded()
