@@ -623,27 +623,36 @@ final class AppViewModel {
         authGeneration &+= 1
         // Cancels the widget history backfill and clears its key too.
         cancelIdentityScopedTasks()
+        // The teardown is synchronous for the same reason. Deferring it until after
+        // the `clearQueue()` await left `currentUser` set across a suspension point,
+        // so a `checkAuth()` starting inside that window (scene activation) could
+        // re-adopt the account and route back into the authenticated UI — and the
+        // deferred teardown would then wipe *that* session's state. A generation
+        // guard inside the task would not have closed it: re-adopting the same
+        // account is deliberately not a transition, so the generation would not have
+        // moved. Signing out is local truth and needs nothing from the queue flush,
+        // so it lands now and the flush follows on its own.
+        currentUser = nil
+        isOfflineMode = false
+        // #665: a real sign-out is the one thing that must take the local copy
+        // of identity with it. `APIClient.logout()` also clears it (in a
+        // `defer`, so an offline sign-out still does), but didLogout is reachable
+        // on its own — belt and braces rather than a single fragile path.
+        CachedIdentityStore.clear()
+        pendingBuddyInviteToken = nil
+        pendingSessionDeepLink = nil
+        pendingLogReasonDate = nil
+        buddyInviteError = nil
+        authStatusMessage = nil
+        resetTrackCompletionBadges()
+        LastAuthProvider.resetPersisted()
+        currentView = .auth
+        SessionNotificationSuppressionController.clearSuppressPreference()
+        // #526: reset account-scoped tracking unlock so the next sign-in re-qualifies.
+        trackingControlPrefsManager.clearOnLogout()
+        syncWidgetData()
         Task { @MainActor in
             try? await SessionSyncCoordinator.shared.clearQueue()
-            currentUser = nil
-            isOfflineMode = false
-            // #665: a real sign-out is the one thing that must take the local copy
-            // of identity with it. `APIClient.logout()` also clears it (in a
-            // `defer`, so an offline sign-out still does), but didLogout is reachable
-            // on its own — belt and braces rather than a single fragile path.
-            CachedIdentityStore.clear()
-            pendingBuddyInviteToken = nil
-            pendingSessionDeepLink = nil
-            pendingLogReasonDate = nil
-            buddyInviteError = nil
-            authStatusMessage = nil
-            resetTrackCompletionBadges()
-            LastAuthProvider.resetPersisted()
-            currentView = .auth
-            SessionNotificationSuppressionController.clearSuppressPreference()
-            // #526: reset account-scoped tracking unlock so the next sign-in re-qualifies.
-            trackingControlPrefsManager.clearOnLogout()
-            syncWidgetData()
         }
     }
 
