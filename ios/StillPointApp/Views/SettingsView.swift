@@ -150,6 +150,11 @@ struct SettingsView: View {
                         isUpdatingAttentionTracking = true
                         Task {
                             defer { isUpdatingAttentionTracking = false }
+                            // Captured at the very top, before any await —
+                            // including a permission prompt. A sign-out during that
+                            // prompt must not let this toggle's intent be applied to
+                            // the replacement account (#665).
+                            let identityAtStart = appVM.identityGeneration
                             if newValue {
                                 let capability = await AttentionTrackingCapability.requestCameraAccessIfNeeded()
                                 switch capability {
@@ -166,9 +171,10 @@ struct SettingsView: View {
                                 }
                             }
                             do {
-                                // Captured before the await: a response that outlived a
-                                // sign-out must not be applied to the next session (#665).
-                                let identityAtStart = appVM.identityGeneration
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
                                 appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
@@ -197,6 +203,11 @@ struct SettingsView: View {
                         isUpdatingAmbientSound = true
                         Task {
                             defer { isUpdatingAmbientSound = false }
+                            // Captured at the very top, before any await —
+                            // including a permission prompt. A sign-out during that
+                            // prompt must not let this toggle's intent be applied to
+                            // the replacement account (#665).
+                            let identityAtStart = appVM.identityGeneration
                             if newValue {
                                 let granted = await AVAudioApplication.requestRecordPermission()
                                 if !granted {
@@ -206,9 +217,10 @@ struct SettingsView: View {
                                 }
                             }
                             do {
-                                // Captured before the await: a response that outlived a
-                                // sign-out must not be applied to the next session (#665).
-                                let identityAtStart = appVM.identityGeneration
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
                                 appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
@@ -250,10 +262,16 @@ struct SettingsView: View {
                         isUpdating = true
                         Task {
                             defer { isUpdating = false }
+                            // Captured at the very top, before any await —
+                            // including a permission prompt. A sign-out during that
+                            // prompt must not let this toggle's intent be applied to
+                            // the replacement account (#665).
+                            let identityAtStart = appVM.identityGeneration
                             do {
-                                // Captured before the await: a response that outlived a
-                                // sign-out must not be applied to the next session (#665).
-                                let identityAtStart = appVM.identityGeneration
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
                                 appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {
@@ -292,10 +310,16 @@ struct SettingsView: View {
                         isUpdatingAphorisms = true
                         Task {
                             defer { isUpdatingAphorisms = false }
+                            // Captured at the very top, before any await —
+                            // including a permission prompt. A sign-out during that
+                            // prompt must not let this toggle's intent be applied to
+                            // the replacement account (#665).
+                            let identityAtStart = appVM.identityGeneration
                             do {
-                                // Captured before the await: a response that outlived a
-                                // sign-out must not be applied to the next session (#665).
-                                let identityAtStart = appVM.identityGeneration
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
                                 appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart)
                             } catch {

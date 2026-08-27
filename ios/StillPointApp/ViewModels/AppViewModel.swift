@@ -189,9 +189,15 @@ final class AppViewModel {
         // suspended would otherwise let the late response re-adopt the old account
         // and route back into the authenticated UI (#665).
         let generation = authGeneration
+        // Overlapping checks are possible (cold start immediately followed by a
+        // scene activation). Only the newest may drop the overlay: an older check
+        // finishing first would otherwise clear it while the newest is still
+        // awaiting `me()`, briefly exposing an intermediate or stale route.
+        activeAuthCheckID &+= 1
+        let checkID = activeAuthCheckID
         isLoading = true
         defer {
-            isLoading = false
+            if checkID == activeAuthCheckID { isLoading = false }
             // Diagnostic for issue #266 / #276. Gated on UI-test mode so we
             // don't leak PII in production logs. Switched to os_log
             // (Logger.notice) because `print()` from the app process is not
@@ -214,6 +220,12 @@ final class AppViewModel {
                 PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
                 hydrateNotificationSuppressionPreference()
                 await refreshTracksDoneToday()
+                // The guard above only covered adopting the response. The refresh is
+                // another suspension point, and everything below it is an
+                // identity-scoped side effect — the widget snapshot and three
+                // non-idempotent deep-link/invite consumptions — so none of it may
+                // run for a session that has since been replaced.
+                guard generation == authGeneration else { return }
                 syncWidgetData()
                 await consumePendingBuddyInviteIfNeeded()
                 await consumePendingSessionDeepLinkIfNeeded()
@@ -266,6 +278,11 @@ final class AppViewModel {
     /// rather than re-reading `currentUser` (which cannot distinguish "same user
     /// throughout" from "signed out and back in").
     private var authGeneration: Int = 0
+
+    /// Identifies the newest in-flight `checkAuth()`. Separate from
+    /// `authGeneration`: this tracks *which check is latest* (so only it may drop
+    /// the loading overlay), not *which identity is live*.
+    private var activeAuthCheckID: Int = 0
 
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
