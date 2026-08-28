@@ -241,7 +241,15 @@ export default function StillPoint() {
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
-  const loginRefreshCancelled = useRef(false);
+  // #666: monotonic session generation. Every async path that adopts a user
+  // captures the generation it started in and drops its result if a sign-out —
+  // or a *different* sign-in — happened in the meantime. A plain "cancelled"
+  // boolean is not enough here: it resets on the next login, so a callback from
+  // the previous session could still land and be adopted as the new one.
+  // Without this the cache effect below would not merely repopulate React state
+  // after a logout, it would persist the signed-out account as the offline
+  // identity, surviving a reload.
+  const sessionGeneration = useRef(0);
   const isMobile = useIsMobile();
   // #666: running the app from the locally cached identity because the server
   // could not be reached. Only a *successful* `/api/auth/me` clears it, mirroring
@@ -256,19 +264,39 @@ export default function StillPoint() {
     resetTrackingUnlockOnLogout();
   };
 
+  // #666: re-read the user from the server after an action that moves account
+  // state (a completed sit advancing the day number, say). The result is dropped
+  // if the session changed while the request was in flight — see
+  // `sessionGeneration`. One helper rather than three copies of the guard, so a
+  // future call site cannot adopt a user without it.
+  const refreshUserFromServer = useCallback(() => {
+    const generation = sessionGeneration.current;
+    void api
+      .me()
+      .then(({ user: u }) => {
+        if (generation === sessionGeneration.current) setUser(u);
+      })
+      .catch(() => {});
+  }, []);
+
   // #666: the single place a server-confirmed user reaches the local copy that
   // survives a reload with no network — the web analogue of the iOS
   // `applyAuthenticatedUser`. An effect rather than a call at each `setUser`
   // site, so every adoption path (bootstrap, sign-in, settings PATCH, buddy
   // completion) keeps the cache tracking the account without a call site being
   // able to forget. Sign-out paths set `user` to null and clear the cache
-  // explicitly, so this never resurrects a signed-out identity.
+  // explicitly; every *asynchronous* adoption is gated on `sessionGeneration`
+  // above, so a response still in flight when the user signs out cannot reach
+  // this effect and resurrect a signed-out identity.
   useEffect(() => {
     if (user) saveCachedUser(user);
   }, [user]);
 
   useEffect(() => {
     let cancelled = false;
+    // The reconnect path re-runs this effect on a live, signed-in screen, so a
+    // sign-out can land between the request and its response (#666).
+    const generation = sessionGeneration.current;
 
     /** Apply a failed `me()` through the shared offline-auth decision (#666). */
     function applyFailure(failure: MeFailure) {
@@ -317,7 +345,7 @@ export default function StillPoint() {
           const data = await res.json();
           // Re-checked after the second await: an unmount between the response
           // and its body must not adopt a user or write the cache.
-          if (cancelled) return;
+          if (cancelled || generation !== sessionGeneration.current) return;
           const freshUser = data?.user ?? null;
           if (freshUser) {
             setUser(freshUser);
@@ -354,6 +382,28 @@ export default function StillPoint() {
     if (!isOnline || !runningFromCache) return;
     setAuthRetryKey((prev) => prev + 1);
   }, [isOnline, runningFromCache]);
+
+  // #666: `navigator.onLine` reports link state, not reachability, so the
+  // transition above never fires for the failures that leave it pinned at
+  // true — a captive portal, a DNS failure, a 5xx. Those sessions would hold the
+  // offline strip until a manual reload. Re-checking when the user returns to
+  // the tab covers them without polling: it is user-driven so it cannot spin,
+  // and coming back to the app is exactly when a stale day number would show.
+  // Only while running from cache, for the same reason as above. A double fire
+  // (visibility *and* focus) is harmless — the bootstrap effect's cleanup
+  // cancels the superseded request.
+  useEffect(() => {
+    if (!runningFromCache) return;
+    const recheck = () => {
+      if (document.visibilityState === "visible") setAuthRetryKey((prev) => prev + 1);
+    };
+    document.addEventListener("visibilitychange", recheck);
+    window.addEventListener("focus", recheck);
+    return () => {
+      document.removeEventListener("visibilitychange", recheck);
+      window.removeEventListener("focus", recheck);
+    };
+  }, [runningFromCache]);
 
   // Redirect legacy `?view=` deep links and unknown tab slugs to their routes.
   useEffect(() => {
@@ -468,22 +518,26 @@ export default function StillPoint() {
     // Intentionally do not navigate: keep the current URL so deep-link state
     // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
     // buddy-invite / ?view= effects below can still consume it.
-    loginRefreshCancelled.current = false;
+    sessionGeneration.current += 1;
+    const generation = sessionGeneration.current;
     setUser(userData);
     setOverlay(null);
     // #238: login returns raw DB fields; missed-day gap detection only runs in
     // GET /api/auth/me. Re-fetch silently so a returning user with a 2+ day gap
     // enters the recovery ramp before their first sit of this session.
-    // Guard with loginRefreshCancelled so a slow response can't repopulate user
+    // Guard on the session generation so a slow response can't repopulate user
     // state after an explicit logout before the /api/auth/me response arrives.
     void fetch(`/api/auth/me?date=${todayLocalIsoDate()}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (!loginRefreshCancelled.current && data?.user) setUser(data.user); })
+      .then((data) => {
+        if (generation === sessionGeneration.current && data?.user) setUser(data.user);
+      })
       .catch(() => {});
   };
 
   const handleLogout = () => {
-    loginRefreshCancelled.current = true;
+    // Invalidates every user adoption already in flight (#666).
+    sessionGeneration.current += 1;
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
@@ -530,7 +584,9 @@ export default function StillPoint() {
   }, []);
 
   const handleEnableDualTrack = useCallback(async () => {
+    const generation = sessionGeneration.current;
     const { user: updated } = await api.enableDualTrack();
+    if (generation !== sessionGeneration.current) return;
     setUser(updated);
     void refreshTodayTracks();
   }, [refreshTodayTracks]);
@@ -568,12 +624,9 @@ export default function StillPoint() {
       nextDuration: previewNextStandardDuration("standard", true, "primary", user),
     });
     setOverlay("complete");
-    void api
-      .me()
-      .then(({ user: u }) => setUser(u))
-      .catch(() => {});
+    refreshUserFromServer();
     void refreshTodayTracks();
-  }, [user, refreshTodayTracks]);
+  }, [user, refreshTodayTracks, refreshUserFromServer]);
 
   const handleSessionComplete = useCallback(async (data: {
     dayNumber: number;
@@ -617,10 +670,7 @@ export default function StillPoint() {
         isPendingSync = result.isPendingSync;
 
         if (data.completed && data.sessionType === "standard" && !isPendingSync) {
-          void api
-            .me()
-            .then(({ user: u }) => setUser(u))
-            .catch(() => {});
+          refreshUserFromServer();
           void refreshTodayTracks();
         } else if (data.completed && data.sessionType === "standard" && isPendingSync) {
           void refreshTodayTracks();
@@ -647,7 +697,7 @@ export default function StillPoint() {
       nextDuration: previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
     });
     setOverlay("complete");
-  }, [user, refreshTodayTracks]);
+  }, [user, refreshTodayTracks, refreshUserFromServer]);
 
   const handleSessionAbandon = useCallback(async (data: {
     dayNumber: number;
@@ -1003,10 +1053,7 @@ export default function StillPoint() {
           onReturn={() => {
             setOverlay(null);
             router.push(pathForTab(DEFAULT_TAB));
-            void api
-              .me()
-              .then(({ user: u }) => setUser(u))
-              .catch(() => {});
+            refreshUserFromServer();
           }}
           onSaveNote={completionData.clientSessionId && user ? async (text: string) => {
             const coordinator = getWebSessionSyncCoordinator();
