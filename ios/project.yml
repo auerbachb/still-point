@@ -87,7 +87,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint
         MARKETING_VERSION: "1.0.3"
-        CURRENT_PROJECT_VERSION: 26
+        CURRENT_PROJECT_VERSION: 27
         # Native Google Sign-In client IDs (#344). Empty by default so no real
         # client ID is committed; override per environment / in CI signing config.
         # GID_CLIENT_ID:           iOS OAuth client ID (xxxxx.apps.googleusercontent.com)
@@ -129,7 +129,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint.monitor
         MARKETING_VERSION: "1.0.3"
-        CURRENT_PROJECT_VERSION: 26
+        CURRENT_PROJECT_VERSION: 27
         DEVELOPMENT_TEAM: T5UU4BP6AV
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: StillPointMonitor/StillPointMonitor.entitlements
@@ -159,7 +159,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.brettonauerbach.stillpoint.widget
         MARKETING_VERSION: "1.0.3"
-        CURRENT_PROJECT_VERSION: 26
+        CURRENT_PROJECT_VERSION: 27
         DEVELOPMENT_TEAM: T5UU4BP6AV
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: StillPointWidget/StillPointWidget.entitlements
