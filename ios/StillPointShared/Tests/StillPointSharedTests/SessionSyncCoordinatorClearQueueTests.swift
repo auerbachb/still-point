@@ -8,7 +8,9 @@ import XCTest
 /// before that cleanup runs, and because the coordinator is an actor the cleanup
 /// can be stuck waiting on an in-flight `flushPending` the whole time. These cover
 /// that ordering for both the next-account and same-account cases.
-final class SessionSyncCoordinatorTests: XCTestCase {
+/// Named for the method under test: `SessionSyncCoordinatorTests` already exists in
+/// `OfflineSessionQueueTests.swift` and a second declaration breaks the test target.
+final class SessionSyncCoordinatorClearQueueTests: XCTestCase {
     private func makeEntry(owner: String, enqueuedAt: Date = Date()) -> PendingSessionEntry {
         let clientSessionId = UUID()
         return PendingSessionEntry(
@@ -93,6 +95,28 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         try await coordinator.clearQueue(ownerUserId: "", enqueuedBefore: logoutBoundary)
 
         XCTAssertEqual(try store.loadEntries().count, 1)
+    }
+
+    /// A row persisted before `enqueuedAt` existed decodes to `.distantPast`, so it
+    /// counts as pre-existing and its owner's sign-out can actually remove it.
+    /// Defaulting that decode to `Date()` would make it outlive every logout.
+    func testLegacyEntryWithoutEnqueuedAtIsTreatedAsPreExisting() async throws {
+        // Round-trips the real encoder with the key removed, rather than a
+        // hand-written fixture, so this cannot drift from the entry's coding shape.
+        // The source entry is deliberately stamped *after* the boundary: absent the
+        // key the decoded value must still come back as pre-existing.
+        let encoded = try JSONEncoder().encode([makeEntry(owner: "user-a", enqueuedAt: afterLogout)])
+        var objects = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
+        objects[0].removeValue(forKey: "enqueuedAt")
+        let stripped = try JSONSerialization.data(withJSONObject: objects)
+
+        let decoded = try JSONDecoder().decode([PendingSessionEntry].self, from: stripped)
+        XCTAssertEqual(decoded.first?.enqueuedAt, .distantPast)
+
+        let (coordinator, store) = makeCoordinator(decoded)
+        try await coordinator.clearQueue(ownerUserId: "user-a", enqueuedBefore: logoutBoundary)
+
+        XCTAssertTrue(try store.loadEntries().isEmpty)
     }
 
     /// Legacy rows decoded without an owner are left alone rather than swept up by
