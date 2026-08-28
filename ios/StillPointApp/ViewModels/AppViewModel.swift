@@ -623,6 +623,12 @@ final class AppViewModel {
         authGeneration &+= 1
         // Cancels the widget history backfill and clears its key too.
         cancelIdentityScopedTasks()
+        // Captured before the teardown clears it. The queue cleanup below is scoped
+        // to this account *and* to this moment: once `currentUser` is nil there is
+        // nothing left to scope it by, and signing back in as the same account would
+        // otherwise let the deferred delete take the new session's sits with it.
+        let signedOutUserId = currentUser?.id
+        let logoutBoundary = Date()
         // The teardown is synchronous for the same reason. Deferring it until after
         // the `clearQueue()` await left `currentUser` set across a suspension point,
         // so a `checkAuth()` starting inside that window (scene activation) could
@@ -651,8 +657,13 @@ final class AppViewModel {
         // #526: reset account-scoped tracking unlock so the next sign-in re-qualifies.
         trackingControlPrefsManager.clearOnLogout()
         syncWidgetData()
-        Task { @MainActor in
-            try? await SessionSyncCoordinator.shared.clearQueue()
+        if let signedOutUserId {
+            Task { @MainActor in
+                try? await SessionSyncCoordinator.shared.clearQueue(
+                    ownerUserId: signedOutUserId,
+                    enqueuedBefore: logoutBoundary
+                )
+            }
         }
     }
 
