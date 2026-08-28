@@ -168,9 +168,41 @@ public actor SessionSyncCoordinator {
         }
     }
 
-    /// Remove all queued entries (logout / account switch).
-    public func clearQueue() async throws {
-        try queueStore.saveEntries([])
+    /// Remove the signed-out account's queued entries (logout / account switch).
+    ///
+    /// Owner-scoped rather than a blanket wipe. `didLogout()` schedules this after
+    /// tearing the session down and routing to `.auth`, so the user can sign in —
+    /// and the next account can save a sit — while this is still pending. A
+    /// `saveEntries([])` here would delete entries that the *new* login had just
+    /// enqueued; scoping the delete to the account that signed out makes the
+    /// ordering irrelevant instead of merely unlikely. Mirrors
+    /// `flushPending(ownerUserId:)` and `pruneCompletedEntries(ownerUserId:)`.
+    ///
+    /// Scoping by owner alone is not enough, because signing back in as the *same*
+    /// account reuses the same owner id — so a sit saved after the new sign-in would
+    /// still match. This coordinator is an actor, so a cleanup scheduled at logout
+    /// can sit waiting on actor isolation while an in-flight `flushPending` blocks
+    /// on a slow network, which is what makes that window wide enough to matter. The
+    /// boundary confines the delete to rows that already existed when logout began.
+    ///
+    /// - Parameters:
+    ///   - ownerUserId: the account that signed out. Required rather than defaulted
+    ///     so a new call site cannot fall back to erasing the whole queue. Empty is
+    ///     a no-op: legacy entries decoded without an owner cannot be attributed to
+    ///     the account signing out, and deleting unattributable rows is the hazard
+    ///     this scoping exists to prevent.
+    ///   - boundary: the moment logout began. Only entries enqueued strictly before
+    ///     it are removed, so anything the next sign-in saves survives regardless of
+    ///     when this cleanup actually runs.
+    public func clearQueue(ownerUserId: String, enqueuedBefore boundary: Date) async throws {
+        guard !ownerUserId.isEmpty else { return }
+
+        var entries = try queueStore.loadEntries()
+        let before = entries.count
+        entries.removeAll { $0.ownerUserId == ownerUserId && $0.enqueuedAt < boundary }
+        if entries.count != before {
+            try queueStore.saveEntries(entries)
+        }
     }
 
     // MARK: - Private

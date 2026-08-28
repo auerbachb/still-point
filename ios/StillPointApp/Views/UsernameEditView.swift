@@ -150,8 +150,13 @@ struct UsernameEditView: View {
         defer { savingUsername = false }
 
         do {
+            // Captured before the await: a response that outlived a sign-out must
+            // not be applied to the next session (#665).
+            let identityAtStart = appVM.identityGeneration
             let updated = try await APIClient.shared.updateSettings(username: trimmed)
-            appVM.applySettingsUser(updated)
+            // If the view model discarded the response because the session changed
+            // under us, do not tell the user their username was updated (#665).
+            guard appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) else { return }
             usernameDraft = updated.username
             editingUsername = false
             usernameSuccessMessage = "Username updated"

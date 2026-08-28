@@ -148,6 +148,14 @@ struct SettingsView: View {
                         guard !isUpdatingAttentionTracking else { return }
                         guard appVM.currentUser?.attentionTrackingEnabled != newValue else { return }
                         isUpdatingAttentionTracking = true
+                        // Captured synchronously with the user's action rather than
+                        // inside the task: the body runs on a later main-actor turn,
+                        // so reading the generation there could pick up an account
+                        // that replaced this one in the gap and apply this toggle's
+                        // intent to them. Binding it here binds it to the identity
+                        // that was live when the toggle was flipped, and still covers
+                        // every later await — including the permission prompt (#665).
+                        let identityAtStart = appVM.identityGeneration
                         Task {
                             defer { isUpdatingAttentionTracking = false }
                             if newValue {
@@ -166,8 +174,17 @@ struct SettingsView: View {
                                 }
                             }
                             do {
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    attentionTrackingEnabled = !newValue
+                                }
                             } catch {
                                 attentionTrackingEnabled = !newValue
                             }
@@ -192,6 +209,14 @@ struct SettingsView: View {
                         guard !isUpdatingAmbientSound else { return }
                         guard appVM.currentUser?.ambientSoundEnabled != newValue else { return }
                         isUpdatingAmbientSound = true
+                        // Captured synchronously with the user's action rather than
+                        // inside the task: the body runs on a later main-actor turn,
+                        // so reading the generation there could pick up an account
+                        // that replaced this one in the gap and apply this toggle's
+                        // intent to them. Binding it here binds it to the identity
+                        // that was live when the toggle was flipped, and still covers
+                        // every later await — including the permission prompt (#665).
+                        let identityAtStart = appVM.identityGeneration
                         Task {
                             defer { isUpdatingAmbientSound = false }
                             if newValue {
@@ -203,8 +228,17 @@ struct SettingsView: View {
                                 }
                             }
                             do {
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    ambientSoundEnabled = !newValue
+                                }
                             } catch {
                                 ambientSoundEnabled = !newValue
                             }
@@ -242,11 +276,27 @@ struct SettingsView: View {
                         guard !isSavingSettings else { return }
                         guard appVM.currentUser?.isPublic != newValue else { return }
                         isUpdating = true
+                        // Captured synchronously with the user's action rather than
+                        // inside the task: the body runs on a later main-actor turn,
+                        // so reading the generation there could pick up an account
+                        // that replaced this one in the gap and apply this toggle's
+                        // intent to them. Binding it here binds it to the identity
+                        // that was live when the toggle was flipped (#665).
+                        let identityAtStart = appVM.identityGeneration
                         Task {
                             defer { isUpdating = false }
                             do {
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
-                                appVM.applySettingsUser(updated)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    isPublic = !newValue
+                                }
                             } catch {
                                 // Revert on failure
                                 isPublic = !newValue
@@ -281,11 +331,27 @@ struct SettingsView: View {
                         guard !isUpdatingAphorisms else { return }
                         guard appVM.currentUser?.aphorismsEnabled != newValue else { return }
                         isUpdatingAphorisms = true
+                        // Captured synchronously with the user's action rather than
+                        // inside the task: the body runs on a later main-actor turn,
+                        // so reading the generation there could pick up an account
+                        // that replaced this one in the gap and apply this toggle's
+                        // intent to them. Binding it here binds it to the identity
+                        // that was live when the toggle was flipped (#665).
+                        let identityAtStart = appVM.identityGeneration
                         Task {
                             defer { isUpdatingAphorisms = false }
                             do {
+                                // Re-checked before issuing the write: sending this would
+                                // otherwise apply the previous user's intent to the
+                                // account that replaced them.
+                                guard identityAtStart == appVM.identityGeneration else { return }
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
-                                appVM.applySettingsUser(updated)
+                                // A discarded response means the session changed; put the
+                                // toggle back rather than leaving it showing an intent that
+                                // was never applied (mirrors the catch below).
+                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                    aphorismsEnabled = !newValue
+                                }
                             } catch {
                                 // Revert on failure
                                 aphorismsEnabled = !newValue

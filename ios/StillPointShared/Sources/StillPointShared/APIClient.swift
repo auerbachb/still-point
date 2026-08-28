@@ -50,6 +50,12 @@ public actor APIClient {
     /// when the actor's instance methods are not yet available.
     private static func clearPersistedSessionArtifacts(session: URLSession) {
         _ = AuthTokenStore.clear()
+        // #665: the offline identity cache is a session artifact too. Clearing it
+        // here covers every authoritative teardown at once — sign-out (including a
+        // sign-out performed while offline, since `logout()` clears in a `defer`),
+        // account deletion, and a UI-test reset launch — so no path can leave a
+        // cached identity behind for the next launch to resurrect.
+        CachedIdentityStore.clear()
 
         let cookieStorage = session.configuration.httpCookieStorage ?? .shared
         for cookie in cookieStorage.cookies ?? [] {

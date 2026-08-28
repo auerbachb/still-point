@@ -59,7 +59,13 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         thoughts = try container.decode([PendingSessionThought].self, forKey: .thoughts)
         serverSessionId = try container.decodeIfPresent(String.self, forKey: .serverSessionId)
         sessionSynced = try container.decode(Bool.self, forKey: .sessionSynced)
-        enqueuedAt = try container.decodeIfPresent(Date.self, forKey: .enqueuedAt) ?? Date()
+        // `.distantPast`, not `Date()`: a row persisted before this field existed is
+        // by definition *older* than anything carrying a timestamp. Defaulting to
+        // "now" made such a row look newer than any later logout boundary, so
+        // `clearQueue(ownerUserId:enqueuedBefore:)` would preserve it on every
+        // sign-out — and because the decoded value is only persisted when some other
+        // operation happens to save the queue, it could survive indefinitely.
+        enqueuedAt = try container.decodeIfPresent(Date.self, forKey: .enqueuedAt) ?? .distantPast
     }
 
     public func encode(to encoder: Encoder) throws {

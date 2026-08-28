@@ -136,6 +136,15 @@ struct RootView: View {
             await appVM.checkAuth()
             await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
         }
+        // #665: connectivity returning is the read/identity half of the reconnect.
+        // The monitor already flushes the queued sits itself (#557); this refreshes
+        // who we are and today's state, in place, with no user-visible reset.
+        // The view model owns the task so signing out can cancel it, rather than the
+        // view spawning an unstructured one that outlives the session it started in.
+        .onChange(of: reachability.isConnected) { wasConnected, isConnected in
+            guard !wasConnected, isConnected else { return }
+            appVM.refreshAfterReconnectInBackground()
+        }
         .onChange(of: scenePhase) { _, phase in
             SessionIdleTimerController.syncSceneForegroundActive(
                 appVM: appVM,
