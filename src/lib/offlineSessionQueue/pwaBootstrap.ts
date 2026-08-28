@@ -23,8 +23,19 @@ export async function persistOfflineOwnerUserId(userId: string | null): Promise<
   }
 }
 
-/** Register the PWA service worker and wire reconnect flush (#558). */
-export function initWebPwaOffline(ownerUserIdProvider: () => string | null): () => void {
+/**
+ * Register the PWA service worker and wire reconnect flush (#558).
+ *
+ * `onSynced` fires after a flush that actually uploaded something. #666 needs
+ * it because reconnect starts the auth re-read and this flush independently: a
+ * `GET /api/auth/me` that wins the race returns the *pre-flush* progression, so
+ * without a nudge afterwards the day number stays one behind a sit that synced
+ * successfully — and, now that the identity is cached, stays behind a reload too.
+ */
+export function initWebPwaOffline(
+  ownerUserIdProvider: () => string | null,
+  onSynced?: () => void,
+): () => void {
   if (typeof window === "undefined" || bootstrapStarted) {
     return () => {};
   }
@@ -37,7 +48,12 @@ export function initWebPwaOffline(ownerUserIdProvider: () => string | null): () 
   const flushForCurrentUser = () => {
     const ownerUserId = ownerUserIdProvider();
     if (!ownerUserId) return;
-    void coordinator.flushPending(ownerUserId).catch(() => {});
+    void coordinator
+      .flushPending(ownerUserId)
+      .then((syncedCount) => {
+        if (syncedCount > 0) onSynced?.();
+      })
+      .catch(() => {});
   };
 
   const onOnline = () => flushForCurrentUser();

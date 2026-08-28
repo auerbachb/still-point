@@ -300,6 +300,11 @@ export default function StillPoint() {
 
     /** Apply a failed `me()` through the shared offline-auth decision (#666). */
     function applyFailure(failure: MeFailure) {
+      // Guarded here rather than at each call site so the *destructive* branch
+      // cannot outlive its session: a 401/403/404 from a bootstrap that was
+      // still in flight across a sign-out would otherwise sign out — and clear
+      // the cached identity of — whichever account replaced it.
+      if (cancelled || generation !== sessionGeneration.current) return;
       const cachedUser = loadCachedUser();
       const outcome = resolveAuthBootstrap(failure, cachedUser !== null);
 
@@ -362,7 +367,7 @@ export default function StillPoint() {
 
         applyFailure({ kind: "status", status: res.status });
       } catch {
-        if (!cancelled) applyFailure({ kind: "transport" });
+        applyFailure({ kind: "transport" });
       }
     }
 
@@ -892,7 +897,7 @@ export default function StillPoint() {
   // Logged in
   return (
     <>
-      <PwaBootstrap ownerUserId={user.id} />
+      <PwaBootstrap ownerUserId={user.id} onSynced={refreshUserFromServer} />
       <div style={{
       minHeight: "100%",
       display: "grid",
