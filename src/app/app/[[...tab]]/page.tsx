@@ -16,6 +16,10 @@ import { FriendsView } from "@/components/FriendsView";
 import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
+import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
 import { api, ApiError } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
@@ -239,6 +243,12 @@ export default function StillPoint() {
   const buddyInviteInFlight = useRef(false);
   const loginRefreshCancelled = useRef(false);
   const isMobile = useIsMobile();
+  // #666: running the app from the locally cached identity because the server
+  // could not be reached. Only a *successful* `/api/auth/me` clears it, mirroring
+  // the iOS `isOfflineMode` — `navigator.onLine` reports link state, not
+  // reachability, so it prompts a re-check and never concludes one.
+  const [runningFromCache, setRunningFromCache] = useState(false);
+  const isOnline = useOnlineStatus();
 
   const clearAccountScopedLocalState = () => {
     setTracksDoneToday({ primary: false, second: false });
@@ -246,8 +256,57 @@ export default function StillPoint() {
     resetTrackingUnlockOnLogout();
   };
 
+  // #666: the single place a server-confirmed user reaches the local copy that
+  // survives a reload with no network — the web analogue of the iOS
+  // `applyAuthenticatedUser`. An effect rather than a call at each `setUser`
+  // site, so every adoption path (bootstrap, sign-in, settings PATCH, buddy
+  // completion) keeps the cache tracking the account without a call site being
+  // able to forget. Sign-out paths set `user` to null and clear the cache
+  // explicitly, so this never resurrects a signed-out identity.
+  useEffect(() => {
+    if (user) saveCachedUser(user);
+  }, [user]);
+
   useEffect(() => {
     let cancelled = false;
+
+    /** Apply a failed `me()` through the shared offline-auth decision (#666). */
+    function applyFailure(failure: MeFailure) {
+      const cachedUser = loadCachedUser();
+      const outcome = resolveAuthBootstrap(failure, cachedUser !== null);
+
+      // Matching on the pair keeps the cached user's presence and the outcome
+      // from drifting apart: without an identity to render there is nothing to
+      // fall back to, whatever the outcome says.
+      if (outcome.action === "offline" && cachedUser) {
+        setUser(cachedUser);
+        setRunningFromCache(true);
+        setAuthError(null);
+        setAuthChecked(true);
+        return;
+      }
+
+      setRunningFromCache(false);
+
+      if (outcome.action === "signedOut") {
+        setUser(null);
+        // Teardown is gated on the one shared predicate — asked once, through
+        // the cached-identity store, whose answer then gates the rest (the iOS
+        // `clearIfAuthoritative` shape). Not on "the request failed", which is
+        // the bug #665/#666 exist to remove.
+        if (clearCachedUserIfAuthoritative(outcome.cause)) {
+          clearAccountScopedLocalState();
+        }
+        setAuthError(null);
+        setAuthChecked(true);
+        return;
+      }
+
+      // `unavailable`: no trustworthy answer and nothing cached to render.
+      // Deliberately keeps every piece of local state, cache included.
+      setAuthError(authErrorMessageFor(outcome.cause));
+      setAuthChecked(true);
+    }
 
     async function checkAuth() {
       try {
@@ -256,35 +315,26 @@ export default function StillPoint() {
 
         if (res.ok) {
           const data = await res.json();
-          setUser(data?.user ?? null);
-          setAuthError(null);
-          setAuthChecked(true);
+          // Re-checked after the second await: an unmount between the response
+          // and its body must not adopt a user or write the cache.
+          if (cancelled) return;
+          const freshUser = data?.user ?? null;
+          if (freshUser) {
+            setUser(freshUser);
+            setRunningFromCache(false);
+            setAuthError(null);
+            setAuthChecked(true);
+            return;
+          }
+          // A 2xx with no user is the server authoritatively reporting no
+          // account — the same cause as a 404 from this route.
+          applyFailure({ kind: "status", status: 404 });
           return;
         }
 
-        if (res.status === 401 || res.status === 403) {
-          setUser(null);
-          clearAccountScopedLocalState();
-          setAuthError(null);
-          setAuthChecked(true);
-          return;
-        }
-
-        if (res.status >= 500) {
-          setAuthError("Unable to verify your sign-in due to a server issue. Please retry.");
-          setAuthChecked(true);
-          return;
-        }
-
-        setUser(null);
-        clearAccountScopedLocalState();
-        setAuthError(null);
-        setAuthChecked(true);
+        applyFailure({ kind: "status", status: res.status });
       } catch {
-        if (!cancelled) {
-          setAuthError("Unable to verify your sign-in due to a network issue. Please retry.");
-          setAuthChecked(true);
-        }
+        if (!cancelled) applyFailure({ kind: "transport" });
       }
     }
 
@@ -294,6 +344,16 @@ export default function StillPoint() {
       cancelled = true;
     };
   }, [authRetryKey]);
+
+  // #666: coming back online, re-run the bootstrap so the on-screen state
+  // refreshes from the server and the offline indicator clears on its own. Only
+  // while actually running from cache — a normal online session must not re-auth
+  // every time a flaky radio flaps. Queued sits are flushed by the existing
+  // `initWebPwaOffline` "online" listener; nothing is duplicated here.
+  useEffect(() => {
+    if (!isOnline || !runningFromCache) return;
+    setAuthRetryKey((prev) => prev + 1);
+  }, [isOnline, runningFromCache]);
 
   // Redirect legacy `?view=` deep links and unknown tab slugs to their routes.
   useEffect(() => {
@@ -429,7 +489,11 @@ export default function StillPoint() {
     setBuddyCalendarMessage(null);
     setOverlay(null);
     setUser(null);
+    setRunningFromCache(false);
     clearAccountScopedLocalState();
+    // #666: an explicit sign-out is the most authoritative signal there is, so
+    // the local identity goes with it — including while offline.
+    clearCachedUser();
     void getWebSessionSyncCoordinator().clearQueue().catch((error) => {
       console.error("Failed to clear offline session queue on logout:", error);
     });
@@ -757,6 +821,24 @@ export default function StillPoint() {
 
   const userRecovery = recoveryFieldsOf(user);
 
+  // #666: the strip is hidden in immersive flows for the same reason the nav and
+  // header are — nothing competes with a sit.
+  const showOfflineIndicator = runningFromCache && !isImmersive;
+
+  const welcomeHeader = !isImmersive && !(overlay === "complete" && isMobile) ? (
+    <div style={{
+      fontFamily: "var(--font-mono)",
+      fontSize: "12px", color: "var(--fg-3)",
+      letterSpacing: "0.12em",
+      fontWeight: 400,
+      textAlign: "center",
+      paddingTop: isMobile ? "var(--s1)" : "var(--s5)",
+      marginBottom: "var(--s4)",
+    }}>
+      <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
+    </div>
+  ) : null;
+
   // Logged in
   return (
     <>
@@ -836,19 +918,17 @@ export default function StillPoint() {
       )}
 
       {/* Welcome header — hidden during the completion overlay on mobile to
-          keep the CompletionScreen content above the fixed bottom nav (#479). */}
-      {!isImmersive && !(overlay === "complete" && isMobile) && (
-        <div style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "12px", color: "var(--fg-3)",
-          letterSpacing: "0.12em",
-          fontWeight: 400,
-          textAlign: "center",
-          paddingTop: isMobile ? "var(--s1)" : "var(--s5)",
-          marginBottom: "var(--s4)",
-        }}>
-          <span style={{ textTransform: "uppercase" }}>Welcome, </span>{user.username}
+          keep the CompletionScreen content above the fixed bottom nav (#479).
+          #666: when the offline strip is up, the two share a single grid item.
+          This container's rows are `auto 1fr auto`, so an extra top-level child
+          would push the tab content out of the `1fr` track and shrink it. */}
+      {showOfflineIndicator ? (
+        <div>
+          <OfflineIndicator />
+          {welcomeHeader}
         </div>
+      ) : (
+        welcomeHeader
       )}
 
       {buddyInviteError && overlay !== "session" && (
