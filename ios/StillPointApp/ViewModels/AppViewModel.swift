@@ -655,6 +655,10 @@ final class AppViewModel {
         pendingLogReasonDate = nil
         buddyInviteError = nil
         authStatusMessage = nil
+        // #703: the not-stored warning is about one account's sit. Left set, the
+        // next user to go offline on this device sees a red strip for a failure
+        // that was never theirs. Mirrored by `clearAccountScopedLocalState` on web.
+        localSaveFailed = false
         resetTrackCompletionBadges()
         LastAuthProvider.resetPersisted()
         currentView = .auth

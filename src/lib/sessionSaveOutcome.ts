@@ -1,3 +1,7 @@
+import {
+  LocalSessionWriteError,
+  SessionSyncError,
+} from "@/lib/offlineSessionQueue/sessionSyncCoordinator";
 import type { SavedSessionResult } from "@/lib/offlineSessionQueue/types";
 
 /**
@@ -23,18 +27,33 @@ export type SessionSaveOutcome =
 /**
  * Map a settled `saveCompletedSession` call to its outcome.
  *
- * Any rejection is `notStored`. The coordinator throws for a refused local write
- * (`LocalSessionWriteError`), for a validation guard (`SessionSyncError`), and
- * for a `permanent` transport error — and in none of those cases is the local
- * entry's durability something we can promise. The coordinator's normal return
- * is the only thing that produces `pending`, because it is the only signal that
- * the write landed.
+ * A rejection is only `notStored` when the sit genuinely never reached the
+ * device, and the coordinator says which case it is by the error it throws:
+ *
+ * - `LocalSessionWriteError` — IndexedDB refused the write. Nothing was stored.
+ * - `SessionSyncError` — a validation guard (`missingOwnerUserId`,
+ *   `ownerMismatch`) that rejects before this user has an entry of their own.
+ * - anything else — in practice a `permanent` transport error, which the
+ *   coordinator rethrows out of `flushEntry`. This one is thrown *after* the
+ *   queue write succeeded, so the entry is durably on this device and
+ *   `flushPending` will retry it on reconnect. Calling it `notStored` is the
+ *   same false report as #703, only inverted: it hides a sit that is safe and
+ *   withdraws a promise the queue is in fact keeping.
+ *
+ * `clientSessionId` is the sit's #557 idempotency key, which is exactly what a
+ * durable-but-unsent entry is keyed by — the same provisional id the
+ * coordinator returns for an ordinary offline save.
  */
 export function resolveSessionSaveOutcome(
   settled: PromiseSettledResult<SavedSessionResult>,
+  clientSessionId: string,
 ): SessionSaveOutcome {
   if (settled.status === "rejected") {
-    return { status: "notStored", sessionId: null };
+    const nothingStored = settled.reason instanceof LocalSessionWriteError
+      || settled.reason instanceof SessionSyncError;
+    return nothingStored
+      ? { status: "notStored", sessionId: null }
+      : { status: "pending", sessionId: clientSessionId };
   }
 
   const result = settled.value;

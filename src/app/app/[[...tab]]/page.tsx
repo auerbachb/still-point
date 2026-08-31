@@ -294,6 +294,10 @@ export default function StillPoint() {
   const clearAccountScopedLocalState = () => {
     setTracksDoneToday({ primary: false, second: false });
     setForkDismissed(false);
+    // #703: the not-stored warning is about one account's sit. Left set, the
+    // next user to go offline on this device sees a red strip for a failure
+    // that was never theirs. Mirrored by `AppViewModel.didLogout` on iOS.
+    setLocalWriteFailed(false);
     resetTrackingUnlockOnLogout();
   };
 
@@ -669,9 +673,10 @@ export default function StillPoint() {
   }, [user, refreshTodayTracks, refreshUserFromServer]);
 
   // #703: the one save path for a finished sit, so the completion screen and its
-  // retry button can never disagree about what happened to it. Every throw
-  // resolves to `notStored` rather than the `isPendingSync` this used to claim —
-  // see `resolveSessionSaveOutcome` for why a rejection is never "queued".
+  // retry button can never disagree about what happened to it. A refused local
+  // write resolves to `notStored` rather than the `isPendingSync` this used to
+  // claim; a sync error thrown *after* the entry is durable stays `pending` —
+  // see `resolveSessionSaveOutcome` for which rejection means which.
   const saveCompletedSit = useCallback(async (
     data: CompletedSitInput,
     clientSessionId: string,
@@ -697,10 +702,10 @@ export default function StillPoint() {
         ownerUserId,
         data.thoughts,
       );
-      outcome = resolveSessionSaveOutcome({ status: "fulfilled", value: result });
+      outcome = resolveSessionSaveOutcome({ status: "fulfilled", value: result }, clientSessionId);
     } catch (error) {
       console.error("Failed to save session:", error);
-      outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error });
+      outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
     }
 
     noteQueueWriteOutcome(isSessionStored(outcome));
@@ -734,6 +739,11 @@ export default function StillPoint() {
     const clientSessionId = crypto.randomUUID();
     let outcome: SessionSaveOutcome | null = null;
 
+    // #666 guard: the save below is a suspension point, and sign-out during it
+    // must not let the previous account's sit reopen the completion screen over
+    // the signed-out UI.
+    const generation = sessionGeneration.current;
+
     if (user?.id) {
       // Kept for the completion screen's retry, which must reuse this exact
       // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
@@ -742,6 +752,8 @@ export default function StillPoint() {
     } else {
       lastCompletedSitRef.current = null;
     }
+
+    if (generation !== sessionGeneration.current) return;
 
     setCompletionData({
       sessionId: outcome?.sessionId ?? null,
@@ -790,8 +802,8 @@ export default function StillPoint() {
 
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
     if (user?.id) {
+      const clientSessionId = crypto.randomUUID();
       try {
-        const clientSessionId = crypto.randomUUID();
         await getWebSessionSyncCoordinator().saveCompletedSession(
           {
             dayNumber: data.dayNumber,
@@ -815,8 +827,12 @@ export default function StillPoint() {
         console.error("Failed to save abandoned session:", error);
         // #703: an abandoned sit is still a sit the queue was asked to keep. It
         // gets no completion screen, so the offline strip is the only place this
-        // can be said at all.
-        noteQueueWriteOutcome(false);
+        // can be said at all — and it goes through the same classifier as a
+        // completed sit, so a sync error thrown after a durable write does not
+        // withdraw a promise the queue is keeping.
+        noteQueueWriteOutcome(isSessionStored(
+          resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
+        ));
       }
     }
 
