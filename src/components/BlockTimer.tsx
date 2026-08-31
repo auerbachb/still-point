@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
-import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, type SoundPrefs } from "@/lib/audio";
+import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, resumeAudioContext, type SoundPrefs } from "@/lib/audio";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useAudioContextResume } from "@/lib/useAudioContextResume";
 
 type BlockTimerProps = {
   totalSeconds: number;
@@ -89,10 +90,65 @@ export function BlockTimer({
     return () => cancelVoiceCountdownPlayback();
   }, [isActive]);
 
+  // #710: recovers a context the browser suspended while the tab was hidden or
+  // the screen was locked — the sound used to stay off for the rest of the sit.
+  useAudioContextResume(isActive);
+
+  const resumeInFlightRef = useRef(false);
+  /// The most recent sound that failed to play, replayed once the context
+  /// recovers. Only the latest is kept: these closures are different sounds
+  /// (`playTick`, `playCompletion`, a voice prompt bound to a specific second),
+  /// so replaying an older one would emit the wrong sound — announcing "three"
+  /// after the sit has already ended.
+  const pendingPlayRef = useRef<(() => boolean) | null>(null);
+  /// Guards the async blocked-report below. Reporting used to be synchronous,
+  /// so it could not outlive the timer; the resume attempt introduced a gap the
+  /// sit can end inside. The consumer of onSoundPlaybackBlocked lives in
+  /// BuddySessionRoom, which outlives this component, so an unguarded late
+  /// report is not a harmless no-op — it raises "Browser audio is paused" over
+  /// a session that already ended.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const playEnabledSound = (play: () => boolean) => {
-    if (!play()) {
-      onSoundPlaybackBlockedRef.current?.();
-    }
+    if (play()) return;
+
+    // #710: a sound can also start failing without a visibility change (the
+    // browser suspending the context on its own). Try to resume before falling
+    // back to the gesture-driven affordance, so the sound that failed — and any
+    // that fail while the attempt is in flight — are not simply lost.
+    //
+    // The blocked callback only fires once that attempt has failed: nothing
+    // clears `audioBlocked` on a successful resume, so reporting it up front
+    // would leave "Browser audio is paused" on screen for a session whose sound
+    // recovered on its own. A play that fails while an attempt is already in
+    // flight is covered by that attempt's result.
+    pendingPlayRef.current = play;
+    if (resumeInFlightRef.current) return;
+    resumeInFlightRef.current = true;
+    void resumeAudioContext()
+      .then(resumed => {
+        // Replay the sound that triggered the resume. Waiting for the next
+        // scheduled sound only works for the repeating tick — a completion
+        // chime or a voice countdown prompt has no successor, so dropping it
+        // loses it outright.
+        const retry = pendingPlayRef.current;
+        pendingPlayRef.current = null;
+        if (resumed && retry?.()) return;
+        // The retry itself is deliberately not gated on the timer still being
+        // active: a completion chime that failed is retried as the sit ends,
+        // which is exactly when it is wanted. Only the banner is suppressed.
+        if (!mountedRef.current) return;
+        onSoundPlaybackBlockedRef.current?.();
+      })
+      .finally(() => {
+        resumeInFlightRef.current = false;
+      });
   };
 
   const maybePlayCountdownSounds = (newElapsed: number) => {

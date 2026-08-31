@@ -35,7 +35,6 @@ import UIKit
 public final class AudioEngine: @unchecked Sendable {
     public static let shared = AudioEngine()
 
-    private let defaultSampleRate: Double = 44100
     private let serialQueue = DispatchQueue(
         label: "com.stillpoint.audioengine",
         qos: .userInteractive
@@ -46,13 +45,27 @@ public final class AudioEngine: @unchecked Sendable {
         label: "com.stillpoint.audioengine.decode",
         qos: .utility
     )
-    private let engine = AVAudioEngine()
+    /// Replaced wholesale by `rebuildEngine()` after a media-services reset or
+    /// repeated start failures (#710), so this is a `var`. Every access happens
+    /// on `serialQueue`.
+    private var engine = AVAudioEngine()
     private let notificationCenter = NotificationCenter.default
     private var observerTokens: [NSObjectProtocol] = []
     private var wasRunningBeforeInterruption = false
     /// Set to true while AmbientSoundManager's capture engine is running so
     /// configureAudioSession() switches to .playAndRecord instead of .playback.
     private var isAmbientCaptureActive = false
+    /// Incremented whenever `engine` is replaced. Deferred node cleanups capture
+    /// the epoch they were scheduled under and skip themselves once it moves, so
+    /// they never touch a node belonging to a discarded engine (#710).
+    private var graphEpoch = 0
+    /// Set when repeated `start()` failures survived a session reactivation. The
+    /// rebuild happens at the top of the next sound, before a source node is
+    /// attached — never mid-play, which would leave the replacement to be started
+    /// bare (#262).
+    private var needsEngineRebuild = false
+    /// Consecutive failed `engine.start()` attempts; reset by any success.
+    private var consecutiveStartFailures = 0
 
     private init() {
         configureAudioSession()
@@ -65,9 +78,19 @@ public final class AudioEngine: @unchecked Sendable {
         // See issue #262 for the crash log.
     }
 
-    private func configureAudioSession() {
+    /// Sets the category for the current capture state and activates the session.
+    ///
+    /// Category and activation are attempted independently on purpose (#710):
+    /// they used to share one `do` block, so a category error — which happens
+    /// when another app briefly holds the mic — skipped `setActive(true)`
+    /// entirely and left the session inactive for the rest of the sit. A stale
+    /// but active category still plays; an inactive session never does.
+    @discardableResult
+    private func configureAudioSession() -> Bool {
+        let session = AVAudioSession.sharedInstance()
+        var succeeded = true
+
         do {
-            let session = AVAudioSession.sharedInstance()
             if isAmbientCaptureActive {
                 // #563: mic tap active — use playAndRecord so tick/chime/completion
                 // continue playing while we sample ambient level via a second engine.
@@ -75,10 +98,19 @@ public final class AudioEngine: @unchecked Sendable {
             } else {
                 try session.setCategory(.playback, options: [.mixWithOthers])
             }
+        } catch {
+            succeeded = false
+            print("AudioEngine: Failed to set audio session category: \(error)")
+        }
+
+        do {
             try session.setActive(true)
         } catch {
-            print("AudioEngine: Failed to configure audio session: \(error)")
+            succeeded = false
+            print("AudioEngine: Failed to activate audio session: \(error)")
         }
+
+        return succeeded
     }
 
     /// Called by AmbientSoundManager before/after its capture engine runs.
@@ -126,10 +158,49 @@ public final class AudioEngine: @unchecked Sendable {
             self?.handleWillEnterForeground()
         }
 
+        // #710: headphones, AirPods, CarPlay and speaker switches tear the route
+        // down mid-sit. Nothing observed this, so the session stayed inactive and
+        // every later tick was silent.
+        let routeChangeToken = notificationCenter.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] notification in
+            self?.handleRouteChange(notification)
+        }
+
+        // #710: the engine stops itself and breaks every connection into the main
+        // mixer when the hardware format changes — including the .playback ⇄
+        // .playAndRecord switch that ambient-level sampling performs mid-sit
+        // (#563). Registered with `object: nil` so it survives `rebuildEngine()`
+        // replacing the engine; the handler filters on engine identity instead,
+        // since `object:` would bind this token to the engine instance that
+        // existed at registration time.
+        let configurationChangeToken = notificationCenter.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            self?.handleConfigurationChange(notification)
+        }
+
+        // #710: the audio server restarting invalidates the engine and every node
+        // it owns. Rare, but without this the app stays silent until relaunch.
+        let mediaServicesResetToken = notificationCenter.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleMediaServicesReset()
+        }
+
         observerTokens = [
             interruptionToken,
             backgroundToken,
-            foregroundToken
+            foregroundToken,
+            routeChangeToken,
+            configurationChangeToken,
+            mediaServicesResetToken
         ]
     }
 
@@ -286,6 +357,10 @@ public final class AudioEngine: @unchecked Sendable {
     /// Schedule and play `buffer` on the voice player node.
     /// Must be called on serialQueue.
     private func _doPlayVoiceBuffer(_ buffer: AVAudioPCMBuffer) {
+        // #710: same pre-attach rebuild as playSynthesized(), and it must run
+        // before voicePlayerNode is read — a rebuild drops that node.
+        rebuildEngineIfNeeded()
+
         // Lazily create and attach the player node using the buffer's decoded format.
         let player: AVAudioPlayerNode
         if let existing = voicePlayerNode {
@@ -298,7 +373,10 @@ public final class AudioEngine: @unchecked Sendable {
             engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
         }
 
-        ensureEngineRunning()
+        // #710: an AVAudioPlayerNode raises when started while its engine is not
+        // running, so recovery has to succeed before scheduling. When it does not,
+        // this clip is dropped and the next second's play retries from scratch.
+        guard ensureEngineRunning() else { return }
         // .interrupts cancels any in-progress buffer and starts the new one immediately.
         player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         player.play()
@@ -346,12 +424,201 @@ public final class AudioEngine: @unchecked Sendable {
         var value: Double = 0
     }
 
-    private func ensureEngineRunning() {
-        guard !engine.isRunning else { return }
+    /// Starts the engine if it is not already running, repairing the audio
+    /// session and escalating to a graph rebuild when a start fails (#710).
+    ///
+    /// Before this, a single failed `start()` was printed and forgotten, so any
+    /// transient disruption silenced every remaining sound of the sit. Returns
+    /// whether the engine is running.
+    ///
+    /// Must be called on `serialQueue`, and only once a source node is attached
+    /// and connected to `mainMixerNode` — starting a bare engine is the #262
+    /// crash.
+    @discardableResult
+    private func ensureEngineRunning() -> Bool {
+        if engine.isRunning {
+            consecutiveStartFailures = 0
+            return true
+        }
+        if startEngine(attempt: "initial") { return true }
+
+        // Overwhelmingly the cause is an inactive audio session: an interruption
+        // that ended without `.shouldResume`, a route change, or backgrounding.
+        // The caller's source node is still attached and connected, so this retry
+        // is not a bare start.
+        configureAudioSession()
+        if startEngine(attempt: "retry after session reactivation") { return true }
+
+        // Reactivation did not help. Schedule the rebuild for the *next* sound:
+        // replacing the engine here would discard the one this call's node is
+        // attached to, leaving the replacement to be started bare (#262).
+        if AudioRecoveryLogic.startFailureRecovery(
+            consecutiveFailures: consecutiveStartFailures
+        ) == .rebuildEngineBeforeNextSound {
+            needsEngineRebuild = true
+        }
+        return false
+    }
+
+    /// One `engine.start()` attempt, maintaining the consecutive-failure count.
+    /// Must be called on `serialQueue`.
+    private func startEngine(attempt: String) -> Bool {
         do {
             try engine.start()
+            consecutiveStartFailures = 0
+            return true
         } catch {
-            print("AudioEngine: Failed to start engine: \(error)")
+            consecutiveStartFailures &+= 1
+            print(
+                "AudioEngine: engine.start() \(attempt) failed "
+                    + "(\(consecutiveStartFailures) consecutive): \(error)"
+            )
+            return false
+        }
+    }
+
+    /// Replaces `engine` with a fresh instance and forgets the old graph (#710).
+    ///
+    /// Used after a media-services reset — the audio server restarted, so every
+    /// node the previous engine owned is invalid — and after start failures that
+    /// session reactivation could not clear. The old engine is released without
+    /// being stopped or detached from: after a reset those calls are not safe,
+    /// and its pending node cleanups skip themselves via `graphEpoch`.
+    ///
+    /// Must be called on `serialQueue`, and never between attaching a source node
+    /// and starting the engine — the replacement would be started bare (#262).
+    private func rebuildEngine() {
+        graphEpoch &+= 1
+        voicePlayerNode = nil
+        engine = AVAudioEngine()
+        needsEngineRebuild = false
+        consecutiveStartFailures = 0
+    }
+
+    /// Rebuild hook for the top of every play path, before any node is attached.
+    /// Must be called on `serialQueue`.
+    private func rebuildEngineIfNeeded() {
+        guard needsEngineRebuild else { return }
+        rebuildEngine()
+    }
+
+    /// Drops the persistent voice-countdown player so the next clip reattaches
+    /// and reconnects it. Must be called on `serialQueue`.
+    ///
+    /// An `AVAudioEngineConfigurationChange` breaks every connection into the
+    /// main mixer. The node survives but plays into nothing, which left the voice
+    /// countdown silent for the rest of the sit (#710).
+    private func discardVoicePlayerNode() {
+        guard let node = voicePlayerNode else { return }
+        voicePlayerNode = nil
+        node.stop()
+        engine.detach(node)
+    }
+
+    /// Current main-mixer output format, repairing the session first when the
+    /// mixer reports an unusable one (#710).
+    ///
+    /// The mixer reports 0 Hz / 0 channels while the session is inactive. That
+    /// value used to be passed straight to `engine.connect(...)`, so the recovery
+    /// path itself produced silence. Returns nil when the format is still
+    /// unusable after a repair — the caller skips that one sound and the next
+    /// one, a second later, retries from scratch.
+    private func usableRenderFormat() -> AVAudioFormat? {
+        let format = engine.mainMixerNode.outputFormat(forBus: 0)
+        if AudioRecoveryLogic.isUsableRenderFormat(
+            sampleRate: format.sampleRate,
+            channelCount: format.channelCount
+        ) {
+            return format
+        }
+
+        configureAudioSession()
+        let repaired = engine.mainMixerNode.outputFormat(forBus: 0)
+        guard AudioRecoveryLogic.isUsableRenderFormat(
+            sampleRate: repaired.sampleRate,
+            channelCount: repaired.channelCount
+        ) else {
+            print("AudioEngine: main mixer reports an unusable format; skipping this sound")
+            return nil
+        }
+        return repaired
+    }
+
+    /// Maps AVFoundation's route-change reason onto the testable mirror. The
+    /// switch is exhaustive over the platform enum, so a raw value this build
+    /// does not know maps to nil and is treated as recoverable.
+    private static func routeChangeReason(
+        rawValue: UInt
+    ) -> AudioRecoveryLogic.RouteChangeReason? {
+        guard let reason = AVAudioSession.RouteChangeReason(rawValue: rawValue) else { return nil }
+        switch reason {
+        case .unknown: return .unknown
+        case .newDeviceAvailable: return .newDeviceAvailable
+        case .oldDeviceUnavailable: return .oldDeviceUnavailable
+        case .categoryChange: return .categoryChange
+        case .override: return .override
+        case .wakeFromSleep: return .wakeFromSleep
+        case .noSuitableRouteForCategory: return .noSuitableRouteForCategory
+        case .routeConfigurationChange: return .routeConfigurationChange
+        @unknown default: return nil
+        }
+    }
+
+    private func handleRouteChange(_ notification: Notification) {
+        let rawValue = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 0
+        let reason = Self.routeChangeReason(rawValue: rawValue)
+        guard AudioRecoveryLogic.shouldReactivateSession(afterRouteChange: reason) else { return }
+
+        // Reactivate only. The engine is restarted lazily by the next
+        // playSynthesized() once it has attached a fresh source node (#262).
+        serialQueue.async { [weak self] in
+            self?.configureAudioSession()
+        }
+    }
+
+    private func handleConfigurationChange(_ notification: Notification) {
+        // AVFoundation posts the affected engine as `notification.object`, and
+        // this process runs two: ours and `AmbientSoundManager.captureEngine`
+        // (#563). Captured here rather than on `serialQueue` so the comparison
+        // uses the notification's own object, not a later one.
+        //
+        // A nil/unrecognized object is treated as ours on purpose: skipping
+        // recovery is the #710 failure itself (silence for the rest of the sit),
+        // while an unnecessary discard costs at most one re-created voice node.
+        let postingEngine = notification.object as? AVAudioEngine
+
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            // The hardware format changed. Reactivate the session unconditionally
+            // — it is idempotent, and a format change that reached the capture
+            // engine affects the shared session either way. No engine.start()
+            // here — the graph has no source node attached (#262).
+            //
+            // This converges rather than looping: reconfiguring with a category
+            // that is already set and a session that is already active changes no
+            // I/O format, so it posts no further configuration change.
+            self.configureAudioSession()
+
+            // Only our engine tearing itself down invalidates the voice node.
+            // Discarding it for a capture-engine notification would stop an
+            // in-progress countdown clip for no reason.
+            let isFromOwnEngine: Bool? = postingEngine.map { $0 === self.engine }
+            guard AudioRecoveryLogic.shouldDiscardVoiceNode(
+                onConfigurationChangeFromOwnEngine: isFromOwnEngine
+            ) else { return }
+            self.discardVoicePlayerNode()
+        }
+    }
+
+    private func handleMediaServicesReset() {
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            // The audio server restarted: the engine, its nodes and the session
+            // configuration are all invalid. Rebuild from scratch, then
+            // reconfigure. The next playSynthesized() attaches a source node and
+            // starts the new engine safely (#262).
+            self.rebuildEngine()
+            self.configureAudioSession()
         }
     }
 
@@ -371,12 +638,16 @@ public final class AudioEngine: @unchecked Sendable {
                     self.engine.pause()
                 }
             case .ended:
-                let optionsValue = (info[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
-                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                let shouldResume = options.contains(.shouldResume)
-                if shouldResume && self.wasRunningBeforeInterruption {
-                    self.resumeAfterInterruptionIfNeeded()
-                }
+                // #710: reactivation used to be gated on `.shouldResume` AND the
+                // engine having been running when the interruption began. Calls,
+                // Siri, alarms and other apps' audio routinely end with neither —
+                // and a sit whose engine was paused by backgrounding never has
+                // the second — so the session stayed deactivated and every later
+                // tick failed to start. The system deactivates the session for
+                // the whole interruption regardless of those flags, so
+                // reactivation is now unconditional; `setActive(true)` is
+                // idempotent when it was not needed.
+                self.reactivateSessionAfterInterruption()
                 self.wasRunningBeforeInterruption = false
             @unknown default:
                 break
@@ -384,7 +655,7 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    private func resumeAfterInterruptionIfNeeded() {
+    private func reactivateSessionAfterInterruption() {
         // Reconfigure the session only. We deliberately do NOT call engine.start()
         // here — by the time we resume, the previously playing source node has
         // already been detached (see playSynthesized's asyncAfter cleanup), so
@@ -414,10 +685,16 @@ public final class AudioEngine: @unchecked Sendable {
         duration: Double,
         generator: @escaping (_ phase: Double, _ sampleRate: Double) -> Float
     ) {
-        let renderFormat = engine.mainMixerNode.outputFormat(forBus: 0)
-        let renderSampleRate = renderFormat.sampleRate > 0 ? renderFormat.sampleRate : defaultSampleRate
+        // #710: clear a graph that earlier start failures condemned *before*
+        // attaching, so the fresh engine is started with a source node connected
+        // (#262 invariant).
+        rebuildEngineIfNeeded()
+
+        guard let renderFormat = usableRenderFormat() else { return }
+        let renderSampleRate = renderFormat.sampleRate
         let totalFrames = Int(duration * renderSampleRate)
         let phase = PhaseBox()
+        let epoch = graphEpoch
 
         let sourceNode = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
             let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
@@ -459,8 +736,11 @@ public final class AudioEngine: @unchecked Sendable {
         ensureEngineRunning()
 
         // Detach this sound node after playback while keeping the warm engine alive.
+        // Skipped when the engine has since been replaced (#710): the node belongs
+        // to the discarded graph and is released with it, and detaching it from the
+        // new engine would raise.
         serialQueue.asyncAfter(deadline: .now() + duration + 0.1) { [weak self] in
-            guard let self else { return }
+            guard let self, self.graphEpoch == epoch else { return }
             self.engine.disconnectNodeOutput(sourceNode)
             self.engine.detach(sourceNode)
         }

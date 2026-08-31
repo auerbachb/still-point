@@ -14,6 +14,15 @@ type Policy = "lenient" | "strict";
 
 const gesture = { active: false };
 let policy: Policy = "strict";
+/** Every context the module under test constructed, newest last. */
+const createdContexts: MockAudioContext[] = [];
+
+/** The context the audio module is currently using. */
+function currentContext(): MockAudioContext {
+  const ctx = createdContexts.at(-1);
+  if (!ctx) throw new Error("no AudioContext was created");
+  return ctx;
+}
 
 class MockAudioParam {
   value = 0;
@@ -58,12 +67,15 @@ class MockAudioContext {
   destination = new MockNode();
   /** True once a node has been started while a user gesture was active. */
   primedDuringGesture = false;
+  /** Number of `resume()` calls, so tests can assert the no-op path (#710). */
+  resumeCallCount = 0;
 
   constructor() {
     // A context created outside a gesture (e.g. by a silent chime attempt while
     // the buddy timer is already running) starts suspended.
     this.state = gesture.active ? "running" : "suspended";
     if (gesture.active) this.primedDuringGesture = true;
+    createdContexts.push(this);
   }
 
   noteStarted() {
@@ -84,6 +96,7 @@ class MockAudioContext {
   }
 
   async resume() {
+    this.resumeCallCount++;
     if (policy === "lenient") {
       if (gesture.active || this.primedDuringGesture) this.state = "running";
     } else {
@@ -116,6 +129,7 @@ async function loadAudio(opts?: {
 beforeEach(() => {
   gesture.active = false;
   policy = "strict";
+  createdContexts.length = 0;
 });
 
 afterEach(() => {
@@ -197,5 +211,71 @@ describe("unlockAudioContext — autoplay policy", () => {
     gesture.active = false;
 
     expect(result).toBe("unlocked");
+  });
+});
+
+describe("resumeAudioContext — mid-session recovery (#710)", () => {
+  it("does not create a context when none exists", async () => {
+    // Creating one outside a user gesture would leave it permanently suspended
+    // on strict-autoplay browsers — worse than doing nothing.
+    const { resumeAudioContext } = await loadAudio();
+    await expect(resumeAudioContext()).resolves.toBe(false);
+    expect(createdContexts).toHaveLength(0);
+  });
+
+  it("returns false when Web Audio is unsupported", async () => {
+    const { resumeAudioContext } = await loadAudio({ withAudioContext: false });
+    await expect(resumeAudioContext()).resolves.toBe(false);
+  });
+
+  it("resumes a context the browser suspended mid-session, no new gesture needed", async () => {
+    const { unlockAudioContext, resumeAudioContext, playTick } = await loadAudio();
+
+    // Sound is working at the start of the sit.
+    gesture.active = true;
+    await unlockAudioContext();
+    gesture.active = false;
+    expect(playTick()).toBe(true);
+
+    // The tab is backgrounded or the screen locks and the browser suspends the
+    // context. This is the state that used to persist for the rest of the sit.
+    await currentContext().suspend();
+    expect(playTick()).toBe(false);
+
+    // Returning to the page recovers it: the context was primed by the original
+    // gesture, so resume() alone is enough even under the strict policy.
+    await expect(resumeAudioContext()).resolves.toBe(true);
+    expect(playTick()).toBe(true);
+  });
+
+  it("reports false when the browser refuses to resume", async () => {
+    const { resumeAudioContext, playTick } = await loadAudio();
+    // Context created outside a gesture → never primed → strict policy refuses.
+    // The gesture-driven unlockAudioContext() stays the recovery path.
+    expect(playTick()).toBe(false);
+    await expect(resumeAudioContext()).resolves.toBe(false);
+  });
+
+  it("is a no-op that reports success when the context is already running", async () => {
+    const { unlockAudioContext, resumeAudioContext } = await loadAudio();
+    gesture.active = true;
+    await unlockAudioContext();
+    gesture.active = false;
+
+    const ctx = currentContext();
+    const callsBefore = ctx.resumeCallCount;
+    await expect(resumeAudioContext()).resolves.toBe(true);
+    expect(ctx.resumeCallCount).toBe(callsBefore);
+  });
+
+  it("swallows a rejected resume() instead of throwing into the tick loop", async () => {
+    const rejectingCtor = class extends MockAudioContext {
+      async resume(): Promise<void> {
+        throw new Error("NotAllowedError");
+      }
+    };
+    const { resumeAudioContext, playTick } = await loadAudio({ ctor: rejectingCtor });
+    expect(playTick()).toBe(false); // lazily creates the suspended context
+    await expect(resumeAudioContext()).resolves.toBe(false);
   });
 });
