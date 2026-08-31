@@ -21,6 +21,23 @@ export class SessionSyncError extends Error {
   }
 }
 
+/**
+ * #703: the local queue write failed, so the sit is NOT on this device.
+ *
+ * Distinct from both siblings on purpose. `SessionSyncError` is a validation
+ * guard, and a *network* failure is not an error at all here — the entry is
+ * already durable, so it resolves normally with `isPendingSync: true`. This one
+ * is the case where IndexedDB itself refused the write (private browsing,
+ * exhausted quota, an evicted or corrupted object store), which means nothing
+ * was stored and nothing will upload later.
+ */
+export class LocalSessionWriteError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "LocalSessionWriteError";
+  }
+}
+
 function requestWithClientId(
   request: Omit<CreateSessionPayload, "clientSessionId">,
   clientSessionId: string,
@@ -89,7 +106,13 @@ export class WebSessionSyncCoordinator {
           sessionSynced: false,
           enqueuedAt: new Date().toISOString(),
         });
-        await this.queueStore.saveEntries(entries);
+        try {
+          await this.queueStore.saveEntries(entries);
+        } catch (error) {
+          // #703: the sit never reached the device. Tagged so the caller can tell
+          // this apart from a queued-but-unsent sit and say so to the user.
+          throw new LocalSessionWriteError("queueWriteFailed", { cause: error });
+        }
         await requestBackgroundSync();
       }
 

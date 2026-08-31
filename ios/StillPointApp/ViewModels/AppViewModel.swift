@@ -81,6 +81,11 @@ final class AppViewModel {
     /// state because the server could not be reached. Drives the offline
     /// indicator; any successful `me()` clears it.
     var isOfflineMode = false
+    /// #703: a local save has failed on this device and has not since succeeded.
+    /// Withdraws the offline indicator's "sits are saved and upload when you
+    /// reconnect" promise, which is false for as long as storage refuses writes.
+    /// A later successful save clears it — that is the proof storage works again.
+    var localSaveFailed = false
     var isLoading = true
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
@@ -805,9 +810,13 @@ final class AppViewModel {
                 thoughts: []
             )
             markPracticeDoneToday(sessionType: .breath, track: .primary)
+            localSaveFailed = false
             currentView = .home
         } catch {
             print("Failed to persist breath session locally: \(error)")
+            // #703: a breath sit has no completion screen to say this on, so the
+            // offline indicator is the only place the loss can surface.
+            localSaveFailed = true
             currentView = .home
         }
     }

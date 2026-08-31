@@ -1,5 +1,16 @@
 "use client";
 
+import { offlineIndicatorCopy, offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
+
+type OfflineIndicatorProps = {
+  /**
+   * #703: a local queue write has failed, so the strip's usual promise is not
+   * true on this device. Withdraws the promise and turns the strip red; the
+   * completion screen carries the actionable detail.
+   */
+  sitNotStored?: boolean;
+};
+
 /**
  * #666: the unobtrusive strip shown while the app is running from its local copy
  * of identity and state. The web twin of the iOS `OfflineIndicatorView` (#665),
@@ -7,19 +18,27 @@
  * `amberBorderSubtle`) and the same copy, so the two clients look and read the
  * same when disconnected.
  *
- * Deliberately not an error. There is nothing to act on and nothing to dismiss —
- * the sit still runs, the day number is still right, and the completion still
- * queues for upload. It replaces what a lost connection used to produce: an
- * "Unable to verify your sign-in" screen nobody asked for. Amber, not red, for
- * the same reason, and `role="status"` rather than `role="alert"` so a screen
- * reader announces it politely instead of interrupting.
+ * Deliberately not an error in its usual state. There is nothing to act on and
+ * nothing to dismiss — the sit still runs, the day number is still right, and
+ * the completion still queues for upload. It replaces what a lost connection
+ * used to produce: an "Unable to verify your sign-in" screen nobody asked for.
+ * Amber, not red, for the same reason, and `role="status"` rather than
+ * `role="alert"` so a screen reader announces it politely instead of
+ * interrupting.
+ *
+ * #703 is the one case where that reassurance would be a lie: a refused
+ * IndexedDB write means the sit is on no device and will upload nowhere. The
+ * strip then carries the withdrawn copy in danger tokens instead.
  */
-export function OfflineIndicator() {
+export function OfflineIndicator({ sitNotStored = false }: OfflineIndicatorProps) {
+  const copy = offlineIndicatorCopy(offlineIndicatorStateFor(sitNotStored));
+
   return (
     <div
       role="status"
       data-testid="offline-indicator"
-      aria-label="Offline. Showing your saved progress; sits are saved and upload when you reconnect."
+      data-state={sitNotStored ? "sit-not-stored" : "saved-progress"}
+      aria-label={copy.accessibilityLabel}
       style={{
         width: "100%",
         display: "flex",
@@ -29,8 +48,10 @@ export function OfflineIndicator() {
         padding: "var(--s1) var(--s2)",
         marginBottom: "var(--s3)",
         background: "var(--accent-amber-bg-faint)",
-        borderBottom: "1px solid var(--accent-amber-border-subtle)",
-        color: "var(--accent-amber-text)",
+        borderBottom: sitNotStored
+          ? "1px solid var(--accent-danger-border-subtle)"
+          : "1px solid var(--accent-amber-border-subtle)",
+        color: sitNotStored ? "var(--accent-danger)" : "var(--accent-amber-text)",
         fontFamily: "var(--font-mono)",
         fontSize: "10px",
         fontWeight: 500,
@@ -57,7 +78,7 @@ export function OfflineIndicator() {
           <path d="M12 20h.01" />
         </svg>
       </span>
-      <span>OFFLINE · SAVED PROGRESS</span>
+      <span>{copy.label}</span>
     </div>
   );
 }
