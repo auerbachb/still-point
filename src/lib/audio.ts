@@ -81,6 +81,32 @@ export async function unlockAudioContext(): Promise<AudioUnlockResult> {
   return readAudioContextState(ctx) === "running" ? "unlocked" : "blocked";
 }
 
+/**
+ * Resumes an already-created context without priming it.
+ *
+ * Browsers suspend the `AudioContext` when the tab is backgrounded or the screen
+ * locks, and nothing resumed it — so a tick that stopped mid-session never came
+ * back (#710). Unlike `unlockAudioContext()` this needs no user gesture: it does
+ * not prime a node and it never creates a context, so it cannot bring one into
+ * existence outside a gesture (which would leave it permanently suspended on
+ * strict-autoplay browsers).
+ *
+ * Returns true when the context is running afterwards. A context that was never
+ * created, or one the browser still refuses to resume, returns false — the
+ * gesture-driven `unlockAudioContext()` remains the recovery path for those.
+ */
+export async function resumeAudioContext(): Promise<boolean> {
+  // Deliberately reads `audioCtx` rather than calling `getAudioContext()`.
+  if (!audioCtx) return false;
+  if (audioCtx.state === "running") return true;
+  try {
+    await audioCtx.resume();
+  } catch {
+    return false;
+  }
+  return readAudioContextState(audioCtx) === "running";
+}
+
 function getPlayableAudioContext(): AudioContext | null {
   const ctx = getAudioContext();
   if (!ctx) return null;

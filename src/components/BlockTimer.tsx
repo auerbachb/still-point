@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
-import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, type SoundPrefs } from "@/lib/audio";
+import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, resumeAudioContext, type SoundPrefs } from "@/lib/audio";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useAudioContextResume } from "@/lib/useAudioContextResume";
 
 type BlockTimerProps = {
   totalSeconds: number;
@@ -89,10 +90,34 @@ export function BlockTimer({
     return () => cancelVoiceCountdownPlayback();
   }, [isActive]);
 
+  // #710: recovers a context the browser suspended while the tab was hidden or
+  // the screen was locked — the sound used to stay off for the rest of the sit.
+  useAudioContextResume(isActive);
+
+  const resumeInFlightRef = useRef(false);
+
   const playEnabledSound = (play: () => boolean) => {
-    if (!play()) {
-      onSoundPlaybackBlockedRef.current?.();
-    }
+    if (play()) return;
+
+    // #710: a sound can also start failing without a visibility change (the
+    // browser suspending the context on its own). Try to resume before falling
+    // back to the gesture-driven affordance, so the next scheduled sound — one
+    // second later for the tick — plays on its own.
+    //
+    // The blocked callback only fires once that attempt has failed: nothing
+    // clears `audioBlocked` on a successful resume, so reporting it up front
+    // would leave "Browser audio is paused" on screen for a session whose sound
+    // recovered on its own. A play that fails while an attempt is already in
+    // flight is covered by that attempt's result.
+    if (resumeInFlightRef.current) return;
+    resumeInFlightRef.current = true;
+    void resumeAudioContext()
+      .then(resumed => {
+        if (!resumed) onSoundPlaybackBlockedRef.current?.();
+      })
+      .finally(() => {
+        resumeInFlightRef.current = false;
+      });
   };
 
   const maybePlayCountdownSounds = (newElapsed: number) => {
