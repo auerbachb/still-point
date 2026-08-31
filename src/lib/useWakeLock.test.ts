@@ -115,6 +115,14 @@ type HookHandle<P, R> = {
   unmount: () => Promise<void>;
 };
 
+/**
+ * Every handle `renderHook` hands out, so `afterEach` can tear down anything a
+ * failed assertion left mounted. Without this, a leaked root keeps its
+ * `visibilitychange` listener registered and drives the *next* test's wake-lock
+ * mock, turning one real failure into a cascade of misleading ones.
+ */
+const liveViews: Array<{ unmount: () => Promise<void> }> = [];
+
 async function renderHook<P, R>(
   hook: (props: P) => R,
   // `NoInfer` keeps a literal first argument (e.g. `true`) from narrowing `P`,
@@ -137,12 +145,10 @@ async function renderHook<P, R>(
     });
   };
 
-  await act(async () => {
-    root = createRoot(container);
-  });
-  await render(initialProps);
-
-  return {
+  // Idempotent: a second call finds `root` null and the container detached, so
+  // the explicit `await view.unmount()` in a test and the `afterEach` sweep can
+  // both run without double-unmounting.
+  const handle: HookHandle<P, R> = {
     current: () => latest,
     rerender: render,
     unmount: async () => {
@@ -153,6 +159,16 @@ async function renderHook<P, R>(
       container.remove();
     },
   };
+  // Registered before the first render: if mounting the hook throws, the sweep
+  // still owns the container (and the root, once created) and can tear it down.
+  liveViews.push(handle);
+
+  await act(async () => {
+    root = createRoot(container);
+  });
+  await render(initialProps);
+
+  return handle;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -162,9 +178,23 @@ beforeEach(() => {
   installMemoryStorage();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Unmount first: the hook's cleanup releases its sentinel, which still needs
+  // the mock this test installed. Each teardown is isolated so one rejection
+  // can't strand the remaining views or skip the mock restoration below —
+  // but it is re-thrown afterwards rather than swallowed, since a failing
+  // unmount is itself a real signal.
+  const teardownErrors: unknown[] = [];
+  for (const view of liveViews.splice(0)) {
+    try {
+      await view.unmount();
+    } catch (error) {
+      teardownErrors.push(error);
+    }
+  }
   removeWakeLock();
   vi.restoreAllMocks();
+  if (teardownErrors.length > 0) throw teardownErrors[0];
 });
 
 describe("useWakeLock", () => {
