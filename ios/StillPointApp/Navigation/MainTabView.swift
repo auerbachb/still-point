@@ -46,7 +46,9 @@ struct MainTabView: View {
         // shell on purpose — an active sit stays free of chrome.
         .safeAreaInset(edge: .top, spacing: 0) {
             if appVM.isOfflineMode {
-                OfflineIndicatorView()
+                // #703: the strip withdraws its "sits are saved" promise while a
+                // local write is known to have failed.
+                OfflineIndicatorView(sitNotStored: appVM.localSaveFailed)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

@@ -21,6 +21,27 @@ export class SessionSyncError extends Error {
   }
 }
 
+/**
+ * #703: the local queue write failed, so the sit is NOT on this device.
+ *
+ * Distinct from both siblings on purpose. `SessionSyncError` is a validation
+ * guard, and a *network* failure is not an error at all here — the entry is
+ * already durable, so it resolves normally with `isPendingSync: true`. This one
+ * is the case where IndexedDB itself was unusable (private browsing, exhausted
+ * quota, an evicted or corrupted object store) for either the read or the write,
+ * which means nothing was stored and nothing will upload later.
+ *
+ * It carries the whole weight of the notStored verdict: `resolveSessionSaveOutcome`
+ * treats an *untagged* rejection as `pending`, because the only other way out of
+ * `saveCompletedSession` is a sync error raised after the entry is durable.
+ */
+export class LocalSessionWriteError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "LocalSessionWriteError";
+  }
+}
+
 function requestWithClientId(
   request: Omit<CreateSessionPayload, "clientSessionId">,
   clientSessionId: string,
@@ -64,7 +85,17 @@ export class WebSessionSyncCoordinator {
     }
 
     return withQueueMutation(async () => {
-      const entries = await this.queueStore.loadEntries();
+      // #703: a store that cannot even be read is a store nothing was written
+      // to. Tagged like the write below so the caller classifies it as
+      // notStored — an untagged throw from here would be read as a *post-write*
+      // sync failure and reported as safely queued, which is the exact false
+      // reassurance this ticket is about.
+      let entries: PendingSessionEntry[];
+      try {
+        entries = await this.queueStore.loadEntries();
+      } catch (error) {
+        throw new LocalSessionWriteError("queueReadFailed", { cause: error });
+      }
       const existingIndex = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
 
       if (existingIndex >= 0) {
@@ -89,7 +120,13 @@ export class WebSessionSyncCoordinator {
           sessionSynced: false,
           enqueuedAt: new Date().toISOString(),
         });
-        await this.queueStore.saveEntries(entries);
+        try {
+          await this.queueStore.saveEntries(entries);
+        } catch (error) {
+          // #703: the sit never reached the device. Tagged so the caller can tell
+          // this apart from a queued-but-unsent sit and say so to the user.
+          throw new LocalSessionWriteError("queueWriteFailed", { cause: error });
+        }
         await requestBackgroundSync();
       }
 

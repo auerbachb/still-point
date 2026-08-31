@@ -7,6 +7,7 @@ export { IndexedDbOfflineSessionQueueStore, defaultOfflineSessionQueueStore } fr
 export { InMemoryOfflineSessionQueueStore, type OfflineSessionQueueStore } from "./queueStore";
 export {
   WebSessionSyncCoordinator,
+  LocalSessionWriteError,
   SessionSyncError,
   alwaysFailingSessionSyncTransport,
   getWebSessionSyncCoordinator,

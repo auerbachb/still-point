@@ -968,9 +968,15 @@ struct SessionView: View {
                 completed: vm.completedNaturally,
                 ownerUserId: ownerUserId
             ) else {
+                // #703: the alert below already blocks the false-success
+                // completion; the flag additionally withdraws the offline
+                // strip's "sits are saved" promise, which stays on screen after
+                // the user picks "Continue without saving".
+                appVM.localSaveFailed = true
                 showSaveError = true
                 return
             }
+            appVM.localSaveFailed = false
             appVM.completeSession(
                 sessionId: session.id,
                 clientSessionId: vm.lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),

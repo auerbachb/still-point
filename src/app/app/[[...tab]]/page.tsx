@@ -26,6 +26,7 @@ import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, session
 import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
+import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
@@ -193,6 +194,9 @@ type CompletionData = {
   clientSessionId: string | null;
   /** #558: true when the sit is queued locally and awaiting server sync. */
   isPendingSync: boolean;
+  /** #703: true when the sit reached neither the server nor this device. Never
+   *  true at the same time as `isPendingSync` — that conflation is the bug. */
+  notStored: boolean;
   dayNumber: number;
   sessionType: SessionType;
   /** #240: which daily track this completed sit belonged to. */
@@ -206,6 +210,21 @@ type CompletionData = {
    *  advancement (#238) — computed with the same `advanceProgression` /
    *  `sessionDurationForUser` the server uses, from the pre-save user state. */
   nextDuration: number;
+};
+
+/** What `SessionView` hands back when a sit ends — completed or abandoned. */
+type CompletedSitInput = {
+  dayNumber: number;
+  sessionType: SessionType;
+  track: Track;
+  duration: number;
+  bonusSeconds: number;
+  completed: boolean;
+  actualTime: number;
+  clearPercent: number;
+  thoughtCount: number;
+  mindStateLog: Array<{ time: number; state: string }>;
+  thoughts: Array<{ timeInSession: number; text: string }>;
 };
 
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
@@ -256,11 +275,44 @@ export default function StillPoint() {
   // the iOS `isOfflineMode` — `navigator.onLine` reports link state, not
   // reachability, so it prompts a re-check and never concludes one.
   const [runningFromCache, setRunningFromCache] = useState(false);
+  // #703: a local queue write has failed on this device and has not since
+  // succeeded. Withdraws the offline strip's "sits are saved and upload when you
+  // reconnect" promise, which is false for as long as storage refuses writes. A
+  // later successful save clears it — that is the proof storage works again.
+  const [localWriteFailed, setLocalWriteFailed] = useState(false);
+  // #703: the last sit handed to the queue, kept so the completion screen can
+  // retry the same one under the same client id — and on the same calendar day.
+  // `sessionDate` is pinned here rather than recomputed inside the save, because
+  // a sit that failed to store before midnight and is retried after it would
+  // otherwise land on the following day, crediting the wrong day's progression.
+  // The #557 idempotency key makes a retry the *same* sit; the date has to agree.
+  const lastCompletedSitRef = useRef<
+    { data: CompletedSitInput; clientSessionId: string; sessionDate: string } | null
+  >(null);
   const isOnline = useOnlineStatus();
+
+  // #703: every path that writes a sit to the local queue reports here, so the
+  // offline strip's promise tracks whether local storage is actually working.
+  //
+  // `generation` is the #666 guard, and it belongs here rather than at the four
+  // call sites: every one of them reports *after* an await, so a sign-out (or a
+  // sign-in) that lands mid-save would otherwise let the previous account's
+  // failure re-raise the strip for whoever is looking at the screen now —
+  // straight past the `setLocalWriteFailed(false)` in
+  // `clearAccountScopedLocalState`, which by then has already run. Callers
+  // capture the generation before their await and hand it back with the result.
+  const noteQueueWriteOutcome = useCallback((stored: boolean, generation: number) => {
+    if (generation !== sessionGeneration.current) return;
+    setLocalWriteFailed(!stored);
+  }, []);
 
   const clearAccountScopedLocalState = () => {
     setTracksDoneToday({ primary: false, second: false });
     setForkDismissed(false);
+    // #703: the not-stored warning is about one account's sit. Left set, the
+    // next user to go offline on this device sees a red strip for a failure
+    // that was never theirs. Mirrored by `AppViewModel.didLogout` on iOS.
+    setLocalWriteFailed(false);
     resetTrackingUnlockOnLogout();
   };
 
@@ -617,6 +669,8 @@ export default function StillPoint() {
       sessionId: data.sessionId,
       clientSessionId: null,
       isPendingSync: false,
+      // The buddy room records this sit server-side; it never touches the queue.
+      notStored: false,
       dayNumber: data.dayNumber,
       sessionType: "standard",
       // Buddy sits always count toward the primary track (#240).
@@ -633,64 +687,101 @@ export default function StillPoint() {
     void refreshTodayTracks();
   }, [user, refreshTodayTracks, refreshUserFromServer]);
 
-  const handleSessionComplete = useCallback(async (data: {
-    dayNumber: number;
-    sessionType: SessionType;
-    track: Track;
-    duration: number;
-    bonusSeconds: number;
-    completed: boolean;
-    actualTime: number;
-    clearPercent: number;
-    thoughtCount: number;
-    mindStateLog: Array<{ time: number; state: string }>;
-    thoughts: Array<{ timeInSession: number; text: string }>;
-  }) => {
-    const clientSessionId = crypto.randomUUID();
-    let savedSessionId: string | null = null;
-    let isPendingSync = false;
+  // #703: the one save path for a finished sit, so the completion screen and its
+  // retry button can never disagree about what happened to it. A refused local
+  // write resolves to `notStored` rather than the `isPendingSync` this used to
+  // claim; a sync error thrown *after* the entry is durable stays `pending` —
+  // see `resolveSessionSaveOutcome` for which rejection means which.
+  const saveCompletedSit = useCallback(async (
+    data: CompletedSitInput,
+    clientSessionId: string,
+    ownerUserId: string,
+    sessionDate: string,
+  ): Promise<SessionSaveOutcome> => {
+    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+    const generation = sessionGeneration.current;
+    let outcome: SessionSaveOutcome;
+    try {
+      const result = await getWebSessionSyncCoordinator().saveCompletedSession(
+        {
+          dayNumber: data.dayNumber,
+          sessionType: data.sessionType,
+          track: data.track,
+          duration: data.duration,
+          bonusSeconds: data.bonusSeconds,
+          completed: data.completed,
+          actualTime: data.actualTime,
+          clearPercent: data.clearPercent,
+          thoughtCount: data.thoughtCount,
+          mindStateLog: data.mindStateLog,
+          // Pinned by the caller when the sit ended, not recomputed here — a
+          // retry that crosses midnight must still be the same day's sit.
+          sessionDate,
+        },
+        clientSessionId,
+        ownerUserId,
+        data.thoughts,
+      );
+      outcome = resolveSessionSaveOutcome({ status: "fulfilled", value: result }, clientSessionId);
+    } catch (error) {
+      console.error("Failed to save session:", error);
+      outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
+    }
 
-    if (user?.id) {
-      try {
-        const coordinator = getWebSessionSyncCoordinator();
-        const result = await coordinator.saveCompletedSession(
-          {
-            dayNumber: data.dayNumber,
-            sessionType: data.sessionType,
-            track: data.track,
-            duration: data.duration,
-            bonusSeconds: data.bonusSeconds,
-            completed: data.completed,
-            actualTime: data.actualTime,
-            clearPercent: data.clearPercent,
-            thoughtCount: data.thoughtCount,
-            mindStateLog: data.mindStateLog,
-            sessionDate: todayLocalIsoDate(),
-          },
-          clientSessionId,
-          user.id,
-          data.thoughts,
-        );
-        savedSessionId = result.sessionId;
-        isPendingSync = result.isPendingSync;
+    noteQueueWriteOutcome(isSessionStored(outcome), generation);
 
-        if (data.completed && data.sessionType === "standard" && !isPendingSync) {
-          refreshUserFromServer();
-          void refreshTodayTracks();
-        } else if (data.completed && data.sessionType === "standard" && isPendingSync) {
-          void refreshTodayTracks();
-        }
-      } catch (error) {
-        console.error("Failed to save session:", error);
-        isPendingSync = true;
-        savedSessionId = clientSessionId;
+    // Unchanged for the two states that existed before: a synced standard sit
+    // re-reads the user, a pending one refreshes the track badges. A sit that was
+    // not stored moved nothing, so neither runs.
+    if (data.completed && data.sessionType === "standard") {
+      if (outcome.status === "synced") {
+        refreshUserFromServer();
+        void refreshTodayTracks();
+      } else if (outcome.status === "pending") {
+        void refreshTodayTracks();
       }
     }
 
+    return outcome;
+  }, [noteQueueWriteOutcome, refreshTodayTracks, refreshUserFromServer]);
+
+  // #703 — cross-client note on the completion view. iOS never renders one for a
+  // sit it could not store: `SessionViewModel.saveSession` returns nil when the
+  // local write throws, and `SessionView.handleCompletion` puts up the "Session
+  // could not be saved" alert (Retry / Continue without saving) instead of
+  // calling `completeSession`. Web has no equivalent interception point — the
+  // completion overlay *is* the screen — so it delivers the same two facts
+  // inside it: the sit was not stored, and Retry. The offline strip's withdrawn
+  // promise is mirrored on both clients (shared `OfflineIndicatorCopy` +
+  // `AppViewModel.localSaveFailed`), because iOS's "Continue without saving"
+  // leaves the user looking at the same false reassurance this ticket is about.
+  const handleSessionComplete = useCallback(async (data: CompletedSitInput) => {
+    const clientSessionId = crypto.randomUUID();
+    // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
+    const sessionDate = todayLocalIsoDate();
+    let outcome: SessionSaveOutcome | null = null;
+
+    // #666 guard: the save below is a suspension point, and sign-out during it
+    // must not let the previous account's sit reopen the completion screen over
+    // the signed-out UI.
+    const generation = sessionGeneration.current;
+
+    if (user?.id) {
+      // Kept for the completion screen's retry, which must reuse this exact
+      // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
+      lastCompletedSitRef.current = { data, clientSessionId, sessionDate };
+      outcome = await saveCompletedSit(data, clientSessionId, user.id, sessionDate);
+    } else {
+      lastCompletedSitRef.current = null;
+    }
+
+    if (generation !== sessionGeneration.current) return;
+
     setCompletionData({
-      sessionId: savedSessionId,
+      sessionId: outcome?.sessionId ?? null,
       clientSessionId,
-      isPendingSync,
+      isPendingSync: outcome?.status === "pending",
+      notStored: outcome?.status === "notStored",
       dayNumber: data.dayNumber,
       sessionType: data.sessionType,
       track: data.track,
@@ -702,24 +793,46 @@ export default function StillPoint() {
       nextDuration: previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
     });
     setOverlay("complete");
-  }, [user, refreshTodayTracks, refreshUserFromServer]);
+  }, [user, saveCompletedSit]);
 
-  const handleSessionAbandon = useCallback(async (data: {
-    dayNumber: number;
-    sessionType: SessionType;
-    track: Track;
-    duration: number;
-    bonusSeconds: number;
-    completed: boolean;
-    actualTime: number;
-    clearPercent: number;
-    thoughtCount: number;
-    mindStateLog: Array<{ time: number; state: string }>;
-    thoughts: Array<{ timeInSession: number; text: string }>;
-  }) => {
+  // #703: retry the local save without leaving the completion screen — the web
+  // counterpart of the iOS "Session could not be saved" alert's Retry button.
+  // Rejects while the sit is still nowhere, which is what puts the banner's
+  // button back into its retry state.
+  const handleRetryCompletionSave = useCallback(async () => {
+    const pending = lastCompletedSitRef.current;
+    if (!pending || !user?.id) {
+      throw new Error("Failed to save session");
+    }
+
+    const outcome = await saveCompletedSit(
+      pending.data,
+      pending.clientSessionId,
+      user.id,
+      pending.sessionDate,
+    );
+    if (outcome.status === "notStored") {
+      throw new Error("Failed to save session");
+    }
+
+    setCompletionData((previous) => (
+      previous && previous.clientSessionId === pending.clientSessionId
+        ? {
+          ...previous,
+          sessionId: outcome.sessionId,
+          isPendingSync: outcome.status === "pending",
+          notStored: false,
+        }
+        : previous
+    ));
+  }, [user, saveCompletedSit]);
+
+  const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
     if (user?.id) {
+      const clientSessionId = crypto.randomUUID();
+      // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+      const generation = sessionGeneration.current;
       try {
-        const clientSessionId = crypto.randomUUID();
         await getWebSessionSyncCoordinator().saveCompletedSession(
           {
             dayNumber: data.dayNumber,
@@ -738,13 +851,22 @@ export default function StillPoint() {
           user.id,
           data.thoughts,
         );
+        noteQueueWriteOutcome(true, generation);
       } catch (error) {
         console.error("Failed to save abandoned session:", error);
+        // #703: an abandoned sit is still a sit the queue was asked to keep. It
+        // gets no completion screen, so the offline strip is the only place this
+        // can be said at all — and it goes through the same classifier as a
+        // completed sit, so a sync error thrown after a durable write does not
+        // withdraw a promise the queue is keeping.
+        noteQueueWriteOutcome(isSessionStored(
+          resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
+        ), generation);
       }
     }
 
     setOverlay(null);
-  }, [user]);
+  }, [user, noteQueueWriteOutcome]);
 
   // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
   // (#374). Empty sessions (entered then ended with no taps) are not logged.
@@ -762,9 +884,11 @@ export default function StillPoint() {
     }
     if (breathSavingRef.current) return;
     breathSavingRef.current = true;
+    const clientSessionId = crypto.randomUUID();
+    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+    const generation = sessionGeneration.current;
     try {
       if (user?.id) {
-        const clientSessionId = crypto.randomUUID();
         await getWebSessionSyncCoordinator().saveCompletedSession(
           {
             dayNumber: user.currentDay ?? 1,
@@ -783,14 +907,22 @@ export default function StillPoint() {
           user.id,
           [],
         );
+        noteQueueWriteOutcome(true, generation);
       }
     } catch (error) {
       console.error("Failed to save breath session:", error);
+      // #703: same as the abandon path — a breath sit has no completion screen,
+      // so the offline strip carries the news that it was not stored, and it
+      // uses the same classifier so a sync error raised after a durable write
+      // is not mistaken for one.
+      noteQueueWriteOutcome(isSessionStored(
+        resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
+      ), generation);
     } finally {
       breathSavingRef.current = false;
       setOverlay(null);
     }
-  }, [user]);
+  }, [user, noteQueueWriteOutcome]);
 
   const inBuddyRoom = tab === "buddy" && !!buddySessionId;
   const isImmersive = overlay === "session" || overlay === "breath" || inBuddyRoom;
@@ -979,7 +1111,7 @@ export default function StillPoint() {
           would push the tab content out of the `1fr` track and shrink it. */}
       {showOfflineIndicator ? (
         <div>
-          <OfflineIndicator />
+          <OfflineIndicator sitNotStored={localWriteFailed} />
           {welcomeHeader}
         </div>
       ) : (
@@ -1055,12 +1187,18 @@ export default function StillPoint() {
           thoughtCount={completionData.thoughtCount}
           thoughts={completionData.thoughts}
           nextDuration={completionData.nextDuration}
+          notStored={completionData.notStored}
+          // #703: only offered while the sit is nowhere; it reuses the original
+          // client id, so a retry can never produce a second sit.
+          onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
           onReturn={() => {
             setOverlay(null);
             router.push(pathForTab(DEFAULT_TAB));
             refreshUserFromServer();
           }}
-          onSaveNote={completionData.clientSessionId && user ? async (text: string) => {
+          // #703: with nothing stored there is no queue entry to append a note to
+          // and no session to post one against, so the field is not offered.
+          onSaveNote={completionData.clientSessionId && user && !completionData.notStored ? async (text: string) => {
             const coordinator = getWebSessionSyncCoordinator();
             if (completionData.isPendingSync) {
               await coordinator.appendEndNote(

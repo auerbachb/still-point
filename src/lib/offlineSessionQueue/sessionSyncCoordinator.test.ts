@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { InMemoryOfflineSessionQueueStore } from "./queueStore";
+import { InMemoryOfflineSessionQueueStore, type OfflineSessionQueueStore } from "./queueStore";
 import {
+  LocalSessionWriteError,
   SessionSyncError,
   WebSessionSyncCoordinator,
   alwaysFailingSessionSyncTransport,
@@ -8,6 +9,7 @@ import {
   requestWithClientId,
 } from "./sessionSyncCoordinator";
 import type { SessionSyncTransport } from "./transport";
+import type { PendingSessionEntry } from "./types";
 
 const testOwnerUserId = "user-test-558";
 
@@ -133,6 +135,88 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
     const entries = await store.loadEntries();
     expect(entries[0]!.thoughts).toEqual([{ timeInSession: -1, text: "offline note" }]);
+  });
+
+  test("#703: a refused IndexedDB write throws LocalSessionWriteError, not a pending result", async () => {
+    const writeFailure = new Error("QuotaExceededError");
+    const refusingStore: OfflineSessionQueueStore = {
+      loadEntries: async (): Promise<PendingSessionEntry[]> => [],
+      saveEntries: async () => {
+        throw writeFailure;
+      },
+    };
+    const coordinator = new WebSessionSyncCoordinator(refusingStore, alwaysFailingSessionSyncTransport);
+
+    await expect(
+      coordinator.saveCompletedSession(
+        baseRequest(),
+        "550e8400-e29b-41d4-a716-446655440007",
+        testOwnerUserId,
+        [],
+      ),
+    ).rejects.toThrow(LocalSessionWriteError);
+  });
+
+  test("#703: the refused write keeps the underlying storage error as its cause", async () => {
+    const writeFailure = new Error("QuotaExceededError");
+    const refusingStore: OfflineSessionQueueStore = {
+      loadEntries: async (): Promise<PendingSessionEntry[]> => [],
+      saveEntries: async () => {
+        throw writeFailure;
+      },
+    };
+    const coordinator = new WebSessionSyncCoordinator(refusingStore, alwaysFailingSessionSyncTransport);
+
+    const error = await coordinator
+      .saveCompletedSession(baseRequest(), "550e8400-e29b-41d4-a716-446655440008", testOwnerUserId, [])
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(LocalSessionWriteError);
+    expect((error as LocalSessionWriteError).cause).toBe(writeFailure);
+  });
+
+  test("#703: an unreadable store throws LocalSessionWriteError too — nothing was stored", async () => {
+    const readFailure = new Error("InvalidStateError");
+    const unreadableStore: OfflineSessionQueueStore = {
+      loadEntries: async (): Promise<PendingSessionEntry[]> => {
+        throw readFailure;
+      },
+      saveEntries: async () => {},
+    };
+    const coordinator = new WebSessionSyncCoordinator(unreadableStore, alwaysFailingSessionSyncTransport);
+
+    const error = await coordinator
+      .saveCompletedSession(baseRequest(), "550e8400-e29b-41d4-a716-446655440009", testOwnerUserId, [])
+      .catch((caught: unknown) => caught);
+
+    // Untagged, this would reach `resolveSessionSaveOutcome` as a post-write
+    // sync failure and be reported to the user as safely queued.
+    expect(error).toBeInstanceOf(LocalSessionWriteError);
+    expect((error as LocalSessionWriteError).cause).toBe(readFailure);
+  });
+
+  /**
+   * The inverse of #703: the write landed and only the upload was refused with a
+   * non-retryable status, which `flushEntry` rethrows. The entry must still be in
+   * the queue for `flushPending` to retry on reconnect, and the error must NOT be
+   * a `LocalSessionWriteError` — that tag is what makes the caller say "nowhere".
+   */
+  test("#703: a permanent sync failure leaves the entry queued and is not tagged as a write failure", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const permanentTransport = {
+      createSession: async () => {
+        throw Object.assign(new Error("Create session failed (400)"), { permanent: true });
+      },
+      batchThoughts: async () => {},
+    };
+    const coordinator = new WebSessionSyncCoordinator(store, permanentTransport);
+
+    const error = await coordinator
+      .saveCompletedSession(baseRequest(), "550e8400-e29b-41d4-a716-446655440010", testOwnerUserId, [])
+      .catch((caught: unknown) => caught);
+
+    expect(error).not.toBeInstanceOf(LocalSessionWriteError);
+    expect(await store.loadEntries()).toHaveLength(1);
   });
 
   test("appendEndNote rejects owner mismatch", async () => {
