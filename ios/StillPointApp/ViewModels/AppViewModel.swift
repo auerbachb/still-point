@@ -1151,6 +1151,15 @@ final class AppViewModel {
 
         widgetHistoryTask?.cancel()
         widgetHistoryTask = Task {
+            // #678: the generation of the stored snapshot as it is *before* this
+            // task suspends. Every `WidgetDataStore` write advances it, so if a
+            // sit finishes — or `refreshTracksDoneToday()` learns from the server
+            // that today is already done — while `getSessions()` is in flight,
+            // the save below sees the move and merges onto that fresher snapshot
+            // instead of overwriting it with this pre-await view. Read here
+            // rather than outside the task so nothing can slip between the read
+            // and the `await`.
+            let baselineGeneration = WidgetDataStore.currentWriteGeneration()
             guard let result = try? await APIClient.shared.getSessions() else {
                 // Allow a later attempt to retry this account+day.
                 if widgetHistoryRefreshKey == refreshKey { widgetHistoryRefreshKey = nil }
@@ -1184,7 +1193,10 @@ final class AppViewModel {
                 serverStreak: result.stats.streak,
                 serverStreakDate: WidgetDataStore.serverStreakAnchorDate(from: result.sessions)
             )
-            WidgetDataStore.save(snapshot)
+            // Newest-wins (#678): merges rather than clobbers when the stored
+            // snapshot moved during the fetch, and declines to write at all if
+            // the container was cleared by a sign-out in the meantime.
+            WidgetDataStore.save(snapshot, ifWriteGeneration: baselineGeneration, now: now)
             WidgetTimelineReloader.reloadHabitWidget()
             // #526: backfill tracking-controls unlock from history so existing users
             // who have a qualifying sit start in the unlocked state (mirrors web's
@@ -1216,11 +1228,16 @@ final class AppViewModel {
         //
         // Drop any in-flight `refreshWidgetWeekHistory()` fetch first (same
         // pattern as `didLogout()`): a `getSessions()` call that started before
-        // this sit finished returns without it, and its unconditional
-        // `WidgetDataStore.save` would clobber the snapshot written just below,
-        // un-checking the row we are here to check. Clearing the throttle key
-        // lets the next `refreshTracksDoneToday()` re-fetch and backfill from
-        // history once `returnHome()` has flushed the sit to the server.
+        // this sit finished returns without it, so there is no point paying for
+        // the rest of it. Clearing the throttle key lets the next
+        // `refreshTracksDoneToday()` re-fetch and backfill from history once
+        // `returnHome()` has flushed the sit to the server.
+        //
+        // Not the guard against that fetch un-checking the row, though — it only
+        // covers writers that know to cancel, and `refreshTracksDoneToday()`
+        // raises `practiceDoneToday` from the server response and syncs without
+        // one. The store-level write generation is what actually makes a late
+        // backfill merge instead of overwrite (#678).
         widgetHistoryTask?.cancel()
         widgetHistoryRefreshKey = nil
         syncWidgetData()
