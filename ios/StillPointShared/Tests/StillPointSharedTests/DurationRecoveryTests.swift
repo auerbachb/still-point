@@ -125,14 +125,76 @@ final class DurationRecoveryTests: XCTestCase {
             recoveryCurrentStep: 3,
             recoveryTotalSteps: 5
         )
+        // #661: the raw ramp value is 236s; it is snapped to the nearest 10-second block.
         XCTAssertEqual(
             DurationRecovery.sessionDurationForUser(sessionType: .standard, currentDay: 45, recovery: recovery),
-            236
+            240
         )
         XCTAssertEqual(
             DurationRecovery.sessionDurationForUser(sessionType: .quick, currentDay: 45, recovery: recovery),
             StillPoint.quickDuration
         )
+    }
+
+    // MARK: - 10-second block rounding (#661)
+
+    func testRoundToNearestBlockLeavesAlignedValuesUnchanged() {
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(60), 60)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(600), 600)
+        XCTAssertEqual(
+            DurationRecovery.roundToNearestBlock(Double(StillPoint.blockDuration)),
+            StillPoint.blockDuration
+        )
+    }
+
+    func testRoundToNearestBlockRoundsBothDirections() {
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(148), 150)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(324), 320)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(236), 240)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(412), 410)
+    }
+
+    /// Ties must round up so iOS matches the web's `Math.round` (half-up on positives).
+    func testRoundToNearestBlockRoundsMidpointsUp() {
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(75), 80)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(65), 70)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(155), 160)
+    }
+
+    func testRoundToNearestBlockNeverReturnsZero() {
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(0), StillPoint.blockDuration)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(1), StillPoint.blockDuration)
+        XCTAssertEqual(DurationRecovery.roundToNearestBlock(4.99), StillPoint.blockDuration)
+    }
+
+    func testEveryRecoveryStepFillsWholeBlocks() {
+        for targetDay in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20, 45, 54, 55, 60] {
+            let totalSteps = DurationRecovery.recoveryTotalStepsFor(targetDay: targetDay)
+            guard totalSteps > 0 else { continue }
+            var previous = 0
+            for step in 1...totalSteps {
+                let duration = DurationRecovery.recoveryStepDuration(
+                    targetDay: targetDay,
+                    totalSteps: totalSteps,
+                    step: step
+                )
+                XCTAssertEqual(
+                    duration % StillPoint.blockDuration, 0,
+                    "day \(targetDay) step \(step) (\(duration)s) is not a whole block"
+                )
+                XCTAssertGreaterThanOrEqual(duration, StillPoint.blockDuration)
+                XCTAssertGreaterThanOrEqual(duration, previous, "ramp went backwards at day \(targetDay)")
+                previous = duration
+            }
+            XCTAssertLessThan(previous, StillPoint.duration(forDay: targetDay))
+        }
+    }
+
+    func testDay45RampLandsOnBlockBoundaries() {
+        let durations = (1...5).map {
+            DurationRecovery.recoveryStepDuration(targetDay: 45, totalSteps: 5, step: $0)
+        }
+        XCTAssertEqual(durations, [60, 150, 240, 320, 410])
     }
 
     private func recoveryFields(from state: DurationForDayFixture.ProgressionState) -> DurationRecovery.RecoveryFields {

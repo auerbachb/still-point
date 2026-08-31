@@ -10,7 +10,7 @@
  * step completes (#559), so sparse sitters are not stuck re-entering recovery at
  * the same day forever before they can climb toward the 10-minute cap.
  */
-import { BASE_DURATION, FORK_DAY, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
+import { BASE_DURATION, BLOCK_DURATION, FORK_DAY, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
 import { daysBetweenIsoDatesInclusive } from "./sessionCalendar";
 
 /** Recovery ramps back to the prior duration level over at most this many sessions. */
@@ -60,11 +60,33 @@ export function recoveryTotalStepsFor(targetDay: number): number {
 }
 
 /**
+ * Rounds a duration (seconds) to the nearest whole 10-second block (#661).
+ *
+ * The session timer renders progress as `BLOCK_DURATION`-second blocks
+ * (`Math.ceil(duration / BLOCK_DURATION)` in BlockTimer/HomeView/CompletionScreen), so a
+ * duration that is not a multiple of the block size ends the sit part-way through a
+ * partially-filled final block. Never returns zero: a session is at least one block long.
+ *
+ * Ties round up (`Math.round` is half-up for the positive values used here), matching
+ * Swift's `.rounded()` (half-away-from-zero) so web and iOS agree on x5 midpoints.
+ */
+export function roundToNearestBlock(seconds: number): number {
+  return Math.max(1, Math.round(seconds / BLOCK_DURATION)) * BLOCK_DURATION;
+}
+
+/**
  * Duration (seconds) for a given recovery step (1-indexed). Step 1 is always exactly
  * `BASE_DURATION` (the "reset to 1 minute" session immediately after the miss); later
  * steps ramp linearly by `difference / totalSteps` seconds. Completing the final
  * recovery step clears recovery and advances `currentDay` by one (#559), so the
  * next standard sit uses `durationForDay(currentDay)` at the newly earned level.
+ *
+ * Every step is snapped to a whole 10-second block (#661) so a recovery sit never ends
+ * mid-block. Rounding happens here, at the computation layer, so every consumer — web,
+ * iOS, and the stats/history surfaces — sees the same block-aligned number. The ramp
+ * stays monotonic (rounding is order-preserving) and, because `durationForDay` is itself
+ * block-aligned and the per-step ramp is at least one block, a recovery step never
+ * rounds up to or past the target day's own duration.
  */
 export function recoveryStepDuration(targetDay: number, totalSteps: number, step: number): number {
   if (totalSteps <= 0) return BASE_DURATION;
@@ -72,9 +94,10 @@ export function recoveryStepDuration(targetDay: number, totalSteps: number, step
   const difference = priorDuration - BASE_DURATION;
   const ramp = difference / totalSteps;
   const clampedStep = Math.min(Math.max(step, 1), totalSteps);
-  // Round to avoid float drift (e.g. a difference not evenly divisible by totalSteps)
-  // leaking fractional seconds into a stored `sessions.duration` integer column.
-  return Math.round(BASE_DURATION + ramp * (clampedStep - 1));
+  // Rounding to a block also absorbs float drift (e.g. a difference not evenly divisible
+  // by totalSteps) that would otherwise leak fractional seconds into the stored
+  // `sessions.duration` integer column.
+  return roundToNearestBlock(BASE_DURATION + ramp * (clampedStep - 1));
 }
 
 /** The shared duration function (#238): every planner/display for a sit's length

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { FORK_DAY, MAX_DURATION, durationForDay } from "./constants";
+import { BLOCK_DURATION, FORK_DAY, MAX_DURATION, durationForDay } from "./constants";
 import {
   activeRecovery,
   advanceProgression,
@@ -8,6 +8,7 @@ import {
   isDualTrackEligible,
   recoveryStepDuration,
   recoveryTotalStepsFor,
+  roundToNearestBlock,
   sessionDurationForUser,
   startRecovery,
   type ProgressionState,
@@ -116,15 +117,15 @@ describe("recoveryStepDuration", () => {
 
   test("handles a difference not evenly divisible by totalSteps without float drift", () => {
     // currentDay=3 -> priorDuration=80, difference=20, totalSteps=3, ramp=6.666...
-    // All output durations must be integers even though the ramp is non-terminating.
-    // step 1 = Math.round(60 + 6.666*0) = 60
-    // step 2 = Math.round(60 + 6.666*1) = Math.round(66.666) = 67
-    // step 3 = Math.round(60 + 6.666*2) = Math.round(73.333) = 73
+    // All output durations must be whole 10-second blocks even though the ramp is
+    // non-terminating (#661): 60 -> 60, 66.666 -> 70, 73.333 -> 70.
+    // Two adjacent steps collapsing onto the same block is expected when the ramp is
+    // finer than one block; the sit still ends on a filled block.
     const results = [1, 2, 3].map((s) => recoveryStepDuration(3, 3, s));
     for (const r of results) {
       expect(Number.isInteger(r)).toBe(true);
     }
-    expect(results).toEqual([60, 67, 73]);
+    expect(results).toEqual([60, 70, 70]);
   });
 
   test("totalSteps=0 always returns BASE_DURATION", () => {
@@ -135,6 +136,97 @@ describe("recoveryStepDuration", () => {
     const totalSteps = recoveryTotalStepsFor(6);
     expect(recoveryStepDuration(6, totalSteps, 0)).toBe(recoveryStepDuration(6, totalSteps, 1));
     expect(recoveryStepDuration(6, totalSteps, 99)).toBe(recoveryStepDuration(6, totalSteps, totalSteps));
+  });
+});
+
+describe("roundToNearestBlock (#661)", () => {
+  test("leaves a value that is already a whole number of blocks unchanged", () => {
+    expect(roundToNearestBlock(60)).toBe(60);
+    expect(roundToNearestBlock(600)).toBe(600);
+    expect(roundToNearestBlock(BLOCK_DURATION)).toBe(BLOCK_DURATION);
+  });
+
+  test("rounds to the nearer block in both directions", () => {
+    expect(roundToNearestBlock(148)).toBe(150); // .8 up
+    expect(roundToNearestBlock(324)).toBe(320); // .4 down
+    expect(roundToNearestBlock(236)).toBe(240);
+    expect(roundToNearestBlock(412)).toBe(410);
+  });
+
+  test("x5 midpoints round up, matching Swift's half-away-from-zero .rounded()", () => {
+    expect(roundToNearestBlock(75)).toBe(80);
+    expect(roundToNearestBlock(65)).toBe(70);
+    expect(roundToNearestBlock(155)).toBe(160);
+  });
+
+  test("never rounds down to zero — a session is at least one block", () => {
+    expect(roundToNearestBlock(0)).toBe(BLOCK_DURATION);
+    expect(roundToNearestBlock(1)).toBe(BLOCK_DURATION);
+    expect(roundToNearestBlock(4)).toBe(BLOCK_DURATION);
+    expect(roundToNearestBlock(4.99)).toBe(BLOCK_DURATION);
+  });
+
+  test("handles a non-terminating input without leaking fractional seconds", () => {
+    const rounded = roundToNearestBlock(60 + 20 / 3);
+    expect(Number.isInteger(rounded)).toBe(true);
+    expect(rounded % BLOCK_DURATION).toBe(0);
+  });
+});
+
+describe("recovery durations always fill whole 10-second blocks (#661)", () => {
+  // The block timer renders `Math.ceil(duration / BLOCK_DURATION)` blocks, so any
+  // duration that is not a multiple of BLOCK_DURATION ends mid-block.
+  const targetDays = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20, 45, 54, 55, 60];
+
+  test("every step of every canonical recovery ramp is a whole block", () => {
+    for (const targetDay of targetDays) {
+      const totalSteps = recoveryTotalStepsFor(targetDay);
+      if (totalSteps <= 0) continue;
+      for (let step = 1; step <= totalSteps; step++) {
+        const duration = recoveryStepDuration(targetDay, totalSteps, step);
+        expect(duration % BLOCK_DURATION).toBe(0);
+        expect(duration).toBeGreaterThanOrEqual(BLOCK_DURATION);
+      }
+    }
+  });
+
+  test("the ramp stays non-decreasing after rounding", () => {
+    for (const targetDay of targetDays) {
+      const totalSteps = recoveryTotalStepsFor(targetDay);
+      if (totalSteps <= 0) continue;
+      const durations = Array.from({ length: totalSteps }, (_, i) =>
+        recoveryStepDuration(targetDay, totalSteps, i + 1),
+      );
+      for (let i = 1; i < durations.length; i++) {
+        expect(durations[i]).toBeGreaterThanOrEqual(durations[i - 1]);
+      }
+    }
+  });
+
+  test("rounding up never reaches the target day's own duration", () => {
+    for (const targetDay of targetDays) {
+      const totalSteps = recoveryTotalStepsFor(targetDay);
+      if (totalSteps <= 0) continue;
+      const last = recoveryStepDuration(targetDay, totalSteps, totalSteps);
+      expect(last).toBeLessThan(durationForDay(targetDay));
+    }
+  });
+
+  test("day 45 ramp lands on block boundaries instead of 148/236/324/412", () => {
+    const totalSteps = recoveryTotalStepsFor(45);
+    expect([1, 2, 3, 4, 5].map((s) => recoveryStepDuration(45, totalSteps, s))).toEqual([
+      60, 150, 240, 320, 410,
+    ]);
+  });
+
+  test("sessionDurationForUser surfaces the block-aligned recovery value", () => {
+    expect(
+      sessionDurationForUser("standard", 45, {
+        recoveryTargetDay: 45,
+        recoveryCurrentStep: 3,
+        recoveryTotalSteps: 5,
+      }),
+    ).toBe(240);
   });
 });
 

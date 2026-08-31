@@ -111,25 +111,74 @@
   ],
   "recoveryStepDuration": [
     {
-      "name": "day 45 recovery ramp step 1 resets to 60s",
+      "name": "day 45 recovery ramp step 1 resets to 60s (already block-aligned)",
       "targetDay": 45,
       "totalSteps": 5,
       "step": 1,
       "expected": 60
     },
     {
-      "name": "day 45 recovery ramp step 3",
+      "name": "day 45 recovery ramp step 2 rounds 148 up to 150 (#661)",
+      "targetDay": 45,
+      "totalSteps": 5,
+      "step": 2,
+      "expected": 150
+    },
+    {
+      "name": "day 45 recovery ramp step 3 rounds 236 up to 240 (#661)",
       "targetDay": 45,
       "totalSteps": 5,
       "step": 3,
-      "expected": 236
+      "expected": 240
     },
     {
-      "name": "day 45 recovery ramp step 5 before landing sit",
+      "name": "day 45 recovery ramp step 4 rounds 324 down to 320 (#661)",
+      "targetDay": 45,
+      "totalSteps": 5,
+      "step": 4,
+      "expected": 320
+    },
+    {
+      "name": "day 45 recovery ramp step 5 rounds 412 down to 410 before landing sit (#661)",
       "targetDay": 45,
       "totalSteps": 5,
       "step": 5,
-      "expected": 412
+      "expected": 410
+    },
+    {
+      "name": "day 6 ramp is already a whole number of blocks and is unchanged",
+      "targetDay": 6,
+      "totalSteps": 5,
+      "step": 4,
+      "expected": 90
+    },
+    {
+      "name": "x5 midpoint rounds up: raw 75 becomes 80 on both clients (#661)",
+      "targetDay": 4,
+      "totalSteps": 2,
+      "step": 2,
+      "expected": 80
+    },
+    {
+      "name": "non-terminating ramp still lands on a whole block: raw 66.67 becomes 70 (#661)",
+      "targetDay": 3,
+      "totalSteps": 3,
+      "step": 2,
+      "expected": 70
+    },
+    {
+      "name": "smallest ramp never rounds below one block: day 2 step 1 stays 60",
+      "targetDay": 2,
+      "totalSteps": 1,
+      "step": 1,
+      "expected": 60
+    },
+    {
+      "name": "totalSteps 0 returns the block-aligned base duration",
+      "targetDay": 45,
+      "totalSteps": 0,
+      "step": 1,
+      "expected": 60
     }
   ]
 }
