@@ -88,15 +88,32 @@ public enum DurationRecovery {
         max(0, min(recoveryMaxSteps, targetDay - 1))
     }
 
+    /// Rounds a duration (seconds) to the nearest whole 10-second block (#661).
+    ///
+    /// The session timer renders progress as `StillPoint.blockDuration`-second blocks
+    /// (`StillPoint.blockCount(forDuration:)` ceils), so a duration that is not a multiple of the
+    /// block size ends the sit part-way through a partially-filled final block. Never
+    /// returns zero: a session is at least one block long.
+    ///
+    /// Ties round up (`.rounded()` is half-away-from-zero, and the values here are
+    /// positive), matching the web's `Math.round` so both clients agree on x5 midpoints.
+    public static func roundToNearestBlock(_ seconds: Double) -> Int {
+        max(1, Int((seconds / Double(StillPoint.blockDuration)).rounded())) * StillPoint.blockDuration
+    }
+
     /// Duration (seconds) for a given recovery step (1-indexed). Step 1 is always exactly
     /// `baseDuration`; later steps ramp linearly toward `duration(forDay: targetDay)`.
+    ///
+    /// Every step is snapped to a whole 10-second block (#661) so a recovery sit never ends
+    /// mid-block. Mirrors `recoveryStepDuration` in `src/lib/duration.ts`; the shared
+    /// `durationForDay.json` fixture pins both to the same values.
     public static func recoveryStepDuration(targetDay: Int, totalSteps: Int, step: Int) -> Int {
         guard totalSteps > 0 else { return StillPoint.baseDuration }
         let priorDuration = StillPoint.duration(forDay: targetDay)
         let difference = priorDuration - StillPoint.baseDuration
         let ramp = Double(difference) / Double(totalSteps)
         let clampedStep = min(max(step, 1), totalSteps)
-        return Int((Double(StillPoint.baseDuration) + ramp * Double(clampedStep - 1)).rounded())
+        return roundToNearestBlock(Double(StillPoint.baseDuration) + ramp * Double(clampedStep - 1))
     }
 
     /// The shared duration function (#238): every planner/display for a sit's length
