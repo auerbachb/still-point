@@ -17,7 +17,7 @@ import {
   sendFailureReasonReminderNotification,
   sendMissADayNotification,
 } from "@/lib/notifications";
-import { isSessionActive } from "@/lib/notifications/session-active";
+import { isSessionActive, isUserSessionActive } from "@/lib/notifications/session-active";
 import { initiateMissedSitCall } from "@/lib/vapi";
 
 export const MISSED_SIT_CALL_NOTIFICATION_TYPE = "missed_sit_call";
@@ -665,6 +665,25 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
           loadUserStreak(prefs.userId, intendedDateKey),
           countDaysMissed(prefs.userId, intendedDateKey),
         ]);
+
+        // `callCandidates` was read in one query before this loop began, so the
+        // pre-claim check above ran against a snapshot that is many awaits old by
+        // now — every earlier user in the loop, the completion lookup, the claim,
+        // and the context loads just above. A sit starting in that gap is
+        // invisible to it, and a ringing phone has no display-time fallback the
+        // way a push does (#431 willPresent / sw.js), so this re-read is the only
+        // layer that can stop it. It sits last, immediately before the dial, so
+        // nothing awaits between the check and the call it guards; a throw here
+        // lands in the catch below and hands the claim back like any other
+        // pre-dial failure.
+        if (await isUserSessionActive(prefs.userId, now)) {
+          // Release rather than record, so the slot is re-evaluated on a later
+          // tick instead of being logged as a call that never went out (same
+          // reasoning as the pre-claim skip in the reminder loop above).
+          await releaseMissedSitCallClaim(prefs.userId, windowKey);
+          continue;
+        }
+
         const result = await initiateMissedSitCall({
           userId: prefs.userId,
           phoneNumber: prefs.callPhoneNumber,

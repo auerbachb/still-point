@@ -149,7 +149,11 @@ app suspended, network drop) self-heals instead of muting the user indefinitely.
   inherits the hold. `dispatchDueNotifications()` additionally skips active-session
   users before claiming a dispatch row, keeping the ledger clean, and skips
   missed-sit **calls** for the same reason (a ringing phone mid-sit is the loudest
-  interruption we own).
+  interruption we own). The call path checks **twice**: once against the candidate
+  scan, then again with a fresh `isUserSessionActive()` read immediately before
+  dialing, releasing the claim if a sit started in between. A push that slips
+  through still meets the #431 display layer; a ringing phone has no such fallback,
+  so the re-read is the only thing that can stop it.
 - **Reminders are held, not queued.** A cron reminder skipped mid-sit is re-evaluated
   on the next tick, which only re-sends if the 5-minute window is still open — a sit
   spanning the whole window drops that day's reminder. That is the intended trade:
@@ -160,9 +164,17 @@ app suspended, network drop) self-heals instead of muting the user indefinitely.
   (`willPresent` never runs) or during a service-worker cold start — the banner is
   already on screen by the time a client-side check could run.
 - Reports are **serialized per client** (`reportSessionActiveState` on web, the
-  report chain in `SessionNotificationSuppressionController` on iOS) so an in-flight
+  report queue in `SessionNotificationSuppressionController` on iOS) so an in-flight
   heartbeat cannot land after the clear that ended the sit and re-suppress for a
-  full TTL.
+  full TTL. iOS coalesces the queue **newest-wins** rather than chaining every
+  report: `APIClient`'s request timeout is no shorter than the 60s heartbeat, so a
+  chain on a slow network took one full request per stacked heartbeat to reach the
+  ending `false`.
+- **The queue is reset at the auth boundary.** Web sign-out is an in-page state
+  reset rather than a reload, so a report queued by one account would otherwise
+  drain under the next account's cookie and silence the wrong user; the web queue
+  carries an epoch that logout bumps, and `clearSuppressPreference()` on iOS
+  cancels anything queued or in flight.
 - **Known bound — one signal per user, not per device.** With two clients in a
   session view simultaneously, whichever finishes first clears the hold and the
   still-sitting client re-establishes it on its next heartbeat (≤60s exposure). A

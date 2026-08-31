@@ -14,6 +14,10 @@ const sendFailureReasonReminderNotification = vi.fn();
 
 const dbSelect = vi.fn();
 let callCandidateRows: Array<Record<string, unknown>> = [];
+// The row `isUserSessionActive` re-reads just before dialing. Kept separate from
+// `callCandidateRows` so a test can make the loop's snapshot disagree with the
+// live hold — which is the whole point of the re-check (#709).
+let sessionActiveRows: Array<Record<string, unknown>> = [];
 
 vi.mock("@/db", () => ({
   db: {
@@ -85,12 +89,20 @@ describe("notification scheduler", () => {
     vi.resetModules();
     preferenceRows = [basePrefs];
     callCandidateRows = [];
+    sessionActiveRows = [];
     dbSelect.mockImplementation(() => ({
       from: vi.fn(() => ({
         innerJoin: vi.fn(() => ({
           where: vi.fn(() => Promise.resolve(callCandidateRows)),
         })),
-        where: vi.fn(() => Promise.resolve(preferenceRows)),
+        // Awaiting the builder yields the preference scan; `.limit(1)` is the
+        // single-row re-read in `isUserSessionActive`. One `where` serves both
+        // because drizzle builders are thenable, so the mock has to be too.
+        where: vi.fn(() =>
+          Object.assign(Promise.resolve(preferenceRows), {
+            limit: vi.fn(() => Promise.resolve(sessionActiveRows)),
+          }),
+        ),
       })),
     }));
     sendDailyReminderNotification.mockReset();
@@ -187,6 +199,37 @@ describe("notification scheduler", () => {
 
     expect(result.callsInitiated).toBe(0);
     expect(initiateMissedSitCall).not.toHaveBeenCalled();
+  });
+
+  test("holds a missed-sit call for a sit that starts after the candidate scan (#709)", async () => {
+    const now = new Date("2026-05-29T18:02:00.000Z");
+    // Snapshot taken before the loop: no hold, so the pre-claim check lets this
+    // candidate through and the dispatch is claimed.
+    callCandidateRows = [{
+      userId: "user-1",
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "18:00",
+      callWindowStop: "21:00",
+      tz: "UTC",
+      suppressDuringSession: true,
+      sessionActiveUntil: null,
+      username: "Alex",
+    }];
+    // The user starts sitting while the scheduler is awaiting the completion
+    // lookup, the claim, and the streak counts — visible only to a fresh read.
+    sessionActiveRows = [{
+      suppressDuringSession: true,
+      sessionActiveUntil: new Date(now.getTime() + 60_000),
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(now);
+
+    expect(result.callsInitiated).toBe(0);
+    expect(initiateMissedSitCall).not.toHaveBeenCalled();
+    // The claim is handed back so the slot can be retried once the sit ends,
+    // rather than being left recorded as a call that never went out.
+    expect(deleteWhere).toHaveBeenCalled();
   });
 
   test("claimNotificationDispatch is idempotent on conflict", async () => {
