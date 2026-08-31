@@ -220,6 +220,23 @@ describe("useWakeLock", () => {
     await view.unmount();
   });
 
+  it("acquires when enabled flips true (the sit actually starting)", async () => {
+    const wakeLock = installWakeLock();
+
+    // The production trigger: SessionView mounts idle, then `isActive` flips.
+    // Mounting straight into `true` exercises a different entry into the effect.
+    const view = await renderHook((enabled: boolean) => useWakeLock(enabled), false);
+    expect(wakeLock.request).not.toHaveBeenCalled();
+
+    await view.rerender(true);
+
+    expect(wakeLock.request).toHaveBeenCalledTimes(1);
+    expect(wakeLock.request).toHaveBeenCalledWith("screen");
+    expect(wakeLock.sentinels[0].released).toBe(false);
+
+    await view.unmount();
+  });
+
   it("releases the lock when enabled flips false (pause, complete, abandon, toggle-off)", async () => {
     const wakeLock = installWakeLock();
 
@@ -406,6 +423,23 @@ describe("useKeepScreenAwakePref", () => {
     });
 
     expect(view.current()).toBe(true);
+    await view.unmount();
+  });
+
+  it("re-renders when the Settings toggle saves off mid-session", async () => {
+    // The hook's stated contract: "an already-mounted session releases its lock
+    // on toggle-off". Paired with the `enabled` true->false release test above,
+    // this pins the half that a live session actually consumes.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: true }));
+
+    const view = await renderHook(() => useKeepScreenAwakePref(), undefined);
+    expect(view.current()).toBe(true);
+
+    await act(async () => {
+      saveWakeLockPrefs({ keepScreenAwakeDuringSession: false });
+    });
+
+    expect(view.current()).toBe(false);
     await view.unmount();
   });
 
