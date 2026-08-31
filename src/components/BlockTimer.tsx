@@ -101,6 +101,19 @@ export function BlockTimer({
   /// so replaying an older one would emit the wrong sound — announcing "three"
   /// after the sit has already ended.
   const pendingPlayRef = useRef<(() => boolean) | null>(null);
+  /// Guards the async blocked-report below. Reporting used to be synchronous,
+  /// so it could not outlive the timer; the resume attempt introduced a gap the
+  /// sit can end inside. The consumer of onSoundPlaybackBlocked lives in
+  /// BuddySessionRoom, which outlives this component, so an unguarded late
+  /// report is not a harmless no-op — it raises "Browser audio is paused" over
+  /// a session that already ended.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const playEnabledSound = (play: () => boolean) => {
     if (play()) return;
@@ -127,6 +140,10 @@ export function BlockTimer({
         const retry = pendingPlayRef.current;
         pendingPlayRef.current = null;
         if (resumed && retry?.()) return;
+        // The retry itself is deliberately not gated on the timer still being
+        // active: a completion chime that failed is retried as the sit ends,
+        // which is exactly when it is wanted. Only the banner is suppressed.
+        if (!mountedRef.current) return;
         onSoundPlaybackBlockedRef.current?.();
       })
       .finally(() => {
