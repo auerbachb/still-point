@@ -855,9 +855,9 @@ export default function StillPoint() {
     }
     if (breathSavingRef.current) return;
     breathSavingRef.current = true;
+    const clientSessionId = crypto.randomUUID();
     try {
       if (user?.id) {
-        const clientSessionId = crypto.randomUUID();
         await getWebSessionSyncCoordinator().saveCompletedSession(
           {
             dayNumber: user.currentDay ?? 1,
@@ -881,8 +881,12 @@ export default function StillPoint() {
     } catch (error) {
       console.error("Failed to save breath session:", error);
       // #703: same as the abandon path — a breath sit has no completion screen,
-      // so the offline strip carries the news that it was not stored.
-      noteQueueWriteOutcome(false);
+      // so the offline strip carries the news that it was not stored, and it
+      // uses the same classifier so a sync error raised after a durable write
+      // is not mistaken for one.
+      noteQueueWriteOutcome(isSessionStored(
+        resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
+      ));
     } finally {
       breathSavingRef.current = false;
       setOverlay(null);
