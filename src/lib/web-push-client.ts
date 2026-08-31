@@ -150,17 +150,35 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
  */
 const SESSION_STATE_TIMEOUT_MS = 10_000;
 
+/**
+ * `fetch` resolves rather than rejects on a 4xx/5xx, so a rejected report is
+ * otherwise indistinguishable from a delivered one. That matters asymmetrically:
+ * the heartbeat re-asserts `active: true` every 60s, but nothing re-asserts the
+ * `false` that ends a sit, so silently dropping that one leaves the user muted
+ * until the server-side TTL expires — the exact failure this endpoint exists to
+ * prevent. Clearing therefore gets one extra attempt; the TTL stays the backstop,
+ * and a loop would be worse than useless on an unmount report.
+ */
 async function postSessionActiveState(active: boolean): Promise<void> {
-  try {
-    await fetch("/api/notifications/session-state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active }),
-      keepalive: true,
-      signal: AbortSignal.timeout(SESSION_STATE_TIMEOUT_MS),
-    });
-  } catch {
-    // Ignore: the server signal self-heals via its TTL.
+  const attempts = active ? 1 : 2;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch("/api/notifications/session-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+        keepalive: true,
+        signal: AbortSignal.timeout(SESSION_STATE_TIMEOUT_MS),
+      });
+      if (res.ok) return;
+      // The session is gone — a retry cannot fix it, and the server expires the
+      // hold on its own.
+      if (res.status === 401) return;
+      console.warn("session-state report rejected", { active, status: res.status, attempt });
+    } catch {
+      // Network error or deadline. Retried once when clearing, then left to the TTL.
+    }
   }
 }
 

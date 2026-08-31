@@ -160,8 +160,46 @@ describe("reportSessionActiveState (#709)", () => {
     await flush();
 
     // The queued sit-end still goes out rather than waiting on a dead request.
-    expect(started).toEqual([true, false]);
+    // It appears twice because a failed *clear* is retried once — this stub reuses
+    // one already-aborted controller for every request, so the retry fails at once;
+    // a real retry gets a fresh deadline.
+    expect(started).toEqual([true, false, false]);
     timeoutSpy.mockRestore();
+  });
+
+  test("retries a failed clear once, but never a heartbeat", async () => {
+    // A 5xx resolves rather than rejects, so without the status check this would
+    // look delivered. The clear is the only report nothing re-asserts: the
+    // heartbeat repeats `true` every 60s, so dropping one is harmless, but a
+    // dropped `false` leaves the user muted until the server-side TTL expires.
+    const sent: boolean[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)).active as boolean);
+      return Promise.resolve({ ok: false, status: 500 } as Response);
+    }));
+
+    const { reportSessionActiveState } = await import("./web-push-client");
+
+    await reportSessionActiveState(true);
+    expect(sent).toEqual([true]);
+
+    await reportSessionActiveState(false);
+    expect(sent).toEqual([true, false, false]);
+  });
+
+  test("does not retry a clear rejected as unauthenticated", async () => {
+    // 401 means the session is gone; retrying cannot fix it and the server's TTL
+    // releases the hold on its own.
+    const sent: boolean[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)).active as boolean);
+      return Promise.resolve({ ok: false, status: 401 } as Response);
+    }));
+
+    const { reportSessionActiveState } = await import("./web-push-client");
+
+    await reportSessionActiveState(false);
+    expect(sent).toEqual([false]);
   });
 
   test("a failed report does not stall the next one", async () => {
