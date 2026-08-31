@@ -167,8 +167,11 @@ final class DurationRecoveryTests: XCTestCase {
         XCTAssertEqual(DurationRecovery.roundToNearestBlock(4.99), StillPoint.blockDuration)
     }
 
+    /// Exhaustive over every day that can enter recovery: day 1 has nothing to recover
+    /// and forkDay (55) onward all share the 10-minute cap, so 2...60 covers every
+    /// distinct ramp shape including the capped tail. Mirrors the web suite's range.
     func testEveryRecoveryStepFillsWholeBlocks() {
-        for targetDay in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20, 45, 54, 55, 60] {
+        for targetDay in 2...60 {
             let totalSteps = DurationRecovery.recoveryTotalStepsFor(targetDay: targetDay)
             guard totalSteps > 0 else { continue }
             var previous = 0

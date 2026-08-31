@@ -179,6 +179,13 @@
       "totalSteps": 0,
       "step": 1,
       "expected": 60
+    },
+    {
+      "name": "negative totalSteps is degenerate but still returns the base duration, never NaN",
+      "targetDay": 45,
+      "totalSteps": -1,
+      "step": 1,
+      "expected": 60
     }
   ]
 }

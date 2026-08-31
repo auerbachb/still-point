@@ -128,8 +128,11 @@ describe("recoveryStepDuration", () => {
     expect(results).toEqual([60, 70, 70]);
   });
 
-  test("totalSteps=0 always returns BASE_DURATION", () => {
+  test("totalSteps<=0 always returns BASE_DURATION", () => {
     expect(recoveryStepDuration(1, 0, 1)).toBe(60);
+    // A negative step count is degenerate but must not divide through to NaN.
+    expect(recoveryStepDuration(45, -1, 1)).toBe(60);
+    expect(recoveryStepDuration(45, -3, 2)).toBe(60);
   });
 
   test("step is clamped into [1, totalSteps]", () => {
@@ -176,7 +179,10 @@ describe("roundToNearestBlock (#661)", () => {
 describe("recovery durations always fill whole 10-second blocks (#661)", () => {
   // The block timer renders `Math.ceil(duration / BLOCK_DURATION)` blocks, so any
   // duration that is not a multiple of BLOCK_DURATION ends mid-block.
-  const targetDays = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20, 45, 54, 55, 60];
+  // Exhaustive over every day that can enter recovery: day 1 has nothing to recover
+  // and FORK_DAY (55) onward all share the 10-minute cap, so 2..60 covers every
+  // distinct ramp shape including the capped tail.
+  const targetDays = Array.from({ length: 59 }, (_, i) => i + 2);
 
   test("every step of every canonical recovery ramp is a whole block", () => {
     for (const targetDay of targetDays) {
