@@ -95,25 +95,39 @@ export function BlockTimer({
   useAudioContextResume(isActive);
 
   const resumeInFlightRef = useRef(false);
+  /// The most recent sound that failed to play, replayed once the context
+  /// recovers. Only the latest is kept: these closures are different sounds
+  /// (`playTick`, `playCompletion`, a voice prompt bound to a specific second),
+  /// so replaying an older one would emit the wrong sound — announcing "three"
+  /// after the sit has already ended.
+  const pendingPlayRef = useRef<(() => boolean) | null>(null);
 
   const playEnabledSound = (play: () => boolean) => {
     if (play()) return;
 
     // #710: a sound can also start failing without a visibility change (the
     // browser suspending the context on its own). Try to resume before falling
-    // back to the gesture-driven affordance, so the next scheduled sound — one
-    // second later for the tick — plays on its own.
+    // back to the gesture-driven affordance, so the sound that failed — and any
+    // that fail while the attempt is in flight — are not simply lost.
     //
     // The blocked callback only fires once that attempt has failed: nothing
     // clears `audioBlocked` on a successful resume, so reporting it up front
     // would leave "Browser audio is paused" on screen for a session whose sound
     // recovered on its own. A play that fails while an attempt is already in
     // flight is covered by that attempt's result.
+    pendingPlayRef.current = play;
     if (resumeInFlightRef.current) return;
     resumeInFlightRef.current = true;
     void resumeAudioContext()
       .then(resumed => {
-        if (!resumed) onSoundPlaybackBlockedRef.current?.();
+        // Replay the sound that triggered the resume. Waiting for the next
+        // scheduled sound only works for the repeating tick — a completion
+        // chime or a voice countdown prompt has no successor, so dropping it
+        // loses it outright.
+        const retry = pendingPlayRef.current;
+        pendingPlayRef.current = null;
+        if (resumed && retry?.()) return;
+        onSoundPlaybackBlockedRef.current?.();
       })
       .finally(() => {
         resumeInFlightRef.current = false;

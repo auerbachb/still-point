@@ -92,6 +92,30 @@ final class AudioRecoveryLogicTests: XCTestCase {
         XCTAssertFalse(AudioRecoveryLogic.isUsableRenderFormat(sampleRate: -44100, channelCount: 2))
     }
 
+    // MARK: - Configuration changes
+
+    func testOwnEngineConfigurationChangeDiscardsVoiceNode() {
+        XCTAssertTrue(
+            AudioRecoveryLogic.shouldDiscardVoiceNode(onConfigurationChangeFromOwnEngine: true)
+        )
+    }
+
+    /// The capture engine (#563) posts its own configuration changes. Acting on
+    /// one would stop an in-progress countdown clip while our graph is intact.
+    func testCaptureEngineConfigurationChangeKeepsVoiceNode() {
+        XCTAssertFalse(
+            AudioRecoveryLogic.shouldDiscardVoiceNode(onConfigurationChangeFromOwnEngine: false)
+        )
+    }
+
+    /// Unknown sender discards: skipping recovery is the #710 failure itself,
+    /// while an unnecessary discard costs one re-created voice node.
+    func testUnrecognizedConfigurationChangeSenderDiscardsVoiceNode() {
+        XCTAssertTrue(
+            AudioRecoveryLogic.shouldDiscardVoiceNode(onConfigurationChangeFromOwnEngine: nil)
+        )
+    }
+
     // MARK: - Engine start failures
 
     func testFirstFailureReactivatesAndRetries() {

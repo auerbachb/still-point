@@ -63,6 +63,31 @@ public enum AudioRecoveryLogic {
         return sampleRate.isFinite && sampleRate > 0
     }
 
+    // MARK: - Configuration changes
+
+    /// Whether a configuration-change notification should discard the shared
+    /// voice player node.
+    ///
+    /// Two `AVAudioEngine`s run in this process — the shared playback engine and
+    /// `AmbientSoundManager`'s capture engine (#563) — and AVFoundation posts the
+    /// affected engine as the notification's object. The observer is registered
+    /// with `object: nil` so it survives `rebuildEngine()` replacing the engine,
+    /// which means capture-engine notifications arrive here too; discarding the
+    /// voice node for one of those would cut off an in-progress countdown clip
+    /// even though our own graph is intact.
+    ///
+    /// `isFromOwnEngine == nil` means the notification carried no recognizable
+    /// engine, and discards. Skipping recovery is the #710 failure itself —
+    /// silence for the rest of the sit — while an unnecessary discard costs at
+    /// most one re-created voice node.
+    ///
+    /// Reactivating the session is deliberately *not* gated on this: it is
+    /// idempotent, and a format change reaching the capture engine affects the
+    /// shared session either way.
+    public static func shouldDiscardVoiceNode(onConfigurationChangeFromOwnEngine isFromOwnEngine: Bool?) -> Bool {
+        isFromOwnEngine ?? true
+    }
+
     // MARK: - Engine start failures
 
     /// What to do after an `AVAudioEngine.start()` attempt fails.

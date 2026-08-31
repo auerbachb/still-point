@@ -24,14 +24,29 @@ export function useAudioContextResume(enabled: boolean): void {
     // Serializes overlapping resumes: visibilitychange can fire again while an
     // earlier resume() is still in flight.
     let resumeInFlight = false;
+    // A visibility change that lands mid-flight must not be dropped. The context
+    // can be suspended again *after* the in-flight resume read it, and that
+    // window is wide rather than narrow: `AudioContext.resume()` on a hidden tab
+    // can stay pending until the tab is shown — which is the very event being
+    // swallowed. Re-run once instead, rather than ending the sit suspended.
+    let pendingResume = false;
 
     const resume = async () => {
-      if (cancelled || resumeInFlight || document.visibilityState !== "visible") return;
+      if (cancelled || document.visibilityState !== "visible") return;
+      if (resumeInFlight) {
+        pendingResume = true;
+        return;
+      }
       resumeInFlight = true;
       try {
         await resumeAudioContext();
       } finally {
         resumeInFlight = false;
+        if (pendingResume) {
+          pendingResume = false;
+          // Re-checks `cancelled` and visibility at the top.
+          void resume();
+        }
       }
     };
 

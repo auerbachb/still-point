@@ -173,13 +173,15 @@ public final class AudioEngine: @unchecked Sendable {
         // mixer when the hardware format changes — including the .playback ⇄
         // .playAndRecord switch that ambient-level sampling performs mid-sit
         // (#563). Registered with `object: nil` so it survives `rebuildEngine()`
-        // replacing the engine, and also covers the ambient capture engine.
+        // replacing the engine; the handler filters on engine identity instead,
+        // since `object:` would bind this token to the engine instance that
+        // existed at registration time.
         let configurationChangeToken = notificationCenter.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: nil,
             queue: nil
-        ) { [weak self] _ in
-            self?.handleConfigurationChange()
+        ) { [weak self] notification in
+            self?.handleConfigurationChange(notification)
         }
 
         // #710: the audio server restarting invalidates the engine and every node
@@ -574,18 +576,36 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    private func handleConfigurationChange() {
+    private func handleConfigurationChange(_ notification: Notification) {
+        // AVFoundation posts the affected engine as `notification.object`, and
+        // this process runs two: ours and `AmbientSoundManager.captureEngine`
+        // (#563). Captured here rather than on `serialQueue` so the comparison
+        // uses the notification's own object, not a later one.
+        //
+        // A nil/unrecognized object is treated as ours on purpose: skipping
+        // recovery is the #710 failure itself (silence for the rest of the sit),
+        // while an unnecessary discard costs at most one re-created voice node.
+        let postingEngine = notification.object as? AVAudioEngine
+
         serialQueue.async { [weak self] in
             guard let self else { return }
-            // The engine has stopped itself and torn down every connection to the
-            // main mixer. Reactivate the session and drop the persistent voice
-            // node so it is reconnected on next use. No engine.start() here — the
-            // graph has no source node attached (#262).
+            // The hardware format changed. Reactivate the session unconditionally
+            // — it is idempotent, and a format change that reached the capture
+            // engine affects the shared session either way. No engine.start()
+            // here — the graph has no source node attached (#262).
             //
             // This converges rather than looping: reconfiguring with a category
             // that is already set and a session that is already active changes no
             // I/O format, so it posts no further configuration change.
             self.configureAudioSession()
+
+            // Only our engine tearing itself down invalidates the voice node.
+            // Discarding it for a capture-engine notification would stop an
+            // in-progress countdown clip for no reason.
+            let isFromOwnEngine: Bool? = postingEngine.map { $0 === self.engine }
+            guard AudioRecoveryLogic.shouldDiscardVoiceNode(
+                onConfigurationChangeFromOwnEngine: isFromOwnEngine
+            ) else { return }
             self.discardVoicePlayerNode()
         }
     }
