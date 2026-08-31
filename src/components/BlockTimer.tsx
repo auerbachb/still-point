@@ -192,9 +192,13 @@ export function BlockTimer({
 
         if (prefs.chime && !voiceMode) {
           const blockEnd = (completedBlockIndex + 1) * 60;
-          const chimeCount = Math.floor((totalSeconds - blockEnd) / 60);
-          if (chimeCount >= 1) {
-            playEnabledSound(() => playChime(chimeCount));
+          // Unchanged rule for *when* the marker fires: only on a completed
+          // minute block with at least one full minute still to go. Since #711
+          // the count no longer sets how many strikes play — the bell is one
+          // strike — so it survives purely as that gate.
+          const fullMinutesRemaining = Math.floor((totalSeconds - blockEnd) / 60);
+          if (fullMinutesRemaining >= 1) {
+            playEnabledSound(playChime);
           }
         }
       }

@@ -436,8 +436,11 @@ final class SessionViewModel {
         if chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex {
             lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
             // Per-minute chime suppressed during voice countdown final minute.
-            if soundPrefs.chime, let chimeCount = chimeUpdate.chimeCount, !voiceActive {
-                AudioEngine.shared.playChime(count: chimeCount)
+            // `chimeCount` is non-nil only when a full minute is still to go;
+            // since #711 the bell is one strike, so the value survives purely
+            // as that gate and no longer sets how many strikes play.
+            if soundPrefs.chime, chimeUpdate.chimeCount != nil, !voiceActive {
+                AudioEngine.shared.playChime()
             }
         }
     }

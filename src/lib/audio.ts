@@ -133,28 +133,55 @@ export function playTick(): boolean {
   return true;
 }
 
-/** Bell chime — repeated `count` times for minute announcements */
-export function playChime(count: number): boolean {
+/**
+ * Length of the whole minute-marker bell (#711).
+ *
+ * The old chime was a 0.5s strike replayed once per remaining minute at 400ms
+ * spacing, so a 20-minute sit opened with a 7.7s, 19-strike run — the "song"
+ * that read as disruptive. This is a single 0.25s strike: exactly half of one
+ * old strike, and no repeats at all.
+ */
+const CHIME_DURATION_S = 0.25;
+/** Onset ramp — long enough to take the click off the strike, short enough to still read as one. */
+const CHIME_ATTACK_S = 0.004;
+/**
+ * Partials of one struck bell. The 2.7x upper partial is deliberately
+ * inharmonic (bell, not organ pipe) and dies inside the first ~90ms, leaving
+ * the fundamental to ring out. Peaks sum to 0.15 — the same peak the old
+ * single strike used, so the marker is no louder than before.
+ *
+ * Fixed frequencies, rather than the old 1200 -> 800Hz glide, are what let the
+ * iOS sample generator reproduce this exactly. Keep in sync with `ChimeSynth`
+ * in `ios/StillPointShared/Sources/StillPointShared/ChimeSynth.swift`.
+ */
+const CHIME_PARTIALS = [
+  { frequency: 880, peak: 0.115, decay: CHIME_DURATION_S },
+  { frequency: 2376, peak: 0.035, decay: 0.09 },
+] as const;
+
+/** Minute-marker bell — one strike, never repeated. */
+export function playChime(): boolean {
   const ctx = getPlayableAudioContext();
   if (!ctx) return false;
 
-  for (let i = 0; i < count; i++) {
-    const startTime = ctx.currentTime + i * 0.4;
+  const startTime = ctx.currentTime;
 
+  for (const { frequency, peak, decay } of CHIME_PARTIALS) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
     osc.type = "sine";
-    osc.frequency.setValueAtTime(1200, startTime);
-    osc.frequency.exponentialRampToValueAtTime(800, startTime + 0.3);
+    osc.frequency.value = frequency;
 
-    gain.gain.setValueAtTime(0.15, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.5);
+    // Soft attack, then an exponential tail to near-silence like a struck bell.
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(peak, startTime + CHIME_ATTACK_S);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + decay);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(startTime);
-    osc.stop(startTime + 0.5);
+    osc.stop(startTime + CHIME_DURATION_S);
   }
   return true;
 }
