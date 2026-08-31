@@ -159,17 +159,29 @@ const SESSION_STATE_TIMEOUT_MS = 10_000;
  * prevent. Clearing therefore gets one extra attempt; the TTL stays the backstop,
  * and a loop would be worse than useless on an unmount report.
  */
-async function postSessionActiveState(active: boolean): Promise<void> {
+async function postSessionActiveState(active: boolean, epoch: number): Promise<void> {
   const attempts = active ? 1 : 2;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    // An auth boundary crossed while the previous attempt was in flight. The
+    // report belongs to a session that is over; retrying it would re-introduce
+    // exactly the late write the abort below exists to prevent.
+    if (epoch !== queueEpoch) return;
+
+    // The deadline is driven manually rather than with `AbortSignal.timeout` so
+    // the same controller can also be tripped by `resetSessionStateReports`,
+    // without needing `AbortSignal.any` (still missing on older mobile Safari,
+    // and this is a PWA).
+    const controller = new AbortController();
+    activeController = controller;
+    const deadline = setTimeout(() => controller.abort(), SESSION_STATE_TIMEOUT_MS);
     try {
       const res = await fetch("/api/notifications/session-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active }),
         keepalive: true,
-        signal: AbortSignal.timeout(SESSION_STATE_TIMEOUT_MS),
+        signal: controller.signal,
       });
       if (res.ok) return;
       // The session is gone — a retry cannot fix it, and the server expires the
@@ -177,7 +189,12 @@ async function postSessionActiveState(active: boolean): Promise<void> {
       if (res.status === 401) return;
       console.warn("session-state report rejected", { active, status: res.status, attempt });
     } catch {
-      // Network error or deadline. Retried once when clearing, then left to the TTL.
+      // Network error, deadline, or an auth-boundary abort. Retried once when
+      // clearing (the epoch check above stops the retry after an abort), then
+      // left to the TTL.
+    } finally {
+      clearTimeout(deadline);
+      if (activeController === controller) activeController = null;
     }
   }
 }
@@ -192,6 +209,9 @@ let queuedActive: boolean | null = null;
 // Bumped at every auth boundary so a chain started by the previous account cannot
 // keep draining — or clobber the next account's `inFlight` — after the reset below.
 let queueEpoch = 0;
+// The request currently on the wire, so an auth boundary can cancel it outright
+// rather than merely forgetting about it.
+let activeController: AbortController | null = null;
 
 function drainSessionStateQueue(epoch: number): Promise<void> {
   if (epoch !== queueEpoch) return Promise.resolve();
@@ -201,7 +221,7 @@ function drainSessionStateQueue(epoch: number): Promise<void> {
     inFlight = null;
     return Promise.resolve();
   }
-  inFlight = postSessionActiveState(next).then(() => drainSessionStateQueue(epoch));
+  inFlight = postSessionActiveState(next, epoch).then(() => drainSessionStateQueue(epoch));
   return inFlight;
 }
 
@@ -211,15 +231,25 @@ function drainSessionStateQueue(epoch: number): Promise<void> {
  * The queue is module-global and web sign-out is an in-page state reset rather
  * than a reload, so a report queued under one account would otherwise drain under
  * the next account's cookie and suppress *their* notifications for a full TTL.
- * A request already dispatched keeps the cookie it was sent with, so only the
- * queued state has to go. Mirrors the offline session queue, which is cleared on
- * logout for the same reason, and the iOS
+ * Dropping the queued state is not enough on its own. A request already on the
+ * wire keeps its own cookie, so it cannot land on the *next* account — but when
+ * the same account signs back in it still can, and out of order: a stale `true`
+ * settling after the `false` that ended a sit leaves the user muted for a full
+ * TTL, and a stale `false` settling after the `true` that started a new one
+ * clears the hold and puts banners in the middle of it. Serializing cannot help
+ * across the boundary, because the reset deliberately forgets `inFlight`. So the
+ * live request is aborted rather than abandoned.
+ *
+ * Mirrors the offline session queue, which is cleared on logout for the same
+ * reason, and the iOS
  * `SessionNotificationSuppressionController.clearSuppressPreference`.
  */
 export function resetSessionStateReports(): void {
   queueEpoch += 1;
   queuedActive = null;
   inFlight = null;
+  activeController?.abort();
+  activeController = null;
 }
 
 /**
@@ -240,7 +270,7 @@ export function reportSessionActiveState(active: boolean): Promise<void> {
   // `postSessionActiveState` swallows its own errors, so the chain never rejects
   // and one failed report cannot stall the ones behind it.
   const epoch = queueEpoch;
-  inFlight = postSessionActiveState(active).then(() => drainSessionStateQueue(epoch));
+  inFlight = postSessionActiveState(active, epoch).then(() => drainSessionStateQueue(epoch));
   return inFlight;
 }
 

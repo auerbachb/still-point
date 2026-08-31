@@ -6,6 +6,22 @@ vi.mock("@/lib/offlineSessionQueue/pwaBootstrap", () => ({
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * Records every `AbortController` the module builds, so a test can fire a
+ * request's deadline itself rather than waiting out the real timeout.
+ */
+function captureAbortControllers(): AbortController[] {
+  const created: AbortController[] = [];
+  const Real = AbortController;
+  vi.stubGlobal("AbortController", class extends Real {
+    constructor() {
+      super();
+      created.push(this);
+    }
+  });
+  return created;
+}
+
 type Recorder = {
   started: boolean[];
   settle: (index: number) => void;
@@ -99,6 +115,42 @@ describe("reportSessionActiveState (#709)", () => {
     expect(started).toEqual([true, false]);
   });
 
+  test("aborts the in-flight request at an auth boundary", async () => {
+    const started: boolean[] = [];
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      started.push(JSON.parse(String(init.body)).active as boolean);
+      const signal = init.signal as AbortSignal;
+      signals.push(signal);
+      return new Promise((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(new Error("aborted"));
+          return;
+        }
+        signal.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    }));
+
+    const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
+
+    reportSessionActiveState(true);
+    await flush();
+    expect(started).toEqual([true]);
+    expect(signals[0].aborted).toBe(false);
+
+    // Forgetting `inFlight` is not enough: the request is already on the wire and
+    // carries a cookie that is still valid when the same account signs back in.
+    // Left alone, that stale `true` can settle after the next sit's `false` and
+    // mute the user for a full TTL — or a stale `false` can settle after a new
+    // `true` and put banners in the middle of the next sit.
+    resetSessionStateReports();
+    expect(signals[0].aborted).toBe(true);
+
+    // The abort must not trigger the clear-retry path under the new epoch.
+    await flush();
+    expect(started).toEqual([true]);
+  });
+
   test("a superseded chain cannot clobber the queue after a reset", async () => {
     const { started, settle } = stubFetch();
     const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
@@ -126,22 +178,17 @@ describe("reportSessionActiveState (#709)", () => {
   });
 
   test("a request that never settles is unblocked by its deadline", async () => {
-    // Stand in for the real deadline so the test controls when it fires; the
-    // assertion is that the request carries one and that firing it drains the queue.
-    const deadline = new AbortController();
-    const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+    // Each attempt now builds its own controller (so the same one can also be
+    // tripped by an auth boundary), rather than taking a shared
+    // `AbortSignal.timeout`. Capture them so the test fires each deadline itself
+    // instead of waiting out the real 10s.
+    const controllers = captureAbortControllers();
 
     const started: boolean[] = [];
     vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
       started.push(JSON.parse(String(init.body)).active as boolean);
       const signal = init.signal as AbortSignal;
-      return new Promise((resolve, reject) => {
-        // Real fetch rejects immediately for an already-aborted signal; this stub
-        // reuses one controller for every request, so it must do the same.
-        if (signal.aborted) {
-          reject(new Error("aborted"));
-          return;
-        }
+      return new Promise((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
       });
     }));
@@ -152,19 +199,27 @@ describe("reportSessionActiveState (#709)", () => {
     reportSessionActiveState(false);
     await flush();
 
-    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Number));
+    // The request carries a deadline it can be cancelled by.
+    expect(controllers).toHaveLength(1);
     expect(started).toEqual([true]);
 
-    deadline.abort();
-    await expect(pending).resolves.toBeUndefined();
+    // Firing it drains the queued sit-end rather than leaving it stuck behind a
+    // dead request.
+    controllers[0].abort();
     await flush();
+    expect(started).toEqual([true, false]);
 
-    // The queued sit-end still goes out rather than waiting on a dead request.
-    // It appears twice because a failed *clear* is retried once — this stub reuses
-    // one already-aborted controller for every request, so the retry fails at once;
-    // a real retry gets a fresh deadline.
+    // Each attempt gets its own deadline now, so the sit-end is still open here —
+    // failing it exercises the clear-retry path, which gets a third deadline.
+    controllers[1].abort();
+    await flush();
     expect(started).toEqual([true, false, false]);
-    timeoutSpy.mockRestore();
+
+    // Once the retry's deadline fires too, the chain is finished and the original
+    // caller is released — its promise settles when the report that superseded it
+    // has been sent, not when its own request did.
+    controllers[2].abort();
+    await expect(pending).resolves.toBeUndefined();
   });
 
   test("retries a failed clear once, but never a heartbeat", async () => {
