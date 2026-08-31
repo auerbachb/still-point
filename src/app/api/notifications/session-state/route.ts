@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { notificationPreferences } from "@/db/schema";
@@ -34,20 +34,48 @@ export const POST = withApiHandler(
     const prefs = await getOrCreateNotificationPreferences(auth.user.userId);
     const sessionActiveUntil = active && prefs.suppressDuringSession ? sessionActiveUntilFrom() : null;
 
-    // Skip the write when clearing state that is already clear — clients post
+    if (sessionActiveUntil !== null) {
+      // The preference is re-checked in the WHERE clause rather than trusted from
+      // the read above: the two are separate statements, so a "During sessions"
+      // toggle-off landing between them would otherwise be overwritten by this
+      // heartbeat and re-suppress the user for a full TTL. `returning()` reports
+      // what actually landed, so the response cannot claim a hold the conditional
+      // update declined to take.
+      const [row] = await db
+        .update(notificationPreferences)
+        // `updatedAt` is deliberately untouched: a heartbeat is not a preference
+        // edit, and bumping it every 60s would churn the row clients sync on.
+        .set({ sessionActiveUntil })
+        .where(
+          and(
+            eq(notificationPreferences.userId, auth.user.userId),
+            eq(notificationPreferences.suppressDuringSession, true),
+          ),
+        )
+        .returning({
+          sessionActiveUntil: notificationPreferences.sessionActiveUntil,
+          suppressDuringSession: notificationPreferences.suppressDuringSession,
+        });
+
+      return NextResponse.json({
+        sessionActiveUntil: row?.sessionActiveUntil?.toISOString() ?? null,
+        suppressDuringSession: row?.suppressDuringSession ?? false,
+      });
+    }
+
+    // Clearing is unconditional — a client ending a sit releases the hold whatever
+    // the preference now says. Skipped when the row is already clear: clients post
     // `active: false` on every session-view unmount, including views that never
     // reported an active sit.
-    if (sessionActiveUntil !== null || prefs.sessionActiveUntil !== null) {
-      // `updatedAt` is deliberately untouched: a heartbeat is not a preference
-      // edit, and bumping it every 60s would churn the row clients sync on.
+    if (prefs.sessionActiveUntil !== null) {
       await db
         .update(notificationPreferences)
-        .set({ sessionActiveUntil })
+        .set({ sessionActiveUntil: null })
         .where(eq(notificationPreferences.userId, auth.user.userId));
     }
 
     return NextResponse.json({
-      sessionActiveUntil: sessionActiveUntil?.toISOString() ?? null,
+      sessionActiveUntil: null,
       suppressDuringSession: prefs.suppressDuringSession,
     });
   },

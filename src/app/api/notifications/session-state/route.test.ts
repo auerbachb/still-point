@@ -3,8 +3,22 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
 const getOrCreateNotificationPreferences = vi.fn();
-const updateWhere = vi.fn();
-const updateSet = vi.fn(() => ({ where: updateWhere }));
+// Rows the conditional `active: true` update reports back. Defaults to echoing the
+// value the route asked for; tests override it to simulate the WHERE clause
+// matching nothing (the preference was toggled off between read and write).
+let updateReturningRows: Array<Record<string, unknown>> | null = null;
+let lastSet: Record<string, unknown> = {};
+const updateReturning = vi.fn(async () =>
+  updateReturningRows ?? [{
+    sessionActiveUntil: lastSet.sessionActiveUntil ?? null,
+    suppressDuringSession: true,
+  }],
+);
+const updateWhere = vi.fn(() => ({ returning: updateReturning }));
+const updateSet = vi.fn((values: Record<string, unknown>) => {
+  lastSet = values;
+  return { where: updateWhere };
+});
 const dbUpdate = vi.fn(() => ({ set: updateSet }));
 
 vi.mock("@/db", () => ({
@@ -33,6 +47,7 @@ vi.mock("@/lib/readJsonObject", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((left, right) => ({ left, right })),
+  and: vi.fn((...conditions) => ({ and: conditions })),
 }));
 
 function post(body: unknown): NextRequest {
@@ -46,6 +61,8 @@ describe("/api/notifications/session-state", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    updateReturningRows = null;
+    lastSet = {};
     getCurrentUser.mockResolvedValue({ userId: "user-1", email: "test@example.com" });
     getOrCreateNotificationPreferences.mockResolvedValue({
       userId: "user-1",
@@ -119,6 +136,35 @@ describe("/api/notifications/session-state", () => {
     await POST(post({ active: false }));
 
     expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  test("takes no hold when the preference is toggled off between the read and the write", async () => {
+    // The conditional UPDATE matches no row, so nothing is stored and the response
+    // reports the hold as declined rather than echoing the value it asked for.
+    updateReturningRows = [];
+    const { POST } = await import("./route");
+
+    const response = await POST(post({ active: true }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.sessionActiveUntil).toBeNull();
+    expect(body.suppressDuringSession).toBe(false);
+  });
+
+  test("clears the window regardless of the current preference", async () => {
+    // A client ending a sit must release the hold even if the user opted out
+    // mid-sit, otherwise the stored window keeps withholding until its TTL.
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      userId: "user-1",
+      suppressDuringSession: false,
+      sessionActiveUntil: new Date("2026-06-01T12:02:00.000Z"),
+    });
+    const { POST } = await import("./route");
+
+    await POST(post({ active: false }));
+
+    expect(updateSet).toHaveBeenCalledWith({ sessionActiveUntil: null });
   });
 
   test("rejects a non-boolean active flag", async () => {

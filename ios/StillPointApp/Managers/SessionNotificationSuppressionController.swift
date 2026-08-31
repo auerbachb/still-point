@@ -46,8 +46,13 @@ enum SessionNotificationSuppressionController {
     /// re-POST on every SwiftUI state change.
     private static var reportedSessionActive = false
     private static var heartbeatTask: Task<Void, Never>?
-    /// Tail of the serialized report chain (see `report(active:)`).
+    /// The drain task for the report queue, and the newest state waiting for it
+    /// (see `report(active:)`). `nil` task means nothing is draining.
     private static var reportTask: Task<Void, Never>?
+    private static var queuedReport: Bool?
+    /// Bumped at every auth boundary so a drain task started by the previous
+    /// account cannot outlive `cancelPendingReports()` or clear a newer task.
+    private static var reportGeneration = 0
 
     /// On by default (#709): a sit is silent unless the user turned the "During
     /// sessions" toggle off. `bool(forKey:)` cannot express that — it returns false
@@ -70,6 +75,7 @@ enum SessionNotificationSuppressionController {
         // Stop reporting rather than clearing server-side: the request would 401
         // without a session, and the server's TTL expires the hold on its own.
         stopHeartbeat()
+        cancelPendingReports()
         reportedSessionActive = false
     }
 
@@ -131,21 +137,39 @@ enum SessionNotificationSuppressionController {
         heartbeatTask = nil
     }
 
-    /// Reports serially: an in-flight heartbeat `true` landing after the `false`
-    /// that ended the sit would re-suppress notifications for the whole server-side
-    /// TTL after the user got up. Chaining each report behind the previous one keeps
-    /// the server's view in call order. Web parity: `reportSessionActiveState`.
+    /// Reports serially with newest-wins coalescing: an in-flight heartbeat `true`
+    /// landing after the `false` that ended the sit would re-suppress notifications
+    /// for the whole server-side TTL after the user got up, so reports must reach
+    /// the server in call order. Web parity: `reportSessionActiveState`.
     ///
-    /// A stalled request cannot block the chain indefinitely — `APIClient` uses
-    /// `URLSessionConfiguration.default`, whose 60s request timeout fails it — and
-    /// reports are rare enough (state changes plus one per heartbeat) that the chain
-    /// needs no coalescing.
+    /// Superseded states are dropped rather than queued. `APIClient` uses
+    /// `URLSessionConfiguration.default`, whose 60s request timeout is no shorter
+    /// than the heartbeat interval, so on a slow network reports can be issued
+    /// faster than they drain; queueing them all would delay the ending `false` by
+    /// one full request per stacked heartbeat. The endpoint stores absolute state,
+    /// so only the newest report still matters.
     private static func report(active: Bool) {
-        let previous = reportTask
+        queuedReport = active
+        guard reportTask == nil else { return }
+
+        let generation = reportGeneration
         reportTask = Task { @MainActor in
-            _ = await previous?.value
-            try? await APIClient.shared.reportSessionNotificationState(active: active)
+            defer { if generation == reportGeneration { reportTask = nil } }
+            while generation == reportGeneration, !Task.isCancelled, let next = queuedReport {
+                queuedReport = nil
+                try? await APIClient.shared.reportSessionNotificationState(active: next)
+            }
         }
+    }
+
+    /// Drop anything queued or in flight at an auth boundary: a report from the
+    /// previous account draining after the next one signs in would carry the new
+    /// account's credentials and silence *their* notifications for a full TTL.
+    private static func cancelPendingReports() {
+        reportGeneration += 1
+        queuedReport = nil
+        reportTask?.cancel()
+        reportTask = nil
     }
 
     private static func registration(for appVM: AppViewModel) -> Registration {

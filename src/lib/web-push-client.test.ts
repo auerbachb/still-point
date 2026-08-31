@@ -76,6 +76,55 @@ describe("reportSessionActiveState (#709)", () => {
     expect(started).toEqual([true, false]);
   });
 
+  test("drops a queued report at an auth boundary", async () => {
+    const { started, settle } = stubFetch();
+    const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
+
+    reportSessionActiveState(true);
+    await flush();
+    expect(started).toEqual([true]);
+
+    // A sit is still being reported when the account signs out. The queued state
+    // must not drain under the next account's cookie and silence them instead.
+    reportSessionActiveState(true);
+    resetSessionStateReports();
+
+    settle(0);
+    await flush();
+    expect(started).toEqual([true]);
+
+    // The next account starts a fresh chain rather than inheriting the old one.
+    reportSessionActiveState(false);
+    await flush();
+    expect(started).toEqual([true, false]);
+  });
+
+  test("a superseded chain cannot clobber the queue after a reset", async () => {
+    const { started, settle } = stubFetch();
+    const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
+
+    reportSessionActiveState(true);
+    await flush();
+    resetSessionStateReports();
+
+    // New account reports a sit while the previous account's request is still open.
+    reportSessionActiveState(true);
+    await flush();
+    expect(started).toEqual([true, true]);
+
+    // The stale request settling must not free the new chain's slot, or the next
+    // report would run concurrently and could land out of order.
+    settle(0);
+    await flush();
+    reportSessionActiveState(false);
+    await flush();
+    expect(started).toEqual([true, true]);
+
+    settle(1);
+    await flush();
+    expect(started).toEqual([true, true, false]);
+  });
+
   test("a request that never settles is unblocked by its deadline", async () => {
     // Stand in for the real deadline so the test controls when it fires; the
     // assertion is that the request carries one and that firing it drains the queue.

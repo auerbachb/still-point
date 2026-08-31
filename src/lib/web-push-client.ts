@@ -171,16 +171,37 @@ async function postSessionActiveState(active: boolean): Promise<void> {
 // notifications for a full TTL.
 let inFlight: Promise<void> | null = null;
 let queuedActive: boolean | null = null;
+// Bumped at every auth boundary so a chain started by the previous account cannot
+// keep draining — or clobber the next account's `inFlight` — after the reset below.
+let queueEpoch = 0;
 
-function drainSessionStateQueue(): Promise<void> {
+function drainSessionStateQueue(epoch: number): Promise<void> {
+  if (epoch !== queueEpoch) return Promise.resolve();
   const next = queuedActive;
   queuedActive = null;
   if (next === null) {
     inFlight = null;
     return Promise.resolve();
   }
-  inFlight = postSessionActiveState(next).then(drainSessionStateQueue);
+  inFlight = postSessionActiveState(next).then(() => drainSessionStateQueue(epoch));
   return inFlight;
+}
+
+/**
+ * Drops any pending session-state report at an auth boundary (#709).
+ *
+ * The queue is module-global and web sign-out is an in-page state reset rather
+ * than a reload, so a report queued under one account would otherwise drain under
+ * the next account's cookie and suppress *their* notifications for a full TTL.
+ * A request already dispatched keeps the cookie it was sent with, so only the
+ * queued state has to go. Mirrors the offline session queue, which is cleared on
+ * logout for the same reason, and the iOS
+ * `SessionNotificationSuppressionController.clearSuppressPreference`.
+ */
+export function resetSessionStateReports(): void {
+  queueEpoch += 1;
+  queuedActive = null;
+  inFlight = null;
 }
 
 /**
@@ -200,7 +221,8 @@ export function reportSessionActiveState(active: boolean): Promise<void> {
   }
   // `postSessionActiveState` swallows its own errors, so the chain never rejects
   // and one failed report cannot stall the ones behind it.
-  inFlight = postSessionActiveState(active).then(drainSessionStateQueue);
+  const epoch = queueEpoch;
+  inFlight = postSessionActiveState(active).then(() => drainSessionStateQueue(epoch));
   return inFlight;
 }
 

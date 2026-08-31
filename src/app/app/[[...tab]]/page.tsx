@@ -27,6 +27,7 @@ import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
 import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
+import { resetSessionStateReports } from "@/lib/web-push-client";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
@@ -608,6 +609,10 @@ export default function StillPoint() {
     void getWebSessionSyncCoordinator().clearQueue().catch((error) => {
       console.error("Failed to clear offline session queue on logout:", error);
     });
+    // #709: same reasoning one line up — a session-state report still queued when
+    // this account signs out would be sent under the next account's cookie and
+    // silence *their* notifications for a full TTL.
+    resetSessionStateReports();
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
