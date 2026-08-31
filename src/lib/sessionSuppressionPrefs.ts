@@ -63,6 +63,30 @@ export function saveSuppressDuringSessionPref(enabled: boolean): void {
   notifyListeners();
 }
 
+/**
+ * Drop the mirror at an auth boundary (#709).
+ *
+ * The key is global to the browser, not scoped to an account, so one user's
+ * stored `false` would otherwise be read as the *next* user's preference. That
+ * is not a cosmetic staleness: `useSessionSuppressionRelay` gates the server
+ * "a sit is running" report on this value, so an inherited `false` means the
+ * next account never reports its sit and takes banners straight through the
+ * middle of it — the exact complaint in #709, one account removed.
+ *
+ * Removing the key rather than writing `true` lets the read fall back to
+ * {@link SUPPRESS_DURING_SESSION_DEFAULT} (silent by default), and the sit-start
+ * fetch in `useSessionSuppressionRelay` then fills in the real server value.
+ */
+export function clearSuppressDuringSessionPref(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Best-effort: a storage failure leaves the default in force, which is silent.
+  }
+  notifyListeners();
+}
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
