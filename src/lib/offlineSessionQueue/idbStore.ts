@@ -33,15 +33,33 @@ function runTransaction<T>(
         const tx = db.transaction(OFFLINE_IDB_STORE, mode);
         const store = tx.objectStore(OFFLINE_IDB_STORE);
         const request = fn(store);
-        request.onsuccess = () => resolve(request.result as T);
+        // #703: settle on the *transaction*, not the request. `success` fires
+        // when the request produced a value, which is before the transaction
+        // has committed — an abort after that point would have been dropped on
+        // an already-resolved promise and reported an unusable store as a
+        // successful read. `saveEntries` below already resolves on
+        // `oncomplete`; the read path now matches it.
+        let result: T;
+        request.onsuccess = () => {
+          result = request.result as T;
+        };
         request.onerror = () => {
           closeDb();
           reject(request.error ?? new Error("IndexedDB request failed"));
         };
-        tx.oncomplete = () => closeDb();
+        tx.oncomplete = () => {
+          closeDb();
+          resolve(result);
+        };
         tx.onerror = () => {
           closeDb();
           reject(tx.error ?? new Error("IndexedDB transaction failed"));
+        };
+        // An explicit or quota-driven abort fires `abort`, not `error`. Without
+        // this the promise above would never settle at all.
+        tx.onabort = () => {
+          closeDb();
+          reject(tx.error ?? new Error("IndexedDB transaction aborted"));
         };
       }),
   );
@@ -105,6 +123,13 @@ export class IndexedDbOfflineSessionQueueStore implements OfflineSessionQueueSto
           tx.onerror = () => {
             closeDb();
             reject(tx.error ?? new Error("IndexedDB transaction failed"));
+          };
+          // #703: a quota-driven abort on the put loop above fires `abort`, not
+          // `error`. Unhandled, the write promise never settles and the caller
+          // waits forever on a sit that was never stored.
+          tx.onabort = () => {
+            closeDb();
+            reject(tx.error ?? new Error("IndexedDB transaction aborted"));
           };
         }),
     );

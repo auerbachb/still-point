@@ -287,7 +287,16 @@ export default function StillPoint() {
 
   // #703: every path that writes a sit to the local queue reports here, so the
   // offline strip's promise tracks whether local storage is actually working.
-  const noteQueueWriteOutcome = useCallback((stored: boolean) => {
+  //
+  // `generation` is the #666 guard, and it belongs here rather than at the four
+  // call sites: every one of them reports *after* an await, so a sign-out (or a
+  // sign-in) that lands mid-save would otherwise let the previous account's
+  // failure re-raise the strip for whoever is looking at the screen now —
+  // straight past the `setLocalWriteFailed(false)` in
+  // `clearAccountScopedLocalState`, which by then has already run. Callers
+  // capture the generation before their await and hand it back with the result.
+  const noteQueueWriteOutcome = useCallback((stored: boolean, generation: number) => {
+    if (generation !== sessionGeneration.current) return;
     setLocalWriteFailed(!stored);
   }, []);
 
@@ -682,6 +691,8 @@ export default function StillPoint() {
     clientSessionId: string,
     ownerUserId: string,
   ): Promise<SessionSaveOutcome> => {
+    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+    const generation = sessionGeneration.current;
     let outcome: SessionSaveOutcome;
     try {
       const result = await getWebSessionSyncCoordinator().saveCompletedSession(
@@ -708,7 +719,7 @@ export default function StillPoint() {
       outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
     }
 
-    noteQueueWriteOutcome(isSessionStored(outcome));
+    noteQueueWriteOutcome(isSessionStored(outcome), generation);
 
     // Unchanged for the two states that existed before: a synced standard sit
     // re-reads the user, a pending one refreshes the track badges. A sit that was
@@ -803,6 +814,8 @@ export default function StillPoint() {
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
     if (user?.id) {
       const clientSessionId = crypto.randomUUID();
+      // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+      const generation = sessionGeneration.current;
       try {
         await getWebSessionSyncCoordinator().saveCompletedSession(
           {
@@ -822,7 +835,7 @@ export default function StillPoint() {
           user.id,
           data.thoughts,
         );
-        noteQueueWriteOutcome(true);
+        noteQueueWriteOutcome(true, generation);
       } catch (error) {
         console.error("Failed to save abandoned session:", error);
         // #703: an abandoned sit is still a sit the queue was asked to keep. It
@@ -832,7 +845,7 @@ export default function StillPoint() {
         // withdraw a promise the queue is keeping.
         noteQueueWriteOutcome(isSessionStored(
           resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
-        ));
+        ), generation);
       }
     }
 
@@ -856,6 +869,8 @@ export default function StillPoint() {
     if (breathSavingRef.current) return;
     breathSavingRef.current = true;
     const clientSessionId = crypto.randomUUID();
+    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
+    const generation = sessionGeneration.current;
     try {
       if (user?.id) {
         await getWebSessionSyncCoordinator().saveCompletedSession(
@@ -876,7 +891,7 @@ export default function StillPoint() {
           user.id,
           [],
         );
-        noteQueueWriteOutcome(true);
+        noteQueueWriteOutcome(true, generation);
       }
     } catch (error) {
       console.error("Failed to save breath session:", error);
@@ -886,7 +901,7 @@ export default function StillPoint() {
       // is not mistaken for one.
       noteQueueWriteOutcome(isSessionStored(
         resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
-      ));
+      ), generation);
     } finally {
       breathSavingRef.current = false;
       setOverlay(null);
