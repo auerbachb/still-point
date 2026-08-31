@@ -281,8 +281,14 @@ export default function StillPoint() {
   // later successful save clears it — that is the proof storage works again.
   const [localWriteFailed, setLocalWriteFailed] = useState(false);
   // #703: the last sit handed to the queue, kept so the completion screen can
-  // retry the same one under the same client id.
-  const lastCompletedSitRef = useRef<{ data: CompletedSitInput; clientSessionId: string } | null>(null);
+  // retry the same one under the same client id — and on the same calendar day.
+  // `sessionDate` is pinned here rather than recomputed inside the save, because
+  // a sit that failed to store before midnight and is retried after it would
+  // otherwise land on the following day, crediting the wrong day's progression.
+  // The #557 idempotency key makes a retry the *same* sit; the date has to agree.
+  const lastCompletedSitRef = useRef<
+    { data: CompletedSitInput; clientSessionId: string; sessionDate: string } | null
+  >(null);
   const isOnline = useOnlineStatus();
 
   // #703: every path that writes a sit to the local queue reports here, so the
@@ -690,6 +696,7 @@ export default function StillPoint() {
     data: CompletedSitInput,
     clientSessionId: string,
     ownerUserId: string,
+    sessionDate: string,
   ): Promise<SessionSaveOutcome> => {
     // Captured before the save below suspends — see `noteQueueWriteOutcome`.
     const generation = sessionGeneration.current;
@@ -707,7 +714,9 @@ export default function StillPoint() {
           clearPercent: data.clearPercent,
           thoughtCount: data.thoughtCount,
           mindStateLog: data.mindStateLog,
-          sessionDate: todayLocalIsoDate(),
+          // Pinned by the caller when the sit ended, not recomputed here — a
+          // retry that crosses midnight must still be the same day's sit.
+          sessionDate,
         },
         clientSessionId,
         ownerUserId,
@@ -748,6 +757,8 @@ export default function StillPoint() {
   // leaves the user looking at the same false reassurance this ticket is about.
   const handleSessionComplete = useCallback(async (data: CompletedSitInput) => {
     const clientSessionId = crypto.randomUUID();
+    // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
+    const sessionDate = todayLocalIsoDate();
     let outcome: SessionSaveOutcome | null = null;
 
     // #666 guard: the save below is a suspension point, and sign-out during it
@@ -758,8 +769,8 @@ export default function StillPoint() {
     if (user?.id) {
       // Kept for the completion screen's retry, which must reuse this exact
       // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
-      lastCompletedSitRef.current = { data, clientSessionId };
-      outcome = await saveCompletedSit(data, clientSessionId, user.id);
+      lastCompletedSitRef.current = { data, clientSessionId, sessionDate };
+      outcome = await saveCompletedSit(data, clientSessionId, user.id, sessionDate);
     } else {
       lastCompletedSitRef.current = null;
     }
@@ -794,7 +805,12 @@ export default function StillPoint() {
       throw new Error("Failed to save session");
     }
 
-    const outcome = await saveCompletedSit(pending.data, pending.clientSessionId, user.id);
+    const outcome = await saveCompletedSit(
+      pending.data,
+      pending.clientSessionId,
+      user.id,
+      pending.sessionDate,
+    );
     if (outcome.status === "notStored") {
       throw new Error("Failed to save session");
     }
