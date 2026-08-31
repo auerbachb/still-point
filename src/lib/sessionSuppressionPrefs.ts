@@ -34,13 +34,22 @@ export type SessionSuppressionMessage = {
   suppress: boolean;
 };
 
+/**
+ * Silencing Still Point's notifications during a sit is on unless the user turned
+ * it off (#709). A browser that has never loaded the Notification settings screen
+ * has no mirrored value, and must still start a sit silent — the server row is
+ * fetched right after and corrects an opted-out user.
+ */
+export const SUPPRESS_DURING_SESSION_DEFAULT = true;
+
 export function loadSuppressDuringSessionPref(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return SUPPRESS_DURING_SESSION_DEFAULT;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw === "true";
+    if (raw === null) return SUPPRESS_DURING_SESSION_DEFAULT;
+    return raw !== "false";
   } catch {
-    return false;
+    return SUPPRESS_DURING_SESSION_DEFAULT;
   }
 }
 

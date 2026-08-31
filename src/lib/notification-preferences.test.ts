@@ -31,8 +31,12 @@ describe("friendRequestNotificationsAllowed", () => {
 });
 
 describe("suppressDuringSession default", () => {
-  test("is opt-in (off by default)", () => {
-    expect(DEFAULT_NOTIFICATION_PREFERENCES.suppressDuringSession).toBe(false);
+  test("is on by default, so a sit is silent without opting in (#709)", () => {
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.suppressDuringSession).toBe(true);
+  });
+
+  test("starts with no active session recorded", () => {
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.sessionActiveUntil).toBeNull();
   });
 });
 

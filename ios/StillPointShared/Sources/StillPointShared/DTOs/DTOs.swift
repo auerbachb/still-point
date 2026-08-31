@@ -588,6 +588,16 @@ public struct DeviceTokenRegistrationRequest: Codable, Sendable {
     }
 }
 
+/// Reports whether a sit is running so the server withholds this user's pushes
+/// for the duration (#709).
+public struct SessionNotificationStateRequest: Codable, Sendable {
+    public let active: Bool
+
+    public init(active: Bool) {
+        self.active = active
+    }
+}
+
 public struct JoinBuddySessionRequest: Codable, Sendable {
     public let token: String
 }
@@ -800,7 +810,7 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         missADayEnabled: Bool,
         friendRequestNotificationsEnabled: Bool = true,
         failureReasonReminderEnabled: Bool = false,
-        suppressDuringSession: Bool = false,
+        suppressDuringSession: Bool = true,
         dailyReminderTime: String,
         dailyReminderFrequency: DailyReminderFrequency,
         quietHoursStart: String?,
@@ -841,7 +851,9 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
             try c.decodeIfPresent(Bool.self, forKey: .friendRequestNotificationsEnabled) ?? true
         failureReasonReminderEnabled =
             try c.decodeIfPresent(Bool.self, forKey: .failureReasonReminderEnabled) ?? false
-        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession) ?? false
+        // On by default (#709): a server that omits the field must not read as
+        // "notifications allowed during sits".
+        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession) ?? true
         dailyReminderTime = try c.decode(String.self, forKey: .dailyReminderTime)
         dailyReminderFrequency = try c.decode(DailyReminderFrequency.self, forKey: .dailyReminderFrequency)
         quietHoursStart = try c.decodeIfPresent(String.self, forKey: .quietHoursStart)

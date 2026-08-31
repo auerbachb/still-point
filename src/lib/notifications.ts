@@ -17,6 +17,7 @@ import {
   buildFailureReasonReminderWebPushPayload,
   FAILURE_REASON_NOTIFICATION_TYPE,
 } from "@/lib/notifications/failure-reason";
+import { isUserSessionActive } from "@/lib/notifications/session-active";
 import { sendWebPushToUser } from "@/lib/web-push";
 
 const invalidTokenReasons = new Set(["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]);
@@ -124,12 +125,32 @@ async function fanOutChannels(
   return delivered;
 }
 
+/**
+ * Fan-out with the during-session gate applied (#709).
+ *
+ * Every user-facing send goes through here, so a sit in progress withholds the
+ * push no matter which caller triggered it — including callers added later that
+ * forget about the gate. Withheld sends report `delivered: false`, which makes the
+ * scheduler release its dispatch claim and re-evaluate on a later tick.
+ */
+async function fanOutToUser(
+  channel: string,
+  recipientUserId: string,
+  tasks: Array<() => Promise<{ delivered: boolean } | void>>,
+): Promise<boolean> {
+  if (await isUserSessionActive(recipientUserId)) {
+    console.info(`${channel} withheld: recipient is in an active session`);
+    return false;
+  }
+  return fanOutChannels(channel, tasks);
+}
+
 export async function sendDailyReminderNotification(params: {
   recipientUserId: string;
   streak?: number;
 }): Promise<{ delivered: boolean }> {
   const streak = params.streak ?? 0;
-  const delivered = await fanOutChannels("daily_reminder", [
+  const delivered = await fanOutToUser("daily_reminder", params.recipientUserId, [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: buildDailyReminderPayload(streak),
@@ -148,7 +169,7 @@ export async function sendMissADayNotification(params: {
   const title = "Still Point";
   const body = "Missed yesterday — try a quick 1-min sit to get back.";
 
-  const delivered = await fanOutChannels("miss_a_day", [
+  const delivered = await fanOutToUser("miss_a_day", params.recipientUserId, [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {
@@ -180,7 +201,7 @@ export async function sendFailureReasonReminderNotification(params: {
   targetDate: string;
   isYesterday: boolean;
 }): Promise<{ delivered: boolean }> {
-  const delivered = await fanOutChannels(FAILURE_REASON_NOTIFICATION_TYPE, [
+  const delivered = await fanOutToUser(FAILURE_REASON_NOTIFICATION_TYPE, params.recipientUserId, [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: buildFailureReasonReminderPayload(params.targetDate, params.isYesterday),
@@ -202,7 +223,7 @@ export async function sendFriendRequestNotification(params: {
   const title = "New friend request";
   const body = `${params.senderUsername} wants to connect on Still Point.`;
 
-  await fanOutChannels("friend_request", [
+  await fanOutToUser("friend_request", params.recipientUserId, [
     () => sendPushNotificationToUser({
       recipientUserId: params.recipientUserId,
       payload: {

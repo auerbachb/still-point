@@ -12,6 +12,8 @@ export type NotificationPreferencesRow = {
   failureReasonReminderEnabled: boolean;
   friendRequestNotificationsEnabled: boolean;
   suppressDuringSession: boolean;
+  /** Server-side session-active TTL (#709); not user-editable. */
+  sessionActiveUntil: Date | null;
   dailyReminderTime: string;
   dailyReminderFrequency: DailyReminderFrequency;
   quietHoursStart: string | null;
@@ -36,7 +38,9 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   missADayEnabled: false,
   failureReasonReminderEnabled: false,
   friendRequestNotificationsEnabled: true,
-  suppressDuringSession: false,
+  // On by default (#709): a sit is silent unless the user opts out.
+  suppressDuringSession: true,
+  sessionActiveUntil: null as Date | null,
   dailyReminderTime: "09:00",
   dailyReminderFrequency: "daily" as DailyReminderFrequency,
   quietHoursStart: null as string | null,

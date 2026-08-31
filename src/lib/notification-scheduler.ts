@@ -17,6 +17,7 @@ import {
   sendFailureReasonReminderNotification,
   sendMissADayNotification,
 } from "@/lib/notifications";
+import { isSessionActive } from "@/lib/notifications/session-active";
 import { initiateMissedSitCall } from "@/lib/vapi";
 
 export const MISSED_SIT_CALL_NOTIFICATION_TYPE = "missed_sit_call";
@@ -449,6 +450,14 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
   for (const prefs of candidates) {
     try {
+      // A sit is in progress: never claim a dispatch or send mid-session (#709).
+      // Skipping here rather than at send time keeps the dispatch ledger clean, so
+      // the reminder is re-evaluated on a later tick if its window is still open.
+      if (isSessionActive(prefs, now)) {
+        skipped += 1;
+        continue;
+      }
+
       const local = getLocalParts(now, prefs.tz);
 
       // Failure-reason reminder fires at a fixed 8 PM local time, independent of the
@@ -604,6 +613,8 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       callWindowStart: notificationPreferences.callWindowStart,
       callWindowStop: notificationPreferences.callWindowStop,
       tz: notificationPreferences.tz,
+      suppressDuringSession: notificationPreferences.suppressDuringSession,
+      sessionActiveUntil: notificationPreferences.sessionActiveUntil,
       username: users.username,
     })
     .from(notificationPreferences)
@@ -613,6 +624,14 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   for (const prefs of callCandidates) {
     try {
       if (!prefs.callPhoneNumber || !prefs.callWindowStart || !prefs.callWindowStop) {
+        continue;
+      }
+
+      // A ringing phone mid-sit is the loudest interruption we own (#709). The call
+      // is dropped rather than deferred — slots are hourly — which is correct: the
+      // user is doing the very thing the missed-sit call would nag them about, and
+      // finishing the sit cancels the remaining slots for the day anyway.
+      if (isSessionActive(prefs, now)) {
         continue;
       }
 

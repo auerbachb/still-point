@@ -144,6 +144,66 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
   return data.preferences as NotificationPreferencesDto;
 }
 
+/**
+ * A hung request must not stall the queue below — the state it is blocking may be
+ * the `false` that ends a sit, and until that lands the server keeps withholding.
+ */
+const SESSION_STATE_TIMEOUT_MS = 10_000;
+
+async function postSessionActiveState(active: boolean): Promise<void> {
+  try {
+    await fetch("/api/notifications/session-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active }),
+      keepalive: true,
+      signal: AbortSignal.timeout(SESSION_STATE_TIMEOUT_MS),
+    });
+  } catch {
+    // Ignore: the server signal self-heals via its TTL.
+  }
+}
+
+// One request in flight at a time, plus at most one queued state — the endpoint
+// stores absolute state, so when reports pile up behind a slow request only the
+// newest one still matters. Serializing also stops an in-flight heartbeat `true`
+// from landing after the `false` that ended the sit and re-suppressing
+// notifications for a full TTL.
+let inFlight: Promise<void> | null = null;
+let queuedActive: boolean | null = null;
+
+function drainSessionStateQueue(): Promise<void> {
+  const next = queuedActive;
+  queuedActive = null;
+  if (next === null) {
+    inFlight = null;
+    return Promise.resolve();
+  }
+  inFlight = postSessionActiveState(next).then(drainSessionStateQueue);
+  return inFlight;
+}
+
+/**
+ * Tells the server whether a sit is running so it withholds Still Point's own
+ * pushes for the duration (#709). Best-effort: a failure leaves the client-side
+ * service-worker suppression as the remaining layer, so it must never surface an
+ * error into a live session view.
+ *
+ * @returns a promise that settles once this report — or a newer one that
+ *   superseded it — has been sent.
+ */
+export function reportSessionActiveState(active: boolean): Promise<void> {
+  if (inFlight) {
+    // Newest state wins; superseded states are dropped rather than queued.
+    queuedActive = active;
+    return inFlight;
+  }
+  // `postSessionActiveState` swallows its own errors, so the chain never rejects
+  // and one failed report cannot stall the ones behind it.
+  inFlight = postSessionActiveState(active).then(drainSessionStateQueue);
+  return inFlight;
+}
+
 export function detectedTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";

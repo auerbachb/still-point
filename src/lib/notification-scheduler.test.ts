@@ -136,6 +136,59 @@ describe("notification scheduler", () => {
     expect(initiateMissedSitCall).toHaveBeenCalled();
   });
 
+  test("holds a due reminder while the recipient is in a sit (#709)", async () => {
+    const now = new Date("2026-05-29T09:02:00.000Z");
+    preferenceRows = [{
+      ...basePrefs,
+      suppressDuringSession: true,
+      sessionActiveUntil: new Date(now.getTime() + 60_000),
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(now);
+
+    expect(result.sent).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+    // No claim is taken, so the reminder is re-evaluated on a later tick.
+    expect(insertReturning).not.toHaveBeenCalled();
+  });
+
+  test("sends normally once the reported session window has expired", async () => {
+    const now = new Date("2026-05-29T09:02:00.000Z");
+    preferenceRows = [{
+      ...basePrefs,
+      suppressDuringSession: true,
+      sessionActiveUntil: new Date(now.getTime() - 60_000),
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(now);
+
+    expect(result.sent).toBe(1);
+    expect(sendDailyReminderNotification).toHaveBeenCalledTimes(1);
+  });
+
+  test("holds a missed-sit call while the recipient is in a sit (#709)", async () => {
+    const now = new Date("2026-05-29T18:02:00.000Z");
+    callCandidateRows = [{
+      userId: "user-1",
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "18:00",
+      callWindowStop: "21:00",
+      tz: "UTC",
+      suppressDuringSession: true,
+      sessionActiveUntil: new Date(now.getTime() + 60_000),
+      username: "Alex",
+    }];
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const result = await dispatchDueNotifications(now);
+
+    expect(result.callsInitiated).toBe(0);
+    expect(initiateMissedSitCall).not.toHaveBeenCalled();
+  });
+
   test("claimNotificationDispatch is idempotent on conflict", async () => {
     insertReturning.mockResolvedValueOnce([{ id: "first" }]).mockResolvedValueOnce([]);
 

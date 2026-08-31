@@ -24,12 +24,12 @@ flowchart LR
 
 | Table | Purpose |
 |-------|---------|
-| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, missed-sit call opt-in (`call_opt_in`, `call_phone_number`, `call_consent_at`, `call_window_start`, `call_window_stop`), IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session` |
+| `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, missed-sit call opt-in (`call_opt_in`, `call_phone_number`, `call_consent_at`, `call_window_start`, `call_window_stop`), IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session`, `session_active_until` (#709 server-side session signal, not user-editable) |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 | `call_attempts` | Outbound missed-sit Vapi call log (#599): phone, window key, status, optional `vapi_call_id` |
 | `web_push_subscriptions` | Browser push endpoints (#347) |
 
-Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`.
+Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`, `drizzle/notification_preferences_session_active_709_incremental.sql`.
 
 ## API
 
@@ -50,6 +50,15 @@ Partial update. Supported fields:
 Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or both set to `null`).
 
 Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart` and `callWindowStop` (updated together). Consent timestamp `callConsentAt` is set on opt-in and cleared on opt-out. Call window fields must differ (`start !== stop`).
+
+### `POST /api/notifications/session-state`
+
+Authenticated. Body `{ "active": boolean }`. Reports whether a sit is running so the
+server withholds this user's pushes for the duration (#709). `active: true` stores a
+TTL-bounded `session_active_until`; `active: false` clears it. Ignored (stored as
+`NULL`) for users who turned "Silence during sessions" off. Clients refresh on a 60s
+heartbeat while the sit runs. Does not bump `updated_at` — a heartbeat is not a
+preference edit.
 
 ### Web Push device registration
 
@@ -114,12 +123,56 @@ Miss-a-day wins over daily reminder when both would fire in the same cron window
 - Idempotency `window_key` = local firing date (not the day being asked about)
 - Skipped when user completed a session or logged a failure reason for the target day
 
-## Suppress during session (#431)
+## Suppress during session (#431, #709)
 
-Opt-in (`suppress_during_session`, default false) that holds push **display** on
-the user's devices while a sit is in progress. The server still *sends* pushes
-normally; suppression happens client-side per platform, and the pref is synced so
-the choice carries across devices.
+`suppress_during_session` (**default true** since #709) holds Still Point's own
+notifications while a sit is in progress. It is an **opt-out**: the "Silence
+during sessions" toggle stays on both Settings screens for users who want
+reminders regardless.
+
+Two layers, because neither is sufficient alone:
+
+### Layer 1 — server withholds the send (#709)
+
+Clients report session state to `POST /api/notifications/session-state`
+(`{ active: boolean }`), which stores `notification_preferences.session_active_until`
+= now + `SESSION_ACTIVE_TTL_MS` (3 min, `src/lib/notifications/session-active.ts`).
+Clients refresh on a 60s heartbeat while the sit runs and clear the column when it
+ends. A TTL rather than a boolean means a client that stops reporting (tab killed,
+app suspended, network drop) self-heals instead of muting the user indefinitely.
+
+- The write is gated on `suppress_during_session`, so an opted-out user is never
+  tracked. `isSessionActive()` re-checks the preference on read too, so toggling it
+  off takes effect immediately rather than at the end of the current sit.
+- **Enforcement is at the choke point:** `fanOutToUser()` in `src/lib/notifications.ts`
+  checks `isUserSessionActive()`, so every send helper — and any added later —
+  inherits the hold. `dispatchDueNotifications()` additionally skips active-session
+  users before claiming a dispatch row, keeping the ledger clean, and skips
+  missed-sit **calls** for the same reason (a ringing phone mid-sit is the loudest
+  interruption we own).
+- **Reminders are held, not queued.** A cron reminder skipped mid-sit is re-evaluated
+  on the next tick, which only re-sends if the 5-minute window is still open — a sit
+  spanning the whole window drops that day's reminder. That is the intended trade:
+  the user is doing the thing the reminder asks for, and `userCompletedSessionOnDate`
+  suppresses it afterwards anyway. Missed-sit call slots are hourly, so a held call
+  is dropped rather than deferred.
+- Only this layer can cover a push that arrives while the iOS app is backgrounded
+  (`willPresent` never runs) or during a service-worker cold start — the banner is
+  already on screen by the time a client-side check could run.
+- Reports are **serialized per client** (`reportSessionActiveState` on web, the
+  report chain in `SessionNotificationSuppressionController` on iOS) so an in-flight
+  heartbeat cannot land after the clear that ended the sit and re-suppress for a
+  full TTL.
+- **Known bound — one signal per user, not per device.** With two clients in a
+  session view simultaneously, whichever finishes first clears the hold and the
+  still-sitting client re-establishes it on its next heartbeat (≤60s exposure). A
+  client only sends `active: false` if it previously sent `active: true`, so an idle
+  client never clears another's hold. Per-device leases were judged not worth the
+  extra storage and client-identity plumbing for a one-person-one-sit product.
+
+### Layer 2 — client display suppression (#431)
+
+Kept as a second layer for anything already in flight when the sit starts.
 
 - **Web:** `SessionView` relays the desired state (`prefOn && sessionActive`) to
   the service worker over a `BroadcastChannel`
@@ -131,17 +184,21 @@ the choice carries across devices.
   without a network round-trip — the same pattern as the wake-lock pref (#317).
   - *Tradeoff:* the Push API mandates `userVisibleOnly`, so a browser may
     eventually show a generic background notice or trim the push budget if many
-    pushes are dropped silently. Suppression is opt-in and scoped to the short
-    window of an active sit, keeping that risk low.
-- **iOS:** `SessionNotificationSuppressionController` tracks the cached opt-in
-  plus local/buddy session-active state (parity with `SessionIdleTimerController`).
-  `PushNotificationCoordinator.willPresent` returns empty presentation options
-  (no banner/sound) when a sit is in progress and the opt-in is on. The opt-in is
-  cached in `UserDefaults` so `willPresent` works before the Notifications screen
-  is opened.
+    pushes are dropped silently. Layer 1 keeps that rare — the push is usually
+    never sent — and suppression is scoped to the short window of an active sit.
+- **iOS:** `SessionNotificationSuppressionController` tracks the cached preference
+  plus local/buddy session-active state (parity with `SessionIdleTimerController`),
+  and owns the server heartbeat above. `PushNotificationCoordinator.willPresent`
+  returns empty presentation options (no banner/sound) when a sit is in progress
+  and the preference is on. The preference is cached in `UserDefaults` (defaulting
+  to **on** for an unset key) so `willPresent` works before the Notifications
+  screen is opened.
 
 A paused sit still counts as "in session" on both platforms, so reminders stay
 held until the sit truly completes or is abandoned.
+
+**Not covered:** other apps' notifications. Only a system Focus mode can silence
+those — an app cannot suppress notifications it did not send.
 
 ## Scheduler
 
@@ -194,4 +251,5 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - #247 — Miss-a-day notifications
 - #359 — Unified Notifications settings screen
 - #431 — Suppress notifications during a meditation session
+- #709 — No notifications during a session (server-side hold + on by default)
 - #599 — Missed-sit outbound Vapi phone calls

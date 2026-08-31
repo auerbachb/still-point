@@ -10,7 +10,8 @@ final class NotificationPreferencesViewModel {
     var missADayEnabled = false
     var friendRequestNotificationsEnabled = true
     var failureReasonReminderEnabled = false
-    var suppressDuringSession = false
+    /// On by default (#709); the toggle is an opt-out, not an opt-in.
+    var suppressDuringSession = true
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
     var callOptInEnabled = false

@@ -368,6 +368,18 @@ public actor APIClient {
         return response.preferences
     }
 
+    /// Reports whether a sit is running so the server withholds Still Point's own
+    /// pushes for the duration (#709). The server stores a short TTL, so callers
+    /// refresh this while the sit runs and clear it when the sit ends.
+    public func reportSessionNotificationState(active: Bool) async throws {
+        if uiTestAPIStore != nil {
+            return
+        }
+        var request = makeRequest(method: "POST", path: "/api/notifications/session-state")
+        request.httpBody = try JSONEncoder().encode(SessionNotificationStateRequest(active: active))
+        _ = try await executeRaw(request)
+    }
+
     // MARK: - Failure reasons
 
     public func getFailureReason(date: String) async throws -> FailureReasonLookupDTO {
