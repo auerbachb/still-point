@@ -96,7 +96,26 @@ function onStorageEvent(e: StorageEvent): void {
   if (e.key === STORAGE_KEY || e.key === null) notifyListeners();
 }
 
+let prefVersion = 0;
+
+/**
+ * Monotonic counter bumped on every mirror change — same-tab
+ * {@link saveSuppressDuringSessionPref} / {@link clearSuppressDuringSessionPref}
+ * and cross-tab `storage` events alike.
+ *
+ * `useSessionSuppressionRelay` samples it either side of the sit-start
+ * preference fetch so a response that left the server *before* a newer local
+ * write cannot overwrite it. Comparing the stored value instead would miss two
+ * cases: a cleared mirror and an explicit `true` both read as
+ * {@link SUPPRESS_DURING_SESSION_DEFAULT}, and a toggle that lands twice in one
+ * flight ends where it started.
+ */
+export function suppressDuringSessionPrefVersion(): number {
+  return prefVersion;
+}
+
 function notifyListeners(): void {
+  prefVersion += 1;
   for (const listener of [...listeners]) listener();
 }
 

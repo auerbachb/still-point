@@ -4,6 +4,7 @@ import {
   loadSuppressDuringSessionPref,
   saveSuppressDuringSessionPref,
   subscribeSuppressDuringSessionPref,
+  suppressDuringSessionPrefVersion,
   SUPPRESS_DURING_SESSION_DEFAULT,
 } from "./sessionSuppressionPrefs";
 
@@ -103,5 +104,45 @@ describe("saveSuppressDuringSessionPref", () => {
     expect(loadSuppressDuringSessionPref()).toBe(false);
     saveSuppressDuringSessionPref(true);
     expect(loadSuppressDuringSessionPref()).toBe(true);
+  });
+});
+
+describe("suppressDuringSessionPrefVersion (sit-start fetch race, #709)", () => {
+  it("advances on every mirror write so a stale response can be detected", () => {
+    stubBrowserStorage();
+
+    // A sit starts and samples the version before fetching the server row.
+    const versionAtRequest = suppressDuringSessionPrefVersion();
+
+    // The user toggles "During sessions" off while that fetch is on the wire.
+    saveSuppressDuringSessionPref(false);
+
+    // The response — carrying the pre-toggle `true` — must now be discarded.
+    expect(suppressDuringSessionPrefVersion()).not.toBe(versionAtRequest);
+    expect(loadSuppressDuringSessionPref()).toBe(false);
+  });
+
+  it("advances on an auth-boundary clear, which reads back as the default", () => {
+    stubBrowserStorage({ [STORAGE_KEY]: "true" });
+
+    const versionAtRequest = suppressDuringSessionPrefVersion();
+    clearSuppressDuringSessionPref();
+
+    // The stored value round-trips to the same boolean, so only the version
+    // separates "unchanged" from "cleared by a sign-out".
+    expect(loadSuppressDuringSessionPref()).toBe(SUPPRESS_DURING_SESSION_DEFAULT);
+    expect(suppressDuringSessionPrefVersion()).not.toBe(versionAtRequest);
+  });
+
+  it("holds steady across reads when nothing writes", () => {
+    stubBrowserStorage();
+
+    const versionAtRequest = suppressDuringSessionPrefVersion();
+    loadSuppressDuringSessionPref();
+    loadSuppressDuringSessionPref();
+
+    // The uncontended path must still let the sit-start fetch backfill the
+    // mirror — that is what corrects an opted-out user on a fresh browser.
+    expect(suppressDuringSessionPrefVersion()).toBe(versionAtRequest);
   });
 });

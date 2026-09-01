@@ -6,6 +6,7 @@ import {
   loadSuppressDuringSessionPref,
   saveSuppressDuringSessionPref,
   subscribeSuppressDuringSessionPref,
+  suppressDuringSessionPrefVersion,
   SUPPRESS_DURING_SESSION_DEFAULT,
   SUPPRESS_HEARTBEAT_MS,
 } from "@/lib/sessionSuppressionPrefs";
@@ -53,10 +54,19 @@ export function useSessionSuppressionRelay(sessionActive: boolean): void {
   useEffect(() => {
     if (!sessionActive) return;
     let cancelled = false;
+    const versionAtRequest = suppressDuringSessionPrefVersion();
     void (async () => {
       try {
         const prefs = await fetchNotificationPreferences();
-        if (!cancelled) saveSuppressDuringSessionPref(prefs.suppressDuringSession);
+        if (cancelled) return;
+        // The response describes the server row as it stood when the request
+        // left. A toggle — or an auth-boundary clear — that landed since is
+        // newer, so writing the response back would revive the value the user
+        // just replaced: toggling "During sessions" off mid-sit would silently
+        // re-suppress and re-report the sit as active. The local write wins, and
+        // the PATCH behind it leaves the next sit's fetch agreeing anyway.
+        if (suppressDuringSessionPrefVersion() !== versionAtRequest) return;
+        saveSuppressDuringSessionPref(prefs.suppressDuringSession);
       } catch {
         // Best-effort: keep the mirrored/default value on failure.
       }
