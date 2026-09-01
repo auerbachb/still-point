@@ -27,6 +27,8 @@ import { todayLocalIsoDate } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
 import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
+import { resetSessionStateReports } from "@/lib/web-push-client";
+import { clearSuppressDuringSessionPref } from "@/lib/sessionSuppressionPrefs";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 /** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
@@ -314,6 +316,18 @@ export default function StillPoint() {
     // that was never theirs. Mirrored by `AppViewModel.didLogout` on iOS.
     setLocalWriteFailed(false);
     resetTrackingUnlockOnLogout();
+    // #709: the suppression mirror is one localStorage key for the whole browser,
+    // so leaving it set hands this account's "During sessions: off" to whoever
+    // signs in next — and that account then never reports its sit to the server
+    // and gets banners mid-sit. Dropping it restores the silent default until
+    // their own preference arrives.
+    clearSuppressDuringSessionPref();
+    // #709: the report queue is account-scoped for the same reason, so it is
+    // dropped here rather than at the one call site that used to do it. Both
+    // teardowns reach this helper — an explicit sign-out and an authoritative
+    // 401/403/404 — and a report still queued under this account would otherwise
+    // survive the second of them and drain under the next account's cookie.
+    resetSessionStateReports();
   };
 
   // #666: re-read the user from the server after an action that moves account

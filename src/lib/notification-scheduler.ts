@@ -17,6 +17,7 @@ import {
   sendFailureReasonReminderNotification,
   sendMissADayNotification,
 } from "@/lib/notifications";
+import { isSessionActive, isUserSessionActive } from "@/lib/notifications/session-active";
 import { initiateMissedSitCall } from "@/lib/vapi";
 
 export const MISSED_SIT_CALL_NOTIFICATION_TYPE = "missed_sit_call";
@@ -449,6 +450,14 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
 
   for (const prefs of candidates) {
     try {
+      // A sit is in progress: never claim a dispatch or send mid-session (#709).
+      // Skipping here rather than at send time keeps the dispatch ledger clean, so
+      // the reminder is re-evaluated on a later tick if its window is still open.
+      if (isSessionActive(prefs, now)) {
+        skipped += 1;
+        continue;
+      }
+
       const local = getLocalParts(now, prefs.tz);
 
       // Failure-reason reminder fires at a fixed 8 PM local time, independent of the
@@ -604,6 +613,8 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       callWindowStart: notificationPreferences.callWindowStart,
       callWindowStop: notificationPreferences.callWindowStop,
       tz: notificationPreferences.tz,
+      suppressDuringSession: notificationPreferences.suppressDuringSession,
+      sessionActiveUntil: notificationPreferences.sessionActiveUntil,
       username: users.username,
     })
     .from(notificationPreferences)
@@ -613,6 +624,14 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
   for (const prefs of callCandidates) {
     try {
       if (!prefs.callPhoneNumber || !prefs.callWindowStart || !prefs.callWindowStop) {
+        continue;
+      }
+
+      // A ringing phone mid-sit is the loudest interruption we own (#709). The call
+      // is dropped rather than deferred — slots are hourly — which is correct: the
+      // user is doing the very thing the missed-sit call would nag them about, and
+      // finishing the sit cancels the remaining slots for the day anyway.
+      if (isSessionActive(prefs, now)) {
         continue;
       }
 
@@ -646,6 +665,25 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
           loadUserStreak(prefs.userId, intendedDateKey),
           countDaysMissed(prefs.userId, intendedDateKey),
         ]);
+
+        // `callCandidates` was read in one query before this loop began, so the
+        // pre-claim check above ran against a snapshot that is many awaits old by
+        // now — every earlier user in the loop, the completion lookup, the claim,
+        // and the context loads just above. A sit starting in that gap is
+        // invisible to it, and a ringing phone has no display-time fallback the
+        // way a push does (#431 willPresent / sw.js), so this re-read is the only
+        // layer that can stop it. It sits last, immediately before the dial, so
+        // nothing awaits between the check and the call it guards; a throw here
+        // lands in the catch below and hands the claim back like any other
+        // pre-dial failure.
+        if (await isUserSessionActive(prefs.userId, now)) {
+          // Release rather than record, so the slot is re-evaluated on a later
+          // tick instead of being logged as a call that never went out (same
+          // reasoning as the pre-claim skip in the reminder loop above).
+          await releaseMissedSitCallClaim(prefs.userId, windowKey);
+          continue;
+        }
+
         const result = await initiateMissedSitCall({
           userId: prefs.userId,
           phoneNumber: prefs.callPhoneNumber,

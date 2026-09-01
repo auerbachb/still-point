@@ -10,7 +10,8 @@ final class NotificationPreferencesViewModel {
     var missADayEnabled = false
     var friendRequestNotificationsEnabled = true
     var failureReasonReminderEnabled = false
-    var suppressDuringSession = false
+    /// On by default (#709); the toggle is an opt-out, not an opt-in.
+    var suppressDuringSession = true
     var dailyReminderFrequency: DailyReminderFrequency = .daily
     var quietHoursEnabled = false
     var callOptInEnabled = false
@@ -38,8 +39,10 @@ final class NotificationPreferencesViewModel {
         defer { isLoading = false }
 
         do {
+            let generation = SessionNotificationSuppressionController.preferenceGeneration
+            let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
             let prefs = try await APIClient.shared.getNotificationPreferences()
-            apply(prefs)
+            apply(prefs, startedAtGeneration: generation, requestTicket: ticket, responseKind: .read)
             await syncTimezoneIfNeeded(prefs)
         } catch {
             errorMessage = "Could not load notification settings."
@@ -181,9 +184,14 @@ final class NotificationPreferencesViewModel {
         errorMessage = nil
 
         do {
+            // Taken after the `isSaving` spin, so the ticket records when this
+            // request actually left — a save that waited its turn is newer than
+            // the one it queued behind, and newer than any read already in flight.
+            let generation = SessionNotificationSuppressionController.preferenceGeneration
+            let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
             let updated = try await APIClient.shared.updateNotificationPreferences(patch)
             isSaving = false
-            apply(updated)
+            apply(updated, startedAtGeneration: generation, requestTicket: ticket, responseKind: .write)
         } catch {
             errorMessage = "Could not save notification settings."
             isSaving = false
@@ -191,15 +199,59 @@ final class NotificationPreferencesViewModel {
         }
     }
 
-    private func apply(_ dto: NotificationPreferencesDTO) {
+    /// Applies a preferences response to the screen, or drops it whole.
+    ///
+    /// Both admission tests are asked once, up front, and govern every field: the
+    /// device-global controller is what outlives an auth boundary, but a response
+    /// that fails either test is equally wrong for the screen-local fields — it
+    /// would repaint them from a row the user has already moved past, or from the
+    /// account that just signed out.
+    ///
+    /// - Parameter generation: `SessionNotificationSuppressionController.preferenceGeneration`
+    ///   as it was when the request started.
+    /// - Parameter ticket: `nextPreferenceRequestTicket()` as taken when the
+    ///   request started, ordering this response against every other preference
+    ///   request in flight.
+    /// - Parameter kind: `.read` from `load()`, `.write` from `persist()` — a
+    ///   PATCH response is server truth as of its commit, a GET response only
+    ///   describes what it happened to observe.
+    private func apply(
+        _ dto: NotificationPreferencesDTO,
+        startedAtGeneration generation: Int,
+        requestTicket ticket: Int,
+        responseKind kind: StaleResponseGuard.ResponseKind
+    ) {
+        // One admission test for the whole response, not just for the one guarded
+        // field. The controller answers both halves of "may this land?" — same
+        // account (#665 generation) and newest word on the row (ticket ordering) —
+        // and neither question is specific to `suppressDuringSession`. A response
+        // that loses either test describes a row this screen has already moved
+        // past, or one belonging to the account that just signed out, so painting
+        // its *other* fields would roll back settings the user has since changed:
+        // a slow GET landing after the user turns "Daily reminder" off revives that
+        // toggle exactly the way it used to revive the suppression choice (#709).
+        // The whole DTO therefore stands or falls together — a partially-applied
+        // stale response is the bug, not a smaller version of it.
+        //
+        // Called before any assignment so the guard is consulted exactly once per
+        // response (it consumes the ticket) and no field is written on the way to
+        // discovering the response was stale. `.read` loses to anything newer,
+        // `.write` only to a newer write — see `StaleResponseGuard.ResponseKind`.
+        guard SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+            dto.suppressDuringSession,
+            startedAtGeneration: generation,
+            requestTicket: ticket,
+            responseKind: kind
+        ) else { return }
+
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
         friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
         failureReasonReminderEnabled = dto.failureReasonReminderEnabled
+        // Moves only because the cache accepted the same value above, so the screen
+        // can never disagree with what `willPresent` will actually do (#709).
         suppressDuringSession = dto.suppressDuringSession
-        // Keep the cached opt-in (read by willPresent) in sync with the server row.
-        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(dto.suppressDuringSession)
         timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil

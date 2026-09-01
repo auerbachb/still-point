@@ -40,6 +40,12 @@ vi.mock("@/lib/web-push", () => ({
   sendWebPushToUser,
 }));
 
+const isUserSessionActive = vi.fn();
+
+vi.mock("@/lib/notifications/session-active", () => ({
+  isUserSessionActive,
+}));
+
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args) => ({ and: args })),
   eq: vi.fn((left, right) => ({ left, right })),
@@ -53,6 +59,7 @@ describe("sendFriendRequestNotification", () => {
     sendApnsNotification.mockResolvedValue({ ok: true, status: 200 });
     getApnsConfigStatus.mockReturnValue({ configured: true, missing: [] });
     sendWebPushToUser.mockResolvedValue({ delivered: false });
+    isUserSessionActive.mockResolvedValue(false);
   });
 
   test("sends the friend request APNs payload to each enabled device token", async () => {
@@ -306,5 +313,54 @@ describe("sendFriendRequestNotification", () => {
 
     expect(sendApnsNotification).toHaveBeenCalledTimes(7);
     expect(maxInFlight).toBeLessThanOrEqual(3);
+  });
+
+  describe("during an active session (#709)", () => {
+    beforeEach(() => {
+      tokenRows.push({ id: "dt-1", token: "a".repeat(64), apnsEnvironment: "development" });
+      isUserSessionActive.mockResolvedValue(true);
+    });
+
+    test("withholds a friend request push", async () => {
+      const { sendFriendRequestNotification } = await import("./notifications");
+
+      await sendFriendRequestNotification({
+        recipientUserId: "recipient-id",
+        senderUsername: "alex",
+        requestId: "req-1",
+      });
+
+      expect(sendApnsNotification).not.toHaveBeenCalled();
+      expect(sendWebPushToUser).not.toHaveBeenCalled();
+    });
+
+    test("withholds a scheduled reminder and reports it undelivered", async () => {
+      const { sendDailyReminderNotification } = await import("./notifications");
+
+      const result = await sendDailyReminderNotification({ recipientUserId: "recipient-id", streak: 3 });
+
+      // delivered:false makes the scheduler release its dispatch claim, so the
+      // reminder can be re-evaluated once the sit is over.
+      expect(result.delivered).toBe(false);
+      expect(sendApnsNotification).not.toHaveBeenCalled();
+      expect(sendWebPushToUser).not.toHaveBeenCalled();
+    });
+
+    test("withholds the miss-a-day and failure-reason reminders", async () => {
+      const { sendMissADayNotification, sendFailureReasonReminderNotification } =
+        await import("./notifications");
+
+      const missADay = await sendMissADayNotification({ recipientUserId: "recipient-id" });
+      const failureReason = await sendFailureReasonReminderNotification({
+        recipientUserId: "recipient-id",
+        targetDate: "2026-06-01",
+        isYesterday: false,
+      });
+
+      expect(missADay.delivered).toBe(false);
+      expect(failureReason.delivered).toBe(false);
+      expect(sendApnsNotification).not.toHaveBeenCalled();
+      expect(sendWebPushToUser).not.toHaveBeenCalled();
+    });
   });
 });

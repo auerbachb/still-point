@@ -75,8 +75,20 @@ export const notificationPreferences = pgTable("notification_preferences", {
   /** #441: opt-in for the fixed 8 PM "log why you couldn't meditate" reminder. */
   failureReasonReminderEnabled: boolean("failure_reason_reminder_enabled").default(false).notNull(),
   friendRequestNotificationsEnabled: boolean("friend_request_notifications_enabled").default(true).notNull(),
-  /** Opt-in (#431): suppress push display on this user's devices while a sit is in progress. */
-  suppressDuringSession: boolean("suppress_during_session").default(false).notNull(),
+  /**
+   * On by default (#709, was opt-in in #431): hold Still Point's own notifications
+   * while a sit is in progress. Users can still opt out from the "During sessions"
+   * toggle. Enforced server-side (see `sessionActiveUntil`) and, as a second layer,
+   * at display time on each client.
+   */
+  suppressDuringSession: boolean("suppress_during_session").default(true).notNull(),
+  /**
+   * Server-side "a sit is running" signal (#709). Clients POST
+   * `/api/notifications/session-state` on session start, refresh it on a heartbeat,
+   * and clear it on session end; the TTL (`SESSION_ACTIVE_TTL_MS`) makes a client
+   * that stops reporting self-heal. Not user-editable.
+   */
+  sessionActiveUntil: timestamp("session_active_until", { withTimezone: true }),
   /** Local reminder time as HH:MM (24h). */
   dailyReminderTime: varchar("daily_reminder_time", { length: 5 }).default("09:00").notNull(),
   /** daily | every_other | weekly */

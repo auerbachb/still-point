@@ -346,6 +346,20 @@ final class AppViewModel {
             // #526: reset account-scoped unlock so the next sign-in re-qualifies
             // (mirrors the clearOnLogout called by didLogout).
             trackingControlPrefsManager.clearOnLogout()
+            // #709: an expired token or a 401 ends the session just as finally as
+            // tapping Sign out, but only `didLogout()` was clearing this — so an
+            // automatic sign-out left the previous account's "During sessions"
+            // choice cached device-globally for whoever signed in next, and left
+            // its queued session-state reports free to drain under the new
+            // account's credentials and silence *their* notifications for a full
+            // TTL. Clearing here also bumps the controller's auth epoch, which is
+            // what stops an in-flight preference response from writing the old
+            // account's value afterwards.
+            //
+            // Inside the authoritative branch deliberately: `.serverError` and
+            // `.unreachable` say nothing about auth, and discarding a live user's
+            // preference because the network dropped is the #665 mistake.
+            SessionNotificationSuppressionController.clearSuppressPreference()
         }
         syncWidgetData(signedOutCause: cause)
     }
@@ -586,11 +600,23 @@ final class AppViewModel {
         // controller, so a response arriving after a sign-out would push the old
         // account's setting onto whoever is signed in next (#665).
         let generation = authGeneration
+        let preferenceGeneration = SessionNotificationSuppressionController.preferenceGeneration
+        // This is a third independent reader of the same row, alongside the two in
+        // `NotificationPreferencesViewModel`, and nothing serializes it against
+        // them. Taken here rather than inside the `Task` so it records when the
+        // fetch was asked for, not when the task happened to be scheduled — a
+        // toggle saved in between must still win (#709).
+        let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
         Task { [weak self] in
             guard let self else { return }
             guard let prefs = try? await APIClient.shared.getNotificationPreferences() else { return }
             guard generation == self.authGeneration else { return }
-            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(prefs.suppressDuringSession)
+            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+                prefs.suppressDuringSession,
+                startedAtGeneration: preferenceGeneration,
+                requestTicket: ticket,
+                responseKind: .read
+            )
         }
     }
 

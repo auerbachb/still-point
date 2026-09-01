@@ -34,13 +34,22 @@ export type SessionSuppressionMessage = {
   suppress: boolean;
 };
 
+/**
+ * Silencing Still Point's notifications during a sit is on unless the user turned
+ * it off (#709). A browser that has never loaded the Notification settings screen
+ * has no mirrored value, and must still start a sit silent — the server row is
+ * fetched right after and corrects an opted-out user.
+ */
+export const SUPPRESS_DURING_SESSION_DEFAULT = true;
+
 export function loadSuppressDuringSessionPref(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return SUPPRESS_DURING_SESSION_DEFAULT;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw === "true";
+    if (raw === null) return SUPPRESS_DURING_SESSION_DEFAULT;
+    return raw !== "false";
   } catch {
-    return false;
+    return SUPPRESS_DURING_SESSION_DEFAULT;
   }
 }
 
@@ -54,6 +63,30 @@ export function saveSuppressDuringSessionPref(enabled: boolean): void {
   notifyListeners();
 }
 
+/**
+ * Drop the mirror at an auth boundary (#709).
+ *
+ * The key is global to the browser, not scoped to an account, so one user's
+ * stored `false` would otherwise be read as the *next* user's preference. That
+ * is not a cosmetic staleness: `useSessionSuppressionRelay` gates the server
+ * "a sit is running" report on this value, so an inherited `false` means the
+ * next account never reports its sit and takes banners straight through the
+ * middle of it — the exact complaint in #709, one account removed.
+ *
+ * Removing the key rather than writing `true` lets the read fall back to
+ * {@link SUPPRESS_DURING_SESSION_DEFAULT} (silent by default), and the sit-start
+ * fetch in `useSessionSuppressionRelay` then fills in the real server value.
+ */
+export function clearSuppressDuringSessionPref(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Best-effort: a storage failure leaves the default in force, which is silent.
+  }
+  notifyListeners();
+}
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
@@ -63,7 +96,26 @@ function onStorageEvent(e: StorageEvent): void {
   if (e.key === STORAGE_KEY || e.key === null) notifyListeners();
 }
 
+let prefVersion = 0;
+
+/**
+ * Monotonic counter bumped on every mirror change — same-tab
+ * {@link saveSuppressDuringSessionPref} / {@link clearSuppressDuringSessionPref}
+ * and cross-tab `storage` events alike.
+ *
+ * `useSessionSuppressionRelay` samples it either side of the sit-start
+ * preference fetch so a response that left the server *before* a newer local
+ * write cannot overwrite it. Comparing the stored value instead would miss two
+ * cases: a cleared mirror and an explicit `true` both read as
+ * {@link SUPPRESS_DURING_SESSION_DEFAULT}, and a toggle that lands twice in one
+ * flight ends where it started.
+ */
+export function suppressDuringSessionPrefVersion(): number {
+  return prefVersion;
+}
+
 function notifyListeners(): void {
+  prefVersion += 1;
   for (const listener of [...listeners]) listener();
 }
 
