@@ -83,7 +83,12 @@ public struct UserDTO: Codable, Sendable {
 }
 
 extension UserDTO {
-    func updating(
+    /// Public so the app module can merge a single server-confirmed field into the
+    /// local copy without adopting a whole response (#697): the settings ordering
+    /// drops a superseded `UserDTO`, but an individual *monotonic* field it
+    /// committed still has to land. Every other member of this type is already
+    /// public; only this helper was not.
+    public func updating(
         username: String? = nil,
         isPublic: Bool? = nil,
         aphorismsEnabled: Bool? = nil,

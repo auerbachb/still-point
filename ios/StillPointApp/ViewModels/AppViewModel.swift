@@ -1024,6 +1024,29 @@ final class AppViewModel {
             // rather than from the response we did not adopt, so it is correct on
             // both surviving paths.
             guard outcome != .discarded else { return }
+            // ...but those badges only render inside Home's `dualTrackEnabled`
+            // branch, and a superseded response never reached `currentUser`. Without
+            // the merge below the refresh unlocked above has nothing to draw into:
+            // Home keeps the single-track layout and the "Add second track" prompt
+            // while the server has the fork on. The reconcile read `applySettingsUser`
+            // schedules usually repairs that, but it is explicitly best effort — when
+            // it fails the stale layout persists until some later `me()`, and the only
+            // recovery the user is offered is opting in a second time. Before this
+            // ordering work the opt-in was adopted unconditionally, so that window is
+            // a regression this PR would otherwise introduce for the one field the
+            // user just asked for.
+            //
+            // Merged field-wise rather than by adopting the response, because this
+            // flag is monotonic: nothing in the app ever sets `dualTrackEnabled` back
+            // to false, so writing `true` cannot revert a newer settings response the
+            // way adopting the whole `UserDTO` would. Every other field still comes
+            // from whichever response won the ordering. Deliberately not generalized —
+            // `isPublic`, the rename, and the other toggles are not monotonic and must
+            // stay ordered. Ordered before the refresh so the badges it writes, and
+            // the widget snapshot it persists, both see the fork as on.
+            if let existing = currentUser, !existing.dualTrackEnabled {
+                applyAuthenticatedUser(existing.updating(dualTrackEnabled: true))
+            }
             await refreshTracksDoneToday()
         } catch {
             print("Failed to enable dual track: \(error)")
