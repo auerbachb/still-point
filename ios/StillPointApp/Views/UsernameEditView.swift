@@ -34,6 +34,12 @@ struct UsernameEditView: View {
     /// name directly under "Username updated" would tell the user their rename did
     /// not take when in fact it did, so the confirmed name is what is displayed until
     /// the account itself reports one.
+    ///
+    /// The same shadowing is needed after a rename that *was* applied. A settings
+    /// write holding a later ticket can have been serialized before the rename
+    /// committed, so it is adopted while still carrying the old name — which is why
+    /// this is released only when the account reports the confirmed name, never on a
+    /// bare change to it.
     @State private var confirmedUsername: String?
 
     private var isSaving: Bool { updating || savingUsername }
@@ -127,10 +133,26 @@ struct UsernameEditView: View {
             if !editingUsername, let newValue {
                 usernameDraft = newValue
             }
-            // The account has spoken since our save — the reconcile landed, or a
-            // rename from elsewhere did — so it is authoritative again and the held
-            // name must not keep shadowing it.
-            confirmedUsername = nil
+            // Released once the account reports the very name the server confirmed
+            // to us: that is what "caught up" means, and it is the only change that
+            // makes the held name redundant. Also released when there is no account
+            // left to describe, so a sign-out cannot carry one session's confirmed
+            // name into the next (#665).
+            //
+            // Deliberately *not* released on any other change. Winning the settings
+            // ordering does not make a response complete: a write that took a later
+            // ticket than this rename can still have been serialized before the
+            // rename committed, so it carries the old username and is adopted anyway
+            // — `AppViewModel.applySettingsUser` says exactly this, and answers it
+            // with a reconciling read that is explicitly best effort. Treating that
+            // write as the account "speaking" would drop the held name and put the
+            // old one directly under "Username updated" until the read lands, or for
+            // good when it fails. Only Settings' own writes disable each other; the
+            // Home opt-in (`enableDualTrack`) takes a settings ticket from outside
+            // that gate, so this overlap is reachable rather than theoretical.
+            if newValue == nil || newValue == confirmedUsername {
+                confirmedUsername = nil
+            }
         }
     }
 
