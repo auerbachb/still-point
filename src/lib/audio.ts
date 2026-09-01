@@ -292,6 +292,13 @@ export type SoundPrefs = {
   completion: boolean;
   /** Spoken final-minute countdown (1–60); suppresses tick/chime while active. */
   voiceCountdown: boolean;
+  /**
+   * #712: vibrate at each minute marker and at the end of the sit, for someone
+   * sitting with their eyes closed who wants no sound at all. Off by default —
+   * an unasked-for buzz mid-sit is worse than silence. Not an audio channel:
+   * see `src/lib/haptics.ts`.
+   */
+  haptics: boolean;
 };
 
 const STORAGE_KEY = "stillpoint_sound_prefs";
@@ -301,6 +308,7 @@ const DEFAULTS: SoundPrefs = {
   chime: true,
   completion: true,
   voiceCountdown: false,
+  haptics: false,
 };
 
 export function loadSoundPrefs(): SoundPrefs {

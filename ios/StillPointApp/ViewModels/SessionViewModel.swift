@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 import StillPointShared
 
 @Observable
@@ -58,6 +59,13 @@ final class SessionViewModel {
     private var lastVoiceCountdownSec = 0
     private var controlHideTimer: AnyCancellable?
     private let uiTestTimerMultiplier: Double
+
+    /// #712: the two generators behind `HapticCueLogic.Intensity`. Held for the
+    /// life of the sit rather than built per cue — a generator has to be
+    /// `prepare()`d to fire promptly, and one created at the moment of the
+    /// marker arrives noticeably after it.
+    private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let pronouncedHaptic = UINotificationFeedbackGenerator()
 
     var remaining: Double {
         max(0, Double(totalSeconds) - elapsed)
@@ -165,6 +173,13 @@ final class SessionViewModel {
         if soundPrefs.voiceCountdown {
             AudioEngine.shared.preloadVoiceCountdown()
         }
+        // #712: deliberately outside the warm-up branch above. Haptics is the
+        // channel for a sitter who wants no sound, so a haptics-only sit must
+        // not activate the audio session — it would duck whatever else is
+        // playing for a sound we are never going to make.
+        if soundPrefs.haptics {
+            prepareHaptics()
+        }
         startTimer()
         scheduleControlHide()
     }
@@ -258,6 +273,8 @@ final class SessionViewModel {
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
         let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
+        // #712: the one toggle that governs vibration rather than sound.
+        let isHapticsToggle = keyPath == \AudioEngine.SoundPrefs.haptics
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
 
@@ -265,8 +282,15 @@ final class SessionViewModel {
             toggledKeyWasEnabled: toggledKeyWasEnabled,
             toggledKeyIsEnabled: soundPrefs[keyPath: keyPath],
             voiceCountdownWasEnabled: voiceCountdownWasEnabled,
-            voiceCountdownIsEnabled: soundPrefs.voiceCountdown
+            voiceCountdownIsEnabled: soundPrefs.voiceCountdown,
+            toggledKeyUsesAudio: !isHapticsToggle
         )
+
+        if isHapticsToggle, soundPrefs.haptics {
+            // Turned on mid-sit: prime the generators so the next minute marker
+            // lands on time rather than a beat late.
+            prepareHaptics()
+        }
 
         if effects.warmUp {
             // #667: `start()` only warms the engine when a sound is already on, so a
@@ -391,6 +415,17 @@ final class SessionViewModel {
             if soundPrefs.completion {
                 AudioEngine.shared.playCompletion()
             }
+            // #712: the end cue, felt rather than heard. Not gated on
+            // `soundPrefs.completion` — silencing the bell must not silence the
+            // buzz — but it is the same moment, so a sitter with both on gets
+            // one event in two channels.
+            if let cue = HapticCueLogic.sessionEndCue(
+                hapticsEnabled: soundPrefs.haptics,
+                completedNaturally: completedNaturally,
+                isAbandoned: isAbandoned
+            ) {
+                fireHaptic(cue)
+            }
             return
         }
 
@@ -433,15 +468,53 @@ final class SessionViewModel {
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: lastCompletedMinuteBlockIndex
         )
-        if chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex {
+        let crossedMinuteBoundary = chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex
+        // `chimeCount` is non-nil only when a full minute is still to go; since
+        // #711 the bell is one strike, so the value survives purely as that gate
+        // and no longer sets how many strikes play.
+        let fullMinuteRemains = chimeUpdate.chimeCount != nil
+        if crossedMinuteBoundary {
             lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
             // Per-minute chime suppressed during voice countdown final minute.
-            // `chimeCount` is non-nil only when a full minute is still to go;
-            // since #711 the bell is one strike, so the value survives purely
-            // as that gate and no longer sets how many strikes play.
-            if soundPrefs.chime, chimeUpdate.chimeCount != nil, !voiceActive {
+            if soundPrefs.chime, fullMinuteRemains, !voiceActive {
                 AudioEngine.shared.playChime()
             }
+        }
+
+        // #712: the same boundary and the same full-minute gate as the bell — one
+        // timing source, two channels — but read from neither `soundPrefs.chime`
+        // nor `voiceActive`, so a sitter who turned every sound off still feels
+        // each minute go by.
+        if let cue = HapticCueLogic.minuteMarkerCue(
+            hapticsEnabled: soundPrefs.haptics,
+            crossedMinuteBoundary: crossedMinuteBoundary,
+            fullMinuteRemains: fullMinuteRemains,
+            isAbandoned: isAbandoned
+        ) {
+            fireHaptic(cue)
+        }
+    }
+
+    // MARK: - Haptics (#712)
+
+    /// Primes both generators. Cheap, and an unprepared generator fires late
+    /// enough that the tap no longer reads as marking the minute it belongs to.
+    private func prepareHaptics() {
+        gentleHaptic.prepare()
+        pronouncedHaptic.prepare()
+    }
+
+    /// Plays a cue at the strength `HapticCueLogic` assigns it. The decision of
+    /// *whether* and *how strong* lives in the shared package; this is only the
+    /// UIKit hand-off.
+    private func fireHaptic(_ cue: HapticCueLogic.Cue) {
+        switch HapticCueLogic.intensity(for: cue) {
+        case .gentle:
+            gentleHaptic.impactOccurred()
+            // A generator goes cold once it fires; re-prime for the next minute.
+            gentleHaptic.prepare()
+        case .pronounced:
+            pronouncedHaptic.notificationOccurred(.success)
         }
     }
 

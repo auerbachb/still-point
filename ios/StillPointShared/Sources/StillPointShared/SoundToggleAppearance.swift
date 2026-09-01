@@ -23,6 +23,18 @@ public enum SoundToggleAppearance {
     /// you see is what you can hit.
     public static let minimumTapTarget: Double = 44
 
+    /// Which channel a toggle controls.
+    ///
+    /// #712 added a pill that governs vibration rather than sound. A speaker
+    /// glyph on it would be a plain lie — the whole point of the control is that
+    /// nothing is heard — so the cue picks the glyph family and the wording.
+    public enum Cue: String, Sendable, Equatable, CaseIterable {
+        /// Plays through the audio session (tick / chime / end / voice).
+        case audio
+        /// Vibrates instead of sounding (haptics).
+        case haptic
+    }
+
     /// The visual channels that carry on/off state.
     ///
     /// Three redundant cues, deliberately: an off state that only differs in text
@@ -34,24 +46,44 @@ public enum SoundToggleAppearance {
         public let isFilled: Bool
         /// Pill border is the stronger tier (on) rather than the faint tier (off).
         public let hasProminentBorder: Bool
-        /// Icon shows a muted speaker (off) rather than a sounding one (on).
+        /// Icon shows the struck-through glyph (off) rather than the active one (on).
         public let isIconMuted: Bool
+        /// Which channel this pill governs — picks the glyph family.
+        public let cue: Cue
 
-        public init(isFilled: Bool, hasProminentBorder: Bool, isIconMuted: Bool) {
+        public init(
+            isFilled: Bool,
+            hasProminentBorder: Bool,
+            isIconMuted: Bool,
+            cue: Cue = .audio
+        ) {
             self.isFilled = isFilled
             self.hasProminentBorder = hasProminentBorder
             self.isIconMuted = isIconMuted
+            self.cue = cue
         }
 
         /// SF Symbol for the icon half of the control.
         public var systemImageName: String {
-            isIconMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+            switch cue {
+            case .audio:
+                return isIconMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+            case .haptic:
+                // A phone throwing off waves reads as "this buzzes" where a
+                // speaker would read as "this makes a noise".
+                return isIconMuted ? "iphone.slash" : "iphone.radiowaves.left.and.right"
+            }
         }
     }
 
-    /// Resolves every visual channel from the single on/off input.
-    public static func appearance(isOn: Bool) -> Appearance {
-        Appearance(isFilled: isOn, hasProminentBorder: isOn, isIconMuted: !isOn)
+    /// Resolves every visual channel from the on/off input and the cue channel.
+    public static func appearance(isOn: Bool, cue: Cue = .audio) -> Appearance {
+        Appearance(
+            isFilled: isOn,
+            hasProminentBorder: isOn,
+            isIconMuted: !isOn,
+            cue: cue
+        )
     }
 
     /// UI-test hook. Unchanged by the restyle — `StillPointAppUITests` and the web
@@ -62,8 +94,14 @@ public enum SoundToggleAppearance {
 
     /// Accessible name. Keeps the visible word first so speech input ("tap tick")
     /// still matches the label a sighted user reads (WCAG 2.5.3 Label in Name).
-    public static func accessibilityLabel(label: String) -> String {
-        "\(label) sound"
+    ///
+    /// The suffix follows the cue: announcing the haptics pill as "haptics
+    /// sound" would tell a VoiceOver user the opposite of what it does.
+    public static func accessibilityLabel(label: String, cue: Cue = .audio) -> String {
+        switch cue {
+        case .audio:  return "\(label) sound"
+        case .haptic: return "\(label) feedback"
+        }
     }
 
     /// Accessible value, so VoiceOver announces the state change rather than

@@ -34,6 +34,7 @@ import {
   soundToggleAppearance,
   soundToggleStateText,
   soundToggleTestId,
+  type SoundToggleCue,
 } from "@/lib/soundToggleAppearance";
 import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
 
@@ -45,7 +46,13 @@ type MindState = "clear" | "thinking" | "hyperfocus";
  * (`speaker.wave.2.fill` / `speaker.slash.fill`) instead of whatever the device
  * font happens to have for `♪`.
  */
-function SoundToggleIcon({ muted }: { muted: boolean }) {
+function SoundToggleIcon({
+  muted,
+  cue = "audio",
+}: {
+  muted: boolean;
+  cue?: SoundToggleCue;
+}) {
   return (
     <svg
       width="13"
@@ -60,16 +67,37 @@ function SoundToggleIcon({ muted }: { muted: boolean }) {
       focusable="false"
       style={{ flexShrink: 0 }}
     >
-      {/* Speaker body, shared by both states. */}
-      <path d="M3 6h2l3-2.5v9L5 10H3z" fill="currentColor" stroke="none" />
-      {muted ? (
-        // Off: a slash through the waves.
-        <path d="M10.5 6l4 4m0-4l-4 4" />
-      ) : (
-        // On: two sound waves, matching speaker.wave.2.fill.
+      {cue === "haptic" ? (
         <>
-          <path d="M10.5 5.75a3 3 0 010 4.5" />
-          <path d="M12.75 4a5.5 5.5 0 010 8" />
+          {/* #712: a phone throwing off waves reads as "this buzzes" where a
+              speaker would read as "this makes a noise". Mirrors the iOS pair
+              iphone.radiowaves.left.and.right / iphone.slash. */}
+          <rect x="5.5" y="2" width="5" height="12" rx="1.25" />
+          {muted ? (
+            // Off: a slash across the phone.
+            <path d="M3.5 13.5l9-11" />
+          ) : (
+            // On: waves leaving both sides.
+            <>
+              <path d="M3.25 5.75a4 4 0 000 4.5" />
+              <path d="M12.75 5.75a4 4 0 010 4.5" />
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Speaker body, shared by both states. */}
+          <path d="M3 6h2l3-2.5v9L5 10H3z" fill="currentColor" stroke="none" />
+          {muted ? (
+            // Off: a slash through the waves.
+            <path d="M10.5 6l4 4m0-4l-4 4" />
+          ) : (
+            // On: two sound waves, matching speaker.wave.2.fill.
+            <>
+              <path d="M10.5 5.75a3 3 0 010 4.5" />
+              <path d="M12.75 4a5.5 5.5 0 010 8" />
+            </>
+          )}
         </>
       )}
     </svg>
@@ -1052,14 +1080,16 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         >
           {(
             [
-              ["tick", "tick"],
-              ["chime", "chime"],
-              ["voiceCountdown", "voice"],
-              ["completion", "end"],
+              ["tick", "tick", "audio"],
+              ["chime", "chime", "audio"],
+              ["voiceCountdown", "voice", "audio"],
+              ["completion", "end", "audio"],
+              // #712: vibration rather than sound, so it carries its own cue.
+              ["haptics", "haptics", "haptic"],
             ] as const
-          ).map(([key, label]) => {
+          ).map(([key, label, cue]) => {
             const isOn = soundPrefs[key];
-            const appearance = soundToggleAppearance(isOn);
+            const appearance = soundToggleAppearance(isOn, cue);
             return (
               <button
                 type="button"
@@ -1068,12 +1098,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                 // "tick sound, toggle button, pressed" and re-announces on change,
                 // so the state never depends on seeing the fill.
                 aria-pressed={isOn}
-                aria-label={soundToggleAccessibilityLabel(label)}
+                aria-label={soundToggleAccessibilityLabel(label, cue)}
                 // Becomes the accessible *description*, not the name. Deliberately
                 // restates the state in words: it is the hover tooltip for mouse
                 // users, and a plain-language fallback on the older
                 // browser/screen-reader pairs that handle `aria-pressed` poorly.
-                title={`${soundToggleAccessibilityLabel(label)} \u2014 ${soundToggleStateText(isOn)}`}
+                title={`${soundToggleAccessibilityLabel(label, cue)} \u2014 ${soundToggleStateText(isOn)}`}
                 data-testid={soundToggleTestId(label)}
                 data-sound-toggle={label}
                 data-state={soundToggleStateText(isOn)}
@@ -1081,7 +1111,10 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                   const next = { ...soundPrefs, [key]: !soundPrefs[key] };
                   setSoundPrefs(next);
                   saveSoundPrefs(next);
-                  if (next[key]) {
+                  // #712: haptics is the one toggle that must not unlock the
+                  // audio context. It exists for someone who wants silence, and
+                  // vibration needs no audio context at all.
+                  if (next[key] && cue !== "haptic") {
                     void unlockAudioContext();
                   }
                 }}
@@ -1105,7 +1138,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                   whiteSpace: "nowrap",
                 }}
               >
-                <SoundToggleIcon muted={appearance.isIconMuted} />
+                <SoundToggleIcon muted={appearance.isIconMuted} cue={cue} />
                 {label}
               </button>
             );
