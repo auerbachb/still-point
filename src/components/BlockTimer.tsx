@@ -75,6 +75,8 @@ export function BlockTimer({
   const lastVoiceSecRef = useRef(61);
   const lastCompletedBlockIndexRef = useRef(-1);
   const controlledCompleteFiredRef = useRef(false);
+  /** Previous controlled elapsed, so a restart can be told from normal advance. */
+  const lastControlledElapsedRef = useRef(-1);
   const skewRef = useRef(0);
   const syncClockRef = useRef(syncClock);
   syncClockRef.current = syncClock;
@@ -393,6 +395,10 @@ export function BlockTimer({
     if (newElapsed >= totalSeconds) {
       setElapsed(totalSeconds);
       pausedElapsedRef.current = totalSeconds;
+      // Recorded before the early return so a run that lands on the end without
+      // an intermediate update still leaves a high-water mark for the next run
+      // to fall below.
+      lastControlledElapsedRef.current = totalSeconds;
       if (!controlledCompleteFiredRef.current) {
         controlledCompleteFiredRef.current = true;
         playSessionEndCues();
@@ -403,11 +409,20 @@ export function BlockTimer({
 
     setElapsed(newElapsed);
     pausedElapsedRef.current = newElapsed;
-    // Back below the end means a fresh run on the same mounted timer, so re-arm
-    // the completion latch the way the buddy-sync path re-arms it on seed.
-    // Without this a second controlled run would find the latch still set and
-    // silently skip its end haptic and completion cue.
-    controlledCompleteFiredRef.current = false;
+    // Elapsed moving backwards means a fresh run on the same mounted timer.
+    // Re-seed from the new position exactly as the buddy-sync path seeds on
+    // start: the cue guards below are all monotonic, so left at the finished
+    // run's high-water mark they would swallow the new run's ticks, minute
+    // markers, end haptic and completion cue until it passed the old total.
+    if (newElapsed < lastControlledElapsedRef.current) {
+      lastTickSecRef.current = Math.floor(newElapsed);
+      lastCompletedBlockIndexRef.current =
+        useMinuteBlocks && minuteBlockCount > 0
+          ? Math.min(minuteBlockCount - 1, Math.floor(newElapsed / 60) - 1)
+          : -1;
+      controlledCompleteFiredRef.current = false;
+    }
+    lastControlledElapsedRef.current = newElapsed;
     const remainingNow = totalSeconds - newElapsed;
     lastVoiceSecRef.current =
       remainingNow > 60 ? 61 : Math.max(lastVoiceSecRef.current, Math.floor(remainingNow));
