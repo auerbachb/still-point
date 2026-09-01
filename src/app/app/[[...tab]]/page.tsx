@@ -1032,7 +1032,17 @@ export default function StillPoint() {
   // strip has to raise itself for a failed write whether or not the network is
   // up. `offlineIndicatorStateFor` owns that rule and the copy that goes with
   // it — `null` is the one combination with nothing to say.
-  const offlineIndicatorState = isImmersive
+  // #717 (review): the completion overlay is *not* immersive, so a sit that was
+  // refused would raise this strip on top of `CompletionScreen`'s own
+  // `completion-not-stored` alert — two danger-token surfaces for one loss. The
+  // strip is the weaker of the two: it only states the loss, while the alert
+  // states it and carries the retry that can still recover the sit, so while
+  // that alert is up it owns the message. Suppressed whole rather than
+  // downgraded to `offlineSavedProgress`, because that string re-makes the
+  // "saved and upload when you reconnect" promise #703 withdrew.
+  const completionOwnsNotStored = overlay === "complete" && completionData?.notStored === true;
+
+  const offlineIndicatorState = isImmersive || completionOwnsNotStored
     ? null
     : offlineIndicatorStateFor({ offline: runningFromCache, sitNotStored: localWriteFailed });
 
