@@ -322,6 +322,12 @@ export default function StillPoint() {
     // and gets banners mid-sit. Dropping it restores the silent default until
     // their own preference arrives.
     clearSuppressDuringSessionPref();
+    // #709: the report queue is account-scoped for the same reason, so it is
+    // dropped here rather than at the one call site that used to do it. Both
+    // teardowns reach this helper — an explicit sign-out and an authoritative
+    // 401/403/404 — and a report still queued under this account would otherwise
+    // survive the second of them and drain under the next account's cookie.
+    resetSessionStateReports();
   };
 
   // #666: re-read the user from the server after an action that moves account
@@ -616,10 +622,6 @@ export default function StillPoint() {
     void getWebSessionSyncCoordinator().clearQueue().catch((error) => {
       console.error("Failed to clear offline session queue on logout:", error);
     });
-    // #709: same reasoning one line up — a session-state report still queued when
-    // this account signs out would be sent under the next account's cookie and
-    // silence *their* notifications for a full TTL.
-    resetSessionStateReports();
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
