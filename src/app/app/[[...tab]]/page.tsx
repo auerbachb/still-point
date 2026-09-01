@@ -18,6 +18,7 @@ import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
 import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
 import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
 import { api, ApiError } from "@/lib/api";
@@ -1024,7 +1025,16 @@ export default function StillPoint() {
 
   // #666: the strip is hidden in immersive flows for the same reason the nav and
   // header are — nothing competes with a sit.
-  const showOfflineIndicator = runningFromCache && !isImmersive;
+  //
+  // #717: outside those flows the strip is no longer a connectivity surface. A
+  // refused IndexedDB write is not an offline condition, and `handleBreathEnd`
+  // and `handleSessionAbandon` have no completion screen to say so on, so the
+  // strip has to raise itself for a failed write whether or not the network is
+  // up. `offlineIndicatorStateFor` owns that rule and the copy that goes with
+  // it — `null` is the one combination with nothing to say.
+  const offlineIndicatorState = isImmersive
+    ? null
+    : offlineIndicatorStateFor({ offline: runningFromCache, sitNotStored: localWriteFailed });
 
   const welcomeHeader = !isImmersive && !(overlay === "complete" && isMobile) ? (
     <div style={{
@@ -1123,9 +1133,9 @@ export default function StillPoint() {
           #666: when the offline strip is up, the two share a single grid item.
           This container's rows are `auto 1fr auto`, so an extra top-level child
           would push the tab content out of the `1fr` track and shrink it. */}
-      {showOfflineIndicator ? (
+      {offlineIndicatorState ? (
         <div>
-          <OfflineIndicator sitNotStored={localWriteFailed} />
+          <OfflineIndicator state={offlineIndicatorState} />
           {welcomeHeader}
         </div>
       ) : (

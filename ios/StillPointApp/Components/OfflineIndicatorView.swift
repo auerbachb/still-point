@@ -14,17 +14,29 @@ import StillPointShared
 /// write means the sit is on no device and will upload nowhere. The strip then
 /// carries the withdrawn copy — from the shared `OfflineIndicatorCopy`, so it
 /// stays word-for-word with the web strip — in danger tokens instead.
+///
+/// #717: that failure is not a connectivity failure, so the strip also has to be
+/// able to raise itself while online — which means the `wifi.slash` glyph has to
+/// go with the copy. It is the loudest thing on the strip and says "offline" on
+/// its own, so an online failure gets a warning triangle and the glyph never
+/// contradicts the label it sits next to.
 struct OfflineIndicatorView: View {
-    /// A local queue write has failed and has not since succeeded.
-    var sitNotStored: Bool = false
+    /// Which of the strip's three things to say — resolved by
+    /// `OfflineIndicatorCopy.state(offline:sitNotStored:)`, which also decides
+    /// whether there is anything to say at all. The caller does not build this
+    /// view for `nil`.
+    var state: OfflineIndicatorCopy.State
 
     private var copy: OfflineIndicatorCopy.Copy {
-        OfflineIndicatorCopy.copy(for: OfflineIndicatorCopy.state(sitNotStored: sitNotStored))
+        OfflineIndicatorCopy.copy(for: state)
     }
+
+    private var sitNotStored: Bool { state != .offlineSavedProgress }
+    private var offline: Bool { state != .onlineSitNotStored }
 
     var body: some View {
         HStack(spacing: SPSpacing.s1) {
-            Image(systemName: "wifi.slash")
+            Image(systemName: offline ? "wifi.slash" : "exclamationmark.triangle")
                 .font(.system(size: 10, weight: .medium))
             Text(copy.label)
                 .font(SPFont.mono(10, weight: .medium))

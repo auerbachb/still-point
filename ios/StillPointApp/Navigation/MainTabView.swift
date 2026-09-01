@@ -1,7 +1,16 @@
 import SwiftUI
+import StillPointShared
 
 struct MainTabView: View {
     @Bindable var appVM: AppViewModel
+
+    /// #665/#703/#717: what the offline strip has to say right now, or `nil`
+    /// when it has nothing — connected, with the sit safely on the device. The
+    /// rule lives in the shared `OfflineIndicatorCopy` so the web strip raises
+    /// and lowers on exactly the same conditions.
+    private var offlineIndicatorState: OfflineIndicatorCopy.State? {
+        OfflineIndicatorCopy.state(offline: appVM.isOfflineMode, sitNotStored: appVM.localSaveFailed)
+    }
 
     var body: some View {
         TabView(selection: $appVM.selectedTab) {
@@ -42,17 +51,20 @@ struct MainTabView: View {
         }
         .tint(SPColor.green)
         // #665: shown across every tab while the app runs from cached identity and
-        // state; it clears the moment a `me()` succeeds. Scoped to the tabbed
-        // shell on purpose — an active sit stays free of chrome.
+        // state; that reason clears the moment a `me()` succeeds. Scoped to the
+        // tabbed shell on purpose — an active sit stays free of chrome.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if appVM.isOfflineMode {
-                // #703: the strip withdraws its "sits are saved" promise while a
-                // local write is known to have failed.
-                OfflineIndicatorView(sitNotStored: appVM.localSaveFailed)
+            // #703: the strip withdraws its "sits are saved" promise while a
+            // local write is known to have failed. #717: that failure is not a
+            // connectivity failure — a breath sit has no completion screen to
+            // surface it on — so the shared rule raises the strip for it whether
+            // or not the app is offline, with copy that says only what is true.
+            if let state = offlineIndicatorState {
+                OfflineIndicatorView(state: state)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: appVM.isOfflineMode)
+        .animation(.easeInOut(duration: 0.2), value: offlineIndicatorState)
         .onAppear {
             Self.configureTabBarAppearance()
         }
