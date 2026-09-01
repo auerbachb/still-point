@@ -556,6 +556,13 @@ public enum WidgetDataStore {
     /// dropped. It is extended past the window edge only by the server anchor or
     /// the previous snapshot's carried value, and only while the rows corroborate
     /// an unbroken run all the way back to that edge.
+    ///
+    /// `flagsAsOf` is the moment the four "done today" flags were last known to
+    /// describe — the local day they are a statement *about*. Each of them folds
+    /// today into a set below, so a flag carried across local midnight would
+    /// claim a day it never earned. Supplying it retires the whole set the moment
+    /// the day rolls over; omitting it keeps the historical "trust the flags"
+    /// behaviour for callers that compute them fresh at the call site.
     public static func makeSnapshot(
         user: UserDTO?,
         primaryDoneToday: Bool,
@@ -563,6 +570,7 @@ public enum WidgetDataStore {
         practiceDoneToday: Bool,
         primaryStandardDoneToday: Bool = false,
         now: Date = Date(),
+        flagsAsOf: Date? = nil,
         previous: WidgetData? = nil,
         completedPracticeDates: Set<String>? = nil,
         secondCompletedPracticeDates: Set<String>? = nil,
@@ -573,6 +581,32 @@ public enum WidgetDataStore {
         guard let user else {
             return .loggedOut
         }
+
+        // Every "done today" flag is a claim about ONE local day, and each one
+        // folds *today* into a set below. Nothing downstream can tell a flag set
+        // an hour ago from one set before midnight, so the check has to happen
+        // here, once, before any of them is read.
+        //
+        // The exposure is not hypothetical. The flags live on `AppViewModel` and
+        // used to be cleared in exactly one place — the top of
+        // `refreshTracksDoneToday()`, a network round-trip. But the path that
+        // matters most is deliberately network-free: finishing a sit calls
+        // `markPracticeDoneToday` -> `syncWidgetData()` directly. So a sit at
+        // 00:05 — a quick one, or one on the other track — reached this function
+        // with yesterday's flags still raised and folded today into sets it had
+        // not earned. For `standardDays` that is the #679 inflation itself: the
+        // day joins the population `standardDaysAfterAnchor` walks, adding +1 to
+        // the server total for a day with no standard sit. The row sets carry the
+        // milder version of the same wrong: a check on a track that did not sit.
+        //
+        // Shadowing rather than renaming is deliberate — it retires the flags for
+        // *every* use below (folds, `dayKeptToday`, and the stored badges alike)
+        // instead of only the uses someone remembered to update.
+        let flagsDescribeToday = flagsAsOf.map { isSameLocalDay($0, now) } ?? true
+        let primaryDoneToday = flagsDescribeToday && primaryDoneToday
+        let secondDoneToday = flagsDescribeToday && secondDoneToday
+        let practiceDoneToday = flagsDescribeToday && practiceDoneToday
+        let primaryStandardDoneToday = flagsDescribeToday && primaryStandardDoneToday
 
         // Nil unless the stored snapshot belongs to this same signed-in account —
         // another account's history and streak must never carry over.

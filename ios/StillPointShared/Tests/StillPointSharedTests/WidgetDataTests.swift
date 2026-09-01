@@ -449,6 +449,137 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertTrue(justFinished.standardDates.contains(localDay(0, from: now)))
     }
 
+    /// The midnight case for the signal the two tests above introduce.
+    ///
+    /// `primaryStandardDoneToday` is a claim about one local day, but the path that
+    /// carries it is deliberately network-free — `markPracticeDoneToday` ->
+    /// `syncWidgetData()` — while the only clear used to live behind a network
+    /// round-trip (`refreshTracksDoneToday()`). So an app held open across midnight
+    /// could reach this function with yesterday's flag still raised, and a *quick*
+    /// sit at 00:05 would fold today into the standard-only set: a day with no
+    /// standard sit joining the population that extends `serverStreak`, which is
+    /// precisely the inflation #679 exists to remove.
+    ///
+    /// `flagsAsOf` is the day the flags describe; when it is not today's, they are
+    /// retired before any of them is read. The two calls differ in that argument
+    /// alone, so the assertion isolates staleness and nothing else.
+    func testStaleDoneTodayFlagsDoNotExtendTheStandardTotalAfterMidnight() {
+        let now = Date()
+        let yesterday = now.addingTimeInterval(-36 * 3600)
+        let previous = backfilled(
+            sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
+            serverStreak: 30,
+            now: now
+        )
+
+        // Control: the identical call with flags stamped today still extends.
+        let fresh = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: true,
+            now: now,
+            flagsAsOf: now,
+            previous: previous
+        )
+        XCTAssertEqual(fresh.streak, 31, "precondition: a same-day flag still extends")
+        XCTAssertTrue(fresh.standardDates.contains(localDay(0, from: now)))
+
+        let stale = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: true,
+            now: now,
+            flagsAsOf: yesterday,
+            previous: previous
+        )
+        XCTAssertFalse(
+            stale.standardDates.contains(localDay(0, from: now)),
+            "yesterday's standard flag must not enter today's standard-only set"
+        )
+        XCTAssertEqual(
+            stale.streak,
+            30,
+            "the server total may not gain a day that carried no standard sit"
+        )
+    }
+
+    /// The same retirement applied to the other two terms of the standard-set
+    /// disjunction. `primaryDoneToday` and `secondDoneToday` are server-derived
+    /// badges rather than local flags, but they are read on the same network-free
+    /// path and go stale across midnight identically — so fixing only the local
+    /// flag would have left the very same inflation reachable through either of
+    /// them.
+    func testStaleServerBadgesDoNotExtendTheStandardTotalAfterMidnight() {
+        let now = Date()
+        let yesterday = now.addingTimeInterval(-36 * 3600)
+        let previous = backfilled(
+            sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
+            serverStreak: 30,
+            now: now
+        )
+
+        for (label, primary, second) in [
+            ("primaryDoneToday", true, false),
+            ("secondDoneToday", false, true)
+        ] {
+            let stale = WidgetDataStore.makeSnapshot(
+                user: makeUser(id: "u1"),
+                primaryDoneToday: primary,
+                secondDoneToday: second,
+                practiceDoneToday: false,
+                primaryStandardDoneToday: false,
+                now: now,
+                flagsAsOf: yesterday,
+                previous: previous
+            )
+            XCTAssertFalse(
+                stale.standardDates.contains(localDay(0, from: now)),
+                "a stale \(label) must not fold today into the standard-only set"
+            )
+            XCTAssertEqual(stale.streak, 30, "a stale \(label) must not extend the server total")
+        }
+    }
+
+    /// Retiring the flags must also un-check the weekday rows they drive: a stale
+    /// flag marking today is the milder sibling of the same wrong, and leaving it
+    /// would show a check on a day the user has not sat.
+    func testStaleFlagsDoNotCheckTodaysRow() {
+        let now = Date()
+        let stale = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: true,
+            secondDoneToday: true,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: true,
+            now: now,
+            flagsAsOf: now.addingTimeInterval(-36 * 3600)
+        )
+        XCTAssertFalse(stale.completedDates.contains(localDay(0, from: now)))
+        XCTAssertFalse(stale.secondCompletedDates.contains(localDay(0, from: now)))
+        XCTAssertFalse(stale.isTodayMarkedDone(now: now), "a new day starts unchecked")
+    }
+
+    /// `flagsAsOf` is opt-in: every caller that computes its flags fresh at the
+    /// call site (and every existing test) omits it and keeps the original
+    /// trust-the-flags behaviour.
+    func testOmittingFlagsAsOfKeepsTrustingTheFlags() {
+        let now = Date()
+        let snapshot = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: true,
+            now: now
+        )
+        XCTAssertTrue(snapshot.standardDates.contains(localDay(0, from: now)))
+        XCTAssertTrue(snapshot.isTodayMarkedDone(now: now))
+    }
+
     /// Re-scope, track axis: on a dual-track account the latest standard sit can
     /// be a *second-track* one, on a day Track One's row leaves blank. The anchor
     /// legitimately lands there — the server counts it, being track-agnostic —

@@ -132,6 +132,13 @@ final class AppViewModel {
     /// Home badge — is still false in the moment a sit finishes, which delayed the
     /// streak until the next `getTracksDoneToday` round-trip.
     var primaryStandardDoneToday = false
+    /// The moment the five flags above were last rolled over — i.e. the local day
+    /// they are a statement *about*. They are all same-day claims, and
+    /// `WidgetDataStore.makeSnapshot` folds each of them into *today*; carrying
+    /// one across local midnight would claim a day that was never sat. Passed to
+    /// `makeSnapshot` as `flagsAsOf` so the fold is retired at the boundary, and
+    /// used by `rollOverDoneTodayFlagsIfNeeded()` to retire the flags themselves.
+    private var doneTodayFlagsStamp: Date?
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -690,6 +697,40 @@ final class AppViewModel {
         practiceDoneToday = false
         secondPracticeDoneToday = false
         primaryStandardDoneToday = false
+        doneTodayFlagsStamp = nil
+    }
+
+    /// Retire the "done today" flags when the local day has advanced past the one
+    /// they describe, and re-stamp them onto the current day.
+    ///
+    /// The flags used to be cleared in exactly one place: the top of
+    /// `refreshTracksDoneToday()`, which is a network round-trip. The path that
+    /// actually crosses midnight with them raised is the one deliberately built to
+    /// need no network — `markPracticeDoneToday` -> `syncWidgetData()`, called the
+    /// instant a sit ends. A quick sit at 00:05, or a second-track sit, therefore
+    /// reached the snapshot with yesterday's primary-standard flag still true and
+    /// let it fold today into the standard-only set that extends `serverStreak`:
+    /// the exact inflation #679 exists to remove.
+    ///
+    /// Called before the flags are written and before they are read, so no caller
+    /// has to remember the rollover. The server-derived Home badges are rolled
+    /// over with the rest for the same reason and on the same fail-closed logic
+    /// the refresh failure path already uses: on a new day nothing has been sat
+    /// yet, and the next successful refresh restores the truth.
+    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
+        if let stamp = doneTodayFlagsStamp, WidgetDataStore.isSameLocalDay(stamp, now) {
+            return
+        }
+        // A nil stamp means nothing has been claimed yet this process; the flags
+        // are already false, so this just establishes the day.
+        if doneTodayFlagsStamp != nil {
+            primaryDoneToday = false
+            secondDoneToday = false
+            practiceDoneToday = false
+            secondPracticeDoneToday = false
+            primaryStandardDoneToday = false
+        }
+        doneTodayFlagsStamp = now
     }
 
     func beginSession(type: SessionType = .standard, track: Track = .primary) {
@@ -723,6 +764,11 @@ final class AppViewModel {
         // a widget snapshot for an account that has signed out or been switched.
         let generation = authGeneration
         let now = Date()
+        // Two rollovers, because they cover different evidence. The stamp-based
+        // one below knows what *this process* claimed and when; the snapshot-based
+        // one here also catches a relaunch that inherited a stored snapshot from a
+        // previous day. Both are cheap and idempotent.
+        rollOverDoneTodayFlagsIfNeeded(now: now)
         let prior = WidgetDataStore.load()
         if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
             practiceDoneToday = false
@@ -1121,6 +1167,10 @@ final class AppViewModel {
     /// merely failing to reach the server at cold start — see #671 and
     /// `WidgetDataStore.shouldClearStoredSnapshot(on:)`.
     private func syncWidgetData(signedOutCause: WidgetDataStore.SignedOutCause = .signedOut) {
+        // Read site for all five flags, and the one every write path funnels
+        // through — including the network-free `markPracticeDoneToday` that can
+        // reach here first on a sit just after local midnight.
+        rollOverDoneTodayFlagsIfNeeded()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
@@ -1132,7 +1182,11 @@ final class AppViewModel {
             // #679: the Track One analogue of the line above — a standard sit that
             // just finished is known here before the Home badge learns of it, and
             // the standard-only set must see it now or the streak lags a round-trip.
-            primaryStandardDoneToday: primaryStandardDoneToday
+            primaryStandardDoneToday: primaryStandardDoneToday,
+            // Belt to the rollover's braces: the flags were just retired if the day
+            // had turned, and this tells `makeSnapshot` the day they describe so it
+            // refuses the same-day folds itself rather than trusting the caller.
+            flagsAsOf: doneTodayFlagsStamp
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)
@@ -1209,6 +1263,12 @@ final class AppViewModel {
                 secondDoneToday: secondDone,
                 practiceDoneToday: doneToday,
                 now: now,
+                // Deliberately no `flagsAsOf` here. The two flags above are derived
+                // from `result.sessions` against this same `now`, so they are fresh
+                // by construction — stamping the set would retire freshly-computed
+                // truth if this fetch happened to span midnight. This path also
+                // supplies the authoritative sets below, so none of the same-day
+                // folds `flagsAsOf` guards are reachable from here.
                 completedPracticeDates: completed.primary,
                 secondCompletedPracticeDates: completed.second,
                 // #679: the days that actually produced `result.stats.streak` —
@@ -1241,6 +1301,13 @@ final class AppViewModel {
     /// rather than waiting for the other session (#684).
     /// Shared touchpoint with #590 completion-handler work — rebase carefully.
     private func markPracticeDoneToday(sessionType: SessionType, track: Track) {
+        // BEFORE the writes below, never after. This sit belongs to the current
+        // local day; any flag still standing from yesterday does not. Rolling over
+        // first retires those and re-stamps onto today, so the flag raised just
+        // below survives the identical (now no-op) rollover inside
+        // `syncWidgetData()`. Doing it afterwards would clear the very sit that
+        // just finished.
+        rollOverDoneTodayFlagsIfNeeded()
         switch sessionType {
         case .quick, .breath:
             // Quick and breath sits are Track One practice whichever track the
