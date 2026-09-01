@@ -69,6 +69,19 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// to a two-a-day schedule carry no second-track sit, so they render on the
     /// Track One row only. Legacy snapshots decode this as empty.
     public var secondCompletedDates: [String]
+    /// #679: ISO local-day strings in the trailing 7-day window carrying a
+    /// completed **standard** sit — on *either* track. This is the population the
+    /// server counts (`calculateSessionStats`), so it is the only set allowed to
+    /// extend `serverStreak`: see `sessionCountsForServerStreak(_:)` for the
+    /// policy and `reconciledStreak` for the arithmetic.
+    ///
+    /// Deliberately not derivable from the two row sets: `completedDates` also
+    /// holds quick and breath days and excludes second-track standard sits, and
+    /// `secondCompletedDates` holds only the latter, so neither their union nor
+    /// their difference is the standard-only day set. Never rendered — the rows
+    /// stay practice-based (#589/#684). Legacy snapshots decode this as empty,
+    /// which simply means "no day may extend the server total".
+    public var standardDates: [String]
     /// #671: server-computed `stats.streak` from `/api/sessions`, the only source
     /// that knows about days older than the trailing-7 window the rows render.
     /// Used solely to *extend* a run the rows already corroborate — never to
@@ -121,6 +134,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: Int,
         completedDates: [String] = [],
         secondCompletedDates: [String] = [],
+        standardDates: [String] = [],
         serverStreak: Int? = nil,
         serverStreakDate: String? = nil,
         lastUpdated: Date
@@ -139,6 +153,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         self.streak = streak
         self.completedDates = completedDates
         self.secondCompletedDates = secondCompletedDates
+        self.standardDates = standardDates
         self.serverStreak = serverStreak
         self.serverStreakDate = serverStreakDate
         self.lastUpdated = lastUpdated
@@ -148,7 +163,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         case isLoggedIn, userId, currentDay, secondTrackDay, dualTrackEnabled
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
         case primaryDoneToday, secondDoneToday, practiceDoneToday, streak
-        case completedDates, secondCompletedDates
+        case completedDates, secondCompletedDates, standardDates
         case serverStreak, serverStreakDate, lastUpdated
         case writeGeneration
     }
@@ -175,6 +190,13 @@ public struct WidgetData: Codable, Sendable, Equatable {
         // Pre-#684 snapshots have no Track Two history: their `completedDates`
         // stay Track One and Track Two starts empty (no back-fill, no migration).
         secondCompletedDates = try c.decodeIfPresent([String].self, forKey: .secondCompletedDates) ?? []
+        // Pre-#679 snapshots recorded no session type alongside their day strings,
+        // so there is nothing to migrate from: an empty set means no day may
+        // extend `serverStreak` until the next authoritative fetch repopulates it.
+        // That errs toward the app/web number, which is the direction #679 asks
+        // for — the row run below is still the floor, so nothing under-reports
+        // what the widget itself draws.
+        standardDates = try c.decodeIfPresent([String].self, forKey: .standardDates) ?? []
         serverStreak = try c.decodeIfPresent(Int.self, forKey: .serverStreak)
         serverStreakDate = try c.decodeIfPresent(String.self, forKey: .serverStreakDate)
         lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
@@ -190,6 +212,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         // snapshot always writes both, so it is never mistaken for a legacy blob.
         historyIsUnknown = !c.contains(.completedDates)
             && !c.contains(.secondCompletedDates)
+            && !c.contains(.standardDates)
             && !c.contains(.serverStreak)
     }
 
@@ -205,6 +228,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: 0,
         completedDates: [],
         secondCompletedDates: [],
+        standardDates: [],
         lastUpdated: .distantPast
     )
 
@@ -409,6 +433,9 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: 12,
         completedDates: WidgetDataStore.previewCompletedDates(),
         secondCompletedDates: [],
+        // Those six days are standard sits, which is what makes the anchor below
+        // legitimate: the preview's 12 is a standard-only total (#679).
+        standardDates: WidgetDataStore.previewCompletedDates(),
         // Anchored on yesterday so the 12 stays compatible with the 6-day row.
         serverStreak: 12,
         serverStreakDate: WidgetDataStore.previewCompletedDates().last,
@@ -430,6 +457,9 @@ public struct WidgetData: Codable, Sendable, Equatable {
         streak: 12,
         completedDates: WidgetDataStore.previewCompletedDates(),
         secondCompletedDates: WidgetDataStore.previewSecondCompletedDates(),
+        // Track-agnostic (#679): both rows' sits are standard here, and the union
+        // is the same six days either way.
+        standardDates: WidgetDataStore.previewCompletedDates(),
         serverStreak: 12,
         serverStreakDate: WidgetDataStore.previewCompletedDates().last,
         lastUpdated: Date()
@@ -515,27 +545,68 @@ public enum WidgetDataStore {
     /// track only when that track's own "done today" flag is set, so completing
     /// either sit checks that row's box immediately (#684).
     ///
+    /// `completedStandardDates` is the third set on the same footing: the days
+    /// carrying a completed **standard** sit on either track (#679). It is not a
+    /// row — nothing renders it — only the evidence that lets `serverStreak` be
+    /// extended by days the server would itself have counted.
+    ///
     /// #671: the streak is then *derived* from the union of those sets — the
     /// same evidence the rows draw — rather than accumulated from flag
     /// transitions, so a day the app never observed can no longer be silently
     /// dropped. It is extended past the window edge only by the server anchor or
     /// the previous snapshot's carried value, and only while the rows corroborate
     /// an unbroken run all the way back to that edge.
+    ///
+    /// `flagsAsOf` is the moment the four "done today" flags were last known to
+    /// describe — the local day they are a statement *about*. Each of them folds
+    /// today into a set below, so a flag carried across local midnight would
+    /// claim a day it never earned. Supplying it retires the whole set the moment
+    /// the day rolls over; omitting it keeps the historical "trust the flags"
+    /// behaviour for callers that compute them fresh at the call site.
     public static func makeSnapshot(
         user: UserDTO?,
         primaryDoneToday: Bool,
         secondDoneToday: Bool,
         practiceDoneToday: Bool,
+        primaryStandardDoneToday: Bool = false,
         now: Date = Date(),
+        flagsAsOf: Date? = nil,
         previous: WidgetData? = nil,
         completedPracticeDates: Set<String>? = nil,
         secondCompletedPracticeDates: Set<String>? = nil,
+        completedStandardDates: Set<String>? = nil,
         serverStreak: Int? = nil,
         serverStreakDate: String? = nil
     ) -> WidgetData {
         guard let user else {
             return .loggedOut
         }
+
+        // Every "done today" flag is a claim about ONE local day, and each one
+        // folds *today* into a set below. Nothing downstream can tell a flag set
+        // an hour ago from one set before midnight, so the check has to happen
+        // here, once, before any of them is read.
+        //
+        // The exposure is not hypothetical. The flags live on `AppViewModel` and
+        // used to be cleared in exactly one place — the top of
+        // `refreshTracksDoneToday()`, a network round-trip. But the path that
+        // matters most is deliberately network-free: finishing a sit calls
+        // `markPracticeDoneToday` -> `syncWidgetData()` directly. So a sit at
+        // 00:05 — a quick one, or one on the other track — reached this function
+        // with yesterday's flags still raised and folded today into sets it had
+        // not earned. For `standardDays` that is the #679 inflation itself: the
+        // day joins the population `standardDaysAfterAnchor` walks, adding +1 to
+        // the server total for a day with no standard sit. The row sets carry the
+        // milder version of the same wrong: a check on a track that did not sit.
+        //
+        // Shadowing rather than renaming is deliberate — it retires the flags for
+        // *every* use below (folds, `dayKeptToday`, and the stored badges alike)
+        // instead of only the uses someone remembered to update.
+        let flagsDescribeToday = flagsAsOf.map { isSameLocalDay($0, now) } ?? true
+        let primaryDoneToday = flagsDescribeToday && primaryDoneToday
+        let secondDoneToday = flagsDescribeToday && secondDoneToday
+        let practiceDoneToday = flagsDescribeToday && practiceDoneToday
+        let primaryStandardDoneToday = flagsDescribeToday && primaryStandardDoneToday
 
         // Nil unless the stored snapshot belongs to this same signed-in account —
         // another account's history and streak must never carry over.
@@ -554,6 +625,14 @@ public enum WidgetDataStore {
             carriedForward: prior?.secondCompletedDates,
             window: window
         )
+        // #679: the standard-only day set travels alongside the two row sets and
+        // is carried forward and account-scoped exactly like them, so the days
+        // allowed to extend `serverStreak` outlive the fetch that produced them.
+        var standardDays = windowedDates(
+            authoritative: completedStandardDates,
+            carriedForward: prior?.standardDates,
+            window: window
+        )
         // Fold today in only on the synchronous fast path (no session set), where
         // the "done today" flags are always same-day fresh. The authoritative path
         // already carries today's real completion in the supplied set, so trusting
@@ -565,6 +644,30 @@ public enum WidgetDataStore {
         }
         if secondCompletedPracticeDates == nil, secondDoneToday {
             secondDates.insert(today)
+        }
+        // #679, same fast-path caveat: fold today into the standard set only when
+        // no authoritative set was supplied. The signal is deliberately *not*
+        // `practiceDoneToday` — that flag is also raised by a quick or breath sit,
+        // and counting one of those here is the inflation this change removes.
+        //
+        // It needs a *standard-only* "sat today" signal that is also **local**, for
+        // the same reason #684 drives the Track Two row from `secondPracticeDoneToday`
+        // rather than the Home badge: `primaryDoneToday` is server-derived
+        // (`getTracksDoneToday`), so immediately after a primary standard sit —
+        // `markPracticeDoneToday` sets the local flag and calls `syncWidgetData()`
+        // straight away — it is still false. Folding on it alone withheld the
+        // extension until the next `refreshTracksDoneToday()` round-trip, so the
+        // flame did not move when the user finished their sit.
+        //
+        // `primaryStandardDoneToday` is that local Track One signal (standard sits
+        // only, unlike `practiceDoneToday`); `secondDoneToday` already carries the
+        // local second-track flag from the same call site. The server badge stays in
+        // the disjunction so a snapshot built from it alone — a refresh with no local
+        // sit this launch — still folds. The server's policy is track-agnostic, so
+        // the disjunction is exactly the day-level signal wanted.
+        if completedStandardDates == nil,
+           primaryStandardDoneToday || primaryDoneToday || secondDoneToday {
+            standardDays.insert(today)
         }
 
         // The authoritative fetch supplies a fresh (streak, anchor) pair; the fast,
@@ -595,6 +698,7 @@ public enum WidgetDataStore {
             previous: prior,
             now: now,
             completedDays: union,
+            standardDays: standardDays,
             serverStreak: resolvedServerStreak,
             serverStreakDate: resolvedServerStreakDate
         )
@@ -614,6 +718,7 @@ public enum WidgetDataStore {
             streak: streak,
             completedDates: dates.sorted(),
             secondCompletedDates: secondDates.sorted(),
+            standardDates: standardDays.sorted(),
             serverStreak: resolvedServerStreak,
             serverStreakDate: resolvedServerStreakDate,
             lastUpdated: now
@@ -662,6 +767,38 @@ public enum WidgetDataStore {
         sessionCountsForWidgetPractice(session, track: .primary)
     }
 
+    /// **Server streak policy (#679), stated once.** Whether a session is one the
+    /// server counts toward `stats.streak`: a *completed* **standard** sit, on
+    /// **either** track. Mirrors web's `calculateSessionStats`, which filters on
+    /// `sessionType === "standard"` and never looks at `track`.
+    ///
+    /// Deliberately narrower than `sessionCountsForWidgetPractice(_:track:)` on
+    /// one axis and wider on the other: the rows also count quick and breath sits
+    /// (#589) but split standard sits by track (#684). Mixing the two populations
+    /// is exactly the defect this predicate exists to prevent — every day used to
+    /// extend `serverStreak` must be a day that contributed to it.
+    public static func sessionCountsForServerStreak(_ session: SessionDTO) -> Bool {
+        session.completed && session.sessionType == .standard
+    }
+
+    /// The local days in the trailing 7-day window carrying a completed standard
+    /// sit on either track — the set `reconciledStreak` may extend `serverStreak`
+    /// with (#679). Pure and network-free so it's unit-testable; the caller
+    /// supplies sessions, exactly as for `recentCompletedPracticeDates`.
+    public static func recentCompletedStandardDates(
+        from sessions: [SessionDTO],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Set<String> {
+        let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now, calendar: calendar))
+        var days = Set<String>()
+        for session in sessions
+        where window.contains(session.sessionDate) && sessionCountsForServerStreak(session) {
+            days.insert(session.sessionDate)
+        }
+        return days
+    }
+
     /// The local days in the trailing 7-day window on which each track recorded
     /// counted practice — Track One (primary standard, quick, breath) and Track
     /// Two (second-track standard). Pure and network-free so it's unit-testable;
@@ -707,6 +844,10 @@ public enum WidgetDataStore {
             let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now))
             copy.completedDates = data.completedDates.filter { window.contains($0) }
             copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
+            // #679: the standard-only set is bounded by the same window. It is
+            // only ever read between the anchor and today, both of which live
+            // inside it, so pruning loses nothing the extension could have used.
+            copy.standardDates = data.standardDates.filter { window.contains($0) }
         }
         // A snapshot written before #671 carries a historical `streak` but no
         // stored evidence for it: its `completedDates` and `serverStreak` keys
@@ -743,6 +884,7 @@ public enum WidgetDataStore {
             previous: data,
             now: now,
             completedDays: copy.completedDayUnion,
+            standardDays: Set(copy.standardDates),
             serverStreak: copy.serverStreak,
             serverStreakDate: copy.serverStreakDate
         )
@@ -773,7 +915,9 @@ public enum WidgetDataStore {
     ///
     /// 1. `serverStreak` anchored on `serverStreakDate` (#671) — the
     ///    server-computed `stats.streak`, anchored onto a day inside the
-    ///    corroborated run so later days extend it without a second fetch.
+    ///    corroborated run so later days extend it without a second fetch. Those
+    ///    later days are counted from `standardDates`, never from the row, so the
+    ///    days extending the total are exactly the days that produced it (#679).
     /// 2. `carriedStreak` (#684) — the previous snapshot's own value, which knows
     ///    about days older than the window when no anchor has been stored yet.
     ///
@@ -785,6 +929,7 @@ public enum WidgetDataStore {
     /// days it skipped.
     public static func reconciledStreak(
         completedDates: [String],
+        standardDates: [String] = [],
         practiceDoneToday: Bool = false,
         serverStreak: Int?,
         serverStreakDate: String?,
@@ -803,18 +948,82 @@ public enum WidgetDataStore {
         guard run.startOffset + run.length >= days.count else { return run.length }
 
         var extended = run.length
+        var anchoredTotal: Int?
         if let serverStreak, serverStreak > 0, let serverStreakDate,
            let anchorOffset = days.firstIndex(of: serverStreakDate),
            anchorOffset >= run.startOffset,
            anchorOffset < run.startOffset + run.length {
-            // Days completed since the server counted, all inside the corroborated run.
-            let daysSinceAnchor = anchorOffset - run.startOffset
-            extended = max(extended, serverStreak + daysSinceAnchor)
+            // **Standard-only policy at the call site (#679).** `serverStreak` is
+            // web's `calculateSessionStats` total, which counts completed standard
+            // sits and ignores track. The row this anchor sits inside counts quick
+            // and breath sits too, and splits standard sits by track, so the days
+            // it shows are *not* the days that produced this number. Extending by
+            // them let a quick-only day push the widget past what the app and web
+            // display for the same account.
+            //
+            // So the extension term walks `standardDates` — the same population
+            // `sessionCountsForServerStreak(_:)` selected — newest-ward from the
+            // anchor, and stops at the first day without a standard sit: a gap
+            // ends the server's own run, and no day beyond it may be claimed. The
+            // result is therefore always a total the server itself once reported,
+            // and never larger than the old `anchorOffset - run.startOffset`.
+            let daysSinceAnchor = standardDaysAfterAnchor(
+                days: days,
+                standardDays: Set(standardDates),
+                anchorOffset: anchorOffset,
+                runStartOffset: run.startOffset
+            )
+            anchoredTotal = serverStreak + daysSinceAnchor
         }
-        if let carriedStreak, carriedStreak > 0 {
+        if let anchoredTotal {
+            // #679: the carried value is deliberately *not* consulted here. It is
+            // the previous snapshot's own number incremented by the #684 day-credit
+            // rule — one per kept day, quick and breath sits included — so applying
+            // it on top of a standard-only total launders a practice day back into
+            // the number the anchor path just refused. That is not hypothetical: a
+            // morning backfill followed by a quick sit at noon is the ordinary
+            // sequence, and it would re-inflate the streak the same afternoon.
+            //
+            // Nothing is lost by skipping it. The carried value exists for the case
+            // this branch does not cover — days older than the window when no
+            // anchor has been stored yet (#684) — and an admitted anchor is
+            // strictly better evidence for the same span: a server-computed total
+            // for the days before it, plus the standard days since. The `else`
+            // below still carries it whenever no anchor applies.
+            extended = max(extended, anchoredTotal)
+        } else if let carriedStreak, carriedStreak > 0 {
             extended = max(extended, carriedStreak)
         }
         return extended
+    }
+
+    /// How many consecutive days carrying a completed standard sit lie between
+    /// the server anchor and the newest day of the corroborated run — walked
+    /// newest-ward from the anchor (`anchorOffset - 1` down to `runStartOffset`)
+    /// and stopped at the first day without one (#679).
+    ///
+    /// Stopping rather than skipping is what keeps the result honest: the server
+    /// counts a *consecutive* run of standard days, so a day without one ends the
+    /// run the anchor belongs to. Counting past it would report a total the server
+    /// never held. Returns 0 when the anchor is already the newest day of the run,
+    /// which is the pre-#679 behaviour for that case.
+    ///
+    /// Callers must have checked `runStartOffset <= anchorOffset < days.count`, as
+    /// `reconciledStreak` does — `runStartOffset` is 0 or 1, so the walk cannot
+    /// step below index 0.
+    private static func standardDaysAfterAnchor(
+        days: [String],
+        standardDays: Set<String>,
+        anchorOffset: Int,
+        runStartOffset: Int
+    ) -> Int {
+        var count = 0
+        var offset = anchorOffset - 1
+        while offset >= runStartOffset, standardDays.contains(days[offset]) {
+            count += 1
+            offset -= 1
+        }
+        return count
     }
 
     /// Resolve the widget streak under the #684 day-credit rule — a local day
@@ -822,7 +1031,9 @@ public enum WidgetDataStore {
     /// the #671 invariant that the number may never contradict the rendered rows.
     ///
     /// `completedDays` is the union of both tracks' history: exactly what
-    /// `WidgetData.weekMarks(now:)` renders. The previous snapshot's streak is
+    /// `WidgetData.weekMarks(now:)` renders. `standardDays` is the separate,
+    /// unrendered standard-only set that alone may extend `serverStreak` (#679).
+    /// The previous snapshot's streak is
     /// offered as an extension candidate only; `reconciledStreak` admits it just
     /// when the run reaches the oldest column, i.e. when the rows cannot see
     /// where the streak began.
@@ -832,6 +1043,7 @@ public enum WidgetDataStore {
         previous: WidgetData?,
         now: Date = Date(),
         completedDays: Set<String> = [],
+        standardDays: Set<String> = [],
         serverStreak: Int? = nil,
         serverStreakDate: String? = nil,
         calendar: Calendar = .current
@@ -842,6 +1054,7 @@ public enum WidgetDataStore {
         }
         return reconciledStreak(
             completedDates: Array(completedDays),
+            standardDates: Array(standardDays),
             practiceDoneToday: dayKeptToday,
             serverStreak: serverStreak,
             serverStreakDate: serverStreakDate,
@@ -903,14 +1116,16 @@ public enum WidgetDataStore {
     /// recent completed **standard** sit, matching the web's `calculateSessionStats`
     /// (which counts standard sessions only). Nil when there is no such sit.
     ///
-    /// Deliberately track-agnostic: under the #684 day-credit rule a second-track
-    /// standard sit keeps its day and is drawn on the Track Two row, so an anchor
-    /// landing there is corroborated by the rendered rows. The remaining
-    /// cross-surface gap — the server counts standard sits only, while the rows
-    /// also count quick and breath — is tracked in #679.
+    /// Deliberately track-agnostic, and now for the same reason on both sides
+    /// (#679): the anchor and the days that may extend it are both selected by
+    /// `sessionCountsForServerStreak(_:)`, so the population the anchor describes
+    /// is precisely the population `serverStreak` counted. The rows stay
+    /// practice-based and merely floor the result — they no longer feed the
+    /// extension term, which is what let a quick-only day inflate a standard-only
+    /// total.
     public static func serverStreakAnchorDate(from sessions: [SessionDTO]) -> String? {
         var latest: String?
-        for session in sessions where session.completed && session.sessionType == .standard {
+        for session in sessions where sessionCountsForServerStreak(session) {
             if let current = latest, session.sessionDate <= current { continue }
             latest = session.sessionDate
         }

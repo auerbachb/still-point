@@ -447,9 +447,25 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
         XCTAssertEqual(merged.serverStreak, 40)
-        // 40 counted through yesterday, and the merged row shows today complete,
-        // so the anchor extends by the one day since it was computed.
-        XCTAssertEqual(merged.streak, 41)
+        // 40 counted through yesterday, and the merged row shows today complete —
+        // but nothing here says today's sit was a *standard* one, and 40 is a
+        // standard-only total. Extending it by an unclassified practice day is
+        // exactly the cross-surface inflation #679 removes, so the anchor is
+        // adopted at its own value. (Before #679 this asserted 41.)
+        XCTAssertEqual(merged.streak, 40)
+
+        // With today recorded as a standard sit, the extension is legitimate and
+        // the anchor does reach 41.
+        let afterStandardSit = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: true,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            now: now,
+            previous: nil
+        )
+        let extended = WidgetDataStore.merged(late: late, onto: afterStandardSit, now: now)
+        XCTAssertEqual(extended.streak, 41)
     }
 
     /// Merging keeps the blob bounded to the renderable window.
@@ -478,6 +494,159 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
         XCTAssertFalse(merged.completedDates.contains(localDay(-40, from: now)))
         XCTAssertTrue(merged.completedDates.contains(localDay(-1, from: now)))
+    }
+
+    // MARK: - #679: the standard-only set merges like history, not like a flag
+
+    /// The state a backfill leaves behind on the eve of a sit: six standard days
+    /// ending yesterday, anchored on a server total older than the row. Seeded
+    /// through `resolveWrite` so it carries a real store-stamped generation.
+    private func storedBeforeStandardSit(now: Date, user: UserDTO) throws -> WidgetData {
+        let week = Set((1...6).map { localDay(-$0, from: now) })
+        let base = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            now: now,
+            previous: nil,
+            completedPracticeDates: week,
+            secondCompletedPracticeDates: [],
+            completedStandardDates: week,
+            serverStreak: 30,
+            serverStreakDate: localDay(-1, from: now)
+        )
+        let (stamped, outcome) = WidgetDataStore.resolveWrite(
+            incoming: base,
+            observedGeneration: 0,
+            stored: nil,
+            now: now
+        )
+        XCTAssertEqual(outcome, .stored)
+        var seeded = try XCTUnwrap(stamped)
+        XCTAssertEqual(seeded.streak, 30, "precondition: the carried total is older than the row")
+        seeded.lastUpdated = now
+        return seeded
+    }
+
+    /// The #678 race, run against the new field: a backfill captured *before*
+    /// today's standard sit lands after it. Its authoritative standard set does
+    /// not know about today, so a "newest wins" merge would drop the very day
+    /// that extended the streak. The union keeps it, and the streak holds at 31.
+    func testMergeKeepsTodaysStandardSitWhenALateBackfillLands() throws {
+        let now = Date()
+        let user = makeUser()
+        let today = WidgetDataStore.localDayString(now)
+        let stored = try storedBeforeStandardSit(now: now, user: user)
+        let observed = stored.writeGeneration
+
+        // The user finishes today's standard sit while `getSessions()` is away.
+        let afterSit = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: true,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            now: now,
+            previous: stored
+        )
+        let (savedAfterSit, sitOutcome) = WidgetDataStore.resolveWrite(
+            incoming: afterSit,
+            observedGeneration: observed,
+            stored: stored,
+            now: now
+        )
+        XCTAssertEqual(sitOutcome, .stored)
+        let newer = try XCTUnwrap(savedAfterSit)
+        XCTAssertTrue(newer.standardDates.contains(today))
+        XCTAssertEqual(newer.streak, 31)
+
+        // The pre-sit response arrives: six standard days, today absent, plus one
+        // older day this device never recorded.
+        let fetched = Set((1...6).map { localDay(-$0, from: now) })
+        let late = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            now: now,
+            previous: newer,
+            completedPracticeDates: fetched,
+            secondCompletedPracticeDates: [],
+            completedStandardDates: fetched,
+            serverStreak: 30,
+            serverStreakDate: localDay(-1, from: now)
+        )
+        XCTAssertFalse(late.standardDates.contains(today), "precondition: the fetch predates the sit")
+
+        let (resolved, outcome) = WidgetDataStore.resolveWrite(
+            incoming: late,
+            observedGeneration: observed,
+            stored: newer,
+            now: now
+        )
+        XCTAssertEqual(outcome, .merged)
+        let merged = try XCTUnwrap(resolved)
+        XCTAssertTrue(merged.standardDates.contains(today), "the sit's own day survives the late backfill")
+        XCTAssertTrue(
+            merged.standardDates.contains(localDay(-6, from: now)),
+            "and the backfill's own days are kept, not discarded"
+        )
+        XCTAssertEqual(merged.streak, 31, "the standard-only extension survives the merge")
+    }
+
+    /// The same interleaving with a *quick* sit today. The row still checks
+    /// today, so the merged snapshot must not regress the rows — but nothing in
+    /// the merge may let that day extend a standard-only server total (#679).
+    func testMergedStreakIsNotExtendedByAQuickSitToday() throws {
+        let now = Date()
+        let user = makeUser()
+        let today = WidgetDataStore.localDayString(now)
+        let stored = try storedBeforeStandardSit(now: now, user: user)
+        let observed = stored.writeGeneration
+
+        let afterQuickSit = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            now: now,
+            previous: stored
+        )
+        let (savedAfterSit, _) = WidgetDataStore.resolveWrite(
+            incoming: afterQuickSit,
+            observedGeneration: observed,
+            stored: stored,
+            now: now
+        )
+        let newer = try XCTUnwrap(savedAfterSit)
+        XCTAssertTrue(newer.completedDates.contains(today), "the row checks today")
+        XCTAssertFalse(newer.standardDates.contains(today), "but a quick sit is not a standard sit")
+
+        let fetched = Set((1...6).map { localDay(-$0, from: now) })
+        let late = WidgetDataStore.makeSnapshot(
+            user: user,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: false,
+            now: now,
+            previous: newer,
+            completedPracticeDates: fetched,
+            secondCompletedPracticeDates: [],
+            completedStandardDates: fetched,
+            serverStreak: 30,
+            serverStreakDate: localDay(-1, from: now)
+        )
+        let (resolved, outcome) = WidgetDataStore.resolveWrite(
+            incoming: late,
+            observedGeneration: observed,
+            stored: newer,
+            now: now
+        )
+        XCTAssertEqual(outcome, .merged)
+        let merged = try XCTUnwrap(resolved)
+        XCTAssertTrue(merged.completedDates.contains(today), "the merge is still additive on the rows")
+        XCTAssertFalse(merged.standardDates.contains(today))
+        XCTAssertEqual(merged.streak, 30, "the quick day fills the row but not the server total")
     }
 
     // MARK: - Persistence
