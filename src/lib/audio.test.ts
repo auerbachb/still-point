@@ -27,6 +27,7 @@ function currentContext(): MockAudioContext {
 class MockAudioParam {
   value = 0;
   setValueAtTime() {}
+  linearRampToValueAtTime() {}
   exponentialRampToValueAtTime() {}
 }
 
@@ -37,13 +38,19 @@ class MockNode {
 class MockOscillator extends MockNode {
   type = "sine";
   frequency = new MockAudioParam();
+  /** Scheduling captured so tests can assert note count and length (#711). */
+  startTime = 0;
+  stopTime = 0;
   constructor(private readonly ctx: MockAudioContext) {
     super();
   }
-  start() {
+  start(when = 0) {
+    this.startTime = when;
     this.ctx.noteStarted();
   }
-  stop() {}
+  stop(when = 0) {
+    this.stopTime = when;
+  }
 }
 
 class MockGain extends MockNode {
@@ -69,6 +76,8 @@ class MockAudioContext {
   primedDuringGesture = false;
   /** Number of `resume()` calls, so tests can assert the no-op path (#710). */
   resumeCallCount = 0;
+  /** Every oscillator this context handed out, oldest first (#711). */
+  oscillators: MockOscillator[] = [];
 
   constructor() {
     // A context created outside a gesture (e.g. by a silent chime attempt while
@@ -83,7 +92,9 @@ class MockAudioContext {
   }
 
   createOscillator() {
-    return new MockOscillator(this);
+    const osc = new MockOscillator(this);
+    this.oscillators.push(osc);
+    return osc;
   }
   createGain() {
     return new MockGain();
@@ -182,8 +193,33 @@ describe("unlockAudioContext — autoplay policy", () => {
     expect(result).toBe("unlocked");
     // All synthesized sounds now reach the (running) context.
     expect(playTick()).toBe(true);
-    expect(playChime(2)).toBe(true);
+    expect(playChime()).toBe(true);
     expect(playCompletion()).toBe(true);
+  });
+
+  it("#711: the minute chime is one strike, half the length of the old one", async () => {
+    const { unlockAudioContext, playChime } = await loadAudio();
+
+    gesture.active = true;
+    await unlockAudioContext();
+    gesture.active = false;
+
+    const ctx = currentContext();
+    const before = ctx.oscillators.length;
+    expect(playChime()).toBe(true);
+
+    const notes = ctx.oscillators.slice(before);
+    expect(notes.length).toBeGreaterThan(0);
+
+    // Non-repeating: every note is a partial of one strike, so they all start
+    // together. The old chime staggered a strike every 0.4s, once per minute
+    // remaining, which is what the buddy heard as a repeating "song".
+    expect(new Set(notes.map(n => n.startTime)).size).toBe(1);
+
+    // Half as long: the old strike ran 0.5s, this one 0.25s.
+    const start = notes[0].startTime;
+    const end = Math.max(...notes.map(n => n.stopTime));
+    expect(end - start).toBeCloseTo(0.25, 5);
   });
 
   it("reports 'blocked' when the gesture cannot unlock the context", async () => {

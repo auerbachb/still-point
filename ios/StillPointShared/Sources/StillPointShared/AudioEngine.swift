@@ -10,7 +10,7 @@ public final class AudioEngine: @unchecked Sendable {
 
     public func warmUp() {}
     public func playTick() {}
-    public func playChime(count: Int) {}
+    public func playChime() {}
     public func playCompletion() {}
     /// No-op on macOS / host builds; real coordination happens on-device only.
     public func setAmbientCaptureActive(_ active: Bool) {}
@@ -235,35 +235,18 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    // MARK: - Chime (1200→800Hz sine, repeated `count` times, 400ms spacing)
+    // MARK: - Chime (one struck bell, 250ms — waveform lives in ChimeSynth)
 
-    public func playChime(count: Int) {
-        serialQueue.async { [self] in self._playChime(count: count) }
+    public func playChime() {
+        serialQueue.async { [self] in self._playChime() }
     }
 
-    private func _playChime(count: Int) {
-        let totalDuration = Double(count) * 0.4 + 0.1
-        playSynthesized(duration: totalDuration) { phase, sampleRate in
-            let t = phase / sampleRate
-            var sample: Float = 0
-
-            for i in 0..<count {
-                let offset = Double(i) * 0.4
-                let localT = t - offset
-                guard localT >= 0 && localT < 0.5 else { continue }
-
-                // Frequency: exponential ramp 1200 → 800 over 300ms
-                let freqProgress = min(localT / 0.3, 1.0)
-                let freq = 1200.0 * pow(800.0 / 1200.0, freqProgress)
-
-                // Gain: exponential ramp 0.15 → 0.001 over 500ms
-                let gainProgress = min(localT / 0.5, 1.0)
-                let gain = 0.15 * pow(0.001 / 0.15, gainProgress)
-
-                sample += Float(sin(2.0 * .pi * freq * localT) * gain)
-            }
-
-            return sample
+    private func _playChime() {
+        // Single strike, never repeated (#711). The waveform lives in
+        // `ChimeSynth`, outside this file's `#if os(macOS)` split, so it
+        // compiles — and is tested — on every platform.
+        playSynthesized(duration: ChimeSynth.duration) { phase, sampleRate in
+            ChimeSynth.sample(at: phase / sampleRate)
         }
     }
 
