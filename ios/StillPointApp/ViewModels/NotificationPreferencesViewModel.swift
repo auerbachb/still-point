@@ -199,11 +199,16 @@ final class NotificationPreferencesViewModel {
         }
     }
 
+    /// Applies a preferences response to the screen, or drops it whole.
+    ///
+    /// Both admission tests are asked once, up front, and govern every field: the
+    /// device-global controller is what outlives an auth boundary, but a response
+    /// that fails either test is equally wrong for the screen-local fields — it
+    /// would repaint them from a row the user has already moved past, or from the
+    /// account that just signed out.
+    ///
     /// - Parameter generation: `SessionNotificationSuppressionController.preferenceGeneration`
-    ///   as it was when the request started. This view model is `@State` on
-    ///   `SettingsView`, so its own fields die with the signed-out UI; the
-    ///   device-global controller below is the part that outlives an auth
-    ///   boundary and so is the part that has to be generation-checked.
+    ///   as it was when the request started.
     /// - Parameter ticket: `nextPreferenceRequestTicket()` as taken when the
     ///   request started, ordering this response against every other preference
     ///   request in flight.
@@ -216,32 +221,37 @@ final class NotificationPreferencesViewModel {
         requestTicket ticket: Int,
         responseKind kind: StaleResponseGuard.ResponseKind
     ) {
+        // One admission test for the whole response, not just for the one guarded
+        // field. The controller answers both halves of "may this land?" — same
+        // account (#665 generation) and newest word on the row (ticket ordering) —
+        // and neither question is specific to `suppressDuringSession`. A response
+        // that loses either test describes a row this screen has already moved
+        // past, or one belonging to the account that just signed out, so painting
+        // its *other* fields would roll back settings the user has since changed:
+        // a slow GET landing after the user turns "Daily reminder" off revives that
+        // toggle exactly the way it used to revive the suppression choice (#709).
+        // The whole DTO therefore stands or falls together — a partially-applied
+        // stale response is the bug, not a smaller version of it.
+        //
+        // Called before any assignment so the guard is consulted exactly once per
+        // response (it consumes the ticket) and no field is written on the way to
+        // discovering the response was stale. `.read` loses to anything newer,
+        // `.write` only to a newer write — see `StaleResponseGuard.ResponseKind`.
+        guard SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+            dto.suppressDuringSession,
+            startedAtGeneration: generation,
+            requestTicket: ticket,
+            responseKind: kind
+        ) else { return }
+
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
         friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
         failureReasonReminderEnabled = dto.failureReasonReminderEnabled
-        // Keep the cached opt-in (read by willPresent) in sync with the server row
-        // — but only while this response is still the newest word on it. `load()`
-        // gates on `isLoading` and `persist()` on `isSaving`, so the two overlap
-        // freely: a read that left before the user turned "During sessions" off
-        // otherwise lands afterwards carrying the pre-toggle `true` and silently
-        // re-suppresses the sit the user just un-suppressed (#709).
-        //
-        // The visible toggle moves only when the cache accepted, so the screen can
-        // never disagree with what `willPresent` will actually do. The ticket
-        // orders *this* preference specifically; the other fields above are
-        // screen-local state that dies with `SettingsView`, so they keep the
-        // existing last-response-wins behaviour rather than being dropped
-        // wholesale on a preference write that says nothing about them.
-        if SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
-            dto.suppressDuringSession,
-            startedAtGeneration: generation,
-            requestTicket: ticket,
-            responseKind: kind
-        ) {
-            suppressDuringSession = dto.suppressDuringSession
-        }
+        // Moves only because the cache accepted the same value above, so the screen
+        // can never disagree with what `willPresent` will actually do (#709).
+        suppressDuringSession = dto.suppressDuringSession
         timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil
