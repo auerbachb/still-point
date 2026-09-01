@@ -21,6 +21,22 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         return WidgetDataStore.localDayString(date)
     }
 
+    /// `snapshot` with the store-owned `writeGeneration` dropped, so a test can
+    /// assert "every *other* field is exactly as supplied" without forging a
+    /// field callers cannot set. Stripping the key and decoding restores it as
+    /// `0` — the documented legacy default that
+    /// `testLegacyBlobWithoutWriteGenerationDecodesAsZero` pins.
+    private func withoutWriteGeneration(_ snapshot: WidgetData) throws -> WidgetData {
+        let encoded = try JSONEncoder().encode(snapshot)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+            "a WidgetData always encodes as a JSON object"
+        )
+        object.removeValue(forKey: "writeGeneration")
+        let stripped = try JSONSerialization.data(withJSONObject: object)
+        return try JSONDecoder().decode(WidgetData.self, from: stripped)
+    }
+
     /// The state on disk before either writer runs: three days practised, today
     /// still pending. Seeded through `resolveWrite` rather than by setting the
     /// generation directly, so it carries the stamp a real `save` would have
@@ -275,9 +291,15 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             now: now
         )
         XCTAssertEqual(outcome, .stored)
-        var expected = incoming
-        expected.writeGeneration = stored.writeGeneration + 1
-        XCTAssertEqual(resolved, expected)
+        let saved = try XCTUnwrap(resolved)
+        // The store owns the stamp and advances it by exactly one...
+        XCTAssertEqual(saved.writeGeneration, stored.writeGeneration + 1)
+        // ...and rewrites nothing else: drop the store-owned field from both
+        // sides and the snapshots are identical.
+        XCTAssertEqual(
+            try withoutWriteGeneration(saved),
+            try withoutWriteGeneration(incoming)
+        )
     }
 
     /// A first write with nothing stored is uncontested, not a conflict.
