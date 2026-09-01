@@ -1,12 +1,23 @@
 export type WakeLockPrefs = {
-  /** Opt-in: keep the screen awake while a sit timer is running (parity with iOS #306). */
+  /** Opt-out (default on): keep the screen awake while a sit timer is running (parity with iOS #306). */
   keepScreenAwakeDuringSession: boolean;
 };
 
 const STORAGE_KEY = "stillpoint_wake_lock_prefs";
 
+/**
+ * Resolved value for a user who has never touched the setting.
+ *
+ * #730 flipped this from opt-in to opt-out: #660 was filed because a sit's
+ * screen dimmed under the old default. An explicit choice is never overridden —
+ * presence of `STORAGE_KEY` is what distinguishes "never set" from a stored
+ * `false`, so no migration is involved and an opt-out survives forever.
+ * iOS mirrors this in `StillPointShared/WakeLockPrefs.swift`.
+ */
+export const DEFAULT_KEEP_SCREEN_AWAKE = true;
+
 const DEFAULTS: WakeLockPrefs = {
-  keepScreenAwakeDuringSession: false,
+  keepScreenAwakeDuringSession: DEFAULT_KEEP_SCREEN_AWAKE,
 };
 
 /** True when the browser exposes the Screen Wake Lock API (secure contexts only). */
@@ -18,6 +29,8 @@ export function loadWakeLockPrefs(): WakeLockPrefs {
   if (typeof window === "undefined") return DEFAULTS;
 
   try {
+    // No key at all: the user has never touched the setting, so the #730
+    // default applies. A stored boolean — `false` included — always wins.
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);

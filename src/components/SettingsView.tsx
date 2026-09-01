@@ -10,6 +10,7 @@ import {
   isValidUsername,
 } from "@/lib/username";
 import {
+  DEFAULT_KEEP_SCREEN_AWAKE,
   isWakeLockSupported,
   loadWakeLockPrefs,
   saveWakeLockPrefs,
@@ -53,10 +54,12 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
   const [togglingAphorisms, setTogglingAphorisms] = useState(false);
-  // Both stay false during SSR/hydration; the Session card only appears after
-  // mount when the browser actually supports the Screen Wake Lock API (#317).
+  // `wakeLockSupported` stays false during SSR/hydration, so the Session card
+  // only appears after mount — by which point the same effect has already read
+  // the stored pref (#317). The seed mirrors the #730 opt-out default so the
+  // toggle never renders in a state the pref module would not resolve to.
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
-  const [keepScreenAwake, setKeepScreenAwake] = useState(false);
+  const [keepScreenAwake, setKeepScreenAwake] = useState(DEFAULT_KEEP_SCREEN_AWAKE);
   const [breathKeyBinding, setBreathKeyBinding] = useState<BreathKeyBinding>("Space");
   const [hideDistractionHyperfocusControls, setHideDistractionHyperfocusControls] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
@@ -394,7 +397,8 @@ export function SettingsView({
                 fontSize: "13px", fontStyle: "italic",
                 color: "var(--fg-3)",
               }}>
-                Prevents the screen from sleeping while a sit timer is running
+                On by default: the screen stays awake while a sit timer is
+                running. Turn it off to let the screen sleep as usual.
               </div>
             </div>
             <button

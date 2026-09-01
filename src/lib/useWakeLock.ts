@@ -2,21 +2,26 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import {
+  DEFAULT_KEEP_SCREEN_AWAKE,
   isWakeLockSupported,
   loadWakeLockPrefs,
   subscribeWakeLockPrefs,
 } from "@/lib/wakeLockPrefs";
 
+/** Inert during SSR (no session is running), but must not drift from the pref default. */
+const getServerSnapshot = (): boolean => DEFAULT_KEEP_SCREEN_AWAKE;
+
 /**
- * Live view of the opt-in "keep screen awake" preference. Re-renders when the
- * Settings toggle saves (same tab) or another tab writes the pref (`storage`
- * event), so an already-mounted session releases its lock on toggle-off.
+ * Live view of the opt-out "keep screen awake" preference (#730: on unless the
+ * user turned it off). Re-renders when the Settings toggle saves (same tab) or
+ * another tab writes the pref (`storage` event), so an already-mounted session
+ * releases its lock on toggle-off.
  */
 export function useKeepScreenAwakePref(): boolean {
   return useSyncExternalStore(
     subscribeWakeLockPrefs,
     () => loadWakeLockPrefs().keepScreenAwakeDuringSession,
-    () => false,
+    getServerSnapshot,
   );
 }
 
@@ -60,7 +65,7 @@ export function useWakeLock(enabled: boolean): void {
         sentinelRef.current = sentinel;
       } catch {
         // Best-effort: the browser can refuse (e.g. battery saver). The sit
-        // continues without a wake lock, matching iOS opt-in semantics.
+        // continues without a wake lock — the same outcome as an explicit opt-out.
       } finally {
         acquireInFlight = false;
       }

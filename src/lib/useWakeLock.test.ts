@@ -407,7 +407,18 @@ describe("useKeepScreenAwakePref", () => {
     await view.unmount();
   });
 
-  it("defaults to false when nothing is stored (opt-in parity with iOS)", async () => {
+  it("defaults to true when nothing is stored (#730 opt-out parity with iOS)", async () => {
+    const view = await renderHook(() => useKeepScreenAwakePref(), undefined);
+
+    expect(view.current()).toBe(true);
+    await view.unmount();
+  });
+
+  // The half the default flip could quietly break: a stored `false` is a choice,
+  // not an absent value, so it must not be re-read as "unset".
+  it("respects an explicit stored off rather than applying the new default", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: false }));
+
     const view = await renderHook(() => useKeepScreenAwakePref(), undefined);
 
     expect(view.current()).toBe(false);
@@ -415,6 +426,10 @@ describe("useKeepScreenAwakePref", () => {
   });
 
   it("re-renders when the Settings toggle saves in the same tab", async () => {
+    // Starts from an explicit opt-out so the observed change is the toggle, not
+    // the default.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: false }));
+
     const view = await renderHook(() => useKeepScreenAwakePref(), undefined);
     expect(view.current()).toBe(false);
 
@@ -445,14 +460,55 @@ describe("useKeepScreenAwakePref", () => {
 
   it("re-renders on a cross-tab storage event", async () => {
     const view = await renderHook(() => useKeepScreenAwakePref(), undefined);
-    expect(view.current()).toBe(false);
+    expect(view.current()).toBe(true);
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: true }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: false }));
     await act(async () => {
       window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
     });
 
-    expect(view.current()).toBe(true);
+    expect(view.current()).toBe(false);
+    await view.unmount();
+  });
+});
+
+/**
+ * The composition the session screens actually run — `useWakeLock(pref && isActive)`
+ * in `SessionView`, `BuddySessionRoom`, and `BreathCountView`. Pinned here because
+ * #730's acceptance is about that pairing, not either hook alone: the default is
+ * only meaningful if an untouched install really acquires the lock mid-sit.
+ */
+describe("wake lock during a sit (pref + isActive)", () => {
+  const renderSession = (isActive: boolean) =>
+    renderHook((active: boolean) => {
+      const pref = useKeepScreenAwakePref();
+      useWakeLock(pref && active);
+    }, isActive);
+
+  it("acquires with no stored preference and releases when the sit ends (#730)", async () => {
+    const wakeLock = installWakeLock();
+
+    const view = await renderSession(false);
+    expect(wakeLock.request).not.toHaveBeenCalled();
+
+    await view.rerender(true);
+    expect(wakeLock.request).toHaveBeenCalledTimes(1);
+    expect(wakeLock.sentinels[0].released).toBe(false);
+
+    await view.rerender(false);
+    expect(wakeLock.sentinels[0].release).toHaveBeenCalledTimes(1);
+    expect(wakeLock.sentinels[0].released).toBe(true);
+
+    await view.unmount();
+  });
+
+  it("never acquires for a user who explicitly turned it off", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ keepScreenAwakeDuringSession: false }));
+    const wakeLock = installWakeLock();
+
+    const view = await renderSession(true);
+
+    expect(wakeLock.request).not.toHaveBeenCalled();
     await view.unmount();
   });
 });
