@@ -124,6 +124,14 @@ final class AppViewModel {
     /// #684: the Track Two equivalent — a second-track standard sit today. Feeds
     /// the widget's second weekday row without touching the Home badge above.
     var secondPracticeDoneToday = false
+    /// #679: a *primary* **standard** sit today, known locally. The Track One
+    /// analogue of `secondPracticeDoneToday`, and narrower than
+    /// `practiceDoneToday`, which quick and breath sits also raise. It exists
+    /// because the widget's standard-only day set may only be extended by days the
+    /// server would itself have counted, and `primaryDoneToday` — the server-derived
+    /// Home badge — is still false in the moment a sit finishes, which delayed the
+    /// streak until the next `getTracksDoneToday` round-trip.
+    var primaryStandardDoneToday = false
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -681,6 +689,7 @@ final class AppViewModel {
         secondDoneToday = false
         practiceDoneToday = false
         secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
     }
 
     func beginSession(type: SessionType = .standard, track: Track = .primary) {
@@ -718,6 +727,9 @@ final class AppViewModel {
         if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
             practiceDoneToday = false
             secondPracticeDoneToday = false
+            // #679: same rollover as its siblings — yesterday's standard sit must
+            // not fold today into the standard-only set.
+            primaryStandardDoneToday = false
         }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -731,6 +743,11 @@ final class AppViewModel {
             secondDoneToday = tracksDoneToday.second
             if primaryDoneToday {
                 practiceDoneToday = true
+                // #679: the server confirming a primary standard sit today is the
+                // same fact the local flag records, so raise it here too. Like its
+                // siblings this only ever goes up — the failure path below clears
+                // the server badges, never the local flags.
+                primaryStandardDoneToday = true
             }
             if secondDoneToday {
                 secondPracticeDoneToday = true
@@ -1111,7 +1128,11 @@ final class AppViewModel {
             // the server-derived Home badge, so a just-finished sit checks today
             // immediately on the fast (network-free) path.
             secondDoneToday: secondPracticeDoneToday,
-            practiceDoneToday: practiceDoneToday
+            practiceDoneToday: practiceDoneToday,
+            // #679: the Track One analogue of the line above — a standard sit that
+            // just finished is known here before the Home badge learns of it, and
+            // the standard-only set must see it now or the streak lags a round-trip.
+            primaryStandardDoneToday: primaryStandardDoneToday
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)
@@ -1230,6 +1251,12 @@ final class AppViewModel {
                 secondPracticeDoneToday = true
             } else {
                 practiceDoneToday = true
+                // #679: and record it as a *standard* sit. `practiceDoneToday` alone
+                // cannot say so — quick and breath sits raise it too — and the
+                // standard-only day set that extends `serverStreak` may only take
+                // days the server would have counted. Without this the flame stood
+                // still until `getTracksDoneToday` caught up.
+                primaryStandardDoneToday = true
             }
         }
         // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay

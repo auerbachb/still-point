@@ -561,6 +561,7 @@ public enum WidgetDataStore {
         primaryDoneToday: Bool,
         secondDoneToday: Bool,
         practiceDoneToday: Bool,
+        primaryStandardDoneToday: Bool = false,
         now: Date = Date(),
         previous: WidgetData? = nil,
         completedPracticeDates: Set<String>? = nil,
@@ -614,13 +615,24 @@ public enum WidgetDataStore {
         // no authoritative set was supplied. The signal is deliberately *not*
         // `practiceDoneToday` — that flag is also raised by a quick or breath sit,
         // and counting one of those here is the inflation this change removes.
-        // `primaryDoneToday` and `secondDoneToday` are each "completed a standard
-        // sit today" on their own track, and the server's policy is track-agnostic,
-        // so their disjunction is exactly the day-level signal wanted. The primary
-        // flag is server-derived and can lag a just-finished sit by one
-        // `refreshTracksDoneToday()`; that only ever withholds the extension for a
-        // beat, and the row run below still floors the number meanwhile.
-        if completedStandardDates == nil, primaryDoneToday || secondDoneToday {
+        //
+        // It needs a *standard-only* "sat today" signal that is also **local**, for
+        // the same reason #684 drives the Track Two row from `secondPracticeDoneToday`
+        // rather than the Home badge: `primaryDoneToday` is server-derived
+        // (`getTracksDoneToday`), so immediately after a primary standard sit —
+        // `markPracticeDoneToday` sets the local flag and calls `syncWidgetData()`
+        // straight away — it is still false. Folding on it alone withheld the
+        // extension until the next `refreshTracksDoneToday()` round-trip, so the
+        // flame did not move when the user finished their sit.
+        //
+        // `primaryStandardDoneToday` is that local Track One signal (standard sits
+        // only, unlike `practiceDoneToday`); `secondDoneToday` already carries the
+        // local second-track flag from the same call site. The server badge stays in
+        // the disjunction so a snapshot built from it alone — a refresh with no local
+        // sit this launch — still folds. The server's policy is track-agnostic, so
+        // the disjunction is exactly the day-level signal wanted.
+        if completedStandardDates == nil,
+           primaryStandardDoneToday || primaryDoneToday || secondDoneToday {
             standardDays.insert(today)
         }
 

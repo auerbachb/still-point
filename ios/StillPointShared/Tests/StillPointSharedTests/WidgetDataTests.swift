@@ -336,6 +336,10 @@ final class WidgetDataTests: XCTestCase {
     /// still extends a streak older than the seven-day row, with no second fetch.
     /// The fast, network-free path folds today in from the per-track standard
     /// flags, which is why `primaryDoneToday` is the discriminator below.
+    ///
+    /// This shape is the *refreshed* one — the server badge has caught up. The
+    /// moment right after the sit, when it has not, is
+    /// `testStandardSitTodayExtendsBeforeTheServerBadgeCatchesUp`.
     func testStandardSitTodayStillExtendsAStreakOlderThanTheRow() {
         let now = Date()
         let previous = backfilled(
@@ -367,6 +371,82 @@ final class WidgetDataTests: XCTestCase {
         )
         XCTAssertTrue(afterQuickSit.isTodayMarkedDone(now: now), "the row still checks today")
         XCTAssertEqual(afterQuickSit.streak, 30, "but a quick sit adds nothing to a standard-only total")
+    }
+
+    /// The real completion path, which the test above cannot reach because it sets
+    /// the server badge by hand.
+    ///
+    /// `markPracticeDoneToday` runs the instant a sit finishes: it raises the local
+    /// flags and calls `syncWidgetData()` immediately, while `primaryDoneToday` —
+    /// the Home badge, filled in by `getTracksDoneToday` — is still false. Folding
+    /// today into the standard-only set on the badge alone therefore withheld the
+    /// extension until the next round-trip, so the flame did not move when the user
+    /// finished their sit. `primaryStandardDoneToday` is the local, standard-only
+    /// Track One signal that closes that gap, exactly as `secondPracticeDoneToday`
+    /// already does for Track Two (#684).
+    func testStandardSitTodayExtendsBeforeTheServerBadgeCatchesUp() {
+        let now = Date()
+        let previous = backfilled(
+            sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
+            serverStreak: 30,
+            now: now
+        )
+
+        // Exactly what `syncWidgetData()` passes in the moment after a primary
+        // standard sit: local flags up, server badge not yet refreshed.
+        let justFinished = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: true,
+            now: now,
+            previous: previous
+        )
+        XCTAssertEqual(
+            justFinished.streak,
+            31,
+            "the flame must move on the sit, not on the round-trip that confirms it"
+        )
+        XCTAssertTrue(justFinished.standardDates.contains(localDay(0, from: now)))
+
+        // The discriminator is still the session *type*, not merely locality: a
+        // quick sit raises `practiceDoneToday` through the same call and must not
+        // move the standard-only total.
+        let afterQuickSit = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            primaryStandardDoneToday: false,
+            now: now,
+            previous: previous
+        )
+        XCTAssertEqual(afterQuickSit.streak, 30, "a quick sit is still not a standard sit")
+        XCTAssertFalse(afterQuickSit.standardDates.contains(localDay(0, from: now)))
+    }
+
+    /// The second-track half of the same moment: `syncWidgetData()` already passes
+    /// the local `secondPracticeDoneToday` as `secondDoneToday` (#684), so a
+    /// just-finished second-track standard sit extends without a round-trip too.
+    func testSecondTrackStandardSitTodayExtendsWithoutTheServerBadge() {
+        let now = Date()
+        let previous = backfilled(
+            sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
+            serverStreak: 30,
+            now: now
+        )
+        let justFinished = WidgetDataStore.makeSnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            secondDoneToday: true,
+            practiceDoneToday: false,
+            primaryStandardDoneToday: false,
+            now: now,
+            previous: previous
+        )
+        XCTAssertEqual(justFinished.streak, 31)
+        XCTAssertTrue(justFinished.standardDates.contains(localDay(0, from: now)))
     }
 
     /// Re-scope, track axis: on a dual-track account the latest standard sit can
@@ -498,12 +578,18 @@ final class WidgetDataTests: XCTestCase {
     func testFastPathFoldsTodayIntoStandardDatesOnlyForAStandardSit() {
         let now = Date()
         let today = WidgetDataStore.localDayString(now)
-        func snapshot(primary: Bool, second: Bool, practice: Bool) -> WidgetData {
+        func snapshot(
+            primary: Bool,
+            second: Bool,
+            practice: Bool,
+            primaryStandard: Bool = false
+        ) -> WidgetData {
             WidgetDataStore.makeSnapshot(
                 user: makeUser(id: "u1"),
                 primaryDoneToday: primary,
                 secondDoneToday: second,
                 practiceDoneToday: practice,
+                primaryStandardDoneToday: primaryStandard,
                 now: now,
                 previous: nil
             )
@@ -517,6 +603,13 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertTrue(
             snapshot(primary: false, second: true, practice: false).standardDates.contains(today),
             "the server is track-agnostic, so a second-track standard sit counts"
+        )
+        // The local Track One signal folds on its own, before the Home badge that
+        // confirms it — the moment `markPracticeDoneToday` writes the snapshot.
+        XCTAssertTrue(
+            snapshot(primary: false, second: false, practice: true, primaryStandard: true)
+                .standardDates.contains(today),
+            "a just-finished primary standard sit counts before getTracksDoneToday returns"
         )
     }
 
