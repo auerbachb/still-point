@@ -156,6 +156,12 @@ struct SettingsView: View {
                         // that was live when the toggle was flipped, and still covers
                         // every later await — including the permission prompt (#665).
                         let identityAtStart = appVM.identityGeneration
+                        // Taken here for the same reason, and one more: the camera
+                        // prompt below is an await of unbounded length. A ticket
+                        // taken after it would rank this opt-in behind a rename the
+                        // user made while the prompt was up, so the opt-in's slower
+                        // response could then revert that rename (#697).
+                        let settingsTicket = appVM.nextSettingsRequestTicket()
                         Task {
                             defer { isUpdatingAttentionTracking = false }
                             if newValue {
@@ -181,8 +187,15 @@ struct SettingsView: View {
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). A superseded
+                                // one is left alone: the server took this change, a newer
+                                // save merely described the account after it, so the toggle
+                                // already shows what was saved (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     attentionTrackingEnabled = !newValue
                                 }
                             } catch {
@@ -217,6 +230,12 @@ struct SettingsView: View {
                         // that was live when the toggle was flipped, and still covers
                         // every later await — including the permission prompt (#665).
                         let identityAtStart = appVM.identityGeneration
+                        // Taken here for the same reason, and one more: the mic
+                        // prompt below is an await of unbounded length. A ticket
+                        // taken after it would rank this opt-in behind a rename the
+                        // user made while the prompt was up, so the opt-in's slower
+                        // response could then revert that rename (#697).
+                        let settingsTicket = appVM.nextSettingsRequestTicket()
                         Task {
                             defer { isUpdatingAmbientSound = false }
                             if newValue {
@@ -235,8 +254,15 @@ struct SettingsView: View {
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). A superseded
+                                // one is left alone: the server took this change, a newer
+                                // save merely described the account after it, so the toggle
+                                // already shows what was saved (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     ambientSoundEnabled = !newValue
                                 }
                             } catch {
@@ -283,6 +309,11 @@ struct SettingsView: View {
                         // intent to them. Binding it here binds it to the identity
                         // that was live when the toggle was flipped (#665).
                         let identityAtStart = appVM.identityGeneration
+                        // Taken alongside it, and for the matching reason: bound to
+                        // the moment the user flipped the toggle, so responses are
+                        // applied in the order the changes were made rather than the
+                        // order they came back (#697).
+                        let settingsTicket = appVM.nextSettingsRequestTicket()
                         Task {
                             defer { isUpdating = false }
                             do {
@@ -293,8 +324,15 @@ struct SettingsView: View {
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). A superseded
+                                // one is left alone: the server took this change, a newer
+                                // save merely described the account after it, so the toggle
+                                // already shows what was saved (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     isPublic = !newValue
                                 }
                             } catch {
@@ -338,6 +376,11 @@ struct SettingsView: View {
                         // intent to them. Binding it here binds it to the identity
                         // that was live when the toggle was flipped (#665).
                         let identityAtStart = appVM.identityGeneration
+                        // Taken alongside it, and for the matching reason: bound to
+                        // the moment the user flipped the toggle, so responses are
+                        // applied in the order the changes were made rather than the
+                        // order they came back (#697).
+                        let settingsTicket = appVM.nextSettingsRequestTicket()
                         Task {
                             defer { isUpdatingAphorisms = false }
                             do {
@@ -348,8 +391,15 @@ struct SettingsView: View {
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). A superseded
+                                // one is left alone: the server took this change, a newer
+                                // save merely described the account after it, so the toggle
+                                // already shows what was saved (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     aphorismsEnabled = !newValue
                                 }
                             } catch {

@@ -153,10 +153,21 @@ struct UsernameEditView: View {
             // Captured before the await: a response that outlived a sign-out must
             // not be applied to the next session (#665).
             let identityAtStart = appVM.identityGeneration
+            // Taken alongside it: this rename has to outrank every settings toggle
+            // the user flipped before tapping save, so a slower toggle response
+            // cannot land last and put the old name back (#697).
+            let settingsTicket = appVM.nextSettingsRequestTicket()
             let updated = try await APIClient.shared.updateSettings(username: trimmed)
             // If the view model discarded the response because the session changed
-            // under us, do not tell the user their username was updated (#665).
-            guard appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) else { return }
+            // under us, do not tell the user their username was updated (#665). A
+            // *superseded* one is still a success: the server accepted the rename,
+            // it simply is no longer the newest description of the account, and
+            // reporting that as a failure would be a lie about what was saved.
+            guard appVM.applySettingsUser(
+                updated,
+                startedAtGeneration: identityAtStart,
+                requestTicket: settingsTicket
+            ) != .discarded else { return }
             usernameDraft = updated.username
             editingUsername = false
             usernameSuccessMessage = "Username updated"
