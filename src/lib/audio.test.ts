@@ -315,3 +315,54 @@ describe("resumeAudioContext — mid-session recovery (#710)", () => {
     await expect(resumeAudioContext()).resolves.toBe(false);
   });
 });
+
+describe("audio-channel classification of SoundPrefs (#712)", () => {
+  const allOff = {
+    tick: false,
+    chime: false,
+    completion: false,
+    voiceCountdown: false,
+    haptics: false,
+  };
+
+  it("classifies the four sound prefs as audio and haptics as not", async () => {
+    const { soundPrefUsesAudio } = await loadAudio();
+    expect(soundPrefUsesAudio("tick")).toBe(true);
+    expect(soundPrefUsesAudio("chime")).toBe(true);
+    expect(soundPrefUsesAudio("completion")).toBe(true);
+    expect(soundPrefUsesAudio("voiceCountdown")).toBe(true);
+    expect(soundPrefUsesAudio("haptics")).toBe(false);
+  });
+
+  it("does not count haptics as enabled sound", async () => {
+    const { hasEnabledAudio } = await loadAudio();
+    // The regression this guards: `Object.values(prefs).some(Boolean)` returned
+    // true here, unlocking the AudioContext and raising the "browser audio is
+    // paused" banner for a sitter who asked for vibration *instead of* sound.
+    expect(hasEnabledAudio({ ...allOff, haptics: true })).toBe(false);
+  });
+
+  it("counts each real sound pref as enabled sound", async () => {
+    const { hasEnabledAudio } = await loadAudio();
+    expect(hasEnabledAudio({ ...allOff, tick: true })).toBe(true);
+    expect(hasEnabledAudio({ ...allOff, chime: true })).toBe(true);
+    expect(hasEnabledAudio({ ...allOff, completion: true })).toBe(true);
+    expect(hasEnabledAudio({ ...allOff, voiceCountdown: true })).toBe(true);
+    // Haptics alongside a real sound is still sound.
+    expect(hasEnabledAudio({ ...allOff, chime: true, haptics: true })).toBe(true);
+  });
+
+  it("reports no enabled sound when every pref is off", async () => {
+    const { hasEnabledAudio } = await loadAudio();
+    expect(hasEnabledAudio(allOff)).toBe(false);
+  });
+
+  it("classifies every stored pref, so a new key cannot slip through unclassified", async () => {
+    const { loadSoundPrefs, soundPrefUsesAudio } = await loadAudio();
+    const keys = Object.keys(loadSoundPrefs()) as (keyof typeof allOff)[];
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) {
+      expect(typeof soundPrefUsesAudio(key)).toBe("boolean");
+    }
+  });
+});

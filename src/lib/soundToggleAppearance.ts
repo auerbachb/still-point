@@ -23,18 +23,32 @@ export const SOUND_TOGGLE_MIN_TAP_TARGET_PX = 44;
  * color difference alone". Anything that collapses these into a single channel
  * breaks `soundToggleAppearance.test.ts`.
  */
+/**
+ * Which channel a toggle controls.
+ *
+ * #712 added a pill that governs vibration rather than sound. A speaker glyph on
+ * it would be a plain lie — the whole point of the control is that nothing is
+ * heard — so the cue picks the glyph family and the wording.
+ */
+export type SoundToggleCue = "audio" | "haptic";
+
 export type SoundToggleAppearance = {
   /** Pill is filled (on) rather than transparent (off). */
   isFilled: boolean;
   /** Pill border is the stronger tier (on) rather than the faint tier (off). */
   hasProminentBorder: boolean;
-  /** Icon shows a muted speaker (off) rather than a sounding one (on). */
+  /** Icon shows the struck-through glyph (off) rather than the active one (on). */
   isIconMuted: boolean;
+  /** Which channel this pill governs — picks the glyph family. */
+  cue: SoundToggleCue;
 };
 
-/** Resolves every visual channel from the single on/off input. */
-export function soundToggleAppearance(isOn: boolean): SoundToggleAppearance {
-  return { isFilled: isOn, hasProminentBorder: isOn, isIconMuted: !isOn };
+/** Resolves every visual channel from the on/off input and the cue channel. */
+export function soundToggleAppearance(
+  isOn: boolean,
+  cue: SoundToggleCue = "audio",
+): SoundToggleAppearance {
+  return { isFilled: isOn, hasProminentBorder: isOn, isIconMuted: !isOn, cue };
 }
 
 /**
@@ -48,9 +62,15 @@ export function soundToggleTestId(label: string): string {
 /**
  * Accessible name. Keeps the visible word first so speech input ("click tick")
  * still matches the label a sighted user reads (WCAG 2.5.3 Label in Name).
+ *
+ * The suffix follows the cue: announcing the haptics pill as "haptics sound"
+ * would tell a screen-reader user the opposite of what it does.
  */
-export function soundToggleAccessibilityLabel(label: string): string {
-  return `${label} sound`;
+export function soundToggleAccessibilityLabel(
+  label: string,
+  cue: SoundToggleCue = "audio",
+): string {
+  return cue === "haptic" ? `${label} feedback` : `${label} sound`;
 }
 
 /**

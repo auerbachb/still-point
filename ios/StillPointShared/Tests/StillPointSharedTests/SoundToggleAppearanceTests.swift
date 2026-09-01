@@ -81,4 +81,56 @@ final class SoundToggleAppearanceTests: XCTestCase {
         XCTAssertEqual(SoundToggleAppearance.accessibilityValue(isOn: true), "on")
         XCTAssertEqual(SoundToggleAppearance.accessibilityValue(isOn: false), "off")
     }
+
+    // MARK: - #712 haptic cue
+
+    /// The audio cue is the default, so every existing call site keeps the
+    /// speaker it has always drawn.
+    func testTheCueDefaultsToAudio() {
+        XCTAssertEqual(SoundToggleAppearance.appearance(isOn: true).cue, .audio)
+        XCTAssertEqual(SoundToggleAppearance.accessibilityLabel(label: "tick"), "tick sound")
+    }
+
+    /// A speaker glyph on the haptics pill would say the opposite of what the
+    /// control does — its entire purpose is that nothing is heard.
+    func testHapticCueNeverBorrowsTheSpeakerGlyph() {
+        let on = SoundToggleAppearance.appearance(isOn: true, cue: .haptic)
+        let off = SoundToggleAppearance.appearance(isOn: false, cue: .haptic)
+
+        XCTAssertEqual(on.systemImageName, "iphone.radiowaves.left.and.right")
+        XCTAssertEqual(off.systemImageName, "iphone.slash")
+        XCTAssertFalse(on.systemImageName.contains("speaker"))
+        XCTAssertFalse(off.systemImageName.contains("speaker"))
+    }
+
+    /// The #668 acceptance criterion holds for the new cue too: on and off must
+    /// differ in fill, border, *and* icon.
+    func testHapticCueStillDistinguishesOnFromOffOnEveryChannel() {
+        let on = SoundToggleAppearance.appearance(isOn: true, cue: .haptic)
+        let off = SoundToggleAppearance.appearance(isOn: false, cue: .haptic)
+
+        XCTAssertNotEqual(on.isFilled, off.isFilled)
+        XCTAssertNotEqual(on.hasProminentBorder, off.hasProminentBorder)
+        XCTAssertNotEqual(on.isIconMuted, off.isIconMuted)
+        XCTAssertNotEqual(on.systemImageName, off.systemImageName)
+    }
+
+    /// VoiceOver must not announce the haptics pill as a sound. The visible word
+    /// still comes first, so WCAG 2.5.3 holds either way.
+    func testHapticAccessibilityLabelDoesNotClaimToBeASound() {
+        let label = SoundToggleAppearance.accessibilityLabel(label: "haptics", cue: .haptic)
+
+        XCTAssertEqual(label, "haptics feedback")
+        XCTAssertTrue(label.hasPrefix("haptics"))
+        XCTAssertFalse(label.contains("sound"))
+    }
+
+    /// The identifier is cue-independent — UI tests address the new pill exactly
+    /// the way they address the other four.
+    func testHapticAccessibilityIdentifierFollowsTheExistingFormat() {
+        XCTAssertEqual(
+            SoundToggleAppearance.accessibilityIdentifier(label: "haptics"),
+            "session.soundToggle.haptics"
+        )
+    }
 }

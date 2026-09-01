@@ -742,27 +742,41 @@ extension AudioEngine {
         /// #554: voice countdown — spoken numbers during the final 60 seconds.
         /// Mirrors the `voiceCountdown` toggle on web (persisted in localStorage).
         public var voiceCountdown: Bool
+        /// #712: vibrate at each minute marker and at the end of the sit, for
+        /// someone sitting with their eyes closed who wants no sound at all.
+        /// Off by default — an unasked-for buzz mid-sit is worse than silence.
+        /// Deliberately *not* an audio channel: see `SoundToggleLogic.effects`.
+        public var haptics: Bool
 
         public static let defaults = SoundPrefs(
-            tick: false, chime: true, completion: true, voiceCountdown: false
+            tick: false, chime: true, completion: true, voiceCountdown: false, haptics: false
         )
 
         /// Memberwise initialiser (required because we added a custom `init(from:)`).
-        public init(tick: Bool, chime: Bool, completion: Bool, voiceCountdown: Bool = false) {
+        public init(
+            tick: Bool,
+            chime: Bool,
+            completion: Bool,
+            voiceCountdown: Bool = false,
+            haptics: Bool = false
+        ) {
             self.tick = tick
             self.chime = chime
             self.completion = completion
             self.voiceCountdown = voiceCountdown
+            self.haptics = haptics
         }
 
         /// Custom decoder that merges over defaults — mirrors web's `{ ...DEFAULTS, ...stored }`.
-        /// Prevents legacy persisted JSON (missing `voiceCountdown`) from wiping tick/chime/completion.
+        /// Prevents legacy persisted JSON (missing `voiceCountdown` or `haptics`)
+        /// from wiping tick/chime/completion.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             tick           = try c.decodeIfPresent(Bool.self, forKey: .tick)           ?? false
             chime          = try c.decodeIfPresent(Bool.self, forKey: .chime)          ?? true
             completion     = try c.decodeIfPresent(Bool.self, forKey: .completion)     ?? true
             voiceCountdown = try c.decodeIfPresent(Bool.self, forKey: .voiceCountdown) ?? false
+            haptics        = try c.decodeIfPresent(Bool.self, forKey: .haptics)        ?? false
         }
     }
 

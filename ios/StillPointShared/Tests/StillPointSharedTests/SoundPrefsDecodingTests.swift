@@ -32,6 +32,7 @@ final class SoundPrefsDecodingTests: XCTestCase {
         XCTAssertTrue(prefs.chime)
         XCTAssertTrue(prefs.completion)
         XCTAssertFalse(prefs.voiceCountdown)
+        XCTAssertFalse(prefs.haptics)
     }
 
     // MARK: - Full round-trip
@@ -63,10 +64,41 @@ final class SoundPrefsDecodingTests: XCTestCase {
     }
 
     func testEncodeDecodeRoundTrip() throws {
-        let original = AudioEngine.SoundPrefs(tick: true, chime: false, completion: true, voiceCountdown: true)
+        let original = AudioEngine.SoundPrefs(
+            tick: true, chime: false, completion: true, voiceCountdown: true, haptics: true
+        )
         let encoded = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: encoded)
         XCTAssertEqual(original, decoded)
+    }
+
+    // MARK: - #712 haptics
+
+    /// The same upgrade guarantee `voiceCountdown` needed: someone who has been
+    /// using the app has JSON without a `haptics` key, and reading it must not
+    /// wipe the sound prefs they actually set.
+    func testDecodeJSONWithoutHapticsPreservesExistingPrefs() throws {
+        let priorJSON = """
+        {"tick":true,"chime":false,"completion":true,"voiceCountdown":true}
+        """
+        let data = try XCTUnwrap(priorJSON.data(using: .utf8))
+        let prefs = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: data)
+
+        XCTAssertTrue(prefs.tick,           "tick should survive the haptics upgrade")
+        XCTAssertFalse(prefs.chime,         "chime should survive the haptics upgrade")
+        XCTAssertTrue(prefs.completion,     "completion should survive the haptics upgrade")
+        XCTAssertTrue(prefs.voiceCountdown, "voiceCountdown should survive the haptics upgrade")
+        XCTAssertFalse(prefs.haptics,       "haptics is opt-in: absent means off")
+    }
+
+    func testDecodeJSONWithHapticsTrue() throws {
+        let json = """
+        {"tick":false,"chime":true,"completion":true,"voiceCountdown":false,"haptics":true}
+        """
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let prefs = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: data)
+
+        XCTAssertTrue(prefs.haptics)
     }
 
     // MARK: - Defaults
@@ -77,5 +109,7 @@ final class SoundPrefsDecodingTests: XCTestCase {
         XCTAssertTrue(d.chime)
         XCTAssertTrue(d.completion)
         XCTAssertFalse(d.voiceCountdown)
+        // #712: a phone that has never been asked to vibrate must not start.
+        XCTAssertFalse(d.haptics)
     }
 }

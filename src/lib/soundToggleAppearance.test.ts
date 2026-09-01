@@ -19,6 +19,7 @@ describe("soundToggleAppearance", () => {
       isFilled: true,
       hasProminentBorder: true,
       isIconMuted: false,
+      cue: "audio",
     });
   });
 
@@ -27,6 +28,7 @@ describe("soundToggleAppearance", () => {
       isFilled: false,
       hasProminentBorder: false,
       isIconMuted: true,
+      cue: "audio",
     });
   });
 
@@ -36,6 +38,25 @@ describe("soundToggleAppearance", () => {
   test("every visual channel distinguishes on from off", () => {
     const on = soundToggleAppearance(true);
     const off = soundToggleAppearance(false);
+
+    expect(on.isFilled).not.toBe(off.isFilled);
+    expect(on.hasProminentBorder).not.toBe(off.hasProminentBorder);
+    expect(on.isIconMuted).not.toBe(off.isIconMuted);
+  });
+
+  // #712 — the haptics pill governs vibration, not sound.
+  test("the cue defaults to audio so existing pills are unchanged", () => {
+    expect(soundToggleAppearance(true).cue).toBe("audio");
+  });
+
+  test("the haptic cue is carried through so the glyph can differ", () => {
+    expect(soundToggleAppearance(true, "haptic").cue).toBe("haptic");
+    expect(soundToggleAppearance(false, "haptic").cue).toBe("haptic");
+  });
+
+  test("the haptic cue still distinguishes on from off on every channel", () => {
+    const on = soundToggleAppearance(true, "haptic");
+    const off = soundToggleAppearance(false, "haptic");
 
     expect(on.isFilled).not.toBe(off.isFilled);
     expect(on.hasProminentBorder).not.toBe(off.hasProminentBorder);
@@ -63,6 +84,20 @@ describe("accessibility", () => {
   test("accessible name starts with the visible word", () => {
     expect(soundToggleAccessibilityLabel("tick")).toBe("tick sound");
     expect(soundToggleAccessibilityLabel("voice").startsWith("voice")).toBe(true);
+  });
+
+  // #712: announcing the haptics pill as a sound would tell a screen-reader
+  // user the opposite of what it does.
+  test("the haptics pill is not announced as a sound", () => {
+    const label = soundToggleAccessibilityLabel("haptics", "haptic");
+
+    expect(label).toBe("haptics feedback");
+    expect(label.startsWith("haptics")).toBe(true);
+    expect(label).not.toContain("sound");
+  });
+
+  test("the haptics test id follows the existing format", () => {
+    expect(soundToggleTestId("haptics")).toBe("session.soundToggle.haptics");
   });
 
   test("state text announces on/off rather than relying on colour", () => {

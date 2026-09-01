@@ -889,21 +889,28 @@ struct SessionView: View {
             }
 
             // Sound toggles. #668: the pills are wider than the bare words they
-            // replaced, so the row tightens to s1 to keep all four on one line on
-            // the narrowest supported iPhone.
-            HStack(spacing: SPSpacing.s1) {
-                soundToggle("tick", isOn: vm.soundPrefs.tick) {
-                    vm.toggleSound(\.tick)
+            // replaced, so the row tightens to s1 to keep four on one line on the
+            // narrowest supported iPhone. #712 adds a fifth, which no longer
+            // fits there — so the row takes one line where it can and falls to
+            // two centred lines where it cannot, rather than clipping a control.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: SPSpacing.s1) {
+                    tickToggle
+                    chimeToggle
+                    endToggle
+                    voiceToggle
+                    hapticsToggle
                 }
-                soundToggle("chime", isOn: vm.soundPrefs.chime) {
-                    vm.toggleSound(\.chime)
-                }
-                soundToggle("end", isOn: vm.soundPrefs.completion) {
-                    vm.toggleSound(\.completion)
-                }
-                // #554: voice countdown — spoken numbers in the final minute.
-                soundToggle("voice", isOn: vm.soundPrefs.voiceCountdown) {
-                    vm.toggleSound(\.voiceCountdown)
+                VStack(spacing: SPSpacing.s1) {
+                    HStack(spacing: SPSpacing.s1) {
+                        tickToggle
+                        chimeToggle
+                        endToggle
+                    }
+                    HStack(spacing: SPSpacing.s1) {
+                        voiceToggle
+                        hapticsToggle
+                    }
                 }
             }
         }
@@ -916,15 +923,51 @@ struct SessionView: View {
         )
     }
 
+    // The five controls, named once so the one-line and two-line arrangements
+    // above stay in step instead of drifting apart as copies.
+
+    private var tickToggle: some View {
+        soundToggle("tick", isOn: vm.soundPrefs.tick) { vm.toggleSound(\.tick) }
+    }
+
+    private var chimeToggle: some View {
+        soundToggle("chime", isOn: vm.soundPrefs.chime) { vm.toggleSound(\.chime) }
+    }
+
+    private var endToggle: some View {
+        soundToggle("end", isOn: vm.soundPrefs.completion) { vm.toggleSound(\.completion) }
+    }
+
+    /// #554: voice countdown — spoken numbers in the final minute.
+    private var voiceToggle: some View {
+        soundToggle("voice", isOn: vm.soundPrefs.voiceCountdown) { vm.toggleSound(\.voiceCountdown) }
+    }
+
+    /// #712: vibration at each minute marker and at the end, for a sitter who
+    /// wants the sit marked with their eyes closed and no sound at all.
+    private var hapticsToggle: some View {
+        soundToggle("haptics", isOn: vm.soundPrefs.haptics, cue: .haptic) {
+            vm.toggleSound(\.haptics)
+        }
+    }
+
     /// #668: a real pill button rather than a bare word.
     ///
     /// On/off is carried by three redundant channels — fill, border, and the
-    /// speaker icon — so the state reads at a glance instead of resting on a
-    /// shift between two muted greys. `SoundToggleAppearance` owns those rules and
-    /// web reads the same ones, so the two clients stay in step. The pill itself
-    /// is 44pt tall, so the visible control *is* the tap target.
-    private func soundToggle(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        let appearance = SoundToggleAppearance.appearance(isOn: isOn)
+    /// icon — so the state reads at a glance instead of resting on a shift
+    /// between two muted greys. `SoundToggleAppearance` owns those rules and web
+    /// reads the same ones, so the two clients stay in step. The pill itself is
+    /// 44pt tall, so the visible control *is* the tap target.
+    ///
+    /// `cue` picks the glyph family and the accessible wording: the haptics pill
+    /// must not draw a speaker or be announced as a sound (#712).
+    private func soundToggle(
+        _ label: String,
+        isOn: Bool,
+        cue: SoundToggleAppearance.Cue = .audio,
+        action: @escaping () -> Void
+    ) -> some View {
+        let appearance = SoundToggleAppearance.appearance(isOn: isOn, cue: cue)
 
         return Button(action: action) {
             HStack(spacing: 5) {
@@ -950,8 +993,9 @@ struct SessionView: View {
         .animation(.easeInOut(duration: 0.2), value: isOn)
         .accessibilityIdentifier(SoundToggleAppearance.accessibilityIdentifier(label: label))
         // VoiceOver reads "tick sound, on, button" — the state is announced, not
-        // left to the colour of the pill.
-        .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label)))
+        // left to the colour of the pill. The haptics pill reads "haptics
+        // feedback, on, button" instead, since it makes no sound.
+        .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label, cue: cue)))
         .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
     }
 

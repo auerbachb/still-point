@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
 import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, resumeAudioContext, type SoundPrefs } from "@/lib/audio";
+import { maybeFireHaptic } from "@/lib/haptics";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useAudioContextResume } from "@/lib/useAudioContextResume";
@@ -74,6 +75,8 @@ export function BlockTimer({
   const lastVoiceSecRef = useRef(61);
   const lastCompletedBlockIndexRef = useRef(-1);
   const controlledCompleteFiredRef = useRef(false);
+  /** Previous controlled elapsed, so a restart can be told from normal advance. */
+  const lastControlledElapsedRef = useRef(-1);
   const skewRef = useRef(0);
   const syncClockRef = useRef(syncClock);
   syncClockRef.current = syncClock;
@@ -151,6 +154,25 @@ export function BlockTimer({
       });
   };
 
+  /**
+   * Everything the end of a sit announces, in both channels.
+   *
+   * The three timer paths below — local, buddy `syncClock`, and controlled —
+   * each reach the end of a sit separately and all three owe the same cues, so
+   * they share one function rather than three copies that drift.
+   *
+   * #712: the buzz is deliberately not gated on `completion`. Silencing the
+   * bell must not silence the buzz — that is the whole reason the preference
+   * exists. It is also not routed through `playEnabledSound`: the "browser audio
+   * is paused" affordance is about the audio context, which vibration never
+   * touches. Reached only when the timer actually ran out, so it needs no
+   * abandon or end-early guard — a discarded sit never gets here.
+   */
+  const playSessionEndCues = () => {
+    maybeFireHaptic(soundPrefsRef.current?.haptics, "sessionEnd");
+    if (soundPrefsRef.current?.completion) playEnabledSound(playCompletion);
+  };
+
   const maybePlayCountdownSounds = (newElapsed: number) => {
     const prefs = soundPrefsRef.current;
     if (!prefs) return;
@@ -190,16 +212,26 @@ export function BlockTimer({
       if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
         lastCompletedBlockIndexRef.current = completedBlockIndex;
 
-        if (prefs.chime && !voiceMode) {
-          const blockEnd = (completedBlockIndex + 1) * 60;
-          // Unchanged rule for *when* the marker fires: only on a completed
-          // minute block with at least one full minute still to go. Since #711
-          // the count no longer sets how many strikes play — the bell is one
-          // strike — so it survives purely as that gate.
-          const fullMinutesRemaining = Math.floor((totalSeconds - blockEnd) / 60);
-          if (fullMinutesRemaining >= 1) {
-            playEnabledSound(playChime);
-          }
+        const blockEnd = (completedBlockIndex + 1) * 60;
+        // Unchanged rule for *when* the marker fires: only on a completed
+        // minute block with at least one full minute still to go. Since #711
+        // the count no longer sets how many strikes play — the bell is one
+        // strike — so it survives purely as that gate. Hoisted out of the chime
+        // branch by #712 so the buzz can share it: one timing source, two
+        // channels, marking the same instants.
+        const fullMinuteRemains =
+          Math.floor((totalSeconds - blockEnd) / 60) >= 1;
+
+        if (prefs.chime && !voiceMode && fullMinuteRemains) {
+          playEnabledSound(playChime);
+        }
+
+        // #712: read from neither `prefs.chime` nor `voiceMode`, so a sitter who
+        // turned every sound off still feels each minute go by. Never routed
+        // through `playEnabledSound` — the "browser audio is paused" affordance
+        // is about the audio context, which vibration does not touch.
+        if (fullMinuteRemains) {
+          maybeFireHaptic(prefs.haptics, "minuteMarker");
         }
       }
     }
@@ -289,7 +321,7 @@ export function BlockTimer({
           setElapsed(totalSeconds);
           pausedElapsedRef.current = totalSeconds;
           clearInterval(intervalRef.current!);
-          if (soundPrefsRef.current?.completion) playEnabledSound(playCompletion);
+          playSessionEndCues();
           onCompleteRef.current();
         } else {
           setElapsed(newElapsed);
@@ -341,7 +373,7 @@ export function BlockTimer({
         window.clearInterval(id);
         if (!controlledCompleteFiredRef.current) {
           controlledCompleteFiredRef.current = true;
-          if (soundPrefsRef.current?.completion) playEnabledSound(playCompletion);
+          playSessionEndCues();
           onCompleteRef.current();
         }
         return;
@@ -363,9 +395,13 @@ export function BlockTimer({
     if (newElapsed >= totalSeconds) {
       setElapsed(totalSeconds);
       pausedElapsedRef.current = totalSeconds;
+      // Recorded before the early return so a run that lands on the end without
+      // an intermediate update still leaves a high-water mark for the next run
+      // to fall below.
+      lastControlledElapsedRef.current = totalSeconds;
       if (!controlledCompleteFiredRef.current) {
         controlledCompleteFiredRef.current = true;
-        if (soundPrefsRef.current?.completion) playEnabledSound(playCompletion);
+        playSessionEndCues();
         onCompleteRef.current();
       }
       return;
@@ -373,6 +409,20 @@ export function BlockTimer({
 
     setElapsed(newElapsed);
     pausedElapsedRef.current = newElapsed;
+    // Elapsed moving backwards means a fresh run on the same mounted timer.
+    // Re-seed from the new position exactly as the buddy-sync path seeds on
+    // start: the cue guards below are all monotonic, so left at the finished
+    // run's high-water mark they would swallow the new run's ticks, minute
+    // markers, end haptic and completion cue until it passed the old total.
+    if (newElapsed < lastControlledElapsedRef.current) {
+      lastTickSecRef.current = Math.floor(newElapsed);
+      lastCompletedBlockIndexRef.current =
+        useMinuteBlocks && minuteBlockCount > 0
+          ? Math.min(minuteBlockCount - 1, Math.floor(newElapsed / 60) - 1)
+          : -1;
+      controlledCompleteFiredRef.current = false;
+    }
+    lastControlledElapsedRef.current = newElapsed;
     const remainingNow = totalSeconds - newElapsed;
     lastVoiceSecRef.current =
       remainingNow > 60 ? 61 : Math.max(lastVoiceSecRef.current, Math.floor(remainingNow));

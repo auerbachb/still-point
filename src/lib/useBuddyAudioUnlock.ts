@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadSoundPrefs, saveSoundPrefs, preloadVoiceCountdown, cancelVoiceCountdownPlayback, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, preloadVoiceCountdown, cancelVoiceCountdownPlayback, unlockAudioContext, hasEnabledAudio, soundPrefUsesAudio, type SoundPrefs } from "@/lib/audio";
 
 export function useBuddyAudioUnlock(sessionId: string) {
   const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
@@ -28,13 +28,16 @@ export function useBuddyAudioUnlock(sessionId: string) {
   const handleSoundPrefToggle = useCallback((key: keyof SoundPrefs) => {
     const current = soundPrefsRef.current;
     const next = { ...current, [key]: !current[key] };
-    const hasEnabledSound = Object.values(next).some(Boolean);
+    const hasEnabledSound = hasEnabledAudio(next);
     soundPrefsRef.current = next;
     setSoundPrefs(next);
     saveSoundPrefs(next);
 
-    const requestId = ++audioUnlockRequestRef.current;
     if (!hasEnabledSound) {
+      // Every audio cue is off now, so cancel any unlock still in flight: its
+      // late "blocked" result must not raise a warning about sound the sitter
+      // has just silenced.
+      audioUnlockRequestRef.current += 1;
       setAudioBlocked(false);
       return;
     }
@@ -43,9 +46,21 @@ export function useBuddyAudioUnlock(sessionId: string) {
       return;
     }
 
+    // #712: enabling a non-audio pref (haptics) must not unlock the audio
+    // context. Vibration needs none, and the sitter reaching for it is the one
+    // who wants silence.
+    if (!soundPrefUsesAudio(key)) {
+      return;
+    }
+
+    // Claimed only on the path that actually starts an unlock. Bumping it on
+    // the early returns above would cancel an in-flight unlock without starting
+    // a replacement — the pending "blocked" result would be dropped on arrival
+    // and the audio warning would stay wrong for cues that really are blocked.
+    const requestId = ++audioUnlockRequestRef.current;
     void unlockAudioContext().then((unlockResult) => {
       if (requestId !== audioUnlockRequestRef.current) return;
-      const stillHasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
+      const stillHasEnabledSound = hasEnabledAudio(soundPrefsRef.current);
       setAudioBlocked(stillHasEnabledSound && unlockResult === "blocked");
     });
   }, []);
@@ -54,7 +69,7 @@ export function useBuddyAudioUnlock(sessionId: string) {
     const requestId = ++audioUnlockRequestRef.current;
     const unlockResult = await unlockAudioContext();
     if (requestId === audioUnlockRequestRef.current) {
-      const hasEnabledSound = Object.values(soundPrefsRef.current).some(Boolean);
+      const hasEnabledSound = hasEnabledAudio(soundPrefsRef.current);
       if (hasEnabledSound) {
         setAudioBlocked(unlockResult === "blocked");
       } else {

@@ -122,4 +122,50 @@ final class SoundToggleLogicTests: XCTestCase {
         // off→on, on→off, off→on, on→off ⇒ exactly two warm-ups.
         XCTAssertEqual(warmUps, 2)
     }
+
+    // MARK: - #712 haptics is not an audio channel
+
+    /// Turning haptics on must not activate the audio session. The pill exists
+    /// for someone who wants silence, and an AVAudioSession activation is not a
+    /// harmless no-op on iOS — it can duck or interrupt whatever else the phone
+    /// is playing. Enabling vibration should never touch their music.
+    func testEnablingHapticsDoesNotWarmTheAudioSession() {
+        let effects = SoundToggleLogic.effects(
+            toggledKeyWasEnabled: false,
+            toggledKeyIsEnabled: true,
+            voiceCountdownWasEnabled: false,
+            voiceCountdownIsEnabled: false,
+            toggledKeyUsesAudio: false
+        )
+
+        XCTAssertFalse(effects.warmUp, "haptics needs no audio session")
+        XCTAssertFalse(effects.preloadVoiceCountdown)
+        XCTAssertFalse(effects.cancelVoiceCountdown)
+        XCTAssertFalse(effects.resetVoiceDedup)
+    }
+
+    /// The guard above must be specific to the non-audio toggle — the same
+    /// off→on transition on a real sound still has to warm up (#667).
+    func testTheAudioDefaultStillWarmsUpOnEnable() {
+        let effects = SoundToggleLogic.effects(
+            toggledKeyWasEnabled: false,
+            toggledKeyIsEnabled: true,
+            voiceCountdownWasEnabled: false,
+            voiceCountdownIsEnabled: false
+        )
+
+        XCTAssertTrue(effects.warmUp, "audio toggles keep the #667 warm-up")
+    }
+
+    func testDisablingHapticsStaysAPurePreferenceWrite() {
+        let effects = SoundToggleLogic.effects(
+            toggledKeyWasEnabled: true,
+            toggledKeyIsEnabled: false,
+            voiceCountdownWasEnabled: false,
+            voiceCountdownIsEnabled: false,
+            toggledKeyUsesAudio: false
+        )
+
+        XCTAssertFalse(effects.warmUp)
+    }
 }

@@ -48,13 +48,16 @@ public enum SoundToggleLogic {
     ///   - toggledKeyIsEnabled: Value of the toggled pref after the tap.
     ///   - voiceCountdownWasEnabled: Value of `voiceCountdown` before the tap.
     ///   - voiceCountdownIsEnabled: Value of `voiceCountdown` after the tap.
+    ///   - toggledKeyUsesAudio: Whether the toggled pref plays through the audio
+    ///     session. False only for `haptics` (#712).
     /// - Returns: The side effects the caller must apply, in `warmUp` →
     ///   `preloadVoiceCountdown` → dedup-reset → cancel order.
     public static func effects(
         toggledKeyWasEnabled: Bool,
         toggledKeyIsEnabled: Bool,
         voiceCountdownWasEnabled: Bool,
-        voiceCountdownIsEnabled: Bool
+        voiceCountdownIsEnabled: Bool,
+        toggledKeyUsesAudio: Bool = true
     ) -> Effects {
         // #667: only an off→on transition needs the audio session reactivated.
         // Turning a sound off must stay a pure preference write.
@@ -63,7 +66,12 @@ public enum SoundToggleLogic {
         let voiceDidDisable = voiceCountdownWasEnabled && !voiceCountdownIsEnabled
 
         return Effects(
-            warmUp: didEnable,
+            // #712: haptics is the one toggle that must NOT warm the audio
+            // session. It exists for a sitter who wants silence, and activating
+            // an AVAudioSession for them is not a harmless no-op — it can duck
+            // or interrupt whatever else the phone is playing. Vibration needs
+            // no audio session at all.
+            warmUp: didEnable && toggledKeyUsesAudio,
             preloadVoiceCountdown: voiceDidEnable,
             // #554: disabling voice stops the in-flight clip and clears the dedup
             // so a re-enable inside the same remaining second still announces.
