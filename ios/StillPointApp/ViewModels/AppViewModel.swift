@@ -1190,6 +1190,16 @@ final class AppViewModel {
                 now: now,
                 completedPracticeDates: completed.primary,
                 secondCompletedPracticeDates: completed.second,
+                // #679: the days that actually produced `result.stats.streak` —
+                // completed standard sits on either track, the same policy web's
+                // `calculateSessionStats` applies. Persisted so a later day may
+                // extend that total only when the server would have counted it;
+                // the rows above also count quick and breath sits, so extending
+                // by them pushed the widget past the app and web.
+                completedStandardDates: WidgetDataStore.recentCompletedStandardDates(
+                    from: result.sessions,
+                    now: now
+                ),
                 serverStreak: result.stats.streak,
                 serverStreakDate: WidgetDataStore.serverStreakAnchorDate(from: result.sessions)
             )

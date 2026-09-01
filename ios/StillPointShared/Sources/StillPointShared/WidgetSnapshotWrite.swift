@@ -109,7 +109,8 @@ extension WidgetDataStore {
     /// `newer` is the base — it holds the freshest user state — and `late`
     /// contributes only what it uniquely knows: the authoritative 7-day history
     /// its `/api/sessions` fetch just returned. The merge is additive on both
-    /// tracks, so neither writer can un-check a day the other recorded, and the
+    /// tracks *and* on the standard-only set (#679), so neither writer can
+    /// un-check a day the other recorded nor drop a standard sit, and the
     /// streak is re-derived from the merged rows rather than carried, keeping the
     /// #671 invariant that the number never contradicts what is drawn.
     ///
@@ -147,6 +148,19 @@ extension WidgetDataStore {
             .union(late.secondCompletedDates)
             .intersection(window)
             .sorted()
+        // #679: the standard-only day set merges by the same additive, day-keyed,
+        // window-clipped rule as the two row sets above — it is history in exactly
+        // the same sense, just the population the *server* counts rather than the
+        // one the rows draw. Union rather than "newest wins" for the same reason:
+        // the backfill knows standard days this device never saw, and the local
+        // writer knows the sit that finished during the fetch, and neither may
+        // erase the other's day. The set that feeds `serverStreak`'s extension is
+        // therefore never smaller after a merge than before it, so a late backfill
+        // cannot knock the streak down by forgetting a standard sit.
+        result.standardDates = Set(newer.standardDates)
+            .union(late.standardDates)
+            .intersection(window)
+            .sorted()
 
         // Each snapshot's flags are day-stamped by its own `lastUpdated`, so
         // `isPrimaryCompleteForToday(at:)` and friends discard a flag set before
@@ -170,6 +184,7 @@ extension WidgetDataStore {
         // the streak.
         result.streak = reconciledStreak(
             completedDates: Array(result.completedDayUnion),
+            standardDates: result.standardDates,
             practiceDoneToday: result.isTodayMarkedDone(now: now),
             serverStreak: anchor.streak,
             serverStreakDate: anchor.date,
