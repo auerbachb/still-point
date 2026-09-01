@@ -24,8 +24,23 @@ struct UsernameEditView: View {
     @State private var usernameDraft = ""
     @State private var usernameFieldError: String?
     @State private var usernameSuccessMessage: String?
+    /// The name the server confirmed for our own save, held only until
+    /// `currentUser` catches up.
+    ///
+    /// A *superseded* rename was committed by the server but is no longer the newest
+    /// description of the account (#697), so `user.username` — which comes from
+    /// `currentUser` — can still be the old name for as long as the reconciling
+    /// `me()` takes, or permanently if that best-effort read fails. Showing that old
+    /// name directly under "Username updated" would tell the user their rename did
+    /// not take when in fact it did, so the confirmed name is what is displayed until
+    /// the account itself reports one.
+    @State private var confirmedUsername: String?
 
     private var isSaving: Bool { updating || savingUsername }
+
+    /// What the account says, unless we are still holding a name the server
+    /// confirmed to us and the account has not caught up to yet.
+    private var displayedUsername: String { confirmedUsername ?? user.username }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -46,7 +61,7 @@ struct UsernameEditView: View {
                 HStack(spacing: SPSpacing.s2) {
                     Button {
                         Task { @MainActor in
-                            await saveUsername(currentUsername: user.username)
+                            await saveUsername(currentUsername: displayedUsername)
                         }
                     } label: {
                         Text(savingUsername ? "Saving…" : "Save")
@@ -58,7 +73,7 @@ struct UsernameEditView: View {
                     .accessibilityIdentifier("settings.usernameSaveButton")
 
                     Button("Cancel") {
-                        cancelUsernameEdit(savedUsername: user.username)
+                        cancelUsernameEdit(savedUsername: displayedUsername)
                     }
                     .font(SPFont.mono(11, weight: .medium))
                     .tracking(2)
@@ -79,13 +94,13 @@ struct UsernameEditView: View {
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg3))
                     Spacer(minLength: SPSpacing.s2)
-                    Text(user.username)
+                    Text(displayedUsername)
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg))
                         .lineLimit(1)
                         .accessibilityIdentifier("settings.usernameDisplay")
                     Button("Edit") {
-                        beginUsernameEdit(savedUsername: user.username)
+                        beginUsernameEdit(savedUsername: displayedUsername)
                     }
                     .font(SPFont.mono(10, weight: .medium))
                     .tracking(2)
@@ -105,13 +120,17 @@ struct UsernameEditView: View {
         }
         .onAppear {
             if !editingUsername {
-                usernameDraft = user.username
+                usernameDraft = displayedUsername
             }
         }
         .onChange(of: appVM.currentUser?.username) { _, newValue in
             if !editingUsername, let newValue {
                 usernameDraft = newValue
             }
+            // The account has spoken since our save — the reconcile landed, or a
+            // rename from elsewhere did — so it is authoritative again and the held
+            // name must not keep shadowing it.
+            confirmedUsername = nil
         }
     }
 
@@ -169,6 +188,11 @@ struct UsernameEditView: View {
                 requestTicket: settingsTicket
             ) != .discarded else { return }
             usernameDraft = updated.username
+            // Held so the display cannot contradict the success message on the
+            // superseded path, where `currentUser` does not carry this rename yet.
+            // Cleared by the `onChange` above the moment the account reports a name
+            // of its own.
+            confirmedUsername = updated.username
             editingUsername = false
             usernameSuccessMessage = "Username updated"
         } catch let error as APIError {

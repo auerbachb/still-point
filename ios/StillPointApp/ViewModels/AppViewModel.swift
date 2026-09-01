@@ -215,6 +215,12 @@ final class AppViewModel {
         // awaiting `me()`, briefly exposing an intermediate or stale route.
         activeAuthCheckID &+= 1
         let checkID = activeAuthCheckID
+        // Taken before the `await`, as at every settings site: this read describes
+        // the account as of *now*, and a save the user makes while it is in flight
+        // has to outrank it (#697). Taken unconditionally even though only the
+        // re-confirmation branch below spends it — a ticket that goes unused leaves
+        // a gap and nothing else.
+        let settingsTicket = nextSettingsRequestTicket()
         isLoading = true
         defer {
             if checkID == activeAuthCheckID { isLoading = false }
@@ -239,7 +245,28 @@ final class AppViewModel {
                 // older call landing after the newest one finished would send a
                 // user who has since navigated back to the initial view.
                 guard generation == authGeneration, checkID == activeAuthCheckID else { return }
-                applyAuthenticatedUser(user)
+                // Re-confirming the account already on screen is a `me()` *read*
+                // racing whatever settings saves are in flight, so it goes through
+                // the same ordering as those saves (#697): without it a scene
+                // activation overlapping a toggle would reinstate the pre-save
+                // `UserDTO` in `currentUser` and in the offline cache #665 reads on
+                // the next cold start. A superseded read changes nothing — a newer
+                // settings write already described this account, `isOfflineMode`
+                // included — so the side effects below still run either way; they
+                // are keyed to this being the newest check, not to the adoption.
+                if currentUser?.id == user.id {
+                    applySettingsResponse(
+                        user,
+                        startedAtGeneration: generation,
+                        requestTicket: settingsTicket,
+                        responseKind: .read
+                    )
+                } else {
+                    // A cold start, or an account switch. Nothing to order it
+                    // against, and the guards inside `applySettingsResponse` would
+                    // read it as `.discarded`.
+                    applyAuthenticatedUser(user)
+                }
                 // Re-captured deliberately. Adopting the user is itself an expected
                 // transition on a cold start (nil -> user), so the entry generation
                 // is stale from here on *by design* and reusing it below would skip
@@ -342,10 +369,20 @@ final class AppViewModel {
     /// site here is the *same* account throughout, which is exactly the case
     /// `applyAuthenticatedUser` deliberately does not bump the generation for.
     ///
-    /// Scoped to settings writes. `checkAuth()` and `refreshAfterReconnect()` adopt
-    /// a `me()` read through `applyAuthenticatedUser` directly and are not ordered
-    /// against these; that is a narrower race (it needs a scene activation to
-    /// overlap a save) and belongs to the auth path, not this one.
+    /// Not scoped to writes. `checkAuth()` and `refreshAfterReconnect()` order their
+    /// `me()` responses through this too, as `.read`s, whenever they are merely
+    /// *re-confirming* the account already adopted. Both run on a scene activation,
+    /// so both can overlap a save in flight, and both adopt a whole `UserDTO` into
+    /// the same cached identity — an older read landing after a newer PATCH reverts
+    /// the setting with the identical blast radius, which makes it this race and not
+    /// a separate one. The read/write asymmetry is what makes sharing the guard safe:
+    /// a read describes the account only as of the moment it left, so a save the user
+    /// makes while it is in flight still wins.
+    ///
+    /// Adoption proper — a cold start, or any response naming a *different* account —
+    /// stays on `applyAuthenticatedUser`. There is nothing to order it against, and
+    /// routing it here would read as `.discarded`, which cannot distinguish "nothing
+    /// adopted yet" from "that session is gone" (#665).
     private var settingsOrdering = StaleResponseGuard()
 
     /// Single place a server-confirmed user is adopted — in memory *and* in the
@@ -512,6 +549,10 @@ final class AppViewModel {
         // Applying it would resurrect a signed-out account *and* re-save the cached
         // identity `applySignedOut` just tore down via `clearIfAuthoritative` (#676).
         let generation = authGeneration
+        // Same reasoning as `checkAuth()`: this is a read of an account already
+        // adopted (the entry guard above proves it), so it must not outrank a
+        // settings save the user made after it left (#697).
+        let settingsTicket = nextSettingsRequestTicket()
         do {
             guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
                 guard generation == authGeneration else { return }
@@ -519,7 +560,24 @@ final class AppViewModel {
                 return
             }
             guard generation == authGeneration else { return }
-            applyAuthenticatedUser(user)
+            // Ordered rather than adopted outright. A superseded read leaves
+            // `currentUser` on the newer settings response, which already cleared
+            // `isOfflineMode` on its way through `applyAuthenticatedUser`, so the
+            // reconnect still ends with the app online either way and the refreshes
+            // below still belong to this account. A reconnect that returns a
+            // *different* account is a legitimate transition and keeps adopting
+            // directly, as before — it is not this race, and the guard would read it
+            // as `.discarded`.
+            if currentUser?.id == user.id {
+                applySettingsResponse(
+                    user,
+                    startedAtGeneration: generation,
+                    requestTicket: settingsTicket,
+                    responseKind: .read
+                )
+            } else {
+                applyAuthenticatedUser(user)
+            }
             // Re-captured after adoption, as in `checkAuth()`: if the reconnect ever
             // returns a different account, that adoption is a legitimate transition
             // and the work below belongs to the account we just adopted.
@@ -673,10 +731,22 @@ final class AppViewModel {
     ///
     /// A ticket whose request never returns (a permission denial that bails out
     /// before the PATCH) is simply never handed back; it leaves a gap and nothing
-    /// else.
+    /// else. A gap can only make the overlap test below answer "yes" when the
+    /// answer was "no" — one extra reconciling read, never a missed one.
     func nextSettingsRequestTicket() -> Int {
-        settingsOrdering.nextTicket()
+        let ticket = settingsOrdering.nextTicket()
+        latestIssuedSettingsTicket = ticket
+        return ticket
     }
+
+    /// Highest ticket `nextSettingsRequestTicket()` has handed out.
+    ///
+    /// Mirrored here rather than read back off the guard because it answers a
+    /// question the guard does not: not "is this response still the newest word?"
+    /// but "did anything else leave after this request did?" — which is how a
+    /// response that *won* the ordering can still be an incomplete snapshot. See
+    /// `applySettingsUser`.
+    private var latestIssuedSettingsTicket = 0
 
     /// Why a settings response was or was not adopted.
     ///
@@ -725,12 +795,37 @@ final class AppViewModel {
         )
         // Newest-wins orders responses by the order the user made the changes,
         // which is what keeps a slower save from reverting a newer one. It cannot
-        // also know the order the server *committed* them in: if this request
-        // committed last, its response is the only one carrying its field, and
-        // dropping it leaves that field stale in `currentUser` and in the cache
-        // #665 reads on the next offline launch. Rather than guess, ask — one
-        // authoritative read, ordered through the same guard, settles it.
-        if outcome == .superseded { reconcileSettingsFromServer() }
+        // also know the order the server *committed* them in, and that gap cuts
+        // both ways:
+        //
+        //   - Superseded: if this request committed last, its response is the only
+        //     one carrying its field, and dropping it leaves that field stale in
+        //     `currentUser` and in the cache #665 reads on the next offline launch.
+        //
+        //   - Applied: winning the ordering does not make this response *complete*.
+        //     An earlier-intent request that left before this one can still commit
+        //     after it, in which case this response's whole `UserDTO` was serialized
+        //     without that field's new value — and adopting it reverts a change the
+        //     server did take, with the same offline-cache blast radius. That is the
+        //     mirror image of the case above and is reachable whenever two settings
+        //     writes overlap: the older-ticket response lands first and applies, then
+        //     this one lands and clobbers it.
+        //
+        // Both are the same question — "is what I hold now what the server holds?" —
+        // so both get the same answer: one authoritative read, ordered through the
+        // same guard. An applied response only needs it when something else left
+        // after this request did; a save with nothing overlapping it is complete by
+        // construction and costs no extra traffic. Each reconcile takes a fresh
+        // ticket, so the last one issued departs after every write has returned and
+        // therefore sees every commit; reads schedule nothing, so this terminates.
+        switch outcome {
+        case .superseded:
+            reconcileSettingsFromServer()
+        case .applied where ticket < latestIssuedSettingsTicket:
+            reconcileSettingsFromServer()
+        case .applied, .discarded:
+            break
+        }
         return outcome
     }
 
@@ -762,16 +857,17 @@ final class AppViewModel {
         return .applied
     }
 
-    /// Re-read the account after a settings response was superseded, so the local
-    /// copy ends up matching what the server actually committed (#697).
+    /// Re-read the account after a settings response left the local copy possibly
+    /// behind what the server committed — superseded, or applied while another
+    /// settings request was still outstanding (#697).
     ///
     /// Applied as a `.read`: it describes the account as of the moment it left, so
     /// a save the user makes while it is in flight must still win. That is exactly
     /// the asymmetry `StaleResponseGuard` draws between its two barriers, and the
     /// reason this cannot simply adopt the response the way `checkAuth()` does.
     ///
-    /// Deliberately un-deduplicated. One read per superseded response is bounded by
-    /// the number of settings writes that can overlap — a handful, and the Settings
+    /// Deliberately un-deduplicated. One read per settings write response is bounded
+    /// by the number of settings writes that can overlap — a handful, and the Settings
     /// toggles already disable each other while a save is in flight — whereas
     /// collapsing a burst into a single read can skip the very pass that would have
     /// seen the last commit, since a read issued earlier may have left before it.
@@ -913,15 +1009,21 @@ final class AppViewModel {
         let ticket = nextSettingsRequestTicket()
         do {
             let updated = try await APIClient.shared.enableDualTrack()
-            // Only an adopted response means the badges below describe this
-            // account's current state; a superseded one leaves the fork unreflected
-            // locally until the next refresh, and a discarded one has no session to
-            // refresh for.
-            guard applySettingsUser(
+            let outcome = applySettingsUser(
                 updated,
                 startedAtGeneration: generation,
                 requestTicket: ticket
-            ) == .applied else { return }
+            )
+            // Only `.discarded` means there is no session to refresh badges for. A
+            // *superseded* opt-in was still committed by the server — the fork is on,
+            // and Home's per-track badges have to say so. Gating the refresh on
+            // `.applied` left a successful opt-in showing single-track badges until
+            // something else happened to refresh them, which for a user who opts in
+            // and stays on Home is indefinitely. `refreshTracksDoneToday()` re-checks
+            // the generation itself, and reads done-today state from the server
+            // rather than from the response we did not adopt, so it is correct on
+            // both surviving paths.
+            guard outcome != .discarded else { return }
             await refreshTracksDoneToday()
         } catch {
             print("Failed to enable dual track: \(error)")
