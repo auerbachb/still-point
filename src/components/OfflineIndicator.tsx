@@ -1,14 +1,14 @@
 "use client";
 
-import { offlineIndicatorCopy, offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
+import { offlineIndicatorCopy, type OfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 
 type OfflineIndicatorProps = {
   /**
-   * #703: a local queue write has failed, so the strip's usual promise is not
-   * true on this device. Withdraws the promise and turns the strip red; the
-   * completion screen carries the actionable detail.
+   * Which of the strip's three things to say — resolved by
+   * `offlineIndicatorStateFor`, which also decides whether there is anything to
+   * say at all. The caller does not render this component for `null`.
    */
-  sitNotStored?: boolean;
+  state: OfflineIndicatorState;
 };
 
 /**
@@ -29,15 +29,29 @@ type OfflineIndicatorProps = {
  * #703 is the one case where that reassurance would be a lie: a refused
  * IndexedDB write means the sit is on no device and will upload nowhere. The
  * strip then carries the withdrawn copy in danger tokens instead.
+ *
+ * #717: that failure is not a connectivity failure, so the strip also has to be
+ * able to raise itself while the user is online — which means the struck-out
+ * wifi glyph has to go with the copy. It is the loudest thing on the strip and
+ * says "offline" on its own, so an online failure gets a warning triangle and
+ * the glyph never contradicts the label it sits next to.
  */
-export function OfflineIndicator({ sitNotStored = false }: OfflineIndicatorProps) {
-  const copy = offlineIndicatorCopy(offlineIndicatorStateFor(sitNotStored));
+export function OfflineIndicator({ state }: OfflineIndicatorProps) {
+  const copy = offlineIndicatorCopy(state);
+  const sitNotStored = state !== "offlineSavedProgress";
+  const offline = state !== "onlineSitNotStored";
 
   return (
     <div
       role="status"
       data-testid="offline-indicator"
-      data-state={sitNotStored ? "sit-not-stored" : "saved-progress"}
+      data-state={
+        state === "offlineSavedProgress"
+          ? "offline-saved-progress"
+          : state === "offlineSitNotStored"
+            ? "offline-sit-not-stored"
+            : "online-sit-not-stored"
+      }
       aria-label={copy.accessibilityLabel}
       style={{
         width: "100%",
@@ -67,15 +81,26 @@ export function OfflineIndicator({ sitNotStored = false }: OfflineIndicatorProps
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
+          strokeLinejoin="round"
           focusable="false"
         >
-          <path d="M2 2l20 20" />
-          <path d="M8.5 16.5a5 5 0 0 1 7 0" />
-          <path d="M5 12.9a10 10 0 0 1 5.2-2.7" />
-          <path d="M13.8 10.2a10 10 0 0 1 5.2 2.7" />
-          <path d="M2 8.8a15 15 0 0 1 5.1-3" />
-          <path d="M16.9 5.8A15 15 0 0 1 22 8.8" />
-          <path d="M12 20h.01" />
+          {offline ? (
+            <>
+              <path d="M2 2l20 20" />
+              <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+              <path d="M5 12.9a10 10 0 0 1 5.2-2.7" />
+              <path d="M13.8 10.2a10 10 0 0 1 5.2 2.7" />
+              <path d="M2 8.8a15 15 0 0 1 5.1-3" />
+              <path d="M16.9 5.8A15 15 0 0 1 22 8.8" />
+              <path d="M12 20h.01" />
+            </>
+          ) : (
+            <>
+              <path d="M12 3.5 2.2 20.5h19.6L12 3.5z" />
+              <path d="M12 10v4" />
+              <path d="M12 17.5h.01" />
+            </>
+          )}
         </svg>
       </span>
       <span>{copy.label}</span>
