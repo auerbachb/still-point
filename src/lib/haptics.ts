@@ -59,11 +59,17 @@ export function fireHaptic(cue: HapticCue): boolean {
  * The single gate the session timer calls: fires `cue` only when the preference
  * is on. Never reads the sound preferences — silencing the bell must not
  * silence the buzz, which is the whole reason this pref exists.
+ *
+ * Strict `=== true` rather than a truthiness check. The value reaches here from
+ * `JSON.parse` of localStorage, which the type annotation cannot vouch for: a
+ * stored string `"false"` is truthy and would buzz a sitter whose saved setting
+ * reads false. An opt-in that promises stillness has to fail closed, so anything
+ * that is not literally `true` means no.
  */
 export function maybeFireHaptic(
   hapticsEnabled: boolean | undefined,
   cue: HapticCue,
 ): boolean {
-  if (!hapticsEnabled) return false;
+  if (hapticsEnabled !== true) return false;
   return fireHaptic(cue);
 }

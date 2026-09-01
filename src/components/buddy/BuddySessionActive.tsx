@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BuddySnapshot } from "@/lib/api";
 import type { SoundPrefs } from "@/lib/audio";
+import { soundToggleAccessibilityLabel } from "@/lib/soundToggleAppearance";
 import type { BuddyMindState } from "@/lib/useBuddyMindState";
 import type { MindHoldKind } from "@/lib/useMindStateHold";
 import { BlockTimer } from "../BlockTimer";
@@ -365,18 +366,27 @@ export function BuddySessionActive({
             >
               {(
                 [
-                  ["tick", "tick"],
-                  ["chime", "chime"],
-                  ["voiceCountdown", "voice"],
-                  ["completion", "end"],
+                  ["tick", "tick", "audio"],
+                  ["chime", "chime", "audio"],
+                  ["voiceCountdown", "voice", "audio"],
+                  ["completion", "end", "audio"],
+                  // #712: the timer below fires minute and end haptics from this
+                  // same shared preference, so the buddy room needs its own way
+                  // to switch them off — otherwise a setting made in a solo sit
+                  // vibrates here with no control within reach.
+                  ["haptics", "haptics", "haptic"],
                 ] as const
-              ).map(([key, label]) => (
+              ).map(([key, label, cue]) => (
                 <button
                   type="button"
                   key={key}
                   aria-pressed={soundPrefs[key]}
-                  aria-label={`${label} sound ${soundPrefs[key] ? "on" : "off"}; only you hear this`}
-                  title="Only you hear this — does not change audio for others"
+                  aria-label={`${soundToggleAccessibilityLabel(label, cue)} ${soundPrefs[key] ? "on" : "off"}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
+                  title={
+                    cue === "haptic"
+                      ? "Only you feel this — does not change anything for others"
+                      : "Only you hear this — does not change audio for others"
+                  }
                   onClick={() => onSoundPrefToggle(key)}
                   style={{
                     background: "none",
@@ -387,7 +397,12 @@ export function BuddySessionActive({
                     padding: "4px 8px",
                   }}
                 >
-                  {soundPrefs[key] ? "\u266A" : "\u2022"} {label}
+                  {soundPrefs[key]
+                    ? cue === "haptic"
+                      ? "\u2248"
+                      : "\u266A"
+                    : "\u2022"}{" "}
+                  {label}
                 </button>
               ))}
             </div>

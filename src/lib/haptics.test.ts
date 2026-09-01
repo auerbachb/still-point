@@ -94,6 +94,23 @@ describe("maybeFireHaptic", () => {
     expect(maybeFireHaptic(true, "sessionEnd")).toBe(true);
     expect(vibrate).toHaveBeenCalledWith([...HAPTIC_PATTERNS.sessionEnd]);
   });
+
+  /**
+   * The pref arrives via `JSON.parse` of localStorage, so the boolean type is a
+   * claim rather than a guarantee. A stored string `"false"` is truthy; an
+   * opt-in that promises stillness has to read that as no.
+   */
+  test("stays silent for a stored value that is not literally true", () => {
+    const vibrate = vi.fn(() => true);
+    setVibrate(vibrate);
+
+    for (const stored of ["false", "true", 1, 0, "", null, {}]) {
+      expect(
+        maybeFireHaptic(stored as unknown as boolean | undefined, "minuteMarker"),
+      ).toBe(false);
+    }
+    expect(vibrate).not.toHaveBeenCalled();
+  });
 });
 
 describe("patterns", () => {
