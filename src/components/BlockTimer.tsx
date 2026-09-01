@@ -403,6 +403,11 @@ export function BlockTimer({
 
     setElapsed(newElapsed);
     pausedElapsedRef.current = newElapsed;
+    // Back below the end means a fresh run on the same mounted timer, so re-arm
+    // the completion latch the way the buddy-sync path re-arms it on seed.
+    // Without this a second controlled run would find the latch still set and
+    // silently skip its end haptic and completion cue.
+    controlledCompleteFiredRef.current = false;
     const remainingNow = totalSeconds - newElapsed;
     lastVoiceSecRef.current =
       remainingNow > 60 ? 61 : Math.max(lastVoiceSecRef.current, Math.floor(remainingNow));

@@ -33,8 +33,11 @@ export function useBuddyAudioUnlock(sessionId: string) {
     setSoundPrefs(next);
     saveSoundPrefs(next);
 
-    const requestId = ++audioUnlockRequestRef.current;
     if (!hasEnabledSound) {
+      // Every audio cue is off now, so cancel any unlock still in flight: its
+      // late "blocked" result must not raise a warning about sound the sitter
+      // has just silenced.
+      audioUnlockRequestRef.current += 1;
       setAudioBlocked(false);
       return;
     }
@@ -50,6 +53,11 @@ export function useBuddyAudioUnlock(sessionId: string) {
       return;
     }
 
+    // Claimed only on the path that actually starts an unlock. Bumping it on
+    // the early returns above would cancel an in-flight unlock without starting
+    // a replacement — the pending "blocked" result would be dropped on arrival
+    // and the audio warning would stay wrong for cues that really are blocked.
+    const requestId = ++audioUnlockRequestRef.current;
     void unlockAudioContext().then((unlockResult) => {
       if (requestId !== audioUnlockRequestRef.current) return;
       const stillHasEnabledSound = hasEnabledAudio(soundPrefsRef.current);
