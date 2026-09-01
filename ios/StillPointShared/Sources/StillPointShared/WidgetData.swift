@@ -94,6 +94,17 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// A legacy blob therefore self-heals to `false` the first time the app
     /// writes real history.
     public private(set) var historyIsUnknown: Bool = false
+    /// #678: how many times the shared snapshot has been written, stamped by
+    /// `WidgetDataStore` at save time (never by `makeSnapshot`). A writer that
+    /// must suspend — the `/api/sessions` backfill — records this before its
+    /// `await` and hands it back to `save(_:ifWriteGeneration:)`, which can then
+    /// tell "nothing moved" from "a fresher snapshot landed while I was away"
+    /// and merge instead of overwrite.
+    ///
+    /// Store-owned provenance, like `historyIsUnknown`: absent from the public
+    /// initializer so callers cannot forge one, and `0` for any snapshot that
+    /// has not been through `save`.
+    public internal(set) var writeGeneration: Int = 0
 
     public init(
         isLoggedIn: Bool,
@@ -139,6 +150,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         case primaryDoneToday, secondDoneToday, practiceDoneToday, streak
         case completedDates, secondCompletedDates
         case serverStreak, serverStreakDate, lastUpdated
+        case writeGeneration
     }
 
     /// Custom decoder so blobs persisted before `completedDates` /
@@ -166,6 +178,11 @@ public struct WidgetData: Codable, Sendable, Equatable {
         serverStreak = try c.decodeIfPresent(Int.self, forKey: .serverStreak)
         serverStreakDate = try c.decodeIfPresent(String.self, forKey: .serverStreakDate)
         lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
+        // #678: a blob written before write generations existed reads as 0, the
+        // same as "never saved". That is the safe direction — the first
+        // generation-checked save after an upgrade sees a mismatch only if
+        // something really did write in between.
+        writeGeneration = try c.decodeIfPresent(Int.self, forKey: .writeGeneration) ?? 0
         // Key *absence* — not an empty value — is what marks a pre-#671 writer.
         // `contains` is the only signal that survives `decodeIfPresent`'s
         // `?? []`, so it is captured here rather than inferred later. Any history
@@ -435,8 +452,18 @@ public enum WidgetDataStore {
         return try? JSONDecoder().decode(WidgetData.self, from: data)
     }
 
+    /// Unconditional write, for callers that hold no stale view of the snapshot
+    /// (every synchronous `syncWidgetData()` path). The stored write generation
+    /// still advances, so a writer that *is* suspended across an `await` can
+    /// detect that this landed underneath it — see
+    /// `save(_:ifWriteGeneration:now:)` (#678).
     @discardableResult
     public static func save(_ snapshot: WidgetData) -> Bool {
+        persist(stamped(snapshot, after: currentWriteGeneration()))
+    }
+
+    /// Encode and write, leaving `snapshot.writeGeneration` exactly as given.
+    static func persist(_ snapshot: WidgetData) -> Bool {
         guard let data = try? JSONEncoder().encode(snapshot),
               let defaults = sharedDefaults else {
             return false
