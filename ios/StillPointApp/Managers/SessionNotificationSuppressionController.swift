@@ -56,6 +56,23 @@ enum SessionNotificationSuppressionController {
     /// applied after it (see `setSuppressPreferenceEnabled`).
     private static var reportGeneration = 0
 
+    /// Orders the three independent readers of the server preference row —
+    /// `NotificationPreferencesViewModel.load()`, its `persist()`, and
+    /// `AppViewModel.hydrateNotificationSuppressionPreference()` — against each
+    /// other. They serialize against themselves but not against one another, so
+    /// without this a slow `load()` that left *before* the user's toggle could
+    /// land after the toggle's PATCH and re-plant the pre-toggle value: "During
+    /// sessions" turned off, then silently back on. Web parity: the
+    /// `suppressDuringSessionPrefVersion()` sampling in `useSessionSuppressionRelay`.
+    ///
+    /// Deliberately separate from `reportGeneration`: that one is the *auth* epoch
+    /// and `report(active:)` drains only while it is unchanged, so bumping it per
+    /// preference write would cancel legitimate in-flight session-state reports.
+    /// The two guards answer different questions — "is this still the same
+    /// account?" and "is this still the newest word on the preference?" — and both
+    /// must pass.
+    private static var preferenceOrdering = StaleResponseGuard()
+
     /// On by default (#709): a sit is silent unless the user turned the "During
     /// sessions" toggle off. `bool(forKey:)` cannot express that — it returns false
     /// for an unset key — so read the object and fall back explicitly.
@@ -65,13 +82,36 @@ enum SessionNotificationSuppressionController {
 
     /// Snapshot of the auth epoch, taken by a caller that will apply a preference
     /// response later. Capture this *before* the `await`, hand it back to
-    /// `setSuppressPreferenceEnabled(_:startedAtGeneration:)`.
+    /// `setSuppressPreferenceEnabled(_:startedAtGeneration:requestTicket:responseKind:)`.
     static var preferenceGeneration: Int { reportGeneration }
+
+    /// Ticket ordering this preference request against every other one in flight.
+    /// Take it *before* the `await` — alongside `preferenceGeneration` — so it
+    /// records when the request left rather than when its response arrived.
+    static func nextPreferenceRequestTicket() -> Int {
+        preferenceOrdering.nextTicket()
+    }
 
     /// - Parameter generation: `preferenceGeneration` as it was when the request
     ///   started. Required rather than defaulted so a new call site cannot forget
     ///   it and silently reintroduce the cross-account leak.
-    static func setSuppressPreferenceEnabled(_ enabled: Bool, startedAtGeneration generation: Int) {
+    /// - Parameter ticket: `nextPreferenceRequestTicket()` as taken when the
+    ///   request started. Also required, for the same reason.
+    /// - Parameter kind: `.write` for a PATCH response (server truth as of its
+    ///   commit), `.read` for a GET. A read that *started* after a write was
+    ///   issued is still stale — it can reach the server before the write commits
+    ///   — so only `.write` supersedes what was in flight beside it.
+    /// - Returns: whether the response was adopted. Callers holding their own copy
+    ///   of the preference must branch on this — writing the field while the cache
+    ///   rejected the same value would leave the Settings toggle showing one
+    ///   answer and `willPresent` acting on the other.
+    @discardableResult
+    static func setSuppressPreferenceEnabled(
+        _ enabled: Bool,
+        startedAtGeneration generation: Int,
+        requestTicket ticket: Int,
+        responseKind kind: StaleResponseGuard.ResponseKind
+    ) -> Bool {
         // This applies a per-account server preference to a device-global
         // controller, so a response that left before a sign-out must not land
         // after it: it would re-plant the choice `clearSuppressPreference()` just
@@ -79,15 +119,23 @@ enum SessionNotificationSuppressionController {
         // reporting a sit — restart that hold under the new account's
         // credentials. Same #665 generation pattern as
         // `AppViewModel.hydrateNotificationSuppressionPreference`.
-        guard generation == reportGeneration else { return }
+        guard generation == reportGeneration else { return false }
+        // Same account, so the question left is which answer is newest. Checked
+        // second: a response from a previous account must not count as "the newest
+        // word" and consume a ticket on this account's behalf.
+        guard preferenceOrdering.shouldApply(ticket: ticket, from: kind) else { return false }
         UserDefaults.standard.set(enabled, forKey: preferenceDefaultsKey)
         // Opting out mid-sit must release the server-side hold, and opting back in
         // must re-take it, without waiting for the next session state change.
         syncServerSessionState()
+        return true
     }
 
-    /// Clear the cached preference at an auth boundary (logout) so one account's
-    /// choice never leaks into the next account on a shared device.
+    /// Clear the cached preference at an auth boundary so one account's choice
+    /// never leaks into the next account on a shared device. Called from both ends
+    /// of a session: `didLogout()` for an explicit sign-out, and `applySignedOut`
+    /// for an authoritative automatic one (expired token, 401) — a rejected
+    /// credential ends the session just as finally as tapping Sign out.
     static func clearSuppressPreference() {
         UserDefaults.standard.removeObject(forKey: preferenceDefaultsKey)
         // Stop reporting rather than clearing server-side: the request would 401

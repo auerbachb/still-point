@@ -40,8 +40,9 @@ final class NotificationPreferencesViewModel {
 
         do {
             let generation = SessionNotificationSuppressionController.preferenceGeneration
+            let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
             let prefs = try await APIClient.shared.getNotificationPreferences()
-            apply(prefs, startedAtGeneration: generation)
+            apply(prefs, startedAtGeneration: generation, requestTicket: ticket, responseKind: .read)
             await syncTimezoneIfNeeded(prefs)
         } catch {
             errorMessage = "Could not load notification settings."
@@ -183,10 +184,14 @@ final class NotificationPreferencesViewModel {
         errorMessage = nil
 
         do {
+            // Taken after the `isSaving` spin, so the ticket records when this
+            // request actually left — a save that waited its turn is newer than
+            // the one it queued behind, and newer than any read already in flight.
             let generation = SessionNotificationSuppressionController.preferenceGeneration
+            let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
             let updated = try await APIClient.shared.updateNotificationPreferences(patch)
             isSaving = false
-            apply(updated, startedAtGeneration: generation)
+            apply(updated, startedAtGeneration: generation, requestTicket: ticket, responseKind: .write)
         } catch {
             errorMessage = "Could not save notification settings."
             isSaving = false
@@ -199,18 +204,44 @@ final class NotificationPreferencesViewModel {
     ///   `SettingsView`, so its own fields die with the signed-out UI; the
     ///   device-global controller below is the part that outlives an auth
     ///   boundary and so is the part that has to be generation-checked.
-    private func apply(_ dto: NotificationPreferencesDTO, startedAtGeneration generation: Int) {
+    /// - Parameter ticket: `nextPreferenceRequestTicket()` as taken when the
+    ///   request started, ordering this response against every other preference
+    ///   request in flight.
+    /// - Parameter kind: `.read` from `load()`, `.write` from `persist()` — a
+    ///   PATCH response is server truth as of its commit, a GET response only
+    ///   describes what it happened to observe.
+    private func apply(
+        _ dto: NotificationPreferencesDTO,
+        startedAtGeneration generation: Int,
+        requestTicket ticket: Int,
+        responseKind kind: StaleResponseGuard.ResponseKind
+    ) {
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
         friendRequestNotificationsEnabled = dto.friendRequestNotificationsEnabled
         failureReasonReminderEnabled = dto.failureReasonReminderEnabled
-        suppressDuringSession = dto.suppressDuringSession
-        // Keep the cached opt-in (read by willPresent) in sync with the server row.
-        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+        // Keep the cached opt-in (read by willPresent) in sync with the server row
+        // — but only while this response is still the newest word on it. `load()`
+        // gates on `isLoading` and `persist()` on `isSaving`, so the two overlap
+        // freely: a read that left before the user turned "During sessions" off
+        // otherwise lands afterwards carrying the pre-toggle `true` and silently
+        // re-suppresses the sit the user just un-suppressed (#709).
+        //
+        // The visible toggle moves only when the cache accepted, so the screen can
+        // never disagree with what `willPresent` will actually do. The ticket
+        // orders *this* preference specifically; the other fields above are
+        // screen-local state that dies with `SettingsView`, so they keep the
+        // existing last-response-wins behaviour rather than being dropped
+        // wholesale on a preference write that says nothing about them.
+        if SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
             dto.suppressDuringSession,
-            startedAtGeneration: generation
-        )
+            startedAtGeneration: generation,
+            requestTicket: ticket,
+            responseKind: kind
+        ) {
+            suppressDuringSession = dto.suppressDuringSession
+        }
         timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil
