@@ -586,11 +586,15 @@ final class AppViewModel {
         // controller, so a response arriving after a sign-out would push the old
         // account's setting onto whoever is signed in next (#665).
         let generation = authGeneration
+        let preferenceGeneration = SessionNotificationSuppressionController.preferenceGeneration
         Task { [weak self] in
             guard let self else { return }
             guard let prefs = try? await APIClient.shared.getNotificationPreferences() else { return }
             guard generation == self.authGeneration else { return }
-            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(prefs.suppressDuringSession)
+            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+                prefs.suppressDuringSession,
+                startedAtGeneration: preferenceGeneration
+            )
         }
     }
 

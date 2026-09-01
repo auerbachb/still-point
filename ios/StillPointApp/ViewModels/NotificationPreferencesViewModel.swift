@@ -39,8 +39,9 @@ final class NotificationPreferencesViewModel {
         defer { isLoading = false }
 
         do {
+            let generation = SessionNotificationSuppressionController.preferenceGeneration
             let prefs = try await APIClient.shared.getNotificationPreferences()
-            apply(prefs)
+            apply(prefs, startedAtGeneration: generation)
             await syncTimezoneIfNeeded(prefs)
         } catch {
             errorMessage = "Could not load notification settings."
@@ -182,9 +183,10 @@ final class NotificationPreferencesViewModel {
         errorMessage = nil
 
         do {
+            let generation = SessionNotificationSuppressionController.preferenceGeneration
             let updated = try await APIClient.shared.updateNotificationPreferences(patch)
             isSaving = false
-            apply(updated)
+            apply(updated, startedAtGeneration: generation)
         } catch {
             errorMessage = "Could not save notification settings."
             isSaving = false
@@ -192,7 +194,12 @@ final class NotificationPreferencesViewModel {
         }
     }
 
-    private func apply(_ dto: NotificationPreferencesDTO) {
+    /// - Parameter generation: `SessionNotificationSuppressionController.preferenceGeneration`
+    ///   as it was when the request started. This view model is `@State` on
+    ///   `SettingsView`, so its own fields die with the signed-out UI; the
+    ///   device-global controller below is the part that outlives an auth
+    ///   boundary and so is the part that has to be generation-checked.
+    private func apply(_ dto: NotificationPreferencesDTO, startedAtGeneration generation: Int) {
         pushEnabled = dto.pushEnabled
         dailyReminderEnabled = dto.dailyReminderEnabled
         missADayEnabled = dto.missADayEnabled
@@ -200,7 +207,10 @@ final class NotificationPreferencesViewModel {
         failureReasonReminderEnabled = dto.failureReasonReminderEnabled
         suppressDuringSession = dto.suppressDuringSession
         // Keep the cached opt-in (read by willPresent) in sync with the server row.
-        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(dto.suppressDuringSession)
+        SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
+            dto.suppressDuringSession,
+            startedAtGeneration: generation
+        )
         timezoneDisplay = dto.tz
         dailyReminderFrequency = dto.dailyReminderFrequency
         quietHoursEnabled = dto.quietHoursStart != nil && dto.quietHoursEnd != nil

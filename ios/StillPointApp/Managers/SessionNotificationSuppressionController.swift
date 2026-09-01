@@ -51,7 +51,9 @@ enum SessionNotificationSuppressionController {
     private static var reportTask: Task<Void, Never>?
     private static var queuedReport: Bool?
     /// Bumped at every auth boundary so a drain task started by the previous
-    /// account cannot outlive `cancelPendingReports()` or clear a newer task.
+    /// account cannot outlive `cancelPendingReports()` or clear a newer task,
+    /// and so a preference response that left before a sign-out cannot be
+    /// applied after it (see `setSuppressPreferenceEnabled`).
     private static var reportGeneration = 0
 
     /// On by default (#709): a sit is silent unless the user turned the "During
@@ -61,7 +63,23 @@ enum SessionNotificationSuppressionController {
         UserDefaults.standard.object(forKey: preferenceDefaultsKey) as? Bool ?? true
     }
 
-    static func setSuppressPreferenceEnabled(_ enabled: Bool) {
+    /// Snapshot of the auth epoch, taken by a caller that will apply a preference
+    /// response later. Capture this *before* the `await`, hand it back to
+    /// `setSuppressPreferenceEnabled(_:startedAtGeneration:)`.
+    static var preferenceGeneration: Int { reportGeneration }
+
+    /// - Parameter generation: `preferenceGeneration` as it was when the request
+    ///   started. Required rather than defaulted so a new call site cannot forget
+    ///   it and silently reintroduce the cross-account leak.
+    static func setSuppressPreferenceEnabled(_ enabled: Bool, startedAtGeneration generation: Int) {
+        // This applies a per-account server preference to a device-global
+        // controller, so a response that left before a sign-out must not land
+        // after it: it would re-plant the choice `clearSuppressPreference()` just
+        // removed onto whoever signs in next, and — with a registration still
+        // reporting a sit — restart that hold under the new account's
+        // credentials. Same #665 generation pattern as
+        // `AppViewModel.hydrateNotificationSuppressionPreference`.
+        guard generation == reportGeneration else { return }
         UserDefaults.standard.set(enabled, forKey: preferenceDefaultsKey)
         // Opting out mid-sit must release the server-side hold, and opting back in
         // must re-take it, without waiting for the next session state change.
