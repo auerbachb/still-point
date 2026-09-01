@@ -7,7 +7,7 @@ import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { FlashHint } from "./FlashHint";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, type SoundPrefs } from "@/lib/audio";
+import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, soundPrefUsesAudio, type SoundPrefs } from "@/lib/audio";
 import { useVoiceCountdown } from "@/lib/useVoiceCountdown";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
@@ -1062,9 +1062,10 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           #668: real pill buttons, not four bare words. On/off is carried by fill,
           border, and the speaker icon together \u2014 the same three channels iOS uses
           via `SoundToggleAppearance` \u2014 so the state reads at a glance rather than
-          resting on a shift between two muted greys. `flexWrap` is a safety net:
-          the row is sized to fit four pills at 320px, and an unusually wide font
-          drops to a second line instead of being clipped by `overflow-x: hidden`.
+          resting on a shift between two muted greys. `flexWrap` carries the row:
+          five pills (#712 added haptics) no longer fit on one 320px line, so it
+          wraps to a second rather than being clipped by `overflow-x: hidden`.
+          iOS reaches the same end with `ViewThatFits`.
         */}
         <div
           style={{
@@ -1113,8 +1114,10 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                   saveSoundPrefs(next);
                   // #712: haptics is the one toggle that must not unlock the
                   // audio context. It exists for someone who wants silence, and
-                  // vibration needs no audio context at all.
-                  if (next[key] && cue !== "haptic") {
+                  // vibration needs no audio context at all. Asks the pref
+                  // classification directly rather than inferring it from the
+                  // drawn cue, so this and the buddy room share one answer.
+                  if (next[key] && soundPrefUsesAudio(key)) {
                     void unlockAudioContext();
                   }
                 }}

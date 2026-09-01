@@ -311,6 +311,47 @@ const DEFAULTS: SoundPrefs = {
   haptics: false,
 };
 
+/**
+ * Which prefs actually play through the audio context.
+ *
+ * #712: `haptics` vibrates the device and needs no `AudioContext`, so it must
+ * never make a caller unlock audio or conclude that a sitter has sound on — the
+ * pref exists precisely for someone who wants none. Counting it would warm an
+ * audio session for that sitter (which can duck whatever else the device is
+ * playing) and raise the "browser audio is paused" banner over silence they
+ * chose.
+ *
+ * Spelled as a total `Record` rather than a list of audio keys so that adding a
+ * field to `SoundPrefs` fails typecheck until it is classified here, instead of
+ * being silently swept in by an `Object.values(prefs).some(Boolean)`.
+ *
+ * iOS counterpart: `SoundToggleLogic.effects(toggledKeyUsesAudio:)`.
+ */
+const SOUND_PREF_USES_AUDIO: Record<keyof SoundPrefs, boolean> = {
+  tick: true,
+  chime: true,
+  completion: true,
+  voiceCountdown: true,
+  haptics: false,
+};
+
+/** Whether toggling `key` on should unlock/warm the audio context (#712). */
+export function soundPrefUsesAudio(key: keyof SoundPrefs): boolean {
+  return SOUND_PREF_USES_AUDIO[key];
+}
+
+/**
+ * Whether any pref that actually produces sound is on.
+ *
+ * Use this instead of `Object.values(prefs).some(Boolean)`, which counts
+ * `haptics` and so treats a silent, vibration-only sitter as having sound (#712).
+ */
+export function hasEnabledAudio(prefs: SoundPrefs): boolean {
+  return (Object.keys(SOUND_PREF_USES_AUDIO) as (keyof SoundPrefs)[]).some(
+    (key) => SOUND_PREF_USES_AUDIO[key] && prefs[key],
+  );
+}
+
 export function loadSoundPrefs(): SoundPrefs {
   if (typeof window === "undefined") return DEFAULTS;
   try {
