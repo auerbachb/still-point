@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_KEEP_SCREEN_AWAKE,
   isWakeLockSupported,
   loadWakeLockPrefs,
   saveWakeLockPrefs,
@@ -29,14 +30,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("DEFAULT_KEEP_SCREEN_AWAKE", () => {
+  // Exported so the SSR snapshot and the Settings seed cannot drift from it.
+  it("is on — #730 made the wake lock opt-out", () => {
+    expect(DEFAULT_KEEP_SCREEN_AWAKE).toBe(true);
+  });
+});
+
 describe("loadWakeLockPrefs", () => {
-  it("returns opt-out default without window (SSR guard)", () => {
-    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
+  it("returns the default without window (SSR guard)", () => {
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
   });
 
-  it("returns default when nothing is stored", () => {
+  it("defaults to on when nothing is stored (#730: never-set means keep the screen awake)", () => {
     stubBrowserStorage();
-    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
   });
 
   it("reads a stored opt-in", () => {
@@ -46,20 +54,33 @@ describe("loadWakeLockPrefs", () => {
     expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
   });
 
-  it("falls back to defaults on corrupt JSON", () => {
-    stubBrowserStorage({ [STORAGE_KEY]: "{not json" });
+  // The regression the default flip must not cause: a user who turned this off
+  // keeps it off. Only the absent key takes the new default.
+  it("reads a stored explicit off, so an opt-out survives the default flip", () => {
+    stubBrowserStorage({
+      [STORAGE_KEY]: JSON.stringify({ keepScreenAwakeDuringSession: false }),
+    });
     expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
   });
 
+  it("falls back to defaults on corrupt JSON", () => {
+    stubBrowserStorage({ [STORAGE_KEY]: "{not json" });
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
+  });
+
+  // The wrong-type payloads are deliberately falsy ("false" / 0): now that the
+  // default is `true`, a truthy payload would pass whether the loader fell back
+  // or silently coerced the stored value. A falsy one can only read back as
+  // `true` if the fallback really ran.
   it.each([
     ["non-object JSON", JSON.stringify("true")],
     ["null", JSON.stringify(null)],
-    ["string instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: "true" })],
-    ["number instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: 1 })],
+    ["string instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: "false" })],
+    ["number instead of boolean", JSON.stringify({ keepScreenAwakeDuringSession: 0 })],
     ["missing field", JSON.stringify({ other: true })],
   ])("falls back to defaults for %s", (_label, raw) => {
     stubBrowserStorage({ [STORAGE_KEY]: raw });
-    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
   });
 });
 
@@ -77,6 +98,17 @@ describe("saveWakeLockPrefs", () => {
       keepScreenAwakeDuringSession: true,
     });
     expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: true });
+  });
+
+  // Writing the key is what turns "never set" into an explicit opt-out; without
+  // the write, the next read would take the default and turn the lock back on.
+  it("persists an explicit off rather than leaving the pref unset", () => {
+    const store = stubBrowserStorage();
+    saveWakeLockPrefs({ keepScreenAwakeDuringSession: false });
+    expect(JSON.parse(store.get(STORAGE_KEY) ?? "")).toEqual({
+      keepScreenAwakeDuringSession: false,
+    });
+    expect(loadWakeLockPrefs()).toEqual({ keepScreenAwakeDuringSession: false });
   });
 });
 

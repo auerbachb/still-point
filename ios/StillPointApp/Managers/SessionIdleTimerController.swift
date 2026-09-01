@@ -1,14 +1,15 @@
 import UIKit
+import StillPointShared
 
 /// Central place to apply `UIApplication.shared.isIdleTimerDisabled` for active sits.
-/// When the preference is off, or no sit timer is running, the system idle timer stays enabled.
+/// The preference is on unless the user turned it off (#730), so an untouched install
+/// keeps the screen awake for the length of a sit. When the preference is off, or no
+/// sit timer is running, the system idle timer stays enabled.
 ///
 /// Tracks activity per `AppViewModel` so multiple `WindowGroup` scenes do not overwrite
 /// each other. Re-applies after foreground using stored registration state.
 @MainActor
 enum SessionIdleTimerController {
-    private static let userDefaultsKey = "sp_keepScreenAwakeDuringSession"
-
     private final class IdleRegistration {
         weak var appViewModel: AppViewModel?
         var sceneForegroundActive = false
@@ -22,12 +23,14 @@ enum SessionIdleTimerController {
 
     private static var registrations: [ObjectIdentifier: IdleRegistration] = [:]
 
+    /// Resolved through `WakeLockPrefs`, which distinguishes "never set" (default on)
+    /// from an explicit `false` — `UserDefaults.bool(forKey:)` cannot (#730).
     static var keepScreenAwakePreferenceEnabled: Bool {
-        UserDefaults.standard.bool(forKey: userDefaultsKey)
+        WakeLockPrefs.isKeepScreenAwakeEnabled
     }
 
     static func setKeepScreenAwakePreferenceEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: userDefaultsKey)
+        WakeLockPrefs.setKeepScreenAwakeEnabled(enabled)
         applyDesiredIdleTimerState()
     }
 

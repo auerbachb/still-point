@@ -93,7 +93,7 @@ struct SettingsView: View {
                             Text("Keep screen on during session")
                                 .font(SPFont.mono(13))
                                 .foregroundStyle(Color(SPColor.fg))
-                            Text("Prevents auto-lock while a sit timer is running")
+                            Text("On by default: prevents auto-lock while a sit timer is running. Turn it off to let the screen sleep as usual.")
                                 .font(SPFont.serif(13, weight: .light))
                                 .foregroundStyle(Color(SPColor.fg4))
                         }
