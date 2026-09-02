@@ -1529,17 +1529,24 @@ final class AppViewModel {
                 return nil
             }
             user = fetched
-        } catch let apiError as APIError where apiError.status == 401 {
-            // The other authoritative shape: `TOKEN_EXPIRED` is thrown rather than
-            // returned. Same answer, and the same generation guard as the success
-            // path — a 401 for the *previous* session must not sign out an account
-            // that has since signed in.
+        } catch let apiError as APIError where apiError.status == 401 || apiError.status == 404 {
+            // The thrown authoritative shapes. 401 is `TOKEN_EXPIRED`, which `me()`
+            // throws rather than returning. 404 is `GET /api/auth/me`'s "User not
+            // found" (`src/app/api/auth/me/route.ts`): the session authenticated but
+            // its user row is gone, so the account is deleted, not unreachable.
+            // Same generation guard as the success path — a rejection belonging to
+            // the *previous* session must not sign out an account that has since
+            // signed in.
             guard generation == authGeneration else { return nil }
-            applySignedOut(cause: .unauthorized, message: apiError.message)
+            applySignedOut(
+                cause: apiError.status == 401 ? .unauthorized : .signedOut,
+                message: apiError.message
+            )
             return nil
         } catch {
-            // A read that never landed is not a reason to skip the badge refresh and
-            // the deep-link consumptions, and never was.
+            // Everything left is a read that never landed — no network, a 5xx, an
+            // undecodable body. Not a reason to skip the badge refresh and the
+            // deep-link consumptions, and never was.
             return generation
         }
         guard generation == authGeneration else { return nil }

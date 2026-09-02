@@ -664,7 +664,13 @@ export default function StillPoint() {
     // projection happens to omit (today, `ambientSoundEnabled`). That is the
     // same failure #664 hit on iOS, where the whole-response adoption is
     // structural — here it is one call site, so merge and it cannot happen.
-    setUser((prev) => (prev ? { ...prev, ...updated } : updated));
+    //
+    // A null `prev` stays null rather than being installed. The generation guard
+    // above catches an explicit logout, which bumps `sessionGeneration` — but the
+    // auth check's `signedOut` outcome clears `user` without bumping it, and
+    // installing this partial response there would resurrect an identity the app
+    // has already signed out, missing whatever the projection omits.
+    setUser((prev) => (prev ? { ...prev, ...updated } : prev));
     void refreshTodayTracks();
   }, [refreshTodayTracks]);
 
