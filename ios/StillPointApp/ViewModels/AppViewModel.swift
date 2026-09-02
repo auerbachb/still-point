@@ -964,16 +964,26 @@ final class AppViewModel {
         //
         // Awaited rather than fired and forgotten so the caller's `Task` still
         // represents the whole opt-in.
+        //
+        // The generation is captured *here*, synchronously with the tap, and not
+        // inside the operation: waiting for a turn is an await like any other, so a
+        // read taken after it would bind this opt-in to whatever account is live when
+        // the queue finally reaches it rather than the one the user tapped on. A tap
+        // that sat behind a slow Settings save while the session changed would then
+        // enable the fork on — and persist the `UserDTO` of — the account that
+        // replaced them (#665). Same capture-then-recheck shape as every Settings
+        // write.
+        let identityAtStart = authGeneration
         await settingsWrites.enqueue { [weak self] in
-            await self?.performEnableDualTrack()
+            await self?.performEnableDualTrack(startedAtGeneration: identityAtStart)
         }.value
     }
 
-    private func performEnableDualTrack() async {
-        // Same identity-lifetime guard as the other sites that adopt a server
-        // response: without it, a sign-out mid-request lets the old account's
-        // returned UserDTO replace the active account and be persisted (#665).
-        let generation = authGeneration
+    private func performEnableDualTrack(startedAtGeneration generation: Int) async {
+        // Re-checked now that the wait is over and before the request is issued:
+        // sending this would otherwise apply the previous user's intent to the
+        // account that replaced them.
+        guard generation == authGeneration else { return }
         // Taken immediately before the request, so it records when this left and
         // outranks the `me()` reads racing it (#697).
         let ticket = nextSettingsRequestTicket()
