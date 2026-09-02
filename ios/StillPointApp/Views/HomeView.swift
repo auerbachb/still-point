@@ -69,7 +69,7 @@ struct HomeView: View {
                         .tracking(2)
 
                     if let recovery = appVM.activeRecovery {
-                        Text("recovery \(recovery.recoveryCurrentStep)/\(recovery.recoveryTotalSteps) · ramping back to day \(recovery.recoveryTargetDay)")
+                        Text(DurationRecovery.recoveryProgressText(recovery))
                             .font(SPFont.mono(11, weight: .medium))
                             .foregroundStyle(SPColor.amberText)
                             .tracking(1)
@@ -269,7 +269,7 @@ struct HomeView: View {
                 .tracking(2)
 
             if let recovery {
-                Text("recovery \(recovery.recoveryCurrentStep)/\(recovery.recoveryTotalSteps) · ramping back to day \(recovery.recoveryTargetDay)")
+                Text(DurationRecovery.recoveryProgressText(recovery))
                     .font(SPFont.mono(11, weight: .medium))
                     .foregroundStyle(SPColor.amberText)
                     .tracking(1)
