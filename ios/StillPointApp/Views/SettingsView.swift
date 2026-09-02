@@ -45,19 +45,20 @@ struct SettingsView: View {
     // (`enableDualTrack`) takes a settings ticket from outside that gate, so this
     // overlap is reachable rather than theoretical.
     //
-    // A hold is released two ways. `syncFromCurrentUser()` drops it once the
-    // account reports the confirmed value — never on a bare change to it, since an
-    // overlapping write can move the field to a stale value and treating that as
-    // the account catching up is the clobber above. Each toggle's `onChange` drops
-    // it as soon as the control shows anything else, which can only be the user's
-    // own newer intent: while a hold is live `syncFromCurrentUser()` writes exactly
-    // the held value, so it never lands there. Without that second release,
-    // flipping a toggle back to what the account already says would be swallowed by
-    // the no-op guard and then sprung back by the next sync.
-    @State private var confirmedIsPublic: Bool?
-    @State private var confirmedAphorismsEnabled: Bool?
-    @State private var confirmedAttentionTrackingEnabled: Bool?
-    @State private var confirmedAmbientSoundEnabled: Bool?
+    // A hold is released two ways. `syncFromCurrentUser()` drops it once a settings
+    // response outranking the hold's barrier has been adopted — the account
+    // genuinely catching up, as opposed to merely *reporting* the confirmed value,
+    // which an overlapping write can be applied after and undo (see
+    // `ConfirmedSettingHold`). Each toggle's `onChange` drops it as soon as the
+    // control shows anything else, which can only be the user's own newer intent:
+    // while a hold is live `syncFromCurrentUser()` writes exactly the held value, so
+    // it never lands there. Without that second release, flipping a toggle back to
+    // what the account already says would be swallowed by the no-op guard and then
+    // sprung back by the next sync.
+    @State private var confirmedIsPublic: ConfirmedSettingHold<Bool>?
+    @State private var confirmedAphorismsEnabled: ConfirmedSettingHold<Bool>?
+    @State private var confirmedAttentionTrackingEnabled: ConfirmedSettingHold<Bool>?
+    @State private var confirmedAmbientSoundEnabled: ConfirmedSettingHold<Bool>?
 
     private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isUpdatingAmbientSound || isSavingUsername }
 
@@ -180,7 +181,7 @@ struct SettingsView: View {
                     .onChange(of: attentionTrackingEnabled) { _, newValue in
                         // Releases the hold on the user's own newer intent; see the
                         // `confirmed…` declarations at the top of the view.
-                        if confirmedAttentionTrackingEnabled != newValue {
+                        if confirmedAttentionTrackingEnabled?.value != newValue {
                             confirmedAttentionTrackingEnabled = nil
                         }
                         guard !isUpdatingAttentionTracking else { return }
@@ -237,8 +238,10 @@ struct SettingsView: View {
                                     attentionTrackingEnabled = !newValue
                                 } else {
                                     // Settled in our favour on both remaining outcomes, so
-                                    // hold it until the account reports it back.
-                                    confirmedAttentionTrackingEnabled = newValue
+                                    // hold it until the account catches up. Nil when this
+                                    // response was already a complete picture and there is
+                                    // nothing to shadow.
+                                    confirmedAttentionTrackingEnabled = appVM.settingsHold(on: newValue)
                                 }
                             } catch {
                                 attentionTrackingEnabled = !newValue
@@ -263,7 +266,7 @@ struct SettingsView: View {
                     .onChange(of: ambientSoundEnabled) { _, newValue in
                         // Releases the hold on the user's own newer intent; see the
                         // `confirmed…` declarations at the top of the view.
-                        if confirmedAmbientSoundEnabled != newValue { confirmedAmbientSoundEnabled = nil }
+                        if confirmedAmbientSoundEnabled?.value != newValue { confirmedAmbientSoundEnabled = nil }
                         guard !isUpdatingAmbientSound else { return }
                         guard appVM.currentUser?.ambientSoundEnabled != newValue else { return }
                         isUpdatingAmbientSound = true
@@ -311,8 +314,10 @@ struct SettingsView: View {
                                     ambientSoundEnabled = !newValue
                                 } else {
                                     // Settled in our favour on both remaining outcomes, so
-                                    // hold it until the account reports it back.
-                                    confirmedAmbientSoundEnabled = newValue
+                                    // hold it until the account catches up. Nil when this
+                                    // response was already a complete picture and there is
+                                    // nothing to shadow.
+                                    confirmedAmbientSoundEnabled = appVM.settingsHold(on: newValue)
                                 }
                             } catch {
                                 ambientSoundEnabled = !newValue
@@ -350,7 +355,7 @@ struct SettingsView: View {
                     .onChange(of: isPublic) { _, newValue in
                         // Releases the hold on the user's own newer intent; see the
                         // `confirmed…` declarations at the top of the view.
-                        if confirmedIsPublic != newValue { confirmedIsPublic = nil }
+                        if confirmedIsPublic?.value != newValue { confirmedIsPublic = nil }
                         guard !isSavingSettings else { return }
                         guard appVM.currentUser?.isPublic != newValue else { return }
                         isUpdating = true
@@ -388,8 +393,10 @@ struct SettingsView: View {
                                     isPublic = !newValue
                                 } else {
                                     // Settled in our favour on both remaining outcomes, so
-                                    // hold it until the account reports it back.
-                                    confirmedIsPublic = newValue
+                                    // hold it until the account catches up. Nil when this
+                                    // response was already a complete picture and there is
+                                    // nothing to shadow.
+                                    confirmedIsPublic = appVM.settingsHold(on: newValue)
                                 }
                             } catch {
                                 // Revert on failure
@@ -424,7 +431,7 @@ struct SettingsView: View {
                     .onChange(of: aphorismsEnabled) { _, newValue in
                         // Releases the hold on the user's own newer intent; see the
                         // `confirmed…` declarations at the top of the view.
-                        if confirmedAphorismsEnabled != newValue { confirmedAphorismsEnabled = nil }
+                        if confirmedAphorismsEnabled?.value != newValue { confirmedAphorismsEnabled = nil }
                         guard !isUpdatingAphorisms else { return }
                         guard appVM.currentUser?.aphorismsEnabled != newValue else { return }
                         isUpdatingAphorisms = true
@@ -462,8 +469,10 @@ struct SettingsView: View {
                                     aphorismsEnabled = !newValue
                                 } else {
                                     // Settled in our favour on both remaining outcomes, so
-                                    // hold it until the account reports it back.
-                                    confirmedAphorismsEnabled = newValue
+                                    // hold it until the account catches up. Nil when this
+                                    // response was already a complete picture and there is
+                                    // nothing to shadow.
+                                    confirmedAphorismsEnabled = appVM.settingsHold(on: newValue)
                                 }
                             } catch {
                                 // Revert on failure
@@ -572,6 +581,15 @@ struct SettingsView: View {
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
+        // Every settings adoption, not just the ones that move a watched field. A
+        // reconciling read that confirms what the account already says changes none
+        // of the four above, and it is precisely that read which settles a hold —
+        // without this the hold it was issued for would stand for the life of the
+        // view. Tickets are never reused, so this fires once per adoption.
+        .onChange(of: appVM.lastAppliedSettingsTicket) { _, _ in
+            guard appVM.currentUser != nil else { return }
+            syncFromCurrentUser()
+        }
         .alert("Microphone access required", isPresented: $showAmbientSoundPermissionDeniedAlert) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -632,11 +650,13 @@ struct SettingsView: View {
     /// value the server confirmed and the account has not caught up to yet, which
     /// would otherwise put the old value back on a toggle the user just saved.
     ///
-    /// Each held value is released only when the account reports that very value,
-    /// never on a bare change to it: an overlapping write can move the field to a
-    /// stale value, and treating that as the account catching up is precisely the
-    /// clobber this guards (see the `confirmed…` declarations above, and
-    /// `confirmedUsername` in `UsernameEditView`).
+    /// Each held value is released only once a settings response outranking its
+    /// barrier has been adopted — never merely because the account now *reports* the
+    /// held value. Reporting it is not the same as having caught up: an overlapping
+    /// write serialized before the save can be applied straight afterwards, putting
+    /// the old value back with the hold already gone. Ranking the adopted response
+    /// against the barrier is what tells the two apart (see `ConfirmedSettingHold`,
+    /// and `confirmedUsername` in `UsernameEditView`).
     private func syncFromCurrentUser() {
         sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
         guard let user = appVM.currentUser else {
@@ -653,19 +673,20 @@ struct SettingsView: View {
             ambientSoundEnabled = false
             return
         }
-        if confirmedIsPublic == user.isPublic { confirmedIsPublic = nil }
-        isPublic = confirmedIsPublic ?? user.isPublic
+        let appliedTicket = appVM.lastAppliedSettingsTicket
 
-        if confirmedAphorismsEnabled == user.aphorismsEnabled { confirmedAphorismsEnabled = nil }
-        aphorismsEnabled = confirmedAphorismsEnabled ?? user.aphorismsEnabled
+        confirmedIsPublic = confirmedIsPublic?.released(byAppliedTicket: appliedTicket)
+        isPublic = confirmedIsPublic?.value ?? user.isPublic
 
-        if confirmedAttentionTrackingEnabled == user.attentionTrackingEnabled {
-            confirmedAttentionTrackingEnabled = nil
-        }
-        attentionTrackingEnabled = confirmedAttentionTrackingEnabled ?? user.attentionTrackingEnabled
+        confirmedAphorismsEnabled = confirmedAphorismsEnabled?.released(byAppliedTicket: appliedTicket)
+        aphorismsEnabled = confirmedAphorismsEnabled?.value ?? user.aphorismsEnabled
 
-        if confirmedAmbientSoundEnabled == user.ambientSoundEnabled { confirmedAmbientSoundEnabled = nil }
-        ambientSoundEnabled = confirmedAmbientSoundEnabled ?? user.ambientSoundEnabled
+        confirmedAttentionTrackingEnabled =
+            confirmedAttentionTrackingEnabled?.released(byAppliedTicket: appliedTicket)
+        attentionTrackingEnabled = confirmedAttentionTrackingEnabled?.value ?? user.attentionTrackingEnabled
+
+        confirmedAmbientSoundEnabled = confirmedAmbientSoundEnabled?.released(byAppliedTicket: appliedTicket)
+        ambientSoundEnabled = confirmedAmbientSoundEnabled?.value ?? user.ambientSoundEnabled
     }
 
     private var appVersionFooter: String {

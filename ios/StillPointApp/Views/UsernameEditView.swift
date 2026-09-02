@@ -38,15 +38,14 @@ struct UsernameEditView: View {
     /// The same shadowing is needed after a rename that *was* applied. A settings
     /// write holding a later ticket can have been serialized before the rename
     /// committed, so it is adopted while still carrying the old name — which is why
-    /// this is released only when the account reports the confirmed name, never on a
-    /// bare change to it.
-    @State private var confirmedUsername: String?
+    /// this is released by rank rather than by value; see `ConfirmedSettingHold`.
+    @State private var confirmedUsername: ConfirmedSettingHold<String>?
 
     private var isSaving: Bool { updating || savingUsername }
 
     /// What the account says, unless we are still holding a name the server
     /// confirmed to us and the account has not caught up to yet.
-    private var displayedUsername: String { confirmedUsername ?? user.username }
+    private var displayedUsername: String { confirmedUsername?.value ?? user.username }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -133,27 +132,44 @@ struct UsernameEditView: View {
             if !editingUsername, let newValue {
                 usernameDraft = newValue
             }
-            // Released once the account reports the very name the server confirmed
-            // to us: that is what "caught up" means, and it is the only change that
-            // makes the held name redundant. Also released when there is no account
-            // left to describe, so a sign-out cannot carry one session's confirmed
-            // name into the next (#665).
-            //
-            // Deliberately *not* released on any other change. Winning the settings
-            // ordering does not make a response complete: a write that took a later
-            // ticket than this rename can still have been serialized before the
-            // rename committed, so it carries the old username and is adopted anyway
-            // — `AppViewModel.applySettingsUser` says exactly this, and answers it
-            // with a reconciling read that is explicitly best effort. Treating that
-            // write as the account "speaking" would drop the held name and put the
-            // old one directly under "Username updated" until the read lands, or for
-            // good when it fails. Only Settings' own writes disable each other; the
-            // Home opt-in (`enableDualTrack`) takes a settings ticket from outside
-            // that gate, so this overlap is reachable rather than theoretical.
-            if newValue == nil || newValue == confirmedUsername {
-                confirmedUsername = nil
-            }
+            releaseConfirmedUsernameIfSettled()
         }
+        // Every settings adoption, not just the ones that move the username. The
+        // reconciling read that settles this hold routinely carries a name the
+        // account already shows — no change, so the watcher above never fires and
+        // the hold would stand for the life of the view. Tickets are never reused,
+        // so this fires once per adoption.
+        .onChange(of: appVM.lastAppliedSettingsTicket) { _, _ in
+            releaseConfirmedUsernameIfSettled()
+        }
+    }
+
+    /// Drops the held name once the account has genuinely caught up.
+    ///
+    /// "Caught up" is a settings response outranking the hold's barrier, not the
+    /// account merely *reporting* the confirmed name. Winning the settings ordering
+    /// does not make a response complete: a write that took a later ticket than this
+    /// rename can still have been serialized before the rename committed, so it
+    /// carries the old username and is adopted anyway — `AppViewModel.applySettingsUser`
+    /// says exactly this, and answers it with a reconciling read that is explicitly
+    /// best effort. Releasing on the name alone leaves the hold gone precisely when
+    /// that write lands, putting the old name directly under "Username updated".
+    /// Ranking against the barrier releases only for a response that departed after
+    /// the rename committed, which no earlier snapshot can follow. Only Settings' own
+    /// writes disable each other; the Home opt-in (`enableDualTrack`) takes a settings
+    /// ticket from outside that gate, so this overlap is reachable rather than
+    /// theoretical.
+    ///
+    /// Also released when there is no account left to describe, so a sign-out cannot
+    /// carry one session's confirmed name into the next (#665).
+    private func releaseConfirmedUsernameIfSettled() {
+        guard appVM.currentUser != nil else {
+            confirmedUsername = nil
+            return
+        }
+        confirmedUsername = confirmedUsername?.released(
+            byAppliedTicket: appVM.lastAppliedSettingsTicket
+        )
     }
 
     private func beginUsernameEdit(savedUsername: String) {
@@ -211,10 +227,11 @@ struct UsernameEditView: View {
             ) != .discarded else { return }
             usernameDraft = updated.username
             // Held so the display cannot contradict the success message on the
-            // superseded path, where `currentUser` does not carry this rename yet.
-            // Cleared by the `onChange` above the moment the account reports a name
-            // of its own.
-            confirmedUsername = updated.username
+            // superseded path, where `currentUser` does not carry this rename yet,
+            // nor on the applied path, where an overlapping write can still clobber
+            // it. Nil when this response was already a complete picture of the
+            // account and there is nothing to shadow.
+            confirmedUsername = appVM.settingsHold(on: updated.username)
             editingUsername = false
             usernameSuccessMessage = "Username updated"
         } catch let error as APIError {

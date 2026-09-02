@@ -748,6 +748,32 @@ final class AppViewModel {
     /// `applySettingsUser`.
     private var latestIssuedSettingsTicket = 0
 
+    /// Ticket carried by the settings response most recently adopted into
+    /// `currentUser`.
+    ///
+    /// A view holding a value the server confirmed for its own save (see
+    /// `ConfirmedSettingHold`) releases that hold by ranking this against the hold's
+    /// barrier: a ticket above the barrier belongs to a request that departed after
+    /// the confirming response arrived, so it reflects the commit and is the account
+    /// genuinely catching up.
+    ///
+    /// Also the signal that an adoption *happened at all*. The per-field watchers in
+    /// `SettingsView` fire only when their field changes, so a reconciling read that
+    /// confirms what the local copy already says would never reach them and the hold
+    /// it was meant to settle would stand for the life of the view. Tickets are never
+    /// reused, so this changes on every adoption and a watcher on it fires on every
+    /// one.
+    ///
+    /// Zero until a settings response is adopted. Adoption proper — a cold start, or
+    /// any response naming a different account — goes through `applyAuthenticatedUser`
+    /// and does not order, so it deliberately leaves this alone.
+    private(set) var lastAppliedSettingsTicket = 0
+
+    /// Barrier for a hold on the value the most recently handled settings response
+    /// confirmed, or `nil` when that response needed no hold. Consumed by
+    /// `settingsHold(on:)`.
+    private var pendingSettingsHoldBarrier: Int?
+
     /// Why a settings response was or was not adopted.
     ///
     /// Three-way rather than a Bool because the two rejections call for opposite
@@ -785,6 +811,11 @@ final class AppViewModel {
         startedAtGeneration generation: Int,
         requestTicket ticket: Int
     ) -> SettingsApplyOutcome {
+        // Read before anything below can take a ticket of its own — specifically
+        // before the reconciling read this may schedule — so that read ranks *above*
+        // the barrier and can settle the hold rather than being mistaken for another
+        // response that might predate the commit. See `ConfirmedSettingHold`.
+        let barrier = latestIssuedSettingsTicket
         // `.write`: a PATCH response is server truth as of a commit, so it outranks
         // every request still outstanding beside it.
         let outcome = applySettingsResponse(
@@ -818,15 +849,39 @@ final class AppViewModel {
         // construction and costs no extra traffic. Each reconcile takes a fresh
         // ticket, so the last one issued departs after every write has returned and
         // therefore sees every commit; reads schedule nothing, so this terminates.
+        //
+        // The same two cases are exactly the ones whose caller needs to hold the
+        // value it just saved: they are the responses that leave the local copy able
+        // to contradict a committed save. An applied response with nothing
+        // outstanding beside it is complete, so no hold is issued for it — which
+        // matters, because a hold no later response is scheduled to settle would
+        // stand for the life of the view.
         switch outcome {
         case .superseded:
+            pendingSettingsHoldBarrier = barrier
             reconcileSettingsFromServer()
-        case .applied where ticket < latestIssuedSettingsTicket:
+        case .applied where ticket < barrier:
+            pendingSettingsHoldBarrier = barrier
             reconcileSettingsFromServer()
         case .applied, .discarded:
-            break
+            pendingSettingsHoldBarrier = nil
         }
         return outcome
+    }
+
+    /// The hold a settings write's caller should keep on the value it just saved, or
+    /// `nil` when the response left nothing to hold.
+    ///
+    /// Call it in the same main-actor turn as the
+    /// `applySettingsUser(_:startedAtGeneration:requestTicket:)` it belongs to —
+    /// there is no `await` between them, so no other response can be handled in the
+    /// gap. Consumed on read rather than left standing, so a call that has drifted
+    /// away from its response yields no hold instead of a barrier belonging to some
+    /// other one: a missing hold merely fails to shadow a stale value for a moment,
+    /// while a wrong barrier could hold one indefinitely.
+    func settingsHold<Value: Sendable & Equatable>(on value: Value) -> ConfirmedSettingHold<Value>? {
+        defer { pendingSettingsHoldBarrier = nil }
+        return pendingSettingsHoldBarrier.map { ConfirmedSettingHold(value: value, barrier: $0) }
     }
 
     /// Shared body of the settings-apply path. Split out so the reconcile below can
@@ -850,6 +905,9 @@ final class AppViewModel {
         // from a session that is gone must not consume a ticket on the live
         // account's behalf and bar its genuine saves.
         guard settingsOrdering.shouldApply(ticket: ticket, from: kind) else { return .superseded }
+        // Recorded before the adoption, so an observer woken by the change to
+        // `currentUser` already sees which response caused it.
+        lastAppliedSettingsTicket = ticket
         // Server-confirmed (a settings PATCH round-tripped), so the local copy is
         // refreshed too — otherwise a rename or track opt-in would vanish on the
         // next offline launch (#665).
