@@ -254,4 +254,68 @@ final class StaleResponseGuardTests: XCTestCase {
         XCTAssertFalse(ordering.shouldApply(ticket: loginCatchUp, from: .read))
         XCTAssertFalse(ordering.shouldApply(ticket: enableDualTrack, from: .read))
     }
+
+    // MARK: - #699: a failure ranks without recording
+
+    /// The mirror of `testStaleRefreshFailureCannotClearWhatANewerRefreshSet`, and
+    /// the reason the failure path asks `isSuperseded` rather than `shouldApply`.
+    ///
+    /// A sit is flushed, `returnHome()`'s refresh is in flight, the network drops,
+    /// and the reconnect refresh fails *instantly* — later ticket, earlier arrival.
+    /// It is entitled to fail closed, but it observed nothing, so it must not
+    /// consume the barrier: the original refresh then lands confirming the sit and
+    /// has to be allowed to repaint the badge the user just earned.
+    func testNewerFailureDoesNotBarAnEarlierSuccessStillInFlight() {
+        var ordering = StaleResponseGuard()
+        let returnHome = ordering.nextTicket()
+        let reconnect = ordering.nextTicket()
+
+        XCTAssertFalse(
+            ordering.isSuperseded(ticket: reconnect),
+            "nothing newer has landed, so failing closed is still the newest word"
+        )
+        XCTAssertTrue(
+            ordering.shouldApply(ticket: returnHome, from: .read),
+            "the failure recorded nothing, so the real answer behind it still applies"
+        )
+    }
+
+    /// ...while ranking still happens, so the original #699 direction holds: a
+    /// failure that a newer response already outranked stays out.
+    func testSupersededFailureIsStillRejected() {
+        var ordering = StaleResponseGuard()
+        let slowFailure = ordering.nextTicket()
+        let newestSuccess = ordering.nextTicket()
+
+        XCTAssertTrue(ordering.shouldApply(ticket: newestSuccess, from: .read))
+        XCTAssertTrue(
+            ordering.isSuperseded(ticket: slowFailure),
+            "an absent answer must not clear what a newer response just confirmed"
+        )
+    }
+
+    /// `isSuperseded` reports, it does not record: asking repeatedly leaves the
+    /// barrier exactly where it was, so back-to-back failures both fail closed and
+    /// neither shuts out the response still coming.
+    func testIsSupersededDoesNotAdvanceTheBarrier() {
+        var ordering = StaleResponseGuard()
+        let inFlight = ordering.nextTicket()
+        let firstFailure = ordering.nextTicket()
+        let secondFailure = ordering.nextTicket()
+
+        XCTAssertFalse(ordering.isSuperseded(ticket: firstFailure))
+        XCTAssertFalse(ordering.isSuperseded(ticket: secondFailure))
+        XCTAssertFalse(ordering.isSuperseded(ticket: firstFailure), "asking twice changes nothing")
+        XCTAssertTrue(ordering.shouldApply(ticket: inFlight, from: .read))
+    }
+
+    /// A ticket this guard never issued is reported superseded rather than trusted,
+    /// matching how `shouldApply(ticket:from:)` rejects a stray number.
+    func testIsSupersededRejectsATicketItNeverIssued() {
+        var ordering = StaleResponseGuard()
+        let real = ordering.nextTicket()
+
+        XCTAssertTrue(ordering.isSuperseded(ticket: real + 1))
+        XCTAssertFalse(ordering.isSuperseded(ticket: real))
+    }
 }

@@ -101,4 +101,26 @@ public struct StaleResponseGuard: Sendable {
         }
         return true
     }
+
+    /// Whether `ticket` has already been outranked — asked *without* recording
+    /// anything.
+    ///
+    /// The read-only counterpart to ``shouldApply(ticket:from:)``, for the one
+    /// caller whose "response" is the absence of one: a request that threw. Such a
+    /// request still has to be *ranked*, because failing closed is only right for
+    /// the newest word on the subject — but it must not consume the barrier the way
+    /// an answer does. A failure observed nothing; letting it advance ``applied``
+    /// would bar an *earlier* request that is still in flight and about to come back
+    /// with real server data, discarding the only observation anyone actually has.
+    ///
+    /// So a failure asks this, and a response calls ``shouldApply(ticket:from:)``.
+    ///
+    /// - Parameter ticket: a ticket from ``nextTicket()`` on *this* guard. One this
+    ///   guard never issued is reported superseded, matching how
+    ///   ``shouldApply(ticket:from:)`` rejects a stray number rather than trusting
+    ///   it.
+    public func isSuperseded(ticket: Int) -> Bool {
+        guard ticket <= issued else { return true }
+        return ticket <= applied
+    }
 }

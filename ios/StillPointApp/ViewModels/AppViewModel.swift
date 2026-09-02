@@ -474,6 +474,11 @@ final class AppViewModel {
     ///
     /// Always a `.read`: the query observes today's completions and commits
     /// nothing, so it is authoritative for the moment it left and nothing later.
+    ///
+    /// Only a *response* records itself here. The failure path ranks its ticket
+    /// with `isSuperseded(ticket:)` instead, so a request that threw cannot consume
+    /// the barrier against an earlier one still in flight — see the comment on that
+    /// guard for the sit-then-network-drop case it otherwise loses.
     private var tracksDoneOrdering = StaleResponseGuard()
 
     /// Single place a server-confirmed user is adopted — in memory *and* in the
@@ -1244,12 +1249,22 @@ final class AppViewModel {
             // lowers them; the failure path must not be the one exception.
             // Midnight rollover is already handled at the top of this method.
             //
-            // Ticketed like the success path (#699), because failing closed is only
+            // Ranked like the success path (#699), because failing closed is only
             // right for the *newest* word on today. An absent answer says nothing
             // the server has since confirmed is wrong, so a refresh that a later
             // one already superseded must not clear badges that newer one just set.
+            //
+            // Ranked but *not* recorded, which is why this asks `isSuperseded` and
+            // the success path calls `shouldApply`. A failure observed nothing, so
+            // consuming the barrier would let it bar an *earlier* refresh still in
+            // flight — and that one comes back with real server data. Losing it is
+            // the mirror of the bug above and just as visible: a sit is flushed,
+            // `returnHome()`'s refresh is in flight, the network drops, the
+            // reconnect refresh fails instantly and clears the badges, and then the
+            // original success lands confirming the sit and is thrown away. The
+            // badge the user just earned stays dark until some later refresh.
             guard generation == authGeneration,
-                  tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
+                  !tracksDoneOrdering.isSuperseded(ticket: ticket) else { return }
             // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
             // deliberately keeps the badges when a session is running, and it
             // schedules this catch-up moments later against the same dead network
@@ -1263,10 +1278,15 @@ final class AppViewModel {
         }
         // Both branches above return early on a generation change or a superseded
         // ticket, so reaching here means this refresh is both the live session's and
-        // the newest word on today. A superseded one skips these two with nothing
-        // lost: the refresh that outranked it makes the same calls from a strictly
-        // fresher answer, and drops the `getSessions()` backfill this one would
-        // otherwise pay for a second time.
+        // still the newest word on today. A superseded one skips these two with
+        // nothing lost: the refresh that outranked it makes the same calls from a
+        // strictly fresher answer, and drops the `getSessions()` backfill this one
+        // would otherwise pay for a second time.
+        //
+        // A failure reaching here does not close the subject — it recorded nothing,
+        // so an earlier refresh still in flight can land afterwards and run these
+        // again from a real answer. That is the point: the second pass overwrites
+        // the fail-closed snapshot this one is about to persist.
         syncWidgetData()
         refreshWidgetWeekHistory()
     }
