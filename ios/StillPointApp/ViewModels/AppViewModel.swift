@@ -1330,9 +1330,37 @@ final class AppViewModel {
         // Starts equal to the entry capture and is refreshed if we adopt a user, so
         // an expected adoption is never mistaken for the session being replaced.
         var adopted = generation
+        // Taken here rather than at the top, unlike `checkAuth()` and
+        // `refreshAfterReconnect()` where the two positions coincide: the flush above
+        // is a *different* request's `await`, and the ticket has to record when this
+        // read left (#697). Taking it at entry would rank it below any save made from
+        // Home while the flush ran — `currentView` is set to `.home` on the first line,
+        // so the user is already interactive there — and a read superseded that way
+        // drops the post-sit refresh this `me()` exists for. Ranking it here keeps
+        // that refresh and is still safe: an accepted `.write` supersedes every ticket
+        // outstanding, so a save racing this read wins whichever took the lower number.
+        let settingsTicket = nextSettingsRequestTicket()
         if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
             guard generation == authGeneration else { return }
-            applyAuthenticatedUser(user)
+            // Finishing a sit re-confirms the account already on screen, so it is a
+            // `me()` *read* racing whatever settings save is in flight and enters the
+            // same ordering as the auth-path reads (#697). Without it, a read that
+            // left before a slow PATCH committed and landed after it reinstates the
+            // pre-save `UserDTO` in `currentUser` and re-saves it to the cache #665
+            // reads on the next offline launch — the revert this PR exists to stop.
+            // Adoption proper, a response naming a *different* account, keeps going
+            // through `applyAuthenticatedUser`: there is nothing to order it against
+            // and the guard would read it as `.discarded`.
+            if currentUser?.id == user.id {
+                applySettingsResponse(
+                    user,
+                    startedAtGeneration: generation,
+                    requestTicket: settingsTicket,
+                    responseKind: .read
+                )
+            } else {
+                applyAuthenticatedUser(user)
+            }
             adopted = authGeneration
         }
         await refreshTracksDoneToday()
