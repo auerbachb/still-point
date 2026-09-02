@@ -108,10 +108,21 @@ final class AppViewModel {
     private var pendingLogReasonDate: String?
 
     /// Persisted: keep device screen awake during an active sit when enabled.
+    ///
+    /// #742: a window onto the shared `WakeLockPreferenceStore` rather than a copy
+    /// of it. Each `WindowGroup` scene builds its own `AppViewModel`, and this used
+    /// to be a stored property seeded once in `init()` — so a preference changed in
+    /// one window left the other's Settings switch rendering its launch-time value.
+    /// Reading through the shared `@Observable` store is what re-renders every
+    /// scene together; nothing here is re-seeded, so no scene writes the key.
+    ///
+    /// The setter still goes through `SessionIdleTimerController` so the idle timer
+    /// is re-applied on the same call that records the choice. The store itself
+    /// declines a set that changes nothing, which is what keeps one tap to one
+    /// write and leaves an untouched install's "never set" state untouched (#730).
     var keepScreenAwakeDuringSession: Bool {
-        didSet {
-            SessionIdleTimerController.setKeepScreenAwakePreferenceEnabled(keepScreenAwakeDuringSession)
-        }
+        get { WakeLockPreferenceStore.shared.isEnabled }
+        set { SessionIdleTimerController.setKeepScreenAwakePreferenceEnabled(newValue) }
     }
 
     /// #240: per-track "completed a standard sit today", drives the Home badges.
@@ -197,9 +208,9 @@ final class AppViewModel {
         return false
     }
 
-    init() {
-        self.keepScreenAwakeDuringSession = SessionIdleTimerController.keepScreenAwakePreferenceEnabled
-    }
+    // No initializer: the wake-lock preference is the only thing this used to seed,
+    // and #742 replaced that snapshot with a read of the shared store. Every other
+    // stored property carries its own default.
 
     func checkAuth() async {
         let startedAt = Date()
@@ -1237,6 +1248,27 @@ final class AppViewModel {
                 secondPracticeDoneToday = true
             }
         } catch {
+            // #759: a cancelled request is not a failed one, and only a failure
+            // justifies what follows. Cancellation here always means replacement or
+            // teardown — every call site that cancels this refresh constructs its
+            // successor in the same run (`enterOfflineMode`,
+            // `refreshAfterReconnectInBackground`, the login catch-up), and the one
+            // that does not (`cancelIdentityScopedTasks`) is a session ending. So a
+            // cancelled request has nothing to correct: clearing the badges and
+            // persisting that at the `syncWidgetData()` below would fail closed on
+            // behalf of a request that never asked the server anything, leaving the
+            // widget briefly holding a value its replacement is about to overwrite.
+            // Returning outright rather than skipping the clear alone, because the
+            // snapshot write at the bottom is the half that reaches the widget.
+            //
+            // Deliberately asymmetric: the success path above has no matching
+            // cancellation check. A cancelled request that nonetheless came back
+            // with an answer holds real, current server data, and `shouldApply`
+            // has already established it is the newest word on today. Dropping it
+            // for being cancelled would throw away a fact nobody else is going to
+            // supply — the same loss #699 fixed in the other direction. Only the
+            // failure branch has nothing to contribute.
+            if RequestCancellation.isCancellation(error, taskIsCancelled: Task.isCancelled) { return }
             // Non-fatal: fail closed so stale "done today" badges do not leak.
             // Only the server-derived Home badges are cleared. The widget
             // practice flags are local truth — a sit finished on this device,

@@ -29,8 +29,14 @@ enum SessionIdleTimerController {
         WakeLockPrefs.isKeepScreenAwakeEnabled
     }
 
+    /// #742: recorded through the shared store rather than straight into
+    /// `WakeLockPrefs`, so every scene's Settings switch re-renders from the one
+    /// value. The store declines a set that matches what is already stored — a
+    /// duplicate write for a single tap, and on an untouched install a write of the
+    /// #730 default the user never chose. The idle timer is re-applied either way:
+    /// it resolves storage itself and is idempotent.
     static func setKeepScreenAwakePreferenceEnabled(_ enabled: Bool) {
-        WakeLockPrefs.setKeepScreenAwakeEnabled(enabled)
+        WakeLockPreferenceStore.shared.setEnabled(enabled)
         applyDesiredIdleTimerState()
     }
 
