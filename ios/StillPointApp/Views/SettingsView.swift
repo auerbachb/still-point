@@ -26,6 +26,39 @@ struct SettingsView: View {
     @State private var showAttentionPermissionDeniedAlert = false
     @State private var showAmbientSoundPermissionDeniedAlert = false
 
+    // Values the server confirmed to us that `currentUser` may not carry yet, held
+    // so `syncFromCurrentUser()` cannot put the old value back on a control the
+    // user just saved. Same shape and same reason as `confirmedUsername` in
+    // `UsernameEditView`, and needed on both settled outcomes (#697):
+    //
+    //   - Superseded: the server took this change, but a newer-ticket response is
+    //     the newest word, so `currentUser` never carries this field's new value.
+    //   - Applied: winning the ordering does not make a response complete. An
+    //     overlapping later-ticket write can be serialized *before* this toggle
+    //     committed and still apply afterwards, carrying the pre-save value and
+    //     clobbering the one this response had just adopted.
+    //
+    // Both are repaired by `reconcileSettingsFromServer()`, which is explicitly
+    // best effort — so between the two there is a window, and on a failed read no
+    // repair at all, during which `currentUser` contradicts a save that took.
+    // Only Settings' own writes disable each other; the Home opt-in
+    // (`enableDualTrack`) takes a settings ticket from outside that gate, so this
+    // overlap is reachable rather than theoretical.
+    //
+    // A hold is released two ways. `syncFromCurrentUser()` drops it once the
+    // account reports the confirmed value — never on a bare change to it, since an
+    // overlapping write can move the field to a stale value and treating that as
+    // the account catching up is the clobber above. Each toggle's `onChange` drops
+    // it as soon as the control shows anything else, which can only be the user's
+    // own newer intent: while a hold is live `syncFromCurrentUser()` writes exactly
+    // the held value, so it never lands there. Without that second release,
+    // flipping a toggle back to what the account already says would be swallowed by
+    // the no-op guard and then sprung back by the next sync.
+    @State private var confirmedIsPublic: Bool?
+    @State private var confirmedAphorismsEnabled: Bool?
+    @State private var confirmedAttentionTrackingEnabled: Bool?
+    @State private var confirmedAmbientSoundEnabled: Bool?
+
     private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isUpdatingAmbientSound || isSavingUsername }
 
     var body: some View {
@@ -145,6 +178,11 @@ struct SettingsView: View {
                     .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.attentionTrackingToggle")
                     .onChange(of: attentionTrackingEnabled) { _, newValue in
+                        // Releases the hold on the user's own newer intent; see the
+                        // `confirmed…` declarations at the top of the view.
+                        if confirmedAttentionTrackingEnabled != newValue {
+                            confirmedAttentionTrackingEnabled = nil
+                        }
                         guard !isUpdatingAttentionTracking else { return }
                         guard appVM.currentUser?.attentionTrackingEnabled != newValue else { return }
                         isUpdatingAttentionTracking = true
@@ -197,6 +235,10 @@ struct SettingsView: View {
                                     requestTicket: settingsTicket
                                 ) == .discarded {
                                     attentionTrackingEnabled = !newValue
+                                } else {
+                                    // Settled in our favour on both remaining outcomes, so
+                                    // hold it until the account reports it back.
+                                    confirmedAttentionTrackingEnabled = newValue
                                 }
                             } catch {
                                 attentionTrackingEnabled = !newValue
@@ -219,6 +261,9 @@ struct SettingsView: View {
                     .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.ambientSoundToggle")
                     .onChange(of: ambientSoundEnabled) { _, newValue in
+                        // Releases the hold on the user's own newer intent; see the
+                        // `confirmed…` declarations at the top of the view.
+                        if confirmedAmbientSoundEnabled != newValue { confirmedAmbientSoundEnabled = nil }
                         guard !isUpdatingAmbientSound else { return }
                         guard appVM.currentUser?.ambientSoundEnabled != newValue else { return }
                         isUpdatingAmbientSound = true
@@ -264,6 +309,10 @@ struct SettingsView: View {
                                     requestTicket: settingsTicket
                                 ) == .discarded {
                                     ambientSoundEnabled = !newValue
+                                } else {
+                                    // Settled in our favour on both remaining outcomes, so
+                                    // hold it until the account reports it back.
+                                    confirmedAmbientSoundEnabled = newValue
                                 }
                             } catch {
                                 ambientSoundEnabled = !newValue
@@ -299,6 +348,9 @@ struct SettingsView: View {
                     .tint(SPColor.green)
                     .disabled(isSavingSettings)
                     .onChange(of: isPublic) { _, newValue in
+                        // Releases the hold on the user's own newer intent; see the
+                        // `confirmed…` declarations at the top of the view.
+                        if confirmedIsPublic != newValue { confirmedIsPublic = nil }
                         guard !isSavingSettings else { return }
                         guard appVM.currentUser?.isPublic != newValue else { return }
                         isUpdating = true
@@ -334,6 +386,10 @@ struct SettingsView: View {
                                     requestTicket: settingsTicket
                                 ) == .discarded {
                                     isPublic = !newValue
+                                } else {
+                                    // Settled in our favour on both remaining outcomes, so
+                                    // hold it until the account reports it back.
+                                    confirmedIsPublic = newValue
                                 }
                             } catch {
                                 // Revert on failure
@@ -366,6 +422,9 @@ struct SettingsView: View {
                     .disabled(isSavingSettings)
                     .accessibilityIdentifier("settings.aphorismsToggle")
                     .onChange(of: aphorismsEnabled) { _, newValue in
+                        // Releases the hold on the user's own newer intent; see the
+                        // `confirmed…` declarations at the top of the view.
+                        if confirmedAphorismsEnabled != newValue { confirmedAphorismsEnabled = nil }
                         guard !isUpdatingAphorisms else { return }
                         guard appVM.currentUser?.aphorismsEnabled != newValue else { return }
                         isUpdatingAphorisms = true
@@ -401,6 +460,10 @@ struct SettingsView: View {
                                     requestTicket: settingsTicket
                                 ) == .discarded {
                                     aphorismsEnabled = !newValue
+                                } else {
+                                    // Settled in our favour on both remaining outcomes, so
+                                    // hold it until the account reports it back.
+                                    confirmedAphorismsEnabled = newValue
                                 }
                             } catch {
                                 // Revert on failure
@@ -565,12 +628,44 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings.notificationsLink")
     }
 
+    /// Copies the account onto the controls — except where we are still holding a
+    /// value the server confirmed and the account has not caught up to yet, which
+    /// would otherwise put the old value back on a toggle the user just saved.
+    ///
+    /// Each held value is released only when the account reports that very value,
+    /// never on a bare change to it: an overlapping write can move the field to a
+    /// stale value, and treating that as the account catching up is precisely the
+    /// clobber this guards (see the `confirmed…` declarations above, and
+    /// `confirmedUsername` in `UsernameEditView`).
     private func syncFromCurrentUser() {
-        isPublic = appVM.currentUser?.isPublic ?? false
-        aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
         sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
-        attentionTrackingEnabled = appVM.currentUser?.attentionTrackingEnabled ?? false
-        ambientSoundEnabled = appVM.currentUser?.ambientSoundEnabled ?? false
+        guard let user = appVM.currentUser else {
+            // No account left. Drop every held value so a confirmation from one
+            // session cannot cross into the next (#665), and fall back to the
+            // signed-out defaults.
+            confirmedIsPublic = nil
+            confirmedAphorismsEnabled = nil
+            confirmedAttentionTrackingEnabled = nil
+            confirmedAmbientSoundEnabled = nil
+            isPublic = false
+            aphorismsEnabled = false
+            attentionTrackingEnabled = false
+            ambientSoundEnabled = false
+            return
+        }
+        if confirmedIsPublic == user.isPublic { confirmedIsPublic = nil }
+        isPublic = confirmedIsPublic ?? user.isPublic
+
+        if confirmedAphorismsEnabled == user.aphorismsEnabled { confirmedAphorismsEnabled = nil }
+        aphorismsEnabled = confirmedAphorismsEnabled ?? user.aphorismsEnabled
+
+        if confirmedAttentionTrackingEnabled == user.attentionTrackingEnabled {
+            confirmedAttentionTrackingEnabled = nil
+        }
+        attentionTrackingEnabled = confirmedAttentionTrackingEnabled ?? user.attentionTrackingEnabled
+
+        if confirmedAmbientSoundEnabled == user.ambientSoundEnabled { confirmedAmbientSoundEnabled = nil }
+        ambientSoundEnabled = confirmedAmbientSoundEnabled ?? user.ambientSoundEnabled
     }
 
     private var appVersionFooter: String {
