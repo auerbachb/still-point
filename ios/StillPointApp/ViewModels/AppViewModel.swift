@@ -782,9 +782,11 @@ final class AppViewModel {
                 guard let self else { return nil }
                 return await self.refreshUserFromServer(startedAtGeneration: adopted)
             }
-            // `nil` is the session being gone; everything below is identity-scoped.
-            // A read that merely failed returns the entry generation, so a flaky
-            // network still leaves the badge refresh and the consumptions to run.
+            // `nil` is the session being gone — replaced while the read was in
+            // flight, or rejected outright by it; everything below is
+            // identity-scoped, and the consumptions below are not idempotent. A read
+            // that merely failed returns the entry generation, so a flaky network
+            // still leaves the badge refresh and the consumptions to run.
             guard let live = await refresh.value else { return }
             await self.refreshTracksDoneToday()
             guard live == self.authGeneration else { return }
@@ -1492,9 +1494,14 @@ final class AppViewModel {
     /// A `me()` read that reconciles the account already on screen, run from the
     /// settings queue. Shared by `returnHome()` (post-sit) and `didLogin` (#664).
     ///
-    /// Unlike `performReconnectRefresh`, a read that does not land is simply dropped:
-    /// neither caller is reacting to an authoritative rejection, so there is nothing
-    /// here that should sign anyone out.
+    /// A read that merely *fails* — no network, a 5xx, an undecodable body — is
+    /// dropped: neither caller is reacting to it, and the badge refresh and the
+    /// consumptions behind it are still worth running. A 401 is not that. It is the
+    /// server saying this session is over, and both callers gate non-idempotent work
+    /// on the answer — `consumePendingBuddyInviteIfNeeded` clears the pending token
+    /// *before* the join it can no longer complete — so an authoritative rejection
+    /// signs out and returns `nil`, as in `performReconnectRefresh`, rather than
+    /// letting that work be spent against a session that is already gone.
     ///
     /// - Parameter generation: `authGeneration` as it was when the caller decided to
     ///   refresh.
@@ -1511,7 +1518,26 @@ final class AppViewModel {
         // records when this read left. The queue turn is what makes the response the
         // newest word; the ticket is the backstop (#697).
         let settingsTicket = nextSettingsRequestTicket()
-        guard let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+        let user: UserDTO
+        do {
+            guard let fetched = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+                // `me()` returns nil for exactly one case: a 401 that is not
+                // `TOKEN_EXPIRED`. The server has rejected this session, so the work
+                // the caller gates on this answer must not run against it.
+                guard generation == authGeneration else { return nil }
+                applySignedOut(cause: .signedOut, message: nil)
+                return nil
+            }
+            user = fetched
+        } catch let apiError as APIError where apiError.status == 401 {
+            // The other authoritative shape: `TOKEN_EXPIRED` is thrown rather than
+            // returned. Same answer, and the same generation guard as the success
+            // path — a 401 for the *previous* session must not sign out an account
+            // that has since signed in.
+            guard generation == authGeneration else { return nil }
+            applySignedOut(cause: .unauthorized, message: apiError.message)
+            return nil
+        } catch {
             // A read that never landed is not a reason to skip the badge refresh and
             // the deep-link consumptions, and never was.
             return generation
