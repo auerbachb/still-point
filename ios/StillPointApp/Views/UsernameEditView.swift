@@ -24,8 +24,12 @@ struct UsernameEditView: View {
     @State private var usernameDraft = ""
     @State private var usernameFieldError: String?
     @State private var usernameSuccessMessage: String?
-
     private var isSaving: Bool { updating || savingUsername }
+
+    /// What the account says. Nothing shadows it: settings writes are serialized
+    /// (#697), so `currentUser` can only lag a rename while that rename is still in
+    /// flight — and the whole block is disabled for exactly that long.
+    private var displayedUsername: String { user.username }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -46,7 +50,7 @@ struct UsernameEditView: View {
                 HStack(spacing: SPSpacing.s2) {
                     Button {
                         Task { @MainActor in
-                            await saveUsername(currentUsername: user.username)
+                            await saveUsername(currentUsername: displayedUsername)
                         }
                     } label: {
                         Text(savingUsername ? "Saving…" : "Save")
@@ -58,7 +62,7 @@ struct UsernameEditView: View {
                     .accessibilityIdentifier("settings.usernameSaveButton")
 
                     Button("Cancel") {
-                        cancelUsernameEdit(savedUsername: user.username)
+                        cancelUsernameEdit(savedUsername: displayedUsername)
                     }
                     .font(SPFont.mono(11, weight: .medium))
                     .tracking(2)
@@ -79,13 +83,13 @@ struct UsernameEditView: View {
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg3))
                     Spacer(minLength: SPSpacing.s2)
-                    Text(user.username)
+                    Text(displayedUsername)
                         .font(SPFont.mono(13))
                         .foregroundStyle(Color(SPColor.fg))
                         .lineLimit(1)
                         .accessibilityIdentifier("settings.usernameDisplay")
                     Button("Edit") {
-                        beginUsernameEdit(savedUsername: user.username)
+                        beginUsernameEdit(savedUsername: displayedUsername)
                     }
                     .font(SPFont.mono(10, weight: .medium))
                     .tracking(2)
@@ -105,7 +109,7 @@ struct UsernameEditView: View {
         }
         .onAppear {
             if !editingUsername {
-                usernameDraft = user.username
+                usernameDraft = displayedUsername
             }
         }
         .onChange(of: appVM.currentUser?.username) { _, newValue in
@@ -149,22 +153,43 @@ struct UsernameEditView: View {
         savingUsername = true
         defer { savingUsername = false }
 
-        do {
-            // Captured before the await: a response that outlived a sign-out must
-            // not be applied to the next session (#665).
-            let identityAtStart = appVM.identityGeneration
-            let updated = try await APIClient.shared.updateSettings(username: trimmed)
-            // If the view model discarded the response because the session changed
-            // under us, do not tell the user their username was updated (#665).
-            guard appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) else { return }
-            usernameDraft = updated.username
-            editingUsername = false
-            usernameSuccessMessage = "Username updated"
-        } catch let error as APIError {
-            usernameFieldError = Self.message(for: error)
-        } catch {
-            usernameFieldError = "Could not update username. Please try again."
-        }
+        // Captured before the rename takes its place in line: a response that
+        // outlived a sign-out must not be applied to the next session (#665).
+        let identityAtStart = appVM.identityGeneration
+        // Enqueued at the moment the user tapped Save, so this rename is sent after
+        // every settings change they made before it and before every one they make
+        // after — no toggle response can land last and put the old name back (#697).
+        // Awaited so `savingUsername` above stays true, and the controls stay
+        // disabled, for the whole time the rename is queued as well as in flight.
+        await appVM.enqueueSettingsWrite {
+            do {
+                // Re-checked after the wait for the same reason the capture exists:
+                // the session can end while this is queued behind another save.
+                guard identityAtStart == appVM.identityGeneration else { return }
+                // Taken immediately before the request, so it records when this left
+                // and outranks the `me()` reads racing it (#697/#709). Ordering
+                // against the other settings mutations is the queue's job.
+                let settingsTicket = appVM.nextSettingsRequestTicket()
+                let updated = try await APIClient.shared.updateSettings(username: trimmed)
+                // If the view model discarded the response because the session changed
+                // under us, do not tell the user their username was updated (#665).
+                // Otherwise it is adopted — nothing else can be in flight to supersede
+                // it — so the account itself now reports this name and the display
+                // below cannot contradict the success message.
+                guard appVM.applySettingsUser(
+                    updated,
+                    startedAtGeneration: identityAtStart,
+                    requestTicket: settingsTicket
+                ) != .discarded else { return }
+                usernameDraft = updated.username
+                editingUsername = false
+                usernameSuccessMessage = "Username updated"
+            } catch let error as APIError {
+                usernameFieldError = Self.message(for: error)
+            } catch {
+                usernameFieldError = "Could not update username. Please try again."
+            }
+        }.value
     }
 
     private static func message(for error: APIError) -> String {

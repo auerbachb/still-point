@@ -156,7 +156,13 @@ struct SettingsView: View {
                         // that was live when the toggle was flipped, and still covers
                         // every later await — including the permission prompt (#665).
                         let identityAtStart = appVM.identityGeneration
-                        Task {
+                        // Enqueued here for the same reason, and one more: the camera
+                        // prompt below is an await of unbounded length. Taking this
+                        // save's place in line *after* the prompt would rank it behind
+                        // a rename the user made while the prompt was up, so the
+                        // opt-in's slower response could then revert that rename
+                        // (#697).
+                        appVM.enqueueSettingsWrite {
                             defer { isUpdatingAttentionTracking = false }
                             if newValue {
                                 let capability = await AttentionTrackingCapability.requestCameraAccessIfNeeded()
@@ -178,11 +184,23 @@ struct SettingsView: View {
                                 // otherwise apply the previous user's intent to the
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
+                                // Taken immediately before the request, so it records
+                                // when this left and outranks the `me()` reads racing
+                                // it (#697/#709). Ordering against the other settings
+                                // mutations is the queue's job, not the ticket's.
+                                let settingsTicket = appVM.nextSettingsRequestTicket()
                                 let updated = try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). Otherwise the
+                                // response is adopted — nothing else can be in flight to
+                                // supersede it — so the account now carries what the toggle
+                                // shows and the sync below is a no-op (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     attentionTrackingEnabled = !newValue
                                 }
                             } catch {
@@ -217,7 +235,13 @@ struct SettingsView: View {
                         // that was live when the toggle was flipped, and still covers
                         // every later await — including the permission prompt (#665).
                         let identityAtStart = appVM.identityGeneration
-                        Task {
+                        // Enqueued here for the same reason, and one more: the mic
+                        // prompt below is an await of unbounded length. Taking this
+                        // save's place in line *after* the prompt would rank it behind
+                        // a rename the user made while the prompt was up, so the
+                        // opt-in's slower response could then revert that rename
+                        // (#697).
+                        appVM.enqueueSettingsWrite {
                             defer { isUpdatingAmbientSound = false }
                             if newValue {
                                 let granted = await AVAudioApplication.requestRecordPermission()
@@ -232,11 +256,23 @@ struct SettingsView: View {
                                 // otherwise apply the previous user's intent to the
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
+                                // Taken immediately before the request, so it records
+                                // when this left and outranks the `me()` reads racing
+                                // it (#697/#709). Ordering against the other settings
+                                // mutations is the queue's job, not the ticket's.
+                                let settingsTicket = appVM.nextSettingsRequestTicket()
                                 let updated = try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). Otherwise the
+                                // response is adopted — nothing else can be in flight to
+                                // supersede it — so the account now carries what the toggle
+                                // shows and the sync below is a no-op (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     ambientSoundEnabled = !newValue
                                 }
                             } catch {
@@ -283,18 +319,34 @@ struct SettingsView: View {
                         // intent to them. Binding it here binds it to the identity
                         // that was live when the toggle was flipped (#665).
                         let identityAtStart = appVM.identityGeneration
-                        Task {
+                        // Enqueued alongside it, and for the matching reason: bound to
+                        // the moment the user flipped the toggle, so the mutations are
+                        // sent in the order the changes were made rather than racing
+                        // each other (#697).
+                        appVM.enqueueSettingsWrite {
                             defer { isUpdating = false }
                             do {
                                 // Re-checked before issuing the write: sending this would
                                 // otherwise apply the previous user's intent to the
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
+                                // Taken immediately before the request, so it records
+                                // when this left and outranks the `me()` reads racing
+                                // it (#697/#709). Ordering against the other settings
+                                // mutations is the queue's job, not the ticket's.
+                                let settingsTicket = appVM.nextSettingsRequestTicket()
                                 let updated = try await APIClient.shared.updateSettings(isPublic: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). Otherwise the
+                                // response is adopted — nothing else can be in flight to
+                                // supersede it — so the account now carries what the toggle
+                                // shows and the sync below is a no-op (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     isPublic = !newValue
                                 }
                             } catch {
@@ -338,18 +390,34 @@ struct SettingsView: View {
                         // intent to them. Binding it here binds it to the identity
                         // that was live when the toggle was flipped (#665).
                         let identityAtStart = appVM.identityGeneration
-                        Task {
+                        // Enqueued alongside it, and for the matching reason: bound to
+                        // the moment the user flipped the toggle, so the mutations are
+                        // sent in the order the changes were made rather than racing
+                        // each other (#697).
+                        appVM.enqueueSettingsWrite {
                             defer { isUpdatingAphorisms = false }
                             do {
                                 // Re-checked before issuing the write: sending this would
                                 // otherwise apply the previous user's intent to the
                                 // account that replaced them.
                                 guard identityAtStart == appVM.identityGeneration else { return }
+                                // Taken immediately before the request, so it records
+                                // when this left and outranks the `me()` reads racing
+                                // it (#697/#709). Ordering against the other settings
+                                // mutations is the queue's job, not the ticket's.
+                                let settingsTicket = appVM.nextSettingsRequestTicket()
                                 let updated = try await APIClient.shared.updateSettings(aphorismsEnabled: newValue)
                                 // A discarded response means the session changed; put the
                                 // toggle back rather than leaving it showing an intent that
-                                // was never applied (mirrors the catch below).
-                                if !appVM.applySettingsUser(updated, startedAtGeneration: identityAtStart) {
+                                // was never applied (mirrors the catch below). Otherwise the
+                                // response is adopted — nothing else can be in flight to
+                                // supersede it — so the account now carries what the toggle
+                                // shows and the sync below is a no-op (#697).
+                                if appVM.applySettingsUser(
+                                    updated,
+                                    startedAtGeneration: identityAtStart,
+                                    requestTicket: settingsTicket
+                                ) == .discarded {
                                     aphorismsEnabled = !newValue
                                 }
                             } catch {
@@ -515,12 +583,36 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings.notificationsLink")
     }
 
+    /// Copies the account onto the controls, skipping any control whose own save is
+    /// still in flight.
+    ///
+    /// Serializing the settings writes (#697) means `currentUser` can disagree with a
+    /// control for exactly one reason: that control's own save has not come back yet,
+    /// so the account still reports the value the user just replaced. Copying it over
+    /// the control would revert the user's change on screen until the response landed
+    /// — which any *other* field changing (a `me()` read, a save on another control)
+    /// can trigger at any moment. Skipping those, and only those, needs no shadow copy
+    /// of the confirmed value and no rule for when to stop trusting one: the flag is
+    /// live for exactly as long as the save is, and it is the same flag that disables
+    /// the control, so the user cannot have moved it in the meantime. Once it clears,
+    /// the response has already been adopted (or the control explicitly reverted), so
+    /// the account is what the control should show.
     private func syncFromCurrentUser() {
-        isPublic = appVM.currentUser?.isPublic ?? false
-        aphorismsEnabled = appVM.currentUser?.aphorismsEnabled ?? false
         sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
-        attentionTrackingEnabled = appVM.currentUser?.attentionTrackingEnabled ?? false
-        ambientSoundEnabled = appVM.currentUser?.ambientSoundEnabled ?? false
+        guard let user = appVM.currentUser else {
+            // No account left: fall back to the signed-out defaults (#665). Not
+            // skipped for an in-flight save — there is no account for it to describe,
+            // and its own identity guard will discard the response.
+            isPublic = false
+            aphorismsEnabled = false
+            attentionTrackingEnabled = false
+            ambientSoundEnabled = false
+            return
+        }
+        if !isUpdating { isPublic = user.isPublic }
+        if !isUpdatingAphorisms { aphorismsEnabled = user.aphorismsEnabled }
+        if !isUpdatingAttentionTracking { attentionTrackingEnabled = user.attentionTrackingEnabled }
+        if !isUpdatingAmbientSound { ambientSoundEnabled = user.ambientSoundEnabled }
     }
 
     private var appVersionFooter: String {
