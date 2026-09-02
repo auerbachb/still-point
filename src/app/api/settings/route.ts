@@ -10,6 +10,20 @@ import { eq } from "drizzle-orm";
 
 const USERNAME_TAKEN_ERROR = "Username already taken";
 
+/**
+ * The user projection returned by every PATCH response.
+ *
+ * This must stay COMPLETE and in step with the me / login / signup projections
+ * (`src/app/api/auth/{me,login,signup}/route.ts`). The web client merges
+ * responses per-field, so it tolerates an omission, but the iOS client adopts a
+ * settings response *wholesale* — replacing its cached identity with exactly
+ * these fields. Any user column missing here is therefore silently nulled on
+ * iOS by an unrelated settings toggle: dropping the recovery trio, for
+ * instance, made the recovery ramp badge vanish and today's duration jump back
+ * to full until the next `me()` (issue #664).
+ *
+ * Adding a user-facing column? Add it here too.
+ */
 const RETURN_FIELDS = {
   id: users.id,
   email: users.email,
@@ -21,6 +35,9 @@ const RETURN_FIELDS = {
   ambientSoundEnabled: users.ambientSoundEnabled,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
+  recoveryTargetDay: users.recoveryTargetDay,
+  recoveryCurrentStep: users.recoveryCurrentStep,
+  recoveryTotalSteps: users.recoveryTotalSteps,
 };
 
 export const PATCH = withApiHandler(

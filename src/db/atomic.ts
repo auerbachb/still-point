@@ -36,6 +36,9 @@ type UsernameUpdateResult =
         ambientSoundEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
+        recoveryTargetDay: number | null;
+        recoveryCurrentStep: number | null;
+        recoveryTotalSteps: number | null;
       };
     }
   | { ok: false; reason: "taken" | "not_found" };
@@ -61,6 +64,9 @@ export async function atomicUpdateUsername(params: {
           )`,
         ),
       )
+      // Keep in step with RETURN_FIELDS in src/app/api/settings/route.ts — the
+      // iOS client adopts a settings response wholesale, so an omitted column
+      // is nulled on the device (issue #664).
       .returning({
         id: users.id,
         email: users.email,
@@ -72,6 +78,9 @@ export async function atomicUpdateUsername(params: {
         ambientSoundEnabled: users.ambientSoundEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
+        recoveryTargetDay: users.recoveryTargetDay,
+        recoveryCurrentStep: users.recoveryCurrentStep,
+        recoveryTotalSteps: users.recoveryTotalSteps,
       });
 
     if (updated) {

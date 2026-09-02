@@ -766,10 +766,32 @@ final class AppViewModel {
         loginCatchUpTask?.cancel()
         loginCatchUpTask = Task { [weak self] in
             guard let self else { return }
+            // #664: missed-day gap detection — the thing that *starts* a recovery
+            // ramp — runs only in `GET /api/auth/me`, never in the login response.
+            // Without this read a returning user who signs in after a gap gets no
+            // ramp for the whole visit: no badge, and today's sit at full length
+            // rather than the ramped one, until some later foreground happens to
+            // call `me()`. Web re-fetches at the same point for the same reason
+            // (#238).
+            //
+            // Enqueued and ticketed like the other whole-`UserDTO` reads: sign-in
+            // lands on Home, where a settings write can start while this is in
+            // flight, and adopting either response out of order drops the other's
+            // fields (#697).
+            let refresh: Task<Int?, Never> = self.enqueueSettingsRead { [weak self] in
+                guard let self else { return nil }
+                return await self.refreshUserFromServer(startedAtGeneration: adopted)
+            }
+            // `nil` is the session being gone — replaced while the read was in
+            // flight, or rejected outright by it; everything below is
+            // identity-scoped, and the consumptions below are not idempotent. A read
+            // that merely failed returns the entry generation, so a flaky network
+            // still leaves the badge refresh and the consumptions to run.
+            guard let live = await refresh.value else { return }
             await self.refreshTracksDoneToday()
-            guard adopted == self.authGeneration else { return }
+            guard live == self.authGeneration else { return }
             self.syncWidgetData()
-            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
+            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: live)
             await self.consumePendingSessionDeepLinkIfNeeded()
             await self.consumePendingLogReasonIfNeeded()
         }
@@ -1455,7 +1477,7 @@ final class AppViewModel {
         // leaves, so its response is the newest word by construction.
         let read: Task<Int?, Never> = enqueueSettingsRead { [weak self] in
             guard let self else { return nil }
-            return await self.refreshUserAfterSit(startedAtGeneration: generation)
+            return await self.refreshUserFromServer(startedAtGeneration: generation)
         }
         // `nil` means the session that finished the sit is gone, so none of the
         // identity-scoped work below belongs to this call any more.
@@ -1469,14 +1491,25 @@ final class AppViewModel {
         await consumePendingLogReasonIfNeeded()
     }
 
-    /// The post-sit `me()` read, run from the settings queue.
+    /// A `me()` read that reconciles the account already on screen, run from the
+    /// settings queue. Shared by `returnHome()` (post-sit) and `didLogin` (#664).
     ///
-    /// - Parameter generation: `authGeneration` as it was when the sit ended.
-    /// - Returns: the generation the rest of `returnHome()` belongs to — the entry
+    /// A read that merely *fails* — no network, a 5xx, an undecodable body — is
+    /// dropped: neither caller is reacting to it, and the badge refresh and the
+    /// consumptions behind it are still worth running. A 401 is not that. It is the
+    /// server saying this session is over, and both callers gate non-idempotent work
+    /// on the answer — `consumePendingBuddyInviteIfNeeded` clears the pending token
+    /// *before* the join it can no longer complete — so an authoritative rejection
+    /// signs out and returns `nil`, as in `performReconnectRefresh`, rather than
+    /// letting that work be spent against a session that is already gone.
+    ///
+    /// - Parameter generation: `authGeneration` as it was when the caller decided to
+    ///   refresh.
+    /// - Returns: the generation the caller's remaining work belongs to — the entry
     ///   capture when the read did not land, or the live one after an adoption, so an
     ///   expected adoption is never mistaken for the session being replaced — or `nil`
     ///   when that session is gone and there is nothing left to finish.
-    private func refreshUserAfterSit(startedAtGeneration generation: Int) async -> Int? {
+    private func refreshUserFromServer(startedAtGeneration generation: Int) async -> Int? {
         // Re-checked now that the queue turn has arrived: waiting for a place in line
         // is an `await` like any other, so a sign-out or account switch may have landed
         // while a save ahead of us was still resolving (#665).
@@ -1485,14 +1518,40 @@ final class AppViewModel {
         // records when this read left. The queue turn is what makes the response the
         // newest word; the ticket is the backstop (#697).
         let settingsTicket = nextSettingsRequestTicket()
-        guard let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
-            // A read that never landed is not a reason to skip the badge refresh and
-            // the deep-link consumptions, and never was.
+        let user: UserDTO
+        do {
+            guard let fetched = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+                // `me()` returns nil for exactly one case: a 401 that is not
+                // `TOKEN_EXPIRED`. The server has rejected this session, so the work
+                // the caller gates on this answer must not run against it.
+                guard generation == authGeneration else { return nil }
+                applySignedOut(cause: .signedOut, message: nil)
+                return nil
+            }
+            user = fetched
+        } catch let apiError as APIError where apiError.status == 401 || apiError.status == 404 {
+            // The thrown authoritative shapes. 401 is `TOKEN_EXPIRED`, which `me()`
+            // throws rather than returning. 404 is `GET /api/auth/me`'s "User not
+            // found" (`src/app/api/auth/me/route.ts`): the session authenticated but
+            // its user row is gone, so the account is deleted, not unreachable.
+            // Same generation guard as the success path — a rejection belonging to
+            // the *previous* session must not sign out an account that has since
+            // signed in.
+            guard generation == authGeneration else { return nil }
+            applySignedOut(
+                cause: apiError.status == 401 ? .unauthorized : .signedOut,
+                message: apiError.message
+            )
+            return nil
+        } catch {
+            // Everything left is a read that never landed — no network, a 5xx, an
+            // undecodable body. Not a reason to skip the badge refresh and the
+            // deep-link consumptions, and never was.
             return generation
         }
         guard generation == authGeneration else { return nil }
-        // Finishing a sit re-confirms the account already on screen, so it enters the
-        // same ordering as the auth-path reads (#697). Adoption proper — a response
+        // This re-confirms the account already on screen, so it enters the same
+        // ordering as the auth-path reads (#697). Adoption proper — a response
         // naming a *different* account — keeps going through `applyAuthenticatedUser`:
         // there is nothing to order it against and the guard would read it as
         // `.discarded`.

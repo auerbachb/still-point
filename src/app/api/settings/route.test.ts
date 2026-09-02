@@ -21,8 +21,12 @@ vi.mock("@/db/schema", () => ({
     currentDay: "currentDay",
     aphorismsEnabled: "aphorismsEnabled",
     attentionTrackingEnabled: "attentionTrackingEnabled",
+    ambientSoundEnabled: "ambientSoundEnabled",
     dualTrackEnabled: "dualTrackEnabled",
     secondTrackDay: "secondTrackDay",
+    recoveryTargetDay: "recoveryTargetDay",
+    recoveryCurrentStep: "recoveryCurrentStep",
+    recoveryTotalSteps: "recoveryTotalSteps",
   },
 }));
 
@@ -229,6 +233,63 @@ describe("PATCH /api/settings", () => {
         isPublic: true,
         currentDay: 1,
         aphorismsEnabled: true,
+      },
+    });
+  });
+
+  // Issue #664: iOS adopts a settings response wholesale, so an omitted column
+  // is nulled on the device. The projection must carry the recovery trio.
+  test("returns the recovery columns in the PATCH projection", async () => {
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ isPublic: true }));
+
+    expect(res.status).toBe(200);
+    expect(dbUpdateReturning).toHaveBeenCalledTimes(1);
+    const projection = dbUpdateReturning.mock.calls[0]![0];
+    expect(projection).toMatchObject({
+      recoveryTargetDay: "recoveryTargetDay",
+      recoveryCurrentStep: "recoveryCurrentStep",
+      recoveryTotalSteps: "recoveryTotalSteps",
+    });
+  });
+
+  test("round-trips an active recovery ramp in the response body", async () => {
+    const storedRow: Record<string, unknown> = {
+      id: userId,
+      email: "user@example.com",
+      username: "existing",
+      isPublic: true,
+      currentDay: 3,
+      aphorismsEnabled: false,
+      attentionTrackingEnabled: false,
+      ambientSoundEnabled: false,
+      dualTrackEnabled: false,
+      secondTrackDay: 1,
+      recoveryTargetDay: 12,
+      recoveryCurrentStep: 2,
+      recoveryTotalSteps: 4,
+    };
+    // Project the stored row through whatever the route asked for, as the real
+    // driver does — otherwise a mock that echoes a fixed row would pass even
+    // with the recovery columns missing from RETURN_FIELDS.
+    dbUpdateReturning.mockImplementation((projection: Record<string, unknown>) =>
+      Promise.resolve([
+        Object.fromEntries(
+          Object.keys(projection).map((column) => [column, storedRow[column]]),
+        ),
+      ]),
+    );
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ ambientSoundEnabled: false }));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      user: {
+        recoveryTargetDay: 12,
+        recoveryCurrentStep: 2,
+        recoveryTotalSteps: 4,
       },
     });
   });

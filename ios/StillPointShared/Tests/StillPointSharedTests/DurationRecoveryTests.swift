@@ -136,6 +136,22 @@ final class DurationRecoveryTests: XCTestCase {
         )
     }
 
+    // MARK: - Recovery badge copy (#664)
+
+    /// Pins the badge string to the web's, character for character — the middle
+    /// dot is U+00B7, written `&middot;` in `src/components/HomeView.tsx`.
+    func testRecoveryProgressTextMatchesWebCopy() {
+        let recovery = DurationRecovery.ActiveRecovery(
+            recoveryTargetDay: 45,
+            recoveryCurrentStep: 3,
+            recoveryTotalSteps: 5
+        )
+        XCTAssertEqual(
+            DurationRecovery.recoveryProgressText(recovery),
+            "recovery 3/5 \u{00B7} ramping back to day 45"
+        )
+    }
+
     // MARK: - 10-second block rounding (#661)
 
     func testRoundToNearestBlockLeavesAlignedValuesUnchanged() {

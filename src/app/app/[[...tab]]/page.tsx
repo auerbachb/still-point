@@ -659,7 +659,18 @@ export default function StillPoint() {
     const generation = sessionGeneration.current;
     const { user: updated } = await api.enableDualTrack();
     if (generation !== sessionGeneration.current) return;
-    setUser(updated);
+    // Merged rather than replaced. Every other `setUser` on this page merges
+    // per-field; replacing wholesale silently nulls any column this route's
+    // projection happens to omit (today, `ambientSoundEnabled`). That is the
+    // same failure #664 hit on iOS, where the whole-response adoption is
+    // structural — here it is one call site, so merge and it cannot happen.
+    //
+    // A null `prev` stays null rather than being installed. The generation guard
+    // above catches an explicit logout, which bumps `sessionGeneration` — but the
+    // auth check's `signedOut` outcome clears `user` without bumping it, and
+    // installing this partial response there would resurrect an identity the app
+    // has already signed out, missing whatever the projection omits.
+    setUser((prev) => (prev ? { ...prev, ...updated } : prev));
     void refreshTodayTracks();
   }, [refreshTodayTracks]);
 

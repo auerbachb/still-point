@@ -88,6 +88,16 @@ public enum DurationRecovery {
         max(0, min(recoveryMaxSteps, targetDay - 1))
     }
 
+    /// The recovery-ramp badge copy, shared by both places iOS renders it.
+    ///
+    /// Pinned character-for-character to the web's badge in
+    /// `src/components/HomeView.tsx` — including the U+00B7 middle dot the web
+    /// writes as `&middot;` — so a founder comparing the two surfaces sees one
+    /// string, not two that drifted (#664).
+    public static func recoveryProgressText(_ recovery: ActiveRecovery) -> String {
+        "recovery \(recovery.recoveryCurrentStep)/\(recovery.recoveryTotalSteps) · ramping back to day \(recovery.recoveryTargetDay)"
+    }
+
     /// Rounds a duration (seconds) to the nearest whole 10-second block (#661).
     ///
     /// The session timer renders progress as `StillPoint.blockDuration`-second blocks
