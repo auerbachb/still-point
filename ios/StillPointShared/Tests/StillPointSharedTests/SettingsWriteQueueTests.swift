@@ -116,4 +116,43 @@ final class SettingsWriteQueueTests: XCTestCase {
         XCTAssertEqual(recorder.finished, [1, 2])
         XCTAssertEqual(recorder.peakConcurrency, 1)
     }
+
+    /// An operation's result reaches the caller through the returned task. This is
+    /// what lets a queued `me()` **read** report what it adopted, so the caller can
+    /// keep the control flow it had before it took a place in line (#697).
+    func testAnOperationsResultReachesTheCallerThroughItsTask() async {
+        let queue = SettingsWriteQueue()
+
+        let answer = await queue.enqueue { () -> Int? in
+            await simulateRoundTrip(yields: 2)
+            return 7
+        }.value
+
+        XCTAssertEqual(answer, 7)
+    }
+
+    /// A value-returning operation still holds the line: one that returns a result
+    /// must not let the operation behind it start early, or a read could be answered
+    /// out of order with the write it was queued against.
+    func testAValueReturningOperationStillOrdersTheOnesBehindIt() async {
+        let queue = SettingsWriteQueue()
+        let recorder = QueueRecorder()
+
+        let first = queue.enqueue { () -> Int in
+            recorder.begin()
+            await simulateRoundTrip(yields: 4)
+            recorder.end(1)
+            return 1
+        }
+        let second = queue.enqueue {
+            recorder.begin()
+            recorder.end(2)
+        }
+
+        let firstValue = await first.value
+        await second.value
+        XCTAssertEqual(firstValue, 1)
+        XCTAssertEqual(recorder.finished, [1, 2])
+        XCTAssertEqual(recorder.peakConcurrency, 1)
+    }
 }

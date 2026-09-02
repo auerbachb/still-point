@@ -215,12 +215,6 @@ final class AppViewModel {
         // awaiting `me()`, briefly exposing an intermediate or stale route.
         activeAuthCheckID &+= 1
         let checkID = activeAuthCheckID
-        // Taken before the `await`, as at every settings site: this read describes
-        // the account as of *now*, and a save the user makes while it is in flight
-        // has to outrank it (#697). Taken unconditionally even though only the
-        // re-confirmation branch below spends it — a ticket that goes unused leaves
-        // a gap and nothing else.
-        let settingsTicket = nextSettingsRequestTicket()
         isLoading = true
         defer {
             if checkID == activeAuthCheckID { isLoading = false }
@@ -235,6 +229,35 @@ final class AppViewModel {
             }
         }
 
+        // Enqueued rather than run outright: this read adopts a whole `UserDTO`, so a
+        // settings save whose PATCH left first would otherwise supersede it and put
+        // that save's response — which may predate today's sit — into `currentUser`
+        // and the offline cache (#697). Awaited, because the routing and the overlay
+        // above both depend on the answer.
+        await enqueueSettingsRead { [weak self] in
+            guard let self else { return }
+            await self.performAuthCheck(startedAt: startedAt, generation: generation, checkID: checkID)
+        }.value
+    }
+
+    /// The body of `checkAuth()`, run from the settings queue.
+    ///
+    /// - Parameter startedAt: when the caller began, for the cold-start timing metric.
+    /// - Parameter generation: `authGeneration` as it was when the check was asked for.
+    /// - Parameter checkID: `activeAuthCheckID` as it was then, so a superseded check
+    ///   cannot route or sign out on behalf of a newer one.
+    private func performAuthCheck(startedAt: Date, generation: Int, checkID: Int) async {
+        // Re-checked now that the queue turn has arrived: waiting for a place in line
+        // is an `await` like any other, so a sign-out or account switch can have landed
+        // while a slower save ahead of us was still resolving, and neither this read
+        // nor the routing under it belongs to the session that replaced ours.
+        guard generation == authGeneration, checkID == activeAuthCheckID else { return }
+        // Taken here, immediately before the request, so it records when this read
+        // left rather than when it was asked for (#697). Taken unconditionally even
+        // though only the re-confirmation branch below spends it — a ticket that goes
+        // unused leaves a gap and nothing else.
+        let settingsTicket = nextSettingsRequestTicket()
+
         do {
             if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
                 // Paired with the check ID for the same reason as the terminal
@@ -245,15 +268,15 @@ final class AppViewModel {
                 // older call landing after the newest one finished would send a
                 // user who has since navigated back to the initial view.
                 guard generation == authGeneration, checkID == activeAuthCheckID else { return }
-                // Re-confirming the account already on screen is a `me()` *read*
-                // racing whatever settings saves are in flight, so it goes through
-                // the same ordering as those saves (#697): without it a scene
-                // activation overlapping a toggle would reinstate the pre-save
-                // `UserDTO` in `currentUser` and in the offline cache #665 reads on
-                // the next cold start. A superseded read changes nothing — a newer
-                // settings write already described this account, `isOfflineMode`
-                // included — so the side effects below still run either way; they
-                // are keyed to this being the newest check, not to the adoption.
+                // Re-confirming the account already on screen still goes through the
+                // settings ordering (#697). The queue turn above is what makes this
+                // response the newest word — no settings save can be in flight — so
+                // the guard is the backstop rather than the mechanism, and it is kept
+                // for the caller that reads the account without queueing. A superseded
+                // read would change nothing anyway: a newer settings write already
+                // described this account, `isOfflineMode` included, so the side effects
+                // below run either way; they are keyed to this being the newest check,
+                // not to the adoption.
                 if currentUser?.id == user.id {
                     applySettingsResponse(
                         user,
@@ -549,9 +572,27 @@ final class AppViewModel {
         // Applying it would resurrect a signed-out account *and* re-save the cached
         // identity `applySignedOut` just tore down via `clearIfAuthoritative` (#676).
         let generation = authGeneration
+        // Enqueued for the same reason as `checkAuth()`: this read adopts a whole
+        // `UserDTO`, and a settings save whose PATCH left first would otherwise
+        // supersede it wholesale (#697).
+        await enqueueSettingsRead { [weak self] in
+            guard let self else { return }
+            await self.performReconnectRefresh(startedAtGeneration: generation)
+        }.value
+    }
+
+    /// The body of `refreshAfterReconnect()`, run from the settings queue.
+    ///
+    /// - Parameter generation: `authGeneration` as it was when the reconnect fired.
+    private func performReconnectRefresh(startedAtGeneration generation: Int) async {
+        // Re-checked now that the queue turn has arrived, as in `performAuthCheck`:
+        // the wait is an `await`, so the session that asked for this refresh may be
+        // gone, and applying the response would resurrect it (#665).
+        guard generation == authGeneration else { return }
         // Same reasoning as `checkAuth()`: this is a read of an account already
-        // adopted (the entry guard above proves it), so it must not outrank a
-        // settings save the user made after it left (#697).
+        // adopted, taken immediately before the request so it records when the read
+        // left. The queue turn already makes it the newest word; the ticket is the
+        // backstop (#697).
         let settingsTicket = nextSettingsRequestTicket()
         do {
             guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
@@ -745,14 +786,34 @@ final class AppViewModel {
         settingsWrites.enqueue(operation)
     }
 
+    /// Runs a whole-account `me()` read on the same queue as the mutations (#697).
+    ///
+    /// The three reads that adopt a whole `UserDTO` — `checkAuth()`,
+    /// `refreshAfterReconnect()` and `returnHome()` — are enqueued rather than left to
+    /// overlap, because a ticket cannot settle a write that left *before* the read: no
+    /// number says whether that write committed before or after the read's snapshot,
+    /// so `StaleResponseGuard` breaks the tie in the write's favour and adopts its
+    /// whole response, dropping the server-derived fields (`currentDay`, the recovery
+    /// ramp, `secondTrackDay`) the read existed to refresh. Waiting for the queue
+    /// removes the tie instead of deciding it.
+    ///
+    /// The wait is an `await` like any other, so re-check the identity generation as
+    /// the operation's first statement: a queue turn can arrive under the account that
+    /// replaced the one that asked.
+    @discardableResult
+    func enqueueSettingsRead<T: Sendable>(_ operation: @escaping @Sendable @MainActor () async -> T) -> Task<T, Never> {
+        settingsWrites.enqueue(operation)
+    }
+
     /// Ticket ranking one settings request against the `me()` reads racing it (#697,
     /// #709).
     ///
     /// Take it immediately before the request's own `await`, so it records when the
-    /// request left. Ordering *between* mutations is `enqueueSettingsWrite`'s job, not
-    /// this one's: two settings writes are never in flight together, so the only race
-    /// a ticket still settles is a read that left before a write committed and landed
-    /// after it.
+    /// request left. Ordering is `enqueueSettingsWrite`/`enqueueSettingsRead`'s job,
+    /// not this one's: the queue lets only one settings request be in flight at a
+    /// time, reads included, so every response is already the newest word when it
+    /// lands. The ticket stays as the backstop for any future caller that reads the
+    /// account without taking a place in line.
     ///
     /// A ticket whose request never returns (a permission denial that bails out
     /// before the PATCH) is simply never handed back; it leaves a gap and nothing
@@ -778,9 +839,12 @@ final class AppViewModel {
         /// longer the newest word. Nothing is reverted and nothing is reported as
         /// failed — where this is a write, the server did commit it.
         ///
-        /// Reachable for a `me()` **read** that a save overtook. Not reachable for a
-        /// write any more: `enqueueSettingsWrite` lets only one mutation be in flight
-        /// at a time, so a write always outranks every write applied before it.
+        /// Not reachable from any current caller: `enqueueSettingsWrite` and
+        /// `enqueueSettingsRead` share one queue, so a settings request — read or
+        /// write — never overlaps another and always outranks everything applied
+        /// before it. Kept because it is the honest answer for a caller that reads the
+        /// account without taking a place in line, and because the two rejections
+        /// still call for opposite UI if one ever appears.
         case superseded
 
         /// The response belongs to a session that is gone — signed out, or another
@@ -975,7 +1039,8 @@ final class AppViewModel {
         // write.
         let identityAtStart = authGeneration
         await settingsWrites.enqueue { [weak self] in
-            await self?.performEnableDualTrack(startedAtGeneration: identityAtStart)
+            guard let self else { return }
+            await self.performEnableDualTrack(startedAtGeneration: identityAtStart)
         }.value
     }
 
@@ -1327,42 +1392,25 @@ final class AppViewModel {
                 print("Failed to flush offline session queue: \(error)")
             }
         }
-        // Starts equal to the entry capture and is refreshed if we adopt a user, so
-        // an expected adoption is never mistaken for the session being replaced.
-        var adopted = generation
-        // Taken here rather than at the top, unlike `checkAuth()` and
-        // `refreshAfterReconnect()` where the two positions coincide: the flush above
-        // is a *different* request's `await`, and the ticket has to record when this
-        // read left (#697). Taking it at entry would rank it below any save made from
-        // Home while the flush ran — `currentView` is set to `.home` on the first line,
-        // so the user is already interactive there — and a read superseded that way
-        // drops the post-sit refresh this `me()` exists for. Ranking it here keeps
-        // that refresh and is still safe: an accepted `.write` supersedes every ticket
-        // outstanding, so a save racing this read wins whichever took the lower number.
-        let settingsTicket = nextSettingsRequestTicket()
-        if let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
-            guard generation == authGeneration else { return }
-            // Finishing a sit re-confirms the account already on screen, so it is a
-            // `me()` *read* racing whatever settings save is in flight and enters the
-            // same ordering as the auth-path reads (#697). Without it, a read that
-            // left before a slow PATCH committed and landed after it reinstates the
-            // pre-save `UserDTO` in `currentUser` and re-saves it to the cache #665
-            // reads on the next offline launch — the revert this PR exists to stop.
-            // Adoption proper, a response naming a *different* account, keeps going
-            // through `applyAuthenticatedUser`: there is nothing to order it against
-            // and the guard would read it as `.discarded`.
-            if currentUser?.id == user.id {
-                applySettingsResponse(
-                    user,
-                    startedAtGeneration: generation,
-                    requestTicket: settingsTicket,
-                    responseKind: .read
-                )
-            } else {
-                applyAuthenticatedUser(user)
-            }
-            adopted = authGeneration
+        // Enqueued rather than issued straight away. `currentView` is set to `.home`
+        // on this function's first line, so the user is interactive on Home for the
+        // whole flush above and "Add second track" can start a settings write from
+        // there. A ticket cannot settle that: the opt-in's PATCH left *first*, and an
+        // accepted `.write` sets `applied = issued` (`StaleResponseGuard`), so its
+        // response supersedes this read whichever of the two took the lower number.
+        // If that PATCH left before the sit committed, adopting it wholesale drops the
+        // post-sit `currentDay` and recovery ramp this `me()` exists to fetch, and
+        // `applyAuthenticatedUser` re-saves the stale snapshot to the cache #665 reads
+        // on the next offline launch. Taking a place in line removes the ambiguity
+        // instead of deciding it: no settings write is outstanding when this read
+        // leaves, so its response is the newest word by construction.
+        let read: Task<Int?, Never> = enqueueSettingsRead { [weak self] in
+            guard let self else { return nil }
+            return await self.refreshUserAfterSit(startedAtGeneration: generation)
         }
+        // `nil` means the session that finished the sit is gone, so none of the
+        // identity-scoped work below belongs to this call any more.
+        guard let adopted = await read.value else { return }
         await refreshTracksDoneToday()
         // As in `refreshAfterReconnect`: re-checked because the refresh above is a
         // suspension point, and consuming the invite burns a token against whatever
@@ -1370,6 +1418,46 @@ final class AppViewModel {
         guard adopted == authGeneration else { return }
         await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
         await consumePendingLogReasonIfNeeded()
+    }
+
+    /// The post-sit `me()` read, run from the settings queue.
+    ///
+    /// - Parameter generation: `authGeneration` as it was when the sit ended.
+    /// - Returns: the generation the rest of `returnHome()` belongs to — the entry
+    ///   capture when the read did not land, or the live one after an adoption, so an
+    ///   expected adoption is never mistaken for the session being replaced — or `nil`
+    ///   when that session is gone and there is nothing left to finish.
+    private func refreshUserAfterSit(startedAtGeneration generation: Int) async -> Int? {
+        // Re-checked now that the queue turn has arrived: waiting for a place in line
+        // is an `await` like any other, so a sign-out or account switch may have landed
+        // while a save ahead of us was still resolving (#665).
+        guard generation == authGeneration else { return nil }
+        // Taken immediately before the request, as at every other settings site, so it
+        // records when this read left. The queue turn is what makes the response the
+        // newest word; the ticket is the backstop (#697).
+        let settingsTicket = nextSettingsRequestTicket()
+        guard let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+            // A read that never landed is not a reason to skip the badge refresh and
+            // the deep-link consumptions, and never was.
+            return generation
+        }
+        guard generation == authGeneration else { return nil }
+        // Finishing a sit re-confirms the account already on screen, so it enters the
+        // same ordering as the auth-path reads (#697). Adoption proper — a response
+        // naming a *different* account — keeps going through `applyAuthenticatedUser`:
+        // there is nothing to order it against and the guard would read it as
+        // `.discarded`.
+        if currentUser?.id == user.id {
+            applySettingsResponse(
+                user,
+                startedAtGeneration: generation,
+                requestTicket: settingsTicket,
+                responseKind: .read
+            )
+        } else {
+            applyAuthenticatedUser(user)
+        }
+        return authGeneration
     }
 
     /// - Parameter generation: `authGeneration` as it was when the caller decided

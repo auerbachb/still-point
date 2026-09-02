@@ -1,4 +1,5 @@
-/// Runs settings mutations one at a time, in the order the user made them (#697).
+/// Runs settings mutations — and the whole-account reads that race them — one at a
+/// time, in the order the user made them (#697).
 ///
 /// Issue #697 offers two ways to stop a slower save from reverting a newer one:
 /// serialize the writes, or tag each request and reject a response older than the
@@ -13,9 +14,18 @@
 /// *after* every earlier mutation committed. Responses are therefore adopted in
 /// order, and complete, by construction rather than by inspection.
 ///
-/// Ordering between a write and a concurrent `me()` **read** is a different problem
-/// and is not this type's job: a read can leave before a write commits and land after
-/// it, so reads still rank against writes through ``StaleResponseGuard`` (#709).
+/// **Whole-account reads belong here too.** A `me()` read that overlaps a write is
+/// the same inversion wearing the other hat, and tickets alone cannot settle it: when
+/// a write's request left *first*, nothing in the ticket order says whether it
+/// committed before or after the read's snapshot, so ``StaleResponseGuard`` has to
+/// resolve the tie in the write's favour and adopt its whole `UserDTO` — discarding
+/// the server-derived fields the read existed to refresh. Enqueuing the read removes
+/// the tie rather than deciding it: the read starts only once every earlier write has
+/// applied, so its response is the newest word by construction, and the guard's
+/// read/write asymmetry becomes belt-and-braces rather than load-bearing.
+///
+/// What stays outside is a *partial* read — one that fetches something other than the
+/// account — since it cannot contradict a settings write in the first place.
 ///
 /// Enqueue at the moment the user acts, and put every `await` the mutation needs —
 /// including a permission prompt — inside the operation. That way the queue records
@@ -47,22 +57,26 @@ public final class SettingsWriteQueue {
     /// Returns immediately: the caller keeps its place in line without blocking the
     /// main actor, so a toggle stays responsive while its save waits its turn.
     ///
-    /// - Returns: the operation's task, for a caller that needs to await its own
-    ///   completion. Discardable — most callers report progress through their own
-    ///   state instead.
+    /// - Returns: the operation's task, carrying whatever the operation returned, for
+    ///   a caller that needs to await its own turn or act on its result. Discardable —
+    ///   most callers report progress through their own state instead.
     @discardableResult
-    public func enqueue(_ operation: @escaping @Sendable @MainActor () async -> Void) -> Task<Void, Never> {
+    public func enqueue<T: Sendable>(_ operation: @escaping @Sendable @MainActor () async -> T) -> Task<T, Never> {
         let predecessor = tail
         let task = Task { @MainActor in
             // A cancelled or already-finished predecessor returns here at once, so a
             // write that failed cannot strand the ones behind it.
             await predecessor?.value
-            await operation()
+            return await operation()
         }
+        // The chain is kept as `Task<Void, Never>` so operations of different result
+        // types can queue behind one another; waiting on this wrapper is waiting on
+        // `task` itself, since that is all the wrapper does.
+        //
         // Assigned before returning to the caller, and nothing above can suspend, so
         // the next `enqueue` on this main-actor turn already sees this operation as
         // the one to wait for.
-        tail = task
+        tail = Task { @MainActor in _ = await task.value }
         return task
     }
 }
