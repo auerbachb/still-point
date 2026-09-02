@@ -443,6 +443,39 @@ final class AppViewModel {
     /// adopted yet" from "that session is gone" (#665).
     private var settingsOrdering = StaleResponseGuard()
 
+    /// Orders the `getTracksDoneToday` responses against each other (#699).
+    ///
+    /// Six callers reach `refreshTracksDoneToday()` — `checkAuth()`,
+    /// `refreshAfterReconnect()`, `returnHome()`, `performEnableDualTrack()`, and
+    /// the offline and login catch-up tasks — and nothing serializes them. The
+    /// three task-backed ones cancel only their *own* predecessor, the other three
+    /// are awaited inline with no handle at all, and the query is deliberately left
+    /// outside the settings queue because it hits a different endpoint. So two
+    /// refreshes for the same account and the same local day overlap routinely, and
+    /// the one that returns second is not the one that left second.
+    ///
+    /// A superseded response then writes twice over: it *assigns* the Home badges,
+    /// so `primaryDoneToday` / `secondDoneToday` go true -> false and un-check a
+    /// card the user has already earned, and it persists that view to the widget
+    /// snapshot. Its failure path is worse — it clears both badges to fail closed,
+    /// on top of a newer success.
+    ///
+    /// Its own guard rather than `settingsOrdering`: that one orders whole-`UserDTO`
+    /// adoptions, and a guard is per *subject*, so sharing it would let a Settings
+    /// PATCH bar a badge refresh and a badge refresh bar a PATCH.
+    ///
+    /// Neither existing generation covers this. `authGeneration` answers "is this
+    /// still the same account?", and every refresh racing here is the same account.
+    /// `WidgetData.writeGeneration` (#678) orders *store writes* across an await —
+    /// which is why `refreshWidgetWeekHistory()` uses it — but the Home badges are
+    /// in-memory state the store cannot see, and `syncWidgetData()` re-reads the
+    /// stored snapshot synchronously anyway, so nothing there is stale to merge
+    /// against. The staleness starts a layer above the store and has to stop there.
+    ///
+    /// Always a `.read`: the query observes today's completions and commits
+    /// nothing, so it is authoritative for the moment it left and nothing later.
+    private var tracksDoneOrdering = StaleResponseGuard()
+
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
     private func applyAuthenticatedUser(_ user: UserDTO) {
@@ -1154,6 +1187,11 @@ final class AppViewModel {
         // so a response that outlived its session cannot repaint badges or persist
         // a widget snapshot for an account that has signed out or been switched.
         let generation = authGeneration
+        // #699: and a ticket for *this* refresh, taken before the request so it
+        // records when this one left rather than when its answer happened to
+        // arrive. The generation above cannot stand in — the refreshes racing here
+        // all describe the same account, which is exactly the case it ignores.
+        let ticket = tracksDoneOrdering.nextTicket()
         let now = Date()
         // Two rollovers, because they cover different evidence. The stamp-based
         // one below knows what *this process* claimed and when; the snapshot-based
@@ -1175,7 +1213,11 @@ final class AppViewModel {
         let today = dateFormatter.string(from: Date())
         do {
             let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
-            guard generation == authGeneration else { return }
+            // Identity first, deliberately: a response that outlived its session is
+            // not evidence about *this* one, and short-circuiting keeps it from
+            // advancing the barrier against the refresh that is still live.
+            guard generation == authGeneration,
+                  tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
             primaryDoneToday = tracksDoneToday.primary
             secondDoneToday = tracksDoneToday.second
             if primaryDoneToday {
@@ -1201,7 +1243,13 @@ final class AppViewModel {
             // Note the success path above only ever raises these flags, never
             // lowers them; the failure path must not be the one exception.
             // Midnight rollover is already handled at the top of this method.
-            guard generation == authGeneration else { return }
+            //
+            // Ticketed like the success path (#699), because failing closed is only
+            // right for the *newest* word on today. An absent answer says nothing
+            // the server has since confirmed is wrong, so a refresh that a later
+            // one already superseded must not clear badges that newer one just set.
+            guard generation == authGeneration,
+                  tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
             // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
             // deliberately keeps the badges when a session is running, and it
             // schedules this catch-up moments later against the same dead network
@@ -1213,8 +1261,12 @@ final class AppViewModel {
                 secondDoneToday = false
             }
         }
-        // Both branches above return early on a generation change, so reaching
-        // here means the session that started this request is still the live one.
+        // Both branches above return early on a generation change or a superseded
+        // ticket, so reaching here means this refresh is both the live session's and
+        // the newest word on today. A superseded one skips these two with nothing
+        // lost: the refresh that outranked it makes the same calls from a strictly
+        // fresher answer, and drops the `getSessions()` backfill this one would
+        // otherwise pay for a second time.
         syncWidgetData()
         refreshWidgetWeekHistory()
     }

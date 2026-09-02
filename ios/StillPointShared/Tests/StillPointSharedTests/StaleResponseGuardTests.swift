@@ -181,4 +181,77 @@ final class StaleResponseGuardTests: XCTestCase {
 
         XCTAssertTrue(first.shouldApply(ticket: firstTicket, from: .read))
     }
+
+    // MARK: - #699: overlapping `refreshTracksDoneToday()` responses
+    //
+    // Every test above pits a read against a *write*. The `getTracksDoneToday`
+    // race has no write in it at all: six callers issue the same observation of
+    // the same account on the same local day, nothing serializes them, and the
+    // one that returns second is not the one that left second. These pin the
+    // all-reads ordering `refreshTracksDoneToday()` now depends on.
+
+    /// The #699 race itself. A superseded refresh *assigns* the Home badges from
+    /// its pre-flush view, so letting it land un-checks a card the user earned.
+    func testSupersededRefreshIsDroppedWhenEveryRequestIsARead() {
+        var ordering = StaleResponseGuard()
+        let superseded = ordering.nextTicket()
+        let newest = ordering.nextTicket()
+
+        XCTAssertTrue(ordering.shouldApply(ticket: newest, from: .read))
+        XCTAssertFalse(
+            ordering.shouldApply(ticket: superseded, from: .read),
+            "it left first, so its answer predates the newer one's"
+        )
+    }
+
+    /// ...and the reason this is a ticketed guard rather than a bare "is my ID
+    /// still the latest?" counter. Two refreshes overlap and drain *in* order:
+    /// the first is still the newest thing applied when it lands, so it must
+    /// apply. A latest-ID-wins counter would discard it and leave the badges
+    /// stale for the rest of the second refresh's flight.
+    func testOverlappingRefreshesBothApplyWhenTheyLandInOrder() {
+        var ordering = StaleResponseGuard()
+        let first = ordering.nextTicket()
+        let second = ordering.nextTicket()
+
+        XCTAssertTrue(
+            ordering.shouldApply(ticket: first, from: .read),
+            "nothing newer has landed yet, so this is still the freshest word"
+        )
+        XCTAssertTrue(ordering.shouldApply(ticket: second, from: .read))
+    }
+
+    /// The failure path. `refreshTracksDoneToday()` fails closed by clearing both
+    /// Home badges, which is right only for the newest refresh: an absent answer
+    /// is not the server contradicting the success that just landed.
+    func testStaleRefreshFailureCannotClearWhatANewerRefreshSet() {
+        var ordering = StaleResponseGuard()
+        let slowRefresh = ordering.nextTicket()
+        let newestRefresh = ordering.nextTicket()
+
+        XCTAssertTrue(ordering.shouldApply(ticket: newestRefresh, from: .read))
+        XCTAssertFalse(
+            ordering.shouldApply(ticket: slowRefresh, from: .read),
+            "a superseded refresh must not fail closed over a newer success"
+        )
+    }
+
+    /// All six callers of `refreshTracksDoneToday()` in flight at once, draining
+    /// scrambled: each response applies only while nothing newer already has.
+    func testOnlyTheNewestRefreshSticksAcrossAllSixCallers() {
+        var ordering = StaleResponseGuard()
+        let checkAuth = ordering.nextTicket()
+        let offlineCatchUp = ordering.nextTicket()
+        let reconnect = ordering.nextTicket()
+        let loginCatchUp = ordering.nextTicket()
+        let enableDualTrack = ordering.nextTicket()
+        let returnHome = ordering.nextTicket()
+
+        XCTAssertTrue(ordering.shouldApply(ticket: reconnect, from: .read))
+        XCTAssertFalse(ordering.shouldApply(ticket: checkAuth, from: .read))
+        XCTAssertFalse(ordering.shouldApply(ticket: offlineCatchUp, from: .read))
+        XCTAssertTrue(ordering.shouldApply(ticket: returnHome, from: .read), "the newest sit wins")
+        XCTAssertFalse(ordering.shouldApply(ticket: loginCatchUp, from: .read))
+        XCTAssertFalse(ordering.shouldApply(ticket: enableDualTrack, from: .read))
+    }
 }
