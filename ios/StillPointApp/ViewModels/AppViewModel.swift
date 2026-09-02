@@ -719,60 +719,47 @@ final class AppViewModel {
     /// `applySettingsUser(_:startedAtGeneration:requestTicket:)`.
     var identityGeneration: Int { authGeneration }
 
-    /// Ticket ordering one settings mutation against every other one in flight
-    /// (#697).
+    /// Serializes every settings mutation in the app against every other one (#697).
     ///
-    /// Take it at the moment the user acts — alongside `identityGeneration`, and
-    /// ahead of *every* `await`, including a permission prompt — so it records the
-    /// order the user expressed their intent in rather than the order the requests
-    /// happened to be scheduled or answered in. A ticket taken after a prompt would
-    /// rank a toggle the user flipped first behind a rename they made while the
-    /// prompt was up, which is the inversion this exists to stop.
+    /// Issue #697 offers two mechanisms — serialize the writes, or tag each request
+    /// and reject a response older than the latest applied mutation. This is the
+    /// first, and it is the one that holds: with only one write in flight at a time,
+    /// each response describes the account *after* every earlier mutation committed,
+    /// so responses are adopted in intent order and are complete by construction.
+    /// See ``SettingsWriteQueue``.
+    private let settingsWrites = SettingsWriteQueue()
+
+    /// Runs a settings mutation once every mutation enqueued before it has finished.
+    ///
+    /// Call this at the moment the user acts and put the *whole* round trip inside —
+    /// every `await` the mutation needs, including a permission prompt, and the
+    /// `applySettingsUser` that adopts its response. Enqueuing is what records the
+    /// order the user expressed their intent in; taking the ticket, prompting, or
+    /// sending outside the operation would let a later intent overtake an earlier
+    /// one, which is the inversion #697 exists to stop.
+    /// - Returns: the operation's task, for a caller that must not finish before its
+    ///   own save has. Discardable — a toggle reports progress through its own state
+    ///   instead.
+    @discardableResult
+    func enqueueSettingsWrite(_ operation: @escaping @Sendable @MainActor () async -> Void) -> Task<Void, Never> {
+        settingsWrites.enqueue(operation)
+    }
+
+    /// Ticket ranking one settings request against the `me()` reads racing it (#697,
+    /// #709).
+    ///
+    /// Take it immediately before the request's own `await`, so it records when the
+    /// request left. Ordering *between* mutations is `enqueueSettingsWrite`'s job, not
+    /// this one's: two settings writes are never in flight together, so the only race
+    /// a ticket still settles is a read that left before a write committed and landed
+    /// after it.
     ///
     /// A ticket whose request never returns (a permission denial that bails out
     /// before the PATCH) is simply never handed back; it leaves a gap and nothing
-    /// else. A gap can only make the overlap test below answer "yes" when the
-    /// answer was "no" — one extra reconciling read, never a missed one.
+    /// else, since the guard only ever compares tickets for rank.
     func nextSettingsRequestTicket() -> Int {
-        let ticket = settingsOrdering.nextTicket()
-        latestIssuedSettingsTicket = ticket
-        return ticket
+        settingsOrdering.nextTicket()
     }
-
-    /// Highest ticket `nextSettingsRequestTicket()` has handed out.
-    ///
-    /// Mirrored here rather than read back off the guard because it answers a
-    /// question the guard does not: not "is this response still the newest word?"
-    /// but "did anything else leave after this request did?" — which is how a
-    /// response that *won* the ordering can still be an incomplete snapshot. See
-    /// `applySettingsUser`.
-    private var latestIssuedSettingsTicket = 0
-
-    /// Ticket carried by the settings response most recently adopted into
-    /// `currentUser`.
-    ///
-    /// A view holding a value the server confirmed for its own save (see
-    /// `ConfirmedSettingHold`) releases that hold by ranking this against the hold's
-    /// barrier: a ticket above the barrier belongs to a request that departed after
-    /// the confirming response arrived, so it reflects the commit and is the account
-    /// genuinely catching up.
-    ///
-    /// Also the signal that an adoption *happened at all*. The per-field watchers in
-    /// `SettingsView` fire only when their field changes, so a reconciling read that
-    /// confirms what the local copy already says would never reach them and the hold
-    /// it was meant to settle would stand for the life of the view. Tickets are never
-    /// reused, so this changes on every adoption and a watcher on it fires on every
-    /// one.
-    ///
-    /// Zero until a settings response is adopted. Adoption proper — a cold start, or
-    /// any response naming a different account — goes through `applyAuthenticatedUser`
-    /// and does not order, so it deliberately leaves this alone.
-    private(set) var lastAppliedSettingsTicket = 0
-
-    /// Barrier for a hold on the value the most recently handled settings response
-    /// confirmed, or `nil` when that response needed no hold. Consumed by
-    /// `settingsHold(on:)`.
-    private var pendingSettingsHoldBarrier: Int?
 
     /// Why a settings response was or was not adopted.
     ///
@@ -787,9 +774,13 @@ final class AppViewModel {
         /// word on the account.
         case applied
 
-        /// The server committed this change, but a newer settings mutation has
-        /// already been applied, so this response is no longer the newest word.
-        /// Nothing is reverted and nothing is reported as failed.
+        /// A newer settings response has already been applied, so this one is no
+        /// longer the newest word. Nothing is reverted and nothing is reported as
+        /// failed — where this is a write, the server did commit it.
+        ///
+        /// Reachable for a `me()` **read** that a save overtook. Not reachable for a
+        /// write any more: `enqueueSettingsWrite` lets only one mutation be in flight
+        /// at a time, so a write always outranks every write applied before it.
         case superseded
 
         /// The response belongs to a session that is gone — signed out, or another
@@ -811,81 +802,29 @@ final class AppViewModel {
         startedAtGeneration generation: Int,
         requestTicket ticket: Int
     ) -> SettingsApplyOutcome {
-        // Read before anything below can take a ticket of its own — specifically
-        // before the reconciling read this may schedule — so that read ranks *above*
-        // the barrier and can settle the hold rather than being mistaken for another
-        // response that might predate the commit. See `ConfirmedSettingHold`.
-        let barrier = latestIssuedSettingsTicket
         // `.write`: a PATCH response is server truth as of a commit, so it outranks
-        // every request still outstanding beside it.
-        let outcome = applySettingsResponse(
+        // every `me()` read still outstanding beside it.
+        //
+        // No repair follows it, because `enqueueSettingsWrite` leaves nothing to
+        // repair. The two ways a response could contradict a committed save both
+        // required a second write in flight — one whose response is the only carrier
+        // of its field (so dropping it stales `currentUser` and the cache #665 reads
+        // on the next offline launch), or one serialized before this save committed
+        // and adopted after it (so it carries the pre-save value). Serializing the
+        // writes makes both unreachable: this request left only after every earlier
+        // mutation had committed *and* been adopted, so its `UserDTO` carries all of
+        // them and nothing older can follow it.
+        return applySettingsResponse(
             user,
             startedAtGeneration: generation,
             requestTicket: ticket,
             responseKind: .write
         )
-        // Newest-wins orders responses by the order the user made the changes,
-        // which is what keeps a slower save from reverting a newer one. It cannot
-        // also know the order the server *committed* them in, and that gap cuts
-        // both ways:
-        //
-        //   - Superseded: if this request committed last, its response is the only
-        //     one carrying its field, and dropping it leaves that field stale in
-        //     `currentUser` and in the cache #665 reads on the next offline launch.
-        //
-        //   - Applied: winning the ordering does not make this response *complete*.
-        //     An earlier-intent request that left before this one can still commit
-        //     after it, in which case this response's whole `UserDTO` was serialized
-        //     without that field's new value — and adopting it reverts a change the
-        //     server did take, with the same offline-cache blast radius. That is the
-        //     mirror image of the case above and is reachable whenever two settings
-        //     writes overlap: the older-ticket response lands first and applies, then
-        //     this one lands and clobbers it.
-        //
-        // Both are the same question — "is what I hold now what the server holds?" —
-        // so both get the same answer: one authoritative read, ordered through the
-        // same guard. An applied response only needs it when something else left
-        // after this request did; a save with nothing overlapping it is complete by
-        // construction and costs no extra traffic. Each reconcile takes a fresh
-        // ticket, so the last one issued departs after every write has returned and
-        // therefore sees every commit; reads schedule nothing, so this terminates.
-        //
-        // The same two cases are exactly the ones whose caller needs to hold the
-        // value it just saved: they are the responses that leave the local copy able
-        // to contradict a committed save. An applied response with nothing
-        // outstanding beside it is complete, so no hold is issued for it — which
-        // matters, because a hold no later response is scheduled to settle would
-        // stand for the life of the view.
-        switch outcome {
-        case .superseded:
-            pendingSettingsHoldBarrier = barrier
-            reconcileSettingsFromServer()
-        case .applied where ticket < barrier:
-            pendingSettingsHoldBarrier = barrier
-            reconcileSettingsFromServer()
-        case .applied, .discarded:
-            pendingSettingsHoldBarrier = nil
-        }
-        return outcome
     }
 
-    /// The hold a settings write's caller should keep on the value it just saved, or
-    /// `nil` when the response left nothing to hold.
-    ///
-    /// Call it in the same main-actor turn as the
-    /// `applySettingsUser(_:startedAtGeneration:requestTicket:)` it belongs to —
-    /// there is no `await` between them, so no other response can be handled in the
-    /// gap. Consumed on read rather than left standing, so a call that has drifted
-    /// away from its response yields no hold instead of a barrier belonging to some
-    /// other one: a missing hold merely fails to shadow a stale value for a moment,
-    /// while a wrong barrier could hold one indefinitely.
-    func settingsHold<Value: Sendable & Equatable>(on value: Value) -> ConfirmedSettingHold<Value>? {
-        defer { pendingSettingsHoldBarrier = nil }
-        return pendingSettingsHoldBarrier.map { ConfirmedSettingHold(value: value, barrier: $0) }
-    }
-
-    /// Shared body of the settings-apply path. Split out so the reconcile below can
-    /// reuse the identity guards while entering the ordering as a `.read`.
+    /// Shared body of the settings-apply path. Split out so the `me()` reads that
+    /// race a save can reuse the identity guards while entering the ordering as a
+    /// `.read`.
     @discardableResult
     private func applySettingsResponse(
         _ user: UserDTO,
@@ -905,51 +844,11 @@ final class AppViewModel {
         // from a session that is gone must not consume a ticket on the live
         // account's behalf and bar its genuine saves.
         guard settingsOrdering.shouldApply(ticket: ticket, from: kind) else { return .superseded }
-        // Recorded before the adoption, so an observer woken by the change to
-        // `currentUser` already sees which response caused it.
-        lastAppliedSettingsTicket = ticket
         // Server-confirmed (a settings PATCH round-tripped), so the local copy is
         // refreshed too — otherwise a rename or track opt-in would vanish on the
         // next offline launch (#665).
         applyAuthenticatedUser(user)
         return .applied
-    }
-
-    /// Re-read the account after a settings response left the local copy possibly
-    /// behind what the server committed — superseded, or applied while another
-    /// settings request was still outstanding (#697).
-    ///
-    /// Applied as a `.read`: it describes the account as of the moment it left, so
-    /// a save the user makes while it is in flight must still win. That is exactly
-    /// the asymmetry `StaleResponseGuard` draws between its two barriers, and the
-    /// reason this cannot simply adopt the response the way `checkAuth()` does.
-    ///
-    /// Deliberately un-deduplicated. One read per settings write response is bounded
-    /// by the number of settings writes that can overlap — a handful, and the Settings
-    /// toggles already disable each other while a save is in flight — whereas
-    /// collapsing a burst into a single read can skip the very pass that would have
-    /// seen the last commit, since a read issued earlier may have left before it.
-    /// Each read carries its own ticket, so the newest answer is the one that
-    /// sticks. Reconciles cannot chain: this applies through
-    /// `applySettingsResponse` rather than `applySettingsUser`, so a superseded
-    /// *read* schedules nothing.
-    ///
-    /// Best effort. A failed read leaves the local copy where it was — no worse
-    /// than before, and the next `me()` reconciles it anyway.
-    private func reconcileSettingsFromServer() {
-        // Taken before the await, as at every other site here.
-        let generation = authGeneration
-        let ticket = nextSettingsRequestTicket()
-        Task { [weak self] in
-            let user = try? await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate())
-            guard let self, let user else { return }
-            self.applySettingsResponse(
-                user,
-                startedAtGeneration: generation,
-                requestTicket: ticket,
-                responseKind: .read
-            )
-        }
     }
 
     func didLogout() {
@@ -1055,15 +954,28 @@ final class AppViewModel {
 
     /// #240: opt into the dual-track fork, then refresh local user + badges.
     func enableDualTrack() async {
+        // Serialized with every other settings mutation (#697). This is a user
+        // mutation returning the same whole `UserDTO` as the Settings toggles and the
+        // rename, and it races them identically — left outside the queue, a slow
+        // opt-in landing last would revert a newer rename in precisely the way the
+        // toggles no longer can. It is also the only settings write reachable from
+        // outside the Settings screen, so it is exactly the overlap that screen's own
+        // `isSavingSettings` gate cannot cover.
+        //
+        // Awaited rather than fired and forgotten so the caller's `Task` still
+        // represents the whole opt-in.
+        await settingsWrites.enqueue { [weak self] in
+            await self?.performEnableDualTrack()
+        }.value
+    }
+
+    private func performEnableDualTrack() async {
         // Same identity-lifetime guard as the other sites that adopt a server
         // response: without it, a sign-out mid-request lets the old account's
         // returned UserDTO replace the active account and be persisted (#665).
         let generation = authGeneration
-        // Routed through the settings guard rather than adopting directly (#697).
-        // This is a user mutation returning the same whole `UserDTO` as the
-        // Settings toggles and the rename, and it races them identically — left
-        // outside the ordering, a slow opt-in landing last would revert a newer
-        // rename in precisely the way the toggles no longer can.
+        // Taken immediately before the request, so it records when this left and
+        // outranks the `me()` reads racing it (#697).
         let ticket = nextSettingsRequestTicket()
         do {
             let updated = try await APIClient.shared.enableDualTrack()
@@ -1072,39 +984,14 @@ final class AppViewModel {
                 startedAtGeneration: generation,
                 requestTicket: ticket
             )
-            // Only `.discarded` means there is no session to refresh badges for. A
-            // *superseded* opt-in was still committed by the server — the fork is on,
-            // and Home's per-track badges have to say so. Gating the refresh on
-            // `.applied` left a successful opt-in showing single-track badges until
-            // something else happened to refresh them, which for a user who opts in
-            // and stays on Home is indefinitely. `refreshTracksDoneToday()` re-checks
-            // the generation itself, and reads done-today state from the server
-            // rather than from the response we did not adopt, so it is correct on
-            // both surviving paths.
+            // `.discarded` means there is no session left to refresh badges for. The
+            // opt-in is otherwise adopted — nothing else can be in flight to
+            // supersede it — so `currentUser.dualTrackEnabled` is on before the
+            // refresh below, and Home's per-track cards, which render only inside
+            // that branch, have something to draw into. Ordered before the refresh so
+            // the badges it writes and the widget snapshot it persists both see the
+            // fork as on.
             guard outcome != .discarded else { return }
-            // ...but those badges only render inside Home's `dualTrackEnabled`
-            // branch, and a superseded response never reached `currentUser`. Without
-            // the merge below the refresh unlocked above has nothing to draw into:
-            // Home keeps the single-track layout and the "Add second track" prompt
-            // while the server has the fork on. The reconcile read `applySettingsUser`
-            // schedules usually repairs that, but it is explicitly best effort — when
-            // it fails the stale layout persists until some later `me()`, and the only
-            // recovery the user is offered is opting in a second time. Before this
-            // ordering work the opt-in was adopted unconditionally, so that window is
-            // a regression this PR would otherwise introduce for the one field the
-            // user just asked for.
-            //
-            // Merged field-wise rather than by adopting the response, because this
-            // flag is monotonic: nothing in the app ever sets `dualTrackEnabled` back
-            // to false, so writing `true` cannot revert a newer settings response the
-            // way adopting the whole `UserDTO` would. Every other field still comes
-            // from whichever response won the ordering. Deliberately not generalized —
-            // `isPublic`, the rename, and the other toggles are not monotonic and must
-            // stay ordered. Ordered before the refresh so the badges it writes, and
-            // the widget snapshot it persists, both see the fork as on.
-            if let existing = currentUser, !existing.dualTrackEnabled {
-                applyAuthenticatedUser(existing.updating(dualTrackEnabled: true))
-            }
             await refreshTracksDoneToday()
         } catch {
             print("Failed to enable dual track: \(error)")

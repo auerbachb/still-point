@@ -24,28 +24,12 @@ struct UsernameEditView: View {
     @State private var usernameDraft = ""
     @State private var usernameFieldError: String?
     @State private var usernameSuccessMessage: String?
-    /// The name the server confirmed for our own save, held only until
-    /// `currentUser` catches up.
-    ///
-    /// A *superseded* rename was committed by the server but is no longer the newest
-    /// description of the account (#697), so `user.username` — which comes from
-    /// `currentUser` — can still be the old name for as long as the reconciling
-    /// `me()` takes, or permanently if that best-effort read fails. Showing that old
-    /// name directly under "Username updated" would tell the user their rename did
-    /// not take when in fact it did, so the confirmed name is what is displayed until
-    /// the account itself reports one.
-    ///
-    /// The same shadowing is needed after a rename that *was* applied. A settings
-    /// write holding a later ticket can have been serialized before the rename
-    /// committed, so it is adopted while still carrying the old name — which is why
-    /// this is released by rank rather than by value; see `ConfirmedSettingHold`.
-    @State private var confirmedUsername: ConfirmedSettingHold<String>?
-
     private var isSaving: Bool { updating || savingUsername }
 
-    /// What the account says, unless we are still holding a name the server
-    /// confirmed to us and the account has not caught up to yet.
-    private var displayedUsername: String { confirmedUsername?.value ?? user.username }
+    /// What the account says. Nothing shadows it: settings writes are serialized
+    /// (#697), so `currentUser` can only lag a rename while that rename is still in
+    /// flight — and the whole block is disabled for exactly that long.
+    private var displayedUsername: String { user.username }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -132,44 +116,7 @@ struct UsernameEditView: View {
             if !editingUsername, let newValue {
                 usernameDraft = newValue
             }
-            releaseConfirmedUsernameIfSettled()
         }
-        // Every settings adoption, not just the ones that move the username. The
-        // reconciling read that settles this hold routinely carries a name the
-        // account already shows — no change, so the watcher above never fires and
-        // the hold would stand for the life of the view. Tickets are never reused,
-        // so this fires once per adoption.
-        .onChange(of: appVM.lastAppliedSettingsTicket) { _, _ in
-            releaseConfirmedUsernameIfSettled()
-        }
-    }
-
-    /// Drops the held name once the account has genuinely caught up.
-    ///
-    /// "Caught up" is a settings response outranking the hold's barrier, not the
-    /// account merely *reporting* the confirmed name. Winning the settings ordering
-    /// does not make a response complete: a write that took a later ticket than this
-    /// rename can still have been serialized before the rename committed, so it
-    /// carries the old username and is adopted anyway — `AppViewModel.applySettingsUser`
-    /// says exactly this, and answers it with a reconciling read that is explicitly
-    /// best effort. Releasing on the name alone leaves the hold gone precisely when
-    /// that write lands, putting the old name directly under "Username updated".
-    /// Ranking against the barrier releases only for a response that departed after
-    /// the rename committed, which no earlier snapshot can follow. Only Settings' own
-    /// writes disable each other; the Home opt-in (`enableDualTrack`) takes a settings
-    /// ticket from outside that gate, so this overlap is reachable rather than
-    /// theoretical.
-    ///
-    /// Also released when there is no account left to describe, so a sign-out cannot
-    /// carry one session's confirmed name into the next (#665).
-    private func releaseConfirmedUsernameIfSettled() {
-        guard appVM.currentUser != nil else {
-            confirmedUsername = nil
-            return
-        }
-        confirmedUsername = confirmedUsername?.released(
-            byAppliedTicket: appVM.lastAppliedSettingsTicket
-        )
     }
 
     private func beginUsernameEdit(savedUsername: String) {
@@ -206,39 +153,43 @@ struct UsernameEditView: View {
         savingUsername = true
         defer { savingUsername = false }
 
-        do {
-            // Captured before the await: a response that outlived a sign-out must
-            // not be applied to the next session (#665).
-            let identityAtStart = appVM.identityGeneration
-            // Taken alongside it: this rename has to outrank every settings toggle
-            // the user flipped before tapping save, so a slower toggle response
-            // cannot land last and put the old name back (#697).
-            let settingsTicket = appVM.nextSettingsRequestTicket()
-            let updated = try await APIClient.shared.updateSettings(username: trimmed)
-            // If the view model discarded the response because the session changed
-            // under us, do not tell the user their username was updated (#665). A
-            // *superseded* one is still a success: the server accepted the rename,
-            // it simply is no longer the newest description of the account, and
-            // reporting that as a failure would be a lie about what was saved.
-            guard appVM.applySettingsUser(
-                updated,
-                startedAtGeneration: identityAtStart,
-                requestTicket: settingsTicket
-            ) != .discarded else { return }
-            usernameDraft = updated.username
-            // Held so the display cannot contradict the success message on the
-            // superseded path, where `currentUser` does not carry this rename yet,
-            // nor on the applied path, where an overlapping write can still clobber
-            // it. Nil when this response was already a complete picture of the
-            // account and there is nothing to shadow.
-            confirmedUsername = appVM.settingsHold(on: updated.username)
-            editingUsername = false
-            usernameSuccessMessage = "Username updated"
-        } catch let error as APIError {
-            usernameFieldError = Self.message(for: error)
-        } catch {
-            usernameFieldError = "Could not update username. Please try again."
-        }
+        // Captured before the rename takes its place in line: a response that
+        // outlived a sign-out must not be applied to the next session (#665).
+        let identityAtStart = appVM.identityGeneration
+        // Enqueued at the moment the user tapped Save, so this rename is sent after
+        // every settings change they made before it and before every one they make
+        // after — no toggle response can land last and put the old name back (#697).
+        // Awaited so `savingUsername` above stays true, and the controls stay
+        // disabled, for the whole time the rename is queued as well as in flight.
+        await appVM.enqueueSettingsWrite {
+            do {
+                // Re-checked after the wait for the same reason the capture exists:
+                // the session can end while this is queued behind another save.
+                guard identityAtStart == appVM.identityGeneration else { return }
+                // Taken immediately before the request, so it records when this left
+                // and outranks the `me()` reads racing it (#697/#709). Ordering
+                // against the other settings mutations is the queue's job.
+                let settingsTicket = appVM.nextSettingsRequestTicket()
+                let updated = try await APIClient.shared.updateSettings(username: trimmed)
+                // If the view model discarded the response because the session changed
+                // under us, do not tell the user their username was updated (#665).
+                // Otherwise it is adopted — nothing else can be in flight to supersede
+                // it — so the account itself now reports this name and the display
+                // below cannot contradict the success message.
+                guard appVM.applySettingsUser(
+                    updated,
+                    startedAtGeneration: identityAtStart,
+                    requestTicket: settingsTicket
+                ) != .discarded else { return }
+                usernameDraft = updated.username
+                editingUsername = false
+                usernameSuccessMessage = "Username updated"
+            } catch let error as APIError {
+                usernameFieldError = Self.message(for: error)
+            } catch {
+                usernameFieldError = "Could not update username. Please try again."
+            }
+        }.value
     }
 
     private static func message(for error: APIError) -> String {
