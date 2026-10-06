@@ -18,6 +18,7 @@ Comprehensive e2e (web + native iOS) runs **nightly** and on the **iOS TestFligh
 | `build` | [Web Build](../../.github/workflows/web-build.yml) | `build` | `npm run build:verify` + design-token parity (#420). |
 | `StillPointShared swift test` | [iOS Shared Unit Tests](../../.github/workflows/ios-shared-tests.yml) | `swift-test` | Shared Swift parity; ubuntu no-op when unchanged (#463). |
 | `Info.plist in sync with project.yml` | [Info.plist sync](../../.github/workflows/infoplist-sync.yml) | `infoplist-sync` | XcodeGen drift guard — #439; split out of path-filtered e2e-ios (#588). |
+| `StillPointApp compile` | [iOS App Compile](../../.github/workflows/ios-app-build.yml) | `app-compile` | Compiles the `StillPoint` app target (`ios/StillPointApp`) with `xcodebuild`; ubuntu no-op when unchanged (#698). |
 
 ## Checks to **not** require (advisory / off-PR)
 
@@ -31,7 +32,7 @@ Comprehensive e2e (web + native iOS) runs **nightly** and on the **iOS TestFligh
 
 If #537 checks were previously applied, remove `web-e2e-smoke`, `web-e2e-critical`, and `e2e-policy` when syncing (#588).
 
-## Path-filter trap (#442 / #463 / #588)
+## Path-filter trap (#442 / #463 / #588 / #698)
 
 Only require checks that report a result on **every** pull request. Required checks that are path-filtered away leave PRs stuck at `mergeStateStatus=BLOCKED` forever.
 
@@ -40,6 +41,7 @@ Only require checks that report a result on **every** pull request. Required che
 | `unit-tests` / `typecheck` / `build` | ✅ | No path filters. |
 | `StillPointShared swift test` | ✅ | Ubuntu no-op when package unchanged (#463). |
 | `Info.plist in sync with project.yml` | ✅ | Ubuntu no-op when plist inputs unchanged (#588 / #439). |
+| `StillPointApp compile` | ✅ | Ubuntu no-op when app target, `ios/project.yml`, and the workflow are unchanged (#698). Reports on every PR, so it does not leave PRs `BLOCKED`. |
 | `web-e2e-*` / `ios-e2e-*` | ❌ | Off PR path — do not require globally. |
 
 ## Apply (repo admin — requires confirmation)
@@ -58,16 +60,17 @@ node scripts/ci/sync-main-required-checks.mjs --apply
 
 The script merges the #588 checks with the existing required set, removes deprecated e2e checks if present, and preserves unrelated settings (e.g. Vercel app checks). Review the printed list before `--apply`.
 
-Manual alternative: **Settings → Branches → `main` → Require status checks** — add the five fast checks above; remove any e2e checks; keep existing Vercel/CodeRabbit checks.
+Manual alternative: **Settings → Branches → `main` → Require status checks** — add the six fast checks above; remove any e2e checks; keep existing Vercel/CodeRabbit checks.
 
 ## Verification
 
-After updating branch protection, open a no-op PR and confirm all five fast checks appear and complete:
+After updating branch protection, open a no-op PR and confirm all six fast checks appear and complete:
 
 1. `typecheck`
 2. `unit-tests`
 3. `build`
 4. `StillPointShared swift test`
 5. `Info.plist in sync with project.yml`
+6. `StillPointApp compile`
 
 Confirm full e2e workflows (`e2e-web`, `e2e-ios`) do **not** run on the PR, while advisory lanes (`pr-e2e-smoke`, coverage nudge) may appear without blocking merge.
