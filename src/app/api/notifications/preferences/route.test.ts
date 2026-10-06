@@ -5,12 +5,14 @@ const getCurrentUser = vi.fn();
 const getOrCreateNotificationPreferences = vi.fn();
 const returning = vi.fn();
 const updateWhere = vi.fn(() => ({ returning }));
-const updateSet = vi.fn(() => ({ where: updateWhere }));
+const updateSet = vi.fn((_values: Record<string, unknown>) => ({ where: updateWhere }));
 const dbUpdate = vi.fn(() => ({ set: updateSet }));
 const insertReturning = vi.fn();
 const insertValues = vi.fn(() => ({ returning: insertReturning }));
 const dbInsert = vi.fn(() => ({ values: insertValues }));
-const dbExecute = vi.fn();
+const dbExecute = vi.fn((_query: { values?: unknown[] }) =>
+  Promise.resolve({ rows: [{ id: "consent-1" }] }),
+);
 
 vi.mock("@/db", () => ({
   db: {
@@ -104,7 +106,7 @@ describe("/api/notifications/preferences", () => {
   });
 
 function consentEventsFromExecute(): unknown[][] {
-  return dbExecute.mock.calls.map((call) => (call[0] as { values: unknown[] }).values);
+  return dbExecute.mock.calls.map((call) => call[0]?.values ?? []);
 }
 
   test("GET returns serialized preferences", async () => {
@@ -289,7 +291,7 @@ function consentEventsFromExecute(): unknown[][] {
     );
 
     expect(response.status).toBe(200);
-    const update = updateSet.mock.calls[0]?.[0] as Record<string, unknown>;
+    const update = updateSet.mock.calls[0]?.[0];
     expect(update).not.toHaveProperty("callOptIn");
     expect(update).not.toHaveProperty("callConsentAt");
     const revoked = consentEventsFromExecute()[0] ?? [];
