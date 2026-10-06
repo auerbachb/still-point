@@ -28,7 +28,7 @@ A plain text sits between them. The open question this document answers is what
 that middle option costs, all-in, at our scale — and whether it is worth a
 recurring bill when push already costs nothing per send.
 
-## What already exists (verified against code, 2026-08-26)
+## What already exists (verified against code, 2026-08-26; webhook row corrected 2026-10-06, #683)
 
 Every claim in the integration sketch below was checked against the current
 `main`. Findings that contradict the issue's framing are flagged.
@@ -44,7 +44,7 @@ Every claim in the integration sketch below was checked against the current
 | E.164 phone | `notificationPreferences.callPhoneNumber` (varchar 20) | Exists; validated by `isValidE164PhoneNumber()` |
 | Consent timestamp | `notificationPreferences.callConsentAt` | Exists — but see the compliance finding below |
 | Attempt log | `call_attempts` table, `logCallAttempt()` in `src/lib/vapi.ts` | Exists; good template for an SMS attempt log |
-| Inbound webhook route | — | **Does not exist.** `src/app/api/` has no webhook handler of any kind |
+| Inbound webhook route | `src/app/api/auth/apple/notifications/route.ts` | **Exists** (#338, Sign in with Apple S2S). Signature verification (`verifyAppleJwt`), idempotency (`recordAppleNotificationReceipt`, `claimAppleNotificationForProcessing`), and a public session-unauthenticated endpoint (`/api/auth/apple/notifications` on the middleware public list). A STOP/HELP handler does not exist yet. |
 
 ### Three findings that change the sketch
 
@@ -241,8 +241,9 @@ probably won't either, and the problem isn't the channel.
 
 **2. The compliance surface is permanent, and larger than the feature.** SMS is
 the only channel here that is *regulated*. It brings 10DLC registration, a
-STOP/HELP webhook (which this codebase has no precedent for — `src/app/api/`
-contains no webhook route of any kind), a consent-evidence burden our current
+STOP/HELP webhook (still new work: keyword handling and carrier opt-out state;
+`src/app/api/auth/apple/notifications/route.ts`, #338, is the inbound webhook
+to model on), a consent-evidence burden our current
 pattern actively undermines by deleting the record on opt-out (see Compliance),
 an FCC requirement to honor opt-outs received by *any* reasonable method within
 10 business days, and an 8am–9pm recipient-local send window that our nullable
@@ -443,10 +444,16 @@ handling is necessary but not sufficient:**
   only text keywords, and within **10 business days**. A keyword-only
   implementation is non-compliant by construction.
 
-`src/app/api/` currently contains **no webhook route of any kind**, so the
-inbound handler is genuinely new infrastructure (signature verification,
-idempotency, a public unauthenticated endpoint), not a variation on something
-already here.
+`src/app/api/auth/apple/notifications/route.ts` (Sign in with Apple S2S, #338)
+is already an inbound webhook: `verifyAppleJwt` checks the Apple-signed JWS
+against Apple's JWKS with issuer and audience checks,
+`recordAppleNotificationReceipt()` writes an audit row before any side effect
+and suppresses duplicate `jti` replays, `claimAppleNotificationForProcessing()`
+guards concurrent delivery, and `/api/auth/apple/notifications` is on the
+middleware public list (session-unauthenticated; the signed JWT is the
+authentication). A STOP/HELP handler is still new work — a provider-specific
+signature scheme, keyword parsing, and SMS suppression state — but it should
+model on that route rather than being treated as greenfield infrastructure.
 
 ### 3. Quiet hours — applies, but is not inherited
 
@@ -505,14 +512,20 @@ the closest analogue we have — same ledger, same scheduler, same consent shape
 decomposition, and is *simpler* in the send client (no assistant config or
 variable injection) but carries two pieces #599 never needed:
 
-- **An inbound STOP/HELP webhook** — new route, new signature verification, no
-  precedent in this codebase.
+- **An inbound STOP/HELP webhook** — new route, provider-specific signature
+  verification (not Apple JWS), keyword handling, and suppression state.
+  Model on `src/app/api/auth/apple/notifications/route.ts` (#338) for the
+  public unauthenticated endpoint, verify-then-receipt ordering, and
+  idempotent replay handling. Not greenfield infrastructure.
 - **A phone-verification round-trip** — also no precedent.
 
 **Estimate: 5–6 PRs, ~1,400–1,700 lines, `size:L` overall**, plus **1–6 weeks of
 10DLC registration lead time** that can run in parallel with development but
 gates the first real send. The consent-log rework should land first regardless,
-since it is a live gap today.
+since it is a live gap today. That size range still holds after re-scoping the
+webhook onto the Apple S2S pattern: phone verification remains net-new, and
+STOP/HELP is still its own handler. The precedent is a shape to copy, not a
+drop-in, so this correction does not lower the line count.
 
 ## Decision record
 
