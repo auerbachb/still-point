@@ -10,11 +10,13 @@ const dbUpdate = vi.fn(() => ({ set: updateSet }));
 const insertReturning = vi.fn();
 const insertValues = vi.fn(() => ({ returning: insertReturning }));
 const dbInsert = vi.fn(() => ({ values: insertValues }));
+const dbExecute = vi.fn();
 
 vi.mock("@/db", () => ({
   db: {
     update: dbUpdate,
     insert: dbInsert,
+    execute: dbExecute,
   },
 }));
 
@@ -40,6 +42,9 @@ vi.mock("@/db/schema", () => ({
     createdAt: "createdAt",
     updatedAt: "updatedAt",
   },
+  consentEvents: {
+    table: "consent_events",
+  },
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -60,6 +65,10 @@ vi.mock("@/lib/readJsonObject", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((left, right) => ({ left, right })),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+    strings: Array.from(strings),
+    values,
+  }),
 }));
 
 const samplePrefs = {
@@ -91,7 +100,12 @@ describe("/api/notifications/preferences", () => {
     getCurrentUser.mockResolvedValue({ userId: "user-1", email: "test@example.com" });
     getOrCreateNotificationPreferences.mockResolvedValue(samplePrefs);
     returning.mockResolvedValue([samplePrefs]);
+    dbExecute.mockResolvedValue({ rows: [{ id: "consent-1" }] });
   });
+
+function consentEventsFromExecute(): unknown[][] {
+  return dbExecute.mock.calls.map((call) => (call[0] as { values: unknown[] }).values);
+}
 
   test("GET returns serialized preferences", async () => {
     const { GET } = await import("./route");
@@ -239,16 +253,129 @@ describe("/api/notifications/preferences", () => {
     expect(response.status).toBe(200);
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({
-        callOptIn: true,
-        callPhoneNumber: "+15551234567",
         callWindowStart: "09:00",
         callWindowStop: "17:00",
-        callConsentAt: expect.any(Date),
       }),
     );
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callConsentAt");
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callOptIn");
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callPhoneNumber");
+    const granted = consentEventsFromExecute()[0] ?? [];
+    expect(granted).toEqual(expect.arrayContaining(["granted", "+15551234567", "preferences_api"]));
   });
 
-  test("PATCH clears consent when opting out of calls", async () => {
+  test("PATCH keeps callConsentAt and records revocation on opt-out", async () => {
+    const grantedAt = new Date("2026-05-29T12:00:00.000Z");
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      ...samplePrefs,
+      callOptIn: true,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: grantedAt,
+    });
+
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        headers: {
+          "x-real-ip": "203.0.113.10",
+          "x-forwarded-for": "198.51.100.2, 203.0.113.10",
+        },
+        body: JSON.stringify({ callOptIn: false }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    const update = updateSet.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(update).not.toHaveProperty("callOptIn");
+    expect(update).not.toHaveProperty("callConsentAt");
+    const revoked = consentEventsFromExecute()[0] ?? [];
+    expect(revoked).toEqual(expect.arrayContaining([
+      false,
+      "revoked",
+      "+15551234567",
+      "preferences_api",
+      "203.0.113.10",
+    ]));
+  });
+
+  test("PATCH records granted, revoked, then granted without destroying earlier events", async () => {
+    const { PATCH } = await import("./route");
+    const patch = (body: Record<string, unknown>, ip?: string) =>
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        headers: ip ? { "x-forwarded-for": ip } : undefined,
+        body: JSON.stringify(body),
+      }) as NextRequest;
+
+    getOrCreateNotificationPreferences.mockResolvedValueOnce({
+      ...samplePrefs,
+      callOptIn: false,
+    });
+    expect((await PATCH(patch({
+      callOptIn: true,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+    }, "203.0.113.10"))).status).toBe(200);
+
+    const firstGrant = (consentEventsFromExecute()[0] ?? []).find((value) => value instanceof Date) as Date;
+    getOrCreateNotificationPreferences.mockResolvedValueOnce({
+      ...samplePrefs,
+      callOptIn: true,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: firstGrant,
+    });
+    expect((await PATCH(patch({ callOptIn: false }))).status).toBe(200);
+
+    getOrCreateNotificationPreferences.mockResolvedValueOnce({
+      ...samplePrefs,
+      callOptIn: false,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: firstGrant,
+    });
+    expect((await PATCH(patch({ callOptIn: true }))).status).toBe(200);
+
+    const events = consentEventsFromExecute().map((values) =>
+      values.find((value) => value === "granted" || value === "revoked"),
+    );
+    expect(events).toEqual(["granted", "revoked", "granted"]);
+    expect(updateSet.mock.calls[1]?.[0]).not.toHaveProperty("callConsentAt");
+    expect(updateSet.mock.calls[2]?.[0]).not.toHaveProperty("callConsentAt");
+    expect(firstGrant).toBeInstanceOf(Date);
+  });
+
+  test("PATCH does not record another revocation when already opted out", async () => {
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      ...samplePrefs,
+      callOptIn: false,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: new Date("2026-05-29T12:00:00.000Z"),
+    });
+
+    const { PATCH } = await import("./route");
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ callOptIn: false }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(dbExecute).not.toHaveBeenCalled();
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callConsentAt");
+  });
+
+  test("PATCH records a new grant when the opted-in phone number changes", async () => {
     getOrCreateNotificationPreferences.mockResolvedValue({
       ...samplePrefs,
       callOptIn: true,
@@ -259,21 +386,34 @@ describe("/api/notifications/preferences", () => {
     });
 
     const { PATCH } = await import("./route");
-
     const response = await PATCH(
       new Request("http://test.local/api/notifications/preferences", {
         method: "PATCH",
-        body: JSON.stringify({ callOptIn: false }),
+        body: JSON.stringify({ callPhoneNumber: "+15557654321" }),
       }) as NextRequest,
     );
 
     expect(response.status).toBe(200);
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        callOptIn: false,
-        callConsentAt: null,
-      }),
-    );
+    const granted = consentEventsFromExecute()[0] ?? [];
+    expect(granted).toEqual(expect.arrayContaining(["granted", "+15557654321", "preferences_api"]));
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callPhoneNumber");
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callConsentAt");
+  });
+
+  test("GET still returns callConsentAt as an ISO string after opt-out", async () => {
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      ...samplePrefs,
+      callOptIn: false,
+      callConsentAt: new Date("2026-05-29T12:00:00.000Z"),
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.preferences.callOptIn).toBe(false);
+    expect(body.preferences.callConsentAt).toBe("2026-05-29T12:00:00.000Z");
   });
 
   test("GET returns 401 when unauthenticated", async () => {

@@ -28,6 +28,7 @@ export async function wasAccountDeleted(email: string): Promise<boolean> {
  * - `thoughts` (owner `user_id`)
  * - `friend_requests` (from/to)
  * - `friendships` (either side)
+ * - `consent_events` (call/SMS consent log — purged with the account, not on opt-out)
  *
  * `sessions.buddy_session_id` → `buddy_sessions` is `ON DELETE SET NULL`, so when a
  * deleted user was the host, other participants keep their personal `sessions` rows with
