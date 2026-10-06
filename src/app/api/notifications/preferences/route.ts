@@ -272,12 +272,15 @@ export const PATCH = withApiHandler("Notification preferences PATCH", async (req
   }
 
   const existing = await getOrCreateNotificationPreferences(auth.user.userId);
+  const requestedOr = (key: "callPhoneNumber" | "callWindowStart" | "callWindowStop", current: string | null) =>
+    Object.prototype.hasOwnProperty.call(updates, key) ? (updates[key] as string | null) : current;
   const mergedCallFields = {
-    callPhoneNumber: (updates.callPhoneNumber as string | null | undefined) ?? existing.callPhoneNumber,
-    callWindowStart: (updates.callWindowStart as string | null | undefined) ?? existing.callWindowStart,
-    callWindowStop: (updates.callWindowStop as string | null | undefined) ?? existing.callWindowStop,
+    callPhoneNumber: requestedOr("callPhoneNumber", existing.callPhoneNumber),
+    callWindowStart: requestedOr("callWindowStart", existing.callWindowStart),
+    callWindowStop: requestedOr("callWindowStop", existing.callWindowStop),
   };
-  const nextCallOptIn = typeof updates.callOptIn === "boolean" ? updates.callOptIn : existing.callOptIn;
+  const callOptInRequested = typeof updates.callOptIn === "boolean";
+  let nextCallOptIn = callOptInRequested ? (updates.callOptIn as boolean) : existing.callOptIn;
 
   if (callStartTouched && callStopTouched) {
     const start = updates.callWindowStart as string | null;
@@ -312,15 +315,13 @@ export const PATCH = withApiHandler("Notification preferences PATCH", async (req
     });
     if (!committed) {
       const fresh = await getOrCreateNotificationPreferences(auth.user.userId);
-      const retryPhone = Object.prototype.hasOwnProperty.call(updates, "callPhoneNumber")
-        ? (updates.callPhoneNumber as string | null)
-        : fresh.callPhoneNumber;
-      const retryWindowStart = Object.prototype.hasOwnProperty.call(updates, "callWindowStart")
-        ? (updates.callWindowStart as string | null)
-        : fresh.callWindowStart;
-      const retryWindowStop = Object.prototype.hasOwnProperty.call(updates, "callWindowStop")
-        ? (updates.callWindowStop as string | null)
-        : fresh.callWindowStop;
+      const retryPhone = requestedOr("callPhoneNumber", fresh.callPhoneNumber);
+      const retryWindowStart = requestedOr("callWindowStart", fresh.callWindowStart);
+      const retryWindowStop = requestedOr("callWindowStop", fresh.callWindowStop);
+      // A phone-only change must not re-enable calls after a concurrent opt-out.
+      if (!callOptInRequested) {
+        nextCallOptIn = fresh.callOptIn;
+      }
       if (
         nextCallOptIn
         && !callOptInRequirementsMet({

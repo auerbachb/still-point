@@ -402,6 +402,57 @@ function consentEventsFromExecute(): unknown[][] {
     expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callConsentAt");
   });
 
+  test("PATCH phone change does not re-grant after a concurrent opt-out", async () => {
+    const optedIn = {
+      ...samplePrefs,
+      callOptIn: true,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+      callConsentAt: new Date("2026-05-29T12:00:00.000Z"),
+    };
+    getOrCreateNotificationPreferences
+      .mockResolvedValueOnce(optedIn)
+      .mockResolvedValueOnce({ ...optedIn, callOptIn: false });
+    dbExecute.mockResolvedValueOnce({ rows: [] });
+
+    const { PATCH } = await import("./route");
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ callPhoneNumber: "+15557654321" }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(dbExecute).toHaveBeenCalledTimes(1);
+    expect(updateSet.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ callPhoneNumber: "+15557654321" }),
+    );
+    expect(updateSet.mock.calls[0]?.[0]).not.toHaveProperty("callOptIn");
+  });
+
+  test("PATCH rejects opt-in that clears the saved phone number", async () => {
+    getOrCreateNotificationPreferences.mockResolvedValue({
+      ...samplePrefs,
+      callPhoneNumber: "+15551234567",
+      callWindowStart: "09:00",
+      callWindowStop: "17:00",
+    });
+
+    const { PATCH } = await import("./route");
+    const response = await PATCH(
+      new Request("http://test.local/api/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ callOptIn: true, callPhoneNumber: null }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(400);
+    expect(dbExecute).not.toHaveBeenCalled();
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
   test("GET still returns callConsentAt as an ISO string after opt-out", async () => {
     getOrCreateNotificationPreferences.mockResolvedValue({
       ...samplePrefs,
