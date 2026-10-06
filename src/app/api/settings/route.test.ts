@@ -24,6 +24,7 @@ vi.mock("@/db/schema", () => ({
     ambientSoundEnabled: "ambientSoundEnabled",
     dualTrackEnabled: "dualTrackEnabled",
     secondTrackDay: "secondTrackDay",
+    longSessionPeriod: "longSessionPeriod",
     recoveryTargetDay: "recoveryTargetDay",
     recoveryCurrentStep: "recoveryCurrentStep",
     recoveryTotalSteps: "recoveryTotalSteps",
@@ -252,6 +253,41 @@ describe("PATCH /api/settings", () => {
       recoveryCurrentStep: "recoveryCurrentStep",
       recoveryTotalSteps: "recoveryTotalSteps",
     });
+  });
+
+  test("accepts longSessionPeriod am or pm (#708)", async () => {
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ longSessionPeriod: "pm" }));
+
+    expect(res.status).toBe(200);
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
+    expect(dbUpdate).toHaveBeenCalledTimes(1);
+    const updates = dbUpdateSet.mock.calls[0]![0];
+    expect(updates.longSessionPeriod).toBe("pm");
+  });
+
+  test("rejects a longSessionPeriod outside am or pm (#708)", async () => {
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ longSessionPeriod: "noon" }));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "longSessionPeriod must be am or pm",
+    });
+    expect(dbUpdate).not.toHaveBeenCalled();
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invalid longSessionPeriod even when a username is also sent (#708)", async () => {
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ username: "validname", longSessionPeriod: "morning" }));
+
+    expect(res.status).toBe(400);
+    expect(atomicUpdateUsername).not.toHaveBeenCalled();
+    expect(dbUpdate).not.toHaveBeenCalled();
   });
 
   test("round-trips an active recovery ramp in the response body", async () => {

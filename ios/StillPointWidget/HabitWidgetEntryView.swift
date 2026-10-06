@@ -121,10 +121,13 @@ struct HabitWidgetEntryView: View {
     @ViewBuilder
     private func weekSection(metrics: WeekMetrics) -> some View {
         if isDualTrack {
+            // Morning row first. The designation is a label: completing the
+            // evening track checks PM even when the sit happens in the morning.
+            let tracks = SessionPeriod.orderedTracks(longSession: entry.data.longSessionPeriod)
             VStack(alignment: .leading, spacing: metrics.rowSpacing) {
                 weekdayHeader(metrics: metrics)
-                trackWeekRow(.primary, metrics: metrics)
-                trackWeekRow(.second, metrics: metrics)
+                trackWeekRow(tracks[0], metrics: metrics)
+                trackWeekRow(tracks[1], metrics: metrics)
             }
         } else {
             weekRow(
@@ -173,15 +176,15 @@ struct HabitWidgetEntryView: View {
         .accessibilityHidden(true)
     }
 
-    /// One track's own row of per-day marks, labeled in a fixed-width gutter so
-    /// the two rows stay column-aligned.
+    /// One track's own row of per-day marks. The gutter holds "AM" or "PM"
+    /// (#708) instead of the track name, sized so the label is not truncated.
     private func trackWeekRow(_ track: Track, metrics: WeekMetrics) -> some View {
-        let name = Self.trackName(track)
+        let period = SessionPeriod.period(for: track, longSession: entry.data.longSessionPeriod)
+        let label = period.widgetLabel
         return HStack(spacing: metrics.spacing) {
-            Text(metrics.compactLabels ? Self.shortTrackName(track) : name.uppercased())
+            Text(label)
                 .font(.system(size: metrics.labelSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(WidgetPalette.foregroundFaint)
-                .tracking(0.5)
                 .lineLimit(1)
                 .frame(width: metrics.labelWidth, alignment: .leading)
                 .accessibilityHidden(true)
@@ -189,24 +192,9 @@ struct HabitWidgetEntryView: View {
                 dayMark(mark, size: metrics.dotSize)
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(name), \(mark.weekdayName)")
+                    .accessibilityLabel("\(label), \(mark.weekdayName)")
                     .accessibilityValue(Self.accessibilityState(for: mark))
             }
-        }
-    }
-
-    private static func trackName(_ track: Track) -> String {
-        switch track {
-        case .primary: return "Track One"
-        case .second: return "Track Two"
-        }
-    }
-
-    /// Small-family gutter abbreviation; VoiceOver still reads the full name.
-    private static func shortTrackName(_ track: Track) -> String {
-        switch track {
-        case .primary: return "ONE"
-        case .second: return "TWO"
         }
     }
 
@@ -250,11 +238,9 @@ private struct WeekMetrics {
     let spacing: CGFloat
     /// Vertical gap between the header and each dual-track row.
     let rowSpacing: CGFloat
-    /// Fixed-width gutter holding each row's track label.
+    /// Fixed-width gutter holding each row's "AM" / "PM" label.
     let labelWidth: CGFloat
     let labelSize: CGFloat
-    /// True where the gutter is too narrow for the full "TRACK ONE" label.
-    let compactLabels: Bool
 
     static let small = WeekMetrics(
         singleDotSize: 13,
@@ -262,9 +248,8 @@ private struct WeekMetrics {
         dotSize: 11,
         spacing: 3,
         rowSpacing: 3,
-        labelWidth: 22,
-        labelSize: 7,
-        compactLabels: true
+        labelWidth: 20,
+        labelSize: 9
     )
 
     static let medium = WeekMetrics(
@@ -273,9 +258,8 @@ private struct WeekMetrics {
         dotSize: 15,
         spacing: 8,
         rowSpacing: 3,
-        labelWidth: 54,
-        labelSize: 9,
-        compactLabels: false
+        labelWidth: 28,
+        labelSize: 11
     )
 }
 

@@ -29,6 +29,7 @@ export const GET = withApiHandler("Auth me", async (request: NextRequest) => {
     recoveryTotalSteps: users.recoveryTotalSteps,
     dualTrackEnabled: users.dualTrackEnabled,
     secondTrackDay: users.secondTrackDay,
+    longSessionPeriod: users.longSessionPeriod,
   }).from(users).where(eq(users.id, auth.user.userId)).limit(1);
 
   if (!user) {

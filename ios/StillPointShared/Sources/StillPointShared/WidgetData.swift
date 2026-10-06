@@ -38,6 +38,10 @@ public struct WidgetData: Codable, Sendable, Equatable {
     public var currentDay: Int
     public var secondTrackDay: Int
     public var dualTrackEnabled: Bool
+    /// #708: whether the long (primary) session is morning or evening. The short
+    /// track is the opposite. Legacy snapshots decode as `.am`. Does not change
+    /// which sits count — a row checks off by track, not by the clock.
+    public var longSessionPeriod: SessionPeriod
     /// #238: miss-a-day recovery ramp for the primary track timer readout.
     public var recoveryTargetDay: Int?
     public var recoveryCurrentStep: Int?
@@ -125,6 +129,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         currentDay: Int,
         secondTrackDay: Int,
         dualTrackEnabled: Bool,
+        longSessionPeriod: SessionPeriod = .am,
         recoveryTargetDay: Int? = nil,
         recoveryCurrentStep: Int? = nil,
         recoveryTotalSteps: Int? = nil,
@@ -144,6 +149,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
         self.currentDay = currentDay
         self.secondTrackDay = secondTrackDay
         self.dualTrackEnabled = dualTrackEnabled
+        self.longSessionPeriod = longSessionPeriod
         self.recoveryTargetDay = recoveryTargetDay
         self.recoveryCurrentStep = recoveryCurrentStep
         self.recoveryTotalSteps = recoveryTotalSteps
@@ -160,7 +166,7 @@ public struct WidgetData: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isLoggedIn, userId, currentDay, secondTrackDay, dualTrackEnabled
+        case isLoggedIn, userId, currentDay, secondTrackDay, dualTrackEnabled, longSessionPeriod
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
         case primaryDoneToday, secondDoneToday, practiceDoneToday, streak
         case completedDates, secondCompletedDates, standardDates
@@ -178,6 +184,12 @@ public struct WidgetData: Codable, Sendable, Equatable {
         currentDay = try c.decode(Int.self, forKey: .currentDay)
         secondTrackDay = try c.decode(Int.self, forKey: .secondTrackDay)
         dualTrackEnabled = try c.decode(Bool.self, forKey: .dualTrackEnabled)
+        if let raw = try c.decodeIfPresent(String.self, forKey: .longSessionPeriod),
+           let period = SessionPeriod(rawValue: raw) {
+            longSessionPeriod = period
+        } else {
+            longSessionPeriod = .am
+        }
         recoveryTargetDay = try c.decodeIfPresent(Int.self, forKey: .recoveryTargetDay)
         recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
         recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
@@ -709,6 +721,7 @@ public enum WidgetDataStore {
             currentDay: StillPoint.clampedCurrentDay(for: user),
             secondTrackDay: max(user.secondTrackDay, 1),
             dualTrackEnabled: user.dualTrackEnabled,
+            longSessionPeriod: user.longSessionPeriod,
             recoveryTargetDay: user.recoveryTargetDay,
             recoveryCurrentStep: user.recoveryCurrentStep,
             recoveryTotalSteps: user.recoveryTotalSteps,

@@ -36,6 +36,7 @@ type UsernameUpdateResult =
         ambientSoundEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
+        longSessionPeriod: string;
         recoveryTargetDay: number | null;
         recoveryCurrentStep: number | null;
         recoveryTotalSteps: number | null;
@@ -78,6 +79,7 @@ export async function atomicUpdateUsername(params: {
         ambientSoundEnabled: users.ambientSoundEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
+        longSessionPeriod: users.longSessionPeriod,
         recoveryTargetDay: users.recoveryTargetDay,
         recoveryCurrentStep: users.recoveryCurrentStep,
         recoveryTotalSteps: users.recoveryTotalSteps,

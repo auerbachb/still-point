@@ -98,6 +98,7 @@ export const POST = withApiHandler("Signup", async (request: NextRequest) => {
       recoveryTotalSteps: newUser.recoveryTotalSteps,
       dualTrackEnabled: newUser.dualTrackEnabled,
       secondTrackDay: newUser.secondTrackDay,
+      longSessionPeriod: newUser.longSessionPeriod,
     },
     ...(includeToken ? { token } : {}),
   });
