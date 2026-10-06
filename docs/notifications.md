@@ -54,7 +54,7 @@ Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart`
 
 `GET /api/notifications/preferences` still returns `callConsentAt` as an ISO timestamp or `null`.
 
-Consent events are kept for five years after the latest event for that user and channel. Opt-out does not delete them. Deleting the account removes them immediately (`consent_events.user_id` cascades from `users`). There is no separate purge job. SMS may use the same table later; this path only writes `channel: call`.
+Consent events are kept for at least five years after the latest event for that user and channel. Opt-out does not delete them. Deleting the account removes them immediately (`consent_events.user_id` cascades from `users`). That cascade is the only deletion path today: nothing purges rows after five years, so they stay until the account is deleted. Enforcing the window is tracked in #789. SMS may use the same table later; this path only writes `channel: call`.
 
 ### `POST /api/notifications/session-state`
 
