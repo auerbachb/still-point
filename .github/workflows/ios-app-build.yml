@@ -3,8 +3,8 @@ name: iOS App Compile
 # The `StillPointApp compile` job is a REQUIRED status check on `main` once an
 # admin applies `scripts/ci/sync-main-required-checks.mjs` (issue #698), so it
 # must report a result on every PR. The real `xcodebuild` runs on macOS only
-# when the app target, `ios/project.yml`, or this workflow changed; otherwise a
-# cheap ubuntu no-op still satisfies the check. Same shape as
+# when sources the `StillPoint` scheme compiles, `ios/project.yml`, or this
+# workflow changed; otherwise a cheap ubuntu no-op still satisfies the check. Same shape as
 # ios-shared-tests.yml (#463) and infoplist-sync.yml (#588).
 
 on:
@@ -56,7 +56,11 @@ jobs:
             echo "app=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if printf '%s\n' "$files" | grep -E '^(ios/StillPointApp/|ios/project\.yml$|\.github/workflows/ios-app-build\.yml$)' >/dev/null; then
+          # The `StillPoint` scheme also compiles AppBlockingShared, the
+          # StillPointMonitor and StillPointWidget extensions, and the
+          # StillPointShared package, so a change to any of them can break
+          # the app build.
+          if printf '%s\n' "$files" | grep -E '^(ios/(StillPointApp|AppBlockingShared|StillPointMonitor|StillPointWidget|StillPointShared)/|ios/project\.yml$|\.github/workflows/ios-app-build\.yml$)' >/dev/null; then
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
