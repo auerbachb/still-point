@@ -1412,18 +1412,22 @@ final class AppViewModel {
 
     func leaveBuddySession() {
         currentView = .home
-        // Retained and guarded like the other identity-scoped work: the task body
-        // runs on a later main-actor turn, and consuming an invite is not
-        // idempotent, so a sign-out in between must not let it burn the token
-        // against whoever is signed in next (#665).
+        scheduleBuddyInviteConsume()
+    }
+
+    /// Every route into the invite flow joins through `consumePendingBuddyInviteIfNeeded`,
+    /// which holds `isConsumingBuddyInvite` for the whole request (#756), so two routes
+    /// cannot POST the same token. Retained and guarded like the other identity-scoped
+    /// work: the task body runs on a later main-actor turn, and consuming an invite is
+    /// not idempotent, so a sign-out in between must not let it burn the token against
+    /// whoever is signed in next (#665).
+    ///
+    /// No cancel of the previous task. A consume in flight would lose the server's
+    /// answer, and one not started yet would run its join already cancelled while
+    /// holding the in-flight flag, so this call would return without joining.
+    private func scheduleBuddyInviteConsume() {
+        guard !isConsumingBuddyInvite else { return }
         let adopted = authGeneration
-        // A consume already holds the token until the server answers (#756).
-        // Cancelling that task would turn a live join into a cancellation and
-        // throw the answer away. When nothing is in flight, keep the old cancel
-        // so a previous direct join does not run alongside this one.
-        if !isConsumingBuddyInvite {
-            buddyInviteTask?.cancel()
-        }
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
             guard adopted == self.authGeneration else { return }
@@ -1449,25 +1453,12 @@ final class AppViewModel {
             pendingBuddyInviteToken = token
             return
         }
-        // A consume is already waiting on the server (#756). Cancelling
-        // `buddyInviteTask` here would drop that answer. The same token needs no
-        // second POST. A different one is queued; the in-flight join only clears
-        // the token it captured, so the new link stays pending.
-        if isConsumingBuddyInvite {
-            if pendingBuddyInviteToken != token {
-                pendingBuddyInviteToken = token
-            }
-            return
-        }
-        // Same reasoning as `leaveBuddySession()`: joining is a non-idempotent
-        // network action, so it must not run for a session that replaced this one.
-        let adopted = authGeneration
-        buddyInviteTask?.cancel()
-        buddyInviteTask = Task { [weak self] in
-            guard let self else { return }
-            guard adopted == self.authGeneration else { return }
-            await self.joinBuddySession(token: token, startedAtGeneration: adopted)
-        }
+        // The newest link replaces an older pending one, so a later retry never
+        // joins an invite the user has since moved past (#756). If a consume is
+        // already waiting on the server, it only clears the token it captured and
+        // picks this one up when it finishes.
+        pendingBuddyInviteToken = token
+        scheduleBuddyInviteConsume()
     }
 
     func handlePushDeepLink(_ url: URL) {
@@ -1699,6 +1690,9 @@ final class AppViewModel {
     private func consumePendingBuddyInviteIfNeeded(startedAtGeneration generation: Int) async {
         guard generation == authGeneration else { return }
         guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
+        // A kept invite must not pull the user out of a sit or a buddy session they
+        // started after it failed. It stays queued for return-home or leave-session.
+        guard !isInSession else { return }
         // The token stays pending for the whole request. Overlapping consumes
         // (a cold start and a scene activation, return-home and leave-session)
         // would otherwise POST it twice.
@@ -1711,7 +1705,9 @@ final class AppViewModel {
         // A newer invite may have replaced this one while the request was in flight.
         // Join that one after this attempt drops the in-flight flag, and only for
         // the session that is still current. A sign-out leaves the replacement
-        // alone so the next account does not inherit this call.
+        // alone so the next account does not inherit this call. If this one joined,
+        // the `isInSession` guard keeps the newer invite queued instead of replacing
+        // the session just opened.
         guard pendingBuddyInviteToken == token else {
             isConsumingBuddyInvite = false
             if generation == authGeneration, pendingBuddyInviteToken != nil {
@@ -1747,7 +1743,6 @@ final class AppViewModel {
     /// - Parameter generation: `authGeneration` at the point the join was decided.
     ///   Required rather than defaulted, matching `applySettingsUser`, so a new
     ///   call site cannot forget it and silently reintroduce the stale-write bug.
-    @discardableResult
     private func joinBuddySession(token: String, startedAtGeneration generation: Int) async -> BuddyInviteJoinOutcome {
         do {
             let sessionId = try await APIClient.shared.joinBuddySession(token: token)
@@ -1759,11 +1754,6 @@ final class AppViewModel {
             guard generation == authGeneration else { return .stale }
             buddyInviteError = nil
             currentView = .buddySession(sessionId: sessionId)
-            // After the server confirmed the join. Direct opens never go through
-            // consume, so the clear has to happen here or the same token is sent again.
-            if pendingBuddyInviteToken == token {
-                pendingBuddyInviteToken = nil
-            }
             return .joined
         } catch is CancellationError {
             // Cancellation is cooperative and does not by itself stop the code
@@ -1777,24 +1767,16 @@ final class AppViewModel {
             switch BuddyInviteJoinFailure.classify(error) {
             case .authoritative:
                 // A newer invite may already be queued. Don't paint this rejection
-                // over it, and don't spend that newer token.
-                if pendingBuddyInviteToken == nil || pendingBuddyInviteToken == token {
+                // over it; the consume that called this spends only this token.
+                if pendingBuddyInviteToken == token {
                     if let apiError = error as? APIError {
                         buddyInviteError = apiError.message
                     } else {
                         buddyInviteError = "Could not open buddy invite."
                     }
                 }
-                if pendingBuddyInviteToken == token {
-                    pendingBuddyInviteToken = nil
-                }
                 return .authoritativeRejection
             case .transient:
-                // Direct open while already signed in never queued a token. Store
-                // it so a later consume can retry. Do not clobber a newer invite.
-                if pendingBuddyInviteToken == nil {
-                    pendingBuddyInviteToken = token
-                }
                 if pendingBuddyInviteToken == token {
                     buddyInviteError = Self.buddyInviteRetryMessage
                 }
