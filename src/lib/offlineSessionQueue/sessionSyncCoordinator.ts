@@ -248,11 +248,12 @@ export class WebSessionSyncCoordinator {
     ) ?? entry;
 
     if (entry.thoughts.length > 0) {
+      const sent = entry.thoughts;
       try {
         await this.transport.batchThoughts({
           sessionId: serverSessionId,
           dayNumber: entry.request.dayNumber,
-          thoughts: entry.thoughts,
+          thoughts: sent,
         });
         const entries = await this.queueStore.loadEntries();
         const index = entries.findIndex(
@@ -260,7 +261,14 @@ export class WebSessionSyncCoordinator {
         );
         if (index < 0) return entry;
         if (entries[index]!.thoughts.length === 0) return entry;
-        entries[index]!.thoughts = [];
+        // Only drop what this batch sent. A note replaced while the request was
+        // in flight (#753 autosave) stays queued for the next flush.
+        entries[index]!.thoughts = entries[index]!.thoughts.filter(
+          (thought) =>
+            !sent.some(
+              (item) => item.timeInSession === thought.timeInSession && item.text === thought.text,
+            ),
+        );
         await this.queueStore.saveEntries(entries);
         entry = entries[index]!;
       } catch (error) {

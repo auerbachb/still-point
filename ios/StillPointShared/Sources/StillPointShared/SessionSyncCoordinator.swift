@@ -244,11 +244,12 @@ public actor SessionSyncCoordinator {
         }) ?? entry
 
         if !entry.thoughts.isEmpty {
+            let sent = entry.thoughts
             do {
                 let batch = BatchThoughtsRequest(
                     sessionId: serverSessionId,
                     dayNumber: entry.request.dayNumber,
-                    thoughts: entry.thoughts.map {
+                    thoughts: sent.map {
                         BatchThoughtsRequest.ThoughtInput(timeInSession: $0.timeInSession, text: $0.text)
                     }
                 )
@@ -259,7 +260,9 @@ public actor SessionSyncCoordinator {
                 }) else {
                     return Self.sessionDTO(from: entry.request, id: serverSessionId)
                 }
-                entries[index].thoughts = []
+                // Only drop what this batch sent. A note replaced while the
+                // request was in flight (#753 autosave) stays queued.
+                entries[index].thoughts.removeAll { sent.contains($0) }
                 try queueStore.saveEntries(entries)
                 entry = entries[index]
             } catch {

@@ -241,26 +241,28 @@ export function CompletionScreen({
       moodTimer.current = null;
     }
     setReturning(true);
-    try {
-      const trimmed = noteTextToAutosave(note);
-      if (trimmed) await track(() => persistNote(trimmed));
-      const ratings = ratingsAutosavePayload({
-        focusRating,
-        happinessRating,
-        focusTouched,
-        happinessTouched,
-      });
-      if (ratings) await track(() => persistRatings(ratings));
-      if (isMoodMatrixTouched(moodMatrix)) await track(() => persistMood(moodMatrix));
-      await inflight.current;
-      onReturn();
-      returningRef.current = false;
-      setReturning(false);
-    } catch {
+    const trimmed = noteTextToAutosave(note);
+    const ratings = ratingsAutosavePayload({
+      focusRating,
+      happinessRating,
+      focusTouched,
+      happinessTouched,
+    });
+    // Every field is attempted even when an earlier one fails; otherwise the
+    // next tap would leave without ever trying the later saves.
+    const results = await Promise.allSettled([
+      trimmed ? track(() => persistNote(trimmed)) : Promise.resolve(),
+      ratings ? track(() => persistRatings(ratings)) : Promise.resolve(),
+      isMoodMatrixTouched(moodMatrix) ? track(() => persistMood(moodMatrix)) : Promise.resolve(),
+    ]);
+    await inflight.current;
+    returningRef.current = false;
+    setReturning(false);
+    if (results.some((result) => result.status === "rejected")) {
       flushFailedRef.current = true;
-      returningRef.current = false;
-      setReturning(false);
+      return;
     }
+    onReturn();
   }
 
   const isQuick = sessionType === "quick";

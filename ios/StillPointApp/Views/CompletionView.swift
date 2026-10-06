@@ -484,6 +484,7 @@ struct CompletionView: View {
         let key = ratingsSaveKey
         guard key != lastSavedRatingsKey else {
             ratingsSaved = true
+            ratingsSaveError = nil
             return
         }
         isSavingRatings = true
@@ -518,6 +519,10 @@ struct CompletionView: View {
         ratingsAutosaveTask?.cancel()
         ratingsAutosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 800_000_000)
+            while isSavingRatings {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
             guard !Task.isCancelled else { return }
             await saveRatings()
         }
@@ -704,6 +709,7 @@ struct CompletionView: View {
         let key = moodSaveKey
         guard key != lastSavedMoodKey else {
             moodMatrixSaved = true
+            moodMatrixSaveError = nil
             return
         }
         isSavingMoodMatrix = true
@@ -739,6 +745,10 @@ struct CompletionView: View {
         moodAutosaveTask?.cancel()
         moodAutosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 800_000_000)
+            while isSavingMoodMatrix {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
             guard !Task.isCancelled else { return }
             await saveMoodMatrix()
         }
@@ -806,6 +816,7 @@ struct CompletionView: View {
         guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving else { return }
         guard noteToSave != lastSavedNote else {
             noteSaved = true
+            saveError = nil
             return
         }
         guard let ownerUserId = appVM.currentUser?.id else { return }
@@ -867,9 +878,12 @@ struct CompletionView: View {
         noteAutosaveTask?.cancel()
         noteAutosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 800_000_000)
-            guard !Task.isCancelled,
-                  endNote == note,
-                  !isSaving else { return }
+            // Wait out a save still in flight so this edit is not skipped.
+            while isSaving {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard !Task.isCancelled, endNote == note else { return }
             await saveEndNote()
         }
     }
