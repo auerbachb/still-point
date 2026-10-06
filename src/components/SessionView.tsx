@@ -7,8 +7,8 @@ import { BlockTimer } from "./BlockTimer";
 import { ThoughtCapture } from "./ThoughtCapture";
 import { FlashHint } from "./FlashHint";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { loadSoundPrefs, saveSoundPrefs, unlockAudioContext, soundPrefUsesAudio, type SoundPrefs } from "@/lib/audio";
-import { useVoiceCountdown } from "@/lib/useVoiceCountdown";
+import { useAudioUnlock } from "@/lib/useAudioUnlock";
+import { AudioBlockedBanner } from "./AudioBlockedBanner";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
 import { useMindStateHold } from "@/lib/useMindStateHold";
 import { markTrackingUnlockIfQualifying } from "@/lib/trackingControlPrefs";
@@ -171,8 +171,14 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   // the timer callback to re-render awareness % while elapsed updates in a ref.
   const [, setLiveElapsed] = useState(0);
   const wallStartRef = useRef<number>(Date.now());
-  const [soundPrefs, setSoundPrefs] = useState<SoundPrefs>(() => loadSoundPrefs());
-  useVoiceCountdown(soundPrefs.voiceCountdown);
+  const {
+    soundPrefs,
+    audioBlocked,
+    handleSoundPlaybackBlocked,
+    handleSoundPlaybackResumed,
+    handleSoundPrefToggle,
+    handleEnableLocalAudio,
+  } = useAudioUnlock("solo");
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True after user pauses once this sit — keeps tracking UI (and ThoughtCapture) mounted while paused. */
@@ -631,6 +637,8 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         mindStateLog={mindStateLog}
         onElapsedChange={handleElapsedChange}
         soundPrefs={soundPrefs}
+        onSoundPlaybackBlocked={handleSoundPlaybackBlocked}
+        onSoundPlaybackResumed={handleSoundPlaybackResumed}
         minimal={minimalView}
       />
 
@@ -1058,6 +1066,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           </div>
         )}
 
+        {audioBlocked && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: isMobile ? "12px" : "20px" }}>
+            <AudioBlockedBanner onEnableLocalAudio={() => void handleEnableLocalAudio()} />
+          </div>
+        )}
+
         {/*
           #668: real pill buttons, not four bare words. On/off is carried by fill,
           border, and the speaker icon together \u2014 the same three channels iOS uses
@@ -1108,19 +1122,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                 data-testid={soundToggleTestId(label)}
                 data-sound-toggle={label}
                 data-state={soundToggleStateText(isOn)}
-                onClick={() => {
-                  const next = { ...soundPrefs, [key]: !soundPrefs[key] };
-                  setSoundPrefs(next);
-                  saveSoundPrefs(next);
-                  // #712: haptics is the one toggle that must not unlock the
-                  // audio context. It exists for someone who wants silence, and
-                  // vibration needs no audio context at all. Asks the pref
-                  // classification directly rather than inferring it from the
-                  // drawn cue, so this and the buddy room share one answer.
-                  if (next[key] && soundPrefUsesAudio(key)) {
-                    void unlockAudioContext();
-                  }
-                }}
+                onClick={() => handleSoundPrefToggle(key)}
                 style={{
                   background: appearance.isFilled ? "var(--surface-3)" : "transparent",
                   border: `1px solid ${

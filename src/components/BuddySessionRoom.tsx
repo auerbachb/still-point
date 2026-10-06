@@ -59,6 +59,7 @@ export function BuddySessionRoom({
     soundPrefs,
     audioBlocked,
     handleSoundPlaybackBlocked,
+    handleSoundPlaybackResumed,
     handleSoundPrefToggle,
     handleEnableLocalAudio,
   } = useBuddyAudioUnlock(sessionId);
@@ -230,6 +231,7 @@ export function BuddySessionRoom({
           beginBuddyHyperfocus={beginBuddyHyperfocus}
           onElapsedChange={handleElapsedChange}
           onSoundPlaybackBlocked={handleSoundPlaybackBlocked}
+          onSoundPlaybackResumed={handleSoundPlaybackResumed}
           onTimerComplete={handleBuddyTimerComplete}
           onSaveThought={handleSaveThought}
           onDismissPostCapture={handleDismissPostCapture}

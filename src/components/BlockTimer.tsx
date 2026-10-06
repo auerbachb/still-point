@@ -17,6 +17,8 @@ type BlockTimerProps = {
   mindStateLog: Array<{ time: number; state: string }>;
   onElapsedChange?: (elapsed: number) => void;
   onSoundPlaybackBlocked?: () => void;
+  /** Fires when a failed sound plays after the automatic resume retry succeeds. */
+  onSoundPlaybackResumed?: () => void;
   soundPrefs?: SoundPrefs;
   /**
    * When set, elapsed time is driven by the parent (e.g. server-synced buddy session).
@@ -56,6 +58,7 @@ export function BlockTimer({
   mindStateLog,
   onElapsedChange,
   onSoundPlaybackBlocked,
+  onSoundPlaybackResumed,
   soundPrefs,
   controlledElapsed,
   syncClock,
@@ -69,6 +72,8 @@ export function BlockTimer({
   onCompleteRef.current = onComplete;
   const onSoundPlaybackBlockedRef = useRef(onSoundPlaybackBlocked);
   onSoundPlaybackBlockedRef.current = onSoundPlaybackBlocked;
+  const onSoundPlaybackResumedRef = useRef(onSoundPlaybackResumed);
+  onSoundPlaybackResumedRef.current = onSoundPlaybackResumed;
   const soundPrefsRef = useRef(soundPrefs);
   soundPrefsRef.current = soundPrefs;
   const lastTickSecRef = useRef(-1);
@@ -126,11 +131,11 @@ export function BlockTimer({
     // back to the gesture-driven affordance, so the sound that failed — and any
     // that fail while the attempt is in flight — are not simply lost.
     //
-    // The blocked callback only fires once that attempt has failed: nothing
-    // clears `audioBlocked` on a successful resume, so reporting it up front
-    // would leave "Browser audio is paused" on screen for a session whose sound
-    // recovered on its own. A play that fails while an attempt is already in
-    // flight is covered by that attempt's result.
+    // The blocked callback only fires once that attempt has failed. Reporting
+    // it up front would leave "Browser audio is paused" on screen for a
+    // session whose sound recovered on its own. A successful retry reports
+    // `onSoundPlaybackResumed` so that warning can clear. A play that fails
+    // while an attempt is already in flight is covered by that attempt's result.
     pendingPlayRef.current = play;
     if (resumeInFlightRef.current) return;
     resumeInFlightRef.current = true;
@@ -142,7 +147,10 @@ export function BlockTimer({
         // loses it outright.
         const retry = pendingPlayRef.current;
         pendingPlayRef.current = null;
-        if (resumed && retry?.()) return;
+        if (resumed && retry?.()) {
+          if (mountedRef.current) onSoundPlaybackResumedRef.current?.();
+          return;
+        }
         // The retry itself is deliberately not gated on the timer still being
         // active: a completion chime that failed is retried as the sit ends,
         // which is exactly when it is wanted. Only the banner is suppressed.

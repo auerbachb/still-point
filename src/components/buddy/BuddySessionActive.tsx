@@ -7,7 +7,8 @@ import type { MindHoldKind } from "@/lib/useMindStateHold";
 import { BlockTimer } from "../BlockTimer";
 import { BuddyVideo } from "../BuddyVideo";
 import { BuddyMindStateControls } from "./BuddyMindStateControls";
-import { btnSecondary, inlineLinkButton } from "./buddySessionRoomStyles";
+import { AudioBlockedBanner } from "../AudioBlockedBanner";
+import { btnSecondary } from "./buddySessionRoomStyles";
 
 type BuddySessionActiveProps = {
   sessionId: string;
@@ -32,6 +33,7 @@ type BuddySessionActiveProps = {
   beginBuddyHyperfocus: () => void;
   onElapsedChange: (elapsed: number) => void;
   onSoundPlaybackBlocked: () => void;
+  onSoundPlaybackResumed: () => void;
   onTimerComplete: () => void;
   onSaveThought: (text: string) => void;
   onDismissPostCapture: () => void;
@@ -64,6 +66,7 @@ export function BuddySessionActive({
   beginBuddyHyperfocus,
   onElapsedChange,
   onSoundPlaybackBlocked,
+  onSoundPlaybackResumed,
   onTimerComplete,
   onSaveThought,
   onDismissPostCapture,
@@ -140,6 +143,7 @@ export function BuddySessionActive({
           mindStateLog={mindStateLog}
           onElapsedChange={onElapsedChange}
           onSoundPlaybackBlocked={onSoundPlaybackBlocked}
+          onSoundPlaybackResumed={onSoundPlaybackResumed}
           soundPrefs={soundPrefs}
           onComplete={onTimerComplete}
         />
@@ -333,25 +337,7 @@ export function BuddySessionActive({
               buddy turns them on too, they stay naturally aligned by the shared timer.
             </p>
             {audioBlocked && (
-              <p
-                role="alert"
-                style={{
-                  margin: 0,
-                  maxWidth: "340px",
-                  fontSize: "11px",
-                  color: "var(--accent-amber)",
-                  fontFamily: "var(--font-mono)",
-                  letterSpacing: "0.04em",
-                  textAlign: "center",
-                  lineHeight: 1.45,
-                }}
-              >
-                Browser audio is paused.
-                <button type="button" onClick={onEnableLocalAudio} style={inlineLinkButton}>
-                  Enable local audio
-                </button>
-                on this device.
-              </p>
+              <AudioBlockedBanner onEnableLocalAudio={onEnableLocalAudio} />
             )}
             <div
               style={{
