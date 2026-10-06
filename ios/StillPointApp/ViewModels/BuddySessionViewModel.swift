@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import StillPointShared
 
 @Observable
@@ -29,6 +30,14 @@ final class BuddySessionViewModel {
     var soundPrefs: AudioEngine.SoundPrefs = AudioEngine.loadPrefs()
     /// Last second announced via voice countdown in the current active session window.
     private var lastVoiceCountdownSec: Int = 0
+    /// #736: highest minute block already marked, so a boundary fires once.
+    private var lastCompletedMinuteBlockIndex = -1
+    /// #736: natural completion has already been announced for this window.
+    private var sessionEndHapticEmitted = false
+    /// #736: held for the sit. A generator built at the moment of the cue fires
+    /// late enough to miss the minute it belongs to.
+    private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let pronouncedHaptic = UINotificationFeedbackGenerator()
 
     private var pollTask: Task<Void, Never>?
     private var activeAnchor: ActiveAnchor?
@@ -191,6 +200,10 @@ final class BuddySessionViewModel {
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
         let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
+        // #736: haptics is vibration, not sound. Enabling it must not warm the
+        // audio session — that ducks whatever else is playing for a sound this
+        // sit is not going to make.
+        let isHapticsToggle = keyPath == \AudioEngine.SoundPrefs.haptics
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
 
@@ -198,8 +211,13 @@ final class BuddySessionViewModel {
             toggledKeyWasEnabled: toggledKeyWasEnabled,
             toggledKeyIsEnabled: soundPrefs[keyPath: keyPath],
             voiceCountdownWasEnabled: voiceCountdownWasEnabled,
-            voiceCountdownIsEnabled: soundPrefs.voiceCountdown
+            voiceCountdownIsEnabled: soundPrefs.voiceCountdown,
+            toggledKeyUsesAudio: !isHapticsToggle
         )
+
+        if isHapticsToggle, soundPrefs.haptics {
+            prepareHaptics()
+        }
 
         if effects.warmUp {
             // #667: this view model never warms the engine anywhere, so a buddy sit
@@ -224,7 +242,12 @@ final class BuddySessionViewModel {
     /// Called from `BuddyActiveSessionView`'s per-second timer.
     /// Fires the voice countdown clip matching the current remaining seconds,
     /// with the same clamp/dedup/reset semantics as the solo session path.
+    ///
+    /// #736: that same tick is the buddy sit's only timing source. Minute and
+    /// end haptics are read from it before the voice-countdown guard, so a
+    /// sitter who turned every sound off still feels the sit.
     func handleVoiceCountdownTick(remaining: Int) {
+        emitSharedTimerHaptics(remaining: remaining)
         let remainingDouble = Double(remaining)
         guard soundPrefs.voiceCountdown else { return }
 
@@ -315,6 +338,11 @@ final class BuddySessionViewModel {
     private func handleSnapshotUpdate(_ snapshot: BuddySnapshotDTO) {
         if snapshot.state == "active", let startedAt = parseISO(snapshot.startedAt) {
             let key = "\(snapshot.id):\(startedAt.timeIntervalSince1970)"
+            let serverNow = parseISO(snapshot.serverNow) ?? Date()
+            let elapsedAtSync = snapshot.elapsedSeconds ?? max(
+                0,
+                min(snapshot.durationSeconds, Int(serverNow.timeIntervalSince(startedAt)))
+            )
             if key != lastActiveKey {
                 lastActiveKey = key
                 mindState = "clear"
@@ -328,13 +356,12 @@ final class BuddySessionViewModel {
                     lastVoiceCountdownSec = 0
                     AudioEngine.shared.cancelVoiceCountdownPlayback()
                 }
+                // #736: seed from server elapsed so markers that already passed
+                // do not replay, and a window that opens already finished does
+                // not buzz on the next tick.
+                seedHapticClock(elapsedAtSync: elapsedAtSync, durationSeconds: snapshot.durationSeconds)
             }
 
-            let serverNow = parseISO(snapshot.serverNow) ?? Date()
-            let elapsedAtSync = snapshot.elapsedSeconds ?? max(
-                0,
-                min(snapshot.durationSeconds, Int(serverNow.timeIntervalSince(startedAt)))
-            )
             activeAnchor = ActiveAnchor(
                 localNow: Date(),
                 serverElapsedAtSync: elapsedAtSync,
@@ -348,6 +375,78 @@ final class BuddySessionViewModel {
         latestMeetingTokenRequestKey = nil
         meetingToken = nil
         meetingTokenError = nil
+        resetHapticClock()
+    }
+
+    /// #736: minute-marker and natural-completion haptics from the shared timer.
+    ///
+    /// The iOS buddy room does not render its own haptics control. The
+    /// preference is per-user and set elsewhere — a solo sit, or the web buddy
+    /// room — and this view model only plays what that preference already says.
+    private func emitSharedTimerHaptics(remaining: Int) {
+        guard let snapshot else { return }
+        let duration = snapshot.durationSeconds
+        // Waiting and completed screens do not owe a cue. Abandoned is handled
+        // below so a tick that lands as the host ends the sit still goes
+        // through `HapticCueLogic` and stays silent.
+        let isAbandoned = snapshot.state == "abandoned"
+        guard snapshot.state == "active" || isAbandoned else { return }
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: remaining,
+            durationSeconds: duration,
+            lastCompletedBlockIndex: lastCompletedMinuteBlockIndex,
+            sessionEndAlreadyEmitted: sessionEndHapticEmitted
+        )
+        lastCompletedMinuteBlockIndex = signals.updatedCompletedBlockIndex
+        sessionEndHapticEmitted = signals.sessionEndAlreadyEmitted
+
+        // Leaving before remaining hits 0 never sets `completedNaturally`.
+        if let cue = HapticCueLogic.minuteMarkerCue(
+            hapticsEnabled: soundPrefs.haptics,
+            crossedMinuteBoundary: signals.crossedMinuteBoundary,
+            fullMinuteRemains: signals.fullMinuteRemains,
+            isAbandoned: isAbandoned
+        ) {
+            fireHaptic(cue)
+        }
+        if let cue = HapticCueLogic.sessionEndCue(
+            hapticsEnabled: soundPrefs.haptics,
+            completedNaturally: signals.completedNaturally,
+            isAbandoned: isAbandoned
+        ) {
+            fireHaptic(cue)
+        }
+    }
+
+    private func seedHapticClock(elapsedAtSync: Int, durationSeconds: Int) {
+        lastCompletedMinuteBlockIndex = SessionLogic.completedMinuteBlockIndex(
+            elapsed: Double(max(0, elapsedAtSync)),
+            totalSeconds: durationSeconds
+        )
+        sessionEndHapticEmitted = elapsedAtSync >= durationSeconds
+        if soundPrefs.haptics {
+            prepareHaptics()
+        }
+    }
+
+    private func resetHapticClock() {
+        lastCompletedMinuteBlockIndex = -1
+        sessionEndHapticEmitted = false
+    }
+
+    private func prepareHaptics() {
+        gentleHaptic.prepare()
+        pronouncedHaptic.prepare()
+    }
+
+    private func fireHaptic(_ cue: HapticCueLogic.Cue) {
+        switch HapticCueLogic.intensity(for: cue) {
+        case .gentle:
+            gentleHaptic.impactOccurred()
+            gentleHaptic.prepare()
+        case .pronounced:
+            pronouncedHaptic.notificationOccurred(.success)
+        }
     }
 
     private func maybeFetchMeetingToken(snapshot: BuddySnapshotDTO) {
