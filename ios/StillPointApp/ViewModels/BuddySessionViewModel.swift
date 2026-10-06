@@ -371,6 +371,21 @@ final class BuddySessionViewModel {
             return
         }
 
+        // #736: the poll can reconcile the sit to `completed` and unmount the
+        // active view before its `remaining == 0` tick. The server only writes
+        // `completed` once the full duration has elapsed, so the first
+        // completed snapshot after an active window still owes the end cue.
+        let wasActiveWindow = activeAnchor != nil
+        if wasActiveWindow, snapshot.state == "completed", !sessionEndHapticEmitted {
+            if let cue = HapticCueLogic.sessionEndCue(
+                hapticsEnabled: soundPrefs.haptics,
+                completedNaturally: true,
+                isAbandoned: false
+            ) {
+                fireHaptic(cue)
+            }
+        }
+
         activeAnchor = nil
         latestMeetingTokenRequestKey = nil
         meetingToken = nil
