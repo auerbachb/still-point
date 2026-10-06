@@ -30,6 +30,7 @@
 		1D776B46EF57E3973A212EBE /* 35.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8AFE37D74C08EB62742A3CC7 /* 35.mp3 */; };
 		1DBE74544D605FF3CA0A1C1D /* 5.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1822261A9F6811AE9984B37B /* 5.mp3 */; };
 		1E5365E85DAF7C7B46336A71 /* 57.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6290D6ED1CB92848B1ECFE90 /* 57.mp3 */; };
+		2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */; };
 		2387CAB41D16E36550FB047A /* 41.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 112EE9026F8169958E58EA43 /* 41.mp3 */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
 		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
@@ -95,6 +96,7 @@
 		8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */; };
 		92415E1B8326C5322B4AF20F /* 59.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */; };
 		93184A5F531520F4C650ECFB /* 36.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0D147E22AE19B02C80DE77AF /* 36.mp3 */; };
+		98E914F3ED9112D734241B4D /* OfflineIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A73516741CC23494C435D7 /* OfflineIndicatorView.swift */; };
 		9AA717BC9490BAAB97E1218E /* 49.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 256101C55C4E5EF9CE549FCA /* 49.mp3 */; };
 		9B4CD9DAB95BB371A571F154 /* SessionPhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03645CA6EFC379138C3D94C4 /* SessionPhotoPicker.swift */; };
 		9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7EFCCDBB888DA255AD6896 /* GoogleSignInController.swift */; };
@@ -253,6 +255,7 @@
 		5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIntroOverlayView.swift; sourceTree = "<group>"; };
 		594426A2F95039E07CBF9536 /* 10.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 10.mp3; sourceTree = "<group>"; };
 		5B4C67F97D99AD6F6B81630C /* 33.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 33.mp3; sourceTree = "<group>"; };
+		5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingControlPrefsManager.swift; sourceTree = "<group>"; };
 		5C7E369849AAFAC053093EAF /* 52.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 52.mp3; sourceTree = "<group>"; };
 		5EF4763920AEA6F4AD6FB313 /* 15.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 15.mp3; sourceTree = "<group>"; };
 		5F29C698B66040CD6AE2303C /* 23.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 23.mp3; sourceTree = "<group>"; };
@@ -309,6 +312,7 @@
 		BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionTrackingManager.swift; sourceTree = "<group>"; };
 		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
 		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
+		C3A73516741CC23494C435D7 /* OfflineIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineIndicatorView.swift; sourceTree = "<group>"; };
 		C5A9C1CFF5807F87F6584765 /* 4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 4.mp3; sourceTree = "<group>"; };
 		C683A9F0586D58020E60DD87 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C7766937C968433C205A250C /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
@@ -453,6 +457,7 @@
 				85EAF998E3470CBB4056699F /* BlockGridView.swift */,
 				48301E50DF8979C80A0C0F15 /* GuidedExerciseOverlayView.swift */,
 				7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */,
+				C3A73516741CC23494C435D7 /* OfflineIndicatorView.swift */,
 				09DD5F417FDE26DAF6433E65 /* PathwayView.swift */,
 				5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */,
 				71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */,
@@ -570,6 +575,7 @@
 				EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */,
 				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
 				A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */,
+				5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */,
 				1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */,
 			);
 			path = Managers;
@@ -958,6 +964,7 @@
 				E0B7E8F73810CD267D2405FB /* NetworkReachabilityMonitor.swift in Sources */,
 				13177552A26E700472836E9A /* NotificationPreferencesViewModel.swift in Sources */,
 				C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */,
+				98E914F3ED9112D734241B4D /* OfflineIndicatorView.swift in Sources */,
 				898E0D6ED681686E28EB329D /* PathwayView.swift in Sources */,
 				DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */,
 				EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */,
@@ -977,6 +984,7 @@
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
+				2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */,
 				C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */,
 				32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */,
 			);
@@ -1033,7 +1041,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				GID_CLIENT_ID = "";
 				GID_REVERSED_CLIENT_ID = "";
@@ -1077,7 +1085,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1106,7 +1114,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				GID_CLIENT_ID = "";
 				GID_REVERSED_CLIENT_ID = "";
@@ -1132,7 +1140,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1175,7 +1183,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1319,7 +1327,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = T5UU4BP6AV;
 				INFOPLIST_FILE = StillPointMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
