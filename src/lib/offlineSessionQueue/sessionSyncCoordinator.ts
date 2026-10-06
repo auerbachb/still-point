@@ -164,7 +164,11 @@ export class WebSessionSyncCoordinator {
         throw new SessionSyncError("ownerMismatch");
       }
 
-      entries[index]!.thoughts.push({ timeInSession: -1, text: trimmed });
+      // #753: autosave can run again as the note is edited. Keep one end note
+      // and replace its text. A second -1 in the same batch is rejected.
+      const kept = entries[index]!.thoughts.filter((thought) => thought.timeInSession !== -1);
+      kept.push({ timeInSession: -1, text: trimmed });
+      entries[index]!.thoughts = kept;
       await this.queueStore.saveEntries(entries);
       await requestBackgroundSync();
       await this.flushEntry(clientSessionId, ownerUserId);

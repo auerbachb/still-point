@@ -48,7 +48,7 @@ test.describe("mobile safe-area and bottom bar behavior", () => {
     await tap(page.getByRole("button", { name: "Begin" }));
     await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
 
-    const returnButton = page.getByRole("button", { name: "Return" });
+    const returnButton = page.getByRole("button", { name: "save and return to home" });
     const homeNav = page.getByRole("button", { name: /^home$/i });
     await expect(returnButton).toBeVisible();
     await expect(homeNav).toBeVisible();

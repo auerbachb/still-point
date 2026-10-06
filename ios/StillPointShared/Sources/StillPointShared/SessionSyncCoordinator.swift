@@ -128,7 +128,11 @@ public actor SessionSyncCoordinator {
             throw SessionSyncError.ownerMismatch
         }
 
-        entries[index].thoughts.append(PendingSessionThought(timeInSession: -1, text: trimmed))
+        // #753: autosave can run again as the note is edited. Keep one end note
+        // and replace its text. A second -1 in the same batch is rejected.
+        var thoughts = entries[index].thoughts.filter { $0.timeInSession != -1 }
+        thoughts.append(PendingSessionThought(timeInSession: -1, text: trimmed))
+        entries[index].thoughts = thoughts
         try queueStore.saveEntries(entries)
         _ = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId)
     }

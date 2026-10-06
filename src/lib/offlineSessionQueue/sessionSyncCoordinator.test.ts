@@ -137,6 +137,27 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     expect(entries[0]!.thoughts).toEqual([{ timeInSession: -1, text: "offline note" }]);
   });
 
+  test("appendEndNote replaces the queued end note instead of appending another", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440015";
+
+    await coordinator.saveCompletedSession(
+      baseRequest(),
+      clientSessionId,
+      testOwnerUserId,
+      [{ timeInSession: 12, text: "mid-sit" }],
+    );
+    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "first draft");
+    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "revised note");
+
+    const entries = await store.loadEntries();
+    expect(entries[0]!.thoughts).toEqual([
+      { timeInSession: 12, text: "mid-sit" },
+      { timeInSession: -1, text: "revised note" },
+    ]);
+  });
+
   test("#703: a refused IndexedDB write throws LocalSessionWriteError, not a pending result", async () => {
     const writeFailure = new Error("QuotaExceededError");
     const refusingStore: OfflineSessionQueueStore = {
