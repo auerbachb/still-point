@@ -85,4 +85,30 @@ public enum OfflineIndicatorCopy {
         }
         return offline ? .offlineSavedProgress : nil
     }
+
+    /// #717 / #744: render-suppression for the offline strip.
+    ///
+    /// Immersive flows hide the strip so nothing competes with a sit. While the
+    /// completion screen's own not-stored alert is up, that alert owns the
+    /// message (#744) — the strip stands down rather than stacking a second
+    /// surface, and rather than falling back to the "saved and upload when you
+    /// reconnect" promise #703 withdrew.
+    ///
+    /// Either flag returns `nil`. Otherwise this delegates to
+    /// `state(offline:sitNotStored:)`. Web twin: `suppressedOfflineIndicatorState`
+    /// in `src/lib/offlineIndicatorCopy.ts`.
+    ///
+    /// iOS already suppresses structurally through `RootView`, so this helper is
+    /// a parity and regression guard. The app UI does not consult it.
+    public static func suppressedState(
+        isImmersive: Bool,
+        completionOwnsNotStored: Bool,
+        offline: Bool,
+        sitNotStored: Bool
+    ) -> State? {
+        if isImmersive || completionOwnsNotStored {
+            return nil
+        }
+        return state(offline: offline, sitNotStored: sitNotStored)
+    }
 }
