@@ -453,7 +453,7 @@ export function BuddySessionActive({
                     type="button"
                     key={key}
                     aria-pressed={isOn}
-                    aria-label={`${soundToggleAccessibilityLabel(label, cue)} ${isOn ? "on" : "off"}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
+                    aria-label={`${soundToggleAccessibilityLabel(label, cue)}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
                     title={
                       cue === "haptic"
                         ? "Only you feel this — does not change anything for others"

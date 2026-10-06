@@ -150,7 +150,7 @@ describe("BuddySessionActive sound toggles", () => {
 
     const tick = button(container, "tick");
     expect(tick.getAttribute("aria-pressed")).toBe("true");
-    expect(tick.getAttribute("aria-label")).toBe("tick sound on; only you hear this");
+    expect(tick.getAttribute("aria-label")).toBe("tick sound; only you hear this");
     expect(tick.title).toBe("Only you hear this — does not change audio for others");
     expect(tick.style.minHeight).toBe("44px");
     expect(tick.style.backgroundColor || tick.style.background).toBe("var(--surface-3)");
@@ -159,7 +159,7 @@ describe("BuddySessionActive sound toggles", () => {
 
     const chime = button(container, "chime");
     expect(chime.getAttribute("aria-pressed")).toBe("false");
-    expect(chime.getAttribute("aria-label")).toBe("chime sound off; only you hear this");
+    expect(chime.getAttribute("aria-label")).toBe("chime sound; only you hear this");
     expect(chime.style.backgroundColor || chime.style.background).toBe("transparent");
     expect(chime.getAttribute("style")).toContain("border: 1px solid var(--border-1)");
     expect(chime.querySelector("path[d='M10.5 6l4 4m0-4l-4 4']")).not.toBeNull();
@@ -168,7 +168,7 @@ describe("BuddySessionActive sound toggles", () => {
     expect(button(container, "end").getAttribute("aria-pressed")).toBe("false");
 
     const haptics = button(container, "haptics");
-    expect(haptics.getAttribute("aria-label")).toBe("haptics feedback off; only you feel this");
+    expect(haptics.getAttribute("aria-label")).toBe("haptics feedback; only you feel this");
     expect(haptics.title).toBe("Only you feel this — does not change anything for others");
     expect(haptics.querySelector("rect")).not.toBeNull();
 
