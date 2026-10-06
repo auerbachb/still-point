@@ -1338,6 +1338,7 @@ final class AppViewModel {
     func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
+            scheduleBuddyInviteConsume()
             return
         }
         guard !isSavingBreathSession else { return }
@@ -1386,6 +1387,9 @@ final class AppViewModel {
             localSaveFailed = true
             currentView = .home
         }
+        // Breath exits skip `returnHome()`, so an invite held back by the
+        // `isInSession` guard during the sit is retried here.
+        scheduleBuddyInviteConsume()
     }
 
     func beginBuddySession() {
