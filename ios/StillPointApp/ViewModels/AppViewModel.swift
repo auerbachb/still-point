@@ -618,6 +618,11 @@ final class AppViewModel {
     /// Buddy invite join/consume. One property: these are alternative routes into
     /// the same invite flow and never need to run concurrently.
     private var buddyInviteTask: Task<Void, Never>?
+    /// Set while a pending invite is being joined. The token stays pending until
+    /// the server answers (#756), so a second consume must not POST it again.
+    private var isConsumingBuddyInvite = false
+    /// Transient join failure. The token is kept; the next auth point retries it.
+    private static let buddyInviteRetryMessage = "Could not reach the server. We will retry your invite."
 
     private func cancelIdentityScopedTasks() {
         offlineCatchUpTask?.cancel()
@@ -1465,6 +1470,7 @@ final class AppViewModel {
     func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
+            scheduleBuddyInviteConsume()
             return
         }
         guard !isSavingBreathSession else { return }
@@ -1509,6 +1515,9 @@ final class AppViewModel {
             localSaveFailed = true
             currentView = .home
         }
+        // Breath exits skip `returnHome()`, so an invite held back by the
+        // `isInSession` guard during the sit is retried here.
+        scheduleBuddyInviteConsume()
     }
 
     func beginBuddySession() {
@@ -1535,12 +1544,22 @@ final class AppViewModel {
 
     func leaveBuddySession() {
         currentView = .home
-        // Retained and guarded like the other identity-scoped work: the task body
-        // runs on a later main-actor turn, and consuming an invite is not
-        // idempotent, so a sign-out in between must not let it burn the token
-        // against whoever is signed in next (#665).
+        scheduleBuddyInviteConsume()
+    }
+
+    /// Every route into the invite flow joins through `consumePendingBuddyInviteIfNeeded`,
+    /// which holds `isConsumingBuddyInvite` for the whole request (#756), so two routes
+    /// cannot POST the same token. Retained and guarded like the other identity-scoped
+    /// work: the task body runs on a later main-actor turn, and consuming an invite is
+    /// not idempotent, so a sign-out in between must not let it burn the token against
+    /// whoever is signed in next (#665).
+    ///
+    /// No cancel of the previous task. A consume in flight would lose the server's
+    /// answer, and one not started yet would run its join already cancelled while
+    /// holding the in-flight flag, so this call would return without joining.
+    private func scheduleBuddyInviteConsume() {
+        guard !isConsumingBuddyInvite else { return }
         let adopted = authGeneration
-        buddyInviteTask?.cancel()
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
             guard adopted == self.authGeneration else { return }
@@ -1566,15 +1585,12 @@ final class AppViewModel {
             pendingBuddyInviteToken = token
             return
         }
-        // Same reasoning as `leaveBuddySession()`: joining is a non-idempotent
-        // network action, so it must not run for a session that replaced this one.
-        let adopted = authGeneration
-        buddyInviteTask?.cancel()
-        buddyInviteTask = Task { [weak self] in
-            guard let self else { return }
-            guard adopted == self.authGeneration else { return }
-            await self.joinBuddySession(token: token, startedAtGeneration: adopted)
-        }
+        // The newest link replaces an older pending one, so a later retry never
+        // joins an invite the user has since moved past (#756). If a consume is
+        // already waiting on the server, it only clears the token it captured and
+        // picks this one up when it finishes.
+        pendingBuddyInviteToken = token
+        scheduleBuddyInviteConsume()
     }
 
     func handlePushDeepLink(_ url: URL) {
@@ -1730,10 +1746,10 @@ final class AppViewModel {
     /// dropped: neither caller is reacting to it, and the badge refresh and the
     /// consumptions behind it are still worth running. A 401 is not that. It is the
     /// server saying this session is over, and both callers gate non-idempotent work
-    /// on the answer — `consumePendingBuddyInviteIfNeeded` clears the pending token
-    /// *before* the join it can no longer complete — so an authoritative rejection
-    /// signs out and returns `nil`, as in `performReconnectRefresh`, rather than
-    /// letting that work be spent against a session that is already gone.
+    /// on the answer — including `consumePendingBuddyInviteIfNeeded`, which joins
+    /// with the pending invite — so an authoritative rejection signs out and returns
+    /// `nil`, as in `performReconnectRefresh`, rather than letting that join run
+    /// against a session that is already gone.
     ///
     /// - Parameter generation: `authGeneration` as it was when the caller decided to
     ///   refresh.
@@ -1804,15 +1820,62 @@ final class AppViewModel {
     ///   to consume the invite, threaded through to the join so the network result
     ///   is checked against the identity that asked for it.
     private func consumePendingBuddyInviteIfNeeded(startedAtGeneration generation: Int) async {
+        guard generation == authGeneration else { return }
         guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
-        pendingBuddyInviteToken = nil
-        await joinBuddySession(token: token, startedAtGeneration: generation)
+        // A kept invite must not pull the user out of a sit or a buddy session they
+        // started after it failed. It stays queued for return-home or leave-session.
+        guard !isInSession else { return }
+        // The token stays pending for the whole request. Overlapping consumes
+        // (a cold start and a scene activation, return-home and leave-session)
+        // would otherwise POST it twice.
+        guard !isConsumingBuddyInvite else { return }
+        isConsumingBuddyInvite = true
+        defer { isConsumingBuddyInvite = false }
+
+        let outcome = await joinBuddySession(token: token, startedAtGeneration: generation)
+
+        // A newer invite may have replaced this one while the request was in flight.
+        // Join that one after this attempt drops the in-flight flag, and only for
+        // the session that is still current. A sign-out leaves the replacement
+        // alone so the next account does not inherit this call. If this one joined,
+        // the `isInSession` guard keeps the newer invite queued instead of replacing
+        // the session just opened.
+        guard pendingBuddyInviteToken == token else {
+            isConsumingBuddyInvite = false
+            if generation == authGeneration, pendingBuddyInviteToken != nil {
+                await consumePendingBuddyInviteIfNeeded(startedAtGeneration: generation)
+            }
+            return
+        }
+        // Sign-out via `didLogout` already nils the token. `applySignedOut` does not,
+        // so a generation change has to drop *this* attempt's token or the next
+        // account inherits it. A token stored since (pending != this one) is kept.
+        guard generation == authGeneration else {
+            pendingBuddyInviteToken = nil
+            return
+        }
+        switch outcome {
+        case .joined, .authoritativeRejection:
+            // Confirmed join, or the server rejected this invite. Either way it is spent.
+            pendingBuddyInviteToken = nil
+        case .transientFailure, .stale:
+            break
+        }
+    }
+
+    private enum BuddyInviteJoinOutcome {
+        case joined
+        case authoritativeRejection
+        case transientFailure
+        /// Cancelled, or the session that started the join is gone. Do not spend
+        /// the token and do not surface an error for it.
+        case stale
     }
 
     /// - Parameter generation: `authGeneration` at the point the join was decided.
     ///   Required rather than defaulted, matching `applySettingsUser`, so a new
     ///   call site cannot forget it and silently reintroduce the stale-write bug.
-    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async {
+    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async -> BuddyInviteJoinOutcome {
         do {
             let sessionId = try await APIClient.shared.joinBuddySession(token: token)
             // The request is a suspension point like every other identity-scoped
@@ -1820,20 +1883,36 @@ final class AppViewModel {
             // *start* the join; a sign-out or account switch landing while it was
             // in flight must not route the replacement account into this session
             // (#665).
-            guard generation == authGeneration else { return }
+            guard generation == authGeneration else { return .stale }
             buddyInviteError = nil
             currentView = .buddySession(sessionId: sessionId)
+            return .joined
+        } catch is CancellationError {
+            // Cancellation is cooperative and does not by itself stop the code
+            // after this await. A sign-out's `cancelIdentityScopedTasks` must not
+            // surface the previous session's failure on whoever is signed in next.
+            return .stale
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return .stale
         } catch {
-            // The failure path needs the same guard — including for the
-            // cancellation error that a sign-out's own `cancelIdentityScopedTasks`
-            // produces. Cancellation is cooperative and does not by itself stop the
-            // post-await mutation, so without this the previous session's failure
-            // would surface as an invite error on whoever is signed in next.
-            guard generation == authGeneration else { return }
-            if let apiError = error as? APIError {
-                buddyInviteError = apiError.message
-            } else {
-                buddyInviteError = "Could not open buddy invite."
+            guard generation == authGeneration else { return .stale }
+            switch BuddyInviteJoinFailure.classify(error) {
+            case .authoritative:
+                // A newer invite may already be queued. Don't paint this rejection
+                // over it; the consume that called this spends only this token.
+                if pendingBuddyInviteToken == token {
+                    if let apiError = error as? APIError {
+                        buddyInviteError = apiError.message
+                    } else {
+                        buddyInviteError = "Could not open buddy invite."
+                    }
+                }
+                return .authoritativeRejection
+            case .transient:
+                if pendingBuddyInviteToken == token {
+                    buddyInviteError = Self.buddyInviteRetryMessage
+                }
+                return .transientFailure
             }
         }
     }
