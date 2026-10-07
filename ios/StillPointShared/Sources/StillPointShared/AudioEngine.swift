@@ -64,6 +64,12 @@ public final class AudioEngine: @unchecked Sendable {
     /// attached — never mid-play, which would leave the replacement to be started
     /// bare (#262).
     private var needsEngineRebuild = false
+    /// True from `mediaServicesWereLost` until `mediaServicesWereReset`.
+    /// Set on the notification thread, before queued cue work runs, so a cue
+    /// already waiting on `serialQueue` still sees the loss. `mediaServicesLock`
+    /// covers that cross-queue read.
+    private let mediaServicesLock = NSLock()
+    private var mediaServicesUnavailable = false
     /// Consecutive failed `engine.start()` attempts; reset by any success.
     private var consecutiveStartFailures = 0
 
@@ -206,16 +212,16 @@ public final class AudioEngine: @unchecked Sendable {
         }
 
         // Posted when the audio server is gone, before the reset that #710
-        // already handles. Do not build a replacement engine here: the server
-        // cannot accept one yet, and the next cue would attach to another
-        // dead graph. The flag makes that cue rebuild; the reset handler
-        // still rebuilds as soon as the server is back.
+        // already handles. Cues wait. The reset handler rebuilds once the
+        // server can accept a graph; a cue must not build one before that.
         let mediaServicesLostToken = notificationCenter.addObserver(
             forName: AVAudioSession.mediaServicesWereLostNotification,
             object: AVAudioSession.sharedInstance(),
             queue: nil
         ) { [weak self] _ in
-            self?.handleMediaServicesLost()
+            // Latch before hopping queues. An async set would let a cue
+            // already waiting on serialQueue play into a dead server.
+            self?.setMediaServicesUnavailable(true)
         }
 
         observerTokens = [
@@ -366,6 +372,9 @@ public final class AudioEngine: @unchecked Sendable {
     /// Schedule and play `buffer` on the voice player node.
     /// Must be called on serialQueue.
     private func _doPlayVoiceBuffer(_ buffer: AVAudioPCMBuffer) {
+        // #768: the media server is gone. Rebuilding here would create an
+        // engine it cannot run, and this clip would play into that graph.
+        guard AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: mediaServicesAreUnavailable()) else { return }
         // #710: same pre-attach rebuild as playSynthesized(), and it must run
         // before voicePlayerNode is read — a rebuild drops that node.
         rebuildEngineIfNeeded()
@@ -658,21 +667,25 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    private func handleMediaServicesLost() {
-        serialQueue.async { [weak self] in
-            // Server is down. Defer the new engine until the next cue or the
-            // reset notification, both of which run on this queue (#262).
-            self?.needsEngineRebuild = true
-        }
+    private func setMediaServicesUnavailable(_ unavailable: Bool) {
+        mediaServicesLock.lock()
+        mediaServicesUnavailable = unavailable
+        mediaServicesLock.unlock()
+    }
+
+    private func mediaServicesAreUnavailable() -> Bool {
+        mediaServicesLock.lock()
+        defer { mediaServicesLock.unlock() }
+        return mediaServicesUnavailable
     }
 
     private func handleMediaServicesReset() {
         serialQueue.async { [weak self] in
             guard let self else { return }
             // The audio server restarted: the engine, its nodes and the session
-            // configuration are all invalid. Rebuild from scratch, then
-            // reconfigure. The next playSynthesized() attaches a source node and
-            // starts the new engine safely (#262).
+            // configuration are all invalid. Clear the latch before rebuilding
+            // so a cue queued behind this block plays on the new graph (#262).
+            self.setMediaServicesUnavailable(false)
             self.rebuildEngine()
             self.configureAudioSession()
         }
@@ -741,6 +754,9 @@ public final class AudioEngine: @unchecked Sendable {
         duration: Double,
         generator: @escaping (_ phase: Double, _ sampleRate: Double) -> Float
     ) {
+        // #768: hold the cue while the media server is down. The reset handler
+        // clears the flag and rebuilds; a rebuild from this call would not.
+        guard AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: mediaServicesAreUnavailable()) else { return }
         // #710: clear a graph that earlier start failures condemned *before*
         // attaching, so the fresh engine is started with a source node connected
         // (#262 invariant).

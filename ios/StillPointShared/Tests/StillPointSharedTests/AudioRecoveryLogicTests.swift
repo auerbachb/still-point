@@ -173,6 +173,14 @@ final class AudioRecoveryLogicTests: XCTestCase {
         )
     }
 
+    func testCueIsHeldWhileMediaServicesAreLost() {
+        XCTAssertFalse(AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: true))
+    }
+
+    func testCuePlaysOnceMediaServicesAreBack() {
+        XCTAssertTrue(AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: false))
+    }
+
     func testUnrecognizedSilenceHintFailsTowardRecovery() {
         XCTAssertEqual(
             AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: .unrecognized),

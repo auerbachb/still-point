@@ -159,4 +159,14 @@ public enum AudioRecoveryLogic {
             return .rebuildEngineBeforeNextSound
         }
     }
+
+    /// Whether a cue may rebuild the graph or play.
+    ///
+    /// `mediaServicesWereLost` means the audio server is gone. Building an
+    /// engine in that window produces another dead graph, and the cue that
+    /// triggered the rebuild plays into it. Hold until `mediaServicesWereReset`
+    /// clears the flag and rebuilds.
+    public static func shouldPlayCue(mediaServicesLost: Bool) -> Bool {
+        !mediaServicesLost
+    }
 }
