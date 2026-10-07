@@ -512,9 +512,6 @@ final class SessionViewModel {
     /// Primes both generators. Cheap, and an unprepared generator fires late
     /// enough that the tap no longer reads as marking the minute it belongs to.
     private func prepareHaptics() {
-        // Ambient capture uses playAndRecord, which mutes haptics unless this
-        // is set. Playback-category sits rely on the Core Haptics engine below.
-        try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
         gentleHaptic.prepare()
         pronouncedHaptic.prepare()
         startCoreHapticsIfNeeded()
@@ -544,6 +541,9 @@ final class SessionViewModel {
     /// Plays a cue at the strength `HapticCueLogic` assigns it. Core Haptics
     /// first, so a sit with sound on still vibrates. UIKit is the fallback.
     private func fireHaptic(_ cue: HapticCueLogic.Cue) {
+        if coreHapticEngine == nil {
+            startCoreHapticsIfNeeded()
+        }
         if playCoreHaptic(cue) { return }
         switch HapticCueLogic.intensity(for: cue) {
         case .gentle:
@@ -573,6 +573,9 @@ final class SessionViewModel {
             try player.start(atTime: CHHapticTimeImmediate)
             return true
         } catch {
+            // A failed start leaves a dead engine. Drop it so the next cue
+            // builds another instead of falling through to silent UIKit forever.
+            coreHapticEngine = nil
             return false
         }
     }
