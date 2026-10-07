@@ -2054,10 +2054,15 @@ final class AppViewModel {
             guard let result = try? await APIClient.shared.getSessions() else {
                 // A cancelled attempt was replaced by a newer one. Only the
                 // attempt that still owns the marker may clear it.
-                if !Task.isCancelled,
-                   widgetHistoryRefreshUserId == attemptUserId,
-                   widgetHistoryRefreshDay == attemptDay,
-                   widgetHistoryRefreshedAt == attemptedAt {
+                if WidgetDataStore.failedAttemptOwnsWidgetHistoryMarker(
+                    cancelled: Task.isCancelled,
+                    markerUserId: widgetHistoryRefreshUserId,
+                    markerDay: widgetHistoryRefreshDay,
+                    markerAttemptedAt: widgetHistoryRefreshedAt,
+                    attemptUserId: attemptUserId,
+                    attemptDay: attemptDay,
+                    attemptedAt: attemptedAt
+                ) {
                     clearWidgetHistoryRefreshMarker()
                 }
                 return
