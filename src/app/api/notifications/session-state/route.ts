@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { getOrCreateNotificationPreferences } from "@/lib/notification-preferences";
 import { sessionActiveUntilFrom } from "@/lib/notifications/session-active";
+import { applyKeyedSessionState, isSessionKey } from "@/lib/notifications/session-holds";
 import { readJsonObject } from "@/lib/readJsonObject";
 
 /**
@@ -26,12 +27,28 @@ export const POST = withApiHandler(
     const json = await readJsonObject(request);
     if (!json.ok) return json.response;
 
-    const { active } = json.body;
+    const { active, sessionKey } = json.body;
     if (typeof active !== "boolean") {
       return NextResponse.json({ error: "active must be a boolean" }, { status: 400 });
     }
+    // Absent or null keeps the legacy single-column write. A present value must
+    // name one sit; a non-string or blank key would otherwise collapse every
+    // such client onto one shared row.
+    if (sessionKey != null && !isSessionKey(sessionKey)) {
+      return NextResponse.json({ error: "sessionKey must be a non-empty string" }, { status: 400 });
+    }
 
     const prefs = await getOrCreateNotificationPreferences(auth.user.userId);
+
+    if (isSessionKey(sessionKey)) {
+      const keyed = await applyKeyedSessionState({
+        userId: auth.user.userId,
+        sessionKey,
+        active,
+        suppressDuringSession: prefs.suppressDuringSession,
+      });
+      return NextResponse.json(keyed);
+    }
     const sessionActiveUntil = active && prefs.suppressDuringSession ? sessionActiveUntilFrom() : null;
 
     if (sessionActiveUntil !== null) {

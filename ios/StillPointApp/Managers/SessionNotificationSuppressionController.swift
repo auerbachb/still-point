@@ -34,22 +34,27 @@ enum SessionNotificationSuppressionController {
         weak var appViewModel: AppViewModel?
         var localSessionRunning = false
         var buddySessionActive = false
+        /// Identifies this scene's live sit on the server (#741). Minted when the
+        /// sit starts and cleared after the `active: false` report is queued.
+        var sessionKey: String?
 
         init(appViewModel: AppViewModel) {
             self.appViewModel = appViewModel
         }
+
+        var sitting: Bool { localSessionRunning || buddySessionActive }
     }
 
     private static var registrations: [ObjectIdentifier: Registration] = [:]
 
-    /// Last state reported to the server, so repeated syncs for the same sit do not
-    /// re-POST on every SwiftUI state change.
-    private static var reportedSessionActive = false
+    /// Session keys whose `active: true` has been reported and not yet released.
+    private static var reportedActiveKeys = Set<String>()
     private static var heartbeatTask: Task<Void, Never>?
-    /// The drain task for the report queue, and the newest state waiting for it
-    /// (see `report(active:)`). `nil` task means nothing is draining.
+    /// The drain task for the report queue, and the newest state waiting for each
+    /// session key (see `report(active:sessionKey:)`). `nil` task means nothing
+    /// is draining.
     private static var reportTask: Task<Void, Never>?
-    private static var queuedReport: Bool?
+    private static var queuedReports: [String: Bool] = [:]
     /// Bumped at every auth boundary so a drain task started by the previous
     /// account cannot outlive `cancelPendingReports()` or clear a newer task,
     /// and so a preference response that left before a sign-out cannot be
@@ -139,10 +144,17 @@ enum SessionNotificationSuppressionController {
     static func clearSuppressPreference() {
         UserDefaults.standard.removeObject(forKey: preferenceDefaultsKey)
         // Stop reporting rather than clearing server-side: the request would 401
-        // without a session, and the server's TTL expires the hold on its own.
+        // without a session, and a queued clear that drained after the next
+        // sign-in would run under that account's credentials. Each sit's hold is
+        // its own row (#741), so the residual rows belong to the signing-out
+        // account and expire with the TTL. A release that did drain later can
+        // delete only a session key the new account does not own, which is a no-op.
         stopHeartbeat()
         cancelPendingReports()
-        reportedSessionActive = false
+        reportedActiveKeys = []
+        for registration in registrations.values {
+            registration.sessionKey = nil
+        }
     }
 
     /// Call when local `SessionView` appears/disappears or its in-progress state changes.
@@ -168,19 +180,33 @@ enum SessionNotificationSuppressionController {
         }
     }
 
-    /// Push the current state to the server when it changed, and keep it refreshed
-    /// while a sit runs. Best-effort: a failed report leaves `willPresent` as the
-    /// remaining layer, and the server's TTL cleans up a hold we stop refreshing.
+    /// Push each live sit's own key to the server, and keep those holds refreshed.
+    /// Best-effort: a failed report leaves `willPresent` as the remaining layer,
+    /// and the server's TTL cleans up a hold we stop refreshing.
     private static func syncServerSessionState() {
-        let active = shouldSuppressPresentation
-        guard active != reportedSessionActive else { return }
-        reportedSessionActive = active
-
-        if active {
-            startHeartbeat()
-        } else {
+        var activeKeys = Set<String>()
+        let holdsEnabled = suppressPreferenceEnabled
+        for registration in registrations.values where registration.appViewModel != nil {
+            if holdsEnabled && registration.sitting {
+                if registration.sessionKey == nil {
+                    registration.sessionKey = UUID().uuidString
+                }
+                if let sessionKey = registration.sessionKey {
+                    activeKeys.insert(sessionKey)
+                    if !reportedActiveKeys.contains(sessionKey) {
+                        report(active: true, sessionKey: sessionKey)
+                    }
+                }
+            } else if let sessionKey = registration.sessionKey {
+                registration.sessionKey = nil
+                report(active: false, sessionKey: sessionKey)
+            }
+        }
+        reportedActiveKeys = activeKeys
+        if activeKeys.isEmpty {
             stopHeartbeat()
-            report(active: false)
+        } else if heartbeatTask == nil {
+            startHeartbeat()
         }
     }
 
@@ -188,7 +214,7 @@ enum SessionNotificationSuppressionController {
         heartbeatTask?.cancel()
         heartbeatTask = Task { @MainActor in
             while !Task.isCancelled {
-                report(active: true)
+                refreshActiveHolds()
                 do {
                     try await Task.sleep(for: serverHeartbeat)
                 } catch {
@@ -198,32 +224,34 @@ enum SessionNotificationSuppressionController {
         }
     }
 
+    private static func refreshActiveHolds() {
+        for registration in registrations.values {
+            guard registration.appViewModel != nil,
+                  suppressPreferenceEnabled,
+                  registration.sitting,
+                  let sessionKey = registration.sessionKey else { continue }
+            report(active: true, sessionKey: sessionKey)
+        }
+    }
+
     private static func stopHeartbeat() {
         heartbeatTask?.cancel()
         heartbeatTask = nil
     }
 
-    /// Reports serially with newest-wins coalescing: an in-flight heartbeat `true`
-    /// landing after the `false` that ended the sit would re-suppress notifications
-    /// for the whole server-side TTL after the user got up, so reports must reach
-    /// the server in call order. Web parity: `reportSessionActiveState`.
-    ///
-    /// Superseded states are dropped rather than queued. `APIClient` uses
-    /// `URLSessionConfiguration.default`, whose 60s request timeout is no shorter
-    /// than the heartbeat interval, so on a slow network reports can be issued
-    /// faster than they drain; queueing them all would delay the ending `false` by
-    /// one full request per stacked heartbeat. The endpoint stores absolute state,
-    /// so only the newest report still matters.
-    private static func report(active: Bool) {
-        queuedReport = active
+    /// Reports serially, newest-wins per session key. One sit's trailing `true`
+    /// must not replace another sit's `false`: the server stores a row per key
+    /// (#741), and only the newest report for *that* key still matters.
+    private static func report(active: Bool, sessionKey: String) {
+        queuedReports[sessionKey] = active
         guard reportTask == nil else { return }
 
         let generation = reportGeneration
         reportTask = Task { @MainActor in
             defer { if generation == reportGeneration { reportTask = nil } }
-            while generation == reportGeneration, !Task.isCancelled, let next = queuedReport {
-                queuedReport = nil
-                try? await APIClient.shared.reportSessionNotificationState(active: next)
+            while generation == reportGeneration, !Task.isCancelled, let sessionKey = queuedReports.keys.first {
+                guard let next = queuedReports.removeValue(forKey: sessionKey) else { continue }
+                try? await APIClient.shared.reportSessionNotificationState(active: next, sessionKey: sessionKey)
             }
         }
     }
@@ -233,7 +261,7 @@ enum SessionNotificationSuppressionController {
     /// account's credentials and silence *their* notifications for a full TTL.
     private static func cancelPendingReports() {
         reportGeneration += 1
-        queuedReport = nil
+        queuedReports = [:]
         reportTask?.cancel()
         reportTask = nil
     }
@@ -252,8 +280,20 @@ enum SessionNotificationSuppressionController {
     }
 
     private static func pruneDeadRegistrations() {
-        registrations = registrations.filter { _, reg in
-            reg.appViewModel != nil
+        let dead = registrations.filter { _, registration in registration.appViewModel == nil }
+        guard !dead.isEmpty else { return }
+        registrations = registrations.filter { _, registration in registration.appViewModel != nil }
+        for (_, registration) in dead {
+            guard let sessionKey = registration.sessionKey else { continue }
+            registration.sessionKey = nil
+            reportedActiveKeys.remove(sessionKey)
+            report(active: false, sessionKey: sessionKey)
+        }
+        let stillSitting = registrations.values.contains { registration in
+            registration.appViewModel != nil && registration.sitting && registration.sessionKey != nil
+        }
+        if !stillSitting {
+            stopHeartbeat()
         }
     }
 }

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const getCurrentUser = vi.fn();
 const getOrCreateNotificationPreferences = vi.fn();
+const { applyKeyedSessionState } = vi.hoisted(() => ({
+  applyKeyedSessionState: vi.fn(),
+}));
 // Rows the conditional `active: true` update reports back. Defaults to echoing the
 // value the route asked for; tests override it to simulate the WHERE clause
 // matching nothing (the preference was toggled off between read and write).
@@ -39,6 +42,12 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/notification-preferences", () => ({
   getOrCreateNotificationPreferences,
+}));
+
+vi.mock("@/lib/notifications/session-holds", () => ({
+  applyKeyedSessionState,
+  isSessionKey: (value: unknown) =>
+    typeof value === "string" && value.length > 0 && value.length <= 64,
 }));
 
 vi.mock("@/lib/readJsonObject", () => ({
@@ -184,5 +193,66 @@ describe("/api/notifications/session-state", () => {
 
     expect(response.status).toBe(401);
     expect(dbUpdate).not.toHaveBeenCalled();
+    expect(applyKeyedSessionState).not.toHaveBeenCalled();
+  });
+
+  test("rejects a non-string session key", async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(post({ active: true, sessionKey: 12 }));
+
+    expect(response.status).toBe(400);
+    expect(dbUpdate).not.toHaveBeenCalled();
+    expect(applyKeyedSessionState).not.toHaveBeenCalled();
+  });
+
+  test("a keyed sit takes only that sit's hold", async () => {
+    applyKeyedSessionState.mockResolvedValue({
+      sessionActiveUntil: "2026-06-01T12:03:00.000Z",
+      suppressDuringSession: true,
+    });
+    const { POST } = await import("./route");
+
+    const response = await POST(post({ active: true, sessionKey: "sit-a" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.sessionActiveUntil).toBe("2026-06-01T12:03:00.000Z");
+    expect(applyKeyedSessionState).toHaveBeenCalledWith({
+      userId: "user-1",
+      sessionKey: "sit-a",
+      active: true,
+      suppressDuringSession: true,
+    });
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
+  test("a keyed release delegates so another sit's hold can remain", async () => {
+    applyKeyedSessionState.mockResolvedValue({
+      sessionActiveUntil: "2026-06-01T12:04:00.000Z",
+      suppressDuringSession: true,
+    });
+    const { POST } = await import("./route");
+
+    const response = await POST(post({ active: false, sessionKey: "sit-a" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.sessionActiveUntil).toBe("2026-06-01T12:04:00.000Z");
+    expect(applyKeyedSessionState).toHaveBeenCalledWith(expect.objectContaining({
+      sessionKey: "sit-a",
+      active: false,
+    }));
+  });
+
+  test("omitting sessionKey keeps the legacy single-column write", async () => {
+    const { POST } = await import("./route");
+
+    await POST(post({ active: true }));
+
+    expect(applyKeyedSessionState).not.toHaveBeenCalled();
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionActiveUntil: expect.any(Date) }),
+    );
   });
 });

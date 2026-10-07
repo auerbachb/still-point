@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
@@ -112,7 +113,11 @@ export function BuddySessionRoom({
 
   const keepScreenAwakePref = useKeepScreenAwakePref();
   useWakeLock(keepScreenAwakePref && buddyHoldActive && !localTimerCompleted && !exitingRoom);
-  useSessionSuppressionRelay(buddyHoldActive && !localTimerCompleted && !exitingRoom);
+  const notificationSessionKeyRef = useRef(crypto.randomUUID());
+  useSessionSuppressionRelay(
+    buddyHoldActive && !localTimerCompleted && !exitingRoom,
+    notificationSessionKeyRef.current,
+  );
 
   if (!snap && !pollError) {
     return (
