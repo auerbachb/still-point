@@ -27,7 +27,7 @@ const updateWhere = vi.fn(() => {
 updateSet.mockImplementation(() => ({ where: updateWhere }));
 const dbUpdate = vi.fn(() => ({ set: updateSet }));
 
-const dbExecute = vi.fn(async () => ({ rows: [] as Array<Record<string, unknown>> }));
+const dbExecute = vi.fn(async (_query: unknown) => ({ rows: [] as Array<Record<string, unknown>> }));
 
 vi.mock("@/db", () => ({
   db: {
