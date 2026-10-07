@@ -414,8 +414,11 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Voice Countdown Asset Helpers
 
     private static func voiceCountdownURL(for seconds: Int) -> URL? {
-        // Folder references from XcodeGen preserve the VoiceCountdown subdirectory.
-        Bundle.main.url(forResource: "\(seconds)", withExtension: "mp3", subdirectory: "VoiceCountdown")
+        // Supports both layouts: a `VoiceCountdown` subdirectory (folder
+        // reference) and clips flattened to the bundle root (XcodeGen group).
+        VoiceCountdownResourceResolver.url(for: seconds) { name, ext, subdirectory in
+            Bundle.main.url(forResource: name, withExtension: ext, subdirectory: subdirectory)
+        }
     }
 
     private static func loadPCMBuffer(from url: URL) -> AVAudioPCMBuffer? {
