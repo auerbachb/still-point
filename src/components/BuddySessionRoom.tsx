@@ -28,6 +28,7 @@ type BuddySessionRoomProps = {
   onExit: () => void;
   /** When set, a finished shared timer saves a personal session row then opens the normal completion flow. */
   onPersonalRecordComplete?: (data: BuddyPersonalRecordPayload) => void;
+  dualTrackEnabled?: boolean;
 };
 
 export function BuddySessionRoom({
@@ -36,6 +37,7 @@ export function BuddySessionRoom({
   calendarMessage,
   onExit,
   onPersonalRecordComplete,
+  dualTrackEnabled = false,
 }: BuddySessionRoomProps) {
   const isMobile = useIsMobile();
 
@@ -104,6 +106,7 @@ export function BuddySessionRoom({
       localTimerCompletedRef,
       pollStopped,
       onPersonalRecordComplete,
+      dualTrackEnabled,
     });
 
   const keepScreenAwakePref = useKeepScreenAwakePref();

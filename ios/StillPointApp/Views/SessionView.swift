@@ -1010,7 +1010,8 @@ struct SessionView: View {
             // Persist session before navigating to completion screen
             guard let session = await vm.saveSession(
                 completed: vm.completedNaturally,
-                ownerUserId: ownerUserId
+                ownerUserId: ownerUserId,
+                sessionDate: appVM.creditedSessionDate()
             ) else {
                 // #703: the alert below already blocks the false-success
                 // completion; the flag additionally withdraws the offline
