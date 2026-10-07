@@ -145,4 +145,167 @@ final class HapticCueLogicTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Buddy timer signals (#736)
+
+    /// A 10-minute sit crossing its first minute, with nine full minutes left.
+    func testBuddySignalsMarkAMinuteWhenAFullMinuteRemains() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 540,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: -1,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertTrue(signals.crossedMinuteBoundary)
+        XCTAssertTrue(signals.fullMinuteRemains)
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertEqual(signals.updatedCompletedBlockIndex, 0)
+        XCTAssertEqual(
+            HapticCueLogic.minuteMarkerCue(
+                hapticsEnabled: true,
+                crossedMinuteBoundary: signals.crossedMinuteBoundary,
+                fullMinuteRemains: signals.fullMinuteRemains,
+                isAbandoned: false
+            ),
+            .minuteMarker
+        )
+    }
+
+    func testBuddySignalsStayQuietBetweenBoundaries() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 500,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 0,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+        XCTAssertFalse(signals.fullMinuteRemains)
+        XCTAssertFalse(signals.completedNaturally)
+    }
+
+    /// Joining after the first minute has already completed must not replay it.
+    func testBuddySignalsDoNotReplayABoundaryAlreadyAccountedFor() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 540,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 0,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertEqual(signals.updatedCompletedBlockIndex, 0)
+    }
+
+    /// 150s sit: the second minute block ends with 30s left, inside the final
+    /// minute, so the boundary is real and the marker must still stay silent.
+    func testBuddySignalsSuppressTheMarkerInsideTheFinalMinute() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 30,
+            durationSeconds: 150,
+            lastCompletedBlockIndex: 0,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertTrue(signals.crossedMinuteBoundary)
+        XCTAssertFalse(signals.fullMinuteRemains)
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertNil(
+            HapticCueLogic.minuteMarkerCue(
+                hapticsEnabled: true,
+                crossedMinuteBoundary: signals.crossedMinuteBoundary,
+                fullMinuteRemains: signals.fullMinuteRemains,
+                isAbandoned: false
+            )
+        )
+    }
+
+    func testBuddySignalsCompleteNaturallyWhenRemainingHitsZero() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 0,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 8,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertTrue(signals.completedNaturally)
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+        XCTAssertFalse(signals.fullMinuteRemains)
+        XCTAssertTrue(signals.sessionEndAlreadyEmitted)
+        XCTAssertEqual(
+            HapticCueLogic.sessionEndCue(
+                hapticsEnabled: true,
+                completedNaturally: signals.completedNaturally,
+                isAbandoned: false
+            ),
+            .sessionEnd
+        )
+    }
+
+    func testBuddySignalsEmitNaturalCompletionOnlyOnce() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 0,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 8,
+            sessionEndAlreadyEmitted: true
+        )
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+        XCTAssertTrue(signals.sessionEndAlreadyEmitted)
+        XCTAssertNil(
+            HapticCueLogic.sessionEndCue(
+                hapticsEnabled: true,
+                completedNaturally: signals.completedNaturally,
+                isAbandoned: false
+            )
+        )
+    }
+
+    /// Leaving before the timer runs out — remaining still positive — is an
+    /// early end, not a natural completion.
+    func testBuddySignalsDoNotCompleteWhileTimeRemains() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 15,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 8,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+    }
+
+    func testBuddyNaturalCompletionStaysSilentWhenAbandoned() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 0,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 8,
+            sessionEndAlreadyEmitted: false
+        )
+        XCTAssertNil(
+            HapticCueLogic.sessionEndCue(
+                hapticsEnabled: true,
+                completedNaturally: signals.completedNaturally,
+                isAbandoned: true
+            )
+        )
+        XCTAssertNil(
+            HapticCueLogic.minuteMarkerCue(
+                hapticsEnabled: true,
+                crossedMinuteBoundary: true,
+                fullMinuteRemains: true,
+                isAbandoned: true
+            )
+        )
+    }
+
+    func testBuddySignalsStayStillAfterCompletionIfTheClockBounces() {
+        let signals = HapticCueLogic.buddyTimerCueSignals(
+            remainingSeconds: 5,
+            durationSeconds: 600,
+            lastCompletedBlockIndex: 8,
+            sessionEndAlreadyEmitted: true
+        )
+        XCTAssertFalse(signals.crossedMinuteBoundary)
+        XCTAssertFalse(signals.fullMinuteRemains)
+        XCTAssertFalse(signals.completedNaturally)
+        XCTAssertTrue(signals.sessionEndAlreadyEmitted)
+        XCTAssertEqual(signals.updatedCompletedBlockIndex, 8)
+    }
 }

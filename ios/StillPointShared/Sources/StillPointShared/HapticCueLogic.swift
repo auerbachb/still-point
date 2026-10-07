@@ -95,4 +95,94 @@ public enum HapticCueLogic {
         else { return nil }
         return .sessionEnd
     }
+
+    /// Timing events for one tick of a buddy sit (#736).
+    ///
+    /// Buddy sits do not keep a haptics-only clock. These signals are read from
+    /// the same minute-block clock the bell uses (`SessionLogic.nextMinuteChimeUpdate`),
+    /// so a later buddy chime and the buzz mark the same instants.
+    public struct BuddyTimerCueSignals: Sendable, Equatable {
+        /// A new minute block completed on this tick.
+        public let crossedMinuteBoundary: Bool
+        /// At least one whole minute is still to go (`MinuteChimeUpdate.chimeCount != nil`).
+        public let fullMinuteRemains: Bool
+        /// The shared timer reached the full duration on this tick, and has not
+        /// already announced that.
+        public let completedNaturally: Bool
+        public let updatedCompletedBlockIndex: Int
+        /// Sticky once natural completion has been reported, so a 1s timer
+        /// waiting on the snapshot does not buzz again.
+        public let sessionEndAlreadyEmitted: Bool
+    }
+
+    /// Derives the buddy sit's minute-boundary and natural-completion events.
+    ///
+    /// `remainingSeconds == 0` is the natural-completion path and suppresses the
+    /// minute marker, matching solo: the end cue and a marker must not land on
+    /// the same tick. A boundary inside the final minute still reports
+    /// `crossedMinuteBoundary` with `fullMinuteRemains == false`, and
+    /// `minuteMarkerCue` stays silent.
+    ///
+    /// - Parameters:
+    ///   - remainingSeconds: Whole seconds left on the shared timer.
+    ///   - durationSeconds: Planned length of the sit.
+    ///   - lastCompletedBlockIndex: Highest minute block already observed.
+    ///     Pass the index seeded from server elapsed when the window opens so
+    ///     a sit joined mid-way does not replay markers that already passed.
+    ///   - sessionEndAlreadyEmitted: True after natural completion has been
+    ///     reported for this window, including when the window opened already
+    ///     at full duration.
+    public static func buddyTimerCueSignals(
+        remainingSeconds: Int,
+        durationSeconds: Int,
+        lastCompletedBlockIndex: Int,
+        sessionEndAlreadyEmitted: Bool
+    ) -> BuddyTimerCueSignals {
+        guard durationSeconds > 0, remainingSeconds >= 0 else {
+            return BuddyTimerCueSignals(
+                crossedMinuteBoundary: false,
+                fullMinuteRemains: false,
+                completedNaturally: false,
+                updatedCompletedBlockIndex: lastCompletedBlockIndex,
+                sessionEndAlreadyEmitted: sessionEndAlreadyEmitted
+            )
+        }
+
+        if remainingSeconds == 0 {
+            return BuddyTimerCueSignals(
+                crossedMinuteBoundary: false,
+                fullMinuteRemains: false,
+                completedNaturally: !sessionEndAlreadyEmitted,
+                updatedCompletedBlockIndex: lastCompletedBlockIndex,
+                sessionEndAlreadyEmitted: true
+            )
+        }
+
+        // A clock that steps backward after the end cue must not mark another
+        // minute or announce the end a second time.
+        if sessionEndAlreadyEmitted {
+            return BuddyTimerCueSignals(
+                crossedMinuteBoundary: false,
+                fullMinuteRemains: false,
+                completedNaturally: false,
+                updatedCompletedBlockIndex: lastCompletedBlockIndex,
+                sessionEndAlreadyEmitted: true
+            )
+        }
+
+        let elapsed = Double(durationSeconds - remainingSeconds)
+        let update = SessionLogic.nextMinuteChimeUpdate(
+            elapsed: elapsed,
+            totalSeconds: durationSeconds,
+            lastCompletedBlockIndex: lastCompletedBlockIndex
+        )
+        let crossedMinuteBoundary = update.updatedCompletedBlockIndex > lastCompletedBlockIndex
+        return BuddyTimerCueSignals(
+            crossedMinuteBoundary: crossedMinuteBoundary,
+            fullMinuteRemains: update.chimeCount != nil,
+            completedNaturally: false,
+            updatedCompletedBlockIndex: update.updatedCompletedBlockIndex,
+            sessionEndAlreadyEmitted: false
+        )
+    }
 }
