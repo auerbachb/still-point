@@ -105,36 +105,13 @@ jobs:
       # are `ios/StillPointApp`. Simulator builds keep the base
       # CODE_SIGN_STYLE Automatic; iphoneos manual signing does not apply, so
       # this step passes no signing overrides (issue #698).
+      # Compile only: a generic simulator destination does not launch a device,
+      # so a renamed simulator on the runner cannot fail this check.
       - name: Compile StillPoint app target
         if: needs.changes.outputs.app == 'true'
         run: |
           set -euo pipefail
-          # Same preferred-device resolution as scripts/e2e/run-ios-tests.sh
-          # (resolve_test_destination). Keep the lists aligned so a retired
-          # simulator name on macos-26 does not fail the compile.
-          simctl_output="$(xcrun simctl list devices available 2>/dev/null || true)"
-          destination=""
-          preferred=(
-            "iPhone 17 Pro"
-            "iPhone 17"
-            "iPhone 17 Pro Max"
-            "iPhone 17e"
-            "iPhone 16e"
-            "iPhone 16 Pro"
-            "iPhone 16"
-            "iPhone 15 Pro"
-            "iPhone 15"
-            "iPhone Air"
-          )
-          for name in "${preferred[@]}"; do
-            if grep -F "    ${name} (" <<<"${simctl_output}" >/dev/null 2>&1; then
-              destination="platform=iOS Simulator,name=${name},OS=latest"
-              break
-            fi
-          done
-          if [ -z "$destination" ]; then
-            destination="platform=iOS Simulator,name=iPhone 17,OS=latest"
-          fi
+          destination="generic/platform=iOS Simulator"
           echo "Using iOS compile destination: ${destination}"
           xcodebuild build \
             -project ios/StillPoint.xcodeproj \
