@@ -206,13 +206,16 @@ public final class AudioEngine: @unchecked Sendable {
         }
 
         // Posted when the audio server is gone, before the reset that #710
-        // already handles. The graph is invalid in that window too.
+        // already handles. Do not build a replacement engine here: the server
+        // cannot accept one yet, and the next cue would attach to another
+        // dead graph. The flag makes that cue rebuild; the reset handler
+        // still rebuilds as soon as the server is back.
         let mediaServicesLostToken = notificationCenter.addObserver(
             forName: AVAudioSession.mediaServicesWereLostNotification,
             object: AVAudioSession.sharedInstance(),
             queue: nil
         ) { [weak self] _ in
-            self?.handleMediaServicesReset()
+            self?.handleMediaServicesLost()
         }
 
         observerTokens = [
@@ -652,6 +655,14 @@ public final class AudioEngine: @unchecked Sendable {
             // consulted: secondary mute leaves it true.
             self.configureAudioSession()
             self.needsEngineRebuild = true
+        }
+    }
+
+    private func handleMediaServicesLost() {
+        serialQueue.async { [weak self] in
+            // Server is down. Defer the new engine until the next cue or the
+            // reset notification, both of which run on this queue (#262).
+            self?.needsEngineRebuild = true
         }
     }
 
