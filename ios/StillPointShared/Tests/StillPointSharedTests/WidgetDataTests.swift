@@ -2218,4 +2218,45 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(data.weekMarks(now: now), data.weekMarks(for: .primary, now: now))
         XCTAssertEqual(data.weekMarks(now: now).first(where: { $0.iso == oneDayAgo })?.done, true)
     }
+
+    /// #767: an unfinished practice day stays open from midnight until 6:00 local.
+    /// A finished day still rolls at midnight.
+    func testUnfinishedPracticeDayStaysOpenUntil6am() {
+        let calendar = Calendar.current
+        func at(_ hour: Int, _ minute: Int, day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+        }
+        let yesterdayEvening = at(23, 0, day: 7)
+        let twelveThirty = at(0, 30, day: 8)
+        let sixAm = at(6, 0, day: 8)
+
+        let unfinished = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 4,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: false,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            streak: 1,
+            lastUpdated: yesterdayEvening
+        )
+        XCTAssertTrue(WidgetDataStore.normalizedForDisplay(unfinished, now: twelveThirty).practiceDoneToday)
+        XCTAssertFalse(WidgetDataStore.normalizedForDisplay(unfinished, now: sixAm).practiceDoneToday)
+
+        let finished = WidgetData(
+            isLoggedIn: true,
+            userId: "u1",
+            currentDay: 4,
+            secondTrackDay: 1,
+            dualTrackEnabled: false,
+            primaryDoneToday: true,
+            secondDoneToday: false,
+            practiceDoneToday: true,
+            streak: 1,
+            lastUpdated: yesterdayEvening
+        )
+        XCTAssertFalse(WidgetDataStore.normalizedForDisplay(finished, now: twelveThirty).primaryDoneToday)
+    }
 }

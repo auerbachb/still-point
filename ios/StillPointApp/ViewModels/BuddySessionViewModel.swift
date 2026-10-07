@@ -261,7 +261,7 @@ final class BuddySessionViewModel {
         return "\(remaining / 60):\(String(format: "%02d", remaining % 60))"
     }
 
-    func savePersonalSession() async -> SessionDTO? {
+    func savePersonalSession(sessionDate: String) async -> SessionDTO? {
         guard let snapshot, snapshot.state == "completed" else { return nil }
         isSavingCompletion = true
         completionSaveError = nil
@@ -284,7 +284,7 @@ final class BuddySessionViewModel {
             thoughtCount: thoughtInputs.count,
             mindStateLog: logToSave,
             actualTime: snapshot.durationSeconds,
-            sessionDate: localISODate(),
+            sessionDate: sessionDate,
             thoughts: thoughtInputs.isEmpty ? nil : thoughtInputs
         )
 
@@ -403,14 +403,6 @@ final class BuddySessionViewModel {
             log.append(MindStateEntry(time: Double(duration), state: "clear"))
         }
         return log
-    }
-
-    private func localISODate() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        return formatter.string(from: Date())
     }
 
     private func parseISO(_ raw: String?) -> Date? {

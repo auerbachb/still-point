@@ -7,6 +7,22 @@
 
 const ISO_CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Local wall-clock hour at which an unfinished practice day closes.
+ * 6:00:00 belongs to the new calendar day; 5:59 still belongs to yesterday
+ * when that day still has a required sit open.
+ */
+export const GRACE_CUTOFF_HOUR = 6;
+
+/** A sit row, narrowed to the fields the practice-day rule reads. */
+export type PracticeDaySit = {
+  completed?: boolean | null;
+  sessionType?: string | null;
+  sessionDate?: string | null;
+  /** Missing track counts as primary, matching pre-#240 rows. */
+  track?: string | null;
+};
+
 /** Strict `YYYY-MM-DD` that parses as a real UTC calendar day and round-trips. */
 export function isValidSessionCalendarDate(value: string | undefined | null): boolean {
   if (typeof value !== "string" || !ISO_CALENDAR_DAY.test(value)) return false;
@@ -46,13 +62,72 @@ export function daysBetweenIsoDatesInclusive(fromIso: string, toIso: string): nu
  * for non-UTC users. Use {@link addDaysToIsoDate}/{@link daysBetweenIsoDatesInclusive}
  * instead when you need pure UTC date math on an already-stored `session_date`.
  */
-export function getLocalIsoDate(offsetDays = 0): string {
-  const now = new Date();
-  now.setDate(now.getDate() + offsetDays);
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
+/** `YYYY-MM-DD` for `now` in its local timezone, shifted by `offsetDays`. */
+export function localIsoDateFrom(now: Date, offsetDays = 0): string {
+  const shifted = new Date(now.getTime());
+  shifted.setDate(shifted.getDate() + offsetDays);
+  const y = shifted.getFullYear();
+  const m = String(shifted.getMonth() + 1).padStart(2, "0");
+  const d = String(shifted.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+export function getLocalIsoDate(offsetDays = 0): string {
+  return localIsoDateFrom(new Date(), offsetDays);
+}
+
+/**
+ * Whether `isoDay` has every required standard sit.
+ * Single-track: the primary sit. Two-a-day (`dualTrackEnabled`): primary and second.
+ * The day stays open until both are done; one finished sit does not close it.
+ */
+export function isDayCompleteForEnabledTracks(
+  sits: readonly PracticeDaySit[],
+  isoDay: string,
+  dualTrackEnabled: boolean,
+): boolean {
+  let primary = false;
+  let second = false;
+  for (const sit of sits) {
+    if (!sit.completed || sit.sessionType !== "standard" || sit.sessionDate !== isoDay) continue;
+    if (sit.track === "second") second = true;
+    else primary = true;
+  }
+  return dualTrackEnabled ? primary && second : primary;
+}
+
+/**
+ * Practice day a sit should be stored on.
+ *
+ * Before 6:00 local, an unfinished previous calendar day stays open, so the
+ * sit counts for yesterday. Once every required sit for that day is done —
+ * or the clock reaches 6:00 — the credited day is the local calendar date.
+ * `previousDayComplete` is the caller's fact about yesterday; this function
+ * does not read sessions.
+ */
+export function effectiveTodayLocalIsoDate(
+  previousDayComplete: boolean,
+  now: Date = new Date(),
+): string {
+  if (now.getHours() < GRACE_CUTOFF_HOUR && !previousDayComplete) {
+    return localIsoDateFrom(now, -1);
+  }
+  return localIsoDateFrom(now, 0);
+}
+
+/**
+ * Credited practice day from a session list. Before the user record is known,
+ * pass `dualTrackEnabled: true` so a finished primary sit does not close a
+ * two-a-day schedule early; refine once `dualTrackEnabled` is known.
+ */
+export function creditedLocalIsoDate(
+  sits: readonly PracticeDaySit[],
+  dualTrackEnabled: boolean,
+  now: Date = new Date(),
+): string {
+  const yesterday = localIsoDateFrom(now, -1);
+  const previousDayComplete = isDayCompleteForEnabledTracks(sits, yesterday, dualTrackEnabled);
+  return effectiveTodayLocalIsoDate(previousDayComplete, now);
 }
 
 /**

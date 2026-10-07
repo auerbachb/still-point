@@ -150,6 +150,17 @@ final class AppViewModel {
     /// `makeSnapshot` as `flagsAsOf` so the fold is retired at the boundary, and
     /// used by `rollOverDoneTodayFlagsIfNeeded()` to retire the flags themselves.
     private var doneTodayFlagsStamp: Date?
+    /// Whether every required sit for the previous calendar day is done.
+    /// False before 6:00 keeps that day open. Defaults to finished so a daytime
+    /// launch does not invent a grace window; a pre-6:00 launch resolves it.
+    private var previousCalendarDayComplete = true
+    /// Set once `resolvePreviousPracticeDay` has an answer, so a later rollover
+    /// does not replace it with the pre-6:00 "unknown" default.
+    private var previousDayResolved = false
+    /// Calendar day `previousDayResolved` describes. A new morning must ask again.
+    private var resolvedForCalendarDay: String?
+    /// Orders overlapping yesterday lookups so a slow answer cannot replace a newer one.
+    private var previousDayRequest = 0
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -316,7 +327,7 @@ final class AppViewModel {
         let settingsTicket = nextSettingsRequestTicket()
 
         do {
-            if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
+            if let user = try await APIClient.shared.me(today: creditedSessionDate()) {
                 // Paired with the check ID for the same reason as the terminal
                 // branches below. Adopting the user is idempotent, but the route
                 // reset and the badge reset under it are not: `RootView` starts a
@@ -701,7 +712,7 @@ final class AppViewModel {
         // backstop (#697).
         let settingsTicket = nextSettingsRequestTicket()
         do {
-            guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+            guard let user = try await APIClient.shared.me(today: creditedSessionDate()) else {
                 guard generation == authGeneration else { return nil }
                 applySignedOut(cause: .signedOut, message: nil)
                 return nil
@@ -1096,6 +1107,10 @@ final class AppViewModel {
         practiceDoneToday = false
         secondPracticeDoneToday = false
         primaryStandardDoneToday = false
+        previousCalendarDayComplete = true
+        previousDayResolved = false
+        resolvedForCalendarDay = nil
+        previousDayRequest += 1
         doneTodayFlagsStamp = nil
     }
 
@@ -1116,19 +1131,110 @@ final class AppViewModel {
     /// over with the rest for the same reason and on the same fail-closed logic
     /// the refresh failure path already uses: on a new day nothing has been sat
     /// yet, and the next successful refresh restores the truth.
-    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
-        if let stamp = doneTodayFlagsStamp, WidgetDataStore.isSameLocalDay(stamp, now) {
+    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
+    private func requiredSitsCompleteFromFlags() -> Bool {
+        let dual = currentUser?.dualTrackEnabled ?? false
+        return dual ? (primaryDoneToday && secondDoneToday) : primaryDoneToday
+    }
+
+    /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
+    func creditedSessionDate(now: Date = Date()) -> String {
+        rollOverDoneTodayFlagsIfNeeded(now: now)
+        return SessionCalendar.effectiveLocalIsoDate(
+            previousDayComplete: previousCalendarDayComplete,
+            now: now
+        )
+    }
+
+    /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
+    private func creditedPracticeInstant(now: Date = Date()) -> Date {
+        let credited = creditedSessionDate(now: now)
+        let calendarToday = SessionCalendar.localIsoDate(now: now)
+        guard credited != calendarToday else { return now }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .hour, value: -1, to: start) ?? now
+    }
+
+    /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
+    private func resolvePreviousPracticeDay(now: Date) async {
+        let calendarDay = SessionCalendar.localIsoDate(now: now)
+        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
             return
         }
-        // A nil stamp means nothing has been claimed yet this process; the flags
-        // are already false, so this just establishes the day.
-        if doneTodayFlagsStamp != nil {
-            primaryDoneToday = false
-            secondDoneToday = false
-            practiceDoneToday = false
-            secondPracticeDoneToday = false
-            primaryStandardDoneToday = false
+        guard Calendar.current.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
+            previousCalendarDayComplete = true
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+            return
         }
+        previousDayRequest += 1
+        let ticket = previousDayRequest
+        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
+        do {
+            let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
+            guard ticket == previousDayRequest else { return }
+            let dual = currentUser?.dualTrackEnabled ?? false
+            previousCalendarDayComplete = dual
+                ? (tracks.primary && tracks.second)
+                : tracks.primary
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+        } catch {
+            guard ticket == previousDayRequest else { return }
+            let calendar = Calendar.current
+            if let stamp = doneTodayFlagsStamp,
+               let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+               calendar.isDate(stamp, inSameDayAs: yesterday) {
+                previousCalendarDayComplete = requiredSitsCompleteFromFlags()
+            } else {
+                previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
+            }
+            // Unresolved so the next refresh retries the lookup.
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
+        }
+    }
+
+    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
+        let calendar = Calendar.current
+        if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
+            return
+        }
+        let hour = calendar.component(.hour, from: now)
+        if doneTodayFlagsStamp == nil {
+            // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
+            // says it is finished, unless that fetch already answered.
+            if !previousDayResolved {
+                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
+            }
+            doneTodayFlagsStamp = now
+            return
+        }
+        if hour < SessionCalendar.graceCutoffHour,
+           let stamp = doneTodayFlagsStamp,
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+           calendar.isDate(stamp, inSameDayAs: yesterday) {
+            if previousDayResolved {
+                if !previousCalendarDayComplete {
+                    return
+                }
+            } else if !requiredSitsCompleteFromFlags() {
+                previousCalendarDayComplete = false
+                return
+            }
+        }
+        // The previous day is finished, the clock is at or after 6:00, or the
+        // stamp is older than yesterday. Roll onto the calendar day. A resolved
+        // answer is kept — badge flags must not overwrite it.
+        if !previousDayResolved {
+            previousCalendarDayComplete = true
+        }
+        primaryDoneToday = false
+        secondDoneToday = false
+        practiceDoneToday = false
+        secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
         doneTodayFlagsStamp = now
     }
 
@@ -1209,24 +1315,32 @@ final class AppViewModel {
         // all describe the same account, which is exactly the case it ignores.
         let ticket = tracksDoneOrdering.nextTicket()
         let now = Date()
+        // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
+        // otherwise assume the day is finished and credit the new calendar date.
+        await resolvePreviousPracticeDay(now: now)
         // Two rollovers, because they cover different evidence. The stamp-based
         // one below knows what *this process* claimed and when; the snapshot-based
         // one here also catches a relaunch that inherited a stored snapshot from a
         // previous day. Both are cheap and idempotent.
         rollOverDoneTodayFlagsIfNeeded(now: now)
         let prior = WidgetDataStore.load()
-        if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
+        let priorRequired = (prior?.dualTrackEnabled ?? false)
+            ? ((prior?.primaryDoneToday ?? false) && (prior?.secondDoneToday ?? false))
+            : (prior?.primaryDoneToday ?? true)
+        if let prior, prior.isLoggedIn,
+           !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now),
+           !WidgetDataStore.graceKeepsPreviousPracticeDay(
+                lastUpdated: prior.lastUpdated,
+                now: now,
+                requiredSitsComplete: priorRequired
+           ) {
             practiceDoneToday = false
             secondPracticeDoneToday = false
             // #679: same rollover as its siblings — yesterday's standard sit must
             // not fold today into the standard-only set.
             primaryStandardDoneToday = false
         }
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
-        let today = dateFormatter.string(from: Date())
+        let today = creditedSessionDate(now: now)
         do {
             let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
             // Identity first, deliberately: a response that outlived its session is
@@ -1246,6 +1360,13 @@ final class AppViewModel {
             }
             if secondDoneToday {
                 secondPracticeDoneToday = true
+            }
+            if today != SessionCalendar.localIsoDate(now: now) {
+                let calendar = Calendar.current
+                let startToday = calendar.startOfDay(for: now)
+                if let evening = calendar.date(byAdding: .hour, value: -1, to: startToday) {
+                    doneTodayFlagsStamp = evening
+                }
             }
         } catch {
             // #759: a cancelled request is not a failed one, and only a failure
@@ -1344,10 +1465,6 @@ final class AppViewModel {
         defer { isSavingBreathSession = false }
 
         let clientSessionId = UUID()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
 
         let request = CreateSessionRequest(
             dayNumber: currentDay,
@@ -1359,7 +1476,7 @@ final class AppViewModel {
             clearPercent: 0,
             thoughtCount: 0,
             mindStateLog: [],
-            sessionDate: dateFormatter.string(from: Date()),
+            sessionDate: creditedSessionDate(),
             breathCount: breathCount,
             clientSessionId: clientSessionId
         )
@@ -1624,7 +1741,7 @@ final class AppViewModel {
         let settingsTicket = nextSettingsRequestTicket()
         let user: UserDTO
         do {
-            guard let fetched = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+            guard let fetched = try await APIClient.shared.me(today: creditedSessionDate()) else {
                 // `me()` returns nil for exactly one case: a 401 that is not
                 // `TOKEN_EXPIRED`. The server has rejected this session, so the work
                 // the caller gates on this answer must not run against it.
@@ -1754,6 +1871,7 @@ final class AppViewModel {
         // through — including the network-free `markPracticeDoneToday` that can
         // reach here first on a sit just after local midnight.
         rollOverDoneTodayFlagsIfNeeded()
+        let practiceNow = creditedPracticeInstant()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
@@ -1769,7 +1887,8 @@ final class AppViewModel {
             // Belt to the rollover's braces: the flags were just retired if the day
             // had turned, and this tells `makeSnapshot` the day they describe so it
             // refuses the same-day folds itself rather than trusting the caller.
-            flagsAsOf: doneTodayFlagsStamp
+            now: practiceNow,
+            flagsAsOf: practiceNow
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)

@@ -21,10 +21,15 @@ import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
 import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
 import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type Session } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
 import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
-import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import {
+  creditedLocalIsoDate,
+  GRACE_CUTOFF_HOUR,
+  localIsoDateFrom,
+  type PracticeDaySit,
+} from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
 import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
@@ -230,6 +235,32 @@ type CompletedSitInput = {
   thoughts: Array<{ timeInSession: number; text: string }>;
 };
 
+function practiceDaySit(session: Pick<Session, "completed" | "sessionType" | "sessionDate" | "track">): PracticeDaySit {
+  return {
+    completed: session.completed,
+    sessionType: session.sessionType,
+    sessionDate: session.sessionDate,
+    track: session.track,
+  };
+}
+
+/**
+ * Practice day to stamp and to send as `/api/auth/me?date=`.
+ * With no session list yet, the hours before 6:00 stay on yesterday so a
+ * failed read cannot start missed-day recovery for a day still open.
+ */
+function creditedPracticeDate(
+  sits: PracticeDaySit[] | null,
+  dualTrackEnabled: boolean,
+  now = new Date(),
+): string {
+  if (sits == null) {
+    if (now.getHours() < GRACE_CUTOFF_HOUR) return localIsoDateFrom(now, -1);
+    return localIsoDateFrom(now, 0);
+  }
+  return creditedLocalIsoDate(sits, dualTrackEnabled, now);
+}
+
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
   const item = sync?.[0];
   if (!item) return null;
@@ -272,6 +303,10 @@ export default function StillPoint() {
   // after a logout, it would persist the signed-out account as the offline
   // identity, surviving a reload.
   const sessionGeneration = useRef(0);
+  // Sits used to decide whether yesterday is still open. Null until a fetch lands.
+  const loadedSitsRef = useRef<PracticeDaySit[] | null>(null);
+  const userRef = useRef(user);
+  userRef.current = user;
   const isMobile = useIsMobile();
   // #666: running the app from the locally cached identity because the server
   // could not be reached. Only a *successful* `/api/auth/me` clears it, mirroring
@@ -338,8 +373,14 @@ export default function StillPoint() {
   // future call site cannot adopt a user without it.
   const refreshUserFromServer = useCallback(() => {
     const generation = sessionGeneration.current;
+    const now = new Date();
+    const date = creditedPracticeDate(
+      loadedSitsRef.current,
+      !!userRef.current?.dualTrackEnabled,
+      now,
+    );
     void api
-      .me()
+      .me(date)
       .then(({ user: u }) => {
         if (generation === sessionGeneration.current) setUser(u);
       })
@@ -389,6 +430,7 @@ export default function StillPoint() {
       setRunningFromCache(false);
 
       if (outcome.action === "signedOut") {
+        loadedSitsRef.current = null;
         setUser(null);
         // Teardown is gated on the one shared predicate — asked once, through
         // the cached-identity store, whose answer then gates the rest (the iOS
@@ -410,7 +452,22 @@ export default function StillPoint() {
 
     async function checkAuth() {
       try {
-        const res = await fetch(`/api/auth/me?date=${todayLocalIsoDate()}`);
+        const now = new Date();
+        if (now.getHours() < GRACE_CUTOFF_HOUR && loadedSitsRef.current == null) {
+          try {
+            const { sessions } = await api.getSessions();
+            if (cancelled || generation !== sessionGeneration.current) return;
+            loadedSitsRef.current = sessions.map(practiceDaySit);
+          } catch {
+            // Leave the cache empty. `creditedPracticeDate` keeps yesterday
+            // open before 6:00 so this miss cannot start recovery early.
+          }
+        }
+        if (cancelled || generation !== sessionGeneration.current) return;
+        // Dual-track is not known yet. Assume it is on so a finished primary
+        // sit does not close a two-a-day schedule; refine after the user lands.
+        const date = creditedPracticeDate(loadedSitsRef.current, true, now);
+        const res = await fetch(`/api/auth/me?date=${encodeURIComponent(date)}`);
         if (cancelled) return;
 
         if (res.ok) {
@@ -418,7 +475,23 @@ export default function StillPoint() {
           // Re-checked after the second await: an unmount between the response
           // and its body must not adopt a user or write the cache.
           if (cancelled || generation !== sessionGeneration.current) return;
-          const freshUser = data?.user ?? null;
+          let freshUser = data?.user ?? null;
+          if (freshUser && loadedSitsRef.current) {
+            const precise = creditedPracticeDate(
+              loadedSitsRef.current,
+              !!freshUser.dualTrackEnabled,
+              now,
+            );
+            if (precise !== date) {
+              const again = await fetch(`/api/auth/me?date=${encodeURIComponent(precise)}`);
+              if (cancelled || generation !== sessionGeneration.current) return;
+              if (again.ok) {
+                const againData = await again.json();
+                if (cancelled || generation !== sessionGeneration.current) return;
+                if (againData?.user) freshUser = againData.user;
+              }
+            }
+          }
           if (freshUser) {
             setUser(freshUser);
             setRunningFromCache(false);
@@ -599,7 +672,9 @@ export default function StillPoint() {
     // enters the recovery ramp before their first sit of this session.
     // Guard on the session generation so a slow response can't repopulate user
     // state after an explicit logout before the /api/auth/me response arrives.
-    void fetch(`/api/auth/me?date=${todayLocalIsoDate()}`)
+    const now = new Date();
+    const date = creditedPracticeDate(loadedSitsRef.current, true, now);
+    void fetch(`/api/auth/me?date=${encodeURIComponent(date)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (generation === sessionGeneration.current && data?.user) setUser(data.user);
@@ -610,6 +685,7 @@ export default function StillPoint() {
   const handleLogout = () => {
     // Invalidates every user adoption already in flight (#666).
     sessionGeneration.current += 1;
+    loadedSitsRef.current = null;
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
@@ -637,7 +713,9 @@ export default function StillPoint() {
   const refreshTodayTracks = useCallback(async () => {
     try {
       const { sessions } = await api.getSessions();
-      const today = todayLocalIsoDate();
+      const sits = sessions.map(practiceDaySit);
+      loadedSitsRef.current = sits;
+      const today = creditedLocalIsoDate(sits, !!userRef.current?.dualTrackEnabled);
       let primary = false;
       let second = false;
       for (const s of sessions) {
@@ -784,7 +862,11 @@ export default function StillPoint() {
   const handleSessionComplete = useCallback(async (data: CompletedSitInput) => {
     const clientSessionId = crypto.randomUUID();
     // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
-    const sessionDate = todayLocalIsoDate();
+    // A retry that crosses 6:00 still keeps this credited day.
+    const sessionDate = creditedPracticeDate(
+      loadedSitsRef.current,
+      !!userRef.current?.dualTrackEnabled,
+    );
     let outcome: SessionSaveOutcome | null = null;
 
     // #666 guard: the save below is a suspension point, and sign-out during it
@@ -802,6 +884,30 @@ export default function StillPoint() {
     }
 
     if (generation !== sessionGeneration.current) return;
+
+    // A pending sit is not on the server yet, so the refresh inside the save
+    // cannot see it. Remember it so the next sit in this grace window knows
+    // yesterday's required sits.
+    if (
+      data.completed
+      && data.sessionType === "standard"
+      && outcome
+      && outcome.status !== "notStored"
+    ) {
+      const sits = loadedSitsRef.current ?? [];
+      const counted = sits.some((sit) =>
+        sit.completed
+        && sit.sessionType === "standard"
+        && sit.sessionDate === sessionDate
+        && (data.track === "second" ? sit.track === "second" : sit.track !== "second"),
+      );
+      if (!counted) {
+        loadedSitsRef.current = [
+          ...sits,
+          { completed: true, sessionType: "standard", sessionDate, track: data.track },
+        ];
+      }
+    }
 
     setCompletionData({
       sessionId: outcome?.sessionId ?? null,
@@ -871,7 +977,10 @@ export default function StillPoint() {
             clearPercent: data.clearPercent,
             thoughtCount: data.thoughtCount,
             mindStateLog: data.mindStateLog,
-            sessionDate: todayLocalIsoDate(),
+            sessionDate: creditedPracticeDate(
+              loadedSitsRef.current,
+              !!userRef.current?.dualTrackEnabled,
+            ),
           },
           clientSessionId,
           user.id,
@@ -927,7 +1036,10 @@ export default function StillPoint() {
             thoughtCount: 0,
             breathCount: result.breathCount,
             mindStateLog: [],
-            sessionDate: todayLocalIsoDate(),
+            sessionDate: creditedPracticeDate(
+              loadedSitsRef.current,
+              !!userRef.current?.dualTrackEnabled,
+            ),
           },
           clientSessionId,
           user.id,
@@ -1327,11 +1439,17 @@ export default function StillPoint() {
           calendarMessage={buddyCalendarMessage}
           onExit={handleBuddyExit}
           onPersonalRecordComplete={handleBuddyPersonalRecordComplete}
+          dualTrackEnabled={!!user.dualTrackEnabled}
         />
       )}
 
       {!overlay && tab === "history" && (
-        <HistoryView currentDay={user.currentDay} recovery={userRecovery} username={user.username} />
+        <HistoryView
+          currentDay={user.currentDay}
+          recovery={userRecovery}
+          username={user.username}
+          dualTrackEnabled={!!user.dualTrackEnabled}
+        />
       )}
 
       {!overlay && tab === "journal" && (

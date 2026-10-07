@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { api } from "@/lib/api";
 import { computeClearPercentFromLog } from "@/lib/mindStateSession";
-import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import { creditedLocalIsoDate, GRACE_CUTOFF_HOUR, localIsoDateFrom } from "@/lib/sessionCalendar";
 import { formatBuddyActionError } from "@/lib/buddySessionRoomUtils";
 import type { BuddySnapshot } from "@/lib/api";
 
@@ -28,6 +28,8 @@ type UseBuddySessionFinalizationOptions = {
   localTimerCompletedRef: RefObject<boolean>;
   pollStopped: boolean;
   onPersonalRecordComplete?: (data: BuddyPersonalRecordPayload) => void;
+  /** When omitted, a finished primary sit is enough to close yesterday. */
+  dualTrackEnabled?: boolean;
 };
 
 export function useBuddySessionFinalization({
@@ -41,6 +43,7 @@ export function useBuddySessionFinalization({
   localTimerCompletedRef,
   pollStopped,
   onPersonalRecordComplete,
+  dualTrackEnabled = false,
 }: UseBuddySessionFinalizationOptions) {
   const serverFinalizeTriggeredRef = useRef(false);
   const localTimerFinalizeTriggeredRef = useRef(false);
@@ -87,12 +90,24 @@ export function useBuddySessionFinalization({
       );
       const clearPercent = computeClearPercentFromLog(mindStateLogRef.current ?? [], durationSeconds);
       const thoughtsSnapshot = sessionThoughtsRef.current ?? [];
+      // Pin the clock before the session fetch so a slow response cannot
+      // cross 6:00 and credit the wrong day.
+      const endedAt = new Date();
+      let sessionDate = endedAt.getHours() < GRACE_CUTOFF_HOUR
+        ? localIsoDateFrom(endedAt, -1)
+        : localIsoDateFrom(endedAt, 0);
+      try {
+        const { sessions } = await api.getSessions();
+        sessionDate = creditedLocalIsoDate(sessions, dualTrackEnabled, endedAt);
+      } catch {
+        // Keep the provisional date. Before 6:00 that is yesterday.
+      }
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
         clearPercent,
         thoughtCount: thoughtsSnapshot.length,
         mindStateLog: mindStateLogRef.current ?? [],
         actualTime: durationSeconds,
-        sessionDate: todayLocalIsoDate(),
+        sessionDate,
         thoughts: thoughtsSnapshot,
       });
       try {
@@ -116,7 +131,7 @@ export function useBuddySessionFinalization({
       saveInFlightRef.current = false;
       setIsSavingPersonalRecord(false);
     }
-  }, [sessionId, onPersonalRecordComplete, snapRef, mindStateLogRef, sessionThoughtsRef, elapsedRef, localTimerCompletedRef]);
+  }, [sessionId, onPersonalRecordComplete, snapRef, mindStateLogRef, sessionThoughtsRef, elapsedRef, localTimerCompletedRef, dualTrackEnabled]);
 
   useEffect(() => {
     if (snap?.state !== "completed" || !onPersonalRecordComplete) return;

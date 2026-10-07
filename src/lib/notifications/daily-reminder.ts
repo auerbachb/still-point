@@ -1,9 +1,9 @@
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
-import { notificationDispatches, sessions } from "@/db/schema";
+import { notificationDispatches, sessions, users } from "@/db/schema";
 import type { ApnsPayload } from "@/lib/apns";
 import { calculateSessionStats, type SessionStatsInput } from "@/lib/constants";
-import { addDaysToIsoDate } from "@/lib/sessionCalendar";
+import { addDaysToIsoDate, isDayCompleteForEnabledTracks } from "@/lib/sessionCalendar";
 
 const DAILY_REMINDER_NOTIFICATION_TYPE = "daily_reminder";
 export const MISS_A_DAY_NOTIFICATION_TYPE = "miss_a_day";
@@ -104,6 +104,41 @@ export async function userCompletedSessionOnDate(
     .limit(1);
 
   return !!row;
+}
+
+/**
+ * True when `yesterdayIso` still has a required standard sit open, so a
+ * notification must not treat that day as missed. Two-a-day stays open until
+ * both tracks have a completed standard sit.
+ */
+export async function previousPracticeDayStillOpen(
+  userId: string,
+  yesterdayIso: string,
+): Promise<boolean> {
+  const [user] = await db
+    .select({ dualTrackEnabled: users.dualTrackEnabled })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const rows = await db
+    .select({
+      completed: sessions.completed,
+      sessionType: sessions.sessionType,
+      sessionDate: sessions.sessionDate,
+      track: sessions.track,
+    })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.userId, userId),
+        eq(sessions.sessionDate, yesterdayIso),
+        eq(sessions.completed, true),
+        eq(sessions.sessionType, "standard"),
+      ),
+    );
+
+  return !isDayCompleteForEnabledTracks(rows, yesterdayIso, !!user?.dualTrackEnabled);
 }
 
 /** De-dup with miss-a-day (#247): skip daily reminder if miss-a-day already sent for this local date. */
