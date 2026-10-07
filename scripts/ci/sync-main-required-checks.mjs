@@ -3,7 +3,8 @@
  * Sync required status checks on `main` for issue #588.
  *
  * Sets the fast PR merge gate (folds #434 unit-tests + #439 Info.plist sync +
- * #588 e2e-off-PR). Supersedes #537 (which would have required web-e2e lanes).
+ * #588 e2e-off-PR + #698 StillPointApp compile). Supersedes #537 (which would
+ * have required web-e2e lanes).
  *
  * Adds the target checks and removes deprecated e2e required checks if present.
  * Preserves unrelated required checks (e.g. Vercel app checks).
@@ -19,13 +20,14 @@ import { execFileSync } from "node:child_process";
 
 const BRANCH = "main";
 
-/** Fast checks that must stay required (#588, #434, #439). */
+/** Fast checks that must stay required (#588, #434, #439, #698). */
 const TARGET_CHECKS = [
   "typecheck",
   "unit-tests",
   "build",
   "StillPointShared swift test",
   "Info.plist in sync with project.yml",
+  "StillPointApp compile",
 ];
 
 /** Deprecated e2e checks to remove when syncing (#588 supersedes #537). */
