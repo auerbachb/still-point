@@ -194,13 +194,36 @@ public final class AudioEngine: @unchecked Sendable {
             self?.handleMediaServicesReset()
         }
 
+        // #768: `.mixWithOthers` lets iOS mute us as secondary audio without an
+        // interruption. The engine stays "running", so the #710 start-failure
+        // path never runs and the tick stays silent after the other audio stops.
+        let silenceHintToken = notificationCenter.addObserver(
+            forName: AVAudioSession.silenceSecondaryAudioHintNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] notification in
+            self?.handleSecondaryAudioSilenceHint(notification)
+        }
+
+        // Posted when the audio server is gone, before the reset that #710
+        // already handles. The graph is invalid in that window too.
+        let mediaServicesLostToken = notificationCenter.addObserver(
+            forName: AVAudioSession.mediaServicesWereLostNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleMediaServicesReset()
+        }
+
         observerTokens = [
             interruptionToken,
             backgroundToken,
             foregroundToken,
             routeChangeToken,
             configurationChangeToken,
-            mediaServicesResetToken
+            mediaServicesResetToken,
+            silenceHintToken,
+            mediaServicesLostToken
         ]
     }
 
@@ -590,6 +613,45 @@ public final class AudioEngine: @unchecked Sendable {
                 onConfigurationChangeFromOwnEngine: isFromOwnEngine
             ) else { return }
             self.discardVoicePlayerNode()
+            // The engine has stopped and every mixer connection is broken.
+            // Starting that same engine again can report success while the tick
+            // stays silent (#768). The next cue replaces the graph before
+            // attaching a node (#262) — not from this notification.
+            self.needsEngineRebuild = true
+        }
+    }
+
+    /// Maps the silence-hint userInfo onto the testable decision.
+    /// A missing or unknown raw value is `.unrecognized` (fail toward recovery).
+    private static func secondaryAudioSilenceHint(
+        rawValue: UInt?
+    ) -> AudioRecoveryLogic.SecondaryAudioSilenceHint {
+        guard let rawValue,
+              let hint = AVAudioSession.SilenceSecondaryAudioHintType(rawValue: rawValue) else {
+            return .unrecognized
+        }
+        switch hint {
+        case .begin: return .began
+        case .end: return .ended
+        @unknown default: return .unrecognized
+        }
+    }
+
+    private func handleSecondaryAudioSilenceHint(_ notification: Notification) {
+        let rawValue = notification.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt
+        let hint = Self.secondaryAudioSilenceHint(rawValue: rawValue)
+        guard AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: hint)
+            == .rebuildEngineBeforeNextSound else {
+            return
+        }
+
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            // Reactivate, then let the next cue rebuild. Rebuilding here would
+            // be a bare engine with no source node (#262). `isRunning` is not
+            // consulted: secondary mute leaves it true.
+            self.configureAudioSession()
+            self.needsEngineRebuild = true
         }
     }
 

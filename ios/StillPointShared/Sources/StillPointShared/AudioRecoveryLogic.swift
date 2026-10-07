@@ -117,4 +117,46 @@ public enum AudioRecoveryLogic {
             ? .rebuildEngineBeforeNextSound
             : .reactivateSessionAndRetry
     }
+
+    // MARK: - Secondary-audio silence (#768)
+
+    /// Mirror of `AVAudioSession.SilenceSecondaryAudioHintType`, plus the
+    /// values this build does not recognize.
+    ///
+    /// With `.mixWithOthers`, iOS can mute this app as secondary audio when
+    /// another app plays primary audio. That posts no interruption, and the
+    /// engine keeps reporting `isRunning`, so a failed `start()` never happens
+    /// and the #710 retry never runs. The tick then stays silent for the rest
+    /// of the sit.
+    public enum SecondaryAudioSilenceHint: Equatable {
+        /// Another app started primary audio. Output is muted until it stops.
+        case began
+        /// The other audio stopped.
+        case ended
+        /// Missing userInfo, or a raw value this build does not know.
+        case unrecognized
+    }
+
+    /// What to do when iOS posts a secondary-audio silence hint.
+    public enum SecondaryAudioSilenceRecovery: Equatable {
+        /// Rebuilding cannot unmute us while the other app is still primary.
+        case waitForHintToEnd
+        /// The engine may still be "running" and producing silence. Replace the
+        /// graph before the next cue. Do not call `engine.start()` from the
+        /// notification — the next play attaches a source node first (#262).
+        case rebuildEngineBeforeNextSound
+    }
+
+    /// Fail toward recovery: an unrecognized hint rebuilds, same as hint-ended.
+    /// Hint-began waits, because a rebuild during the mute cannot be heard.
+    public static func secondaryAudioSilenceRecovery(
+        for hint: SecondaryAudioSilenceHint
+    ) -> SecondaryAudioSilenceRecovery {
+        switch hint {
+        case .began:
+            return .waitForHintToEnd
+        case .ended, .unrecognized:
+            return .rebuildEngineBeforeNextSound
+        }
+    }
 }
