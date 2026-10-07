@@ -60,7 +60,7 @@ test.describe("mobile overflow and scrolling", () => {
     await expectMinimumTapTarget(endEarlyButton, "session end early button");
 
     await tapWithControlReveal(page, endEarlyButton);
-    const returnButton = page.getByRole("button", { name: "Return" });
+    const returnButton = page.getByRole("button", { name: "save and return to home" });
     await expect(returnButton).toBeVisible();
     await expectMinimumTapTarget(returnButton, "completion return button");
   });

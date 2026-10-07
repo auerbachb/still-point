@@ -25,9 +25,14 @@ struct CompletionView: View {
 
     @State private var endNote = ""
     @State private var noteSaved = false
+    @State private var lastSavedNote = ""
     @State private var isSaving = false
     @State private var saveError: String?
-    @State private var uiTestAutoSaveTask: Task<Void, Never>?
+    @State private var noteAutosaveTask: Task<Void, Never>?
+    @State private var ratingsAutosaveTask: Task<Void, Never>?
+    @State private var moodAutosaveTask: Task<Void, Never>?
+    @State private var returnFlushFailed = false
+    @State private var isReturning = false
 
     // Session environment photo (optional, local-only MVP)
     @State private var capturedPhoto: UIImage?
@@ -39,12 +44,14 @@ struct CompletionView: View {
     @State private var focusTouched = false
     @State private var happinessTouched = false
     @State private var ratingsSaved = false
+    @State private var lastSavedRatingsKey = ""
     @State private var isSavingRatings = false
     @State private var ratingsSaveError: String?
 
     // Before/after mood matrix (#472 / #635)
     @State private var moodMatrix: [MoodKey: MoodMatrixEntry] = [:]
     @State private var moodMatrixSaved = false
+    @State private var lastSavedMoodKey = ""
     @State private var isSavingMoodMatrix = false
     @State private var moodMatrixSaveError: String?
 
@@ -66,7 +73,6 @@ struct CompletionView: View {
         endNote.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var isSaveDisabled: Bool { trimmedEndNote.isEmpty || noteSaved || isSaving || sessionId.isEmpty }
     private var isQuickSession: Bool { sessionType == .quick }
     private var hasUnlockedApps: Bool { appVM.appBlockingManager.didUnlockFromLastCompletedSession }
 
@@ -228,10 +234,7 @@ struct CompletionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(SPColor.border2)
                         )
-                        .disabled(isSaving || noteSaved)
-                        .onChange(of: endNote) {
-                            if noteSaved { noteSaved = false }
-                        }
+                        .disabled(isReturning)
                         .accessibilityIdentifier("completion.endNoteEditor")
 
                     if noteSaved {
@@ -239,45 +242,12 @@ struct CompletionView: View {
                             .font(SPFont.mono(11, weight: .medium))
                             .foregroundStyle(SPColor.green)
                             .accessibilityIdentifier("completion.savedIndicator")
-                    } else {
-                        Button {
-                            saveEndNote()
-                        } label: {
-                            HStack(spacing: SPSpacing.s1) {
-                                if isSaving {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .tint(Color(SPColor.bg))
-                                }
-                                Text(isSaving ? "Saving…" : "Save note")
-                            }
-                            .font(SPFont.serifItalic(18, weight: .light))
-                            .spCapsuleButtonStyle(
-                                isSaveDisabled ? .neutral : .greenSolid,
-                                size: .fullWidth,
-                                prominent: isSaveDisabled
-                            )
-                            .foregroundStyle(isSaveDisabled ? Color(SPColor.fg3) : Color(SPColor.bg))
-                        }
-                        .disabled(isSaveDisabled)
-                        .accessibilityIdentifier("completion.saveNoteButton")
                     }
 
                     if let saveError {
-                        VStack(alignment: .leading, spacing: SPSpacing.s1) {
-                            Text(saveError)
-                                .font(SPFont.mono(11))
-                                .foregroundStyle(SPColor.dangerMuted)
-
-                            Button {
-                                saveEndNote()
-                            } label: {
-                                Text("Retry save")
-                                    .font(SPFont.mono(11, weight: .medium))
-                                    .foregroundStyle(SPColor.dangerMuted)
-                            }
-                            .disabled(isSaving)
-                        }
+                        Text(saveError)
+                            .font(SPFont.mono(11))
+                            .foregroundStyle(SPColor.dangerMuted)
                     }
                 }
 
@@ -321,14 +291,14 @@ struct CompletionView: View {
                     )
                 }
 
-                // Return button
                 Button {
-                    Task { await appVM.returnHome() }
+                    Task { await saveAndReturnHome() }
                 } label: {
-                    Text("Return")
+                    Text("save and return to home")
                         .font(SPFont.serifItalic(18, weight: .light))
                         .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
                 }
+                .disabled(isReturning)
                 .accessibilityIdentifier("completion.returnButton")
 
                 Spacer().frame(height: SPSpacing.s4)
@@ -338,7 +308,9 @@ struct CompletionView: View {
         .stillPointBackground()
         .onChange(of: endNote) { _, newValue in
             saveError = nil
-            scheduleUITestAutoSaveIfNeeded(for: newValue)
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed != lastSavedNote { noteSaved = false }
+            scheduleNoteAutosave(for: newValue)
         }
         .sheet(isPresented: $showPhotoPicker) {
             SessionPhotoPicker { image in
@@ -446,16 +418,24 @@ struct CompletionView: View {
             ratingRow(
                 label: "FOCUS",
                 value: $focusRating,
-                onTouch: { focusTouched = true },
-                disabled: isSavingRatings || ratingsSaved
+                onTouch: {
+                    focusTouched = true
+                    ratingsSaved = false
+                    scheduleRatingsAutosave()
+                },
+                disabled: isReturning
             )
             .accessibilityIdentifier("completion.focusSlider")
 
             ratingRow(
                 label: "HAPPINESS",
                 value: $happinessRating,
-                onTouch: { happinessTouched = true },
-                disabled: isSavingRatings || ratingsSaved
+                onTouch: {
+                    happinessTouched = true
+                    ratingsSaved = false
+                    scheduleRatingsAutosave()
+                },
+                disabled: isReturning
             )
             .accessibilityIdentifier("completion.happinessSlider")
 
@@ -464,40 +444,12 @@ struct CompletionView: View {
                     .font(SPFont.mono(11, weight: .medium))
                     .foregroundStyle(SPColor.green)
                     .accessibilityIdentifier("completion.ratingsSavedIndicator")
-            } else {
-                Button {
-                    saveRatings()
-                } label: {
-                    HStack(spacing: SPSpacing.s1) {
-                        if isSavingRatings {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(Color(SPColor.bg))
-                        }
-                        Text(isSavingRatings ? "Saving…" : "Save ratings")
-                    }
-                    .font(SPFont.serifItalic(18, weight: .light))
-                    .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
-                }
-                .disabled(isSavingRatings)
-                .accessibilityIdentifier("completion.saveRatingsButton")
             }
 
             if let ratingsSaveError {
-                VStack(alignment: .leading, spacing: SPSpacing.s1) {
-                    Text(ratingsSaveError)
-                        .font(SPFont.mono(11))
-                        .foregroundStyle(SPColor.dangerMuted)
-
-                    Button {
-                        saveRatings()
-                    } label: {
-                        Text("Retry")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .foregroundStyle(SPColor.dangerMuted)
-                    }
-                    .disabled(isSavingRatings)
-                }
+                Text(ratingsSaveError)
+                    .font(SPFont.mono(11))
+                    .foregroundStyle(SPColor.dangerMuted)
             }
         }
     }
@@ -526,40 +478,53 @@ struct CompletionView: View {
         }
     }
 
-    private func saveRatings() {
-        guard !sessionId.isEmpty, !isSavingRatings, !ratingsSaved else { return }
+    private func saveRatings() async {
+        guard !sessionId.isEmpty, !isSavingRatings else { return }
+        guard focusTouched || happinessTouched else { return }
+        let key = ratingsSaveKey
+        guard key != lastSavedRatingsKey else {
+            ratingsSaved = true
+            ratingsSaveError = nil
+            return
+        }
         isSavingRatings = true
         ratingsSaveError = nil
-        Task { @MainActor in
-            // Replicate web's touched-field payload logic exactly:
-            // Only send ratings the user explicitly touched. If neither was
-            // touched, send both (user tapped Save with visible defaults —
-            // treat as intentional, mirroring web's CompletionScreen behaviour).
-            let patch: SessionRatingsPatch
-            if !focusTouched && !happinessTouched {
-                patch = SessionRatingsPatch(
-                    focusRating: Int(focusRating),
-                    happinessRating: Int(happinessRating)
-                )
-            } else {
-                patch = SessionRatingsPatch(
-                    focusRating: focusTouched ? Int(focusRating) : nil,
-                    happinessRating: happinessTouched ? Int(happinessRating) : nil
-                )
+        let patch = SessionRatingsPatch(
+            focusRating: focusTouched ? Int(focusRating) : nil,
+            happinessRating: happinessTouched ? Int(happinessRating) : nil
+        )
+        do {
+            _ = try await APIClient.shared.updateSessionRatings(sessionId: sessionId, ratings: patch)
+            isSavingRatings = false
+            lastSavedRatingsKey = key
+            ratingsSaved = true
+        } catch is CancellationError {
+            isSavingRatings = false
+        } catch let error as APIError {
+            isSavingRatings = false
+            ratingsSaveError = ratingsErrorMessage(for: error.status)
+        } catch {
+            isSavingRatings = false
+            ratingsSaveError = "Unable to save ratings — please try again"
+        }
+    }
+
+    private var ratingsSaveKey: String {
+        let focus = focusTouched ? String(Int(focusRating)) : "-"
+        let happiness = happinessTouched ? String(Int(happinessRating)) : "-"
+        return "\(focus):\(happiness)"
+    }
+
+    private func scheduleRatingsAutosave() {
+        ratingsAutosaveTask?.cancel()
+        ratingsAutosaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            while isSavingRatings {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
             }
-            do {
-                _ = try await APIClient.shared.updateSessionRatings(sessionId: sessionId, ratings: patch)
-                isSavingRatings = false
-                ratingsSaved = true
-            } catch is CancellationError {
-                isSavingRatings = false
-            } catch let error as APIError {
-                isSavingRatings = false
-                ratingsSaveError = ratingsErrorMessage(for: error.status)
-            } catch {
-                isSavingRatings = false
-                ratingsSaveError = "Unable to save ratings — please try again"
-            }
+            guard !Task.isCancelled else { return }
+            await saveRatings()
         }
     }
 
@@ -588,49 +553,26 @@ struct CompletionView: View {
                 .foregroundStyle(Color(SPColor.fg4))
                 .tracking(2)
 
+            moodMatrixColumnHeaders
+            moodMatrixScaleHints
+
+            VStack(spacing: SPSpacing.s2) {
+                ForEach(MoodKey.allCases, id: \.self) { key in
+                    moodMatrixRow(for: key)
+                }
+            }
+
             if moodMatrixSaved {
                 Text("mood saved")
                     .font(SPFont.mono(11, weight: .medium))
                     .foregroundStyle(SPColor.green)
                     .accessibilityIdentifier("completion.moodMatrixSavedIndicator")
-            } else {
-                moodMatrixColumnHeaders
-                moodMatrixScaleHints
+            }
 
-                VStack(spacing: SPSpacing.s2) {
-                    ForEach(MoodKey.allCases, id: \.self) { key in
-                        moodMatrixRow(for: key)
-                    }
-                }
-
-                if MoodMatrixLogic.isTouched(moodMatrix) {
-                    Button {
-                        saveMoodMatrix()
-                    } label: {
-                        HStack(spacing: SPSpacing.s1) {
-                            if isSavingMoodMatrix {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(Color(SPColor.bg))
-                            }
-                            Text(isSavingMoodMatrix ? "Saving…" : (moodMatrixSaveError == nil ? "Save mood" : "Retry"))
-                        }
-                        .font(SPFont.serifItalic(18, weight: .light))
-                        .spCapsuleButtonStyle(
-                            moodMatrixSaveError == nil ? .neutral : .greenSolid,
-                            size: .fullWidth,
-                            prominent: true
-                        )
-                    }
-                    .disabled(isSavingMoodMatrix)
-                    .accessibilityIdentifier("completion.saveMoodMatrixButton")
-                }
-
-                if let moodMatrixSaveError {
-                    Text(moodMatrixSaveError)
-                        .font(SPFont.mono(11))
-                        .foregroundStyle(SPColor.dangerMuted)
-                }
+            if let moodMatrixSaveError {
+                Text(moodMatrixSaveError)
+                    .font(SPFont.mono(11))
+                    .foregroundStyle(SPColor.dangerMuted)
             }
         }
     }
@@ -682,7 +624,7 @@ struct CompletionView: View {
                 moodKey: key,
                 column: .before,
                 selected: entry.before,
-                disabled: isSavingMoodMatrix
+                disabled: isSavingMoodMatrix || isReturning
             )
             .frame(maxWidth: .infinity)
 
@@ -690,7 +632,7 @@ struct CompletionView: View {
                 moodKey: key,
                 column: .after,
                 selected: entry.after,
-                disabled: isSavingMoodMatrix
+                disabled: isSavingMoodMatrix || isReturning
             )
             .frame(maxWidth: .infinity)
         }
@@ -757,28 +699,58 @@ struct CompletionView: View {
         }
         moodMatrix[key] = MoodMatrixEntry(before: newBefore, after: newAfter)
         moodMatrixSaveError = nil
+        moodMatrixSaved = false
+        scheduleMoodAutosave()
     }
 
-    private func saveMoodMatrix() {
-        guard !sessionId.isEmpty, !isSavingMoodMatrix, !moodMatrixSaved else { return }
+    private func saveMoodMatrix() async {
+        guard !sessionId.isEmpty, !isSavingMoodMatrix else { return }
         guard MoodMatrixLogic.isTouched(moodMatrix) else { return }
+        let key = moodSaveKey
+        guard key != lastSavedMoodKey else {
+            moodMatrixSaved = true
+            moodMatrixSaveError = nil
+            return
+        }
         isSavingMoodMatrix = true
         moodMatrixSaveError = nil
         let patch = MoodMatrixPatch(from: moodMatrix)
-        Task { @MainActor in
-            do {
-                _ = try await APIClient.shared.updateSessionMoodMatrix(sessionId: sessionId, patch: patch)
-                isSavingMoodMatrix = false
-                moodMatrixSaved = true
-            } catch is CancellationError {
-                isSavingMoodMatrix = false
-            } catch let error as APIError {
-                isSavingMoodMatrix = false
-                moodMatrixSaveError = moodMatrixErrorMessage(for: error.status)
-            } catch {
-                isSavingMoodMatrix = false
-                moodMatrixSaveError = "Unable to save mood — please try again"
+        do {
+            _ = try await APIClient.shared.updateSessionMoodMatrix(sessionId: sessionId, patch: patch)
+            isSavingMoodMatrix = false
+            lastSavedMoodKey = key
+            moodMatrixSaved = true
+        } catch is CancellationError {
+            isSavingMoodMatrix = false
+        } catch let error as APIError {
+            isSavingMoodMatrix = false
+            moodMatrixSaveError = moodMatrixErrorMessage(for: error.status)
+        } catch {
+            isSavingMoodMatrix = false
+            moodMatrixSaveError = "Unable to save mood — please try again"
+        }
+    }
+
+    private var moodSaveKey: String {
+        let patch = MoodMatrixPatch(from: moodMatrix)
+        return patch.entries.keys.sorted().map { key in
+            let entry = patch.entries[key]
+            let before = entry?.before.map(String.init) ?? "-"
+            let after = entry?.after.map(String.init) ?? "-"
+            return "\(key):\(before):\(after)"
+        }.joined(separator: ",")
+    }
+
+    private func scheduleMoodAutosave() {
+        moodAutosaveTask?.cancel()
+        moodAutosaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            while isSavingMoodMatrix {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
             }
+            guard !Task.isCancelled else { return }
+            await saveMoodMatrix()
         }
     }
 
@@ -839,48 +811,44 @@ struct CompletionView: View {
         )
     }
 
-    private func saveEndNote() {
+    private func saveEndNote() async {
         let noteToSave = trimmedEndNote
-        guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving, !noteSaved else { return }
+        guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving else { return }
+        guard noteToSave != lastSavedNote else {
+            noteSaved = true
+            saveError = nil
+            return
+        }
         guard let ownerUserId = appVM.currentUser?.id else { return }
         isSaving = true
         saveError = nil
-        Task { @MainActor in
+        do {
+            try await SessionSyncCoordinator.shared.appendEndNote(
+                clientSessionId: clientSessionId,
+                ownerUserId: ownerUserId,
+                note: noteToSave
+            )
+            isSaving = false
+            lastSavedNote = noteToSave
+            noteSaved = true
+            logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
+        } catch SessionSyncError.entryNotFound {
+            let request = BatchThoughtsRequest(
+                sessionId: sessionId,
+                dayNumber: dayNumber,
+                thoughts: [
+                    BatchThoughtsRequest.ThoughtInput(
+                        timeInSession: -1,
+                        text: noteToSave
+                    )
+                ]
+            )
             do {
-                try await SessionSyncCoordinator.shared.appendEndNote(
-                    clientSessionId: clientSessionId,
-                    ownerUserId: ownerUserId,
-                    note: noteToSave
-                )
+                _ = try await APIClient.shared.batchThoughts(request)
                 isSaving = false
+                lastSavedNote = noteToSave
                 noteSaved = true
-                logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
-            } catch SessionSyncError.entryNotFound {
-                let request = BatchThoughtsRequest(
-                    sessionId: sessionId,
-                    dayNumber: dayNumber,
-                    thoughts: [
-                        BatchThoughtsRequest.ThoughtInput(
-                            timeInSession: -1,
-                            text: noteToSave
-                        )
-                    ]
-                )
-                do {
-                    _ = try await APIClient.shared.batchThoughts(request)
-                    isSaving = false
-                    noteSaved = true
-                    logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
-                } catch let error as APIError {
-                    print("Failed to save end note: \(error)")
-                    isSaving = false
-                    saveError = saveErrorMessage(for: error.status)
-                    logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
-                } catch {
-                    print("Failed to save end note: \(error)")
-                    isSaving = false
-                    saveError = "Could not save your note. Please try again."
-                }
+                logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
             } catch let error as APIError {
                 print("Failed to save end note: \(error)")
                 isSaving = false
@@ -890,22 +858,60 @@ struct CompletionView: View {
                 print("Failed to save end note: \(error)")
                 isSaving = false
                 saveError = "Could not save your note. Please try again."
-                logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
             }
+        } catch let error as APIError {
+            print("Failed to save end note: \(error)")
+            isSaving = false
+            saveError = saveErrorMessage(for: error.status)
+            logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
+        } catch {
+            print("Failed to save end note: \(error)")
+            isSaving = false
+            saveError = "Could not save your note. Please try again."
+            logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
         }
     }
 
-    private func scheduleUITestAutoSaveIfNeeded(for note: String) {
-        guard isUITestMode, !note.isEmpty, !sessionId.isEmpty, !noteSaved else { return }
-        uiTestAutoSaveTask?.cancel()
-        uiTestAutoSaveTask = Task { @MainActor in
+    private func scheduleNoteAutosave(for note: String) {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !sessionId.isEmpty, trimmed != lastSavedNote else { return }
+        noteAutosaveTask?.cancel()
+        noteAutosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 800_000_000)
-            guard !Task.isCancelled,
-                  endNote == note,
-                  !isSaving,
-                  !noteSaved else { return }
-            saveEndNote()
+            // Wait out a save still in flight so this edit is not skipped.
+            while isSaving {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard !Task.isCancelled, endNote == note else { return }
+            await saveEndNote()
         }
+    }
+
+    private func saveAndReturnHome() async {
+        guard !isReturning else { return }
+        isReturning = true
+        if returnFlushFailed {
+            await appVM.returnHome()
+            isReturning = false
+            return
+        }
+        noteAutosaveTask?.cancel()
+        ratingsAutosaveTask?.cancel()
+        moodAutosaveTask?.cancel()
+        while isSaving || isSavingRatings || isSavingMoodMatrix {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        await saveEndNote()
+        await saveRatings()
+        await saveMoodMatrix()
+        guard saveError == nil, ratingsSaveError == nil, moodMatrixSaveError == nil else {
+            returnFlushFailed = true
+            isReturning = false
+            return
+        }
+        await appVM.returnHome()
+        isReturning = false
     }
 
     private func logUITestDiagnostic(_ message: String) {

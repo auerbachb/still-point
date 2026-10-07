@@ -137,6 +137,57 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     expect(entries[0]!.thoughts).toEqual([{ timeInSession: -1, text: "offline note" }]);
   });
 
+  test("appendEndNote replaces the queued end note instead of appending another", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440015";
+
+    await coordinator.saveCompletedSession(
+      baseRequest(),
+      clientSessionId,
+      testOwnerUserId,
+      [{ timeInSession: 12, text: "mid-sit" }],
+    );
+    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "first draft");
+    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "revised note");
+
+    const entries = await store.loadEntries();
+    expect(entries[0]!.thoughts).toEqual([
+      { timeInSession: 12, text: "mid-sit" },
+      { timeInSession: -1, text: "revised note" },
+    ]);
+  });
+
+  test("a flush keeps an end note replaced while its batch was in flight", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440016";
+    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+      baseRequest(),
+      clientSessionId,
+      testOwnerUserId,
+      [],
+    );
+    const seeded = await store.loadEntries();
+    seeded[0]!.sessionSynced = true;
+    seeded[0]!.serverSessionId = "server-session-16";
+    seeded[0]!.thoughts = [{ timeInSession: -1, text: "first draft" }];
+    await store.saveEntries(seeded);
+
+    const transport: SessionSyncTransport = {
+      ...alwaysFailingSessionSyncTransport,
+      batchThoughts: async () => {
+        const entries = await store.loadEntries();
+        entries[0]!.thoughts = [{ timeInSession: -1, text: "revised note" }];
+        await store.saveEntries(entries);
+      },
+    };
+
+    await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
+
+    const entries = await store.loadEntries();
+    expect(entries[0]!.thoughts).toEqual([{ timeInSession: -1, text: "revised note" }]);
+  });
+
   test("#703: a refused IndexedDB write throws LocalSessionWriteError, not a pending result", async () => {
     const writeFailure = new Error("QuotaExceededError");
     const refusingStore: OfflineSessionQueueStore = {
