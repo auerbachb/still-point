@@ -128,7 +128,11 @@ public actor SessionSyncCoordinator {
             throw SessionSyncError.ownerMismatch
         }
 
-        entries[index].thoughts.append(PendingSessionThought(timeInSession: -1, text: trimmed))
+        // #753: autosave can run again as the note is edited. Keep one end note
+        // and replace its text. A second -1 in the same batch is rejected.
+        var thoughts = entries[index].thoughts.filter { $0.timeInSession != -1 }
+        thoughts.append(PendingSessionThought(timeInSession: -1, text: trimmed))
+        entries[index].thoughts = thoughts
         try queueStore.saveEntries(entries)
         _ = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId)
     }
@@ -240,11 +244,12 @@ public actor SessionSyncCoordinator {
         }) ?? entry
 
         if !entry.thoughts.isEmpty {
+            let sent = entry.thoughts
             do {
                 let batch = BatchThoughtsRequest(
                     sessionId: serverSessionId,
                     dayNumber: entry.request.dayNumber,
-                    thoughts: entry.thoughts.map {
+                    thoughts: sent.map {
                         BatchThoughtsRequest.ThoughtInput(timeInSession: $0.timeInSession, text: $0.text)
                     }
                 )
@@ -255,7 +260,9 @@ public actor SessionSyncCoordinator {
                 }) else {
                     return Self.sessionDTO(from: entry.request, id: serverSessionId)
                 }
-                entries[index].thoughts = []
+                // Only drop what this batch sent. A note replaced while the
+                // request was in flight (#753 autosave) stays queued.
+                entries[index].thoughts.removeAll { sent.contains($0) }
                 try queueStore.saveEntries(entries)
                 entry = entries[index]
             } catch {

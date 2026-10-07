@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BLOCK_DURATION, type SessionType } from "@/lib/constants";
 import { RatingSlider } from "@/components/RatingSlider";
 import { MoodMatrix, type MoodMatrixValue, isMoodMatrixTouched, buildMoodMatrixPayload } from "@/components/MoodMatrix";
+import {
+  COMPLETION_AUTOSAVE_MS,
+  COMPLETION_RETURN_LABEL,
+  noteTextToAutosave,
+  ratingsAutosavePayload,
+} from "@/lib/completionAutosave";
 
 type CompletionScreenProps = {
   dayNumber: number;
@@ -74,6 +80,191 @@ export function CompletionScreen({
   // #703: retrying the local save from the not-stored banner.
   const [retryingSave, setRetryingSave] = useState(false);
   const [retrySaveFailed, setRetrySaveFailed] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const onSaveNoteRef = useRef(onSaveNote);
+  const onSaveRatingsRef = useRef(onSaveRatings);
+  const onSaveMoodMatrixRef = useRef(onSaveMoodMatrix);
+  onSaveNoteRef.current = onSaveNote;
+  onSaveRatingsRef.current = onSaveRatings;
+  onSaveMoodMatrixRef.current = onSaveMoodMatrix;
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ratingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedNote = useRef<string | null>(null);
+  const lastSavedRatings = useRef<string | null>(null);
+  const lastSavedMood = useRef<string | null>(null);
+  const inflight = useRef<Promise<void>>(Promise.resolve());
+  const returningRef = useRef(false);
+  const flushFailedRef = useRef(false);
+
+  function track(task: () => Promise<void>): Promise<void> {
+    const run = inflight.current.then(task, task);
+    inflight.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  async function persistNote(trimmed: string): Promise<void> {
+    const save = onSaveNoteRef.current;
+    if (!save || trimmed === lastSavedNote.current) return;
+    setSaving(true);
+    try {
+      setSaveError(false);
+      await save(trimmed);
+      lastSavedNote.current = trimmed;
+      setNoteSaved(true);
+    } catch (err) {
+      console.error("Failed to save note:", err);
+      setSaveError(true);
+      setNoteSaved(false);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function persistRatings(payload: {
+    focusRating?: number;
+    happinessRating?: number;
+  }): Promise<void> {
+    const save = onSaveRatingsRef.current;
+    const key = JSON.stringify(payload);
+    if (!save || key === lastSavedRatings.current) return;
+    setSavingRatings(true);
+    try {
+      setRatingsSaveError(false);
+      await save(payload);
+      lastSavedRatings.current = key;
+      setRatingsSaved(true);
+    } catch (err) {
+      console.error("Failed to save ratings:", err);
+      setRatingsSaveError(true);
+      setRatingsSaved(false);
+      throw err;
+    } finally {
+      setSavingRatings(false);
+    }
+  }
+
+  async function persistMood(matrix: MoodMatrixValue): Promise<void> {
+    const save = onSaveMoodMatrixRef.current;
+    if (!save || !isMoodMatrixTouched(matrix)) return;
+    const payload = buildMoodMatrixPayload(matrix);
+    const key = JSON.stringify(payload);
+    if (key === lastSavedMood.current) return;
+    setSavingMoodMatrix(true);
+    try {
+      setMoodMatrixSaveError(false);
+      await save(payload);
+      lastSavedMood.current = key;
+      setMoodMatrixSaved(true);
+    } catch (err) {
+      console.error("Failed to save mood matrix:", err);
+      setMoodMatrixSaveError(true);
+      setMoodMatrixSaved(false);
+      throw err;
+    } finally {
+      setSavingMoodMatrix(false);
+    }
+  }
+
+  useEffect(() => {
+    const trimmed = noteTextToAutosave(note);
+    if (!onSaveNoteRef.current || !trimmed || trimmed === lastSavedNote.current) return;
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => {
+      noteTimer.current = null;
+      void track(() => persistNote(trimmed)).catch(() => {});
+    }, COMPLETION_AUTOSAVE_MS);
+    return () => {
+      if (noteTimer.current) clearTimeout(noteTimer.current);
+      noteTimer.current = null;
+    };
+  }, [note]);
+
+  useEffect(() => {
+    const payload = ratingsAutosavePayload({
+      focusRating,
+      happinessRating,
+      focusTouched,
+      happinessTouched,
+    });
+    if (!onSaveRatingsRef.current || !payload) return;
+    if (JSON.stringify(payload) === lastSavedRatings.current) return;
+    if (ratingsTimer.current) clearTimeout(ratingsTimer.current);
+    ratingsTimer.current = setTimeout(() => {
+      ratingsTimer.current = null;
+      void track(() => persistRatings(payload)).catch(() => {});
+    }, COMPLETION_AUTOSAVE_MS);
+    return () => {
+      if (ratingsTimer.current) clearTimeout(ratingsTimer.current);
+      ratingsTimer.current = null;
+    };
+  }, [focusRating, happinessRating, focusTouched, happinessTouched]);
+
+  useEffect(() => {
+    if (!onSaveMoodMatrixRef.current || !isMoodMatrixTouched(moodMatrix)) return;
+    const key = JSON.stringify(buildMoodMatrixPayload(moodMatrix));
+    if (key === lastSavedMood.current) return;
+    if (moodTimer.current) clearTimeout(moodTimer.current);
+    const matrix = moodMatrix;
+    moodTimer.current = setTimeout(() => {
+      moodTimer.current = null;
+      void track(() => persistMood(matrix)).catch(() => {});
+    }, COMPLETION_AUTOSAVE_MS);
+    return () => {
+      if (moodTimer.current) clearTimeout(moodTimer.current);
+      moodTimer.current = null;
+    };
+  }, [moodMatrix]);
+
+  async function handleReturn() {
+    if (returningRef.current) return;
+    // A failed flush must not trap the user here. The next tap leaves.
+    if (flushFailedRef.current) {
+      onReturn();
+      return;
+    }
+    returningRef.current = true;
+    if (noteTimer.current) {
+      clearTimeout(noteTimer.current);
+      noteTimer.current = null;
+    }
+    if (ratingsTimer.current) {
+      clearTimeout(ratingsTimer.current);
+      ratingsTimer.current = null;
+    }
+    if (moodTimer.current) {
+      clearTimeout(moodTimer.current);
+      moodTimer.current = null;
+    }
+    setReturning(true);
+    const trimmed = noteTextToAutosave(note);
+    const ratings = ratingsAutosavePayload({
+      focusRating,
+      happinessRating,
+      focusTouched,
+      happinessTouched,
+    });
+    // Every field is attempted even when an earlier one fails; otherwise the
+    // next tap would leave without ever trying the later saves.
+    const results = await Promise.allSettled([
+      trimmed ? track(() => persistNote(trimmed)) : Promise.resolve(),
+      ratings ? track(() => persistRatings(ratings)) : Promise.resolve(),
+      isMoodMatrixTouched(moodMatrix) ? track(() => persistMood(moodMatrix)) : Promise.resolve(),
+    ]);
+    await inflight.current;
+    returningRef.current = false;
+    setReturning(false);
+    if (results.some((result) => result.status === "rejected")) {
+      flushFailedRef.current = true;
+      return;
+    }
+    onReturn();
+  }
+
   const isQuick = sessionType === "quick";
   const nextBlocks = Math.ceil(nextDuration / BLOCK_DURATION);
   const distractionPercentDisplayed = Math.max(0, 100 - clearPercent);
@@ -239,13 +430,50 @@ export function CompletionScreen({
         </p>
       </div>
 
-      {/* Session note */}
+      {/* Session note — saved as the user types (#753). */}
       {onSaveNote && (
         <div style={{
           width: "100%", maxWidth: "min(380px, calc(100vw - 40px))",
           display: "flex", flexDirection: "column", alignItems: "center", gap: "10px",
         }}>
-          {noteSaved ? (
+          <textarea
+            value={note}
+            onChange={(e) => {
+              const next = e.target.value;
+              setNote(next);
+              if (noteTextToAutosave(next) !== lastSavedNote.current) setNoteSaved(false);
+            }}
+            placeholder="end-of-session note..."
+            rows={3}
+            maxLength={1000}
+            aria-label="end-of-session note"
+            disabled={returning}
+            style={{
+              width: "100%",
+              background: "var(--surface-1)",
+              border: "1px solid var(--border-1)",
+              borderRadius: "10px",
+              color: "var(--fg)",
+              fontFamily: "var(--font-serif)",
+              fontSize: "14px", fontStyle: "italic",
+              padding: "12px 16px",
+              resize: "vertical",
+              outline: "none",
+            }}
+          />
+          {saveError ? (
+            <div
+              role="alert"
+              aria-live="assertive"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px", color: "var(--accent-danger)",
+                letterSpacing: "0.09em",
+              }}
+            >
+              failed to save
+            </div>
+          ) : noteSaved ? (
             <div style={{
               fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-green-dim)",
@@ -253,77 +481,15 @@ export function CompletionScreen({
             }}>
               note saved
             </div>
-          ) : (
-            <>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="end-of-session note..."
-                rows={3}
-                maxLength={1000}
-                style={{
-                  width: "100%",
-                  background: "var(--surface-1)",
-                  border: "1px solid var(--border-1)",
-                  borderRadius: "10px",
-                  color: "var(--fg)",
-                  fontFamily: "var(--font-serif)",
-                  fontSize: "14px", fontStyle: "italic",
-                  padding: "12px 16px",
-                  resize: "vertical",
-                  outline: "none",
-                }}
-              />
-              {saveError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px", color: "var(--accent-danger)",
-                    letterSpacing: "0.09em",
-                  }}
-                >
-                  failed to save — tap to retry
-                </div>
-              )}
-              {note.trim() && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSaving(true);
-                    try {
-                      setSaveError(false);
-                      await onSaveNote(note.trim());
-                      setNoteSaved(true);
-                    } catch (err) {
-                      console.error("Failed to save note:", err);
-                      setSaveError(true);
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
-                  disabled={saving}
-                  style={{
-                    background: "none",
-                    border: saveError
-                      ? "1px solid var(--accent-danger-border)"
-                      : "1px solid var(--accent-green-border)",
-                    color: saveError
-                      ? "var(--accent-danger)"
-                      : "var(--accent-green-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
-                    padding: "8px 24px", borderRadius: "20px",
-                    cursor: saving ? "default" : "pointer",
-                    opacity: saving ? 0.5 : 1,
-                  }}
-                >
-                  {saving ? "saving..." : saveError ? "retry" : "save note"}
-                </button>
-              )}
-            </>
-          )}
+          ) : saving ? (
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--fg-3)",
+              letterSpacing: "0.09em",
+            }}>
+              saving...
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -333,7 +499,21 @@ export function CompletionScreen({
           width: "100%", maxWidth: "min(380px, calc(100vw - 40px))",
           display: "flex", flexDirection: "column", alignItems: "center", gap: "14px",
         }}>
-          {ratingsSaved ? (
+          <RatingSlider label="Focus" value={focusRating} onChange={(v) => { setFocusRating(v); setFocusTouched(true); setRatingsSaved(false); }} disabled={returning} />
+          <RatingSlider label="Happiness" value={happinessRating} onChange={(v) => { setHappinessRating(v); setHappinessTouched(true); setRatingsSaved(false); }} disabled={returning} />
+          {ratingsSaveError ? (
+            <div
+              role="alert"
+              aria-live="assertive"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px", color: "var(--accent-danger)",
+                letterSpacing: "0.09em",
+              }}
+            >
+              failed to save
+            </div>
+          ) : ratingsSaved ? (
             <div style={{
               fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-green-dim)",
@@ -341,71 +521,15 @@ export function CompletionScreen({
             }}>
               ratings saved
             </div>
-          ) : (
-            <>
-              <RatingSlider label="Focus" value={focusRating} onChange={(v) => { setFocusRating(v); setFocusTouched(true); }} disabled={savingRatings} />
-              <RatingSlider label="Happiness" value={happinessRating} onChange={(v) => { setHappinessRating(v); setHappinessTouched(true); }} disabled={savingRatings} />
-              {ratingsSaveError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px", color: "var(--accent-danger)",
-                    letterSpacing: "0.09em",
-                  }}
-                >
-                  failed to save — tap to retry
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={async () => {
-                  setSavingRatings(true);
-                  try {
-                    setRatingsSaveError(false);
-                    // Only send ratings the user explicitly touched; untouched
-                    // sliders stay at their default and are omitted from the
-                    // payload so the server-side partial-update logic is used
-                    // correctly and no unintended default-5 overwrites occur.
-                    const payload: { focusRating?: number; happinessRating?: number } = {};
-                    if (focusTouched) payload.focusRating = focusRating;
-                    if (happinessTouched) payload.happinessRating = happinessRating;
-                    // If neither was touched, send both (user explicitly clicked
-                    // save with the visible defaults — treat as intentional).
-                    if (!focusTouched && !happinessTouched) {
-                      payload.focusRating = focusRating;
-                      payload.happinessRating = happinessRating;
-                    }
-                    await onSaveRatings(payload);
-                    setRatingsSaved(true);
-                  } catch (err) {
-                    console.error("Failed to save ratings:", err);
-                    setRatingsSaveError(true);
-                  } finally {
-                    setSavingRatings(false);
-                  }
-                }}
-                disabled={savingRatings}
-                style={{
-                  background: "none",
-                  border: ratingsSaveError
-                    ? "1px solid var(--accent-danger-border)"
-                    : "1px solid var(--accent-green-border)",
-                  color: ratingsSaveError
-                    ? "var(--accent-danger)"
-                    : "var(--accent-green-text)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "8px 24px", borderRadius: "20px",
-                  cursor: savingRatings ? "default" : "pointer",
-                  opacity: savingRatings ? 0.5 : 1,
-                }}
-              >
-                {savingRatings ? "saving..." : ratingsSaveError ? "retry" : "save ratings"}
-              </button>
-            </>
-          )}
+          ) : savingRatings ? (
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--fg-3)",
+              letterSpacing: "0.09em",
+            }}>
+              saving...
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -424,7 +548,28 @@ export function CompletionScreen({
             Mood Shift
           </div>
 
-          {moodMatrixSaved ? (
+          <MoodMatrix
+            value={moodMatrix}
+            onChange={(next) => {
+              setMoodMatrix(next);
+              const key = JSON.stringify(buildMoodMatrixPayload(next));
+              if (key !== lastSavedMood.current) setMoodMatrixSaved(false);
+            }}
+            disabled={returning}
+          />
+          {moodMatrixSaveError ? (
+            <div
+              role="alert"
+              aria-live="assertive"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px", color: "var(--accent-danger)",
+                letterSpacing: "0.09em",
+              }}
+            >
+              failed to save
+            </div>
+          ) : moodMatrixSaved ? (
             <div style={{
               fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--accent-green-dim)",
@@ -432,69 +577,22 @@ export function CompletionScreen({
             }}>
               mood saved
             </div>
-          ) : (
-            <>
-              <MoodMatrix
-                value={moodMatrix}
-                onChange={setMoodMatrix}
-                disabled={savingMoodMatrix}
-              />
-              {moodMatrixSaveError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px", color: "var(--accent-danger)",
-                    letterSpacing: "0.09em",
-                  }}
-                >
-                  failed to save — tap to retry
-                </div>
-              )}
-              {isMoodMatrixTouched(moodMatrix) && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSavingMoodMatrix(true);
-                    try {
-                      setMoodMatrixSaveError(false);
-                      await onSaveMoodMatrix(buildMoodMatrixPayload(moodMatrix));
-                      setMoodMatrixSaved(true);
-                    } catch (err) {
-                      console.error("Failed to save mood matrix:", err);
-                      setMoodMatrixSaveError(true);
-                    } finally {
-                      setSavingMoodMatrix(false);
-                    }
-                  }}
-                  disabled={savingMoodMatrix}
-                  style={{
-                    background: "none",
-                    border: moodMatrixSaveError
-                      ? "1px solid var(--accent-danger-border)"
-                      : "1px solid var(--accent-green-border)",
-                    color: moodMatrixSaveError
-                      ? "var(--accent-danger)"
-                      : "var(--accent-green-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase",
-                    padding: "8px 24px", borderRadius: "20px",
-                    cursor: savingMoodMatrix ? "default" : "pointer",
-                    opacity: savingMoodMatrix ? 0.5 : 1,
-                  }}
-                >
-                  {savingMoodMatrix ? "saving..." : moodMatrixSaveError ? "retry" : "save mood"}
-                </button>
-              )}
-            </>
-          )}
+          ) : savingMoodMatrix ? (
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--fg-3)",
+              letterSpacing: "0.09em",
+            }}>
+              saving...
+            </div>
+          ) : null}
         </div>
       )}
 
       <button
         type="button"
-        onClick={onReturn}
+        onClick={() => { void handleReturn(); }}
+        disabled={returning}
         style={{
           background: "none",
           border: "1px solid var(--border-2)",
@@ -503,15 +601,17 @@ export function CompletionScreen({
           fontSize: "14px", fontStyle: "italic",
           padding: "12px 36px", borderRadius: "30px",
           minHeight: "44px",
-          cursor: "pointer", marginTop: "8px",
+          cursor: returning ? "default" : "pointer",
+          opacity: returning ? 0.5 : 1,
+          marginTop: "8px",
           // scrollMarginBottom ensures scrollIntoViewIfNeeded respects the fixed
-          // bottom nav so the Return button never lands behind it on mobile (#479).
+          // bottom nav so this button never lands behind it on mobile (#479).
           scrollMarginBottom: compact
             ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
             : undefined,
         }}
       >
-        Return
+        {COMPLETION_RETURN_LABEL}
       </button>
     </div>
   );

@@ -12,14 +12,22 @@ class MockNode {
 
 class MockBufferSource extends MockNode {
   buffer: unknown = null;
-  start() {}
-  stop() {}
+  onended: (() => void) | null = null;
+  start = vi.fn();
+  stop = vi.fn();
+  constructor() {
+    super();
+    MockBufferSource.created.push(this);
+  }
+  static created: MockBufferSource[] = [];
 }
 
 class MockAudioContext {
   state: "running" | "suspended" = "running";
   currentTime = 0;
   destination = new MockNode();
+  addEventListener() {}
+  removeEventListener() {}
 
   createBufferSource() {
     return new MockBufferSource();
@@ -42,7 +50,7 @@ async function loadAudio(): Promise<AudioModule> {
   return import("./audio");
 }
 
-beforeEach(() => {
+function stubSuccessfulFetch() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -50,6 +58,11 @@ beforeEach(() => {
       arrayBuffer: async () => new ArrayBuffer(8),
     })),
   );
+}
+
+beforeEach(() => {
+  MockBufferSource.created = [];
+  stubSuccessfulFetch();
 });
 
 afterEach(() => {
@@ -97,5 +110,69 @@ describe("voice countdown playback", () => {
     const { preloadVoiceCountdown, playVoiceCountdown } = await loadAudio();
     await preloadVoiceCountdown();
     expect(playVoiceCountdown(10)).toBe(true);
+    expect(MockBufferSource.created).toHaveLength(1);
+    expect(MockBufferSource.created[0].start).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start an uncached clip until the file loads", async () => {
+    let release: (value: unknown) => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      ),
+    );
+    const { playVoiceCountdown } = await loadAudio();
+    expect(playVoiceCountdown(10)).toBe(true);
+    expect(MockBufferSource.created).toHaveLength(0);
+
+    release({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    await vi.waitFor(() => {
+      expect(MockBufferSource.created).toHaveLength(1);
+    });
+    expect(MockBufferSource.created[0].start).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancel before the clip loads never starts it", async () => {
+    let release: (value: unknown) => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      ),
+    );
+    const { playVoiceCountdown, cancelVoiceCountdownPlayback } = await loadAudio();
+    expect(playVoiceCountdown(10)).toBe(true);
+    cancelVoiceCountdownPlayback();
+    release({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(MockBufferSource.created).toHaveLength(0);
+  });
+
+  it("cancel stops a clip that is already playing", async () => {
+    const { preloadVoiceCountdown, playVoiceCountdown, cancelVoiceCountdownPlayback } =
+      await loadAudio();
+    await preloadVoiceCountdown();
+    expect(playVoiceCountdown(10)).toBe(true);
+    const source = MockBufferSource.created[0];
+    cancelVoiceCountdownPlayback();
+    expect(source.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays again after cancel", async () => {
+    const { preloadVoiceCountdown, playVoiceCountdown, cancelVoiceCountdownPlayback } =
+      await loadAudio();
+    await preloadVoiceCountdown();
+    playVoiceCountdown(10);
+    cancelVoiceCountdownPlayback();
+    expect(playVoiceCountdown(9)).toBe(true);
+    expect(MockBufferSource.created).toHaveLength(2);
+    expect(MockBufferSource.created[1].start).toHaveBeenCalledTimes(1);
   });
 });

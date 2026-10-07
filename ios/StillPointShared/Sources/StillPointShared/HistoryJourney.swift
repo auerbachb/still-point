@@ -55,16 +55,77 @@ public enum SessionCalendar {
         isoFormatter.string(from: Date())
     }
 
+    /// Local wall-clock hour at which an unfinished practice day closes.
+    /// 6:00:00 belongs to the new calendar day.
+    public static let graceCutoffHour = 6
+
     /// Today's calendar day as `YYYY-MM-DD` in the client's LOCAL timezone — the same
     /// convention used to stamp `session_date` on the write path. Pass this to
     /// `/api/auth/me?date=` so missed-day recovery detection aligns with local sits.
     public static func localTodayIsoDate() -> String {
-        let calendar = Calendar.current
-        let now = Date()
-        let year = calendar.component(.year, from: now)
-        let month = calendar.component(.month, from: now)
-        let day = calendar.component(.day, from: now)
-        return String(format: "%04d-%02d-%02d", year, month, day)
+        localIsoDate()
+    }
+
+    /// Gregorian calendar in `calendar`'s time zone. Session dates are Gregorian
+    /// digits even when the device's preferred calendar is not.
+    private static func gregorian(matching calendar: Calendar) -> Calendar {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        return gregorian
+    }
+
+    /// `YYYY-MM-DD` for `now` in `calendar`'s time zone, shifted by `offsetDays`.
+    public static func localIsoDate(now: Date = Date(), offsetDays: Int = 0, calendar: Calendar = .current) -> String {
+        let gregorian = gregorian(matching: calendar)
+        let day = gregorian.date(byAdding: .day, value: offsetDays, to: now) ?? now
+        let year = gregorian.component(.year, from: day)
+        let month = gregorian.component(.month, from: day)
+        let date = gregorian.component(.day, from: day)
+        return String(format: "%04d-%02d-%02d", year, month, date)
+    }
+
+    /// Practice day a sit is stored on. Before 6:00 local, an unfinished previous
+    /// calendar day stays open. At 6:00 the new calendar day begins either way.
+    public static func effectiveLocalIsoDate(
+        previousDayComplete: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
+        let gregorian = gregorian(matching: calendar)
+        let hour = gregorian.component(.hour, from: now)
+        if hour < graceCutoffHour && !previousDayComplete {
+            return localIsoDate(now: now, offsetDays: -1, calendar: gregorian)
+        }
+        return localIsoDate(now: now, offsetDays: 0, calendar: gregorian)
+    }
+
+    public struct PracticeDaySit: Equatable {
+        public var completed: Bool
+        public var isStandard: Bool
+        public var sessionDate: String
+        /// `nil` counts as the primary track, matching pre-dual-track rows.
+        public var track: String?
+
+        public init(completed: Bool, isStandard: Bool, sessionDate: String, track: String?) {
+            self.completed = completed
+            self.isStandard = isStandard
+            self.sessionDate = sessionDate
+            self.track = track
+        }
+    }
+
+    /// Single-track: the primary standard sit. Two-a-day: primary and second.
+    public static func isDayComplete(sits: [PracticeDaySit], isoDay: String, dualTrackEnabled: Bool) -> Bool {
+        var primary = false
+        var second = false
+        for sit in sits where sit.completed && sit.isStandard && sit.sessionDate == isoDay {
+            if sit.track == "second" {
+                second = true
+            } else {
+                primary = true
+            }
+        }
+        return dualTrackEnabled ? (primary && second) : primary
     }
 
     /// Matches backend `maxReasonDate()` — UTC today + 1 for users ahead of UTC (#441).

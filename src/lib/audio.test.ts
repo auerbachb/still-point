@@ -69,8 +69,9 @@ class MockBufferSource extends MockNode {
 }
 
 class MockAudioContext {
-  state: "suspended" | "running" | "closed";
+  state: "suspended" | "running" | "closed" | "interrupted";
   currentTime = 0;
+  private stateListeners = new Set<() => void>();
   destination = new MockNode();
   /** True once a node has been started while a user gesture was active. */
   primedDuringGesture = false;
@@ -117,8 +118,22 @@ class MockAudioContext {
     }
   }
 
+  addEventListener(type: string, listener: () => void) {
+    if (type === "statechange") this.stateListeners.add(listener);
+  }
+
+  removeEventListener(type: string, listener: () => void) {
+    if (type === "statechange") this.stateListeners.delete(listener);
+  }
+
+  /** Sets `state` and notifies `statechange` listeners (#768). */
+  emitState(next: "suspended" | "running" | "closed" | "interrupted") {
+    this.state = next;
+    for (const listener of this.stateListeners) listener();
+  }
+
   async suspend() {
-    this.state = "suspended";
+    this.emitState("suspended");
   }
 }
 
@@ -313,6 +328,80 @@ describe("resumeAudioContext — mid-session recovery (#710)", () => {
     const { resumeAudioContext, playTick } = await loadAudio({ ctor: rejectingCtor });
     expect(playTick()).toBe(false); // lazily creates the suspended context
     await expect(resumeAudioContext()).resolves.toBe(false);
+  });
+
+  it("#768: a statechange to suspended resumes without a visibility event", async () => {
+    policy = "lenient";
+    const {
+      unlockAudioContext,
+      subscribeAudioContextState,
+      audioContextStateNeedsResume,
+      resumeAudioContext,
+      playTick,
+    } = await loadAudio();
+
+    gesture.active = true;
+    await unlockAudioContext();
+    gesture.active = false;
+
+    const ctx = currentContext();
+    const resumesBefore = ctx.resumeCallCount;
+    // Same condition the session hook uses: suspended or interrupted, then
+    // the existing gesture-free resume. No visibilitychange is dispatched.
+    subscribeAudioContextState((state) => {
+      if (audioContextStateNeedsResume(state)) void resumeAudioContext();
+    });
+
+    ctx.emitState("suspended");
+    await vi.waitFor(() => {
+      expect(ctx.resumeCallCount).toBeGreaterThan(resumesBefore);
+    });
+    expect(ctx.state).toBe("running");
+    expect(playTick()).toBe(true);
+  });
+
+  it("#768: an interrupted context takes the same resume path", async () => {
+    policy = "lenient";
+    const { unlockAudioContext, subscribeAudioContextState, audioContextStateNeedsResume, resumeAudioContext } =
+      await loadAudio();
+
+    gesture.active = true;
+    await unlockAudioContext();
+    gesture.active = false;
+
+    const ctx = currentContext();
+    subscribeAudioContextState((state) => {
+      if (audioContextStateNeedsResume(state)) void resumeAudioContext();
+    });
+    ctx.emitState("interrupted");
+    await vi.waitFor(() => {
+      expect(ctx.state).toBe("running");
+    });
+  });
+
+  it("#768: a statechange the browser refuses to resume does not throw", async () => {
+    const rejectingCtor = class extends MockAudioContext {
+      async resume(): Promise<void> {
+        this.resumeCallCount++;
+        throw new Error("NotAllowedError");
+      }
+    };
+    const { playTick, subscribeAudioContextState, audioContextStateNeedsResume, resumeAudioContext } =
+      await loadAudio({ ctor: rejectingCtor });
+    expect(playTick()).toBe(false);
+
+    subscribeAudioContextState((state) => {
+      if (audioContextStateNeedsResume(state)) void resumeAudioContext();
+    });
+    expect(() => currentContext().emitState("suspended")).not.toThrow();
+    await expect(resumeAudioContext()).resolves.toBe(false);
+    expect(playTick()).toBe(false);
+  });
+
+  it("#768: subscribing does not create an AudioContext", async () => {
+    const { subscribeAudioContextState } = await loadAudio();
+    subscribeAudioContextState(() => {});
+    expect(createdContexts).toHaveLength(0);
   });
 });
 

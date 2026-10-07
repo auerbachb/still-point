@@ -155,6 +155,39 @@ final class AudioRecoveryLogicTests: XCTestCase {
         )
     }
 
+    // MARK: - Secondary-audio silence (#768)
+
+    func testSilenceHintBeganWaits() {
+        XCTAssertEqual(
+            AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: .began),
+            .waitForHintToEnd
+        )
+    }
+
+    func testSilenceHintEndedReplacesTheEngineBeforeTheNextSound() {
+        // The engine can still report isRunning while iOS has muted secondary
+        // audio, so waiting for a failed start() never fires.
+        XCTAssertEqual(
+            AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: .ended),
+            .rebuildEngineBeforeNextSound
+        )
+    }
+
+    func testCueIsHeldWhileMediaServicesAreLost() {
+        XCTAssertFalse(AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: true))
+    }
+
+    func testCuePlaysOnceMediaServicesAreBack() {
+        XCTAssertTrue(AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: false))
+    }
+
+    func testUnrecognizedSilenceHintFailsTowardRecovery() {
+        XCTAssertEqual(
+            AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: .unrecognized),
+            .rebuildEngineBeforeNextSound
+        )
+    }
+
     func testRebuildThresholdIsTwoSilentSounds() {
         // Each sound makes one plain start attempt and one after reactivating.
         XCTAssertEqual(AudioRecoveryLogic.startFailuresBeforeRebuild, 4)

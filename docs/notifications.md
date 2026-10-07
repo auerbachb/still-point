@@ -27,9 +27,10 @@ flowchart LR
 | `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, missed-sit call opt-in (`call_opt_in`, `call_phone_number`, `call_consent_at`, `call_window_start`, `call_window_stop`), IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session`, `session_active_until` (#709 server-side session signal, not user-editable) |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 | `call_attempts` | Outbound missed-sit Vapi call log (#599): phone, window key, status, optional `vapi_call_id` |
+| `consent_events` | Append-only consent log (#674): `user_id`, `channel` (`call` \| `sms`), `phone_number`, `event` (`granted` \| `revoked`), `disclosure_version`, `method`, `ip`, `created_at`. Opt-out appends `revoked` and does not delete prior rows. |
 | `web_push_subscriptions` | Browser push endpoints (#347) |
 
-Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`, `drizzle/notification_preferences_session_active_709_incremental.sql`.
+Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`, `drizzle/notification_preferences_session_active_709_incremental.sql`, `drizzle/notification_preferences_consent_events_674_incremental.sql`.
 
 ## API
 
@@ -49,7 +50,11 @@ Partial update. Supported fields:
 
 Quiet hours: `quietHoursStart` and `quietHoursEnd` must be updated together (or both set to `null`).
 
-Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart` and `callWindowStop` (updated together). Consent timestamp `callConsentAt` is set on opt-in and cleared on opt-out. Call window fields must differ (`start !== stop`).
+Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart` and `callWindowStop` (updated together). A false→true transition appends a `consent_events` row (`channel: call`, `event: granted`, `method: preferences_api`) and sets `callConsentAt` to that time. Changing `callPhoneNumber` while already opted in appends another `granted` row for the new number and refreshes `callConsentAt`. A true→false transition appends `event: revoked` and leaves `callConsentAt` in place (it is a cache of the latest grant, not proof that consent is still active — `callOptIn` is). The preference update and the audit insert run as one statement, and only if `call_opt_in` and `call_phone_number` are still the values that decision used. `disclosure_version` is null until a versioned disclosure exists. Backfill does not copy the current phone number, because it may not be the number that was consented. Call window fields must differ (`start !== stop`).
+
+`GET /api/notifications/preferences` still returns `callConsentAt` as an ISO timestamp or `null`.
+
+Consent events are kept for at least five years after the latest event for that user and channel. Opt-out does not delete them. Deleting the account removes them immediately (`consent_events.user_id` cascades from `users`). That cascade is the only deletion path today: nothing purges rows after five years, so they stay until the account is deleted. Enforcing the window is tracked in #789. SMS may use the same table later; this path only writes `channel: call`.
 
 ### `POST /api/notifications/session-state`
 

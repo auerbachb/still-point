@@ -150,6 +150,17 @@ final class AppViewModel {
     /// `makeSnapshot` as `flagsAsOf` so the fold is retired at the boundary, and
     /// used by `rollOverDoneTodayFlagsIfNeeded()` to retire the flags themselves.
     private var doneTodayFlagsStamp: Date?
+    /// Whether every required sit for the previous calendar day is done.
+    /// False before 6:00 keeps that day open. Defaults to finished so a daytime
+    /// launch does not invent a grace window; a pre-6:00 launch resolves it.
+    private var previousCalendarDayComplete = true
+    /// Set once `resolvePreviousPracticeDay` has an answer, so a later rollover
+    /// does not replace it with the pre-6:00 "unknown" default.
+    private var previousDayResolved = false
+    /// Calendar day `previousDayResolved` describes. A new morning must ask again.
+    private var resolvedForCalendarDay: String?
+    /// Orders overlapping yesterday lookups so a slow answer cannot replace a newer one.
+    private var previousDayRequest = 0
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -316,7 +327,7 @@ final class AppViewModel {
         let settingsTicket = nextSettingsRequestTicket()
 
         do {
-            if let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) {
+            if let user = try await APIClient.shared.me(today: creditedSessionDate()) {
                 // Paired with the check ID for the same reason as the terminal
                 // branches below. Adopting the user is idempotent, but the route
                 // reset and the badge reset under it are not: `RootView` starts a
@@ -607,6 +618,11 @@ final class AppViewModel {
     /// Buddy invite join/consume. One property: these are alternative routes into
     /// the same invite flow and never need to run concurrently.
     private var buddyInviteTask: Task<Void, Never>?
+    /// Set while a pending invite is being joined. The token stays pending until
+    /// the server answers (#756), so a second consume must not POST it again.
+    private var isConsumingBuddyInvite = false
+    /// Transient join failure. The token is kept; the next auth point retries it.
+    private static let buddyInviteRetryMessage = "Could not reach the server. We will retry your invite."
 
     private func cancelIdentityScopedTasks() {
         offlineCatchUpTask?.cancel()
@@ -701,7 +717,7 @@ final class AppViewModel {
         // backstop (#697).
         let settingsTicket = nextSettingsRequestTicket()
         do {
-            guard let user = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+            guard let user = try await APIClient.shared.me(today: creditedSessionDate()) else {
                 guard generation == authGeneration else { return nil }
                 applySignedOut(cause: .signedOut, message: nil)
                 return nil
@@ -1096,6 +1112,10 @@ final class AppViewModel {
         practiceDoneToday = false
         secondPracticeDoneToday = false
         primaryStandardDoneToday = false
+        previousCalendarDayComplete = true
+        previousDayResolved = false
+        resolvedForCalendarDay = nil
+        previousDayRequest += 1
         doneTodayFlagsStamp = nil
     }
 
@@ -1116,19 +1136,121 @@ final class AppViewModel {
     /// over with the rest for the same reason and on the same fail-closed logic
     /// the refresh failure path already uses: on a new day nothing has been sat
     /// yet, and the next successful refresh restores the truth.
-    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
-        if let stamp = doneTodayFlagsStamp, WidgetDataStore.isSameLocalDay(stamp, now) {
+    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
+    private func requiredSitsCompleteFromFlags() -> Bool {
+        let dual = currentUser?.dualTrackEnabled ?? false
+        // Local flags cover a sit that finished offline and has not reached the
+        // server badges yet. Without them the day stays open and the next sit
+        // before 6:00 is stored on yesterday again.
+        let primary = primaryDoneToday || primaryStandardDoneToday
+        let second = secondDoneToday || secondPracticeDoneToday
+        return dual ? (primary && second) : primary
+    }
+
+    private func previousDayAnswerIsCurrent(now: Date) -> Bool {
+        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now)
+    }
+
+    /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
+    func creditedSessionDate(now: Date = Date()) -> String {
+        rollOverDoneTodayFlagsIfNeeded(now: now)
+        return SessionCalendar.effectiveLocalIsoDate(
+            previousDayComplete: previousCalendarDayComplete,
+            now: now
+        )
+    }
+
+    /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
+    private func creditedPracticeInstant(now: Date = Date()) -> Date {
+        let credited = creditedSessionDate(now: now)
+        let calendarToday = SessionCalendar.localIsoDate(now: now)
+        guard credited != calendarToday else { return now }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .hour, value: -1, to: start) ?? now
+    }
+
+    /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
+    private func resolvePreviousPracticeDay(now: Date) async {
+        let calendarDay = SessionCalendar.localIsoDate(now: now)
+        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
             return
         }
-        // A nil stamp means nothing has been claimed yet this process; the flags
-        // are already false, so this just establishes the day.
-        if doneTodayFlagsStamp != nil {
-            primaryDoneToday = false
-            secondDoneToday = false
-            practiceDoneToday = false
-            secondPracticeDoneToday = false
-            primaryStandardDoneToday = false
+        guard Calendar.current.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
+            previousCalendarDayComplete = true
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+            return
         }
+        previousDayRequest += 1
+        let ticket = previousDayRequest
+        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
+        do {
+            let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
+            guard ticket == previousDayRequest else { return }
+            let dual = currentUser?.dualTrackEnabled ?? false
+            previousCalendarDayComplete = dual
+                ? (tracks.primary && tracks.second)
+                : tracks.primary
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+        } catch {
+            guard ticket == previousDayRequest else { return }
+            let calendar = Calendar.current
+            if let stamp = doneTodayFlagsStamp,
+               let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+               calendar.isDate(stamp, inSameDayAs: yesterday) {
+                previousCalendarDayComplete = requiredSitsCompleteFromFlags()
+            } else {
+                previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
+            }
+            // Unresolved so the next refresh retries the lookup.
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
+        }
+    }
+
+    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
+        let calendar = Calendar.current
+        if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
+            return
+        }
+        let hour = calendar.component(.hour, from: now)
+        if doneTodayFlagsStamp == nil {
+            // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
+            // says it is finished, unless that fetch already answered.
+            if !previousDayAnswerIsCurrent(now: now) {
+                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
+            }
+            doneTodayFlagsStamp = now
+            return
+        }
+        if hour < SessionCalendar.graceCutoffHour,
+           let stamp = doneTodayFlagsStamp,
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+           calendar.isDate(stamp, inSameDayAs: yesterday) {
+            if previousDayAnswerIsCurrent(now: now) {
+                if !previousCalendarDayComplete {
+                    return
+                }
+            } else if !requiredSitsCompleteFromFlags() {
+                previousCalendarDayComplete = false
+                return
+            }
+        }
+        // The previous day is finished, the clock is at or after 6:00, or the
+        // stamp is older than yesterday. Roll onto the calendar day. A resolved
+        // answer for *this* calendar day is kept. A stale one must not.
+        if !previousDayAnswerIsCurrent(now: now) {
+            previousCalendarDayComplete = true
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
+        }
+        primaryDoneToday = false
+        secondDoneToday = false
+        practiceDoneToday = false
+        secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
         doneTodayFlagsStamp = now
     }
 
@@ -1209,24 +1331,32 @@ final class AppViewModel {
         // all describe the same account, which is exactly the case it ignores.
         let ticket = tracksDoneOrdering.nextTicket()
         let now = Date()
+        // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
+        // otherwise assume the day is finished and credit the new calendar date.
+        await resolvePreviousPracticeDay(now: now)
         // Two rollovers, because they cover different evidence. The stamp-based
         // one below knows what *this process* claimed and when; the snapshot-based
         // one here also catches a relaunch that inherited a stored snapshot from a
         // previous day. Both are cheap and idempotent.
         rollOverDoneTodayFlagsIfNeeded(now: now)
         let prior = WidgetDataStore.load()
-        if let prior, prior.isLoggedIn, !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now) {
+        let priorRequired = (prior?.dualTrackEnabled ?? false)
+            ? ((prior?.primaryDoneToday ?? false) && (prior?.secondDoneToday ?? false))
+            : (prior?.primaryDoneToday ?? true)
+        if let prior, prior.isLoggedIn,
+           !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now),
+           !WidgetDataStore.graceKeepsPreviousPracticeDay(
+                lastUpdated: prior.lastUpdated,
+                now: now,
+                requiredSitsComplete: priorRequired
+           ) {
             practiceDoneToday = false
             secondPracticeDoneToday = false
             // #679: same rollover as its siblings — yesterday's standard sit must
             // not fold today into the standard-only set.
             primaryStandardDoneToday = false
         }
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
-        let today = dateFormatter.string(from: Date())
+        let today = creditedSessionDate(now: now)
         do {
             let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
             // Identity first, deliberately: a response that outlived its session is
@@ -1246,6 +1376,13 @@ final class AppViewModel {
             }
             if secondDoneToday {
                 secondPracticeDoneToday = true
+            }
+            if today != SessionCalendar.localIsoDate(now: now) {
+                let calendar = Calendar.current
+                let startToday = calendar.startOfDay(for: now)
+                if let evening = calendar.date(byAdding: .hour, value: -1, to: startToday) {
+                    doneTodayFlagsStamp = evening
+                }
             }
         } catch {
             // #759: a cancelled request is not a failed one, and only a failure
@@ -1333,6 +1470,7 @@ final class AppViewModel {
     func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
+            scheduleBuddyInviteConsume()
             return
         }
         guard !isSavingBreathSession else { return }
@@ -1344,10 +1482,6 @@ final class AppViewModel {
         defer { isSavingBreathSession = false }
 
         let clientSessionId = UUID()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
 
         let request = CreateSessionRequest(
             dayNumber: currentDay,
@@ -1359,7 +1493,7 @@ final class AppViewModel {
             clearPercent: 0,
             thoughtCount: 0,
             mindStateLog: [],
-            sessionDate: dateFormatter.string(from: Date()),
+            sessionDate: creditedSessionDate(),
             breathCount: breathCount,
             clientSessionId: clientSessionId
         )
@@ -1381,6 +1515,9 @@ final class AppViewModel {
             localSaveFailed = true
             currentView = .home
         }
+        // Breath exits skip `returnHome()`, so an invite held back by the
+        // `isInSession` guard during the sit is retried here.
+        scheduleBuddyInviteConsume()
     }
 
     func beginBuddySession() {
@@ -1407,12 +1544,22 @@ final class AppViewModel {
 
     func leaveBuddySession() {
         currentView = .home
-        // Retained and guarded like the other identity-scoped work: the task body
-        // runs on a later main-actor turn, and consuming an invite is not
-        // idempotent, so a sign-out in between must not let it burn the token
-        // against whoever is signed in next (#665).
+        scheduleBuddyInviteConsume()
+    }
+
+    /// Every route into the invite flow joins through `consumePendingBuddyInviteIfNeeded`,
+    /// which holds `isConsumingBuddyInvite` for the whole request (#756), so two routes
+    /// cannot POST the same token. Retained and guarded like the other identity-scoped
+    /// work: the task body runs on a later main-actor turn, and consuming an invite is
+    /// not idempotent, so a sign-out in between must not let it burn the token against
+    /// whoever is signed in next (#665).
+    ///
+    /// No cancel of the previous task. A consume in flight would lose the server's
+    /// answer, and one not started yet would run its join already cancelled while
+    /// holding the in-flight flag, so this call would return without joining.
+    private func scheduleBuddyInviteConsume() {
+        guard !isConsumingBuddyInvite else { return }
         let adopted = authGeneration
-        buddyInviteTask?.cancel()
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
             guard adopted == self.authGeneration else { return }
@@ -1438,15 +1585,12 @@ final class AppViewModel {
             pendingBuddyInviteToken = token
             return
         }
-        // Same reasoning as `leaveBuddySession()`: joining is a non-idempotent
-        // network action, so it must not run for a session that replaced this one.
-        let adopted = authGeneration
-        buddyInviteTask?.cancel()
-        buddyInviteTask = Task { [weak self] in
-            guard let self else { return }
-            guard adopted == self.authGeneration else { return }
-            await self.joinBuddySession(token: token, startedAtGeneration: adopted)
-        }
+        // The newest link replaces an older pending one, so a later retry never
+        // joins an invite the user has since moved past (#756). If a consume is
+        // already waiting on the server, it only clears the token it captured and
+        // picks this one up when it finishes.
+        pendingBuddyInviteToken = token
+        scheduleBuddyInviteConsume()
     }
 
     func handlePushDeepLink(_ url: URL) {
@@ -1602,10 +1746,10 @@ final class AppViewModel {
     /// dropped: neither caller is reacting to it, and the badge refresh and the
     /// consumptions behind it are still worth running. A 401 is not that. It is the
     /// server saying this session is over, and both callers gate non-idempotent work
-    /// on the answer — `consumePendingBuddyInviteIfNeeded` clears the pending token
-    /// *before* the join it can no longer complete — so an authoritative rejection
-    /// signs out and returns `nil`, as in `performReconnectRefresh`, rather than
-    /// letting that work be spent against a session that is already gone.
+    /// on the answer — including `consumePendingBuddyInviteIfNeeded`, which joins
+    /// with the pending invite — so an authoritative rejection signs out and returns
+    /// `nil`, as in `performReconnectRefresh`, rather than letting that join run
+    /// against a session that is already gone.
     ///
     /// - Parameter generation: `authGeneration` as it was when the caller decided to
     ///   refresh.
@@ -1624,7 +1768,7 @@ final class AppViewModel {
         let settingsTicket = nextSettingsRequestTicket()
         let user: UserDTO
         do {
-            guard let fetched = try await APIClient.shared.me(today: SessionCalendar.localTodayIsoDate()) else {
+            guard let fetched = try await APIClient.shared.me(today: creditedSessionDate()) else {
                 // `me()` returns nil for exactly one case: a 401 that is not
                 // `TOKEN_EXPIRED`. The server has rejected this session, so the work
                 // the caller gates on this answer must not run against it.
@@ -1676,15 +1820,62 @@ final class AppViewModel {
     ///   to consume the invite, threaded through to the join so the network result
     ///   is checked against the identity that asked for it.
     private func consumePendingBuddyInviteIfNeeded(startedAtGeneration generation: Int) async {
+        guard generation == authGeneration else { return }
         guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
-        pendingBuddyInviteToken = nil
-        await joinBuddySession(token: token, startedAtGeneration: generation)
+        // A kept invite must not pull the user out of a sit or a buddy session they
+        // started after it failed. It stays queued for return-home or leave-session.
+        guard !isInSession else { return }
+        // The token stays pending for the whole request. Overlapping consumes
+        // (a cold start and a scene activation, return-home and leave-session)
+        // would otherwise POST it twice.
+        guard !isConsumingBuddyInvite else { return }
+        isConsumingBuddyInvite = true
+        defer { isConsumingBuddyInvite = false }
+
+        let outcome = await joinBuddySession(token: token, startedAtGeneration: generation)
+
+        // A newer invite may have replaced this one while the request was in flight.
+        // Join that one after this attempt drops the in-flight flag, and only for
+        // the session that is still current. A sign-out leaves the replacement
+        // alone so the next account does not inherit this call. If this one joined,
+        // the `isInSession` guard keeps the newer invite queued instead of replacing
+        // the session just opened.
+        guard pendingBuddyInviteToken == token else {
+            isConsumingBuddyInvite = false
+            if generation == authGeneration, pendingBuddyInviteToken != nil {
+                await consumePendingBuddyInviteIfNeeded(startedAtGeneration: generation)
+            }
+            return
+        }
+        // Sign-out via `didLogout` already nils the token. `applySignedOut` does not,
+        // so a generation change has to drop *this* attempt's token or the next
+        // account inherits it. A token stored since (pending != this one) is kept.
+        guard generation == authGeneration else {
+            pendingBuddyInviteToken = nil
+            return
+        }
+        switch outcome {
+        case .joined, .authoritativeRejection:
+            // Confirmed join, or the server rejected this invite. Either way it is spent.
+            pendingBuddyInviteToken = nil
+        case .transientFailure, .stale:
+            break
+        }
+    }
+
+    private enum BuddyInviteJoinOutcome {
+        case joined
+        case authoritativeRejection
+        case transientFailure
+        /// Cancelled, or the session that started the join is gone. Do not spend
+        /// the token and do not surface an error for it.
+        case stale
     }
 
     /// - Parameter generation: `authGeneration` at the point the join was decided.
     ///   Required rather than defaulted, matching `applySettingsUser`, so a new
     ///   call site cannot forget it and silently reintroduce the stale-write bug.
-    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async {
+    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async -> BuddyInviteJoinOutcome {
         do {
             let sessionId = try await APIClient.shared.joinBuddySession(token: token)
             // The request is a suspension point like every other identity-scoped
@@ -1692,20 +1883,36 @@ final class AppViewModel {
             // *start* the join; a sign-out or account switch landing while it was
             // in flight must not route the replacement account into this session
             // (#665).
-            guard generation == authGeneration else { return }
+            guard generation == authGeneration else { return .stale }
             buddyInviteError = nil
             currentView = .buddySession(sessionId: sessionId)
+            return .joined
+        } catch is CancellationError {
+            // Cancellation is cooperative and does not by itself stop the code
+            // after this await. A sign-out's `cancelIdentityScopedTasks` must not
+            // surface the previous session's failure on whoever is signed in next.
+            return .stale
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return .stale
         } catch {
-            // The failure path needs the same guard — including for the
-            // cancellation error that a sign-out's own `cancelIdentityScopedTasks`
-            // produces. Cancellation is cooperative and does not by itself stop the
-            // post-await mutation, so without this the previous session's failure
-            // would surface as an invite error on whoever is signed in next.
-            guard generation == authGeneration else { return }
-            if let apiError = error as? APIError {
-                buddyInviteError = apiError.message
-            } else {
-                buddyInviteError = "Could not open buddy invite."
+            guard generation == authGeneration else { return .stale }
+            switch BuddyInviteJoinFailure.classify(error) {
+            case .authoritative:
+                // A newer invite may already be queued. Don't paint this rejection
+                // over it; the consume that called this spends only this token.
+                if pendingBuddyInviteToken == token {
+                    if let apiError = error as? APIError {
+                        buddyInviteError = apiError.message
+                    } else {
+                        buddyInviteError = "Could not open buddy invite."
+                    }
+                }
+                return .authoritativeRejection
+            case .transient:
+                if pendingBuddyInviteToken == token {
+                    buddyInviteError = Self.buddyInviteRetryMessage
+                }
+                return .transientFailure
             }
         }
     }
@@ -1754,6 +1961,7 @@ final class AppViewModel {
         // through — including the network-free `markPracticeDoneToday` that can
         // reach here first on a sit just after local midnight.
         rollOverDoneTodayFlagsIfNeeded()
+        let practiceNow = creditedPracticeInstant()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: currentUser,
             primaryDoneToday: primaryDoneToday,
@@ -1769,7 +1977,8 @@ final class AppViewModel {
             // Belt to the rollover's braces: the flags were just retired if the day
             // had turned, and this tells `makeSnapshot` the day they describe so it
             // refuses the same-day folds itself rather than trusting the caller.
-            flagsAsOf: doneTodayFlagsStamp
+            now: practiceNow,
+            flagsAsOf: practiceNow
         )
         if snapshot.isLoggedIn {
             WidgetDataStore.save(snapshot)
