@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import CoreHaptics
 import StillPointShared
 
 @Observable
@@ -34,10 +35,13 @@ final class BuddySessionViewModel {
     private var lastCompletedMinuteBlockIndex = -1
     /// #736: natural completion has already been announced for this window.
     private var sessionEndHapticEmitted = false
-    /// #736: held for the sit. A generator built at the moment of the cue fires
-    /// late enough to miss the minute it belongs to.
+    /// #736: UIKit fallback when the device has no Core Haptics. A generator
+    /// built at the moment of the cue fires late enough to miss the minute.
     private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
     private let pronouncedHaptic = UINotificationFeedbackGenerator()
+    /// Core Haptics plays beside `AVAudioEngine`. UIKit feedback stays quiet
+    /// once that engine is running, which is the normal buddy sit (#794).
+    private var coreHapticEngine: CHHapticEngine?
 
     private var pollTask: Task<Void, Never>?
     private var activeAnchor: ActiveAnchor?
@@ -217,6 +221,8 @@ final class BuddySessionViewModel {
 
         if isHapticsToggle, soundPrefs.haptics {
             prepareHaptics()
+        } else if isHapticsToggle {
+            stopCoreHaptics()
         }
 
         if effects.warmUp {
@@ -459,9 +465,40 @@ final class BuddySessionViewModel {
     private func prepareHaptics() {
         gentleHaptic.prepare()
         pronouncedHaptic.prepare()
+        startCoreHapticsIfNeeded()
     }
 
+    private func startCoreHapticsIfNeeded() {
+        guard HapticPlayback.prefersCoreHaptics(
+            hardwareSupportsCoreHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics
+        ) else { return }
+        if let coreHapticEngine {
+            try? coreHapticEngine.start()
+            return
+        }
+        do {
+            let engine = try CHHapticEngine()
+            engine.playsHapticsOnly = true
+            engine.isAutoShutdownEnabled = true
+            engine.resetHandler = { [weak self] in
+                DispatchQueue.main.async {
+                    try? self?.coreHapticEngine?.start()
+                }
+            }
+            try engine.start()
+            coreHapticEngine = engine
+        } catch {
+            coreHapticEngine = nil
+        }
+    }
+
+    /// Core Haptics first, so a buddy sit with sound on still vibrates.
+    /// UIKit is the fallback when the hardware has no Core Haptics engine.
     private func fireHaptic(_ cue: HapticCueLogic.Cue) {
+        if coreHapticEngine == nil {
+            startCoreHapticsIfNeeded()
+        }
+        if playCoreHaptic(cue) { return }
         switch HapticCueLogic.intensity(for: cue) {
         case .gentle:
             gentleHaptic.impactOccurred()
@@ -469,6 +506,35 @@ final class BuddySessionViewModel {
         case .pronounced:
             pronouncedHaptic.notificationOccurred(.success)
         }
+    }
+
+    private func playCoreHaptic(_ cue: HapticCueLogic.Cue) -> Bool {
+        guard let coreHapticEngine else { return false }
+        let events = HapticPlayback.transients(for: HapticCueLogic.intensity(for: cue)).map { tap in
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
+                ],
+                relativeTime: tap.relativeTime
+            )
+        }
+        do {
+            try coreHapticEngine.start()
+            let pattern = try CHHapticPattern(events: events, parameters: [])
+            let player = try coreHapticEngine.makePlayer(with: pattern)
+            try player.start(atTime: CHHapticTimeImmediate)
+            return true
+        } catch {
+            self.coreHapticEngine = nil
+            return false
+        }
+    }
+
+    private func stopCoreHaptics() {
+        coreHapticEngine?.stop(completionHandler: nil)
+        coreHapticEngine = nil
     }
 
     private func maybeFetchMeetingToken(snapshot: BuddySnapshotDTO) {
