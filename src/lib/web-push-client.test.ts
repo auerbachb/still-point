@@ -24,22 +24,26 @@ function captureAbortControllers(): AbortController[] {
 
 type Recorder = {
   started: boolean[];
+  keys: string[];
   settle: (index: number) => void;
 };
 
 /** Stubs fetch with manually-settled responses and records each request's `active`. */
 function stubFetch(): Recorder {
   const started: boolean[] = [];
+  const keys: string[] = [];
   const resolvers: Array<() => void> = [];
 
   vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
-    started.push(JSON.parse(String(init.body)).active as boolean);
+    const body = JSON.parse(String(init.body)) as { active: boolean; sessionKey: string };
+    started.push(body.active);
+    keys.push(body.sessionKey);
     return new Promise((resolve) => {
       resolvers.push(() => resolve({ ok: true } as Response));
     });
   }));
 
-  return { started, settle: (index: number) => resolvers[index]() };
+  return { started, keys, settle: (index: number) => resolvers[index]() };
 }
 
 describe("reportSessionActiveState (#709)", () => {
@@ -49,11 +53,11 @@ describe("reportSessionActiveState (#709)", () => {
   });
 
   test("applies reports in call order even when requests overlap", async () => {
-    const { started, settle } = stubFetch();
+    const { started, keys, settle } = stubFetch();
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    const first = reportSessionActiveState(true);
-    reportSessionActiveState(false);
+    const first = reportSessionActiveState(true, "sit");
+    reportSessionActiveState(false, "sit");
     await flush();
 
     // The second report must not start until the first settles, so the server
@@ -63,6 +67,7 @@ describe("reportSessionActiveState (#709)", () => {
     settle(0);
     await flush();
     expect(started).toEqual([true, false]);
+    expect(keys).toEqual(["sit", "sit"]);
 
     settle(1);
     await first;
@@ -72,15 +77,15 @@ describe("reportSessionActiveState (#709)", () => {
     const { started, settle } = stubFetch();
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     await flush();
     expect(started).toEqual([true]);
 
     // Three more reports pile up while the first request is still open. Only the
     // newest state matters — the endpoint stores absolute state, not a delta.
-    reportSessionActiveState(true);
-    reportSessionActiveState(true);
-    reportSessionActiveState(false);
+    reportSessionActiveState(true, "sit");
+    reportSessionActiveState(true, "sit");
+    reportSessionActiveState(false, "sit");
 
     settle(0);
     await flush();
@@ -96,13 +101,13 @@ describe("reportSessionActiveState (#709)", () => {
     const { started, settle } = stubFetch();
     const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
 
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     await flush();
     expect(started).toEqual([true]);
 
     // A sit is still being reported when the account signs out. The queued state
     // must not drain under the next account's cookie and silence them instead.
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     resetSessionStateReports();
 
     settle(0);
@@ -110,7 +115,7 @@ describe("reportSessionActiveState (#709)", () => {
     expect(started).toEqual([true]);
 
     // The next account starts a fresh chain rather than inheriting the old one.
-    reportSessionActiveState(false);
+    reportSessionActiveState(false, "sit");
     await flush();
     expect(started).toEqual([true, false]);
   });
@@ -133,7 +138,7 @@ describe("reportSessionActiveState (#709)", () => {
 
     const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
 
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     await flush();
     expect(started).toEqual([true]);
     expect(signals[0].aborted).toBe(false);
@@ -155,12 +160,12 @@ describe("reportSessionActiveState (#709)", () => {
     const { started, settle } = stubFetch();
     const { reportSessionActiveState, resetSessionStateReports } = await import("./web-push-client");
 
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     await flush();
     resetSessionStateReports();
 
     // New account reports a sit while the previous account's request is still open.
-    reportSessionActiveState(true);
+    reportSessionActiveState(true, "sit");
     await flush();
     expect(started).toEqual([true, true]);
 
@@ -168,7 +173,7 @@ describe("reportSessionActiveState (#709)", () => {
     // report would run concurrently and could land out of order.
     settle(0);
     await flush();
-    reportSessionActiveState(false);
+    reportSessionActiveState(false, "sit");
     await flush();
     expect(started).toEqual([true, true]);
 
@@ -195,8 +200,8 @@ describe("reportSessionActiveState (#709)", () => {
 
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    const pending = reportSessionActiveState(true);
-    reportSessionActiveState(false);
+    const pending = reportSessionActiveState(true, "sit");
+    reportSessionActiveState(false, "sit");
     await flush();
 
     // The request carries a deadline it can be cancelled by.
@@ -235,10 +240,10 @@ describe("reportSessionActiveState (#709)", () => {
 
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    await reportSessionActiveState(true);
+    await reportSessionActiveState(true, "sit");
     expect(sent).toEqual([true]);
 
-    await reportSessionActiveState(false);
+    await reportSessionActiveState(false, "sit");
     expect(sent).toEqual([true, false, false]);
   });
 
@@ -253,7 +258,7 @@ describe("reportSessionActiveState (#709)", () => {
 
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    await reportSessionActiveState(false);
+    await reportSessionActiveState(false, "sit");
     expect(sent).toEqual([false]);
   });
 
@@ -267,8 +272,8 @@ describe("reportSessionActiveState (#709)", () => {
 
     const { reportSessionActiveState } = await import("./web-push-client");
 
-    await reportSessionActiveState(true);
-    await expect(reportSessionActiveState(false)).resolves.toBeUndefined();
+    await reportSessionActiveState(true, "sit");
+    await expect(reportSessionActiveState(false, "sit")).resolves.toBeUndefined();
     expect(sent).toEqual([true, false]);
   });
 });

@@ -199,10 +199,12 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
   const showDistractionHyperfocusCluster =
     trackingControlsUnlocked && !hideDistractionHyperfocusControls;
   useWakeLock(keepScreenAwakePref && isActive);
+  // One key for this mount, so ending the sit releases only this sit's hold (#741).
+  const notificationSessionKeyRef = useRef(crypto.randomUUID());
   // Relay sit state to the service worker so it can suppress push display while
   // a sit is in progress when the opt-in pref is on (#431). Treat a paused sit
   // as still "in session" so reminders stay suppressed until it truly ends.
-  useSessionSuppressionRelay(!sessionFinished);
+  useSessionSuppressionRelay(!sessionFinished, notificationSessionKeyRef.current);
 
   useEffect(() => {
     if (sessionFinished) {

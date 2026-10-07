@@ -159,7 +159,11 @@ const SESSION_STATE_TIMEOUT_MS = 10_000;
  * prevent. Clearing therefore gets one extra attempt; the TTL stays the backstop,
  * and a loop would be worse than useless on an unmount report.
  */
-async function postSessionActiveState(active: boolean, epoch: number): Promise<void> {
+async function postSessionActiveState(
+  active: boolean,
+  sessionKey: string,
+  epoch: number,
+): Promise<void> {
   const attempts = active ? 1 : 2;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -179,7 +183,7 @@ async function postSessionActiveState(active: boolean, epoch: number): Promise<v
       const res = await fetch("/api/notifications/session-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active }),
+        body: JSON.stringify({ active, sessionKey }),
         keepalive: true,
         signal: controller.signal,
       });
@@ -199,13 +203,11 @@ async function postSessionActiveState(active: boolean, epoch: number): Promise<v
   }
 }
 
-// One request in flight at a time, plus at most one queued state — the endpoint
-// stores absolute state, so when reports pile up behind a slow request only the
-// newest one still matters. Serializing also stops an in-flight heartbeat `true`
-// from landing after the `false` that ended the sit and re-suppressing
-// notifications for a full TTL.
+// One request in flight at a time. Each session key keeps its own newest state,
+// so one sit's report cannot replace another's (#741). Serializing still stops
+// an in-flight heartbeat `true` from landing after that sit's `false`.
 let inFlight: Promise<void> | null = null;
-let queuedActive: boolean | null = null;
+const queuedReports = new Map<string, boolean>();
 // Bumped at every auth boundary so a chain started by the previous account cannot
 // keep draining — or clobber the next account's `inFlight` — after the reset below.
 let queueEpoch = 0;
@@ -215,19 +217,26 @@ let activeController: AbortController | null = null;
 
 function drainSessionStateQueue(epoch: number): Promise<void> {
   if (epoch !== queueEpoch) return Promise.resolve();
-  const next = queuedActive;
-  queuedActive = null;
-  if (next === null) {
+  const next = queuedReports.entries().next();
+  if (next.done) {
     inFlight = null;
     return Promise.resolve();
   }
-  inFlight = postSessionActiveState(next, epoch).then(() => drainSessionStateQueue(epoch));
+  const [sessionKey, active] = next.value;
+  queuedReports.delete(sessionKey);
+  inFlight = postSessionActiveState(active, sessionKey, epoch)
+    .then(() => drainSessionStateQueue(epoch));
   return inFlight;
 }
 
 /**
  * Drops any pending session-state report at an auth boundary (#709).
  *
+ * A queued or in-flight report is tied to the sit that created it (#741). If it
+ * still lands, the server deletes only that session key's row, so it cannot
+ * clear another sit or another account. The abort and epoch stay: a stale
+ * `true` or `false` can still arrive out of order for the *same* sit after the
+ * same account signs back in.
  * The queue is module-global and web sign-out is an in-page state reset rather
  * than a reload, so a report queued under one account would otherwise drain under
  * the next account's cookie and suppress *their* notifications for a full TTL.
@@ -246,7 +255,7 @@ function drainSessionStateQueue(epoch: number): Promise<void> {
  */
 export function resetSessionStateReports(): void {
   queueEpoch += 1;
-  queuedActive = null;
+  queuedReports.clear();
   inFlight = null;
   activeController?.abort();
   activeController = null;
@@ -261,16 +270,16 @@ export function resetSessionStateReports(): void {
  * @returns a promise that settles once this report — or a newer one that
  *   superseded it — has been sent.
  */
-export function reportSessionActiveState(active: boolean): Promise<void> {
+export function reportSessionActiveState(active: boolean, sessionKey: string): Promise<void> {
   if (inFlight) {
     // Newest state wins; superseded states are dropped rather than queued.
-    queuedActive = active;
+    queuedReports.set(sessionKey, active);
     return inFlight;
   }
   // `postSessionActiveState` swallows its own errors, so the chain never rejects
   // and one failed report cannot stall the ones behind it.
   const epoch = queueEpoch;
-  inFlight = postSessionActiveState(active, epoch).then(() => drainSessionStateQueue(epoch));
+  inFlight = postSessionActiveState(active, sessionKey, epoch).then(() => drainSessionStateQueue(epoch));
   return inFlight;
 }
 

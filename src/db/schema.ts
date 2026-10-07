@@ -95,6 +95,10 @@ export const notificationPreferences = pgTable("notification_preferences", {
    * `/api/notifications/session-state` on session start, refresh it on a heartbeat,
    * and clear it on session end; the TTL (`SESSION_ACTIVE_TTL_MS`) makes a client
    * that stops reporting self-heal. Not user-editable.
+   *
+   * When a client sends a session key (#741), this column is the latest unexpired
+   * `session_notification_holds` expiry for the user. Requests without a key still
+   * write it directly, so an app that has not been updated keeps the old behavior.
    */
   sessionActiveUntil: timestamp("session_active_until", { withTimezone: true }),
   /** Local reminder time as HH:MM (24h). */
@@ -128,6 +132,30 @@ export const notificationPreferences = pgTable("notification_preferences", {
     table.missADayEnabled,
     table.failureReasonReminderEnabled,
     table.dailyReminderTime,
+  ),
+}));
+
+/**
+ * One live notification hold per sit (#741). Ending one sit deletes only that
+ * row, so another device's sit keeps withholding pushes. `expiresAt` is the
+ * same TTL as `notification_preferences.session_active_until`, which stores the
+ * maximum unexpired expiry for the user.
+ */
+export const sessionNotificationHolds = pgTable("session_notification_holds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionKey: varchar("session_key", { length: 64 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userSessionKeyUnique: uniqueIndex("session_notification_holds_user_session_key_unique").on(
+    table.userId,
+    table.sessionKey,
+  ),
+  userExpiresIdx: index("idx_session_notification_holds_user_expires").on(
+    table.userId,
+    table.expiresAt,
   ),
 }));
 

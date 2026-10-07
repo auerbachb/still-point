@@ -610,12 +610,26 @@ public struct DeviceTokenRegistrationRequest: Codable, Sendable {
 }
 
 /// Reports whether a sit is running so the server withholds this user's pushes
-/// for the duration (#709).
+/// for the duration (#709). `sessionKey` names the sit (#741). It is omitted
+/// when nil so an older call site still writes the single shared column.
 public struct SessionNotificationStateRequest: Codable, Sendable {
     public let active: Bool
+    public let sessionKey: String?
 
-    public init(active: Bool) {
+    public init(active: Bool, sessionKey: String? = nil) {
         self.active = active
+        self.sessionKey = sessionKey
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(active, forKey: .active)
+        try container.encodeIfPresent(sessionKey, forKey: .sessionKey)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case active
+        case sessionKey
     }
 }
 

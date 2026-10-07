@@ -377,12 +377,14 @@ public actor APIClient {
     /// Reports whether a sit is running so the server withholds Still Point's own
     /// pushes for the duration (#709). The server stores a short TTL, so callers
     /// refresh this while the sit runs and clear it when the sit ends.
-    public func reportSessionNotificationState(active: Bool) async throws {
+    public func reportSessionNotificationState(active: Bool, sessionKey: String? = nil) async throws {
         if uiTestAPIStore != nil {
             return
         }
         var request = makeRequest(method: "POST", path: "/api/notifications/session-state")
-        request.httpBody = try JSONEncoder().encode(SessionNotificationStateRequest(active: active))
+        request.httpBody = try JSONEncoder().encode(
+            SessionNotificationStateRequest(active: active, sessionKey: sessionKey)
+        )
         _ = try await executeRaw(request)
     }
 

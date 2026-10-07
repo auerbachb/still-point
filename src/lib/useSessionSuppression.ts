@@ -40,7 +40,7 @@ export function useSuppressDuringSessionPref(): boolean {
  * normally. Web parity with the iOS `willPresent` suppression in
  * `PushNotificationCoordinator`.
  */
-export function useSessionSuppressionRelay(sessionActive: boolean): void {
+export function useSessionSuppressionRelay(sessionActive: boolean, sessionKey: string): void {
   const prefOn = useSuppressDuringSessionPref();
   const suppress = prefOn && sessionActive;
   // Tracks whether this hook told the server a sit is running, so mounting a
@@ -82,17 +82,17 @@ export function useSessionSuppressionRelay(sessionActive: boolean): void {
       // this only fires when nothing was reported (and is then a no-op).
       if (reportedActiveRef.current) {
         reportedActiveRef.current = false;
-        void reportSessionActiveState(false);
+        void reportSessionActiveState(false, sessionKey);
       }
       return;
     }
 
     reportedActiveRef.current = true;
-    void reportSessionActiveState(true);
+    void reportSessionActiveState(true, sessionKey);
 
     const heartbeat = setInterval(() => {
       broadcastSessionSuppression(true);
-      void reportSessionActiveState(true);
+      void reportSessionActiveState(true, sessionKey);
     }, SUPPRESS_HEARTBEAT_MS);
 
     return () => {
@@ -101,7 +101,7 @@ export function useSessionSuppressionRelay(sessionActive: boolean): void {
       // navigating away mid-session without a clean complete/abandon).
       broadcastSessionSuppression(false);
       reportedActiveRef.current = false;
-      void reportSessionActiveState(false);
+      void reportSessionActiveState(false, sessionKey);
     };
-  }, [suppress]);
+  }, [sessionKey, suppress]);
 }
