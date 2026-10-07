@@ -324,6 +324,11 @@ public actor APIClient {
         try await updateSettings(body: SettingsPatchBody(ambientSoundEnabled: ambientSoundEnabled))
     }
 
+    /// #708: whether the long (primary) session is the morning or evening sit.
+    public func updateSettings(longSessionPeriod: SessionPeriod) async throws -> UserDTO {
+        try await updateSettings(body: SettingsPatchBody(longSessionPeriod: longSessionPeriod))
+    }
+
     private func updateSettings(body: SettingsPatchBody) async throws -> UserDTO {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.updateSettings(
@@ -331,7 +336,8 @@ public actor APIClient {
                 username: body.username,
                 aphorismsEnabled: body.aphorismsEnabled,
                 attentionTrackingEnabled: body.attentionTrackingEnabled,
-                ambientSoundEnabled: body.ambientSoundEnabled
+                ambientSoundEnabled: body.ambientSoundEnabled,
+                longSessionPeriod: body.longSessionPeriod
             )
         }
         let response: UserResponse = try await patch("/api/settings", body: body)
@@ -587,19 +593,22 @@ private struct SettingsPatchBody: Encodable {
     let aphorismsEnabled: Bool?
     let attentionTrackingEnabled: Bool?
     let ambientSoundEnabled: Bool?
+    let longSessionPeriod: SessionPeriod?
 
     init(
         isPublic: Bool? = nil,
         username: String? = nil,
         aphorismsEnabled: Bool? = nil,
         attentionTrackingEnabled: Bool? = nil,
-        ambientSoundEnabled: Bool? = nil
+        ambientSoundEnabled: Bool? = nil,
+        longSessionPeriod: SessionPeriod? = nil
     ) {
         self.isPublic = isPublic
         self.username = username
         self.aphorismsEnabled = aphorismsEnabled
         self.attentionTrackingEnabled = attentionTrackingEnabled
         self.ambientSoundEnabled = ambientSoundEnabled
+        self.longSessionPeriod = longSessionPeriod
     }
 
     func encode(to encoder: Encoder) throws {
@@ -609,6 +618,7 @@ private struct SettingsPatchBody: Encodable {
         if let aphorismsEnabled { try c.encode(aphorismsEnabled, forKey: .aphorismsEnabled) }
         if let attentionTrackingEnabled { try c.encode(attentionTrackingEnabled, forKey: .attentionTrackingEnabled) }
         if let ambientSoundEnabled { try c.encode(ambientSoundEnabled, forKey: .ambientSoundEnabled) }
+        if let longSessionPeriod { try c.encode(longSessionPeriod, forKey: .longSessionPeriod) }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -617,6 +627,7 @@ private struct SettingsPatchBody: Encodable {
         case aphorismsEnabled
         case attentionTrackingEnabled
         case ambientSoundEnabled
+        case longSessionPeriod
     }
 }
 

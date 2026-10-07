@@ -15,6 +15,53 @@ public enum Track: String, Codable, Sendable {
     case second
 }
 
+/// #708: which time of day the long (primary) session is designated.
+/// The short (second) track is the opposite. A label only — a sit checks its
+/// designated row even when it happens at the other time of day.
+public enum SessionPeriod: String, Codable, Sendable, CaseIterable, Hashable {
+    case am
+    case pm
+
+    /// Widget row label. Short on purpose so the gutter does not truncate.
+    public var widgetLabel: String {
+        switch self {
+        case .am: return "AM"
+        case .pm: return "PM"
+        }
+    }
+
+    /// Settings picker label for the long session.
+    public var settingsLabel: String {
+        switch self {
+        case .am: return "Morning"
+        case .pm: return "Evening"
+        }
+    }
+
+    public var opposite: SessionPeriod {
+        switch self {
+        case .am: return .pm
+        case .pm: return .am
+        }
+    }
+
+    /// Period designated for `track` when the long session uses `longSession`.
+    public static func period(for track: Track, longSession: SessionPeriod) -> SessionPeriod {
+        switch track {
+        case .primary: return longSession
+        case .second: return longSession.opposite
+        }
+    }
+
+    /// Dual-track widget rows, morning first, then evening.
+    public static func orderedTracks(longSession: SessionPeriod) -> [Track] {
+        switch longSession {
+        case .am: return [.primary, .second]
+        case .pm: return [.second, .primary]
+        }
+    }
+}
+
 public enum StillPoint {
     /// Base session duration in seconds (Day 1)
     public static let baseDuration = 60

@@ -19,6 +19,10 @@ public struct UserDTO: Codable, Sendable {
     /// permissively so a server that predates #240 defaults to single-track.
     public let dualTrackEnabled: Bool
     public let secondTrackDay: Int
+    /// #708: whether the long (primary) session is the morning or evening sit.
+    /// The short track is the opposite. A label only — sits are not locked to
+    /// the clock. Missing on older servers decodes as `.am`.
+    public let longSessionPeriod: SessionPeriod
     /// #238: miss-a-day recovery ramp. All three are nil when not recovering.
     public let recoveryTargetDay: Int?
     public let recoveryCurrentStep: Int?
@@ -37,6 +41,7 @@ public struct UserDTO: Codable, Sendable {
         attentionTrackingEnabled: Bool? = nil,
         dualTrackEnabled: Bool = false,
         secondTrackDay: Int = 1,
+        longSessionPeriod: SessionPeriod = .am,
         recoveryTargetDay: Int? = nil,
         recoveryCurrentStep: Int? = nil,
         recoveryTotalSteps: Int? = nil,
@@ -51,6 +56,7 @@ public struct UserDTO: Codable, Sendable {
         self.attentionTrackingEnabled = attentionTrackingEnabled ?? false
         self.dualTrackEnabled = dualTrackEnabled
         self.secondTrackDay = secondTrackDay
+        self.longSessionPeriod = longSessionPeriod
         self.recoveryTargetDay = recoveryTargetDay
         self.recoveryCurrentStep = recoveryCurrentStep
         self.recoveryTotalSteps = recoveryTotalSteps
@@ -68,6 +74,12 @@ public struct UserDTO: Codable, Sendable {
         attentionTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .attentionTrackingEnabled) ?? false
         dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled) ?? false
         secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay) ?? 1
+        if let raw = try c.decodeIfPresent(String.self, forKey: .longSessionPeriod),
+           let period = SessionPeriod(rawValue: raw) {
+            longSessionPeriod = period
+        } else {
+            longSessionPeriod = .am
+        }
         recoveryTargetDay = try c.decodeIfPresent(Int.self, forKey: .recoveryTargetDay)
         recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
         recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
@@ -76,7 +88,7 @@ public struct UserDTO: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, email, username, isPublic, currentDay, aphorismsEnabled, attentionTrackingEnabled
-        case dualTrackEnabled, secondTrackDay
+        case dualTrackEnabled, secondTrackDay, longSessionPeriod
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
         case ambientSoundEnabled
     }
@@ -95,6 +107,7 @@ extension UserDTO {
         attentionTrackingEnabled: Bool? = nil,
         dualTrackEnabled: Bool? = nil,
         secondTrackDay: Int? = nil,
+        longSessionPeriod: SessionPeriod? = nil,
         ambientSoundEnabled: Bool? = nil
     ) -> UserDTO {
         UserDTO(
@@ -107,6 +120,7 @@ extension UserDTO {
             attentionTrackingEnabled: attentionTrackingEnabled ?? self.attentionTrackingEnabled,
             dualTrackEnabled: dualTrackEnabled ?? self.dualTrackEnabled,
             secondTrackDay: secondTrackDay ?? self.secondTrackDay,
+            longSessionPeriod: longSessionPeriod ?? self.longSessionPeriod,
             recoveryTargetDay: recoveryTargetDay,
             recoveryCurrentStep: recoveryCurrentStep,
             recoveryTotalSteps: recoveryTotalSteps,
@@ -125,6 +139,7 @@ extension UserDTO {
             attentionTrackingEnabled: attentionTrackingEnabled,
             dualTrackEnabled: dualTrackEnabled,
             secondTrackDay: secondTrackDay,
+            longSessionPeriod: longSessionPeriod,
             recoveryTargetDay: state.recoveryTargetDay,
             recoveryCurrentStep: state.recoveryCurrentStep,
             recoveryTotalSteps: state.recoveryTotalSteps,
@@ -143,6 +158,7 @@ extension UserDTO {
             attentionTrackingEnabled: attentionTrackingEnabled,
             dualTrackEnabled: dualTrackEnabled,
             secondTrackDay: secondTrackDay,
+            longSessionPeriod: longSessionPeriod,
             recoveryTargetDay: targetDay,
             recoveryCurrentStep: currentStep,
             recoveryTotalSteps: totalSteps,

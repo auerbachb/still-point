@@ -12,10 +12,13 @@ struct SettingsView: View {
     @State private var attentionTrackingEnabled: Bool = false
     /// #563: opt-in ambient sound level capture during solo sits.
     @State private var ambientSoundEnabled: Bool = false
+    /// #708: whether the long (primary) session is morning or evening.
+    @State private var longSessionPeriod: SessionPeriod = .am
     @State private var isUpdating = false
     @State private var isUpdatingAphorisms = false
     @State private var isUpdatingAttentionTracking = false
     @State private var isUpdatingAmbientSound = false
+    @State private var isUpdatingLongSessionPeriod = false
     @State private var isSavingUsername = false
     @State private var showDeleteAccountDialog = false
     @State private var showDeleteAccountConfirm = false
@@ -26,7 +29,9 @@ struct SettingsView: View {
     @State private var showAttentionPermissionDeniedAlert = false
     @State private var showAmbientSoundPermissionDeniedAlert = false
 
-    private var isSavingSettings: Bool { isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isUpdatingAmbientSound || isSavingUsername }
+    private var isSavingSettings: Bool {
+        isUpdating || isUpdatingAphorisms || isUpdatingAttentionTracking || isUpdatingAmbientSound || isUpdatingLongSessionPeriod || isSavingUsername
+    }
 
     var body: some View {
         NavigationStack {
@@ -87,6 +92,46 @@ struct SettingsView: View {
                         .font(SPFont.mono(11, weight: .medium))
                         .foregroundStyle(Color(SPColor.fg4))
                         .tracking(2)
+
+                    if appVM.dualTrackEnabled {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Picker("Long session", selection: $longSessionPeriod) {
+                                ForEach(SessionPeriod.allCases, id: \.self) { period in
+                                    Text(period.settingsLabel).tag(period)
+                                }
+                            }
+                            .font(SPFont.mono(13))
+                            .disabled(isSavingSettings)
+                            .accessibilityIdentifier("settings.longSessionPeriodPicker")
+                            .onChange(of: longSessionPeriod) { _, newValue in
+                                guard !isUpdatingLongSessionPeriod else { return }
+                                guard appVM.currentUser?.longSessionPeriod != newValue else { return }
+                                let previous = appVM.currentUser?.longSessionPeriod ?? .am
+                                isUpdatingLongSessionPeriod = true
+                                let identityAtStart = appVM.identityGeneration
+                                appVM.enqueueSettingsWrite {
+                                    defer { isUpdatingLongSessionPeriod = false }
+                                    do {
+                                        guard identityAtStart == appVM.identityGeneration else { return }
+                                        let settingsTicket = appVM.nextSettingsRequestTicket()
+                                        let updated = try await APIClient.shared.updateSettings(longSessionPeriod: newValue)
+                                        if appVM.applySettingsUser(
+                                            updated,
+                                            startedAtGeneration: identityAtStart,
+                                            requestTicket: settingsTicket
+                                        ) == .discarded {
+                                            longSessionPeriod = previous
+                                        }
+                                    } catch {
+                                        longSessionPeriod = previous
+                                    }
+                                }
+                            }
+                            Text("The 10-minute track is this sitting. The shorter track is the other one. You can still do either sit at any time of day.")
+                                .font(SPFont.serif(13, weight: .light))
+                                .foregroundStyle(Color(SPColor.fg4))
+                        }
+                    }
 
                     Toggle(isOn: Bindable(appVM).keepScreenAwakeDuringSession) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -527,6 +572,10 @@ struct SettingsView: View {
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
+        .onChange(of: appVM.currentUser?.longSessionPeriod) { _, _ in
+            guard appVM.currentUser != nil else { return }
+            syncFromCurrentUser()
+        }
         .alert("Microphone access required", isPresented: $showAmbientSoundPermissionDeniedAlert) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -607,12 +656,14 @@ struct SettingsView: View {
             aphorismsEnabled = false
             attentionTrackingEnabled = false
             ambientSoundEnabled = false
+            longSessionPeriod = .am
             return
         }
         if !isUpdating { isPublic = user.isPublic }
         if !isUpdatingAphorisms { aphorismsEnabled = user.aphorismsEnabled }
         if !isUpdatingAttentionTracking { attentionTrackingEnabled = user.attentionTrackingEnabled }
         if !isUpdatingAmbientSound { ambientSoundEnabled = user.ambientSoundEnabled }
+        if !isUpdatingLongSessionPeriod { longSessionPeriod = user.longSessionPeriod }
     }
 
     private var appVersionFooter: String {

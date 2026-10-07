@@ -489,7 +489,8 @@ actor UITestAPIStore {
         username: String?,
         aphorismsEnabled: Bool?,
         attentionTrackingEnabled: Bool?,
-        ambientSoundEnabled: Bool?
+        ambientSoundEnabled: Bool?,
+        longSessionPeriod: SessionPeriod? = nil
     ) throws -> UserDTO {
         try ensureAuthenticated()
 
@@ -498,6 +499,7 @@ actor UITestAPIStore {
         var nextAphorismsEnabled = store.user.aphorismsEnabled
         var nextAttentionTrackingEnabled = store.user.attentionTrackingEnabled
         var nextAmbientSoundEnabled = store.user.ambientSoundEnabled
+        var nextLongSessionPeriod = store.user.longSessionPeriod
 
         if let username {
             let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -526,11 +528,16 @@ actor UITestAPIStore {
             nextAmbientSoundEnabled = ambientSoundEnabled
         }
 
+        if let longSessionPeriod {
+            nextLongSessionPeriod = longSessionPeriod
+        }
+
         store.user = store.user.updating(
             username: nextUsername,
             isPublic: nextIsPublic,
             aphorismsEnabled: nextAphorismsEnabled,
             attentionTrackingEnabled: nextAttentionTrackingEnabled,
+            longSessionPeriod: nextLongSessionPeriod,
             ambientSoundEnabled: nextAmbientSoundEnabled
         )
         persist()

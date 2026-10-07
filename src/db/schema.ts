@@ -52,6 +52,10 @@ export const users = pgTable("users", {
    *  Both are backward-compatible defaults so existing rows stay single-track. */
   dualTrackEnabled: boolean("dual_track_enabled").default(false).notNull(),
   secondTrackDay: integer("second_track_day").default(1).notNull(),
+  /** #708: whether the long (primary) session is the morning or evening sit.
+   *  am | pm. The short track is the opposite. A label only — sits are not
+   *  locked to the clock. */
+  longSessionPeriod: varchar("long_session_period", { length: 2 }).default("am").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -63,6 +67,10 @@ export const users = pgTable("users", {
     "users_recovery_all_or_none",
     sql`(${table.recoveryTargetDay} is null) = (${table.recoveryCurrentStep} is null)
       and (${table.recoveryCurrentStep} is null) = (${table.recoveryTotalSteps} is null)`,
+  ),
+  longSessionPeriodCheck: check(
+    "users_long_session_period_allowed",
+    sql`${table.longSessionPeriod} in ('am', 'pm')`,
   ),
 }));
 

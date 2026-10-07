@@ -44,6 +44,9 @@ export type User = {
    *  server that predates #240 still type-check (treated as single-track). */
   dualTrackEnabled?: boolean;
   secondTrackDay?: number;
+  /** #708: whether the long (primary) session is the morning or evening sit.
+   *  The short track is the opposite. Optional so older servers still type-check. */
+  longSessionPeriod?: "am" | "pm";
 };
 
 export type Session = {

@@ -35,6 +35,7 @@ const RETURN_FIELDS = {
   ambientSoundEnabled: users.ambientSoundEnabled,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
+  longSessionPeriod: users.longSessionPeriod,
   recoveryTargetDay: users.recoveryTargetDay,
   recoveryCurrentStep: users.recoveryCurrentStep,
   recoveryTotalSteps: users.recoveryTotalSteps,
@@ -67,6 +68,20 @@ export const PATCH = withApiHandler(
 
     if (typeof body.ambientSoundEnabled === "boolean") {
       updates.ambientSoundEnabled = body.ambientSoundEnabled;
+      hasSupportedUpdate = true;
+    }
+
+    // #708: long (primary) session is morning or evening. Present-but-invalid
+    // is a 400 even when another field is also being saved, so a bad value
+    // never rides along on a username update.
+    if (body.longSessionPeriod !== undefined) {
+      if (body.longSessionPeriod !== "am" && body.longSessionPeriod !== "pm") {
+        return NextResponse.json(
+          { error: "longSessionPeriod must be am or pm" },
+          { status: 400 },
+        );
+      }
+      updates.longSessionPeriod = body.longSessionPeriod;
       hasSupportedUpdate = true;
     }
 

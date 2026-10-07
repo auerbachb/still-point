@@ -1048,6 +1048,11 @@ final class AppViewModel {
         // refreshed too — otherwise a rename or track opt-in would vanish on the
         // next offline launch (#665).
         applyAuthenticatedUser(user)
+        // #708: the widget orders and labels its rows by this period, so a change
+        // must reach the stored snapshot now rather than at the next sit.
+        if existing.longSessionPeriod != user.longSessionPeriod {
+            syncWidgetData()
+        }
         return .applied
     }
 
