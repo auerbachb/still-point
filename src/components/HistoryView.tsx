@@ -6,7 +6,7 @@ import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { buildCurrentMonthGrid, buildPriorMonthSummaries, formatTotalTime } from "@/lib/historyMonthGrid";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { todayLocalIsoDate } from "@/lib/sessionCalendar";
+import { creditedLocalIsoDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import type { MindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { HistoryMindStateTrends } from "@/components/HistoryMindStateTrends";
 import { HistoryYearInReview } from "@/components/HistoryYearInReview";
@@ -66,6 +66,7 @@ type HistoryViewProps = {
   currentDay: number;
   recovery?: RecoveryFields;
   username: string;
+  dualTrackEnabled?: boolean;
 };
 
 const EMPTY_MIND_STATE_TRENDS: MindStateTrendStats = {
@@ -86,7 +87,12 @@ const EMPTY_MIND_STATE_TRENDS: MindStateTrendStats = {
   dailyTrend: [],
 };
 
-export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: HistoryViewProps) {
+export function HistoryView({
+  currentDay,
+  recovery = NO_RECOVERY,
+  username,
+  dualTrackEnabled = false,
+}: HistoryViewProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [stats, setStats] = useState({
     streak: 0,
@@ -113,44 +119,68 @@ export function HistoryView({ currentDay, recovery = NO_RECOVERY, username }: Hi
   const cellSize = isMobile ? "36px" : "44px";
 
   useEffect(() => {
-    const today = todayLocalIsoDate();
+    const calendarToday = todayLocalIsoDate();
     const readJson = async (response: Response) => {
       if (!response.ok) {
         throw new Error(`Request failed (${response.status})`);
       }
       return response.json();
     };
+    let cancelled = false;
     Promise.all([
-      fetch(`/api/sessions?today=${encodeURIComponent(today)}`).then(readJson),
+      fetch(`/api/sessions?today=${encodeURIComponent(calendarToday)}`).then(readJson),
       fetch("/api/thoughts").then(readJson),
-    ]).then(([sessData, thoughtData]) => {
-      setSessions(sessData.sessions || []);
+    ]).then(async ([sessData, thoughtData]) => {
+      if (cancelled) return;
+      const loaded = sessData.sessions || [];
+      const credited = creditedLocalIsoDate(loaded, dualTrackEnabled);
+      let statsSource = sessData;
+      if (credited !== calendarToday) {
+        try {
+          const again = await fetch(`/api/sessions?today=${encodeURIComponent(credited)}`).then(readJson);
+          if (cancelled) return;
+          statsSource = again;
+        } catch {
+          if (cancelled) return;
+          // The first payload already has the sessions. Period stats stay on
+          // the calendar day rather than blanking history.
+        }
+      }
+      setTodayDate(credited);
+      setSessions(statsSource.sessions || loaded);
       setStats({
-        streak: sessData.stats?.streak ?? 0,
-        avgClearPercent: sessData.stats?.avgClearPercent ?? 0,
-        avgThoughtsPerSession: sessData.stats?.avgThoughtsPerSession ?? 0,
-        avgThoughtsPerMinute: sessData.stats?.avgThoughtsPerMinute ?? 0,
-        bonusMinutesTotal: sessData.stats?.bonusMinutesTotal ?? 0,
-        trailing4WeekDays: sessData.stats?.trailing4WeekDays ?? 0,
-        trailing4WeekDayPercent: sessData.stats?.trailing4WeekDayPercent ?? 0,
-        trailing4WeekTotalTime: sessData.stats?.trailing4WeekTotalTime ?? 0,
-        trailing4WeekTimePercent: sessData.stats?.trailing4WeekTimePercent ?? 0,
-        totalTimeAllTime: sessData.stats?.totalTimeAllTime ?? 0,
-        progressTo10kHours: sessData.stats?.progressTo10kHours ?? 0,
-        mindStateTrends: sessData.stats?.mindStateTrends ?? EMPTY_MIND_STATE_TRENDS,
+        streak: statsSource.stats?.streak ?? 0,
+        avgClearPercent: statsSource.stats?.avgClearPercent ?? 0,
+        avgThoughtsPerSession: statsSource.stats?.avgThoughtsPerSession ?? 0,
+        avgThoughtsPerMinute: statsSource.stats?.avgThoughtsPerMinute ?? 0,
+        bonusMinutesTotal: statsSource.stats?.bonusMinutesTotal ?? 0,
+        trailing4WeekDays: statsSource.stats?.trailing4WeekDays ?? 0,
+        trailing4WeekDayPercent: statsSource.stats?.trailing4WeekDayPercent ?? 0,
+        trailing4WeekTotalTime: statsSource.stats?.trailing4WeekTotalTime ?? 0,
+        trailing4WeekTimePercent: statsSource.stats?.trailing4WeekTimePercent ?? 0,
+        totalTimeAllTime: statsSource.stats?.totalTimeAllTime ?? 0,
+        progressTo10kHours: statsSource.stats?.progressTo10kHours ?? 0,
+        mindStateTrends: statsSource.stats?.mindStateTrends ?? EMPTY_MIND_STATE_TRENDS,
       });
       setThoughts(thoughtData.thoughts || []);
       setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dualTrackEnabled]);
 
   useEffect(() => {
     const id = setInterval(() => {
-      const d = todayLocalIsoDate();
-      setTodayDate(prev => (prev === d ? prev : d));
+      setTodayDate((prev) => {
+        const next = creditedLocalIsoDate(sessions, dualTrackEnabled);
+        return prev === next ? prev : next;
+      });
     }, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [sessions, dualTrackEnabled]);
 
   const monthGrid = useMemo(
     () => buildCurrentMonthGrid(sessions, todayDate),

@@ -204,8 +204,10 @@ export const api = {
       credentials: "include",
     }),
 
-  me: () =>
-    request<{ user: User }>("/api/auth/me"),
+  me: (date?: string) =>
+    request<{ user: User }>(
+      date ? `/api/auth/me?date=${encodeURIComponent(date)}` : "/api/auth/me",
+    ),
 
   getSessions: (today?: string) =>
     request<{ sessions: Session[]; stats: {
