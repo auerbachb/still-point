@@ -106,11 +106,14 @@ final class HapticCueLogicTests: XCTestCase {
         )
     }
 
+    /// `completedNaturally` stays true so silence can only come from the abandon
+    /// clause. Pairing it with `false` would duplicate the early-end case and
+    /// leave `!isAbandoned` unpinned (#738).
     func testSessionEndStaysSilentAfterAnAbandon() {
         XCTAssertNil(
             HapticCueLogic.sessionEndCue(
                 hapticsEnabled: true,
-                completedNaturally: false,
+                completedNaturally: true,
                 isAbandoned: true
             )
         )
