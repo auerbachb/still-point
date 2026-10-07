@@ -609,9 +609,8 @@ actor UITestAPIStore {
             if patch.callOptIn == true && !current.callOptIn {
                 return ISO8601DateFormatter().string(from: Date())
             }
-            if patch.callOptIn == false {
-                return nil
-            }
+            // Opt-out keeps the last grant time. Revocation is an audit event on
+            // the server (#674); this test double only mirrors the cache column.
             return current.callConsentAt
         }()
 

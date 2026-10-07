@@ -1,6 +1,8 @@
 import SwiftUI
 import Combine
 import UIKit
+import AVFoundation
+import CoreHaptics
 import StillPointShared
 
 @Observable
@@ -66,6 +68,9 @@ final class SessionViewModel {
     /// marker arrives noticeably after it.
     private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
     private let pronouncedHaptic = UINotificationFeedbackGenerator()
+    /// Plays beside the session audio engine. UIKit generators stay silent
+    /// once that engine is running, which a normal sit does by default (#794).
+    private var coreHapticEngine: CHHapticEngine?
 
     var remaining: Double {
         max(0, Double(totalSeconds) - elapsed)
@@ -335,9 +340,12 @@ final class SessionViewModel {
 
     /// #557: stable local key for offline end-note sync during completion.
     private(set) var lastClientSessionId: UUID?
+    /// Credited practice day, pinned on the first save so a retry after 6:00
+    /// still stores the sit on the day it ended.
+    private var pinnedSessionDate: String?
 
     /// Save session locally first, then sync when online (#557). Returns nil when persistence fails.
-    func saveSession(completed: Bool, ownerUserId: String) async -> SessionDTO? {
+    func saveSession(completed: Bool, ownerUserId: String, sessionDate: String? = nil) async -> SessionDTO? {
         let clientSessionId: UUID
         if let existing = lastClientSessionId {
             clientSessionId = existing
@@ -350,6 +358,10 @@ final class SessionViewModel {
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.calendar = Calendar(identifier: .gregorian)
+        if pinnedSessionDate == nil {
+            pinnedSessionDate = sessionDate ?? dateFormatter.string(from: Date())
+        }
+        let creditedDate = pinnedSessionDate ?? dateFormatter.string(from: Date())
 
         let request = CreateSessionRequest(
             dayNumber: dayNumber,
@@ -362,7 +374,7 @@ final class SessionViewModel {
             thoughtCount: thoughtCount,
             mindStateLog: mindStateLog,
             attentionLog: attentionLog,
-            sessionDate: dateFormatter.string(from: Date()),
+            sessionDate: creditedDate,
             track: track,
             clientSessionId: clientSessionId,
             ambientSoundSummary: ambientSoundSummary
@@ -502,19 +514,71 @@ final class SessionViewModel {
     private func prepareHaptics() {
         gentleHaptic.prepare()
         pronouncedHaptic.prepare()
+        startCoreHapticsIfNeeded()
     }
 
-    /// Plays a cue at the strength `HapticCueLogic` assigns it. The decision of
-    /// *whether* and *how strong* lives in the shared package; this is only the
-    /// UIKit hand-off.
+    private func startCoreHapticsIfNeeded() {
+        guard HapticPlayback.prefersCoreHaptics(
+            hardwareSupportsCoreHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics
+        ) else { return }
+        if let coreHapticEngine {
+            try? coreHapticEngine.start()
+            return
+        }
+        do {
+            let engine = try CHHapticEngine()
+            engine.playsHapticsOnly = true
+            engine.resetHandler = { [weak self] in
+                DispatchQueue.main.async {
+                    try? self?.coreHapticEngine?.start()
+                }
+            }
+            try engine.start()
+            coreHapticEngine = engine
+        } catch {
+            coreHapticEngine = nil
+        }
+    }
+
+    /// Plays a cue at the strength `HapticCueLogic` assigns it. Core Haptics
+    /// first, so a sit with sound on still vibrates. UIKit is the fallback.
     private func fireHaptic(_ cue: HapticCueLogic.Cue) {
+        if coreHapticEngine == nil {
+            startCoreHapticsIfNeeded()
+        }
+        if playCoreHaptic(cue) { return }
         switch HapticCueLogic.intensity(for: cue) {
         case .gentle:
             gentleHaptic.impactOccurred()
-            // A generator goes cold once it fires; re-prime for the next minute.
             gentleHaptic.prepare()
         case .pronounced:
             pronouncedHaptic.notificationOccurred(.success)
+        }
+    }
+
+    private func playCoreHaptic(_ cue: HapticCueLogic.Cue) -> Bool {
+        guard let coreHapticEngine else { return false }
+        let events = HapticPlayback.transients(for: HapticCueLogic.intensity(for: cue)).map { tap in
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
+                ],
+                relativeTime: tap.relativeTime
+            )
+        }
+        do {
+            try coreHapticEngine.start()
+            let pattern = try CHHapticPattern(events: events, parameters: [])
+            let player = try coreHapticEngine.makePlayer(with: pattern)
+            try player.start(atTime: CHHapticTimeImmediate)
+            return true
+        } catch {
+            // A failed start leaves a dead engine. Clear the stored property,
+            // not the `guard let` binding, so the next cue can build another.
+            self.coreHapticEngine = nil
+            return false
         }
     }
 

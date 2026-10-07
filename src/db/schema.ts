@@ -107,7 +107,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   callOptIn: boolean("call_opt_in").default(false).notNull(),
   /** E.164 phone number for missed-sit calls, e.g. +15551234567 */
   callPhoneNumber: varchar("call_phone_number", { length: 20 }),
-  /** When the user last opted in to missed-sit calls; cleared on opt-out. */
+  /** Latest granted call-consent time (#674). Not cleared on opt-out; revocations live in consent_events. */
   callConsentAt: timestamp("call_consent_at", { withTimezone: true }),
   /** Local call window start as HH:MM (24h). */
   callWindowStart: varchar("call_window_start", { length: 5 }),
@@ -144,6 +144,38 @@ export const callAttempts = pgTable("call_attempts", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   userWindowIdx: index("call_attempts_user_window_idx").on(table.userId, table.windowKey),
+}));
+
+/**
+ * Append-only TCPA consent log (#674). Opt-out inserts a `revoked` row and does
+ * not delete or null prior rows. `callConsentAt` on notification_preferences is
+ * only a cache of the latest `granted` timestamp.
+ */
+export const consentEvents = pgTable("consent_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  /** call | sms. SMS events are not written until that channel ships. */
+  channel: varchar("channel", { length: 16 }).notNull(),
+  phoneNumber: varchar("phone_number", { length: 20 }),
+  /** granted | revoked */
+  event: varchar("event", { length: 16 }).notNull(),
+  /** Null until the product has a versioned disclosure the user can agree to. */
+  disclosureVersion: varchar("disclosure_version", { length: 64 }),
+  /** Call opt-in through PATCH /api/notifications/preferences uses `preferences_api`. */
+  method: varchar("method", { length: 64 }),
+  /** Client IP when the request supplied one (`x-real-ip`, else the last `x-forwarded-for` hop). */
+  ip: varchar("ip", { length: 64 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  channelCheck: check(
+    "consent_events_channel_allowed",
+    sql`${table.channel} in ('call', 'sms')`,
+  ),
+  eventCheck: check(
+    "consent_events_event_allowed",
+    sql`${table.event} in ('granted', 'revoked')`,
+  ),
+  userCreatedIdx: index("consent_events_user_created_idx").on(table.userId, table.createdAt),
 }));
 
 /** Idempotent send ledger: one row per user/type/window (#345). */
@@ -547,6 +579,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   notificationDispatches: many(notificationDispatches),
   callAttempts: many(callAttempts),
+  consentEvents: many(consentEvents),
   failureReasons: many(failureReasons),
   oauthAccounts: many(oauthAccounts),
   googleOAuthToken: one(googleOAuthTokens, {
@@ -570,6 +603,10 @@ export const notificationDispatchesRelations = relations(notificationDispatches,
 
 export const callAttemptsRelations = relations(callAttempts, ({ one }) => ({
   user: one(users, { fields: [callAttempts.userId], references: [users.id] }),
+}));
+
+export const consentEventsRelations = relations(consentEvents, ({ one }) => ({
+  user: one(users, { fields: [consentEvents.userId], references: [users.id] }),
 }));
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({

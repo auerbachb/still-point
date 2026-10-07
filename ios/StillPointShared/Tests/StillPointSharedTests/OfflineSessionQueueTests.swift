@@ -186,4 +186,46 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(dto.id, clientSessionId.uuidString)
         XCTAssertEqual(dto.sessionType, .quick)
     }
+
+    func testAppendEndNoteReplacesQueuedEndNote() async throws {
+        let store = InMemoryOfflineSessionQueueStore()
+        let coordinator = SessionSyncCoordinator(
+            queueStore: store,
+            transport: .alwaysFailing
+        )
+        let clientSessionId = UUID()
+        let request = CreateSessionRequest(
+            dayNumber: 1,
+            duration: 60,
+            completed: true,
+            actualTime: 60,
+            clearPercent: 100,
+            thoughtCount: 1,
+            mindStateLog: [],
+            sessionDate: "2026-07-17",
+            clientSessionId: clientSessionId
+        )
+        _ = try await coordinator.saveCompletedSession(
+            request: request,
+            clientSessionId: clientSessionId,
+            ownerUserId: testOwnerUserId,
+            thoughts: [PendingSessionThought(timeInSession: 12, text: "mid-sit")]
+        )
+        try await coordinator.appendEndNote(
+            clientSessionId: clientSessionId,
+            ownerUserId: testOwnerUserId,
+            note: "first draft"
+        )
+        try await coordinator.appendEndNote(
+            clientSessionId: clientSessionId,
+            ownerUserId: testOwnerUserId,
+            note: "revised note"
+        )
+
+        let thoughts = try store.loadEntries()[0].thoughts
+        XCTAssertEqual(thoughts, [
+            PendingSessionThought(timeInSession: 12, text: "mid-sit"),
+            PendingSessionThought(timeInSession: -1, text: "revised note"),
+        ])
+    }
 }

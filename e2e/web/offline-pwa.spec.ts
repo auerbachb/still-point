@@ -129,7 +129,7 @@ test.describe("offline-first web PWA", () => {
       .toBeGreaterThan(0);
     expect(mockApiState.sessions.length, "nothing reached the server while offline").toBe(0);
 
-    await tap(page.getByRole("button", { name: "Return" }));
+    await tap(page.getByRole("button", { name: "save and return to home" }));
 
     // Back online: the queue drains, and the indicator clears on its own once
     // the bootstrap re-runs successfully — no reload, no sign-in flash.

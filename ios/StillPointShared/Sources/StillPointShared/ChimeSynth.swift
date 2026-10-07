@@ -63,8 +63,9 @@ public enum ChimeSynth {
 
     /// The bell's amplitude `t` seconds after the strike.
     ///
-    /// Called once per frame from the audio render thread, so it allocates
-    /// nothing: `partials` is a static array, iterated in place.
+    /// Called once per frame from the audio render thread. `partials` is a
+    /// static array iterated in place. The first access lazily allocates that
+    /// array once per process; later calls allocate nothing.
     public static func sample(at t: Double) -> Float {
         var sample = 0.0
         for partial in partials {

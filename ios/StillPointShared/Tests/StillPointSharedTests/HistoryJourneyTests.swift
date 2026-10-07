@@ -283,4 +283,49 @@ final class HistoryJourneyTests: XCTestCase {
             XCTAssertEqual(stats.bonusMinutesTotal ?? 0, testCase.expected.bonusMinutesTotal, "\(testCase.name): bonusMinutesTotal")
         }
     }
+
+    // MARK: - #767 grace period
+
+    private func localDate(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    func testGracePeriodCreditsTheUnfinishedDayUntil6am() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let elevenFiftyNine = localDate(2026, 10, 7, 23, 59)
+        let twelveThirty = localDate(2026, 10, 8, 0, 30)
+        let sixAm = localDate(2026, 10, 8, 6, 0)
+
+        XCTAssertEqual(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: elevenFiftyNine, calendar: calendar),
+            "2026-10-07",
+            "11:59pm unfinished day credits today"
+        )
+        XCTAssertEqual(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: twelveThirty, calendar: calendar),
+            "2026-10-07",
+            "12:30am unfinished day credits yesterday"
+        )
+        XCTAssertEqual(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: twelveThirty, calendar: calendar),
+            "2026-10-08",
+            "12:30am finished day credits the new day"
+        )
+        XCTAssertEqual(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: sixAm, calendar: calendar),
+            "2026-10-08",
+            "6:00am credits the new day"
+        )
+    }
+
+    func testTwoADayStaysOpenUntilBothSitsAreDone() {
+        let primary = SessionCalendar.PracticeDaySit(completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary")
+        let second = SessionCalendar.PracticeDaySit(completed: true, isStandard: true, sessionDate: "2026-10-07", track: "second")
+        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: true))
+        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [primary, second], isoDay: "2026-10-07", dualTrackEnabled: true))
+        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: false))
+    }
 }

@@ -1,13 +1,73 @@
 import { useEffect, useRef, useState } from "react";
 import type { BuddySnapshot } from "@/lib/api";
 import type { SoundPrefs } from "@/lib/audio";
-import { soundToggleAccessibilityLabel } from "@/lib/soundToggleAppearance";
+import {
+  SOUND_TOGGLE_MIN_TAP_TARGET_PX,
+  soundToggleAccessibilityLabel,
+  soundToggleAppearance,
+  type SoundToggleCue,
+} from "@/lib/soundToggleAppearance";
 import type { BuddyMindState } from "@/lib/useBuddyMindState";
 import type { MindHoldKind } from "@/lib/useMindStateHold";
 import { BlockTimer } from "../BlockTimer";
 import { BuddyVideo } from "../BuddyVideo";
 import { BuddyMindStateControls } from "./BuddyMindStateControls";
 import { btnSecondary, inlineLinkButton } from "./buddySessionRoomStyles";
+
+/**
+ * Same glyph as `SessionView`'s sound toggle (#668). Inline here so the buddy
+ * row does not import the solo screen. A speaker (or phone, for haptics) carries
+ * on/off together with the pill fill and border.
+ */
+function SoundToggleIcon({
+  muted,
+  cue = "audio",
+}: {
+  muted: boolean;
+  cue?: SoundToggleCue;
+}) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ flexShrink: 0 }}
+    >
+      {cue === "haptic" ? (
+        <>
+          <rect x="5.5" y="2" width="5" height="12" rx="1.25" />
+          {muted ? (
+            <path d="M3.5 13.5l9-11" />
+          ) : (
+            <>
+              <path d="M3.25 5.75a4 4 0 000 4.5" />
+              <path d="M12.75 5.75a4 4 0 010 4.5" />
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <path d="M3 6h2l3-2.5v9L5 10H3z" fill="currentColor" stroke="none" />
+          {muted ? (
+            <path d="M10.5 6l4 4m0-4l-4 4" />
+          ) : (
+            <>
+              <path d="M10.5 5.75a3 3 0 010 4.5" />
+              <path d="M12.75 4a5.5 5.5 0 010 8" />
+            </>
+          )}
+        </>
+      )}
+    </svg>
+  );
+}
 
 type BuddySessionActiveProps = {
   sessionId: string;
@@ -353,15 +413,24 @@ export function BuddySessionActive({
                 on this device.
               </p>
             )}
+            {/*
+              #689: the same #668 pills as the solo sit. On/off is fill, border,
+              and icon — not a shift between two greys. flexWrap plus the same
+              width clamp as BuddyMindStateControls keeps five pills inside a
+              320px phone next to the video column.
+            */}
             <div
+              data-testid="buddySession.soundToggles"
               style={{
                 display: "flex",
                 justifyContent: "center",
-                gap: "16px",
-                fontFamily: "var(--font-mono)",
-                fontSize: "11px",
-                letterSpacing: "0.1em",
                 flexWrap: "wrap",
+                gap: "6px",
+                maxWidth: "min(420px, calc(100vw - 40px))",
+                width: "100%",
+                fontFamily: "var(--font-mono)",
+                fontSize: "10px",
+                letterSpacing: "0.06em",
               }}
             >
               {(
@@ -376,35 +445,45 @@ export function BuddySessionActive({
                   // vibrates here with no control within reach.
                   ["haptics", "haptics", "haptic"],
                 ] as const
-              ).map(([key, label, cue]) => (
-                <button
-                  type="button"
-                  key={key}
-                  aria-pressed={soundPrefs[key]}
-                  aria-label={`${soundToggleAccessibilityLabel(label, cue)} ${soundPrefs[key] ? "on" : "off"}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
-                  title={
-                    cue === "haptic"
-                      ? "Only you feel this — does not change anything for others"
-                      : "Only you hear this — does not change audio for others"
-                  }
-                  onClick={() => onSoundPrefToggle(key)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: soundPrefs[key] ? "var(--fg-3)" : "var(--fg-4)",
-                    transition: "color 0.3s",
-                    padding: "4px 8px",
-                  }}
-                >
-                  {soundPrefs[key]
-                    ? cue === "haptic"
-                      ? "\u2248"
-                      : "\u266A"
-                    : "\u2022"}{" "}
-                  {label}
-                </button>
-              ))}
+              ).map(([key, label, cue]) => {
+                const isOn = soundPrefs[key];
+                const appearance = soundToggleAppearance(isOn, cue);
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    aria-pressed={isOn}
+                    aria-label={`${soundToggleAccessibilityLabel(label, cue)}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
+                    title={
+                      cue === "haptic"
+                        ? "Only you feel this — does not change anything for others"
+                        : "Only you hear this — does not change audio for others"
+                    }
+                    data-testid={`buddySession.soundToggle.${label}`}
+                    onClick={() => onSoundPrefToggle(key)}
+                    style={{
+                      background: appearance.isFilled ? "var(--surface-3)" : "transparent",
+                      border: `1px solid ${
+                        appearance.hasProminentBorder ? "var(--border-2)" : "var(--border-1)"
+                      }`,
+                      cursor: "pointer",
+                      color: isOn ? "var(--fg-2)" : "var(--fg-4)",
+                      transition: "background 0.2s, border-color 0.2s, color 0.2s",
+                      padding: "0 10px",
+                      minHeight: `${SOUND_TOGGLE_MIN_TAP_TARGET_PX}px`,
+                      borderRadius: `${SOUND_TOGGLE_MIN_TAP_TARGET_PX / 2}px`,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "5px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <SoundToggleIcon muted={appearance.isIconMuted} cue={cue} />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

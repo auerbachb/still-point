@@ -271,19 +271,55 @@ public struct WidgetData: Codable, Sendable, Equatable {
     }
 
     /// Whether the user has finished today's primary standard sit.
+    /// Primary plus second when two-a-day is on. One finished sit does not close the day.
+    private var requiredStandardSitsComplete: Bool {
+        dualTrackEnabled ? (primaryDoneToday && secondDoneToday) : primaryDoneToday
+    }
+
+    /// During the pre-6:00 grace window, display "today" as the still-open previous day.
+    private func practiceDisplayInstant(now: Date, calendar: Calendar) -> Date {
+        if WidgetDataStore.graceKeepsPreviousPracticeDay(
+            lastUpdated: lastUpdated,
+            now: now,
+            requiredSitsComplete: requiredStandardSitsComplete,
+            calendar: calendar
+        ) {
+            return lastUpdated
+        }
+        return now
+    }
+
     public func isPrimaryCompleteForToday(at now: Date = Date()) -> Bool {
-        primaryDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
+        guard primaryDoneToday else { return false }
+        if WidgetDataStore.isSameLocalDay(lastUpdated, now) { return true }
+        return WidgetDataStore.graceKeepsPreviousPracticeDay(
+            lastUpdated: lastUpdated,
+            now: now,
+            requiredSitsComplete: requiredStandardSitsComplete
+        )
     }
 
     /// Whether the user has finished today's second-track standard sit (#684).
     public func isSecondCompleteForToday(at now: Date = Date()) -> Bool {
-        secondDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
+        guard secondDoneToday else { return false }
+        if WidgetDataStore.isSameLocalDay(lastUpdated, now) { return true }
+        return WidgetDataStore.graceKeepsPreviousPracticeDay(
+            lastUpdated: lastUpdated,
+            now: now,
+            requiredSitsComplete: requiredStandardSitsComplete
+        )
     }
 
     /// Whether the user has logged any counted Track One practice today
     /// (primary standard, quick, or breath).
     public func isPracticeCompleteForToday(at now: Date = Date()) -> Bool {
-        practiceDoneToday && WidgetDataStore.isSameLocalDay(lastUpdated, now)
+        guard practiceDoneToday else { return false }
+        if WidgetDataStore.isSameLocalDay(lastUpdated, now) { return true }
+        return WidgetDataStore.graceKeepsPreviousPracticeDay(
+            lastUpdated: lastUpdated,
+            now: now,
+            requiredSitsComplete: requiredStandardSitsComplete
+        )
     }
 
     /// **Day-credit rule (#684; cross-surface policy tracked in #679):** a local
@@ -305,10 +341,11 @@ public struct WidgetData: Codable, Sendable, Equatable {
     /// two rendered rows show, between them, precisely the days this union row
     /// marks, so "the run the row draws" is well-defined for both layouts.
     public func weekMarks(now: Date = Date(), calendar: Calendar = .current) -> [WidgetDayMark] {
-        weekMarks(
+        let anchor = practiceDisplayInstant(now: now, calendar: calendar)
+        return weekMarks(
             completed: completedDayUnion,
-            doneToday: isDayKeptToday(at: now),
-            now: now,
+            doneToday: isDayKeptToday(at: anchor),
+            now: anchor,
             calendar: calendar
         )
     }
@@ -321,19 +358,20 @@ public struct WidgetData: Codable, Sendable, Equatable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [WidgetDayMark] {
+        let anchor = practiceDisplayInstant(now: now, calendar: calendar)
         switch track {
         case .primary:
             return weekMarks(
                 completed: Set(completedDates),
-                doneToday: isPracticeCompleteForToday(at: now),
-                now: now,
+                doneToday: isPracticeCompleteForToday(at: anchor),
+                now: anchor,
                 calendar: calendar
             )
         case .second:
             return weekMarks(
                 completed: Set(secondCompletedDates),
-                doneToday: isSecondCompleteForToday(at: now),
-                now: now,
+                doneToday: isSecondCompleteForToday(at: anchor),
+                now: anchor,
                 calendar: calendar
             )
         }
@@ -848,13 +886,27 @@ public enum WidgetDataStore {
     public static func normalizedForDisplay(_ data: WidgetData, now: Date = Date()) -> WidgetData {
         guard data.isLoggedIn else { return data }
 
+        let requiredSitsComplete = data.dualTrackEnabled
+            ? (data.primaryDoneToday && data.secondDoneToday)
+            : data.primaryDoneToday
+        let grace = graceKeepsPreviousPracticeDay(
+            lastUpdated: data.lastUpdated,
+            now: now,
+            requiredSitsComplete: requiredSitsComplete
+        )
+        let displayNow = grace ? data.lastUpdated : now
+
         var copy = data
         if !isSameLocalDay(data.lastUpdated, now) {
-            copy.primaryDoneToday = false
-            copy.secondDoneToday = false
-            copy.practiceDoneToday = false
+            // An unfinished day stays open until 6:00, so its done-today flags
+            // survive midnight. History outside the window is still dropped.
+            if !grace {
+                copy.primaryDoneToday = false
+                copy.secondDoneToday = false
+                copy.practiceDoneToday = false
+            }
             // Keep completion history bounded to the window the rows can render.
-            let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: now))
+            let window = Set(localDayStrings(lastN: historyWindowDays, endingAt: displayNow))
             copy.completedDates = data.completedDates.filter { window.contains($0) }
             copy.secondCompletedDates = data.secondCompletedDates.filter { window.contains($0) }
             // #679: the standard-only set is bounded by the same window. It is
@@ -893,9 +945,9 @@ public enum WidgetDataStore {
         // unattributed blob carries nothing forward.
         copy.streak = resolvedStreak(
             userId: data.userId ?? "",
-            dayKeptToday: copy.isTodayMarkedDone(now: now),
+            dayKeptToday: copy.isTodayMarkedDone(now: displayNow),
             previous: data,
-            now: now,
+            now: displayNow,
             completedDays: copy.completedDayUnion,
             standardDays: Set(copy.standardDates),
             serverStreak: copy.serverStreak,
@@ -1179,6 +1231,24 @@ public enum WidgetDataStore {
 
     public static func isSameLocalDay(_ lhs: Date, _ rhs: Date) -> Bool {
         Calendar.current.isDate(lhs, inSameDayAs: rhs)
+    }
+
+    /// Before 6:00 local, a snapshot from the previous calendar day still describes
+    /// the open practice day when a required sit is unfinished. A finished day
+    /// rolls at midnight, and 6:00 always starts the new day.
+    public static func graceKeepsPreviousPracticeDay(
+        lastUpdated: Date,
+        now: Date,
+        requiredSitsComplete: Bool,
+        calendar: Calendar = .current
+    ) -> Bool {
+        if requiredSitsComplete { return false }
+        guard calendar.component(.hour, from: now) < SessionCalendar.graceCutoffHour else { return false }
+        guard !calendar.isDate(lastUpdated, inSameDayAs: now) else { return false }
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) else {
+            return false
+        }
+        return calendar.isDate(lastUpdated, inSameDayAs: yesterday)
     }
 
     /// Local-day `yyyy-MM-dd` for `date`, matching exactly how the app stamps

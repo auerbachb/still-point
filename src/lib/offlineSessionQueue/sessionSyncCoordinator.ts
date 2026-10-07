@@ -164,7 +164,11 @@ export class WebSessionSyncCoordinator {
         throw new SessionSyncError("ownerMismatch");
       }
 
-      entries[index]!.thoughts.push({ timeInSession: -1, text: trimmed });
+      // #753: autosave can run again as the note is edited. Keep one end note
+      // and replace its text. A second -1 in the same batch is rejected.
+      const kept = entries[index]!.thoughts.filter((thought) => thought.timeInSession !== -1);
+      kept.push({ timeInSession: -1, text: trimmed });
+      entries[index]!.thoughts = kept;
       await this.queueStore.saveEntries(entries);
       await requestBackgroundSync();
       await this.flushEntry(clientSessionId, ownerUserId);
@@ -244,11 +248,12 @@ export class WebSessionSyncCoordinator {
     ) ?? entry;
 
     if (entry.thoughts.length > 0) {
+      const sent = entry.thoughts;
       try {
         await this.transport.batchThoughts({
           sessionId: serverSessionId,
           dayNumber: entry.request.dayNumber,
-          thoughts: entry.thoughts,
+          thoughts: sent,
         });
         const entries = await this.queueStore.loadEntries();
         const index = entries.findIndex(
@@ -256,7 +261,14 @@ export class WebSessionSyncCoordinator {
         );
         if (index < 0) return entry;
         if (entries[index]!.thoughts.length === 0) return entry;
-        entries[index]!.thoughts = [];
+        // Only drop what this batch sent. A note replaced while the request was
+        // in flight (#753 autosave) stays queued for the next flush.
+        entries[index]!.thoughts = entries[index]!.thoughts.filter(
+          (thought) =>
+            !sent.some(
+              (item) => item.timeInSession === thought.timeInSession && item.text === thought.text,
+            ),
+        );
         await this.queueStore.saveEntries(entries);
         entry = entries[index]!;
       } catch (error) {

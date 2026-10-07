@@ -5,8 +5,10 @@ import type { DailyReminderFrequency } from "@/lib/notification-preferences";
 import {
   hasMissADayDispatchForDate,
   loadUserStreak,
+  previousPracticeDayStillOpen,
   userCompletedSessionOnDate,
 } from "@/lib/notifications/daily-reminder";
+import { GRACE_CUTOFF_HOUR } from "@/lib/sessionCalendar";
 import {
   FAILURE_REASON_NOTIFICATION_TYPE,
   FAILURE_REASON_REMINDER_MINUTES,
@@ -505,7 +507,13 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       // date rather than the run's date, preventing duplicate sends at midnight boundaries.
       const intendedDateKey = addCalendarDays(local.dateKey, dayOffset);
 
-      if (prefs.missADayEnabled) {
+      // Before 6:00 local, an unfinished previous day is still open. Do not
+      // send "you missed yesterday" while the user can still finish it.
+      const graceStillOpen = prefs.missADayEnabled
+        && local.hour < GRACE_CUTOFF_HOUR
+        && await previousPracticeDayStillOpen(prefs.userId, addCalendarDays(local.dateKey, -1));
+
+      if (prefs.missADayEnabled && !graceStillOpen) {
         const yesterday = addCalendarDays(intendedDateKey, -1);
         const meditatedToday = await userCompletedSessionOnDate(prefs.userId, intendedDateKey);
         const completedYesterday = await userCompletedSessionOnDate(prefs.userId, yesterday);
@@ -636,6 +644,14 @@ export async function dispatchDueNotifications(now: Date = new Date()): Promise<
       }
 
       const local = getLocalParts(now, prefs.tz);
+      // Same grace window as the miss-a-day push: a call before 6:00 while
+      // yesterday is unfinished is a "you missed it" for a day still open.
+      if (
+        local.hour < GRACE_CUTOFF_HOUR
+        && await previousPracticeDayStillOpen(prefs.userId, addCalendarDays(local.dateKey, -1))
+      ) {
+        continue;
+      }
       const { due, slotMinutes, dayOffset } = evaluateMissedSitCallDue(
         local.minutesSinceMidnight,
         prefs.callWindowStart,
