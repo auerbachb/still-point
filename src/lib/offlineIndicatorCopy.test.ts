@@ -9,7 +9,11 @@
  * so both clients assert the same strings; keep the two files in step.
  */
 import { describe, expect, test } from "vitest";
-import { offlineIndicatorCopy, offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
+import {
+  offlineIndicatorCopy,
+  offlineIndicatorStateFor,
+  suppressedOfflineIndicatorState,
+} from "@/lib/offlineIndicatorCopy";
 
 const PROMISE = "sits are saved and upload when you reconnect";
 
@@ -82,5 +86,86 @@ describe("offlineIndicatorStateFor (#717)", () => {
 
   test("online with the sit stored is the one combination with nothing to say", () => {
     expect(offlineIndicatorStateFor({ offline: false, sitNotStored: false })).toBeNull();
+  });
+});
+
+/**
+ * #744 / #717: the page hides the strip during immersive flows and while
+ * CompletionScreen's own not-stored alert owns the message. Mirrored in
+ * `ios/StillPointShared/Tests/StillPointSharedTests/OfflineIndicatorCopyTests.swift`.
+ */
+describe("suppressedOfflineIndicatorState (#744 / #717)", () => {
+  test("completion's not-stored alert suppresses the strip even when the facts would raise it", () => {
+    // The double-surface regression #744 fixed: the alert is up, so the strip
+    // stands down for every connectivity × write combination that would otherwise show.
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: false,
+      completionOwnsNotStored: true,
+      offline: true,
+      sitNotStored: true,
+    })).toBeNull();
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: false,
+      completionOwnsNotStored: true,
+      offline: false,
+      sitNotStored: true,
+    })).toBeNull();
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: false,
+      completionOwnsNotStored: true,
+      offline: true,
+      sitNotStored: false,
+    })).toBeNull();
+  });
+
+  test("immersive flows suppress the strip (session, breath, and buddy room)", () => {
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: true,
+      completionOwnsNotStored: false,
+      offline: true,
+      sitNotStored: true,
+    })).toBeNull();
+  });
+
+  test("either gate suppresses the strip when both are set", () => {
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: true,
+      completionOwnsNotStored: true,
+      offline: false,
+      sitNotStored: true,
+    })).toBeNull();
+  });
+
+  test("a successful retry lifts completion suppression and the strip returns when the facts warrant it", () => {
+    // Retry stored the sit (`notStored: false`), so completion no longer owns
+    // the message. Offline with the sit intact is the #665/#666 strip again.
+    const facts = { offline: true, sitNotStored: false };
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: false,
+      completionOwnsNotStored: false,
+      ...facts,
+    })).toBe("offlineSavedProgress");
+    expect(suppressedOfflineIndicatorState({
+      isImmersive: false,
+      completionOwnsNotStored: false,
+      ...facts,
+    })).toBe(offlineIndicatorStateFor(facts));
+  });
+
+  test("with neither gate set, the helper matches the truth table and does not alter it", () => {
+    const combinations = [
+      { offline: true, sitNotStored: true },
+      { offline: false, sitNotStored: true },
+      { offline: true, sitNotStored: false },
+      { offline: false, sitNotStored: false },
+    ] as const;
+
+    for (const facts of combinations) {
+      expect(suppressedOfflineIndicatorState({
+        isImmersive: false,
+        completionOwnsNotStored: false,
+        ...facts,
+      })).toBe(offlineIndicatorStateFor(facts));
+    }
   });
 });

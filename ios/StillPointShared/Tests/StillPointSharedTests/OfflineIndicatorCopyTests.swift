@@ -98,4 +98,89 @@ final class OfflineIndicatorCopyTests: XCTestCase {
     func testOnlineWithTheSitStoredIsTheOneCombinationWithNothingToSay() {
         XCTAssertNil(OfflineIndicatorCopy.state(offline: false, sitNotStored: false))
     }
+
+    // MARK: - #744 / #717: render suppression
+    //
+    // Mirrored case-for-case from `src/lib/offlineIndicatorCopy.test.ts`
+    // (`suppressedOfflineIndicatorState`). Keep the two files in step.
+
+    func testCompletionNotStoredAlertSuppressesTheStripEvenWhenTheFactsWouldRaiseIt() {
+        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
+            isImmersive: false,
+            completionOwnsNotStored: true,
+            offline: true,
+            sitNotStored: true
+        ))
+        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
+            isImmersive: false,
+            completionOwnsNotStored: true,
+            offline: false,
+            sitNotStored: true
+        ))
+        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
+            isImmersive: false,
+            completionOwnsNotStored: true,
+            offline: true,
+            sitNotStored: false
+        ))
+    }
+
+    func testImmersiveFlowsSuppressTheStrip() {
+        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
+            isImmersive: true,
+            completionOwnsNotStored: false,
+            offline: true,
+            sitNotStored: true
+        ))
+    }
+
+    func testEitherGateSuppressesTheStripWhenBothAreSet() {
+        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
+            isImmersive: true,
+            completionOwnsNotStored: true,
+            offline: false,
+            sitNotStored: true
+        ))
+    }
+
+    func testSuccessfulRetryLiftsCompletionSuppressionAndTheStripReturnsWhenTheFactsWarrantIt() {
+        XCTAssertEqual(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: false,
+                completionOwnsNotStored: false,
+                offline: true,
+                sitNotStored: false
+            ),
+            .offlineSavedProgress
+        )
+        XCTAssertEqual(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: false,
+                completionOwnsNotStored: false,
+                offline: true,
+                sitNotStored: false
+            ),
+            OfflineIndicatorCopy.state(offline: true, sitNotStored: false)
+        )
+    }
+
+    func testWithNeitherGateSetTheHelperMatchesTheTruthTable() {
+        let combinations: [(offline: Bool, sitNotStored: Bool)] = [
+            (true, true),
+            (false, true),
+            (true, false),
+            (false, false),
+        ]
+        for facts in combinations {
+            XCTAssertEqual(
+                OfflineIndicatorCopy.suppressedState(
+                    isImmersive: false,
+                    completionOwnsNotStored: false,
+                    offline: facts.offline,
+                    sitNotStored: facts.sitNotStored
+                ),
+                OfflineIndicatorCopy.state(offline: facts.offline, sitNotStored: facts.sitNotStored)
+            )
+        }
+    }
 }

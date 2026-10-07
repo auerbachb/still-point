@@ -18,7 +18,7 @@ import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
-import { offlineIndicatorStateFor } from "@/lib/offlineIndicatorCopy";
+import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
 import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
 import { api, ApiError, type Session } from "@/lib/api";
@@ -1174,8 +1174,10 @@ export default function StillPoint() {
   // refused IndexedDB write is not an offline condition, and `handleBreathEnd`
   // and `handleSessionAbandon` have no completion screen to say so on, so the
   // strip has to raise itself for a failed write whether or not the network is
-  // up. `offlineIndicatorStateFor` owns that rule and the copy that goes with
-  // it — `null` is the one combination with nothing to say.
+  // up. `suppressedOfflineIndicatorState` applies the immersive and
+  // completion-owns gates, then `offlineIndicatorStateFor` owns the remaining
+  // rule and the copy that goes with it — `null` is the one combination with
+  // nothing to say.
   // #717 (review): the completion overlay is *not* immersive, so a sit that was
   // refused would raise this strip on top of `CompletionScreen`'s own
   // `completion-not-stored` alert — two danger-token surfaces for one loss. The
@@ -1186,9 +1188,12 @@ export default function StillPoint() {
   // "saved and upload when you reconnect" promise #703 withdrew.
   const completionOwnsNotStored = overlay === "complete" && completionData?.notStored === true;
 
-  const offlineIndicatorState = isImmersive || completionOwnsNotStored
-    ? null
-    : offlineIndicatorStateFor({ offline: runningFromCache, sitNotStored: localWriteFailed });
+  const offlineIndicatorState = suppressedOfflineIndicatorState({
+    isImmersive,
+    completionOwnsNotStored,
+    offline: runningFromCache,
+    sitNotStored: localWriteFailed,
+  });
 
   const welcomeHeader = !isImmersive && !(overlay === "complete" && isMobile) ? (
     <div style={{

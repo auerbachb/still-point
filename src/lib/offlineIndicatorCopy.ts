@@ -76,3 +76,36 @@ export function offlineIndicatorStateFor(
   }
   return offline ? "offlineSavedProgress" : null;
 }
+
+/**
+ * #717 / #744: render-suppression for the offline strip.
+ *
+ * Immersive flows hide the strip so nothing competes with a sit. While
+ * `CompletionScreen`'s own `completion-not-stored` alert is up, that alert
+ * owns the message (#744) — the strip stands down rather than stacking a
+ * second danger surface, and rather than falling back to the "saved and
+ * upload when you reconnect" promise #703 withdrew.
+ *
+ * Either flag returns `null`. Otherwise this delegates to
+ * `offlineIndicatorStateFor`, which owns the connectivity × write-failure
+ * truth table. iOS twin: `OfflineIndicatorCopy.suppressedState` in
+ * `ios/StillPointShared/Sources/StillPointShared/OfflineIndicatorCopy.swift`.
+ * iOS already suppresses structurally through `RootView`, so that twin is a
+ * parity and regression guard.
+ */
+export function suppressedOfflineIndicatorState(
+  {
+    isImmersive,
+    completionOwnsNotStored,
+    offline,
+    sitNotStored,
+  }: {
+    isImmersive: boolean;
+    completionOwnsNotStored: boolean;
+    offline: boolean;
+    sitNotStored: boolean;
+  },
+): OfflineIndicatorState | null {
+  if (isImmersive || completionOwnsNotStored) return null;
+  return offlineIndicatorStateFor({ offline, sitNotStored });
+}
