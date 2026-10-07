@@ -1257,6 +1257,32 @@ public enum WidgetDataStore {
     /// than `Calendar.current`) keeps the digits aligned on devices whose preferred
     /// calendar is non-Gregorian (e.g. Buddhist/Japanese), so string equality with
     /// `sessionDate` still holds and real completions aren't dropped from the row.
+    /// How long a successful widget-history fetch stays fresh for one account
+    /// on one local day. A web sit has to show up the next time the phone app
+    /// is foregrounded, so this is minutes rather than once per day (#663).
+    public static let widgetHistoryRefreshInterval: TimeInterval = 5 * 60
+
+    /// Whether `refreshWidgetWeekHistory` should call `GET /api/sessions`.
+    /// A new account or a new local day always fetches. The same account on
+    /// the same day fetches again once `widgetHistoryRefreshInterval` has
+    /// passed since the last success, and always retries when that success
+    /// time was cleared after a failure.
+    public static func shouldRefreshWidgetHistory(
+        userId: String,
+        now: Date,
+        lastUserId: String?,
+        lastLocalDay: String?,
+        lastSuccessAt: Date?,
+        calendar: Calendar = .current
+    ) -> Bool {
+        let day = localDayString(now, calendar: calendar)
+        if lastUserId != userId || lastLocalDay != day {
+            return true
+        }
+        guard let lastSuccessAt else { return true }
+        return now.timeIntervalSince(lastSuccessAt) >= widgetHistoryRefreshInterval
+    }
+
     public static func localDayString(_ date: Date, calendar: Calendar = .current) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")

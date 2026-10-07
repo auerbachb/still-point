@@ -641,7 +641,7 @@ final class AppViewModel {
         // `applySignedOut` did not, which is the gap this closes.
         widgetHistoryTask?.cancel()
         widgetHistoryTask = nil
-        widgetHistoryRefreshKey = nil
+        clearWidgetHistoryRefreshMarker()
     }
 
     /// #665: non-`async` entry point for the reconnect refresh so the view layer
@@ -1992,7 +1992,7 @@ final class AppViewModel {
             // #671: the next sign-in must re-backfill the week. Without this the
             // once-per-account-per-day throttle below would suppress the fetch for
             // the rest of the day, leaving the row blank on a sign-out/sign-in.
-            widgetHistoryRefreshKey = nil
+            clearWidgetHistoryRefreshMarker()
         }
         WidgetTimelineReloader.reloadHabitWidget()
     }
@@ -2000,10 +2000,19 @@ final class AppViewModel {
     /// In-flight widget history backfill, cancelled before a new one starts so a
     /// slow earlier fetch can't overwrite a newer snapshot out of order.
     private var widgetHistoryTask: Task<Void, Never>?
-    /// `"userId|localDay"` of the last successful backfill; throttles the fetch to
-    /// once per account per local day (past days don't change intra-day, and
-    /// today's completion is handled synchronously by `syncWidgetData()`).
-    private var widgetHistoryRefreshKey: String?
+    /// Account and local day of the last widget-history attempt, plus when it
+    /// succeeded. A new day or another account always refetches. The same
+    /// account refetches after `widgetHistoryRefreshInterval` so a sit finished
+    /// on the web shows up the next time this app is foregrounded (#663).
+    private var widgetHistoryRefreshUserId: String?
+    private var widgetHistoryRefreshDay: String?
+    private var widgetHistoryRefreshedAt: Date?
+
+    private func clearWidgetHistoryRefreshMarker() {
+        widgetHistoryRefreshUserId = nil
+        widgetHistoryRefreshDay = nil
+        widgetHistoryRefreshedAt = nil
+    }
 
     /// #84 follow-up: backfill the widget's 7-day completion row from real
     /// session history so the weekday checkmarks reflect actual practice (not
@@ -2013,13 +2022,23 @@ final class AppViewModel {
     private func refreshWidgetWeekHistory() {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
               let user = currentUser else { return }
-        // Throttle: `/api/sessions` returns the full history, so skip the re-fetch
-        // when we've already backfilled for this account today. `syncWidgetData`
-        // resets the key whenever it clears the stored snapshot (#671), so a
-        // sign-out/sign-in always re-backfills rather than showing a blank row.
-        let refreshKey = "\(user.id)|\(WidgetDataStore.localDayString(Date()))"
-        guard widgetHistoryRefreshKey != refreshKey else { return }
-        widgetHistoryRefreshKey = refreshKey
+        // `/api/sessions` is the full history, so don't refetch on every
+        // foreground. Do refetch when the day or account changes, and again
+        // after a few minutes, so a sit saved on the web is not stuck behind
+        // a once-a-day in-memory guard (#663). Sign-out clears the marker.
+        let attemptedAt = Date()
+        guard WidgetDataStore.shouldRefreshWidgetHistory(
+            userId: user.id,
+            now: attemptedAt,
+            lastUserId: widgetHistoryRefreshUserId,
+            lastLocalDay: widgetHistoryRefreshDay,
+            lastSuccessAt: widgetHistoryRefreshedAt
+        ) else { return }
+        let attemptUserId = user.id
+        let attemptDay = WidgetDataStore.localDayString(attemptedAt)
+        widgetHistoryRefreshUserId = attemptUserId
+        widgetHistoryRefreshDay = attemptDay
+        widgetHistoryRefreshedAt = attemptedAt
 
         widgetHistoryTask?.cancel()
         widgetHistoryTask = Task {
@@ -2033,8 +2052,14 @@ final class AppViewModel {
             // and the `await`.
             let baselineGeneration = WidgetDataStore.currentWriteGeneration()
             guard let result = try? await APIClient.shared.getSessions() else {
-                // Allow a later attempt to retry this account+day.
-                if widgetHistoryRefreshKey == refreshKey { widgetHistoryRefreshKey = nil }
+                // A cancelled attempt was replaced by a newer one. Only the
+                // attempt that still owns the marker may clear it.
+                if !Task.isCancelled,
+                   widgetHistoryRefreshUserId == attemptUserId,
+                   widgetHistoryRefreshDay == attemptDay,
+                   widgetHistoryRefreshedAt == attemptedAt {
+                    clearWidgetHistoryRefreshMarker()
+                }
                 return
             }
             // Drop if superseded, or the account changed during the await.
@@ -2140,7 +2165,7 @@ final class AppViewModel {
         // one. The store-level write generation is what actually makes a late
         // backfill merge instead of overwrite (#678).
         widgetHistoryTask?.cancel()
-        widgetHistoryRefreshKey = nil
+        clearWidgetHistoryRefreshMarker()
         syncWidgetData()
     }
 }
