@@ -109,6 +109,16 @@ public final class AudioEngine: @unchecked Sendable {
             print("AudioEngine: Failed to set audio session category: \(error)")
         }
 
+        if isAmbientCaptureActive {
+            // Only valid once the category is playAndRecord. A throw here must
+            // not skip activating the session (#794).
+            do {
+                try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            } catch {
+                print("AudioEngine: Failed to allow haptics during recording: \(error)")
+            }
+        }
+
         do {
             try session.setActive(true)
         } catch {
