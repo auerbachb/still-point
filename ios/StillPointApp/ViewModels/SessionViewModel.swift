@@ -335,9 +335,12 @@ final class SessionViewModel {
 
     /// #557: stable local key for offline end-note sync during completion.
     private(set) var lastClientSessionId: UUID?
+    /// Credited practice day, pinned on the first save so a retry after 6:00
+    /// still stores the sit on the day it ended.
+    private var pinnedSessionDate: String?
 
     /// Save session locally first, then sync when online (#557). Returns nil when persistence fails.
-    func saveSession(completed: Bool, ownerUserId: String) async -> SessionDTO? {
+    func saveSession(completed: Bool, ownerUserId: String, sessionDate: String? = nil) async -> SessionDTO? {
         let clientSessionId: UUID
         if let existing = lastClientSessionId {
             clientSessionId = existing
@@ -350,6 +353,10 @@ final class SessionViewModel {
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.calendar = Calendar(identifier: .gregorian)
+        if pinnedSessionDate == nil {
+            pinnedSessionDate = sessionDate ?? dateFormatter.string(from: Date())
+        }
+        let creditedDate = pinnedSessionDate ?? dateFormatter.string(from: Date())
 
         let request = CreateSessionRequest(
             dayNumber: dayNumber,
@@ -362,7 +369,7 @@ final class SessionViewModel {
             thoughtCount: thoughtCount,
             mindStateLog: mindStateLog,
             attentionLog: attentionLog,
-            sessionDate: dateFormatter.string(from: Date()),
+            sessionDate: creditedDate,
             track: track,
             clientSessionId: clientSessionId,
             ambientSoundSummary: ambientSoundSummary

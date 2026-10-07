@@ -170,7 +170,7 @@ struct BuddySessionContainerView: View {
     private func saveCompletionIfPossible() async {
         guard let snapshotBeforeSave = vm.snapshot, snapshotBeforeSave.state == "completed", !vm.isSavingCompletion else { return }
         guard !didExitWithoutSaving else { return }
-        guard let saved = await vm.savePersonalSession() else { return }
+        guard let saved = await vm.savePersonalSession(sessionDate: appVM.creditedSessionDate()) else { return }
         guard let snapshotAfterSave = vm.snapshot, snapshotAfterSave.state == "completed" else { return }
         guard snapshotAfterSave.id == snapshotBeforeSave.id else { return }
         guard saved.buddySessionId == nil || saved.buddySessionId == snapshotAfterSave.id else { return }
