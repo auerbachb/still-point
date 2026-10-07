@@ -31,7 +31,7 @@ export function AudioBlockedBanner({ onEnableLocalAudio }: AudioBlockedBannerPro
       }}
     >
       Browser audio is paused.{" "}
-      <button type="button" onClick={onEnableLocalAudio} style={inlineLinkButton}>
+      <button type="button" data-no-space-distraction onClick={onEnableLocalAudio} style={inlineLinkButton}>
         Enable local audio
       </button>{" "}
       on this device.

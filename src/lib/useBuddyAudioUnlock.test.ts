@@ -210,6 +210,26 @@ describe("useBuddyAudioUnlock", () => {
 });
 
 describe("useAudioUnlock — solo blocked affordance", () => {
+  it("does not restore the warning when playback fails after every sound is off", async () => {
+    seedPrefs({ chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(true);
+
+    await act(async () => {
+      view.current().handleSoundPrefToggle("chime");
+    });
+    expect(view.current().audioBlocked).toBe(false);
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(false);
+  });
+
   it("raises the warning when playback is blocked, and clears it when enable succeeds", async () => {
     seedPrefs({ chime: true });
     const view = await renderHook(() => useAudioUnlock("solo"));

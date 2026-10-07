@@ -36,7 +36,9 @@ export function useAudioUnlock(resetKey: string) {
   }, [soundPrefs.voiceCountdown]);
 
   const handleSoundPlaybackBlocked = useCallback(() => {
-    setAudioBlocked(true);
+    // A late retry from the timer must not restore the warning after the
+    // sitter has turned every sound off.
+    setAudioBlocked(hasEnabledAudio(soundPrefsRef.current));
   }, []);
 
   const handleSoundPlaybackResumed = useCallback(() => {
