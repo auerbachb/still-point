@@ -529,7 +529,9 @@ final class SessionViewModel {
             let engine = try CHHapticEngine()
             engine.playsHapticsOnly = true
             engine.resetHandler = { [weak self] in
-                try? self?.coreHapticEngine?.start()
+                DispatchQueue.main.async {
+                    try? self?.coreHapticEngine?.start()
+                }
             }
             try engine.start()
             coreHapticEngine = engine
@@ -573,9 +575,9 @@ final class SessionViewModel {
             try player.start(atTime: CHHapticTimeImmediate)
             return true
         } catch {
-            // A failed start leaves a dead engine. Drop it so the next cue
-            // builds another instead of falling through to silent UIKit forever.
-            coreHapticEngine = nil
+            // A failed start leaves a dead engine. Clear the stored property,
+            // not the `guard let` binding, so the next cue can build another.
+            self.coreHapticEngine = nil
             return false
         }
     }
