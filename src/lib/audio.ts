@@ -2,6 +2,9 @@
 // Tick/chime/completion are synthesized; voice countdown uses pre-generated clips.
 
 let audioCtx: AudioContext | null = null;
+/** Listeners for `AudioContext` state, attached once the context exists (#768). */
+const audioContextStateListeners = new Set<(state: AudioContextState) => void>();
+let audioContextStateBound = false;
 
 /** Remaining-second values with pre-generated voice clips (final minute). */
 export const VOICE_COUNTDOWN_MAX = 60;
@@ -38,8 +41,41 @@ function getAudioContext(): AudioContext | null {
   if (!AudioContextCtor) return null;
   if (!audioCtx) {
     audioCtx = new AudioContextCtor();
+    bindAudioContextStateListeners(audioCtx);
   }
   return audioCtx;
+}
+
+/**
+ * True when a live sit should try to resume. `interrupted` is the WebKit
+ * state for an audio focus loss that is not a tab hide (#768).
+ */
+export function audioContextStateNeedsResume(state: AudioContextState | string): boolean {
+  return state === "suspended" || state === "interrupted";
+}
+
+function bindAudioContextStateListeners(ctx: AudioContext): void {
+  if (audioContextStateBound) return;
+  audioContextStateBound = true;
+  ctx.addEventListener("statechange", () => {
+    const state = ctx.state;
+    for (const listener of audioContextStateListeners) listener(state);
+  });
+}
+
+/**
+ * Observe state changes on the existing context. Does not create one — a
+ * context created here, outside a gesture, would stay suspended for good.
+ * Listeners registered before the context exists are attached when it is.
+ */
+export function subscribeAudioContextState(
+  listener: (state: AudioContextState) => void,
+): () => void {
+  audioContextStateListeners.add(listener);
+  if (audioCtx) bindAudioContextStateListeners(audioCtx);
+  return () => {
+    audioContextStateListeners.delete(listener);
+  };
 }
 
 function readAudioContextState(ctx: AudioContext): AudioContextState {
