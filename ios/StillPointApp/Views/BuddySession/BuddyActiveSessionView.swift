@@ -250,20 +250,40 @@ struct BuddyActiveSessionView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(SPColor.border1))
     }
 
+    /// #689: the same pill as `SessionView.soundToggle` (#668). Fill, border, and
+    /// the speaker icon carry on/off. The identifier stays buddy-specific — solo's
+    /// helper returns `session.soundToggle.*`.
     private func soundToggle(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+        let appearance = SoundToggleAppearance.appearance(isOn: isOn)
+        let tapTarget = CGFloat(SoundToggleAppearance.minimumTapTarget)
+
+        return Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: appearance.systemImageName)
                     .font(.system(size: 12))
                 Text(label)
                     .font(SPFont.mono(11))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(isOn ? Color(SPColor.fg3) : Color(SPColor.fg4))
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
+            .foregroundStyle(isOn ? Color(SPColor.fg2) : Color(SPColor.fg4))
+            .padding(.horizontal, SPSpacing.s2)
+            .frame(minWidth: tapTarget, minHeight: tapTarget)
+            .background(appearance.isFilled ? SPColor.surface3 : Color.clear)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(
+                    appearance.hasProminentBorder ? SPColor.border2 : SPColor.border1
+                )
+            )
+            .contentShape(Capsule())
         }
+        .animation(.easeInOut(duration: 0.2), value: isOn)
         .accessibilityIdentifier("buddySession.soundToggle.\(label)")
+        .accessibilityLabel(Text("\(SoundToggleAppearance.accessibilityLabel(label: label)), only you hear this"))
+        .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
+        .accessibilityHint("Only you hear this — does not change audio for others")
+        .help("Only you hear this — does not change audio for others")
     }
 
     private var hints: some View {

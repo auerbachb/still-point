@@ -63,7 +63,7 @@ test.describe("mobile session flow", () => {
     await expect(page.getByRole("heading", { name: /Day .* Complete/i })).toBeVisible();
     await expect(page.getByText(/sustained attention/i)).toBeVisible();
 
-    const returnButton = page.getByRole("button", { name: "Return" });
+    const returnButton = page.getByRole("button", { name: "save and return to home" });
     await expectMinimumTapTarget(returnButton, "return home button");
     await tap(returnButton);
 
@@ -81,7 +81,7 @@ test.describe("mobile session flow", () => {
 
     await expect(page.getByRole("heading", { name: "Quick Minute Complete" })).toBeVisible();
     await expect(page.getByText(/day 1 unchanged/i)).toBeVisible();
-    await tap(page.getByRole("button", { name: "Return" }));
+    await tap(page.getByRole("button", { name: "save and return to home" }));
 
     await expect(page.getByText(/day\s+·\s+60s\s+·\s+6 blocks/i)).toBeVisible();
     expect(mockApiState.user.currentDay, "quick minute should not advance current day").toBe(1);
@@ -161,7 +161,7 @@ test.describe("mobile session flow", () => {
     expect(await readStoredPref()).toBe("false");
 
     await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
-    await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "save and return to home" })).toBeVisible();
   });
 
   test("pull-to-refresh style overscroll does not break active session", async ({ page, ensureLoggedIn }) => {
@@ -176,7 +176,7 @@ test.describe("mobile session flow", () => {
 
     await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
     await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
-    await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "save and return to home" })).toBeVisible();
   });
 
   test("landscape smoke keeps essential controls visible", async ({ page, ensureLoggedIn }) => {
@@ -192,6 +192,6 @@ test.describe("mobile session flow", () => {
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
     await expectVisibleInViewport(page, endEarlyButton, "landscape end early button");
     await tapWithControlReveal(page, endEarlyButton);
-    await expect(page.getByRole("button", { name: "Return" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "save and return to home" })).toBeVisible();
   });
 });

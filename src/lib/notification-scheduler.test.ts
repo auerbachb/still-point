@@ -44,11 +44,13 @@ vi.mock("@/lib/notifications", () => ({
 const hasMissADayDispatchForDate = vi.fn();
 const userCompletedSessionOnDate = vi.fn();
 const loadUserStreak = vi.fn();
+const previousPracticeDayStillOpen = vi.fn();
 
 vi.mock("@/lib/notifications/daily-reminder", () => ({
   hasMissADayDispatchForDate,
   userCompletedSessionOnDate,
   loadUserStreak,
+  previousPracticeDayStillOpen,
 }));
 
 const hasFailureReasonForDate = vi.fn();
@@ -115,6 +117,7 @@ describe("notification scheduler", () => {
     insertReturning.mockResolvedValue([{ id: "dispatch-1" }]);
     hasMissADayDispatchForDate.mockResolvedValue(false);
     userCompletedSessionOnDate.mockResolvedValue(false);
+    previousPracticeDayStillOpen.mockResolvedValue(false);
     hasFailureReasonForDate.mockResolvedValue(false);
     loadUserStreak.mockResolvedValue(0);
     initiateMissedSitCall.mockResolvedValue({ ok: true, callId: "call-1", attemptId: "attempt-1" });
@@ -336,6 +339,35 @@ describe("notification scheduler", () => {
     expect(result.missADaySent).toBe(1);
     expect(sendMissADayNotification).toHaveBeenCalledWith({ recipientUserId: "user-1" });
     expect(sendDailyReminderNotification).not.toHaveBeenCalled();
+  });
+
+  test("skips miss-a-day before 6am while yesterday is still open", async () => {
+    preferenceRows = [{
+      ...basePrefs,
+      missADayEnabled: true,
+      dailyReminderEnabled: false,
+      dailyReminderTime: "05:30",
+      tz: "UTC",
+    }];
+    userCompletedSessionOnDate.mockResolvedValue(false);
+    previousPracticeDayStillOpen.mockResolvedValue(true);
+
+    const { dispatchDueNotifications } = await import("./notification-scheduler");
+    const duringGrace = await dispatchDueNotifications(new Date("2026-05-30T05:30:00.000Z"));
+
+    expect(duringGrace.missADaySent).toBe(0);
+    expect(sendMissADayNotification).not.toHaveBeenCalled();
+
+    preferenceRows = [{
+      ...basePrefs,
+      missADayEnabled: true,
+      dailyReminderEnabled: false,
+      dailyReminderTime: "06:00",
+      tz: "UTC",
+    }];
+    previousPracticeDayStillOpen.mockResolvedValue(false);
+    const afterCutoff = await dispatchDueNotifications(new Date("2026-05-30T06:00:00.000Z"));
+    expect(afterCutoff.missADaySent).toBe(1);
   });
 
   test("dispatchDueNotifications skips miss-a-day when user meditated today", async () => {

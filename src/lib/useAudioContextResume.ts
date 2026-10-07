@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { resumeAudioContext } from "@/lib/audio";
+import { audioContextStateNeedsResume, resumeAudioContext, subscribeAudioContextState } from "@/lib/audio";
 
 /**
  * Resumes a suspended `AudioContext` whenever the page becomes visible again,
@@ -57,9 +57,16 @@ export function useAudioContextResume(enabled: boolean): void {
     // Covers a context suspended before this session mounted.
     void resume();
     document.addEventListener("visibilitychange", onVisibilityChange);
+    // #768: a suspension that is not a tab hide (audio focus, an OS
+    // interruption) never fires visibilitychange. The same guarded resume
+    // runs when the context itself reports suspended or interrupted.
+    const unsubscribeState = subscribeAudioContextState((state) => {
+      if (audioContextStateNeedsResume(state)) void resume();
+    });
 
     return () => {
       cancelled = true;
+      unsubscribeState();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [enabled]);

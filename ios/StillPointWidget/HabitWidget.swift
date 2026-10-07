@@ -45,7 +45,15 @@ struct HabitTimelineProvider: TimelineProvider {
         let raw = WidgetDataStore.load() ?? .loggedOut
         let data = WidgetDataStore.normalizedForDisplay(raw, now: now)
         let entry = HabitEntry(date: now, data: data)
-        let nextRefresh = Calendar.current.startOfDay(for: now.addingTimeInterval(86400))
+        let nextMidnight = Calendar.current.startOfDay(for: now.addingTimeInterval(86400))
+        let sixToday = Calendar.current.date(
+            bySettingHour: SessionCalendar.graceCutoffHour,
+            minute: 0,
+            second: 0,
+            of: now
+        ) ?? nextMidnight
+        // Re-render at 6:00 so an unfinished day rolls forward without an app open.
+        let nextRefresh = now < sixToday ? sixToday : nextMidnight
         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
 }

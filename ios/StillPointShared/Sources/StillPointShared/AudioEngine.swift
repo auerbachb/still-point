@@ -64,6 +64,12 @@ public final class AudioEngine: @unchecked Sendable {
     /// attached — never mid-play, which would leave the replacement to be started
     /// bare (#262).
     private var needsEngineRebuild = false
+    /// True from `mediaServicesWereLost` until `mediaServicesWereReset`.
+    /// Set on the notification thread, before queued cue work runs, so a cue
+    /// already waiting on `serialQueue` still sees the loss. `mediaServicesLock`
+    /// covers that cross-queue read.
+    private let mediaServicesLock = NSLock()
+    private var mediaServicesUnavailable = false
     /// Consecutive failed `engine.start()` attempts; reset by any success.
     private var consecutiveStartFailures = 0
 
@@ -101,6 +107,16 @@ public final class AudioEngine: @unchecked Sendable {
         } catch {
             succeeded = false
             print("AudioEngine: Failed to set audio session category: \(error)")
+        }
+
+        if isAmbientCaptureActive {
+            // Only valid once the category is playAndRecord. A throw here must
+            // not skip activating the session (#794).
+            do {
+                try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            } catch {
+                print("AudioEngine: Failed to allow haptics during recording: \(error)")
+            }
         }
 
         do {
@@ -194,13 +210,39 @@ public final class AudioEngine: @unchecked Sendable {
             self?.handleMediaServicesReset()
         }
 
+        // #768: `.mixWithOthers` lets iOS mute us as secondary audio without an
+        // interruption. The engine stays "running", so the #710 start-failure
+        // path never runs and the tick stays silent after the other audio stops.
+        let silenceHintToken = notificationCenter.addObserver(
+            forName: AVAudioSession.silenceSecondaryAudioHintNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] notification in
+            self?.handleSecondaryAudioSilenceHint(notification)
+        }
+
+        // Posted when the audio server is gone, before the reset that #710
+        // already handles. Cues wait. The reset handler rebuilds once the
+        // server can accept a graph; a cue must not build one before that.
+        let mediaServicesLostToken = notificationCenter.addObserver(
+            forName: AVAudioSession.mediaServicesWereLostNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] _ in
+            // Latch before hopping queues. An async set would let a cue
+            // already waiting on serialQueue play into a dead server.
+            self?.setMediaServicesUnavailable(true)
+        }
+
         observerTokens = [
             interruptionToken,
             backgroundToken,
             foregroundToken,
             routeChangeToken,
             configurationChangeToken,
-            mediaServicesResetToken
+            mediaServicesResetToken,
+            silenceHintToken,
+            mediaServicesLostToken
         ]
     }
 
@@ -340,6 +382,9 @@ public final class AudioEngine: @unchecked Sendable {
     /// Schedule and play `buffer` on the voice player node.
     /// Must be called on serialQueue.
     private func _doPlayVoiceBuffer(_ buffer: AVAudioPCMBuffer) {
+        // #768: the media server is gone. Rebuilding here would create an
+        // engine it cannot run, and this clip would play into that graph.
+        guard AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: mediaServicesAreUnavailable()) else { return }
         // #710: same pre-attach rebuild as playSynthesized(), and it must run
         // before voicePlayerNode is read — a rebuild drops that node.
         rebuildEngineIfNeeded()
@@ -379,8 +424,11 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Voice Countdown Asset Helpers
 
     private static func voiceCountdownURL(for seconds: Int) -> URL? {
-        // Folder references from XcodeGen preserve the VoiceCountdown subdirectory.
-        Bundle.main.url(forResource: "\(seconds)", withExtension: "mp3", subdirectory: "VoiceCountdown")
+        // Supports both layouts: a `VoiceCountdown` subdirectory (folder
+        // reference) and clips flattened to the bundle root (XcodeGen group).
+        VoiceCountdownResourceResolver.url(for: seconds) { name, ext, subdirectory in
+            Bundle.main.url(forResource: name, withExtension: ext, subdirectory: subdirectory)
+        }
     }
 
     private static func loadPCMBuffer(from url: URL) -> AVAudioPCMBuffer? {
@@ -590,16 +638,67 @@ public final class AudioEngine: @unchecked Sendable {
                 onConfigurationChangeFromOwnEngine: isFromOwnEngine
             ) else { return }
             self.discardVoicePlayerNode()
+            // The engine has stopped and every mixer connection is broken.
+            // Starting that same engine again can report success while the tick
+            // stays silent (#768). The next cue replaces the graph before
+            // attaching a node (#262) — not from this notification.
+            self.needsEngineRebuild = true
         }
+    }
+
+    /// Maps the silence-hint userInfo onto the testable decision.
+    /// A missing or unknown raw value is `.unrecognized` (fail toward recovery).
+    private static func secondaryAudioSilenceHint(
+        rawValue: UInt?
+    ) -> AudioRecoveryLogic.SecondaryAudioSilenceHint {
+        guard let rawValue,
+              let hint = AVAudioSession.SilenceSecondaryAudioHintType(rawValue: rawValue) else {
+            return .unrecognized
+        }
+        switch hint {
+        case .begin: return .began
+        case .end: return .ended
+        @unknown default: return .unrecognized
+        }
+    }
+
+    private func handleSecondaryAudioSilenceHint(_ notification: Notification) {
+        let rawValue = notification.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt
+        let hint = Self.secondaryAudioSilenceHint(rawValue: rawValue)
+        guard AudioRecoveryLogic.secondaryAudioSilenceRecovery(for: hint)
+            == .rebuildEngineBeforeNextSound else {
+            return
+        }
+
+        serialQueue.async { [weak self] in
+            guard let self else { return }
+            // Reactivate, then let the next cue rebuild. Rebuilding here would
+            // be a bare engine with no source node (#262). `isRunning` is not
+            // consulted: secondary mute leaves it true.
+            self.configureAudioSession()
+            self.needsEngineRebuild = true
+        }
+    }
+
+    private func setMediaServicesUnavailable(_ unavailable: Bool) {
+        mediaServicesLock.lock()
+        mediaServicesUnavailable = unavailable
+        mediaServicesLock.unlock()
+    }
+
+    private func mediaServicesAreUnavailable() -> Bool {
+        mediaServicesLock.lock()
+        defer { mediaServicesLock.unlock() }
+        return mediaServicesUnavailable
     }
 
     private func handleMediaServicesReset() {
         serialQueue.async { [weak self] in
             guard let self else { return }
             // The audio server restarted: the engine, its nodes and the session
-            // configuration are all invalid. Rebuild from scratch, then
-            // reconfigure. The next playSynthesized() attaches a source node and
-            // starts the new engine safely (#262).
+            // configuration are all invalid. Clear the latch before rebuilding
+            // so a cue queued behind this block plays on the new graph (#262).
+            self.setMediaServicesUnavailable(false)
             self.rebuildEngine()
             self.configureAudioSession()
         }
@@ -668,6 +767,9 @@ public final class AudioEngine: @unchecked Sendable {
         duration: Double,
         generator: @escaping (_ phase: Double, _ sampleRate: Double) -> Float
     ) {
+        // #768: hold the cue while the media server is down. The reset handler
+        // clears the flag and rebuilds; a rebuild from this call would not.
+        guard AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: mediaServicesAreUnavailable()) else { return }
         // #710: clear a graph that earlier start failures condemned *before*
         // attaching, so the fresh engine is started with a source node connected
         // (#262 invariant).
