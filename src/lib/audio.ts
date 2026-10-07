@@ -16,11 +16,29 @@ const voiceBuffers = new Map<number, AudioBuffer>();
 let voicePreloadPromise: Promise<void> | null = null;
 let voicePlaybackEpoch = 0;
 let lastVoiceCountdownPlayedSec = 61;
+/** Clips that have started and not yet ended. Cancel stops these (#793). */
+const activeVoiceSources = new Set<AudioBufferSourceNode>();
+
+function trackVoiceSource(source: AudioBufferSourceNode): void {
+  activeVoiceSources.add(source);
+  source.onended = () => {
+    activeVoiceSources.delete(source);
+  };
+}
 
 /** Drop any in-flight voice countdown playback queued by async buffer loads. */
 export function cancelVoiceCountdownPlayback(): void {
   voicePlaybackEpoch++;
   lastVoiceCountdownPlayedSec = 61;
+  const playing = [...activeVoiceSources];
+  activeVoiceSources.clear();
+  for (const source of playing) {
+    try {
+      source.stop();
+    } catch {
+      // stop() throws if the source never started or already ended.
+    }
+  }
 }
 
 export type AudioUnlockResult = "unlocked" | "blocked" | "unavailable";
@@ -287,6 +305,7 @@ export function playVoiceCountdown(seconds: number): boolean {
     source.buffer = buffer;
     source.connect(ctx.destination);
     source.start(ctx.currentTime);
+    trackVoiceSource(source);
     lastVoiceCountdownPlayedSec = seconds;
     return true;
   } catch {
