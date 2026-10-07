@@ -420,5 +420,10 @@ export function loadSoundPrefs(): SoundPrefs {
 
 export function saveSoundPrefs(prefs: SoundPrefs) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Storage can be full or denied (private browsing). The toggle still has
+    // to reach the gesture-time audio unlock, so a failed save is not fatal.
+  }
 }

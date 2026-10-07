@@ -25,16 +25,6 @@ export const btnSecondary: CSSProperties = {
   textTransform: "uppercase",
 };
 
-export const inlineLinkButton: CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--accent-amber)",
-  cursor: "pointer",
-  font: "inherit",
-  padding: 0,
-  textDecoration: "underline",
-};
-
 export const btnGhost: CSSProperties = {
   ...btnSecondary,
   border: "none",

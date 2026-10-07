@@ -85,6 +85,7 @@ function Harness({
     beginBuddyHyperfocus: () => {},
     onElapsedChange: () => {},
     onSoundPlaybackBlocked: () => {},
+    onSoundPlaybackResumed: () => {},
     onTimerComplete: () => {},
     onSaveThought: () => {},
     onDismissPostCapture: () => {},

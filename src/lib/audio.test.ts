@@ -446,6 +446,20 @@ describe("audio-channel classification of SoundPrefs (#712)", () => {
     expect(hasEnabledAudio(allOff)).toBe(false);
   });
 
+  it("does not throw when storage rejects the save", async () => {
+    const { saveSoundPrefs } = await loadAudio();
+    vi.stubGlobal("localStorage", {
+      setItem: () => {
+        throw new DOMException("denied", "SecurityError");
+      },
+    });
+    try {
+      expect(() => saveSoundPrefs({ ...allOff, chime: true })).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("classifies every stored pref, so a new key cannot slip through unclassified", async () => {
     const { loadSoundPrefs, soundPrefUsesAudio } = await loadAudio();
     const keys = Object.keys(loadSoundPrefs()) as (keyof typeof allOff)[];

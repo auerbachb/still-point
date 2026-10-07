@@ -36,6 +36,7 @@ vi.mock("@/lib/audio", async (importOriginal) => {
 });
 
 const { useBuddyAudioUnlock } = await import("./useBuddyAudioUnlock");
+const { useAudioUnlock } = await import("./useAudioUnlock");
 
 /**
  * jsdom 29 under Vitest 4 exposes a `window` with no `localStorage`, so the
@@ -85,6 +86,7 @@ function seedPrefs(prefs: Partial<SoundPrefs>): void {
 
 type HookHandle<R> = {
   current: () => R;
+  rerender: () => Promise<void>;
   unmount: () => Promise<void>;
 };
 
@@ -103,6 +105,11 @@ async function renderHook<R>(hook: () => R): Promise<HookHandle<R>> {
 
   const handle: HookHandle<R> = {
     current: () => latest,
+    rerender: async () => {
+      await act(async () => {
+        root?.render(createElement(Probe));
+      });
+    },
     // Idempotent, so an explicit unmount and the afterEach sweep can both run.
     unmount: async () => {
       await act(async () => {
@@ -199,5 +206,104 @@ describe("useBuddyAudioUnlock", () => {
     expect(pendingUnlocks).toHaveLength(0);
     expect(view.current().audioBlocked).toBe(false);
     expect(view.current().soundPrefs.haptics).toBe(true);
+  });
+});
+
+describe("useAudioUnlock — solo blocked affordance", () => {
+  it("does not restore the warning when playback fails after every sound is off", async () => {
+    seedPrefs({ chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(true);
+
+    await act(async () => {
+      view.current().handleSoundPrefToggle("chime");
+    });
+    expect(view.current().audioBlocked).toBe(false);
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(false);
+  });
+
+  it("raises the warning when playback is blocked, and clears it when enable succeeds", async () => {
+    seedPrefs({ chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(true);
+
+    await act(async () => {
+      void view.current().handleEnableLocalAudio();
+    });
+    expect(pendingUnlocks).toHaveLength(1);
+
+    await act(async () => {
+      pendingUnlocks[0]("unlocked");
+    });
+    expect(view.current().audioBlocked).toBe(false);
+  });
+
+  it("keeps the warning when enable is still blocked", async () => {
+    seedPrefs({ chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    await act(async () => {
+      void view.current().handleEnableLocalAudio();
+    });
+    await act(async () => {
+      pendingUnlocks[0]("blocked");
+    });
+
+    expect(view.current().audioBlocked).toBe(true);
+  });
+
+  it("clears a stale warning when the sit key changes", async () => {
+    seedPrefs({ chime: true });
+    let resetKey = "solo-a";
+    const view = await renderHook(() => useAudioUnlock(resetKey));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(true);
+
+    resetKey = "solo-b";
+    await view.rerender();
+    expect(view.current().audioBlocked).toBe(false);
+  });
+
+  it("clears the warning when a later resume succeeds, and ignores a late blocked unlock", async () => {
+    seedPrefs({ chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(true);
+
+    await act(async () => {
+      view.current().handleSoundPrefToggle("tick");
+    });
+    expect(pendingUnlocks).toHaveLength(1);
+
+    await act(async () => {
+      view.current().handleSoundPlaybackResumed();
+    });
+    expect(view.current().audioBlocked).toBe(false);
+
+    await act(async () => {
+      pendingUnlocks[0]("blocked");
+    });
+    expect(view.current().audioBlocked).toBe(false);
   });
 });
