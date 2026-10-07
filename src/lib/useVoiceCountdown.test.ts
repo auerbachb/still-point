@@ -46,16 +46,24 @@ async function load() {
   return { ...audio, useVoiceCountdown: hook.useVoiceCountdown };
 }
 
+function VoiceProbe({
+  enabled,
+  hook,
+}: {
+  enabled: boolean;
+  hook: (enabled: boolean) => void;
+}) {
+  hook(enabled);
+  return null;
+}
+
 async function renderEnabled(useVoiceCountdown: (enabled: boolean) => void, enabled: boolean) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   let root: Root | null = null;
   const render = async (next: boolean) => {
     await act(async () => {
-      root?.render(createElement(() => {
-        useVoiceCountdown(next);
-        return null;
-      }));
+      root?.render(createElement(VoiceProbe, { enabled: next, hook: useVoiceCountdown }));
     });
   };
   await act(async () => {
