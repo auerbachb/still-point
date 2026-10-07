@@ -261,8 +261,15 @@ final class BuddySessionViewModel {
         return "\(remaining / 60):\(String(format: "%02d", remaining % 60))"
     }
 
+    /// Credited day from the first save attempt. Retries after 6:00 keep it.
+    private var pinnedSessionDate: String?
+
     func savePersonalSession(sessionDate: String) async -> SessionDTO? {
         guard let snapshot, snapshot.state == "completed" else { return nil }
+        if pinnedSessionDate == nil {
+            pinnedSessionDate = sessionDate
+        }
+        let creditedDate = pinnedSessionDate ?? sessionDate
         isSavingCompletion = true
         completionSaveError = nil
         defer { isSavingCompletion = false }
@@ -284,7 +291,7 @@ final class BuddySessionViewModel {
             thoughtCount: thoughtInputs.count,
             mindStateLog: logToSave,
             actualTime: snapshot.durationSeconds,
-            sessionDate: sessionDate,
+            sessionDate: creditedDate,
             thoughts: thoughtInputs.isEmpty ? nil : thoughtInputs
         )
 

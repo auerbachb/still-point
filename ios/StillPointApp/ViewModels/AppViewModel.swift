@@ -1134,7 +1134,16 @@ final class AppViewModel {
     /// Single-track: the primary standard sit. Two-a-day: both standard sits.
     private func requiredSitsCompleteFromFlags() -> Bool {
         let dual = currentUser?.dualTrackEnabled ?? false
-        return dual ? (primaryDoneToday && secondDoneToday) : primaryDoneToday
+        // Local flags cover a sit that finished offline and has not reached the
+        // server badges yet. Without them the day stays open and the next sit
+        // before 6:00 is stored on yesterday again.
+        let primary = primaryDoneToday || primaryStandardDoneToday
+        let second = secondDoneToday || secondPracticeDoneToday
+        return dual ? (primary && second) : primary
+    }
+
+    private func previousDayAnswerIsCurrent(now: Date) -> Bool {
+        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now)
     }
 
     /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
@@ -1205,7 +1214,7 @@ final class AppViewModel {
         if doneTodayFlagsStamp == nil {
             // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
             // says it is finished, unless that fetch already answered.
-            if !previousDayResolved {
+            if !previousDayAnswerIsCurrent(now: now) {
                 previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
             }
             doneTodayFlagsStamp = now
@@ -1215,7 +1224,7 @@ final class AppViewModel {
            let stamp = doneTodayFlagsStamp,
            let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
            calendar.isDate(stamp, inSameDayAs: yesterday) {
-            if previousDayResolved {
+            if previousDayAnswerIsCurrent(now: now) {
                 if !previousCalendarDayComplete {
                     return
                 }
@@ -1226,9 +1235,11 @@ final class AppViewModel {
         }
         // The previous day is finished, the clock is at or after 6:00, or the
         // stamp is older than yesterday. Roll onto the calendar day. A resolved
-        // answer is kept — badge flags must not overwrite it.
-        if !previousDayResolved {
+        // answer for *this* calendar day is kept. A stale one must not.
+        if !previousDayAnswerIsCurrent(now: now) {
             previousCalendarDayComplete = true
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
         }
         primaryDoneToday = false
         secondDoneToday = false

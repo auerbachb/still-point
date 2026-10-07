@@ -249,6 +249,24 @@ function practiceDaySit(session: Pick<Session, "completed" | "sessionType" | "se
  * With no session list yet, the hours before 6:00 stay on yesterday so a
  * failed read cannot start missed-day recovery for a day still open.
  */
+function sameStandardSit(a: PracticeDaySit, b: PracticeDaySit): boolean {
+  return !!a.completed && a.sessionType === "standard"
+    && !!b.completed && b.sessionType === "standard"
+    && a.sessionDate === b.sessionDate
+    && (a.track === "second") === (b.track === "second");
+}
+
+/** Keep a queued standard sit that the server list does not have yet. */
+function mergeRememberedSits(server: PracticeDaySit[], remembered: PracticeDaySit[]): PracticeDaySit[] {
+  const merged = [...server];
+  for (const sit of remembered) {
+    if (!sit.completed || sit.sessionType !== "standard") continue;
+    if (merged.some((row) => sameStandardSit(row, sit))) continue;
+    merged.push(sit);
+  }
+  return merged;
+}
+
 function creditedPracticeDate(
   sits: PracticeDaySit[] | null,
   dualTrackEnabled: boolean,
@@ -711,14 +729,17 @@ export default function StillPoint() {
   // to drive HomeView's completion badges. A missing `track` (pre-#240 row) counts
   // as the primary track.
   const refreshTodayTracks = useCallback(async () => {
+    const generation = sessionGeneration.current;
+    const remembered = loadedSitsRef.current ?? [];
     try {
       const { sessions } = await api.getSessions();
-      const sits = sessions.map(practiceDaySit);
+      if (generation !== sessionGeneration.current) return;
+      const sits = mergeRememberedSits(sessions.map(practiceDaySit), remembered);
       loadedSitsRef.current = sits;
       const today = creditedLocalIsoDate(sits, !!userRef.current?.dualTrackEnabled);
       let primary = false;
       let second = false;
-      for (const s of sessions) {
+      for (const s of sits) {
         if (s.completed && s.sessionType === "standard" && s.sessionDate === today) {
           if (s.track === "second") second = true;
           else primary = true;

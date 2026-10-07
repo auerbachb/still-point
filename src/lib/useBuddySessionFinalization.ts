@@ -49,6 +49,7 @@ export function useBuddySessionFinalization({
   const localTimerFinalizeTriggeredRef = useRef(false);
   const pollStoppedFinalizeTriggeredRef = useRef(false);
   const saveInFlightRef = useRef(false);
+  const pinnedSessionDateRef = useRef<string | null>(null);
   const [isSavingPersonalRecord, setIsSavingPersonalRecord] = useState(false);
   const [personalRecordError, setPersonalRecordError] = useState<string | null>(null);
 
@@ -90,17 +91,20 @@ export function useBuddySessionFinalization({
       );
       const clearPercent = computeClearPercentFromLog(mindStateLogRef.current ?? [], durationSeconds);
       const thoughtsSnapshot = sessionThoughtsRef.current ?? [];
-      // Pin the clock before the session fetch so a slow response cannot
-      // cross 6:00 and credit the wrong day.
-      const endedAt = new Date();
-      let sessionDate = endedAt.getHours() < GRACE_CUTOFF_HOUR
-        ? localIsoDateFrom(endedAt, -1)
-        : localIsoDateFrom(endedAt, 0);
-      try {
-        const { sessions } = await api.getSessions();
-        sessionDate = creditedLocalIsoDate(sessions, dualTrackEnabled, endedAt);
-      } catch {
-        // Keep the provisional date. Before 6:00 that is yesterday.
+      // Pin on the first attempt. A retry after 6:00 must keep that day.
+      let sessionDate = pinnedSessionDateRef.current;
+      if (!sessionDate) {
+        const endedAt = new Date();
+        sessionDate = endedAt.getHours() < GRACE_CUTOFF_HOUR
+          ? localIsoDateFrom(endedAt, -1)
+          : localIsoDateFrom(endedAt, 0);
+        try {
+          const { sessions } = await api.getSessions();
+          sessionDate = creditedLocalIsoDate(sessions, dualTrackEnabled, endedAt);
+        } catch {
+          // Keep the provisional date. Before 6:00 that is yesterday.
+        }
+        pinnedSessionDateRef.current = sessionDate;
       }
       const { session } = await api.recordBuddyPersonalSession(sessionId, {
         clearPercent,
