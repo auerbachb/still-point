@@ -11,7 +11,7 @@
  * already had.
  */
 
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationPreferences, sessionNotificationHolds } from "@/db/schema";
 import { sessionActiveUntilFrom } from "@/lib/notifications/session-active";
@@ -47,6 +47,16 @@ export async function releaseSessionHold(userId: string, sessionKey: string): Pr
     ));
 }
 
+/** Drop this user's expired rows so abandoned sits do not accumulate (#741). */
+export async function deleteExpiredSessionHolds(userId: string, now: Date = new Date()): Promise<void> {
+  await db
+    .delete(sessionNotificationHolds)
+    .where(and(
+      eq(sessionNotificationHolds.userId, userId),
+      lte(sessionNotificationHolds.expiresAt, now),
+    ));
+}
+
 /** Latest unexpired hold for this user, or null when every row has lapsed. */
 export async function maxUnexpiredHoldExpiry(
   userId: string,
@@ -64,14 +74,43 @@ export async function maxUnexpiredHoldExpiry(
   return rows[0]?.expiresAt ?? null;
 }
 
-async function writeDerivedSessionActiveUntil(
+function timestampFromRow(value: unknown): Date | null {
+  if (value == null) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Delete this sit's row and set the shared column to the latest remaining
+ * unexpired hold, in one statement. The max is computed inside that statement,
+ * so a sit that starts after the delete is not overwritten with a null this
+ * request captured earlier.
+ */
+async function releaseHoldAndRecomputeColumn(
   userId: string,
-  sessionActiveUntil: Date | null,
-): Promise<void> {
-  await db
-    .update(notificationPreferences)
-    .set({ sessionActiveUntil })
-    .where(eq(notificationPreferences.userId, userId));
+  sessionKey: string,
+  now: Date,
+): Promise<Date | null> {
+  const result = await db.execute(sql`
+    WITH removed AS (
+      DELETE FROM session_notification_holds
+      WHERE user_id = ${userId}::uuid
+        AND session_key = ${sessionKey}
+      RETURNING session_key
+    )
+    UPDATE notification_preferences AS prefs
+    SET session_active_until = (
+      SELECT max(holds.expires_at)
+      FROM session_notification_holds AS holds
+      WHERE holds.user_id = prefs.user_id
+        AND holds.expires_at > ${now}
+        AND holds.session_key <> ${sessionKey}
+    )
+    WHERE prefs.user_id = ${userId}::uuid
+    RETURNING prefs.session_active_until
+  `);
+  const row = result.rows[0] as { session_active_until?: unknown } | undefined;
+  return timestampFromRow(row?.session_active_until);
 }
 
 export async function applyKeyedSessionState(input: {
@@ -82,6 +121,7 @@ export async function applyKeyedSessionState(input: {
   now?: Date;
 }): Promise<{ sessionActiveUntil: string | null; suppressDuringSession: boolean }> {
   const now = input.now ?? new Date();
+  await deleteExpiredSessionHolds(input.userId, now);
 
   if (input.active) {
     if (!input.suppressDuringSession) {
@@ -112,9 +152,7 @@ export async function applyKeyedSessionState(input: {
     };
   }
 
-  await releaseSessionHold(input.userId, input.sessionKey);
-  const remaining = await maxUnexpiredHoldExpiry(input.userId, now);
-  await writeDerivedSessionActiveUntil(input.userId, remaining);
+  const remaining = await releaseHoldAndRecomputeColumn(input.userId, input.sessionKey, now);
   return {
     sessionActiveUntil: remaining?.toISOString() ?? null,
     suppressDuringSession: input.suppressDuringSession,

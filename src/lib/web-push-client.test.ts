@@ -73,6 +73,29 @@ describe("reportSessionActiveState (#709)", () => {
     await first;
   });
 
+  test("keeps a different session key when one sit ends behind a slow request", async () => {
+    const { started, keys, settle } = stubFetch();
+    const { reportSessionActiveState } = await import("./web-push-client");
+
+    reportSessionActiveState(true, "sit-a");
+    await flush();
+    reportSessionActiveState(false, "sit-a");
+    reportSessionActiveState(true, "sit-b");
+    reportSessionActiveState(true, "sit-b");
+
+    settle(0);
+    await flush();
+    expect(started).toEqual([true, false]);
+
+    settle(1);
+    await flush();
+    expect(started).toEqual([true, false, true]);
+    expect(keys).toEqual(["sit-a", "sit-a", "sit-b"]);
+
+    settle(2);
+    await flush();
+  });
+
   test("coalesces heartbeats queued behind a slow request, keeping the final state", async () => {
     const { started, settle } = stubFetch();
     const { reportSessionActiveState } = await import("./web-push-client");

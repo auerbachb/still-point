@@ -27,12 +27,15 @@ const updateWhere = vi.fn(() => {
 updateSet.mockImplementation(() => ({ where: updateWhere }));
 const dbUpdate = vi.fn(() => ({ set: updateSet }));
 
+const dbExecute = vi.fn(async () => ({ rows: [] as Array<Record<string, unknown>> }));
+
 vi.mock("@/db", () => ({
   db: {
     insert: dbInsert,
     delete: dbDelete,
     select: dbSelect,
     update: dbUpdate,
+    execute: dbExecute,
   },
 }));
 
@@ -53,7 +56,12 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...conditions: unknown[]) => ({ and: conditions })),
   eq: vi.fn((left: unknown, right: unknown) => ({ left, right })),
   gt: vi.fn((left: unknown, right: unknown) => ({ gt: [left, right] })),
+  lte: vi.fn((left: unknown, right: unknown) => ({ lte: [left, right] })),
   desc: vi.fn((column: unknown) => ({ desc: column })),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+    text: strings.join("?"),
+    values,
+  }),
 }));
 
 describe("session holds", () => {
@@ -106,8 +114,10 @@ describe("session holds", () => {
     expect(dbDelete).toHaveBeenCalled();
   });
 
-  test("release deletes only the caller's row and keeps another sit's expiry", async () => {
-    selectRows = [{ expiresAt: otherHold }];
+  test("release recomputes the shared column in the same statement as the delete", async () => {
+    dbExecute.mockResolvedValueOnce({
+      rows: [{ session_active_until: otherHold.toISOString() }],
+    });
     const { applyKeyedSessionState } = await import("./session-holds");
 
     const result = await applyKeyedSessionState({
@@ -118,10 +128,10 @@ describe("session holds", () => {
       now,
     });
 
-    expect(dbDelete).toHaveBeenCalled();
-    expect(deleteWhere).toHaveBeenCalled();
-    expect(dbInsert).not.toHaveBeenCalled();
-    expect(updateSet).toHaveBeenCalledWith({ sessionActiveUntil: otherHold });
+    const statement = JSON.stringify(dbExecute.mock.calls[0]?.[0]).toLowerCase();
+    expect(statement).toContain("delete from session_notification_holds");
+    expect(statement).toContain("max(holds.expires_at)");
+    expect(statement).toContain("session_key");
     expect(result.sessionActiveUntil).toBe(otherHold.toISOString());
   });
 
@@ -138,7 +148,7 @@ describe("session holds", () => {
       now,
     });
 
-    expect(updateSet).toHaveBeenCalledWith({ sessionActiveUntil: null });
+    expect(updateSet).not.toHaveBeenCalled();
     expect(result.sessionActiveUntil).toBeNull();
   });
 });
