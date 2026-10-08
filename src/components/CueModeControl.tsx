@@ -40,6 +40,12 @@ export function CueModeControl({
         minHeight: "44px",
       }}
     >
+      <style>{`
+        [data-testid="${testId}"] button:focus-visible {
+          outline: 2px solid var(--fg-2);
+          outline-offset: -2px;
+        }
+      `}</style>
       {OPTIONS.map((opt, index) => {
         const isSelected = selected === opt.mode;
         const feel = opt.mode === "haptic" ? "feel" : "hear";
