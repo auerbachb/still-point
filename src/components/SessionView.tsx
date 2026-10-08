@@ -37,7 +37,7 @@ import {
   type SoundToggleCue,
 } from "@/lib/soundToggleAppearance";
 import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
-import { CueModeControl } from "./CueModeControl";
+import { CueModeControl, HapticIntervalControl } from "./CueModeControl";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -179,6 +179,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
     setCueMode,
+    setHapticInterval,
     handleEnableLocalAudio,
   } = useAudioUnlock("solo");
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -1094,6 +1095,13 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
           }}
         >
           <CueModeControl prefs={soundPrefs} onChange={setCueMode} testId="session.cueMode" />
+          {soundPrefs.haptics && (
+            <HapticIntervalControl
+              value={soundPrefs.hapticInterval}
+              onChange={setHapticInterval}
+              testId="session.hapticInterval"
+            />
+          )}
           {(
             [
               ["chime", "chime", "audio"],

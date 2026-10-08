@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BuddySnapshot } from "@/lib/api";
-import type { CueMode, SoundPrefs } from "@/lib/audio";
-import { CueModeControl } from "../CueModeControl";
+import type { CueMode, HapticInterval, SoundPrefs } from "@/lib/audio";
+import { CueModeControl, HapticIntervalControl } from "../CueModeControl";
 import {
   SOUND_TOGGLE_MIN_TAP_TARGET_PX,
   soundToggleAccessibilityLabel,
@@ -101,6 +101,7 @@ type BuddySessionActiveProps = {
   onOpenThoughtCapture: () => void;
   onSoundPrefToggle: (key: keyof SoundPrefs) => void;
   onCueMode: (mode: CueMode) => void;
+  onHapticInterval: (interval: HapticInterval) => void;
   onEnableLocalAudio: () => void;
   onLeave: () => void;
 };
@@ -135,6 +136,7 @@ export function BuddySessionActive({
   onOpenThoughtCapture,
   onSoundPrefToggle,
   onCueMode,
+  onHapticInterval,
   onEnableLocalAudio,
   onLeave,
 }: BuddySessionActiveProps) {
@@ -428,6 +430,13 @@ export function BuddySessionActive({
                 testId="buddySession.cueMode"
                 onlyYou
               />
+              {soundPrefs.haptics && (
+                <HapticIntervalControl
+                  value={soundPrefs.hapticInterval}
+                  onChange={onHapticInterval}
+                  testId="buddySession.hapticInterval"
+                />
+              )}
               {(
                 [
                   ["chime", "chime", "audio"],

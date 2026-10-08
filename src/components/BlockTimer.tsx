@@ -4,7 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { BLOCK_DURATION } from "@/lib/constants";
 import { MindStateBar } from "./MindStateBar";
 import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, resumeAudioContext, type SoundPrefs } from "@/lib/audio";
-import { maybeFireHaptic } from "@/lib/haptics";
+import {
+  maybeFireHaptic,
+  nextRepeatingHaptic,
+  completedHapticIntervalIndex,
+  hapticIntervalSeconds,
+} from "@/lib/haptics";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useAudioContextResume } from "@/lib/useAudioContextResume";
@@ -79,6 +84,8 @@ export function BlockTimer({
   const lastTickSecRef = useRef(-1);
   const lastVoiceSecRef = useRef(61);
   const lastCompletedBlockIndexRef = useRef(-1);
+  const lastHapticIndexRef = useRef(0);
+  const lastHapticIntervalRef = useRef<number | null>(null);
   const controlledCompleteFiredRef = useRef(false);
   /** Previous controlled elapsed, so a restart can be told from normal advance. */
   const lastControlledElapsedRef = useRef(-1);
@@ -233,15 +240,28 @@ export function BlockTimer({
         if (prefs.chime && !voiceMode && fullMinuteRemains) {
           playEnabledSound(playChime);
         }
-
-        // #712: read from neither `prefs.chime` nor `voiceMode`, so a sitter who
-        // turned every sound off still feels each minute go by. Never routed
-        // through `playEnabledSound` — the "browser audio is paused" affordance
-        // is about the audio context, which vibration does not touch.
-        if (fullMinuteRemains) {
-          maybeFireHaptic(prefs.haptics, "minuteMarker");
-        }
       }
+    }
+
+    const interval = hapticIntervalSeconds(prefs.hapticInterval);
+    if (lastHapticIntervalRef.current !== interval) {
+      lastHapticIntervalRef.current = interval;
+      lastHapticIndexRef.current = completedHapticIntervalIndex(
+        newElapsed,
+        totalSeconds,
+        interval,
+      );
+      return;
+    }
+    const hapticUpdate = nextRepeatingHaptic({
+      elapsedSeconds: newElapsed,
+      durationSeconds: totalSeconds,
+      intervalSeconds: interval,
+      lastCompletedIndex: lastHapticIndexRef.current,
+    });
+    lastHapticIndexRef.current = hapticUpdate.completedIndex;
+    if (hapticUpdate.shouldFire) {
+      maybeFireHaptic(prefs.haptics, "minuteMarker");
     }
   };
 
@@ -311,9 +331,18 @@ export function BlockTimer({
       lastCompletedBlockIndexRef.current = useMinuteBlocks
         ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
         : -1;
+      const interval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
+      lastHapticIntervalRef.current = interval;
+      lastHapticIndexRef.current = completedHapticIntervalIndex(
+        resumeElapsed,
+        totalSeconds,
+        interval,
+      );
     } else {
       // Fresh session — clear all accumulated state
       lastCompletedBlockIndexRef.current = -1;
+      lastHapticIndexRef.current = 0;
+      lastHapticIntervalRef.current = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
       lastTickSecRef.current = -1;
       lastVoiceSecRef.current = 61;
       pausedElapsedRef.current = 0;
@@ -362,6 +391,9 @@ export function BlockTimer({
       useMinuteBlocks && minuteBlockCount > 0
         ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)
         : -1;
+    const hapticInterval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
+    lastHapticIntervalRef.current = hapticInterval;
+    lastHapticIndexRef.current = completedHapticIntervalIndex(seed, duration, hapticInterval);
     controlledCompleteFiredRef.current = false;
     setElapsed(seed);
     pausedElapsedRef.current = seed;
@@ -428,6 +460,13 @@ export function BlockTimer({
         useMinuteBlocks && minuteBlockCount > 0
           ? Math.min(minuteBlockCount - 1, Math.floor(newElapsed / 60) - 1)
           : -1;
+      const hapticInterval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
+      lastHapticIntervalRef.current = hapticInterval;
+      lastHapticIndexRef.current = completedHapticIntervalIndex(
+        newElapsed,
+        totalSeconds,
+        hapticInterval,
+      );
       controlledCompleteFiredRef.current = false;
     }
     lastControlledElapsedRef.current = newElapsed;

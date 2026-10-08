@@ -65,6 +65,7 @@ export function BuddySessionRoom({
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
     setCueMode,
+    setHapticInterval,
     handleEnableLocalAudio,
   } = useBuddyAudioUnlock(sessionId);
 
@@ -247,6 +248,7 @@ export function BuddySessionRoom({
           onOpenThoughtCapture={openThoughtCapture}
           onSoundPrefToggle={(key) => void handleSoundPrefToggle(key)}
           onCueMode={setCueMode}
+          onHapticInterval={setHapticInterval}
           onEnableLocalAudio={() => void handleEnableLocalAudio()}
           onLeave={() => void leave()}
         />

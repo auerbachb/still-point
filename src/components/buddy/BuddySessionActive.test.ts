@@ -94,6 +94,7 @@ function Harness({
     onOpenThoughtCapture: () => {},
     onSoundPrefToggle: onToggle,
     onCueMode,
+    onHapticInterval: () => {},
     onEnableLocalAudio: () => {},
     onLeave: () => {},
   });
@@ -141,6 +142,7 @@ describe("BuddySessionActive sound toggles", () => {
     completion: false,
     voiceCountdown: true,
     haptics: false,
+    hapticInterval: "minute",
   };
 
   it("renders one cue control plus chime and end pills", async () => {

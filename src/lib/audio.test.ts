@@ -412,6 +412,7 @@ describe("audio-channel classification of SoundPrefs (#712)", () => {
     completion: false,
     voiceCountdown: false,
     haptics: false,
+    hapticInterval: "minute" as const,
   };
 
   it("classifies the four sound prefs as audio and haptics as not", async () => {
@@ -477,6 +478,7 @@ describe("exclusive cue mode", () => {
     completion: true,
     voiceCountdown: false,
     haptics: false,
+    hapticInterval: "minute" as const,
   };
 
   it("keeps a single cue and leaves chime and completion alone", async () => {

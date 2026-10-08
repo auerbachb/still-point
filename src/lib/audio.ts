@@ -357,7 +357,11 @@ export type SoundPrefs = {
    * see `src/lib/haptics.ts`.
    */
   haptics: boolean;
+  /** Repeating haptic spacing. Missing stored values stay every minute. */
+  hapticInterval: HapticInterval;
 };
+
+export type HapticInterval = "minute" | "tenSeconds";
 
 const STORAGE_KEY = "stillpoint_sound_prefs";
 
@@ -367,6 +371,7 @@ const DEFAULTS: SoundPrefs = {
   completion: true,
   voiceCountdown: false,
   haptics: false,
+  hapticInterval: "minute",
 };
 
 /**
@@ -426,6 +431,7 @@ const SOUND_PREF_USES_AUDIO: Record<keyof SoundPrefs, boolean> = {
   completion: true,
   voiceCountdown: true,
   haptics: false,
+  hapticInterval: false,
 };
 
 /** Whether toggling `key` on should unlock/warm the audio context (#712). */
@@ -460,12 +466,14 @@ export function loadSoundPrefs(): SoundPrefs {
       completion: stored.completion ?? DEFAULTS.completion,
       voiceCountdown: stored.voiceCountdown ?? false,
       haptics: stored.haptics ?? false,
+      hapticInterval: stored.hapticInterval === "tenSeconds" ? "tenSeconds" : "minute",
     };
     const merged = normalizeCuePrefs(decoded);
     if (
       stored.tick !== merged.tick ||
       stored.haptics !== merged.haptics ||
-      stored.voiceCountdown !== merged.voiceCountdown
+      stored.voiceCountdown !== merged.voiceCountdown ||
+      stored.hapticInterval !== merged.hapticInterval
     ) {
       saveSoundPrefs(merged);
     }
