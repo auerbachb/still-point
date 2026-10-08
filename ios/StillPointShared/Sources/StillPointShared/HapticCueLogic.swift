@@ -73,6 +73,106 @@ public enum HapticCueLogic {
         return .minuteMarker
     }
 
+    /// How often the repeating haptic fires. Only these two values exist.
+    public enum Interval: String, Codable, CaseIterable, Sendable, Equatable {
+        case minute
+        case tenSeconds
+
+        public var seconds: Int {
+            switch self {
+            case .minute: return 60
+            case .tenSeconds: return 10
+            }
+        }
+
+        public static func seconds(validating raw: Int) -> Int? {
+            raw == 10 || raw == 60 ? raw : nil
+        }
+    }
+
+    /// Highest completed interval strictly before the end of the sit.
+    ///
+    /// An elapsed time already at the duration counts the last mark before the
+    /// end, so seeding at the completion tick does not treat the end itself as
+    /// a repeating boundary.
+    public static func completedHapticIntervalIndex(
+        elapsedSeconds: Double,
+        durationSeconds: Int,
+        intervalSeconds: Int
+    ) -> Int {
+        guard Interval.seconds(validating: intervalSeconds) != nil,
+              elapsedSeconds >= 0,
+              durationSeconds > 0
+        else { return 0 }
+        let capped = min(elapsedSeconds, Double(durationSeconds) - 0.000_000_1)
+        return Int(floor(max(0, capped) / Double(intervalSeconds)))
+    }
+
+    public struct RepeatingHapticUpdate: Equatable, Sendable {
+        public let completedIndex: Int
+        public let crossedBoundary: Bool
+
+        public init(completedIndex: Int, crossedBoundary: Bool) {
+            self.completedIndex = completedIndex
+            self.crossedBoundary = crossedBoundary
+        }
+    }
+
+    /// Session-origin repeating haptic. Independent of minute blocks.
+    ///
+    /// A sit has to be longer than one interval. The boundary that lands on the
+    /// end of the sit is not a repeating cue — that tick belongs to the end
+    /// buzz. A jump across several boundaries fires once and moves the cursor
+    /// to the latest one, so earlier marks are not replayed.
+    public static func repeatingHapticUpdate(
+        elapsedSeconds: Double,
+        durationSeconds: Int,
+        intervalSeconds: Int,
+        lastCompletedIndex: Int
+    ) -> RepeatingHapticUpdate {
+        guard Interval.seconds(validating: intervalSeconds) != nil,
+              durationSeconds > intervalSeconds,
+              elapsedSeconds >= 0
+        else {
+            return RepeatingHapticUpdate(
+                completedIndex: lastCompletedIndex,
+                crossedBoundary: false
+            )
+        }
+
+        if elapsedSeconds >= Double(durationSeconds) {
+            let finalIndex = completedHapticIntervalIndex(
+                elapsedSeconds: Double(durationSeconds),
+                durationSeconds: durationSeconds,
+                intervalSeconds: intervalSeconds
+            )
+            return RepeatingHapticUpdate(
+                completedIndex: max(lastCompletedIndex, finalIndex),
+                crossedBoundary: false
+            )
+        }
+
+        let completedIndex = Int(floor(elapsedSeconds / Double(intervalSeconds)))
+        let boundary = completedIndex * intervalSeconds
+        let crossed = completedIndex > lastCompletedIndex
+            && completedIndex >= 1
+            && boundary < durationSeconds
+        return RepeatingHapticUpdate(
+            completedIndex: max(lastCompletedIndex, completedIndex),
+            crossedBoundary: crossed
+        )
+    }
+
+    /// The repeating cue, or nil. The end cue stays on `sessionEndCue`.
+    public static func repeatingCue(
+        hapticsEnabled: Bool,
+        crossedBoundary: Bool,
+        isAbandoned: Bool
+    ) -> Cue? {
+        guard hapticsEnabled, crossedBoundary, !isAbandoned else { return nil }
+        return .minuteMarker
+    }
+
     /// The cue owed as the timer runs out, or nil for stillness.
     ///
     /// Only a sit that ran its full length earns the end cue. Ending early keeps

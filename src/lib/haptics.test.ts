@@ -10,6 +10,7 @@ import {
   HAPTIC_PATTERNS,
   fireHaptic,
   maybeFireHaptic,
+  nextRepeatingHaptic,
   supportsVibration,
 } from "@/lib/haptics";
 
@@ -137,5 +138,93 @@ describe("patterns", () => {
         expect(ms).toBeLessThanOrEqual(200);
       }
     }
+  });
+});
+
+describe("repeating haptic interval", () => {
+  test("60s fires on each completed minute, including sits that skipped minute blocks", () => {
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 60,
+        durationSeconds: 120,
+        intervalSeconds: 60,
+        lastCompletedIndex: 0,
+      }),
+    ).toEqual({ completedIndex: 1, shouldFire: true });
+
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 60,
+        durationSeconds: 90,
+        intervalSeconds: 60,
+        lastCompletedIndex: 0,
+      }).shouldFire,
+    ).toBe(true);
+  });
+
+  test("10s fires on each completed ten seconds", () => {
+    const first = nextRepeatingHaptic({
+      elapsedSeconds: 10,
+      durationSeconds: 25,
+      intervalSeconds: 10,
+      lastCompletedIndex: 0,
+    });
+    expect(first).toEqual({ completedIndex: 1, shouldFire: true });
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 20,
+        durationSeconds: 25,
+        intervalSeconds: 10,
+        lastCompletedIndex: first.completedIndex,
+      }),
+    ).toEqual({ completedIndex: 2, shouldFire: true });
+  });
+
+  test("a sit no longer than the interval does not repeat, and the end tick does not", () => {
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 60,
+        durationSeconds: 60,
+        intervalSeconds: 60,
+        lastCompletedIndex: 0,
+      }).shouldFire,
+    ).toBe(false);
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 120,
+        durationSeconds: 120,
+        intervalSeconds: 60,
+        lastCompletedIndex: 1,
+      }).shouldFire,
+    ).toBe(false);
+  });
+
+  test("a jump fires once and does not replay the marks it skipped", () => {
+    const jumped = nextRepeatingHaptic({
+      elapsedSeconds: 25,
+      durationSeconds: 40,
+      intervalSeconds: 10,
+      lastCompletedIndex: 0,
+    });
+    expect(jumped).toEqual({ completedIndex: 2, shouldFire: true });
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 26,
+        durationSeconds: 40,
+        intervalSeconds: 10,
+        lastCompletedIndex: jumped.completedIndex,
+      }).shouldFire,
+    ).toBe(false);
+  });
+
+  test("rejects intervals other than 10s and 60s", () => {
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 30,
+        durationSeconds: 90,
+        intervalSeconds: 30,
+        lastCompletedIndex: 0,
+      }),
+    ).toEqual({ completedIndex: 0, shouldFire: false });
   });
 });

@@ -9,6 +9,7 @@ import {
   soundPrefUsesAudio,
   applyCueMode,
   type CueMode,
+  type HapticInterval,
   type SoundPrefs,
 } from "@/lib/audio";
 
@@ -81,7 +82,17 @@ export function useAudioUnlock(resetKey: string) {
     });
   }, []);
 
+  const setHapticInterval = useCallback((interval: HapticInterval) => {
+    const current = soundPrefsRef.current;
+    if (current.hapticInterval === interval) return;
+    const next = { ...current, hapticInterval: interval };
+    soundPrefsRef.current = next;
+    setSoundPrefs(next);
+    saveSoundPrefs(next);
+  }, []);
+
   const handleSoundPrefToggle = useCallback((key: keyof SoundPrefs) => {
+    if (key === "hapticInterval") return;
     if (key === "tick" || key === "haptics" || key === "voiceCountdown") {
       const mode: CueMode = key === "haptics" ? "haptic" : key === "voiceCountdown" ? "voice" : "tick";
       setCueMode(mode);
@@ -146,6 +157,7 @@ export function useAudioUnlock(resetKey: string) {
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
     setCueMode,
+    setHapticInterval,
     handleEnableLocalAudio,
   };
 }

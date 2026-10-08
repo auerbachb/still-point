@@ -903,6 +903,9 @@ struct SessionView: View {
                     }
                 }
             }
+            if vm.soundPrefs.haptics {
+                hapticIntervalPicker
+            }
         }
         .padding(.horizontal, SPSpacing.s4)
         .padding(.top, SPSpacing.s3)
@@ -925,6 +928,19 @@ struct SessionView: View {
         .pickerStyle(.segmented)
         .frame(maxWidth: 280)
         .accessibilityIdentifier("session.cueMode")
+    }
+
+    private var hapticIntervalPicker: some View {
+        Picker("Haptic interval", selection: Binding(
+            get: { vm.soundPrefs.hapticInterval },
+            set: { vm.setHapticInterval($0) }
+        )) {
+            Text("Every minute").tag(HapticCueLogic.Interval.minute)
+            Text("Every 10 sec").tag(HapticCueLogic.Interval.tenSeconds)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 280)
+        .accessibilityIdentifier("session.hapticInterval")
     }
 
     private var chimeToggle: some View {

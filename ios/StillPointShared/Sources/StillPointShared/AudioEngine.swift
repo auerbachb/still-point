@@ -849,6 +849,8 @@ extension AudioEngine {
         /// Off by default — an unasked-for buzz mid-sit is worse than silence.
         /// Deliberately *not* an audio channel: see `SoundToggleLogic.effects`.
         public var haptics: Bool
+        /// Repeating haptic spacing. Missing JSON stays every minute.
+        public var hapticInterval: HapticCueLogic.Interval
 
         /// Tick is the cue when nothing else was chosen. Haptics and voice stay
         /// off so a fresh install is not silent and is not buzzing unasked.
@@ -862,13 +864,15 @@ extension AudioEngine {
             chime: Bool,
             completion: Bool,
             voiceCountdown: Bool = false,
-            haptics: Bool = false
+            haptics: Bool = false,
+            hapticInterval: HapticCueLogic.Interval = .minute
         ) {
             self.tick = tick
             self.chime = chime
             self.completion = completion
             self.voiceCountdown = voiceCountdown
             self.haptics = haptics
+            self.hapticInterval = hapticInterval
         }
 
         /// Custom decoder that merges over defaults — mirrors web's `{ ...DEFAULTS, ...stored }`.
@@ -881,6 +885,12 @@ extension AudioEngine {
             completion     = try c.decodeIfPresent(Bool.self, forKey: .completion)     ?? true
             voiceCountdown = try c.decodeIfPresent(Bool.self, forKey: .voiceCountdown) ?? false
             haptics        = try c.decodeIfPresent(Bool.self, forKey: .haptics)        ?? false
+            if let raw = try c.decodeIfPresent(String.self, forKey: .hapticInterval),
+               let parsed = HapticCueLogic.Interval(rawValue: raw) {
+                hapticInterval = parsed
+            } else {
+                hapticInterval = .minute
+            }
         }
     }
 

@@ -1,4 +1,9 @@
-import { cueModeOf, type CueMode, type SoundPrefs } from "@/lib/audio";
+import {
+  cueModeOf,
+  type CueMode,
+  type HapticInterval,
+  type SoundPrefs,
+} from "@/lib/audio";
 
 const OPTIONS: { mode: CueMode; label: string }[] = [
   { mode: "tick", label: "tick" },
@@ -78,6 +83,79 @@ export function CueModeControl({
               padding: "0 12px",
               minHeight: "44px",
               minWidth: "44px",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const INTERVALS: { value: HapticInterval; label: string }[] = [
+  { value: "minute", label: "Every minute" },
+  { value: "tenSeconds", label: "Every 10 sec" },
+];
+
+/** Two-way haptic spacing. Shown while haptic mode is the active cue. */
+export function HapticIntervalControl({
+  value,
+  onChange,
+  testId,
+}: {
+  value: HapticInterval;
+  onChange: (interval: HapticInterval) => void;
+  testId: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Haptic interval"
+      data-testid={testId}
+      style={{
+        display: "inline-flex",
+        border: "1px solid var(--border-1)",
+        borderRadius: "22px",
+        overflow: "hidden",
+        minHeight: "44px",
+      }}
+    >
+      {INTERVALS.map((opt, index) => {
+        const isSelected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            tabIndex={isSelected ? 0 : -1}
+            data-testid={`${testId}.${opt.value}`}
+            onClick={() => onChange(opt.value)}
+            onKeyDown={(event) => {
+              const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+              const backward = event.key === "ArrowLeft" || event.key === "ArrowUp";
+              if (!forward && !backward) return;
+              event.preventDefault();
+              const next = forward
+                ? (index + 1) % INTERVALS.length
+                : (index - 1 + INTERVALS.length) % INTERVALS.length;
+              onChange(INTERVALS[next].value);
+              const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                '[role="radio"]',
+              );
+              buttons?.[next]?.focus();
+            }}
+            style={{
+              background: isSelected ? "var(--surface-3)" : "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: isSelected ? "var(--fg-2)" : "var(--fg-4)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              letterSpacing: "0.06em",
+              padding: "0 12px",
+              minHeight: "44px",
             }}
           >
             {opt.label}

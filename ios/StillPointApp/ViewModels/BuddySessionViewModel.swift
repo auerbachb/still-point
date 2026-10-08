@@ -33,6 +33,7 @@ final class BuddySessionViewModel {
     private var lastVoiceCountdownSec: Int = 0
     /// #736: highest minute block already marked, so a boundary fires once.
     private var lastCompletedMinuteBlockIndex = -1
+    private var lastHapticIntervalIndex = 0
     /// #736: natural completion has already been announced for this window.
     private var sessionEndHapticEmitted = false
     /// #736: UIKit fallback when the device has no Core Haptics. A generator
@@ -200,6 +201,19 @@ final class BuddySessionViewModel {
     }
 
     // MARK: - Sound Preferences (#554)
+
+    func setHapticInterval(_ interval: HapticCueLogic.Interval) {
+        guard soundPrefs.hapticInterval != interval else { return }
+        soundPrefs.hapticInterval = interval
+        AudioEngine.savePrefs(soundPrefs)
+        if let duration = snapshot?.durationSeconds {
+            lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
+                elapsedSeconds: Double(currentElapsedSeconds()),
+                durationSeconds: duration,
+                intervalSeconds: interval.seconds
+            )
+        }
+    }
 
     func setCueMode(_ mode: CueMode) {
         let previous = soundPrefs
@@ -467,10 +481,17 @@ final class BuddySessionViewModel {
         sessionEndHapticEmitted = signals.sessionEndAlreadyEmitted
 
         // Leaving before remaining hits 0 never sets `completedNaturally`.
-        if let cue = HapticCueLogic.minuteMarkerCue(
+        let elapsed = Double(max(0, duration - remaining))
+        let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
+            elapsedSeconds: elapsed,
+            durationSeconds: duration,
+            intervalSeconds: soundPrefs.hapticInterval.seconds,
+            lastCompletedIndex: lastHapticIntervalIndex
+        )
+        lastHapticIntervalIndex = hapticUpdate.completedIndex
+        if let cue = HapticCueLogic.repeatingCue(
             hapticsEnabled: soundPrefs.haptics,
-            crossedMinuteBoundary: signals.crossedMinuteBoundary,
-            fullMinuteRemains: signals.fullMinuteRemains,
+            crossedBoundary: hapticUpdate.crossedBoundary,
             isAbandoned: isAbandoned
         ) {
             fireHaptic(cue)
@@ -489,6 +510,11 @@ final class BuddySessionViewModel {
             elapsed: Double(max(0, elapsedAtSync)),
             totalSeconds: durationSeconds
         )
+        lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
+            elapsedSeconds: Double(max(0, elapsedAtSync)),
+            durationSeconds: durationSeconds,
+            intervalSeconds: soundPrefs.hapticInterval.seconds
+        )
         sessionEndHapticEmitted = elapsedAtSync >= durationSeconds
         if soundPrefs.haptics {
             prepareHaptics()
@@ -497,6 +523,7 @@ final class BuddySessionViewModel {
 
     private func resetHapticClock() {
         lastCompletedMinuteBlockIndex = -1
+        lastHapticIntervalIndex = 0
         sessionEndHapticEmitted = false
     }
 

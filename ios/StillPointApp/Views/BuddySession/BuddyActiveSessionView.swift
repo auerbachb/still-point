@@ -242,6 +242,18 @@ struct BuddyActiveSessionView: View {
             .accessibilityIdentifier("buddySession.cueMode")
             .accessibilityHint("Only you hear or feel this — does not change the sit for others")
 
+            if vm.soundPrefs.haptics {
+                Picker("Haptic interval", selection: Binding(
+                    get: { vm.soundPrefs.hapticInterval },
+                    set: { vm.setHapticInterval($0) }
+                )) {
+                    Text("Every minute").tag(HapticCueLogic.Interval.minute)
+                    Text("Every 10 sec").tag(HapticCueLogic.Interval.tenSeconds)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("buddySession.hapticInterval")
+            }
+
             Button {
                 showExitConfirm = true
             } label: {

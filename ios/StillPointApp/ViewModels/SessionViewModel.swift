@@ -57,6 +57,8 @@ final class SessionViewModel {
     private var timer: AnyCancellable?
     private var lastTickSec = 0
     private var lastCompletedMinuteBlockIndex = -1
+    /// Completed repeating-haptic intervals. Independent of the chime's minute blocks.
+    private var lastHapticIntervalIndex = 0
     /// #554: last second announced via voice countdown; 0 means none yet this window.
     private var lastVoiceCountdownSec = 0
     private var controlHideTimer: AnyCancellable?
@@ -158,6 +160,11 @@ final class SessionViewModel {
                 elapsed: resumeElapsed,
                 totalSeconds: totalSeconds
             )
+            lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
+                elapsedSeconds: resumeElapsed,
+                durationSeconds: totalSeconds,
+                intervalSeconds: soundPrefs.hapticInterval.seconds
+            )
             // Reset voice countdown state so resume re-announces the current second.
             lastVoiceCountdownSec = 0
         } else {
@@ -166,6 +173,7 @@ final class SessionViewModel {
             pausedElapsed = 0
             lastTickSec = 0
             lastCompletedMinuteBlockIndex = -1
+            lastHapticIntervalIndex = 0
             lastVoiceCountdownSec = 0
         }
 
@@ -531,18 +539,32 @@ final class SessionViewModel {
             }
         }
 
-        // #712: the same boundary and the same full-minute gate as the bell — one
-        // timing source, two channels — but read from neither `soundPrefs.chime`
-        // nor `voiceActive`, so a sitter who turned every sound off still feels
-        // each minute go by.
-        if let cue = HapticCueLogic.minuteMarkerCue(
+        // Repeating haptic uses its own interval, not the chime's minute blocks.
+        let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
+            elapsedSeconds: newElapsed,
+            durationSeconds: totalSeconds,
+            intervalSeconds: soundPrefs.hapticInterval.seconds,
+            lastCompletedIndex: lastHapticIntervalIndex
+        )
+        lastHapticIntervalIndex = hapticUpdate.completedIndex
+        if let cue = HapticCueLogic.repeatingCue(
             hapticsEnabled: soundPrefs.haptics,
-            crossedMinuteBoundary: crossedMinuteBoundary,
-            fullMinuteRemains: fullMinuteRemains,
+            crossedBoundary: hapticUpdate.crossedBoundary,
             isAbandoned: isAbandoned
         ) {
             fireHaptic(cue)
         }
+    }
+
+    func setHapticInterval(_ interval: HapticCueLogic.Interval) {
+        guard soundPrefs.hapticInterval != interval else { return }
+        soundPrefs.hapticInterval = interval
+        AudioEngine.savePrefs(soundPrefs)
+        lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
+            elapsedSeconds: elapsed,
+            durationSeconds: totalSeconds,
+            intervalSeconds: interval.seconds
+        )
     }
 
     // MARK: - Haptics (#712)
