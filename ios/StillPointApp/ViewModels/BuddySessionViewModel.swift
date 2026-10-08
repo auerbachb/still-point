@@ -31,6 +31,8 @@ final class BuddySessionViewModel {
     var soundPrefs: AudioEngine.SoundPrefs = AudioEngine.loadPrefs()
     /// Last second announced via voice countdown in the current active session window.
     private var lastVoiceCountdownSec: Int = 0
+    /// Highest elapsed second that already owed a tick, so a second plays once.
+    private var lastTickSec = 0
     /// #736: highest minute block already marked, so a boundary fires once.
     private var lastCompletedMinuteBlockIndex = -1
     /// #736: natural completion has already been announced for this window.
@@ -201,7 +203,45 @@ final class BuddySessionViewModel {
 
     // MARK: - Sound Preferences (#554)
 
+    func setCueMode(_ mode: CueMode) {
+        let previous = soundPrefs
+        let next = CueModeLogic.applying(mode, to: previous)
+        guard next != previous else { return }
+        soundPrefs = next
+        AudioEngine.savePrefs(soundPrefs)
+
+        if next.haptics && !previous.haptics {
+            prepareHaptics()
+        } else if previous.haptics && !next.haptics {
+            stopCoreHaptics()
+        }
+
+        let effects = CueModeLogic.transitionEffects(from: previous, to: next)
+        if effects.warmUp {
+            AudioEngine.shared.warmUp()
+        }
+        if effects.preloadVoiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        }
+        if effects.resetVoiceDedup {
+            lastVoiceCountdownSec = 0
+        }
+        if effects.cancelVoiceCountdown {
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+        }
+    }
+
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        if let mode = CueModeLogic.mode(
+            forTick: keyPath == \AudioEngine.SoundPrefs.tick,
+            haptics: keyPath == \AudioEngine.SoundPrefs.haptics,
+            voice: keyPath == \AudioEngine.SoundPrefs.voiceCountdown
+        ) {
+            if !soundPrefs[keyPath: keyPath] {
+                setCueMode(mode)
+            }
+            return
+        }
         let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         // #736: haptics is vibration, not sound. Enabling it must not warm the
@@ -251,9 +291,11 @@ final class BuddySessionViewModel {
     ///
     /// #736: that same tick is the buddy sit's only timing source. Minute and
     /// end haptics are read from it before the voice-countdown guard, so a
-    /// sitter who turned every sound off still feels the sit.
+    /// sitter who turned every sound off still feels the sit. Tick mode uses
+    /// the same clock: one tick per elapsed second, silent in the other modes.
     func handleVoiceCountdownTick(remaining: Int) {
         emitSharedTimerHaptics(remaining: remaining)
+        emitIntervalTick(remaining: remaining)
         let remainingDouble = Double(remaining)
         guard soundPrefs.voiceCountdown else { return }
 
@@ -373,6 +415,8 @@ final class BuddySessionViewModel {
                 // do not replay, and a window that opens already finished does
                 // not buzz on the next tick.
                 seedHapticClock(elapsedAtSync: elapsedAtSync, durationSeconds: snapshot.durationSeconds)
+                lastTickSec = max(0, elapsedAtSync)
+                prepareActiveCueAudio()
             }
 
             activeAnchor = ActiveAnchor(
@@ -404,6 +448,31 @@ final class BuddySessionViewModel {
         meetingToken = nil
         meetingTokenError = nil
         resetHapticClock()
+    }
+
+    /// Tick and voice need an active audio session before the first cue.
+    /// Haptic mode must not warm the session — that ducks other audio for a
+    /// sound this sit will not make.
+    func prepareActiveCueAudio() {
+        if soundPrefs.tick || soundPrefs.voiceCountdown {
+            AudioEngine.shared.warmUp()
+        }
+        if soundPrefs.voiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        }
+    }
+
+    /// One tick per newly reached elapsed second. The clock advances in every
+    /// cue mode so switching into tick does not replay the current second.
+    /// The completion second (`remaining == 0`) does not tick, matching solo.
+    private func emitIntervalTick(remaining: Int) {
+        guard let snapshot, snapshot.state == "active", remaining > 0 else { return }
+        let elapsed = snapshot.durationSeconds - remaining
+        guard elapsed > lastTickSec else { return }
+        lastTickSec = elapsed
+        if soundPrefs.tick {
+            AudioEngine.shared.playTick()
+        }
     }
 
     /// #736: minute-marker and natural-completion haptics from the shared timer.
@@ -460,6 +529,7 @@ final class BuddySessionViewModel {
     private func resetHapticClock() {
         lastCompletedMinuteBlockIndex = -1
         sessionEndHapticEmitted = false
+        lastTickSec = 0
     }
 
     private func prepareHaptics() {

@@ -55,9 +55,11 @@ const snap: BuddySnapshot = {
 function Harness({
   prefs,
   onToggle,
+  onCueMode = () => {},
 }: {
   prefs: SoundPrefs;
   onToggle: (key: keyof SoundPrefs) => void;
+  onCueMode?: (mode: "tick" | "haptic" | "voice") => void;
 }) {
   const mindStateRef = useRef<BuddyMindState>("clear");
   const holdKindRef = useRef<MindHoldKind>("none");
@@ -91,6 +93,7 @@ function Harness({
     onDismissPostCapture: () => {},
     onOpenThoughtCapture: () => {},
     onSoundPrefToggle: onToggle,
+    onCueMode,
     onEnableLocalAudio: () => {},
     onLeave: () => {},
   });
@@ -140,42 +143,46 @@ describe("BuddySessionActive sound toggles", () => {
     haptics: false,
   };
 
-  it("renders #668 pills with a 44px target and buddy-only names", async () => {
+  it("renders one cue control plus chime and end pills", async () => {
     const onToggle = vi.fn();
-    const container = await render(createElement(Harness, { prefs, onToggle }));
+    const onCueMode = vi.fn();
+    const container = await render(createElement(Harness, { prefs, onToggle, onCueMode }));
 
     const row = container.querySelector('[data-testid="buddySession.soundToggles"]');
     expect(row).toBeInstanceOf(HTMLElement);
     expect((row as HTMLElement).style.flexWrap).toBe("wrap");
     expect((row as HTMLElement).style.maxWidth).toBe("min(420px, calc(100vw - 40px))");
 
-    const tick = button(container, "tick");
-    expect(tick.getAttribute("aria-pressed")).toBe("true");
-    expect(tick.getAttribute("aria-label")).toBe("tick sound; only you hear this");
-    expect(tick.title).toBe("Only you hear this — does not change audio for others");
+    const group = container.querySelector('[data-testid="buddySession.cueMode"]');
+    expect(group?.getAttribute("role")).toBe("radiogroup");
+    const tick = container.querySelector('[data-testid="buddySession.cueMode.tick"]');
+    const voice = container.querySelector('[data-testid="buddySession.cueMode.voice"]');
+    if (!(tick instanceof HTMLButtonElement) || !(voice instanceof HTMLButtonElement)) {
+      throw new Error("missing cue mode segments");
+    }
+    // Tick wins when more than one cue flag is on.
+    expect(tick.getAttribute("aria-checked")).toBe("true");
+    expect(voice.getAttribute("aria-checked")).toBe("false");
     expect(tick.style.minHeight).toBe("44px");
-    expect(tick.style.backgroundColor || tick.style.background).toBe("var(--surface-3)");
-    expect(tick.getAttribute("style")).toContain("border: 1px solid var(--border-2)");
-    expect(tick.querySelector("path[d='M10.5 5.75a3 3 0 010 4.5']")).not.toBeNull();
 
     const chime = button(container, "chime");
     expect(chime.getAttribute("aria-pressed")).toBe("false");
     expect(chime.getAttribute("aria-label")).toBe("chime sound; only you hear this");
     expect(chime.style.backgroundColor || chime.style.background).toBe("transparent");
     expect(chime.getAttribute("style")).toContain("border: 1px solid var(--border-1)");
-    expect(chime.querySelector("path[d='M10.5 6l4 4m0-4l-4 4']")).not.toBeNull();
-
-    expect(button(container, "voice").getAttribute("aria-pressed")).toBe("true");
     expect(button(container, "end").getAttribute("aria-pressed")).toBe("false");
-
-    const haptics = button(container, "haptics");
-    expect(haptics.getAttribute("aria-label")).toBe("haptics feedback; only you feel this");
-    expect(haptics.title).toBe("Only you feel this — does not change anything for others");
-    expect(haptics.querySelector("rect")).not.toBeNull();
+    expect(container.querySelector('[data-testid="buddySession.soundToggle.tick"]')).toBeNull();
+    expect(container.querySelector('[data-testid="buddySession.soundToggle.haptics"]')).toBeNull();
 
     expect(container.textContent).toContain("sounds play only on this device");
 
-    tick.click();
-    expect(onToggle).toHaveBeenCalledWith("tick");
+    voice.click();
+    expect(onCueMode).toHaveBeenCalledWith("voice");
+    expect(onToggle).not.toHaveBeenCalled();
+
+    expect(tick.tabIndex).toBe(0);
+    expect(voice.tabIndex).toBe(-1);
+    tick.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(onCueMode).toHaveBeenCalledWith("haptic");
   });
 });

@@ -275,7 +275,45 @@ final class SessionViewModel {
         scheduleControlHide()
     }
 
+    func setCueMode(_ mode: CueMode) {
+        let previous = soundPrefs
+        let next = CueModeLogic.applying(mode, to: previous)
+        guard next != previous else { return }
+        soundPrefs = next
+        AudioEngine.savePrefs(soundPrefs)
+
+        if next.haptics && !previous.haptics {
+            prepareHaptics()
+        }
+
+        let effects = CueModeLogic.transitionEffects(from: previous, to: next)
+        if effects.warmUp {
+            AudioEngine.shared.warmUp()
+        }
+        if effects.preloadVoiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        }
+        if effects.resetVoiceDedup {
+            lastVoiceCountdownSec = 0
+        }
+        if effects.cancelVoiceCountdown {
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+        }
+    }
+
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        if let mode = CueModeLogic.mode(
+            forTick: keyPath == \AudioEngine.SoundPrefs.tick,
+            haptics: keyPath == \AudioEngine.SoundPrefs.haptics,
+            voice: keyPath == \AudioEngine.SoundPrefs.voiceCountdown
+        ) {
+            // Selecting a cue turns that one on. The active cue cannot be
+            // toggled off; another segment has to take its place.
+            if !soundPrefs[keyPath: keyPath] {
+                setCueMode(mode)
+            }
+            return
+        }
         let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         // #712: the one toggle that governs vibration rather than sound.

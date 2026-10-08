@@ -850,8 +850,10 @@ extension AudioEngine {
         /// Deliberately *not* an audio channel: see `SoundToggleLogic.effects`.
         public var haptics: Bool
 
+        /// Tick is the cue when nothing else was chosen. Haptics and voice stay
+        /// off so a fresh install is not silent and is not buzzing unasked.
         public static let defaults = SoundPrefs(
-            tick: false, chime: true, completion: true, voiceCountdown: false, haptics: false
+            tick: true, chime: true, completion: true, voiceCountdown: false, haptics: false
         )
 
         /// Memberwise initialiser (required because we added a custom `init(from:)`).
@@ -889,7 +891,11 @@ extension AudioEngine {
               let prefs = try? JSONDecoder().decode(SoundPrefs.self, from: data) else {
             return .defaults
         }
-        return prefs
+        let normalized = CueModeLogic.normalized(prefs)
+        if normalized != prefs {
+            savePrefs(normalized)
+        }
+        return normalized
     }
 
     public static func savePrefs(_ prefs: SoundPrefs) {
