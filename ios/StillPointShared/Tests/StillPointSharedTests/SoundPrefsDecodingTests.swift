@@ -105,7 +105,7 @@ final class SoundPrefsDecodingTests: XCTestCase {
 
     func testDefaultsMatchExpectedValues() {
         let d = AudioEngine.SoundPrefs.defaults
-        XCTAssertFalse(d.tick)
+        XCTAssertTrue(d.tick)
         XCTAssertTrue(d.chime)
         XCTAssertTrue(d.completion)
         XCTAssertFalse(d.voiceCountdown)

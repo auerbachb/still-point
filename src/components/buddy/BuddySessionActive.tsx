@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BuddySnapshot } from "@/lib/api";
-import type { SoundPrefs } from "@/lib/audio";
+import type { CueMode, SoundPrefs } from "@/lib/audio";
+import { CueModeControl } from "../CueModeControl";
 import {
   SOUND_TOGGLE_MIN_TAP_TARGET_PX,
   soundToggleAccessibilityLabel,
@@ -99,6 +100,7 @@ type BuddySessionActiveProps = {
   onDismissPostCapture: () => void;
   onOpenThoughtCapture: () => void;
   onSoundPrefToggle: (key: keyof SoundPrefs) => void;
+  onCueMode: (mode: CueMode) => void;
   onEnableLocalAudio: () => void;
   onLeave: () => void;
 };
@@ -132,6 +134,7 @@ export function BuddySessionActive({
   onDismissPostCapture,
   onOpenThoughtCapture,
   onSoundPrefToggle,
+  onCueMode,
   onEnableLocalAudio,
   onLeave,
 }: BuddySessionActiveProps) {
@@ -419,17 +422,16 @@ export function BuddySessionActive({
                 letterSpacing: "0.06em",
               }}
             >
+              <CueModeControl
+                prefs={soundPrefs}
+                onChange={onCueMode}
+                testId="buddySession.cueMode"
+                onlyYou
+              />
               {(
                 [
-                  ["tick", "tick", "audio"],
                   ["chime", "chime", "audio"],
-                  ["voiceCountdown", "voice", "audio"],
                   ["completion", "end", "audio"],
-                  // #712: the timer below fires minute and end haptics from this
-                  // same shared preference, so the buddy room needs its own way
-                  // to switch them off — otherwise a setting made in a solo sit
-                  // vibrates here with no control within reach.
-                  ["haptics", "haptics", "haptic"],
                 ] as const
               ).map(([key, label, cue]) => {
                 const isOn = soundPrefs[key];
@@ -439,12 +441,8 @@ export function BuddySessionActive({
                     type="button"
                     key={key}
                     aria-pressed={isOn}
-                    aria-label={`${soundToggleAccessibilityLabel(label, cue)}; only you ${cue === "haptic" ? "feel" : "hear"} this`}
-                    title={
-                      cue === "haptic"
-                        ? "Only you feel this — does not change anything for others"
-                        : "Only you hear this — does not change audio for others"
-                    }
+                    aria-label={`${soundToggleAccessibilityLabel(label, cue)}; only you hear this`}
+                    title="Only you hear this — does not change audio for others"
                     data-testid={`buddySession.soundToggle.${label}`}
                     onClick={() => onSoundPrefToggle(key)}
                     style={{

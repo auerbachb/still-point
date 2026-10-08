@@ -64,6 +64,7 @@ export function BuddySessionRoom({
     handleSoundPlaybackBlocked,
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
+    setCueMode,
     handleEnableLocalAudio,
   } = useBuddyAudioUnlock(sessionId);
 
@@ -245,6 +246,7 @@ export function BuddySessionRoom({
           onDismissPostCapture={handleDismissPostCapture}
           onOpenThoughtCapture={openThoughtCapture}
           onSoundPrefToggle={(key) => void handleSoundPrefToggle(key)}
+          onCueMode={setCueMode}
           onEnableLocalAudio={() => void handleEnableLocalAudio()}
           onLeave={() => void leave()}
         />

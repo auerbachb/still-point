@@ -469,3 +469,85 @@ describe("audio-channel classification of SoundPrefs (#712)", () => {
     }
   });
 });
+
+describe("exclusive cue mode", () => {
+  const base = {
+    tick: false,
+    chime: false,
+    completion: true,
+    voiceCountdown: false,
+    haptics: false,
+  };
+
+  it("keeps a single cue and leaves chime and completion alone", async () => {
+    const { normalizeCuePrefs } = await loadAudio();
+    expect(normalizeCuePrefs({ ...base, haptics: true })).toEqual({
+      ...base,
+      haptics: true,
+    });
+    expect(normalizeCuePrefs({ ...base, voiceCountdown: true })).toEqual({
+      ...base,
+      voiceCountdown: true,
+    });
+    expect(normalizeCuePrefs({ ...base, tick: true, chime: true })).toEqual({
+      ...base,
+      tick: true,
+      chime: true,
+    });
+  });
+
+  it("prefers tick, then haptics, then voice when more than one cue is on", async () => {
+    const { normalizeCuePrefs } = await loadAudio();
+    expect(normalizeCuePrefs({ ...base, tick: true, haptics: true, voiceCountdown: true })).toMatchObject({
+      tick: true,
+      haptics: false,
+      voiceCountdown: false,
+    });
+    expect(normalizeCuePrefs({ ...base, haptics: true, voiceCountdown: true })).toMatchObject({
+      tick: false,
+      haptics: true,
+      voiceCountdown: false,
+    });
+  });
+
+  it("defaults to tick when no cue is on, including a fresh load", async () => {
+    const { normalizeCuePrefs, loadSoundPrefs } = await loadAudio();
+    expect(normalizeCuePrefs(base)).toMatchObject({
+      tick: true,
+      haptics: false,
+      voiceCountdown: false,
+      completion: true,
+    });
+
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+    });
+    try {
+      store.set(
+        "stillpoint_sound_prefs",
+        JSON.stringify({ tick: false, haptics: false, voiceCountdown: false, chime: false }),
+      );
+      const loaded = loadSoundPrefs();
+      expect(loaded.tick).toBe(true);
+      expect(loaded.haptics).toBe(false);
+      expect(loaded.voiceCountdown).toBe(false);
+      expect(loaded.chime).toBe(false);
+      expect(JSON.parse(store.get("stillpoint_sound_prefs") ?? "{}").tick).toBe(true);
+
+      store.set("stillpoint_sound_prefs", JSON.stringify({ haptics: true, chime: false }));
+      const hapticOnly = loadSoundPrefs();
+      expect(hapticOnly.haptics).toBe(true);
+      expect(hapticOnly.tick).toBe(false);
+      expect(hapticOnly.chime).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

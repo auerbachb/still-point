@@ -171,7 +171,8 @@ describe("useBuddyAudioUnlock", () => {
   });
 
   it("keeps the warning cleared when the last audio cue is switched off mid-unlock", async () => {
-    seedPrefs({});
+    // Haptic mode is the silent cue, so chime is the only sound that can be on.
+    seedPrefs({ haptics: true });
     const view = await renderHook(() => useBuddyAudioUnlock("session-2"));
 
     await act(async () => {
@@ -211,7 +212,7 @@ describe("useBuddyAudioUnlock", () => {
 
 describe("useAudioUnlock — solo blocked affordance", () => {
   it("does not restore the warning when playback fails after every sound is off", async () => {
-    seedPrefs({ chime: true });
+    seedPrefs({ haptics: true, chime: true });
     const view = await renderHook(() => useAudioUnlock("solo"));
 
     await act(async () => {
@@ -292,7 +293,7 @@ describe("useAudioUnlock — solo blocked affordance", () => {
     expect(view.current().audioBlocked).toBe(true);
 
     await act(async () => {
-      view.current().handleSoundPrefToggle("tick");
+      view.current().handleSoundPrefToggle("voiceCountdown");
     });
     expect(pendingUnlocks).toHaveLength(1);
 

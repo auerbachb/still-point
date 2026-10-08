@@ -7,6 +7,8 @@ import {
   unlockAudioContext,
   hasEnabledAudio,
   soundPrefUsesAudio,
+  applyCueMode,
+  type CueMode,
   type SoundPrefs,
 } from "@/lib/audio";
 
@@ -48,7 +50,43 @@ export function useAudioUnlock(resetKey: string) {
     setAudioBlocked(false);
   }, []);
 
+  const setCueMode = useCallback((mode: CueMode) => {
+    const current = soundPrefsRef.current;
+    const next = applyCueMode(current, mode);
+    const changed =
+      next.tick !== current.tick ||
+      next.haptics !== current.haptics ||
+      next.voiceCountdown !== current.voiceCountdown;
+    soundPrefsRef.current = next;
+    setSoundPrefs(next);
+    saveSoundPrefs(next);
+    if (!changed) return;
+
+    const enablingAudio =
+      (next.tick && !current.tick) || (next.voiceCountdown && !current.voiceCountdown);
+    if (!hasEnabledAudio(next)) {
+      audioUnlockRequestRef.current += 1;
+      setAudioBlocked(false);
+      return;
+    }
+    // Switching to haptic, or between cues while chime/end still make sound,
+    // must not cancel an unlock that another audio cue already started.
+    if (!enablingAudio) return;
+
+    const requestId = ++audioUnlockRequestRef.current;
+    void unlockAudioContext().then((unlockResult) => {
+      if (requestId !== audioUnlockRequestRef.current) return;
+      const stillHasEnabledSound = hasEnabledAudio(soundPrefsRef.current);
+      setAudioBlocked(stillHasEnabledSound && unlockResult === "blocked");
+    });
+  }, []);
+
   const handleSoundPrefToggle = useCallback((key: keyof SoundPrefs) => {
+    if (key === "tick" || key === "haptics" || key === "voiceCountdown") {
+      const mode: CueMode = key === "haptics" ? "haptic" : key === "voiceCountdown" ? "voice" : "tick";
+      setCueMode(mode);
+      return;
+    }
     const current = soundPrefsRef.current;
     const next = { ...current, [key]: !current[key] };
     const hasEnabledSound = hasEnabledAudio(next);
@@ -86,7 +124,7 @@ export function useAudioUnlock(resetKey: string) {
       const stillHasEnabledSound = hasEnabledAudio(soundPrefsRef.current);
       setAudioBlocked(stillHasEnabledSound && unlockResult === "blocked");
     });
-  }, []);
+  }, [setCueMode]);
 
   const handleEnableLocalAudio = useCallback(async () => {
     const requestId = ++audioUnlockRequestRef.current;
@@ -107,6 +145,7 @@ export function useAudioUnlock(resetKey: string) {
     handleSoundPlaybackBlocked,
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
+    setCueMode,
     handleEnableLocalAudio,
   };
 }

@@ -341,6 +341,9 @@ export function playCompletion(): boolean {
 
 // --- Sound preferences (localStorage) ---
 
+/** One of tick, haptic, or voice. Chime and completion are not cue modes. */
+export type CueMode = "tick" | "haptic" | "voice";
+
 export type SoundPrefs = {
   tick: boolean;
   chime: boolean;
@@ -359,12 +362,47 @@ export type SoundPrefs = {
 const STORAGE_KEY = "stillpoint_sound_prefs";
 
 const DEFAULTS: SoundPrefs = {
-  tick: false,
+  tick: true,
   chime: true,
   completion: true,
   voiceCountdown: false,
   haptics: false,
 };
+
+/**
+ * The mode implied by the three cue flags.
+ *
+ * Exactly one flag on keeps that mode. More than one prefers tick, then
+ * haptics, then voice. None becomes tick.
+ */
+export function cueModeOf(
+  prefs: Pick<SoundPrefs, "tick" | "haptics" | "voiceCountdown">,
+): CueMode {
+  const count = [prefs.tick, prefs.haptics, prefs.voiceCountdown].filter(Boolean).length;
+  if (count === 1) {
+    if (prefs.haptics) return "haptic";
+    if (prefs.voiceCountdown) return "voice";
+    return "tick";
+  }
+  if (prefs.tick || count === 0) return "tick";
+  if (prefs.haptics) return "haptic";
+  return "voice";
+}
+
+/** Writes exactly one cue flag. Chime and completion are copied through. */
+export function applyCueMode(prefs: SoundPrefs, mode: CueMode): SoundPrefs {
+  return {
+    ...prefs,
+    tick: mode === "tick",
+    haptics: mode === "haptic",
+    voiceCountdown: mode === "voice",
+  };
+}
+
+/** Returns prefs with exactly one of tick, haptics, and voiceCountdown on. */
+export function normalizeCuePrefs(prefs: SoundPrefs): SoundPrefs {
+  return applyCueMode(prefs, cueModeOf(prefs));
+}
 
 /**
  * Which prefs actually play through the audio context.
@@ -408,13 +446,32 @@ export function hasEnabledAudio(prefs: SoundPrefs): boolean {
 }
 
 export function loadSoundPrefs(): SoundPrefs {
-  if (typeof window === "undefined") return DEFAULTS;
+  if (typeof window === "undefined") return normalizeCuePrefs(DEFAULTS);
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (!raw) return normalizeCuePrefs(DEFAULTS);
+    const stored = JSON.parse(raw) as Partial<SoundPrefs>;
+    // Missing cue flags mean off, matching the iOS decoder. Spreading DEFAULTS
+    // here would treat a haptic-only file that omits `tick` as tick-on and
+    // then drop the haptic the sitter actually saved.
+    const decoded: SoundPrefs = {
+      tick: stored.tick ?? false,
+      chime: stored.chime ?? DEFAULTS.chime,
+      completion: stored.completion ?? DEFAULTS.completion,
+      voiceCountdown: stored.voiceCountdown ?? false,
+      haptics: stored.haptics ?? false,
+    };
+    const merged = normalizeCuePrefs(decoded);
+    if (
+      stored.tick !== merged.tick ||
+      stored.haptics !== merged.haptics ||
+      stored.voiceCountdown !== merged.voiceCountdown
+    ) {
+      saveSoundPrefs(merged);
+    }
+    return merged;
   } catch {
-    return DEFAULTS;
+    return normalizeCuePrefs(DEFAULTS);
   }
 }
 

@@ -37,6 +37,7 @@ import {
   type SoundToggleCue,
 } from "@/lib/soundToggleAppearance";
 import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
+import { CueModeControl } from "./CueModeControl";
 
 type MindState = "clear" | "thinking" | "hyperfocus";
 
@@ -177,6 +178,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     handleSoundPlaybackBlocked,
     handleSoundPlaybackResumed,
     handleSoundPrefToggle,
+    setCueMode,
     handleEnableLocalAudio,
   } = useAudioUnlock("solo");
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -1075,19 +1077,15 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
         )}
 
         {/*
-          #668: real pill buttons, not four bare words. On/off is carried by fill,
-          border, and the speaker icon together \u2014 the same three channels iOS uses
-          via `SoundToggleAppearance` \u2014 so the state reads at a glance rather than
-          resting on a shift between two muted greys. `flexWrap` carries the row:
-          five pills (#712 added haptics) no longer fit on one 320px line, so it
-          wraps to a second rather than being clipped by `overflow-x: hidden`.
-          iOS reaches the same end with `ViewThatFits`.
+          Tick, haptic, and voice are one segmented choice. Chime and the end
+          bell stay independent pills.
         */}
         <div
           style={{
             display: "flex",
             justifyContent: "center",
             flexWrap: "wrap",
+            alignItems: "center",
             gap: "6px",
             marginTop: isMobile ? "8px" : "24px",
             ...mono,
@@ -1095,14 +1093,11 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
             letterSpacing: "0.06em",
           }}
         >
+          <CueModeControl prefs={soundPrefs} onChange={setCueMode} testId="session.cueMode" />
           {(
             [
-              ["tick", "tick", "audio"],
               ["chime", "chime", "audio"],
-              ["voiceCountdown", "voice", "audio"],
               ["completion", "end", "audio"],
-              // #712: vibration rather than sound, so it carries its own cue.
-              ["haptics", "haptics", "haptic"],
             ] as const
           ).map(([key, label, cue]) => {
             const isOn = soundPrefs[key];

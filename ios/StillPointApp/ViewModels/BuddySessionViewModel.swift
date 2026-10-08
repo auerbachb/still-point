@@ -201,7 +201,45 @@ final class BuddySessionViewModel {
 
     // MARK: - Sound Preferences (#554)
 
+    func setCueMode(_ mode: CueMode) {
+        let previous = soundPrefs
+        let next = CueModeLogic.applying(mode, to: previous)
+        guard next != previous else { return }
+        soundPrefs = next
+        AudioEngine.savePrefs(soundPrefs)
+
+        if next.haptics && !previous.haptics {
+            prepareHaptics()
+        } else if previous.haptics && !next.haptics {
+            stopCoreHaptics()
+        }
+
+        let effects = CueModeLogic.transitionEffects(from: previous, to: next)
+        if effects.warmUp {
+            AudioEngine.shared.warmUp()
+        }
+        if effects.preloadVoiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        }
+        if effects.resetVoiceDedup {
+            lastVoiceCountdownSec = 0
+        }
+        if effects.cancelVoiceCountdown {
+            AudioEngine.shared.cancelVoiceCountdownPlayback()
+        }
+    }
+
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
+        if let mode = CueModeLogic.mode(
+            forTick: keyPath == \AudioEngine.SoundPrefs.tick,
+            haptics: keyPath == \AudioEngine.SoundPrefs.haptics,
+            voice: keyPath == \AudioEngine.SoundPrefs.voiceCountdown
+        ) {
+            if !soundPrefs[keyPath: keyPath] {
+                setCueMode(mode)
+            }
+            return
+        }
         let toggledKeyWasEnabled = soundPrefs[keyPath: keyPath]
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         // #736: haptics is vibration, not sound. Enabling it must not warm the

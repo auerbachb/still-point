@@ -227,14 +227,20 @@ struct BuddyActiveSessionView: View {
                     .multilineTextAlignment(.center)
             }
 
-            // #554: voice countdown toggle — spoken numbers in the final minute.
-            HStack {
-                Spacer()
-                soundToggle("voice", isOn: vm.soundPrefs.voiceCountdown) {
-                    vm.toggleSound(\.voiceCountdown)
-                }
-                Spacer()
+            // One cue at a time, on this device only. Chime and end stay on the
+            // solo screen; buddy sits share the saved prefs and can switch the
+            // cue here.
+            Picker("Cue", selection: Binding(
+                get: { CueModeLogic.mode(of: vm.soundPrefs) },
+                set: { vm.setCueMode($0) }
+            )) {
+                Text("Tick").tag(CueMode.tick)
+                Text("Haptic").tag(CueMode.haptic)
+                Text("Voice").tag(CueMode.voice)
             }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("buddySession.cueMode")
+            .accessibilityHint("Only you hear or feel this — does not change the sit for others")
 
             Button {
                 showExitConfirm = true
@@ -248,42 +254,6 @@ struct BuddyActiveSessionView: View {
         .background(SPColor.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(SPColor.border1))
-    }
-
-    /// #689: the same pill as `SessionView.soundToggle` (#668). Fill, border, and
-    /// the speaker icon carry on/off. The identifier stays buddy-specific — solo's
-    /// helper returns `session.soundToggle.*`.
-    private func soundToggle(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        let appearance = SoundToggleAppearance.appearance(isOn: isOn)
-        let tapTarget = CGFloat(SoundToggleAppearance.minimumTapTarget)
-
-        return Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: appearance.systemImageName)
-                    .font(.system(size: 12))
-                Text(label)
-                    .font(SPFont.mono(11))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(isOn ? Color(SPColor.fg2) : Color(SPColor.fg4))
-            .padding(.horizontal, SPSpacing.s2)
-            .frame(minWidth: tapTarget, minHeight: tapTarget)
-            .background(appearance.isFilled ? SPColor.surface3 : Color.clear)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(
-                    appearance.hasProminentBorder ? SPColor.border2 : SPColor.border1
-                )
-            )
-            .contentShape(Capsule())
-        }
-        .animation(.easeInOut(duration: 0.2), value: isOn)
-        .accessibilityIdentifier("buddySession.soundToggle.\(label)")
-        .accessibilityLabel(Text("\(SoundToggleAppearance.accessibilityLabel(label: label)), only you hear this"))
-        .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
-        .accessibilityHint("Only you hear this — does not change audio for others")
-        .help("Only you hear this — does not change audio for others")
     }
 
     private var hints: some View {
