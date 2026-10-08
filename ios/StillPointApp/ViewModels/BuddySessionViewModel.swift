@@ -31,6 +31,8 @@ final class BuddySessionViewModel {
     var soundPrefs: AudioEngine.SoundPrefs = AudioEngine.loadPrefs()
     /// Last second announced via voice countdown in the current active session window.
     private var lastVoiceCountdownSec: Int = 0
+    /// Highest elapsed second that already owed a tick, so a second plays once.
+    private var lastTickSec = 0
     /// #736: highest minute block already marked, so a boundary fires once.
     private var lastCompletedMinuteBlockIndex = -1
     /// #736: natural completion has already been announced for this window.
@@ -289,9 +291,11 @@ final class BuddySessionViewModel {
     ///
     /// #736: that same tick is the buddy sit's only timing source. Minute and
     /// end haptics are read from it before the voice-countdown guard, so a
-    /// sitter who turned every sound off still feels the sit.
+    /// sitter who turned every sound off still feels the sit. Tick mode uses
+    /// the same clock: one tick per elapsed second, silent in the other modes.
     func handleVoiceCountdownTick(remaining: Int) {
         emitSharedTimerHaptics(remaining: remaining)
+        emitIntervalTick(remaining: remaining)
         let remainingDouble = Double(remaining)
         guard soundPrefs.voiceCountdown else { return }
 
@@ -411,6 +415,8 @@ final class BuddySessionViewModel {
                 // do not replay, and a window that opens already finished does
                 // not buzz on the next tick.
                 seedHapticClock(elapsedAtSync: elapsedAtSync, durationSeconds: snapshot.durationSeconds)
+                lastTickSec = max(0, elapsedAtSync)
+                prepareActiveCueAudio()
             }
 
             activeAnchor = ActiveAnchor(
@@ -442,6 +448,34 @@ final class BuddySessionViewModel {
         meetingToken = nil
         meetingTokenError = nil
         resetHapticClock()
+    }
+
+    /// Tick and voice need an active audio session before the first cue.
+    /// Haptic mode must not warm the session — that ducks other audio for a
+    /// sound this sit will not make.
+    func prepareActiveCueAudio() {
+        if soundPrefs.tick || soundPrefs.voiceCountdown {
+            AudioEngine.shared.warmUp()
+        }
+        if soundPrefs.voiceCountdown {
+            AudioEngine.shared.preloadVoiceCountdown()
+        }
+    }
+
+    /// One tick per newly reached elapsed second. The completion second
+    /// (`remaining == 0`) does not tick, matching the solo timer. Voice in the
+    /// last minute still advances the clock so those seconds are not replayed
+    /// as ticks if the sitter leaves voice mode.
+    private func emitIntervalTick(remaining: Int) {
+        guard let snapshot, snapshot.state == "active", remaining > 0 else { return }
+        let elapsed = snapshot.durationSeconds - remaining
+        guard soundPrefs.tick, elapsed > lastTickSec else { return }
+        lastTickSec = elapsed
+        let voiceActive = soundPrefs.voiceCountdown
+            && VoiceCountdownLogic.isActive(remaining: Double(remaining))
+        if !voiceActive {
+            AudioEngine.shared.playTick()
+        }
     }
 
     /// #736: minute-marker and natural-completion haptics from the shared timer.
@@ -498,6 +532,7 @@ final class BuddySessionViewModel {
     private func resetHapticClock() {
         lastCompletedMinuteBlockIndex = -1
         sessionEndHapticEmitted = false
+        lastTickSec = 0
     }
 
     private func prepareHaptics() {

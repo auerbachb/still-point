@@ -48,9 +48,7 @@ struct BuddyActiveSessionView: View {
             }
         }
         .onAppear {
-            if vm.soundPrefs.voiceCountdown {
-                AudioEngine.shared.preloadVoiceCountdown()
-            }
+            vm.prepareActiveCueAudio()
         }
         .onDisappear {
             AudioEngine.shared.cancelVoiceCountdownPlayback()
