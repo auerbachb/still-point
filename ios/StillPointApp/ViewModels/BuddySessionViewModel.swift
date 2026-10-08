@@ -462,18 +462,15 @@ final class BuddySessionViewModel {
         }
     }
 
-    /// One tick per newly reached elapsed second. The completion second
-    /// (`remaining == 0`) does not tick, matching the solo timer. Voice in the
-    /// last minute still advances the clock so those seconds are not replayed
-    /// as ticks if the sitter leaves voice mode.
+    /// One tick per newly reached elapsed second. The clock advances in every
+    /// cue mode so switching into tick does not replay the current second.
+    /// The completion second (`remaining == 0`) does not tick, matching solo.
     private func emitIntervalTick(remaining: Int) {
         guard let snapshot, snapshot.state == "active", remaining > 0 else { return }
         let elapsed = snapshot.durationSeconds - remaining
-        guard soundPrefs.tick, elapsed > lastTickSec else { return }
+        guard elapsed > lastTickSec else { return }
         lastTickSec = elapsed
-        let voiceActive = soundPrefs.voiceCountdown
-            && VoiceCountdownLogic.isActive(remaining: Double(remaining))
-        if !voiceActive {
+        if soundPrefs.tick {
             AudioEngine.shared.playTick()
         }
     }
