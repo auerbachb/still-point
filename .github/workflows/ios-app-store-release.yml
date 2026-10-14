@@ -182,7 +182,7 @@ jobs:
         run: xcodegen generate
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1.315.0
+        uses: ruby/setup-ruby@e81a8fa391b11a595c1b7ed84177cc0fe02faf83 # v1.328.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
