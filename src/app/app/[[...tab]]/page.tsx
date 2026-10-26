@@ -6,7 +6,7 @@ import type { CalendarSyncResult, User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
-import { BreathCountView, type BreathSessionResult } from "@/components/BreathCountView";
+import { BreathCountView } from "@/components/BreathCountView";
 import { CompletionScreen } from "@/components/CompletionScreen";
 import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
@@ -15,269 +15,30 @@ import { SettingsView } from "@/components/SettingsView";
 import { FriendsView } from "@/components/FriendsView";
 import { BuddySessionHub } from "@/components/BuddySessionHub";
 import { BuddySessionRoom, type BuddyPersonalRecordPayload } from "@/components/BuddySessionRoom";
+import { AppNav } from "@/components/app/AppNav";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
-import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
-import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
-import { api, ApiError, type Session } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { DEFAULT_TAB, isTab, pathForTab, type Tab } from "@/lib/appTabs";
 import type { SessionType, Track } from "@/lib/constants";
-import { advanceProgression, advanceSecondTrackDay, isDualTrackEligible, sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
-import {
-  creditedLocalIsoDate,
-  GRACE_CUTOFF_HOUR,
-  localIsoDateFrom,
-  type PracticeDaySit,
-} from "@/lib/sessionCalendar";
-import { resetTrackingUnlockOnLogout, syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
+import { isDualTrackEligible } from "@/lib/duration";
+import type { PracticeDaySit } from "@/lib/sessionCalendar";
+import { resetTrackingUnlockOnLogout } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
-import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
 import { resetSessionStateReports } from "@/lib/web-push-client";
 import { clearSuppressDuringSessionPref } from "@/lib/sessionSuppressionPrefs";
+import { NO_RECOVERY, previewNextStandardDuration, recoveryFieldsOf } from "@/lib/userProgression";
+import { useAuthBootstrap } from "@/lib/useAuthBootstrap";
+import { useDualTrackFork } from "@/lib/useDualTrackFork";
+import { useSessionSaveLifecycle } from "@/lib/useSessionSaveLifecycle";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
-
-/** Normalizes `User`'s optional recovery fields (absent on some legacy responses)
- *  into the non-optional shape `@/lib/duration` helpers expect. */
-function recoveryFieldsOf(user: Pick<User, "recoveryTargetDay" | "recoveryCurrentStep" | "recoveryTotalSteps">): RecoveryFields {
-  return {
-    recoveryTargetDay: user.recoveryTargetDay ?? null,
-    recoveryCurrentStep: user.recoveryCurrentStep ?? null,
-    recoveryTotalSteps: user.recoveryTotalSteps ?? null,
-  };
-}
-
-const NO_RECOVERY: RecoveryFields = {
-  recoveryTargetDay: null,
-  recoveryCurrentStep: null,
-  recoveryTotalSteps: null,
-};
-
-/**
- * Planned duration of the *next* standard sit, previewed client-side from the
- * pre-save user state using the same `advanceProgression` / `sessionDurationForUser`
- * the server applies (#238) — so the completion screen's "tomorrow" preview stays
- * correct whether this sit advanced `currentDay` normally, stepped a recovery ramp,
- * or just completed the final recovery step.
- */
-function previewNextStandardDuration(
-  sessionType: SessionType,
-  completed: boolean,
-  track: Track,
-  user: User | null,
-): number {
-  if (!user) return 60;
-  // #240: the second track has its own counter and no recovery ramp, so preview
-  // its next length independently from the primary track's progression.
-  if (track === "second") {
-    const nextSecond = advanceSecondTrackDay(sessionType, completed, user.secondTrackDay ?? 1);
-    return sessionDurationForUser("standard", nextSecond, NO_RECOVERY);
-  }
-  const next = advanceProgression(sessionType, completed, {
-    currentDay: user.currentDay,
-    ...recoveryFieldsOf(user),
-  });
-  return sessionDurationForUser("standard", next.currentDay, next);
-}
-
-// URL-driven tabs. The first path segment of /app/[[...tab]] selects the tab;
-// `/app` (no segment) resolves to the Progress tab.
-type Tab =
-  | "progress"
-  | "history"
-  | "journal"
-  | "board"
-  | "friends"
-  | "settings"
-  | "buddy";
-
-// Tabs that appear in the persistent nav, in display order. `buddy` is reached
-// from the Progress screen rather than the nav, so it is intentionally omitted.
-const NAV_TABS: Tab[] = ["progress", "history", "journal", "board", "friends", "settings"];
-
-const ALL_TABS: Tab[] = [...NAV_TABS, "buddy"];
-
-const DEFAULT_TAB: Tab = "progress";
-
-// Visible nav labels are decoupled from the route slug: the Progress tab keeps
-// its existing "home" label (shorter, so the 6-item mobile nav row stays
-// readable) while living at /app/progress.
-const TAB_LABELS: Record<Tab, string> = {
-  progress: "home",
-  history: "history",
-  journal: "journal",
-  board: "board",
-  friends: "friends",
-  settings: "settings",
-  buddy: "buddy",
-};
-
-// Minimal line icons for the mobile bottom tab bar. Pairing each short label
-// with an icon lets the six tabs sit with clear spacing at 320px instead of
-// colliding as text-only labels did (#473 P1).
-const TAB_ICONS: Record<Tab, React.ReactNode> = {
-  progress: (
-    <>
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M5 9.5V20h14V9.5" />
-    </>
-  ),
-  history: (
-    <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7.5V12l3 2" />
-    </>
-  ),
-  journal: (
-    <>
-      <rect x="5" y="3.5" width="14" height="17" rx="2" />
-      <path d="M9 8h6M9 12h6M9 16h4" />
-    </>
-  ),
-  board: (
-    <>
-      <path d="M6 20v-7M12 20V5M18 20v-9" />
-    </>
-  ),
-  friends: (
-    <>
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3.5 19.5c0-3 2.6-5 5.5-5s5.5 2 5.5 5" />
-      <path d="M16 6.2a3 3 0 0 1 0 5.6" />
-      <path d="M16.5 14.6c2.3.4 4 2.3 4 4.9" />
-    </>
-  ),
-  settings: (
-    <>
-      <path d="M4 7h8M16 7h4M4 17h4M12 17h8" />
-      <circle cx="14" cy="7" r="2.2" />
-      <circle cx="9" cy="17" r="2.2" />
-    </>
-  ),
-  // Reached from the Progress screen, not the nav row; defined to satisfy the
-  // Record<Tab> type.
-  buddy: (
-    <>
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="16" cy="9" r="2.4" />
-      <path d="M3.5 19.5c0-3 2.6-5 5.5-5s5.5 2 5.5 5" />
-    </>
-  ),
-};
-
-function TabIcon({ tab }: { tab: Tab }) {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {TAB_ICONS[tab]}
-    </svg>
-  );
-}
-
-function isTab(value: string | undefined): value is Tab {
-  return value !== undefined && (ALL_TABS as string[]).includes(value);
-}
-
-function pathForTab(tab: Tab): string {
-  return `/app/${tab}`;
-}
 
 // Transient flows that overlay the active tab without changing the URL.
 // "breath" hides nav/header and renders BreathCountView full-screen, matching
 // the iOS breath-counting mode (#376).
 type Overlay = "session" | "breath" | "complete";
-
-type CompletionData = {
-  sessionId: string | null;
-  /** #558: stable local key for offline end-note sync during completion. */
-  clientSessionId: string | null;
-  /** #558: true when the sit is queued locally and awaiting server sync. */
-  isPendingSync: boolean;
-  /** #703: true when the sit reached neither the server nor this device. Never
-   *  true at the same time as `isPendingSync` — that conflation is the bug. */
-  notStored: boolean;
-  dayNumber: number;
-  sessionType: SessionType;
-  /** #240: which daily track this completed sit belonged to. */
-  track: Track;
-  duration: number;
-  bonusSeconds: number;
-  clearPercent: number;
-  thoughtCount: number;
-  thoughts: Array<{ timeInSession: number; text: string }>;
-  /** Planned duration of the *next* standard sit, accounting for recovery-ramp
-   *  advancement (#238) — computed with the same `advanceProgression` /
-   *  `sessionDurationForUser` the server uses, from the pre-save user state. */
-  nextDuration: number;
-};
-
-/** What `SessionView` hands back when a sit ends — completed or abandoned. */
-type CompletedSitInput = {
-  dayNumber: number;
-  sessionType: SessionType;
-  track: Track;
-  duration: number;
-  bonusSeconds: number;
-  completed: boolean;
-  actualTime: number;
-  clearPercent: number;
-  thoughtCount: number;
-  mindStateLog: Array<{ time: number; state: string }>;
-  thoughts: Array<{ timeInSession: number; text: string }>;
-};
-
-function practiceDaySit(session: Pick<Session, "completed" | "sessionType" | "sessionDate" | "track">): PracticeDaySit {
-  return {
-    completed: session.completed,
-    sessionType: session.sessionType,
-    sessionDate: session.sessionDate,
-    track: session.track,
-  };
-}
-
-/**
- * Practice day to stamp and to send as `/api/auth/me?date=`.
- * With no session list yet, the hours before 6:00 stay on yesterday so a
- * failed read cannot start missed-day recovery for a day still open.
- */
-function sameStandardSit(a: PracticeDaySit, b: PracticeDaySit): boolean {
-  return !!a.completed && a.sessionType === "standard"
-    && !!b.completed && b.sessionType === "standard"
-    && a.sessionDate === b.sessionDate
-    && (a.track === "second") === (b.track === "second");
-}
-
-/** Keep a queued standard sit that the server list does not have yet. */
-function mergeRememberedSits(server: PracticeDaySit[], remembered: PracticeDaySit[]): PracticeDaySit[] {
-  const merged = [...server];
-  for (const sit of remembered) {
-    if (!sit.completed || sit.sessionType !== "standard") continue;
-    if (merged.some((row) => sameStandardSit(row, sit))) continue;
-    merged.push(sit);
-  }
-  return merged;
-}
-
-function creditedPracticeDate(
-  sits: PracticeDaySit[] | null,
-  dualTrackEnabled: boolean,
-  now = new Date(),
-): string {
-  if (sits == null) {
-    if (now.getHours() < GRACE_CUTOFF_HOUR) return localIsoDateFrom(now, -1);
-    return localIsoDateFrom(now, 0);
-  }
-  return creditedLocalIsoDate(sits, dualTrackEnabled, now);
-}
 
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
   const item = sync?.[0];
@@ -293,21 +54,10 @@ export default function StillPoint() {
   const rawTab = Array.isArray(params.tab) ? params.tab[0] : undefined;
   const tab: Tab = isTab(rawTab) ? rawTab : DEFAULT_TAB;
 
-  const [user, setUser] = useState<User | null>(null);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authRetryKey, setAuthRetryKey] = useState(0);
-  const [completionData, setCompletionData] = useState<CompletionData | null>(null);
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
-  // #240: which track the in-progress standard sit belongs to, per-track completion
-  // status for today, and whether the fork prompt was dismissed this session.
+  // #240: which track the in-progress standard sit belongs to.
   const [activeTrack, setActiveTrack] = useState<Track>("primary");
-  const [tracksDoneToday, setTracksDoneToday] = useState<{ primary: boolean; second: boolean }>({
-    primary: false,
-    second: false,
-  });
-  const [forkDismissed, setForkDismissed] = useState(false);
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
@@ -317,58 +67,70 @@ export default function StillPoint() {
   // or a *different* sign-in — happened in the meantime. A plain "cancelled"
   // boolean is not enough here: it resets on the next login, so a callback from
   // the previous session could still land and be adopted as the new one.
-  // Without this the cache effect below would not merely repopulate React state
-  // after a logout, it would persist the signed-out account as the offline
-  // identity, surviving a reload.
+  // Without this the cache effect in `useAuthBootstrap` would not merely
+  // repopulate React state after a logout, it would persist the signed-out
+  // account as the offline identity, surviving a reload. Shared with every hook
+  // below that adopts state after an await.
   const sessionGeneration = useRef(0);
   // Sits used to decide whether yesterday is still open. Null until a fetch lands.
   const loadedSitsRef = useRef<PracticeDaySit[] | null>(null);
-  const userRef = useRef(user);
-  userRef.current = user;
   const isMobile = useIsMobile();
-  // #666: running the app from the locally cached identity because the server
-  // could not be reached. Only a *successful* `/api/auth/me` clears it, mirroring
-  // the iOS `isOfflineMode` — `navigator.onLine` reports link state, not
-  // reachability, so it prompts a re-check and never concludes one.
-  const [runningFromCache, setRunningFromCache] = useState(false);
-  // #703: a local queue write has failed on this device and has not since
-  // succeeded. Withdraws the offline strip's "sits are saved and upload when you
-  // reconnect" promise, which is false for as long as storage refuses writes. A
-  // later successful save clears it — that is the proof storage works again.
-  const [localWriteFailed, setLocalWriteFailed] = useState(false);
-  // #703: the last sit handed to the queue, kept so the completion screen can
-  // retry the same one under the same client id — and on the same calendar day.
-  // `sessionDate` is pinned here rather than recomputed inside the save, because
-  // a sit that failed to store before midnight and is retried after it would
-  // otherwise land on the following day, crediting the wrong day's progression.
-  // The #557 idempotency key makes a retry the *same* sit; the date has to agree.
-  const lastCompletedSitRef = useRef<
-    { data: CompletedSitInput; clientSessionId: string; sessionDate: string } | null
-  >(null);
   const isOnline = useOnlineStatus();
 
-  // #703: every path that writes a sit to the local queue reports here, so the
-  // offline strip's promise tracks whether local storage is actually working.
-  //
-  // `generation` is the #666 guard, and it belongs here rather than at the four
-  // call sites: every one of them reports *after* an await, so a sign-out (or a
-  // sign-in) that lands mid-save would otherwise let the previous account's
-  // failure re-raise the strip for whoever is looking at the screen now —
-  // straight past the `setLocalWriteFailed(false)` in
-  // `clearAccountScopedLocalState`, which by then has already run. Callers
-  // capture the generation before their await and hand it back with the result.
-  const noteQueueWriteOutcome = useCallback((stored: boolean, generation: number) => {
-    if (generation !== sessionGeneration.current) return;
-    setLocalWriteFailed(!stored);
-  }, []);
+  const {
+    user,
+    setUser,
+    userRef,
+    authChecked,
+    authError,
+    runningFromCache,
+    refreshUserFromServer,
+    retryAuth,
+    signIn,
+    signOut,
+  } = useAuthBootstrap({
+    sessionGeneration,
+    loadedSitsRef,
+    isOnline,
+    // Declared below, because it clears state owned by the hooks that follow.
+    // The auth hook only calls it from a sign-out, never while rendering.
+    onAccountTeardown: () => clearAccountScopedLocalState(),
+  });
+
+  const {
+    tracksDoneToday,
+    forkDismissed,
+    setForkDismissed,
+    refreshTodayTracks,
+    handleEnableDualTrack,
+    resetForAccount: resetDualTrackFork,
+  } = useDualTrackFork({ sessionGeneration, loadedSitsRef, user, userRef, authChecked, setUser });
+
+  const {
+    completionData,
+    setCompletionData,
+    localWriteFailed,
+    clearLocalWriteFailed,
+    handleSessionComplete,
+    handleRetryCompletionSave,
+    handleSessionAbandon,
+    handleBreathEnd,
+  } = useSessionSaveLifecycle({
+    sessionGeneration,
+    loadedSitsRef,
+    user,
+    userRef,
+    refreshUserFromServer,
+    refreshTodayTracks,
+    setOverlay,
+  });
 
   const clearAccountScopedLocalState = () => {
-    setTracksDoneToday({ primary: false, second: false });
-    setForkDismissed(false);
+    resetDualTrackFork();
     // #703: the not-stored warning is about one account's sit. Left set, the
     // next user to go offline on this device sees a red strip for a failure
     // that was never theirs. Mirrored by `AppViewModel.didLogout` on iOS.
-    setLocalWriteFailed(false);
+    clearLocalWriteFailed();
     resetTrackingUnlockOnLogout();
     // #709: the suppression mirror is one localStorage key for the whole browser,
     // so leaving it set hands this account's "During sessions: off" to whoever
@@ -383,190 +145,6 @@ export default function StillPoint() {
     // survive the second of them and drain under the next account's cookie.
     resetSessionStateReports();
   };
-
-  // #666: re-read the user from the server after an action that moves account
-  // state (a completed sit advancing the day number, say). The result is dropped
-  // if the session changed while the request was in flight — see
-  // `sessionGeneration`. One helper rather than three copies of the guard, so a
-  // future call site cannot adopt a user without it.
-  const refreshUserFromServer = useCallback(() => {
-    const generation = sessionGeneration.current;
-    const now = new Date();
-    const date = creditedPracticeDate(
-      loadedSitsRef.current,
-      !!userRef.current?.dualTrackEnabled,
-      now,
-    );
-    void api
-      .me(date)
-      .then(({ user: u }) => {
-        if (generation === sessionGeneration.current) setUser(u);
-      })
-      .catch(() => {});
-  }, []);
-
-  // #666: the single place a server-confirmed user reaches the local copy that
-  // survives a reload with no network — the web analogue of the iOS
-  // `applyAuthenticatedUser`. An effect rather than a call at each `setUser`
-  // site, so every adoption path (bootstrap, sign-in, settings PATCH, buddy
-  // completion) keeps the cache tracking the account without a call site being
-  // able to forget. Sign-out paths set `user` to null and clear the cache
-  // explicitly; every *asynchronous* adoption is gated on `sessionGeneration`
-  // above, so a response still in flight when the user signs out cannot reach
-  // this effect and resurrect a signed-out identity.
-  useEffect(() => {
-    if (user) saveCachedUser(user);
-  }, [user]);
-
-  useEffect(() => {
-    let cancelled = false;
-    // The reconnect path re-runs this effect on a live, signed-in screen, so a
-    // sign-out can land between the request and its response (#666).
-    const generation = sessionGeneration.current;
-
-    /** Apply a failed `me()` through the shared offline-auth decision (#666). */
-    function applyFailure(failure: MeFailure) {
-      // Guarded here rather than at each call site so the *destructive* branch
-      // cannot outlive its session: a 401/403/404 from a bootstrap that was
-      // still in flight across a sign-out would otherwise sign out — and clear
-      // the cached identity of — whichever account replaced it.
-      if (cancelled || generation !== sessionGeneration.current) return;
-      const cachedUser = loadCachedUser();
-      const outcome = resolveAuthBootstrap(failure, cachedUser !== null);
-
-      // Matching on the pair keeps the cached user's presence and the outcome
-      // from drifting apart: without an identity to render there is nothing to
-      // fall back to, whatever the outcome says.
-      if (outcome.action === "offline" && cachedUser) {
-        setUser(cachedUser);
-        setRunningFromCache(true);
-        setAuthError(null);
-        setAuthChecked(true);
-        return;
-      }
-
-      setRunningFromCache(false);
-
-      if (outcome.action === "signedOut") {
-        loadedSitsRef.current = null;
-        setUser(null);
-        // Teardown is gated on the one shared predicate — asked once, through
-        // the cached-identity store, whose answer then gates the rest (the iOS
-        // `clearIfAuthoritative` shape). Not on "the request failed", which is
-        // the bug #665/#666 exist to remove.
-        if (clearCachedUserIfAuthoritative(outcome.cause)) {
-          clearAccountScopedLocalState();
-        }
-        setAuthError(null);
-        setAuthChecked(true);
-        return;
-      }
-
-      // `unavailable`: no trustworthy answer and nothing cached to render.
-      // Deliberately keeps every piece of local state, cache included.
-      setAuthError(authErrorMessageFor(outcome.cause));
-      setAuthChecked(true);
-    }
-
-    async function checkAuth() {
-      try {
-        const now = new Date();
-        if (now.getHours() < GRACE_CUTOFF_HOUR && loadedSitsRef.current == null) {
-          try {
-            const { sessions } = await api.getSessions();
-            if (cancelled || generation !== sessionGeneration.current) return;
-            loadedSitsRef.current = sessions.map(practiceDaySit);
-          } catch {
-            // Leave the cache empty. `creditedPracticeDate` keeps yesterday
-            // open before 6:00 so this miss cannot start recovery early.
-          }
-        }
-        if (cancelled || generation !== sessionGeneration.current) return;
-        // Dual-track is not known yet. Assume it is on so a finished primary
-        // sit does not close a two-a-day schedule; refine after the user lands.
-        const date = creditedPracticeDate(loadedSitsRef.current, true, now);
-        const res = await fetch(`/api/auth/me?date=${encodeURIComponent(date)}`);
-        if (cancelled) return;
-
-        if (res.ok) {
-          const data = await res.json();
-          // Re-checked after the second await: an unmount between the response
-          // and its body must not adopt a user or write the cache.
-          if (cancelled || generation !== sessionGeneration.current) return;
-          let freshUser = data?.user ?? null;
-          if (freshUser && loadedSitsRef.current) {
-            const precise = creditedPracticeDate(
-              loadedSitsRef.current,
-              !!freshUser.dualTrackEnabled,
-              now,
-            );
-            if (precise !== date) {
-              const again = await fetch(`/api/auth/me?date=${encodeURIComponent(precise)}`);
-              if (cancelled || generation !== sessionGeneration.current) return;
-              if (again.ok) {
-                const againData = await again.json();
-                if (cancelled || generation !== sessionGeneration.current) return;
-                if (againData?.user) freshUser = againData.user;
-              }
-            }
-          }
-          if (freshUser) {
-            setUser(freshUser);
-            setRunningFromCache(false);
-            setAuthError(null);
-            setAuthChecked(true);
-            return;
-          }
-          // A 2xx with no user is the server authoritatively reporting no
-          // account — the same cause as a 404 from this route.
-          applyFailure({ kind: "status", status: 404 });
-          return;
-        }
-
-        applyFailure({ kind: "status", status: res.status });
-      } catch {
-        applyFailure({ kind: "transport" });
-      }
-    }
-
-    checkAuth();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authRetryKey]);
-
-  // #666: coming back online, re-run the bootstrap so the on-screen state
-  // refreshes from the server and the offline indicator clears on its own. Only
-  // while actually running from cache — a normal online session must not re-auth
-  // every time a flaky radio flaps. Queued sits are flushed by the existing
-  // `initWebPwaOffline` "online" listener; nothing is duplicated here.
-  useEffect(() => {
-    if (!isOnline || !runningFromCache) return;
-    setAuthRetryKey((prev) => prev + 1);
-  }, [isOnline, runningFromCache]);
-
-  // #666: `navigator.onLine` reports link state, not reachability, so the
-  // transition above never fires for the failures that leave it pinned at
-  // true — a captive portal, a DNS failure, a 5xx. Those sessions would hold the
-  // offline strip until a manual reload. Re-checking when the user returns to
-  // the tab covers them without polling: it is user-driven so it cannot spin,
-  // and coming back to the app is exactly when a stale day number would show.
-  // Only while running from cache, for the same reason as above. A double fire
-  // (visibility *and* focus) is harmless — the bootstrap effect's cleanup
-  // cancels the superseded request.
-  useEffect(() => {
-    if (!runningFromCache) return;
-    const recheck = () => {
-      if (document.visibilityState === "visible") setAuthRetryKey((prev) => prev + 1);
-    };
-    document.addEventListener("visibilitychange", recheck);
-    window.addEventListener("focus", recheck);
-    return () => {
-      document.removeEventListener("visibilitychange", recheck);
-      window.removeEventListener("focus", recheck);
-    };
-  }, [runningFromCache]);
 
   // Redirect legacy `?view=` deep links and unknown tab slugs to their routes.
   useEffect(() => {
@@ -680,43 +258,17 @@ export default function StillPoint() {
   const handleLogin = (userData: User) => {
     // Intentionally do not navigate: keep the current URL so deep-link state
     // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
-    // buddy-invite / ?view= effects below can still consume it.
-    sessionGeneration.current += 1;
-    const generation = sessionGeneration.current;
-    setUser(userData);
+    // buddy-invite / ?view= effects above can still consume it.
+    signIn(userData);
     setOverlay(null);
-    // #238: login returns raw DB fields; missed-day gap detection only runs in
-    // GET /api/auth/me. Re-fetch silently so a returning user with a 2+ day gap
-    // enters the recovery ramp before their first sit of this session.
-    // Guard on the session generation so a slow response can't repopulate user
-    // state after an explicit logout before the /api/auth/me response arrives.
-    const now = new Date();
-    const date = creditedPracticeDate(loadedSitsRef.current, true, now);
-    void fetch(`/api/auth/me?date=${encodeURIComponent(date)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (generation === sessionGeneration.current && data?.user) setUser(data.user);
-      })
-      .catch(() => {});
   };
 
   const handleLogout = () => {
-    // Invalidates every user adoption already in flight (#666).
-    sessionGeneration.current += 1;
-    loadedSitsRef.current = null;
+    signOut();
     buddyInviteInFlight.current = false;
     setBuddySessionId(null);
     setBuddyCalendarMessage(null);
     setOverlay(null);
-    setUser(null);
-    setRunningFromCache(false);
-    clearAccountScopedLocalState();
-    // #666: an explicit sign-out is the most authoritative signal there is, so
-    // the local identity goes with it — including while offline.
-    clearCachedUser();
-    void getWebSessionSyncCoordinator().clearQueue().catch((error) => {
-      console.error("Failed to clear offline session queue on logout:", error);
-    });
   };
 
   const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
@@ -724,60 +276,6 @@ export default function StillPoint() {
     setActiveTrack(track);
     setOverlay("session");
   };
-
-  // #240: derive per-track "completed a standard sit today" from the session list,
-  // to drive HomeView's completion badges. A missing `track` (pre-#240 row) counts
-  // as the primary track.
-  const refreshTodayTracks = useCallback(async () => {
-    const generation = sessionGeneration.current;
-    const remembered = loadedSitsRef.current ?? [];
-    try {
-      const { sessions } = await api.getSessions();
-      if (generation !== sessionGeneration.current) return;
-      const sits = mergeRememberedSits(sessions.map(practiceDaySit), remembered);
-      loadedSitsRef.current = sits;
-      const today = creditedLocalIsoDate(sits, !!userRef.current?.dualTrackEnabled);
-      let primary = false;
-      let second = false;
-      for (const s of sits) {
-        if (s.completed && s.sessionType === "standard" && s.sessionDate === today) {
-          if (s.track === "second") second = true;
-          else primary = true;
-        }
-      }
-      syncTrackingUnlockFromSessions(sessions);
-      setTracksDoneToday({ primary, second });
-    } catch {
-      // Fail closed so a failed refresh can't leave a stale "done today"
-      // badge on screen (e.g. after switching accounts).
-      setTracksDoneToday({ primary: false, second: false });
-    }
-  }, []);
-
-  const handleEnableDualTrack = useCallback(async () => {
-    const generation = sessionGeneration.current;
-    const { user: updated } = await api.enableDualTrack();
-    if (generation !== sessionGeneration.current) return;
-    // Merged rather than replaced. Every other `setUser` on this page merges
-    // per-field; replacing wholesale silently nulls any column this route's
-    // projection happens to omit (today, `ambientSoundEnabled`). That is the
-    // same failure #664 hit on iOS, where the whole-response adoption is
-    // structural — here it is one call site, so merge and it cannot happen.
-    //
-    // A null `prev` stays null rather than being installed. The generation guard
-    // above catches an explicit logout, which bumps `sessionGeneration` — but the
-    // auth check's `signedOut` outcome clears `user` without bumping it, and
-    // installing this partial response there would resurrect an identity the app
-    // has already signed out, missing whatever the projection omits.
-    setUser((prev) => (prev ? { ...prev, ...updated } : prev));
-    void refreshTodayTracks();
-  }, [refreshTodayTracks]);
-
-  // #240: load per-track completion badges once a user is present.
-  useEffect(() => {
-    if (!user || !authChecked) return;
-    void refreshTodayTracks();
-  }, [user?.id, authChecked, refreshTodayTracks]);
 
   const handleBuddyExit = useCallback(() => {
     setBuddySessionId(null);
@@ -810,278 +308,7 @@ export default function StillPoint() {
     setOverlay("complete");
     refreshUserFromServer();
     void refreshTodayTracks();
-  }, [user, refreshTodayTracks, refreshUserFromServer]);
-
-  // #703: the one save path for a finished sit, so the completion screen and its
-  // retry button can never disagree about what happened to it. A refused local
-  // write resolves to `notStored` rather than the `isPendingSync` this used to
-  // claim; a sync error thrown *after* the entry is durable stays `pending` —
-  // see `resolveSessionSaveOutcome` for which rejection means which.
-  const saveCompletedSit = useCallback(async (
-    data: CompletedSitInput,
-    clientSessionId: string,
-    ownerUserId: string,
-    sessionDate: string,
-  ): Promise<SessionSaveOutcome> => {
-    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
-    const generation = sessionGeneration.current;
-    let outcome: SessionSaveOutcome;
-    try {
-      const result = await getWebSessionSyncCoordinator().saveCompletedSession(
-        {
-          dayNumber: data.dayNumber,
-          sessionType: data.sessionType,
-          track: data.track,
-          duration: data.duration,
-          bonusSeconds: data.bonusSeconds,
-          completed: data.completed,
-          actualTime: data.actualTime,
-          clearPercent: data.clearPercent,
-          thoughtCount: data.thoughtCount,
-          mindStateLog: data.mindStateLog,
-          // Pinned by the caller when the sit ended, not recomputed here — a
-          // retry that crosses midnight must still be the same day's sit.
-          sessionDate,
-        },
-        clientSessionId,
-        ownerUserId,
-        data.thoughts,
-      );
-      outcome = resolveSessionSaveOutcome({ status: "fulfilled", value: result }, clientSessionId);
-    } catch (error) {
-      console.error("Failed to save session:", error);
-      outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
-    }
-
-    noteQueueWriteOutcome(isSessionStored(outcome), generation);
-
-    // Unchanged for the two states that existed before: a synced standard sit
-    // re-reads the user, a pending one refreshes the track badges. A sit that was
-    // not stored moved nothing, so neither runs.
-    if (data.completed && data.sessionType === "standard") {
-      if (outcome.status === "synced") {
-        refreshUserFromServer();
-        void refreshTodayTracks();
-      } else if (outcome.status === "pending") {
-        void refreshTodayTracks();
-      }
-    }
-
-    return outcome;
-  }, [noteQueueWriteOutcome, refreshTodayTracks, refreshUserFromServer]);
-
-  // #703 — cross-client note on the completion view. iOS never renders one for a
-  // sit it could not store: `SessionViewModel.saveSession` returns nil when the
-  // local write throws, and `SessionView.handleCompletion` puts up the "Session
-  // could not be saved" alert (Retry / Continue without saving) instead of
-  // calling `completeSession`. Web has no equivalent interception point — the
-  // completion overlay *is* the screen — so it delivers the same two facts
-  // inside it: the sit was not stored, and Retry. The offline strip's withdrawn
-  // promise is mirrored on both clients (shared `OfflineIndicatorCopy` +
-  // `AppViewModel.localSaveFailed`), because iOS's "Continue without saving"
-  // leaves the user looking at the same false reassurance this ticket is about.
-  const handleSessionComplete = useCallback(async (data: CompletedSitInput) => {
-    const clientSessionId = crypto.randomUUID();
-    // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
-    // A retry that crosses 6:00 still keeps this credited day.
-    const sessionDate = creditedPracticeDate(
-      loadedSitsRef.current,
-      !!userRef.current?.dualTrackEnabled,
-    );
-    let outcome: SessionSaveOutcome | null = null;
-
-    // #666 guard: the save below is a suspension point, and sign-out during it
-    // must not let the previous account's sit reopen the completion screen over
-    // the signed-out UI.
-    const generation = sessionGeneration.current;
-
-    if (user?.id) {
-      // Kept for the completion screen's retry, which must reuse this exact
-      // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
-      lastCompletedSitRef.current = { data, clientSessionId, sessionDate };
-      outcome = await saveCompletedSit(data, clientSessionId, user.id, sessionDate);
-    } else {
-      lastCompletedSitRef.current = null;
-    }
-
-    if (generation !== sessionGeneration.current) return;
-
-    // A pending sit is not on the server yet, so the refresh inside the save
-    // cannot see it. Remember it so the next sit in this grace window knows
-    // yesterday's required sits.
-    if (
-      data.completed
-      && data.sessionType === "standard"
-      && outcome
-      && outcome.status !== "notStored"
-    ) {
-      const sits = loadedSitsRef.current ?? [];
-      const counted = sits.some((sit) =>
-        sit.completed
-        && sit.sessionType === "standard"
-        && sit.sessionDate === sessionDate
-        && (data.track === "second" ? sit.track === "second" : sit.track !== "second"),
-      );
-      if (!counted) {
-        loadedSitsRef.current = [
-          ...sits,
-          { completed: true, sessionType: "standard", sessionDate, track: data.track },
-        ];
-      }
-    }
-
-    setCompletionData({
-      sessionId: outcome?.sessionId ?? null,
-      clientSessionId,
-      isPendingSync: outcome?.status === "pending",
-      notStored: outcome?.status === "notStored",
-      dayNumber: data.dayNumber,
-      sessionType: data.sessionType,
-      track: data.track,
-      duration: data.duration,
-      bonusSeconds: data.bonusSeconds,
-      clearPercent: data.clearPercent,
-      thoughtCount: data.thoughtCount,
-      thoughts: data.thoughts,
-      nextDuration: previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
-    });
-    setOverlay("complete");
-  }, [user, saveCompletedSit]);
-
-  // #703: retry the local save without leaving the completion screen — the web
-  // counterpart of the iOS "Session could not be saved" alert's Retry button.
-  // Rejects while the sit is still nowhere, which is what puts the banner's
-  // button back into its retry state.
-  const handleRetryCompletionSave = useCallback(async () => {
-    const pending = lastCompletedSitRef.current;
-    if (!pending || !user?.id) {
-      throw new Error("Failed to save session");
-    }
-
-    const outcome = await saveCompletedSit(
-      pending.data,
-      pending.clientSessionId,
-      user.id,
-      pending.sessionDate,
-    );
-    if (outcome.status === "notStored") {
-      throw new Error("Failed to save session");
-    }
-
-    setCompletionData((previous) => (
-      previous && previous.clientSessionId === pending.clientSessionId
-        ? {
-          ...previous,
-          sessionId: outcome.sessionId,
-          isPendingSync: outcome.status === "pending",
-          notStored: false,
-        }
-        : previous
-    ));
-  }, [user, saveCompletedSit]);
-
-  const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
-    if (user?.id) {
-      const clientSessionId = crypto.randomUUID();
-      // Captured before the save below suspends — see `noteQueueWriteOutcome`.
-      const generation = sessionGeneration.current;
-      try {
-        await getWebSessionSyncCoordinator().saveCompletedSession(
-          {
-            dayNumber: data.dayNumber,
-            sessionType: data.sessionType,
-            track: data.track,
-            duration: data.duration,
-            bonusSeconds: data.bonusSeconds,
-            completed: false,
-            actualTime: data.actualTime,
-            clearPercent: data.clearPercent,
-            thoughtCount: data.thoughtCount,
-            mindStateLog: data.mindStateLog,
-            sessionDate: creditedPracticeDate(
-              loadedSitsRef.current,
-              !!userRef.current?.dualTrackEnabled,
-            ),
-          },
-          clientSessionId,
-          user.id,
-          data.thoughts,
-        );
-        noteQueueWriteOutcome(true, generation);
-      } catch (error) {
-        console.error("Failed to save abandoned session:", error);
-        // #703: an abandoned sit is still a sit the queue was asked to keep. It
-        // gets no completion screen, so the offline strip is the only place this
-        // can be said at all — and it goes through the same classifier as a
-        // completed sit, so a sync error thrown after a durable write does not
-        // withdraw a promise the queue is keeping.
-        noteQueueWriteOutcome(isSessionStored(
-          resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
-        ), generation);
-      }
-    }
-
-    setOverlay(null);
-  }, [user, noteQueueWriteOutcome]);
-
-  // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
-  // (#374). Empty sessions (entered then ended with no taps) are not logged.
-  // Breath sits do not advance the daily progression, and there is no
-  // completion screen — End returns straight to the Progress tab.
-  const breathSavingRef = useRef(false);
-  const handleBreathEnd = useCallback(async (result: BreathSessionResult) => {
-    // A session is empty only when no tap was ever recorded. Using tapCount
-    // (not the derived elapsedSeconds/breathCount) avoids dropping a real
-    // session where End was pressed within the first second of the first tap,
-    // which produces elapsedSeconds=0 and breathCount=0 but tapCount>0.
-    if (result.tapCount <= 0) {
-      setOverlay(null);
-      return;
-    }
-    if (breathSavingRef.current) return;
-    breathSavingRef.current = true;
-    const clientSessionId = crypto.randomUUID();
-    // Captured before the save below suspends — see `noteQueueWriteOutcome`.
-    const generation = sessionGeneration.current;
-    try {
-      if (user?.id) {
-        await getWebSessionSyncCoordinator().saveCompletedSession(
-          {
-            dayNumber: user.currentDay ?? 1,
-            sessionType: "breath",
-            duration: Math.max(result.elapsedSeconds, 1),
-            bonusSeconds: 0,
-            completed: true,
-            actualTime: result.elapsedSeconds,
-            clearPercent: 0,
-            thoughtCount: 0,
-            breathCount: result.breathCount,
-            mindStateLog: [],
-            sessionDate: creditedPracticeDate(
-              loadedSitsRef.current,
-              !!userRef.current?.dualTrackEnabled,
-            ),
-          },
-          clientSessionId,
-          user.id,
-          [],
-        );
-        noteQueueWriteOutcome(true, generation);
-      }
-    } catch (error) {
-      console.error("Failed to save breath session:", error);
-      // #703: same as the abandon path — a breath sit has no completion screen,
-      // so the offline strip carries the news that it was not stored, and it
-      // uses the same classifier so a sync error raised after a durable write
-      // is not mistaken for one.
-      noteQueueWriteOutcome(isSessionStored(
-        resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId),
-      ), generation);
-    } finally {
-      breathSavingRef.current = false;
-      setOverlay(null);
-    }
-  }, [user, noteQueueWriteOutcome]);
+  }, [user, setCompletionData, refreshTodayTracks, refreshUserFromServer]);
 
   const inBuddyRoom = tab === "buddy" && !!buddySessionId;
   const isImmersive = overlay === "session" || overlay === "breath" || inBuddyRoom;
@@ -1123,11 +350,7 @@ export default function StillPoint() {
         </p>
         <button
           type="button"
-          onClick={() => {
-            setAuthChecked(false);
-            setAuthError(null);
-            setAuthRetryKey((prev) => prev + 1);
-          }}
+          onClick={retryAuth}
           style={{
             border: "1px solid var(--border-2)",
             background: "transparent",
@@ -1232,59 +455,7 @@ export default function StillPoint() {
     }}>
       {/* Nav */}
       {!isImmersive && (
-        <div style={isMobile ? {
-          position: "fixed", bottom: 0, left: 0, right: 0,
-          display: "flex", justifyContent: "space-around",
-          background: "rgba(var(--bg-rgb), 0.92)", backdropFilter: "blur(10px)",
-          borderTop: "1px solid var(--border-1)",
-          padding: "10px 6px env(safe-area-inset-bottom, 8px)",
-          zIndex: 100,
-        } : {
-          position: "fixed", top: "var(--s4)", right: "var(--s4)",
-          display: "flex", gap: "var(--s3)",
-          zIndex: 100,
-        }}>
-          {NAV_TABS.map(t => {
-            const active = !overlay && tab === t;
-            return (
-            <button
-              type="button"
-              key={t}
-              aria-label={TAB_LABELS[t]}
-              aria-current={active ? "page" : undefined}
-              onClick={() => goToTab(t)}
-              style={{
-                background: "none", border: "none",
-                color: active ? "var(--fg)" : "var(--fg-2)",
-                fontFamily: "var(--font-mono)",
-                fontSize: isMobile ? "9px" : "11px",
-                letterSpacing: isMobile ? "0.02em" : "0.1em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-                padding: isMobile ? "6px 2px 8px" : "8px",
-                minWidth: isMobile ? "44px" : undefined,
-                minHeight: isMobile ? "44px" : undefined,
-                lineHeight: 1.2,
-                display: "inline-flex",
-                flexDirection: isMobile ? "column" : "row",
-                alignItems: "center", justifyContent: "center",
-                gap: isMobile ? "3px" : undefined,
-                transition: "color 0.3s",
-                position: "relative",
-              }}
-            >
-              {isMobile && <TabIcon tab={t} />}
-              <span>{TAB_LABELS[t]}</span>
-              {active && isMobile && (
-                <span style={{
-                  position: "absolute", bottom: "2px", left: "50%", transform: "translateX(-50%)",
-                  width: "16px", height: "2px", borderRadius: "1px",
-                  background: "var(--fg)",
-                }} />
-              )}
-            </button>
-          );})}
-        </div>
+        <AppNav activeTab={overlay ? null : tab} isMobile={isMobile} onSelectTab={goToTab} />
       )}
 
       {/* Welcome header — hidden during the completion overlay on mobile to
