@@ -26,6 +26,10 @@ struct CompletionView: View {
     @State private var endNote = ""
     @State private var noteSaved = false
     @State private var lastSavedNote = ""
+    /// #792: a note write that failed or was cancelled may still have landed,
+    /// so until the next one succeeds `lastSavedNote` is a guess and every
+    /// write is sent.
+    @State private var noteUnsure = false
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var noteAutosaveTask: Task<Void, Never>?
@@ -54,6 +58,9 @@ struct CompletionView: View {
     @State private var lastSavedMoodKey = ""
     /// #792: the rows the server holds, so deselecting them clears them there.
     @State private var persistedMood: [String: MoodMatrixEntry] = [:]
+    /// #792: as `noteUnsure`, for mood. While set, `persistedMood` also holds
+    /// the rows of the write that failed, so a later patch still empties them.
+    @State private var moodUnsure = false
     @State private var isSavingMoodMatrix = false
     @State private var moodMatrixSaveError: String?
 
@@ -721,7 +728,7 @@ struct CompletionView: View {
     private func saveMoodMatrix() async {
         guard let detailSessionId, !isSavingMoodMatrix else { return }
         let key = moodSaveKey
-        guard key != lastSavedMoodKey else {
+        guard moodUnsure || key != lastSavedMoodKey else {
             moodMatrixSaved = !key.isEmpty
             moodMatrixSaveError = nil
             return
@@ -737,16 +744,27 @@ struct CompletionView: View {
             isSavingMoodMatrix = false
             lastSavedMoodKey = key
             persistedMood = desired
+            moodUnsure = false
             moodMatrixSaved = !patch.clearsMatrix
         } catch is CancellationError {
             isSavingMoodMatrix = false
+            markMoodUnsure(attempted: desired)
         } catch let error as APIError {
             isSavingMoodMatrix = false
+            markMoodUnsure(attempted: desired)
             moodMatrixSaveError = moodMatrixErrorMessage(for: error.status)
         } catch {
             isSavingMoodMatrix = false
+            markMoodUnsure(attempted: desired)
             moodMatrixSaveError = "Unable to save mood — please try again"
         }
+    }
+
+    /// #792: the failed write may have stored `attempted`, so count its rows as
+    /// stored and send the next write whatever it holds.
+    private func markMoodUnsure(attempted: [String: MoodMatrixEntry]) {
+        persistedMood.merge(attempted) { _, attemptedRow in attemptedRow }
+        moodUnsure = true
     }
 
     private var moodSaveKey: String {
@@ -850,7 +868,7 @@ struct CompletionView: View {
     private func saveEndNote() async {
         let noteToSave = trimmedEndNote
         guard !sessionId.isEmpty, !isSaving else { return }
-        guard noteToSave != lastSavedNote else {
+        guard noteUnsure || noteToSave != lastSavedNote else {
             noteSaved = !noteToSave.isEmpty
             saveError = nil
             return
@@ -873,6 +891,7 @@ struct CompletionView: View {
             }
             isSaving = false
             lastSavedNote = noteToSave
+            noteUnsure = false
             noteSaved = !noteToSave.isEmpty
             logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
         } catch SessionSyncError.entryNotFound {
@@ -880,11 +899,13 @@ struct CompletionView: View {
         } catch let error as APIError {
             print("Failed to save end note: \(error)")
             isSaving = false
+            noteUnsure = true
             saveError = saveErrorMessage(for: error.status)
             logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
         } catch {
             print("Failed to save end note: \(error)")
             isSaving = false
+            noteUnsure = true
             saveError = "Could not save your note. Please try again."
             logUITestDiagnostic("completion.saveEndNote.error message=\(error.localizedDescription)")
         }
@@ -923,16 +944,19 @@ struct CompletionView: View {
             _ = try await APIClient.shared.batchThoughts(request)
             isSaving = false
             lastSavedNote = noteToSave
+            noteUnsure = false
             noteSaved = !noteToSave.isEmpty
             logUITestDiagnostic("completion.saveEndNote.success sessionId=\(targetSessionId)")
         } catch let error as APIError {
             print("Failed to save end note: \(error)")
             isSaving = false
+            noteUnsure = true
             saveError = saveErrorMessage(for: error.status)
             logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
         } catch {
             print("Failed to save end note: \(error)")
             isSaving = false
+            noteUnsure = true
             saveError = "Could not save your note. Please try again."
         }
     }

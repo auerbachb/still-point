@@ -114,6 +114,10 @@ export function CompletionScreen({
   const lastSavedNote = useRef<string | null>(null);
   const lastSavedRatings = useRef<string | null>(null);
   const lastSavedMood = useRef<Record<string, MoodEntry>>({});
+  // A write that failed may still have landed, so until the next one succeeds
+  // the stored value is a guess and every write is sent (#792).
+  const noteUnsure = useRef(false);
+  const moodUnsure = useRef(false);
   const inflight = useRef<Promise<void>>(Promise.resolve());
   const returningRef = useRef(false);
   const flushFailedRef = useRef(false);
@@ -138,7 +142,7 @@ export function CompletionScreen({
   // `track`, after any write still in flight. Judging it when it is scheduled
   // would skip a clear made while the save it undoes was still on the wire.
   async function persistNote(trimmed: string | null): Promise<void> {
-    if (trimmed === lastSavedNote.current) {
+    if (!noteUnsure.current && trimmed === lastSavedNote.current) {
       // Back to what is stored, so an error from an edit since undone is stale.
       setNoteSaved(trimmed !== null);
       setSaveError(false);
@@ -151,8 +155,10 @@ export function CompletionScreen({
       setSaveError(false);
       await write();
       lastSavedNote.current = trimmed;
+      noteUnsure.current = false;
       setNoteSaved(trimmed !== null);
     } catch (err) {
+      noteUnsure.current = true;
       console.error(trimmed === null ? "Failed to clear note:" : "Failed to save note:", err);
       setSaveError(true);
       setNoteSaved(false);
@@ -194,7 +200,7 @@ export function CompletionScreen({
 
   async function persistMood(matrix: MoodMatrixValue): Promise<void> {
     const desired = buildMoodMatrixPayload(matrix);
-    if (JSON.stringify(desired) === JSON.stringify(lastSavedMood.current)) {
+    if (!moodUnsure.current && JSON.stringify(desired) === JSON.stringify(lastSavedMood.current)) {
       setMoodMatrixSaved(Object.keys(desired).length > 0);
       setMoodMatrixSaveError(false);
       return;
@@ -207,8 +213,12 @@ export function CompletionScreen({
       setMoodMatrixSaveError(false);
       await write();
       lastSavedMood.current = desired;
+      moodUnsure.current = false;
       setMoodMatrixSaved(patch !== null);
     } catch (err) {
+      // Count the rows it carried as stored, so a later patch still empties them.
+      lastSavedMood.current = { ...lastSavedMood.current, ...desired };
+      moodUnsure.current = true;
       console.error(patch === null ? "Failed to clear mood matrix:" : "Failed to save mood matrix:", err);
       setMoodMatrixSaveError(true);
       setMoodMatrixSaved(false);

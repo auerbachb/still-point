@@ -179,6 +179,21 @@ describe("CompletionScreen note clear (#792)", () => {
     expect(onClearNote).toHaveBeenCalledTimes(2);
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
+
+  test("a note emptied after its save failed is still cleared, since that save may have landed", async () => {
+    const onSaveNote = vi.fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("response lost"));
+    const onClearNote = vi.fn(async () => {});
+    await render({ onSaveNote, onClearNote });
+
+    await typeNote("first thoughts");
+    await settleAutosave();
+    expect(onSaveNote).toHaveBeenCalledTimes(1);
+
+    await typeNote("");
+    await settleAutosave();
+    expect(onClearNote).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("CompletionScreen mood clear (#792)", () => {
@@ -251,5 +266,45 @@ describe("CompletionScreen mood clear (#792)", () => {
     expect(onSaveMoodMatrix).not.toHaveBeenCalled();
     expect(onClearMoodMatrix).not.toHaveBeenCalled();
     expect(onReturn).toHaveBeenCalledTimes(1);
+  });
+
+  test("a mood deselected after its save failed is still cleared, since that save may have landed", async () => {
+    const onSaveMoodMatrix = vi.fn<(matrix: Record<string, unknown>) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("response lost"));
+    const onClearMoodMatrix = vi.fn(async () => {});
+    await render({ onSaveMoodMatrix, onClearMoodMatrix });
+
+    await tapMoodCell("Calm before: 3");
+    await settleAutosave();
+    expect(onSaveMoodMatrix).toHaveBeenCalledTimes(1);
+
+    await tapMoodCell("Calm before: 3");
+    await settleAutosave();
+    expect(onClearMoodMatrix).toHaveBeenCalledTimes(1);
+  });
+
+  test("a row only a failed save carried is still emptied once it is deselected", async () => {
+    const onSaveMoodMatrix = vi.fn<(matrix: Record<string, unknown>) => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValue(undefined);
+    const onClearMoodMatrix = vi.fn(async () => {});
+    await render({ onSaveMoodMatrix, onClearMoodMatrix });
+
+    await tapMoodCell("Calm before: 3");
+    await settleAutosave();
+    await tapMoodCell("Focus after: 4");
+    await settleAutosave();
+    expect(onSaveMoodMatrix).toHaveBeenCalledTimes(2);
+
+    // Back to the last confirmed matrix, but the failed save may have stored focus.
+    await tapMoodCell("Focus after: 4");
+    await settleAutosave();
+    expect(onSaveMoodMatrix).toHaveBeenCalledTimes(3);
+    expect(onSaveMoodMatrix).toHaveBeenLastCalledWith({
+      calm: { before: 3, after: null },
+      focus: { before: null, after: null },
+    });
+    expect(onClearMoodMatrix).not.toHaveBeenCalled();
   });
 });
