@@ -1,18 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { BLOCK_DURATION } from "@/lib/constants";
+import { useState, useEffect } from "react";
 import { MindStateBar } from "./MindStateBar";
-import { playTick, playChime, playCompletion, playVoiceCountdown, cancelVoiceCountdownPlayback, resumeAudioContext, type SoundPrefs } from "@/lib/audio";
-import {
-  maybeFireHaptic,
-  nextRepeatingHaptic,
-  completedHapticIntervalIndex,
-  hapticIntervalSeconds,
-} from "@/lib/haptics";
+import type { SoundPrefs } from "@/lib/audio";
+import { buildBlocks, usesMinuteBlocks, type BlockDef } from "@/lib/blockTimerGrid";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
+import { useElapsedClock, type SyncClock } from "@/lib/useElapsedClock";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { useAudioContextResume } from "@/lib/useAudioContextResume";
+import { useSessionCues } from "@/lib/useSessionCues";
 
 type BlockTimerProps = {
   totalSeconds: number;
@@ -34,11 +29,7 @@ type BlockTimerProps = {
    * Buddy / server-synced: same 50ms smooth updates as solo, using server timestamps from polls.
    * When set, takes precedence over `controlledElapsed`.
    */
-  syncClock?: {
-    startedAt: string;
-    serverNow: string;
-    durationSeconds: number;
-  };
+  syncClock?: SyncClock;
   /**
    * #669 "just the timer": render the numeric countdown alone — no mind-state bar,
    * progress bar, block grid, or show/hide toggle. The clock, sounds, and
@@ -48,13 +39,14 @@ type BlockTimerProps = {
   minimal?: boolean;
 };
 
-type BlockDef = {
-  duration: number;
-  startTime: number;
-  label: string;
-  type: "minute" | "second";
-};
-
+/**
+ * The countdown a sit is watched on: the digits, the mind-state and minute
+ * progress bars, and the block grid.
+ *
+ * #732: rendering only. The clocks live in `useElapsedClock`, what the sit
+ * plays and when in `useSessionCues` / `sessionCues.ts`, and the grid layout in
+ * `blockTimerGrid.ts`.
+ */
 export function BlockTimer({
   totalSeconds,
   onComplete,
@@ -69,422 +61,36 @@ export function BlockTimer({
   syncClock,
   minimal = false,
 }: BlockTimerProps) {
-  const [elapsed, setElapsed] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const pausedElapsedRef = useRef(0);
-  const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
-  const onSoundPlaybackBlockedRef = useRef(onSoundPlaybackBlocked);
-  onSoundPlaybackBlockedRef.current = onSoundPlaybackBlocked;
-  const onSoundPlaybackResumedRef = useRef(onSoundPlaybackResumed);
-  onSoundPlaybackResumedRef.current = onSoundPlaybackResumed;
-  const soundPrefsRef = useRef(soundPrefs);
-  soundPrefsRef.current = soundPrefs;
-  const lastTickSecRef = useRef(-1);
-  const lastVoiceSecRef = useRef(61);
-  const lastCompletedBlockIndexRef = useRef(-1);
-  const lastHapticIndexRef = useRef(0);
-  const lastHapticIntervalRef = useRef<number | null>(null);
-  const controlledCompleteFiredRef = useRef(false);
-  /** Previous controlled elapsed, so a restart can be told from normal advance. */
-  const lastControlledElapsedRef = useRef(-1);
-  const skewRef = useRef(0);
-  const syncClockRef = useRef(syncClock);
-  syncClockRef.current = syncClock;
   const isMobile = useIsMobile();
-  const isBuddySync = Boolean(syncClock?.startedAt && syncClock?.serverNow);
-  const isControlled = controlledElapsed !== undefined && !isBuddySync;
   const [showTimer, setShowTimer] = useState(() => loadDisplayPrefs().showTimer);
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
   const blockGap = 11;
 
-  useEffect(() => {
-    if (!isActive) cancelVoiceCountdownPlayback();
-    return () => cancelVoiceCountdownPlayback();
-  }, [isActive]);
-
-  // #710: recovers a context the browser suspended while the tab was hidden or
-  // the screen was locked — the sound used to stay off for the rest of the sit.
-  useAudioContextResume(isActive);
-
-  const resumeInFlightRef = useRef(false);
-  /// The most recent sound that failed to play, replayed once the context
-  /// recovers. Only the latest is kept: these closures are different sounds
-  /// (`playTick`, `playCompletion`, a voice prompt bound to a specific second),
-  /// so replaying an older one would emit the wrong sound — announcing "three"
-  /// after the sit has already ended.
-  const pendingPlayRef = useRef<(() => boolean) | null>(null);
-  /// Guards the async blocked-report below. Reporting used to be synchronous,
-  /// so it could not outlive the timer; the resume attempt introduced a gap the
-  /// sit can end inside. The consumer of onSoundPlaybackBlocked lives in
-  /// BuddySessionRoom, which outlives this component, so an unguarded late
-  /// report is not a harmless no-op — it raises "Browser audio is paused" over
-  /// a session that already ended.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const playEnabledSound = (play: () => boolean) => {
-    if (play()) return;
-
-    // #710: a sound can also start failing without a visibility change (the
-    // browser suspending the context on its own). Try to resume before falling
-    // back to the gesture-driven affordance, so the sound that failed — and any
-    // that fail while the attempt is in flight — are not simply lost.
-    //
-    // The blocked callback only fires once that attempt has failed. Reporting
-    // it up front would leave "Browser audio is paused" on screen for a
-    // session whose sound recovered on its own. A successful retry reports
-    // `onSoundPlaybackResumed` so that warning can clear. A play that fails
-    // while an attempt is already in flight is covered by that attempt's result.
-    pendingPlayRef.current = play;
-    if (resumeInFlightRef.current) return;
-    resumeInFlightRef.current = true;
-    void resumeAudioContext()
-      .then(resumed => {
-        // Replay the sound that triggered the resume. Waiting for the next
-        // scheduled sound only works for the repeating tick — a completion
-        // chime or a voice countdown prompt has no successor, so dropping it
-        // loses it outright.
-        const retry = pendingPlayRef.current;
-        pendingPlayRef.current = null;
-        if (resumed && retry?.()) {
-          if (mountedRef.current) onSoundPlaybackResumedRef.current?.();
-          return;
-        }
-        // The retry itself is deliberately not gated on the timer still being
-        // active: a completion chime that failed is retried as the sit ends,
-        // which is exactly when it is wanted. Only the banner is suppressed.
-        if (!mountedRef.current) return;
-        onSoundPlaybackBlockedRef.current?.();
-      })
-      .finally(() => {
-        resumeInFlightRef.current = false;
-      });
-  };
-
-  /**
-   * Everything the end of a sit announces, in both channels.
-   *
-   * The three timer paths below — local, buddy `syncClock`, and controlled —
-   * each reach the end of a sit separately and all three owe the same cues, so
-   * they share one function rather than three copies that drift.
-   *
-   * #712: the buzz is deliberately not gated on `completion`. Silencing the
-   * bell must not silence the buzz — that is the whole reason the preference
-   * exists. It is also not routed through `playEnabledSound`: the "browser audio
-   * is paused" affordance is about the audio context, which vibration never
-   * touches. Reached only when the timer actually ran out, so it needs no
-   * abandon or end-early guard — a discarded sit never gets here.
-   */
-  const playSessionEndCues = () => {
-    maybeFireHaptic(soundPrefsRef.current?.haptics, "sessionEnd");
-    if (soundPrefsRef.current?.completion) playEnabledSound(playCompletion);
-  };
-
-  const maybePlayCountdownSounds = (newElapsed: number) => {
-    const prefs = soundPrefsRef.current;
-    if (!prefs) return;
-
-    const remaining = totalSeconds - newElapsed;
-    const voiceMode = Boolean(prefs.voiceCountdown);
-    const currentSec = Math.floor(newElapsed);
-
-    if (voiceMode) {
-      if (remaining > 60) {
-        if (lastVoiceSecRef.current <= 60) {
-          cancelVoiceCountdownPlayback();
-          lastVoiceSecRef.current = 61;
-        }
-      } else if (remaining > 0) {
-        let announceSec = Math.floor(remaining);
-        if (announceSec < 1) announceSec = 1;
-        if (remaining > 59 && lastVoiceSecRef.current > 60) {
-          announceSec = 60;
-        }
-        if (announceSec !== lastVoiceSecRef.current) {
-          lastVoiceSecRef.current = announceSec;
-          playEnabledSound(() => playVoiceCountdown(announceSec));
-        }
-      }
-    } else if (prefs.tick && currentSec > lastTickSecRef.current) {
-      lastTickSecRef.current = currentSec;
-      playEnabledSound(playTick);
-    }
-
-    if (useMinuteBlocks) {
-      const completedBlockIndex = Math.min(
-        minuteBlockCount - 1,
-        Math.floor(newElapsed / 60) - 1,
-      );
-
-      if (completedBlockIndex > lastCompletedBlockIndexRef.current) {
-        lastCompletedBlockIndexRef.current = completedBlockIndex;
-
-        const blockEnd = (completedBlockIndex + 1) * 60;
-        // Unchanged rule for *when* the marker fires: only on a completed
-        // minute block with at least one full minute still to go. Since #711
-        // the count no longer sets how many strikes play — the bell is one
-        // strike — so it survives purely as that gate. Hoisted out of the chime
-        // branch by #712 so the buzz can share it: one timing source, two
-        // channels, marking the same instants.
-        const fullMinuteRemains =
-          Math.floor((totalSeconds - blockEnd) / 60) >= 1;
-
-        if (prefs.chime && !voiceMode && fullMinuteRemains) {
-          playEnabledSound(playChime);
-        }
-      }
-    }
-
-    const interval = hapticIntervalSeconds(prefs.hapticInterval);
-    if (lastHapticIntervalRef.current !== interval) {
-      lastHapticIntervalRef.current = interval;
-      lastHapticIndexRef.current = completedHapticIntervalIndex(
-        newElapsed,
-        totalSeconds,
-        interval,
-      );
-      return;
-    }
-    const hapticUpdate = nextRepeatingHaptic({
-      elapsedSeconds: newElapsed,
-      durationSeconds: totalSeconds,
-      intervalSeconds: interval,
-      lastCompletedIndex: lastHapticIndexRef.current,
-    });
-    lastHapticIndexRef.current = hapticUpdate.completedIndex;
-    if (hapticUpdate.shouldFire) {
-      maybeFireHaptic(prefs.haptics, "minuteMarker");
-    }
-  };
-
-  // Build block definitions
-  const useMinuteBlocks = totalSeconds > 120;
-  const fullMinutes = Math.floor(totalSeconds / 60);
-  const minuteBlockCount = useMinuteBlocks
-    ? (totalSeconds % 60 > 0 ? fullMinutes : fullMinutes - 1)
-    : 0;
-  const blocks: BlockDef[] = [];
-
-  if (useMinuteBlocks) {
-    for (let i = 0; i < minuteBlockCount; i++) {
-      blocks.push({ duration: 60, startTime: i * 60, label: `${i + 1}m`, type: "minute" });
-    }
-
-    const lastMinuteStart = minuteBlockCount * 60;
-    const lastMinuteDuration = totalSeconds - lastMinuteStart;
-    const tenSecCount = Math.ceil(lastMinuteDuration / BLOCK_DURATION);
-    for (let i = 0; i < tenSecCount; i++) {
-      blocks.push({
-        duration: BLOCK_DURATION,
-        startTime: lastMinuteStart + i * BLOCK_DURATION,
-        label: `${(i + 1) * BLOCK_DURATION}s`,
-        type: "second",
-      });
-    }
-  } else {
-    const totalBlocks = Math.ceil(totalSeconds / BLOCK_DURATION);
-    for (let i = 0; i < totalBlocks; i++) {
-      blocks.push({
-        duration: BLOCK_DURATION,
-        startTime: i * BLOCK_DURATION,
-        label: `${(i + 1) * BLOCK_DURATION}s`,
-        type: "second",
-      });
-    }
-  }
-
-  const minuteBlocks = blocks.filter(b => b.type === "minute");
-  const secondBlocks = blocks.filter(b => b.type === "second");
-
-  useEffect(() => {
-    if (!syncClock?.startedAt || !syncClock?.serverNow) return;
-    skewRef.current = new Date(syncClock.serverNow).getTime() - Date.now();
-  }, [syncClock?.startedAt, syncClock?.serverNow]);
+  const cues = useSessionCues({
+    isActive,
+    soundPrefs,
+    onSoundPlaybackBlocked,
+    onSoundPlaybackResumed,
+  });
+  const elapsed = useElapsedClock({
+    totalSeconds,
+    isActive,
+    controlledElapsed,
+    syncClock,
+    onComplete,
+    onElapsedChange,
+    cues,
+  });
 
   useEffect(() => {
     saveDisplayPrefs({ showTimer });
   }, [showTimer]);
 
-  useEffect(() => {
-    if (isControlled || isBuddySync) return;
-
-    // Reset or seed refs based on whether this is a fresh session or a resume
-    const resumeElapsed = pausedElapsedRef.current;
-    const isResume =
-      resumeElapsed < totalSeconds &&
-      (resumeElapsed > 0 || startTimeRef.current !== null);
-
-    if (isResume) {
-      lastTickSecRef.current = Math.floor(resumeElapsed);
-      lastVoiceSecRef.current =
-        totalSeconds - resumeElapsed <= 60
-          ? Math.floor(totalSeconds - resumeElapsed)
-          : 61;
-      lastCompletedBlockIndexRef.current = useMinuteBlocks
-        ? Math.min(minuteBlockCount - 1, Math.floor(resumeElapsed / 60) - 1)
-        : -1;
-      const interval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
-      lastHapticIntervalRef.current = interval;
-      lastHapticIndexRef.current = completedHapticIntervalIndex(
-        resumeElapsed,
-        totalSeconds,
-        interval,
-      );
-    } else {
-      // Fresh session — clear all accumulated state
-      lastCompletedBlockIndexRef.current = -1;
-      lastHapticIndexRef.current = 0;
-      lastHapticIntervalRef.current = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
-      lastTickSecRef.current = -1;
-      lastVoiceSecRef.current = 61;
-      pausedElapsedRef.current = 0;
-      setElapsed(0);
-    }
-
-    if (isActive) {
-      startTimeRef.current = Date.now() - pausedElapsedRef.current * 1000;
-      intervalRef.current = setInterval(() => {
-        const now = Date.now();
-        const newElapsed = (now - startTimeRef.current!) / 1000;
-        if (newElapsed >= totalSeconds) {
-          setElapsed(totalSeconds);
-          pausedElapsedRef.current = totalSeconds;
-          clearInterval(intervalRef.current!);
-          playSessionEndCues();
-          onCompleteRef.current();
-        } else {
-          setElapsed(newElapsed);
-          pausedElapsedRef.current = newElapsed;
-          maybePlayCountdownSounds(newElapsed);
-        }
-      }, 50);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isActive, totalSeconds, isControlled, isBuddySync]);
-
-  useEffect(() => {
-    if (!isBuddySync || !isActive || !syncClock?.startedAt || !syncClock?.serverNow) {
-      return;
-    }
-
-    const duration = totalSeconds;
-    const startedMs = new Date(syncClock.startedAt).getTime();
-    skewRef.current = new Date(syncClock.serverNow).getTime() - Date.now();
-
-    const seed = Math.min(duration, Math.max(0, (Date.now() + skewRef.current - startedMs) / 1000));
-    lastTickSecRef.current = Math.floor(seed);
-    lastVoiceSecRef.current =
-      duration - seed <= 60 ? Math.floor(duration - seed) : 61;
-    lastCompletedBlockIndexRef.current =
-      useMinuteBlocks && minuteBlockCount > 0
-        ? Math.min(minuteBlockCount - 1, Math.floor(seed / 60) - 1)
-        : -1;
-    const hapticInterval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
-    lastHapticIntervalRef.current = hapticInterval;
-    lastHapticIndexRef.current = completedHapticIntervalIndex(seed, duration, hapticInterval);
-    controlledCompleteFiredRef.current = false;
-    setElapsed(seed);
-    pausedElapsedRef.current = seed;
-
-    const id = window.setInterval(() => {
-      const sc = syncClockRef.current;
-      if (!sc?.startedAt) return;
-      const startMs = new Date(sc.startedAt).getTime();
-      const newElapsed = Math.min(
-        duration,
-        Math.max(0, (Date.now() + skewRef.current - startMs) / 1000),
-      );
-
-      if (newElapsed >= duration) {
-        setElapsed(duration);
-        pausedElapsedRef.current = duration;
-        window.clearInterval(id);
-        if (!controlledCompleteFiredRef.current) {
-          controlledCompleteFiredRef.current = true;
-          playSessionEndCues();
-          onCompleteRef.current();
-        }
-        return;
-      }
-
-      setElapsed(newElapsed);
-      pausedElapsedRef.current = newElapsed;
-      maybePlayCountdownSounds(newElapsed);
-    }, 50);
-
-    return () => window.clearInterval(id);
-  }, [isBuddySync, isActive, syncClock?.startedAt, totalSeconds, useMinuteBlocks, minuteBlockCount]);
-
-  useEffect(() => {
-    if (!isControlled) return;
-    const raw = controlledElapsed ?? 0;
-    const newElapsed = Math.min(totalSeconds, Math.max(0, raw));
-
-    if (newElapsed >= totalSeconds) {
-      setElapsed(totalSeconds);
-      pausedElapsedRef.current = totalSeconds;
-      // Recorded before the early return so a run that lands on the end without
-      // an intermediate update still leaves a high-water mark for the next run
-      // to fall below.
-      lastControlledElapsedRef.current = totalSeconds;
-      if (!controlledCompleteFiredRef.current) {
-        controlledCompleteFiredRef.current = true;
-        playSessionEndCues();
-        onCompleteRef.current();
-      }
-      return;
-    }
-
-    setElapsed(newElapsed);
-    pausedElapsedRef.current = newElapsed;
-    // Elapsed moving backwards means a fresh run on the same mounted timer.
-    // Re-seed from the new position exactly as the buddy-sync path seeds on
-    // start: the cue guards below are all monotonic, so left at the finished
-    // run's high-water mark they would swallow the new run's ticks, minute
-    // markers, end haptic and completion cue until it passed the old total.
-    if (newElapsed < lastControlledElapsedRef.current) {
-      lastTickSecRef.current = Math.floor(newElapsed);
-      lastCompletedBlockIndexRef.current =
-        useMinuteBlocks && minuteBlockCount > 0
-          ? Math.min(minuteBlockCount - 1, Math.floor(newElapsed / 60) - 1)
-          : -1;
-      const hapticInterval = hapticIntervalSeconds(soundPrefsRef.current?.hapticInterval);
-      lastHapticIntervalRef.current = hapticInterval;
-      lastHapticIndexRef.current = completedHapticIntervalIndex(
-        newElapsed,
-        totalSeconds,
-        hapticInterval,
-      );
-      controlledCompleteFiredRef.current = false;
-    }
-    lastControlledElapsedRef.current = newElapsed;
-    const remainingNow = totalSeconds - newElapsed;
-    lastVoiceSecRef.current =
-      remainingNow > 60 ? 61 : Math.max(lastVoiceSecRef.current, Math.floor(remainingNow));
-    maybePlayCountdownSounds(newElapsed);
-  }, [
-    isControlled,
-    controlledElapsed,
-    totalSeconds,
-    useMinuteBlocks,
-    minuteBlockCount,
-  ]);
-
-  useEffect(() => {
-    onElapsedChange?.(elapsed);
-  }, [elapsed, onElapsedChange]);
+  const useMinuteBlocks = usesMinuteBlocks(totalSeconds);
+  const blocks = buildBlocks(totalSeconds);
+  const minuteBlocks = blocks.filter(b => b.type === "minute");
+  const secondBlocks = blocks.filter(b => b.type === "second");
 
   const remaining = Math.max(0, totalSeconds - elapsed);
   const minutes = Math.floor(remaining / 60);

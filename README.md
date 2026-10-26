@@ -341,6 +341,10 @@ src/
     auth.ts                  # JWT + bcrypt helpers
     api.ts                   # typed fetch wrapper
     audio.ts                 # Web Audio API sound synthesis
+    sessionCues.ts           # when a sit's tick / voice / chime / buzz cues are due
+    useSessionCues.ts        # plays session cues; recovers suspended audio
+    useElapsedClock.ts       # local, buddy-synced, and controlled session clocks
+    blockTimerGrid.ts        # session timer block layout
     constants.ts             # BASE_DURATION, INCREMENT, BLOCK_DURATION
     apns.ts                  # Apple Push Notification Service helpers
     web-push.ts              # VAPID web push helpers
