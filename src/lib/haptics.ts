@@ -13,8 +13,9 @@
  * path anything depends on. Every entry point degrades to a silent no-op.
  *
  * Unlike iOS, the abandon and end-early exclusions are not parameters here: the
- * three call sites in `BlockTimer.tsx` exist only on the natural-completion and
- * live-minute-boundary paths, so a discarded sit never reaches them.
+ * session timer plans these cues only on the natural-completion and
+ * live-interval-boundary paths (`planSessionEndCues` and `planCountdownCues` in
+ * `sessionCues.ts`), so a discarded sit never reaches them.
  */
 
 /** The two moments a sit announces by feel. Mirrors `HapticCueLogic.Cue`. */

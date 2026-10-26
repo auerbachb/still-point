@@ -63,7 +63,7 @@ export function recoveryTotalStepsFor(targetDay: number): number {
  * Rounds a duration (seconds) to the nearest whole 10-second block (#661).
  *
  * The session timer renders progress as `BLOCK_DURATION`-second blocks
- * (`Math.ceil(duration / BLOCK_DURATION)` in BlockTimer/HomeView/CompletionScreen), so a
+ * (`Math.ceil(duration / BLOCK_DURATION)` in blockTimerGrid/HomeView/CompletionScreen), so a
  * duration that is not a multiple of the block size ends the sit part-way through a
  * partially-filled final block. Never returns zero: a session is at least one block long.
  *
