@@ -1,8 +1,10 @@
 import Foundation
 import StillPointShared
+import SwiftUI
 
 /// Ordering for settings mutations and the whole-account reads that race them (#697),
-/// and the dual-track opt-in, which is one of those mutations.
+/// the save round trip the Settings controls share, and the dual-track opt-in, which
+/// is one of those mutations.
 ///
 /// The queue and its ticket guard (`settingsWrites`, `settingsOrdering`) are stored
 /// properties, so they are declared with the rest of the state in `AppViewModel.swift`.
@@ -160,6 +162,80 @@ extension AppViewModel {
             syncWidgetData()
         }
         return .applied
+    }
+
+    /// Saves one Settings control's new value — the round trip every account-backed
+    /// control on the Settings screen shares: Public Board, Aphorisms, gaze tracking,
+    /// ambient sound, and the long-session picker (#757).
+    ///
+    /// Call it from the control's change handler, synchronously with the user's
+    /// action, once that handler has decided the change needs saving: the identity
+    /// capture and the place in line below are both bound to the moment of the call.
+    ///
+    /// - Parameters:
+    ///   - saving: the control's in-flight flag. Raised before this returns and
+    ///     lowered when the save ends, however it ends. Settings disables the control
+    ///     on it and skips the control when copying the account onto the screen, so it
+    ///     has to be live for exactly as long as the save is.
+    ///   - authorize: runs first inside the queued operation and says whether to go
+    ///     on — a permission prompt goes here. Returning `false` abandons the save
+    ///     before anything is sent; the gate puts the control back and tells the user
+    ///     why itself. `nil` for a control that needs no permission.
+    ///   - send: the PATCH carrying this control's field.
+    ///   - revert: puts the control back to what it showed before the change. Called
+    ///     when the request throws, or when its response belongs to a session that is
+    ///     gone.
+    func saveSettingsControl(
+        saving: Binding<Bool>,
+        authorize: (@Sendable @MainActor () async -> Bool)? = nil,
+        send: @escaping @Sendable @MainActor () async throws -> UserDTO,
+        revert: @escaping @Sendable @MainActor () -> Void
+    ) {
+        saving.wrappedValue = true
+        // Captured synchronously with the user's action rather than inside the
+        // operation: that runs on a later main-actor turn, so reading the generation
+        // there could pick up an account that replaced this one in the gap and apply
+        // this change to them. Binding it here binds it to the identity that was live
+        // when the control changed, and still covers every later await — including a
+        // permission prompt (#665).
+        let identityAtStart = identityGeneration
+        // Enqueued here for the matching reason: bound to the moment the user made the
+        // change, so the mutations are sent in the order the changes were made rather
+        // than racing each other. A permission prompt adds one more: it is an await of
+        // unbounded length, and taking this save's place in line *after* it would rank
+        // the save behind a rename the user made while the prompt was up, so the
+        // opt-in's slower response could then revert that rename (#697).
+        enqueueSettingsWrite { [self] in
+            defer { saving.wrappedValue = false }
+            if let authorize {
+                guard await authorize() else { return }
+            }
+            do {
+                // Re-checked before issuing the write: sending this would otherwise
+                // apply the previous user's intent to the account that replaced them.
+                guard identityAtStart == identityGeneration else { return }
+                // Taken immediately before the request, so it records when this left
+                // and outranks the `me()` reads racing it (#697/#709). Ordering against
+                // the other settings mutations is the queue's job, not the ticket's.
+                let settingsTicket = nextSettingsRequestTicket()
+                let updated = try await send()
+                // A discarded response means the session changed; put the control back
+                // rather than leaving it showing an intent that was never applied
+                // (mirrors the catch below). Otherwise the response is adopted —
+                // nothing else can be in flight to supersede it — so the account now
+                // carries what the control shows and Settings' sync from it is a no-op
+                // (#697).
+                if applySettingsUser(
+                    updated,
+                    startedAtGeneration: identityAtStart,
+                    requestTicket: settingsTicket
+                ) == .discarded {
+                    revert()
+                }
+            } catch {
+                revert()
+            }
+        }
     }
 
     /// #240: opt into the dual-track fork, then refresh local user + badges.

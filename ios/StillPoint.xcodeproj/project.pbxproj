@@ -33,6 +33,7 @@
 		1DBE74544D605FF3CA0A1C1D /* 5.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1822261A9F6811AE9984B37B /* 5.mp3 */; };
 		1E5365E85DAF7C7B46336A71 /* 57.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6290D6ED1CB92848B1ECFE90 /* 57.mp3 */; };
 		2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */; };
+		214C8E0D29060034400C22BA /* SettingsSessionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */; };
 		2387CAB41D16E36550FB047A /* 41.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 112EE9026F8169958E58EA43 /* 41.mp3 */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
 		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
@@ -77,6 +78,7 @@
 		68C3A6205945A55E953DE283 /* AppBlockingBackgroundScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */; };
 		69607B53AA6B1E3D62AC7A15 /* 3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = F05568F31FE83D1EC32A9173 /* 3.mp3 */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
+		6D02D1A8A6D6A077223C172A /* SettingsAphorismsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */; };
 		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
 		70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
@@ -84,10 +86,12 @@
 		783596788FCBE118748CF294 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 359072B628F0A3E3329DF9D6 /* ARKit.framework */; };
 		797B745150CC15EBBD4151E8 /* 25.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A326B39E4201675CA4263C4D /* 25.mp3 */; };
 		7A35474775D311BBFEB53DE8 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = A693158BF7B588EA9D5744E5 /* StillPointShared */; };
+		7B0CD9573076A4807FDAB320 /* SettingsAccountSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5610C475E8072CF5CCA4C8C8 /* SettingsAccountSection.swift */; };
 		7C61653E3A2AD035853FF50A /* 15.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5EF4763920AEA6F4AD6FB313 /* 15.mp3 */; };
 		7D69596D9288E07BD0028FFF /* 17.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 47548299197A3F6DEF4043C9 /* 17.mp3 */; };
 		7F195F0AC09CCB718C2C04AE /* 10.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 594426A2F95039E07CBF9536 /* 10.mp3 */; };
 		80005A5883007151E3A9C5C3 /* MindStateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */; };
+		81CCB14C028B2ED5A2FA9045 /* SettingsDangerZoneSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932E78D5A64007E7738FFE6F /* SettingsDangerZoneSection.swift */; };
 		8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */ = {isa = PBXBuildFile; productRef = FE1475755D9C9BA63C80748F /* StillPointShared */; };
 		840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */; };
 		84DD3D592ACAFBE5FC6AEC28 /* 6.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3CB4E2EFAF45CA35CD5F45C8 /* 6.mp3 */; };
@@ -148,6 +152,7 @@
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
 		DDC0AA3B25A6D0AF5D2F52B7 /* 51.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = E17D1E13F75A9811452B4895 /* 51.mp3 */; };
 		DE4CACA493D76D725E84175E /* 31.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 06353C957A9C0111FE540DD9 /* 31.mp3 */; };
+		DFB99FF0486CEB1EEDE70DFE /* SettingsVisibilitySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */; };
 		E0B7E8F73810CD267D2405FB /* NetworkReachabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */; };
 		E15A367CAC8FFA7D3A43A349 /* 11.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0E20E4DF9BB209813988B1F4 /* 11.mp3 */; };
 		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
@@ -210,6 +215,7 @@
 		07AE546FEA49290BBE163744 /* StillPointWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		07F9F5F5BD51497B5C18B28C /* 37.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 37.mp3; sourceTree = "<group>"; };
 		085AB5EC3C680F94156BCA42 /* 53.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 53.mp3; sourceTree = "<group>"; };
+		08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSessionSection.swift; sourceTree = "<group>"; };
 		09DD5F417FDE26DAF6433E65 /* PathwayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathwayView.swift; sourceTree = "<group>"; };
 		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
 		0D147E22AE19B02C80DE77AF /* 36.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 36.mp3; sourceTree = "<group>"; };
@@ -257,11 +263,13 @@
 		4976183C8621BCA485D0B82D /* BreathCountingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathCountingView.swift; sourceTree = "<group>"; };
 		4E0BB1EDF1994530B03012DD /* 34.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 34.mp3; sourceTree = "<group>"; };
 		503A6D41F27BA9646DA35192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAphorismsSection.swift; sourceTree = "<group>"; };
 		512E6E655209E76A5E6B0DF3 /* 1.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 1.mp3; sourceTree = "<group>"; };
 		517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyleUITests.swift; sourceTree = "<group>"; };
 		52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogReasonDeepLinkParser.swift; sourceTree = "<group>"; };
 		54816ED19E21CAB37F0AE81A /* 43.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 43.mp3; sourceTree = "<group>"; };
 		55FDA17DAB49084E87B6AAE7 /* 26.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 26.mp3; sourceTree = "<group>"; };
+		5610C475E8072CF5CCA4C8C8 /* SettingsAccountSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAccountSection.swift; sourceTree = "<group>"; };
 		58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillPointMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIntroOverlayView.swift; sourceTree = "<group>"; };
 		594426A2F95039E07CBF9536 /* 10.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 10.mp3; sourceTree = "<group>"; };
@@ -302,10 +310,12 @@
 		92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCTestCase+StillPointUITest.swift"; sourceTree = "<group>"; };
 		92F0B6135A30B315B9962460 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		932E78D5A64007E7738FFE6F /* SettingsDangerZoneSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDangerZoneSection.swift; sourceTree = "<group>"; };
 		94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 46.mp3; sourceTree = "<group>"; };
 		9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		95B9BFB54C47EA75C997B1AC /* 7.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 7.mp3; sourceTree = "<group>"; };
 		96564931B9635CCC906F2C4C /* 27.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 27.mp3; sourceTree = "<group>"; };
+		99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsVisibilitySection.swift; sourceTree = "<group>"; };
 		9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Widget.swift"; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		A326B39E4201675CA4263C4D /* 25.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 25.mp3; sourceTree = "<group>"; };
@@ -417,6 +427,7 @@
 				7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */,
 				3CF33E14AFF118C76854F60A /* BuddyCalendar */,
 				8BFB3AFE8B8A4AFB50ADB37B /* BuddySession */,
+				B115CFE0D3813570B8F87EEA /* Settings */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -670,6 +681,18 @@
 				8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */,
 			);
 			path = Theme;
+			sourceTree = "<group>";
+		};
+		B115CFE0D3813570B8F87EEA /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				5610C475E8072CF5CCA4C8C8 /* SettingsAccountSection.swift */,
+				511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */,
+				932E78D5A64007E7738FFE6F /* SettingsDangerZoneSection.swift */,
+				08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */,
+				99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		B5DCE12E19F7C00786209F0E /* ViewModels */ = {
@@ -1015,7 +1038,12 @@
 				F35737C317B60994A0FB1DC7 /* SessionTimerEngine.swift in Sources */,
 				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
 				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
+				7B0CD9573076A4807FDAB320 /* SettingsAccountSection.swift in Sources */,
+				6D02D1A8A6D6A077223C172A /* SettingsAphorismsSection.swift in Sources */,
+				81CCB14C028B2ED5A2FA9045 /* SettingsDangerZoneSection.swift in Sources */,
+				214C8E0D29060034400C22BA /* SettingsSessionSection.swift in Sources */,
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
+				DFB99FF0486CEB1EEDE70DFE /* SettingsVisibilitySection.swift in Sources */,
 				E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */,
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
