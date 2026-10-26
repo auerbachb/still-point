@@ -14,8 +14,10 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".."
 // file names Vitest's default `include` picks up there.
 const TEST_ROOTS = ["src", "scripts"];
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+// A static or dynamic import, or a CommonJS `require()` (which a `.cts` test
+// can use), of PGlite or of the `pgliteTestDb` helper, with or without `.ts`/`.js`.
 const IMPORTS_PGLITE =
-  /(?:from\s+|import\s*\(\s*)["'](?:@electric-sql\/pglite|[^"']*\/pgliteTestDb)["']/;
+  /(?:from\s+|(?:import|require)\s*\(\s*)["'](?:@electric-sql\/pglite|[^"']*\/pgliteTestDb(?:\.[jt]s)?)["']/;
 // The guard evaluates two pattern shapes: `**/*<suffix>` and a literal path.
 const SUFFIX_GLOB = "**/*";
 const GLOB_SYNTAX = /[*?[\]{}()!]/;
@@ -44,6 +46,17 @@ function inPgliteProject(file: string): boolean {
 }
 
 describe("pglite Vitest project routing (#733)", () => {
+  test("recognizes static, dynamic and CommonJS loads of PGlite", () => {
+    const loads = (specifier: string) => [
+      `import { x } from "${specifier}";`,
+      `await import("${specifier}");`,
+      `require("${specifier}");`,
+    ];
+    const pglite = ["@electric-sql/pglite", "@/lib/testing/pgliteTestDb", "./pgliteTestDb.js"];
+    expect(pglite.flatMap(loads).filter((source) => !IMPORTS_PGLITE.test(source))).toEqual([]);
+    expect(loads("./pgliteTestFiles").filter((source) => IMPORTS_PGLITE.test(source))).toEqual([]);
+  });
+
   test("lists only pattern shapes this guard can evaluate", () => {
     const unsupported = PGLITE_TEST_FILES.filter((pattern) =>
       GLOB_SYNTAX.test(suffixOf(pattern) ?? pattern),
