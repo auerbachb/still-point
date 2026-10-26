@@ -22,22 +22,22 @@ Pick a path by intent. All TestFlight uploads share the reusable build workflow 
 
 | Path | Trigger | Workflow | Use when |
 |------|---------|----------|----------|
-| **Auto TestFlight** (recommended) | Merge a PR to `main` with the **`release:ios`** label | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) → `ios-testflight-build.yml` | You want the merged code on TestFlight; build number auto-increments. |
-| **Manual TestFlight tag** (escape hatch) | Push `ios-v<marketing>-build<n>` (e.g. `ios-v1.0.3-build11`) | [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) → `ios-testflight-build.yml` | You need a specific commit/build by hand, or e2e infra blocked the auto path. |
+| **Auto TestFlight** (default) | Any merge to `main` that changes iOS app code | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) → `ios-testflight-build.yml` | Always. Merged iOS app code reaches TestFlight, and the build number moves by itself. |
+| **Manual TestFlight tag** (break-glass) | Push `ios-v<marketing>-build<n>` (e.g. `ios-v1.0.3-build41`) | [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) → `ios-testflight-build.yml` | You need a specific commit/build by hand, or e2e infra blocked the auto path. |
 | **App Store release** | Push strict semver `ios-vMAJOR.MINOR.PATCH` (no `-build`; must match `MARKETING_VERSION`) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Shipping metadata + binary via Fastlane after TestFlight validation. |
 
-### Auto TestFlight (recommended)
+### Auto TestFlight (default)
 
-1. Add the **`release:ios`** label to the PR you want to ship.
-2. Merge to `main`. The auto workflow runs parallel e2e gates, increments `CURRENT_PROJECT_VERSION`, commits the bump with `[skip ci]`, tags `ios-v<MARKETING_VERSION>-build<n>`, and calls the reusable build/upload workflow.
+1. Merge to `main`. Nothing else is needed: no label and no version bump (#707).
+2. If the merge changes iOS app code, the auto workflow runs the e2e gates in parallel. When both pass, it claims the next build number by pushing an `ios-v<MARKETING_VERSION>-build<n>` tag, where n is 1 + the highest existing build tag. It then calls the reusable build/upload workflow with that number. Doc-only, test-only, and web-only merges don't cut a build, and nothing is committed back to `main`.
 3. Build appears in TestFlight ~15–30 minutes after the workflow finishes. Record processed build number and timestamp in [`ios/QA_CHECKLIST.md`](../../ios/QA_CHECKLIST.md).
 
-`MARKETING_VERSION` is never auto-bumped — bump it in `ios/project.yml` in an ordinary PR when you want a new storefront version.
+`MARKETING_VERSION` is never auto-bumped — bump it in `ios/project.yml` in an ordinary PR when you want a new storefront version. For what counts as iOS app code and how failed or queued cuts behave, see [`ios/RELEASING.md`](../../ios/RELEASING.md#automatic-merge-ios-app-code-default).
 
-### Manual TestFlight tag (escape hatch)
+### Manual TestFlight tag (break-glass)
 
-1. Bump `CURRENT_PROJECT_VERSION` in [`ios/project.yml`](../../ios/project.yml) so it is strictly greater than the last upload.
-2. Commit, tag, and push: `git tag ios-v1.0.3-build11 && git push origin ios-v1.0.3-build11`.
+1. Pick the next build number: 1 + the highest `ios-v*-build*` tag (`git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1`).
+2. Tag the commit and push: `git tag ios-v1.0.3-build41 <commit> && git push origin ios-v1.0.3-build41`. The tag sets the build number, so no `ios/project.yml` bump is needed. Its marketing version must match `MARKETING_VERSION` at that commit.
 3. Confirm [Build & Upload to TestFlight](../../.github/workflows/ios-testflight.yml) is green and the build reaches **Ready to Test** in App Store Connect → **TestFlight**.
 
 ### First-time TestFlight setup
@@ -65,7 +65,7 @@ GitHub Actions holds distribution signing material as secrets (values never appe
 
 - **Signing error in CI:** verify certificate validity and that the provisioning profile bundle ID matches.
 - **Upload authentication error:** regenerate the App Store Connect API key and update GitHub secrets.
-- **Build number conflict:** `CURRENT_PROJECT_VERSION` must be unique per upload; re-uploads need a new TestFlight tag and incremented build number.
+- **Build number conflict:** every upload needs an unused build number. TestFlight cuts take theirs from the `ios-v*-build*` tags, and a re-upload is a new cut with a new tag.
 - **`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`:** Account Holder must clear Agreements, Tax, and Banking in Apple Developer / App Store Connect before uploads succeed.
 
 The App Store release workflow maps `APPSTORE_*` secrets to Fastlane's `APP_STORE_CONNECT_API_*` environment names at runtime (see [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml)).
@@ -117,7 +117,7 @@ Assumes a **TestFlight build is already uploaded** and agreements are clear unle
 | 1 | [ ] **Apple Developer + App Store Connect:** all **Agreements, Tax, and Banking** are signed with no **Action required** items. | Account Holder / Admin | Screenshot or written confirmation. Uploads fail with `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED` until clean. |
 | 2 | [ ] **GitHub Actions:** latest **Build & Upload to TestFlight** workflow for the intended `ios-v*` tag is green. | Engineering | Link the successful run for [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) or [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml). |
 | 3 | [ ] **TestFlight:** intended build is visible in App Store Connect → **TestFlight** and is not stuck **Processing** or marked **Invalid**. | Engineering | Capture build status and processing timestamp. |
-| 4 | [ ] **Version / build:** `ios/project.yml` `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` match the intended submission; build number is strictly greater than any prior upload. | Engineering | Paste version/build values; compare against prior Connect uploads. |
+| 4 | [ ] **Version / build:** `ios/project.yml` `MARKETING_VERSION` matches the intended submission, and the attached build is the one its `ios-v<marketing>-build<N>` tag names. TestFlight build numbers come from those tags, not from `CURRENT_PROJECT_VERSION` (#707). | Engineering | Paste version/build values; compare against prior Connect uploads. |
 | 5 | [ ] **Release-readiness artifacts:** [`ios/PARITY_CHECKLIST.md`](../../ios/PARITY_CHECKLIST.md) and [`ios/QA_CHECKLIST.md`](../../ios/QA_CHECKLIST.md) signed off for App Store path (required by `ios-app-store-release.yml`). | Engineering + Product | Required checkboxes checked before App Store tag push. |
 
 ### Phase B — App Store version record
@@ -188,7 +188,7 @@ Account deletion path for Guideline 5.1.1(v):
 
 | Workflow | File | Trigger |
 |----------|------|---------|
-| Auto TestFlight on merge | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) | PR merged to `main` with `release:ios` label |
+| Auto TestFlight on merge | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) | Push to `main` that changes iOS app code, or manual `workflow_dispatch` |
 | Manual TestFlight tag | [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) | Push `ios-v*-build*` tag |
 | Reusable build + upload | [`.github/workflows/ios-testflight-build.yml`](../../.github/workflows/ios-testflight-build.yml) | Called by auto and manual TestFlight paths |
 | App Store release (Fastlane) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Push `ios-vMAJOR.MINOR.PATCH` (no `-build`) |

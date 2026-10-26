@@ -6,7 +6,8 @@ name: E2E iOS
 # sync guard moved to `infoplist-sync.yml` (required on every PR — #439/#588).
 #
 # Runs via:
-#   - `ios-testflight-auto.yml` — release:ios merge gate (#588)
+#   - `ios-testflight-auto.yml` — gate on the automatic TestFlight cut that
+#     every iOS merge to main triggers (#588, #707)
 #   - `workflow_dispatch` — ad-hoc verification
 #   - `workflow_call` — reusable from other workflows
 #
