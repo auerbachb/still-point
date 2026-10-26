@@ -46,6 +46,9 @@ const MAX_REPORT_DAYS = 366;
  */
 const SETTLED_DAYS_AGO = 2;
 
+/** The furthest local time runs ahead of UTC (UTC+14). */
+const MAX_HOURS_AHEAD_OF_UTC = 14;
+
 /**
  * A local practice day is within 14 hours of its UTC date, and a reminder held by
  * quiet hours can go out up to a day after its window_key date. Reading rows this
@@ -149,6 +152,15 @@ export function settledThrough(now: Date): string {
   return addDaysToIsoDate(now.toISOString().slice(0, 10), -SETTLED_DAYS_AGO);
 }
 
+/**
+ * Latest local practice day that has started somewhere as of `now`. A later day
+ * cannot have a nudge or a sit yet, so the baseline would count it as a day
+ * without either.
+ */
+function latestStartedDay(now: Date): string {
+  return new Date(now.getTime() + MAX_HOURS_AHEAD_OF_UTC * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export function resolveReportWindow(
   options: { days?: number; end?: string } = {},
   now: Date = new Date(),
@@ -160,6 +172,10 @@ export function resolveReportWindow(
   const end = options.end ?? settledThrough(now);
   if (!isValidSessionCalendarDate(end)) {
     throw new RangeError(`end must be a YYYY-MM-DD date, got "${end}"`);
+  }
+  const latest = latestStartedDay(now);
+  if (end > latest) {
+    throw new RangeError(`end must be ${latest} or earlier, the last local day that has started anywhere, got "${end}"`);
   }
   return { start: addDaysToIsoDate(end, 1 - days), end, days };
 }
@@ -578,7 +594,7 @@ export function formatNudgeEffectivenessMarkdown(report: NudgeEffectivenessRepor
   const settled = settledThrough(new Date(report.generatedAt));
   if (reportWindow.end > settled) {
     lines.push(
-      `> **Warning:** the window ends after ${settled}, so its last days may still be open in some timezones. Conversion on those days is understated.`,
+      `> **Warning:** the window ends after ${settled}, so its last days may still be open in some timezones. A sit or a nudge can still come on those days, so conversion and both baseline sit rates are not final.`,
       "",
     );
   }
@@ -623,7 +639,7 @@ export function formatNudgeEffectivenessMarkdown(report: NudgeEffectivenessRepor
     "**How to read this**",
     "",
     "- **Day:** the user's local practice day, meaning the dispatch's `window_key` date matched to `sessions.session_date`. Only completed sits count, the same test as `userCompletedSessionOnDate()`.",
-    "- **Sent:** a push is a `notification_dispatches` row, which is kept only when at least one device accepted the push. A call is a `call_attempts` row with status `initiated`: the call was placed, but whether anyone answered is not recorded.",
+    "- **Sent:** a push is a `notification_dispatches` row, which is kept only when at least one device accepted the push. APNs and web push are pooled: the ledger does not record which one delivered, so this report cannot compare them. A call is a `call_attempts` row with status `initiated`: the call was placed, but whether anyone answered is not recorded.",
     "- **Conversion:** nudged days with a completed sit saved at or after that day's first nudge of the kind. Several calls on one day count as one nudged day.",
     "- **Cohort:** each row covers only the users who got that nudge at least once in the window. Users who never got it are left out, not counted as zero.",
     "- **Shared days:** nudged days on which another kind of nudge also went out. The rows overlap, so they are not independent effects.",

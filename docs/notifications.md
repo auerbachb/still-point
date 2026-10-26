@@ -249,7 +249,7 @@ those — an app cannot suppress notifications it did not send.
 | Term | Meaning |
 |------|---------|
 | Day | The user's local practice day: the row's `window_key` date, matched to `sessions.session_date`. A weekly reminder's `YYYY-Www` key is that week's Monday. A call's `YYYY-MM-DDTHH` key is the day of that slot. No timestamp is converted to a date. |
-| Sent | Push (`daily_reminder`, `miss_a_day`, `failure_reason_reminder`): a `notification_dispatches` row. The row survives only if at least one device accepted the push. Call (`missed_sit_call`): a `call_attempts` row with status `initiated`. Ledger `missed_sit_call` rows are listed as not measured, because the scheduler keeps that claim when Vapi rejects the call. |
+| Sent | Push (`daily_reminder`, `miss_a_day`, `failure_reason_reminder`): a `notification_dispatches` row. The row survives only if at least one device accepted the push. APNs and web push are pooled, because the ledger does not record which one delivered. Call (`missed_sit_call`): a `call_attempts` row with status `initiated`. Ledger `missed_sit_call` rows are listed as not measured, because the scheduler keeps that claim when Vapi rejects the call. |
 | Converted | A completed sit credited to that day and saved (`sessions.created_at`) at or after the day's first send of that type. Several calls on one day are one nudged day. |
 | Conversion | Converted days ÷ nudged days, with a 95% Wilson interval. |
 | Baseline | For the users who got the nudge at least once: the sit rate on their nudged days, and on their days with no nudge of any kind (from signup to the window end). Users who never got a type are not in its row at all. |
@@ -264,7 +264,7 @@ POSTGRES_URL="$(npx neonctl connection-string --project-id <production project i
   npm run report:notification-effectiveness -- --days 28
 ```
 
-- `--days N` (default 28) and `--end YYYY-MM-DD` set the window. The default end is two days before today (UTC), the last day that has closed in every timezone, including the 6:00 grace window. A later `--end` adds a warning to the output.
+- `--days N` (default 28) and `--end YYYY-MM-DD` set the window. The default end is two days before today (UTC), the last day that has closed in every timezone, including the 6:00 grace window. A later `--end` adds a warning to the output: its open days can still get a sit or a nudge, so the rates are not final. An `--end` after the last local day that has started anywhere is refused, since the baseline would count those days as days without a sit.
 - `--json` prints the raw report instead of Markdown.
 - To keep the queries off production, point it at a fresh Neon branch of production. The results match production as of the branch point.
 - The connection host prints to stderr, so stdout is only the Markdown.

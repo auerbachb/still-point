@@ -95,6 +95,15 @@ describe("resolveReportWindow", () => {
     }
     expect(() => resolveReportWindow({ end: "2026-13-01" })).toThrow(RangeError);
   });
+
+  test("rejects an end that has not started in any timezone", () => {
+    // 10:00 UTC is midnight at UTC+14, where the next UTC day starts first.
+    expect(resolveReportWindow({ days: 7, end: "2026-10-27" }, at("2026-10-26T10:00:00Z")).end).toBe("2026-10-27");
+    expect(() => resolveReportWindow({ days: 7, end: "2026-10-27" }, at("2026-10-26T09:59:59Z"))).toThrow(
+      "end must be 2026-10-26 or earlier",
+    );
+    expect(() => resolveReportWindow({ days: 7, end: "2026-10-28" }, at("2026-10-26T22:00:00Z"))).toThrow(RangeError);
+  });
 });
 
 describe("wilsonInterval", () => {
@@ -264,6 +273,7 @@ describe("computeNudgeEffectiveness", () => {
       expect(markdown).toContain("| All nudges | 66.7% (4 of 6) | 35.7% (5 of 14) |");
       expect(markdown).toContain("**Selection effect:**");
       expect(markdown).toContain("Only a holdout");
+      expect(markdown).toContain("APNs and web push are pooled");
       expect(markdown).toContain("`missed_sit_call` ×3");
       expect(markdown).toContain("2 attempts had a status other than `initiated`");
       expect(markdown).toContain(
@@ -277,7 +287,9 @@ describe("computeNudgeEffectiveness", () => {
 
     test("warns when the window has days that may still be open", () => {
       const early = { ...report, generatedAt: "2026-10-08T12:00:00.000Z" };
-      expect(formatNudgeEffectivenessMarkdown(early)).toContain("the window ends after 2026-10-06");
+      const warned = formatNudgeEffectivenessMarkdown(early);
+      expect(warned).toContain("the window ends after 2026-10-06");
+      expect(warned).toContain("conversion and both baseline sit rates are not final");
       expect(markdown).not.toContain("**Warning:**");
     });
 
