@@ -21,6 +21,9 @@ let client: PGlite | null = null;
  * The instance is cached per module registry (one per Vitest test file under
  * the default isolation). Call `closeTestDb()` in `afterAll` so reruns in the
  * same worker never see leftover rows.
+ *
+ * Every test file that uses this helper must run in the `pglite` Vitest
+ * project, which budgets for the boot — see `./pgliteTestFiles.ts`.
  */
 export function getTestDb(): Promise<TestDb> {
   if (!instancePromise) {
