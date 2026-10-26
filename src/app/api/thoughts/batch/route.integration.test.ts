@@ -210,3 +210,150 @@ describe("POST /api/thoughts/batch — iOS payloads persist", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+/**
+ * Issue #792 — clearing a saved completion note. Bodies match what both clients
+ * send for an emptied note: the web completion screen and offline queue, and
+ * iOS `BatchThoughtsRequest(..., clearCompletionNote: true)`.
+ */
+describe("POST /api/thoughts/batch — clearCompletionNote (#792)", () => {
+  async function seedNoteAndThought() {
+    await db.insert(thoughts).values([
+      { userId, sessionId, dayNumber: 3, timeInSession: 12, text: "phone buzzed" },
+      { userId, sessionId, dayNumber: 3, timeInSession: -1, text: "saved note" },
+    ]);
+  }
+
+  async function storedRows() {
+    const rows = await db.select().from(thoughts).where(eq(thoughts.sessionId, sessionId));
+    return rows.map((r) => [r.timeInSession, r.text]).sort();
+  }
+
+  test("a clear-only request deletes the completion note and keeps in-sit thoughts", async () => {
+    await seedNoteAndThought();
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[],"clearCompletionNote":true}`,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).thoughts).toEqual([]);
+    expect(await storedRows()).toEqual([[12, "phone buzzed"]]);
+  });
+
+  test("clearing a session that has no note succeeds and changes nothing", async () => {
+    await db.insert(thoughts).values({
+      userId, sessionId, dayNumber: 3, timeInSession: 12, text: "phone buzzed",
+    });
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[],"clearCompletionNote":true}`,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedRows()).toEqual([[12, "phone buzzed"]]);
+  });
+
+  test("a clear sent with queued in-sit thoughts inserts them and still deletes the note", async () => {
+    await db.insert(thoughts).values({
+      userId, sessionId, dayNumber: 3, timeInSession: -1, text: "saved note",
+    });
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"clearCompletionNote":true,` +
+          `"thoughts":[{"timeInSession":47,"text":"breathing settled"}]}`,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).thoughts).toHaveLength(1);
+    expect(await storedRows()).toEqual([[47, "breathing settled"]]);
+  });
+
+  test("a clear sent with a new completion note replaces the stored one", async () => {
+    await seedNoteAndThought();
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"clearCompletionNote":true,` +
+          `"thoughts":[{"timeInSession":-1,"text":"rewritten note"}]}`,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedRows()).toEqual([
+      [-1, "rewritten note"],
+      [12, "phone buzzed"],
+    ]);
+  });
+
+  test("clearCompletionNote false keeps an empty batch a no-op", async () => {
+    await seedNoteAndThought();
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[],"clearCompletionNote":false}`,
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedRows()).toEqual([
+      [-1, "saved note"],
+      [12, "phone buzzed"],
+    ]);
+  });
+
+  test.each([
+    ["a string", `"true"`],
+    ["a number", "1"],
+    ["null", "null"],
+  ])("a clearCompletionNote that is %s fails with 400 and deletes nothing", async (_label, value) => {
+    await seedNoteAndThought();
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[],"clearCompletionNote":${value}}`,
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid clearCompletionNote");
+    expect(await storedRows()).toEqual([
+      [-1, "saved note"],
+      [12, "phone buzzed"],
+    ]);
+  });
+
+  test("a clear with a day number mismatch fails with 400 and deletes nothing", async () => {
+    await seedNoteAndThought();
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":99,"thoughts":[],"clearCompletionNote":true}`,
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Day number mismatch");
+    expect(await storedRows()).toHaveLength(2);
+  });
+
+  test("a clear against another user's session returns 404 and deletes nothing", async () => {
+    await seedNoteAndThought();
+    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other227@test.local" });
+
+    const res = await POST(
+      batchRequest(
+        `{"sessionId":"${sessionId}","dayNumber":3,"thoughts":[],"clearCompletionNote":true}`,
+      ),
+    );
+
+    expect(res.status).toBe(404);
+    expect(await storedRows()).toHaveLength(2);
+  });
+});

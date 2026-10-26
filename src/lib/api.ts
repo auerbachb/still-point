@@ -258,8 +258,9 @@ export const api = {
     data: {
       focusRating?: number;
       happinessRating?: number;
-      /** #472: mood matrix payload — partial keys allowed. */
-      moodMatrix?: MoodMatrixPayload;
+      /** #472: mood matrix payload — partial keys allowed. #792: `null` clears
+       *  the stored matrix, and an all-null row deletes that row. */
+      moodMatrix?: MoodMatrixPayload | null;
     },
   ) =>
     request<{ session: Session }>(`/api/sessions/by-session/${sessionId}`, {

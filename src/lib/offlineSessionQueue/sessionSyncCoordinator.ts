@@ -53,6 +53,12 @@ function provisionalSessionId(clientSessionId: string): string {
   return clientSessionId;
 }
 
+/** The entry still owes the server something: its session row, queued
+ *  thoughts, or a completion-note clear (#792). */
+function awaitsSync(entry: PendingSessionEntry): boolean {
+  return !entry.sessionSynced || entry.thoughts.length > 0 || entry.clearCompletionNote === true;
+}
+
 export class WebSessionSyncCoordinator {
   private readonly queueStore: OfflineSessionQueueStore;
   private readonly transport: SessionSyncTransport;
@@ -68,9 +74,7 @@ export class WebSessionSyncCoordinator {
   async pendingCount(ownerUserId: string): Promise<number> {
     const entries = await this.queueStore.loadEntries();
     return entries.filter(
-      (entry) =>
-        entry.ownerUserId === ownerUserId
-        && (!entry.sessionSynced || entry.thoughts.length > 0),
+      (entry) => entry.ownerUserId === ownerUserId && awaitsSync(entry),
     ).length;
   }
 
@@ -103,7 +107,7 @@ export class WebSessionSyncCoordinator {
         if (existing.ownerUserId !== ownerUserId) {
           throw new SessionSyncError("ownerMismatch");
         }
-        if (existing.sessionSynced && existing.thoughts.length === 0 && existing.serverSessionId) {
+        if (!awaitsSync(existing) && existing.serverSessionId) {
           return {
             sessionId: existing.serverSessionId,
             isPendingSync: false,
@@ -147,32 +151,16 @@ export class WebSessionSyncCoordinator {
     });
   }
 
-  async appendEndNote(clientSessionId: string, ownerUserId: string, note: string): Promise<void> {
+  /** Set the end note of a queued or already-synced sit. */
+  async replaceEndNote(clientSessionId: string, ownerUserId: string, note: string): Promise<void> {
     const trimmed = note.trim();
     if (!trimmed) return;
-    if (!ownerUserId) {
-      throw new SessionSyncError("missingOwnerUserId");
-    }
+    return this.writeEndNote(clientSessionId, ownerUserId, trimmed);
+  }
 
-    return withQueueMutation(async () => {
-      const entries = await this.queueStore.loadEntries();
-      const index = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
-      if (index < 0) {
-        throw new SessionSyncError("entryNotFound");
-      }
-      if (entries[index]!.ownerUserId !== ownerUserId) {
-        throw new SessionSyncError("ownerMismatch");
-      }
-
-      // #753: autosave can run again as the note is edited. Keep one end note
-      // and replace its text. A second -1 in the same batch is rejected.
-      const kept = entries[index]!.thoughts.filter((thought) => thought.timeInSession !== -1);
-      kept.push({ timeInSession: -1, text: trimmed });
-      entries[index]!.thoughts = kept;
-      await this.queueStore.saveEntries(entries);
-      await requestBackgroundSync();
-      await this.flushEntry(clientSessionId, ownerUserId);
-    });
+  /** #792: remove the end note of a queued or already-synced sit. */
+  async clearEndNote(clientSessionId: string, ownerUserId: string): Promise<void> {
+    return this.writeEndNote(clientSessionId, ownerUserId, null);
   }
 
   async flushPending(ownerUserId: string): Promise<number> {
@@ -182,8 +170,11 @@ export class WebSessionSyncCoordinator {
     let syncedCount = 0;
     for (const entry of entries) {
       if (entry.ownerUserId !== ownerUserId) continue;
-      if (entry.sessionSynced && entry.thoughts.length === 0) continue;
-      const flushed = await this.flushEntry(entry.clientSessionId, ownerUserId);
+      if (!awaitsSync(entry)) continue;
+      // #792: through the same chain as note edits, so an edit can never land
+      // between this upload and the queue update that follows it — and a clear
+      // can never reach the server ahead of the note it is meant to delete.
+      const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
       if (flushed) syncedCount += 1;
     }
     return syncedCount;
@@ -198,18 +189,58 @@ export class WebSessionSyncCoordinator {
 
   async pruneCompletedEntries(ownerUserId: string): Promise<void> {
     if (!ownerUserId) return;
-    const entries = await this.queueStore.loadEntries();
-    const next = entries.filter(
-      (entry) =>
-        !(entry.ownerUserId === ownerUserId && entry.sessionSynced && entry.thoughts.length === 0),
-    );
-    if (next.length !== entries.length) {
-      await this.queueStore.saveEntries(next);
-    }
+    // #792: in turn with note edits and flushes. Saved from a stale read, the
+    // filtered list would drop an entry whose clear was flagged in between.
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const next = entries.filter(
+        (entry) => !(entry.ownerUserId === ownerUserId && !awaitsSync(entry)),
+      );
+      if (next.length !== entries.length) {
+        await this.queueStore.saveEntries(next);
+      }
+    });
   }
 
   async clearQueue(): Promise<void> {
     await this.queueStore.saveEntries([]);
+  }
+
+  /** `note` null clears it. Either way the queue keeps at most one end note
+   *  and never touches the sit's in-session thoughts. */
+  private async writeEndNote(
+    clientSessionId: string,
+    ownerUserId: string,
+    note: string | null,
+  ): Promise<void> {
+    if (!ownerUserId) {
+      throw new SessionSyncError("missingOwnerUserId");
+    }
+
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const index = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
+      if (index < 0) {
+        throw new SessionSyncError("entryNotFound");
+      }
+      const entry = entries[index]!;
+      if (entry.ownerUserId !== ownerUserId) {
+        throw new SessionSyncError("ownerMismatch");
+      }
+
+      // #753: autosave can run again as the note is edited. Keep one end note
+      // and replace its text. A second -1 in the same batch is rejected.
+      const kept = entry.thoughts.filter((thought) => thought.timeInSession !== -1);
+      if (note !== null) kept.push({ timeInSession: -1, text: note });
+      entry.thoughts = kept;
+      // #792: a new note replaces the stored one server-side, so only a clear
+      // needs the flag — and only once the sit has a server row that could hold
+      // a note. Before that, dropping the queued note is the whole clear.
+      entry.clearCompletionNote = note === null && entry.sessionSynced;
+      await this.queueStore.saveEntries(entries);
+      await requestBackgroundSync();
+      await this.flushEntry(clientSessionId, ownerUserId);
+    });
   }
 
   private async flushEntry(
@@ -247,30 +278,37 @@ export class WebSessionSyncCoordinator {
       (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
     ) ?? entry;
 
-    if (entry.thoughts.length > 0) {
+    const sentClear = entry.clearCompletionNote === true;
+    if (entry.thoughts.length > 0 || sentClear) {
       const sent = entry.thoughts;
       try {
         await this.transport.batchThoughts({
           sessionId: serverSessionId,
           dayNumber: entry.request.dayNumber,
           thoughts: sent,
+          ...(sentClear ? { clearCompletionNote: true as const } : {}),
         });
         const entries = await this.queueStore.loadEntries();
         const index = entries.findIndex(
           (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
         );
         if (index < 0) return entry;
-        if (entries[index]!.thoughts.length === 0) return entry;
+        const current = entries[index]!;
         // Only drop what this batch sent. A note replaced while the request was
-        // in flight (#753 autosave) stays queued for the next flush.
-        entries[index]!.thoughts = entries[index]!.thoughts.filter(
+        // in flight (#753 autosave) stays queued for the next flush, and a clear
+        // asked for after a request that carried none stays set (#792).
+        const remaining = current.thoughts.filter(
           (thought) =>
             !sent.some(
               (item) => item.timeInSession === thought.timeInSession && item.text === thought.text,
             ),
         );
+        const clearDelivered = sentClear && current.clearCompletionNote === true;
+        if (remaining.length === current.thoughts.length && !clearDelivered) return current;
+        current.thoughts = remaining;
+        if (clearDelivered) current.clearCompletionNote = false;
         await this.queueStore.saveEntries(entries);
-        entry = entries[index]!;
+        entry = current;
       } catch (error) {
         if (isNetworkFailure(error)) return null;
         if (error && typeof error === "object" && "permanent" in error) throw error;

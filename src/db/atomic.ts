@@ -131,6 +131,8 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
   userId: string;
   sessionId: string;
   dayNumber: number;
+  /** #792: delete the stored completion note even when no replacement is sent. */
+  clearCompletionNote: boolean;
   completionNote: ThoughtInsertRow | null;
   rowsToInsert: ThoughtInsertRow[];
 }): Promise<Array<{
@@ -140,13 +142,15 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
   timeInSession: number;
   text: string;
 }>> {
-  const { userId, sessionId, dayNumber, completionNote, rowsToInsert } = params;
+  const { userId, sessionId, dayNumber, clearCompletionNote, completionNote, rowsToInsert } = params;
+  // A new note replaces the stored one; an explicit clear removes it outright.
+  const deleteStoredNote = clearCompletionNote || completionNote !== null;
 
-  if (!completionNote && rowsToInsert.length === 0) {
+  if (!deleteStoredNote && rowsToInsert.length === 0) {
     return [];
   }
 
-  if (completionNote && rowsToInsert.length === 0) {
+  if (deleteStoredNote && rowsToInsert.length === 0) {
     await db
       .delete(thoughts)
       .where(
@@ -167,7 +171,7 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
     text: row.text,
   }));
 
-  if (completionNote) {
+  if (deleteStoredNote) {
     const valueRows = values.map(
       (row) => sql`(${row.userId}::uuid, ${row.sessionId}::uuid, ${row.dayNumber}, ${row.timeInSession}, ${row.text})`,
     );

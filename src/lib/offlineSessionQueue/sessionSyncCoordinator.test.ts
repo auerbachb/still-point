@@ -125,19 +125,19 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     expect(entries[0]!.thoughts).toHaveLength(0);
   });
 
-  test("appendEndNote queues note for pending entry", async () => {
+  test("replaceEndNote queues note for pending entry", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440005";
 
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
-    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "offline note");
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "offline note");
 
     const entries = await store.loadEntries();
     expect(entries[0]!.thoughts).toEqual([{ timeInSession: -1, text: "offline note" }]);
   });
 
-  test("appendEndNote replaces the queued end note instead of appending another", async () => {
+  test("replaceEndNote replaces the queued end note instead of appending another", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440015";
@@ -148,8 +148,8 @@ describe("WebSessionSyncCoordinator (#558)", () => {
       testOwnerUserId,
       [{ timeInSession: 12, text: "mid-sit" }],
     );
-    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "first draft");
-    await coordinator.appendEndNote(clientSessionId, testOwnerUserId, "revised note");
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "first draft");
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "revised note");
 
     const entries = await store.loadEntries();
     expect(entries[0]!.thoughts).toEqual([
@@ -270,7 +270,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     expect(await store.loadEntries()).toHaveLength(1);
   });
 
-  test("appendEndNote rejects owner mismatch", async () => {
+  test("replaceEndNote rejects owner mismatch", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440006";
@@ -278,7 +278,264 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
 
     await expect(
-      coordinator.appendEndNote(clientSessionId, "other-user", "note"),
+      coordinator.replaceEndNote(clientSessionId, "other-user", "note"),
     ).rejects.toThrow(SessionSyncError);
+  });
+});
+
+/** Let every queued microtask run, so a chain that is blocked shows as blocked. */
+const drainMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+type SentBatch = Parameters<SessionSyncTransport["batchThoughts"]>[0];
+
+/** A synced sit with these thoughts still queued, as a flush would find it. */
+async function seedSyncedEntry(
+  store: InMemoryOfflineSessionQueueStore,
+  clientSessionId: string,
+  thoughts: PendingSessionEntry["thoughts"],
+): Promise<void> {
+  await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+    baseRequest(),
+    clientSessionId,
+    testOwnerUserId,
+    [],
+  );
+  const seeded = await store.loadEntries();
+  seeded[0]!.sessionSynced = true;
+  seeded[0]!.serverSessionId = `server-${clientSessionId}`;
+  seeded[0]!.thoughts = thoughts;
+  await store.saveEntries(seeded);
+}
+
+function recordingTransport(batches: SentBatch[]): SessionSyncTransport {
+  return {
+    ...alwaysFailingSessionSyncTransport,
+    batchThoughts: async (data) => {
+      batches.push(data);
+    },
+  };
+}
+
+describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
+  test("clearEndNote before sync drops the queued note, keeps in-sit thoughts, and sends nothing", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440020";
+
+    await coordinator.saveCompletedSession(
+      baseRequest(),
+      clientSessionId,
+      testOwnerUserId,
+      [{ timeInSession: 12, text: "mid-sit" }],
+    );
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "offline note");
+    await coordinator.clearEndNote(clientSessionId, testOwnerUserId);
+
+    const [entry] = await store.loadEntries();
+    expect(entry!.thoughts).toEqual([{ timeInSession: 12, text: "mid-sit" }]);
+    // No server row yet, so there is no stored note to delete.
+    expect(entry!.clearCompletionNote).toBe(false);
+  });
+
+  test("clearEndNote after sync sends clearCompletionNote to the server session, then resets it", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440021";
+    await seedSyncedEntry(store, clientSessionId, []);
+    const batches: SentBatch[] = [];
+
+    await new WebSessionSyncCoordinator(store, recordingTransport(batches))
+      .clearEndNote(clientSessionId, testOwnerUserId);
+
+    expect(batches).toEqual([{
+      sessionId: `server-${clientSessionId}`,
+      dayNumber: 1,
+      thoughts: [],
+      clearCompletionNote: true,
+    }]);
+    const [entry] = await store.loadEntries();
+    expect(entry!.clearCompletionNote).toBe(false);
+    expect(entry!.thoughts).toEqual([]);
+  });
+
+  test("a clear that cannot reach the server stays queued, counts as pending, and survives pruning", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440022";
+    await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "saved note" }]);
+
+    await coordinator.clearEndNote(clientSessionId, testOwnerUserId);
+    await coordinator.pruneCompletedEntries(testOwnerUserId);
+
+    const entries = await store.loadEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.thoughts).toEqual([]);
+    expect(entries[0]!.clearCompletionNote).toBe(true);
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
+
+    const batches: SentBatch[] = [];
+    const flushed = await new WebSessionSyncCoordinator(store, recordingTransport(batches))
+      .flushPending(testOwnerUserId);
+    expect(flushed).toBe(1);
+    expect(batches.map((batch) => batch.clearCompletionNote)).toEqual([true]);
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(0);
+  });
+
+  test("replaceEndNote after a queued clear sends the new note without the clear flag", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440023";
+    await seedSyncedEntry(store, clientSessionId, []);
+    const offline = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    await offline.clearEndNote(clientSessionId, testOwnerUserId);
+    await offline.replaceEndNote(clientSessionId, testOwnerUserId, "second thoughts");
+
+    const batches: SentBatch[] = [];
+    await new WebSessionSyncCoordinator(store, recordingTransport(batches)).flushPending(testOwnerUserId);
+
+    // The server replaces the stored note on its own; the flag is not needed.
+    expect(batches).toEqual([{
+      sessionId: `server-${clientSessionId}`,
+      dayNumber: 1,
+      thoughts: [{ timeInSession: -1, text: "second thoughts" }],
+    }]);
+  });
+
+  test("a clear asked for while a note upload is in flight is not erased by that upload's acknowledgement", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440024";
+    await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "first draft" }]);
+
+    // Another tab clears the note while this tab's upload of it is on the wire.
+    const transport: SessionSyncTransport = {
+      ...alwaysFailingSessionSyncTransport,
+      batchThoughts: async () => {
+        const entries = await store.loadEntries();
+        entries[0]!.thoughts = [];
+        entries[0]!.clearCompletionNote = true;
+        await store.saveEntries(entries);
+      },
+    };
+
+    await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
+
+    const [entry] = await store.loadEntries();
+    expect(entry!.clearCompletionNote).toBe(true);
+  });
+
+  test("flushPending holds a clear until the note upload ahead of it is acknowledged", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440025";
+    await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "first draft" }]);
+
+    const batches: SentBatch[] = [];
+    let uploadStarted!: () => void;
+    const started = new Promise<void>((resolve) => { uploadStarted = resolve; });
+    let releaseUpload!: () => void;
+    const released = new Promise<void>((resolve) => { releaseUpload = resolve; });
+    const coordinator = new WebSessionSyncCoordinator(store, {
+      ...alwaysFailingSessionSyncTransport,
+      batchThoughts: async (data) => {
+        batches.push(data);
+        if (batches.length === 1) {
+          uploadStarted();
+          await released;
+        }
+      },
+    });
+
+    const flushing = coordinator.flushPending(testOwnerUserId);
+    await started;
+    const clearing = coordinator.clearEndNote(clientSessionId, testOwnerUserId);
+    await drainMicrotasks();
+
+    // The clear waits its turn: nothing new on the wire, and the queue still
+    // holds the note the in-flight upload is sending.
+    expect(batches).toHaveLength(1);
+    expect((await store.loadEntries())[0]!.thoughts).toEqual([{ timeInSession: -1, text: "first draft" }]);
+
+    releaseUpload();
+    await flushing;
+    await clearing;
+
+    // Upload first, then the clear that deletes what it stored.
+    expect(batches.map((batch) => [batch.thoughts, batch.clearCompletionNote])).toEqual([
+      [[{ timeInSession: -1, text: "first draft" }], undefined],
+      [[], true],
+    ]);
+    const [entry] = await store.loadEntries();
+    expect(entry!.thoughts).toEqual([]);
+    expect(entry!.clearCompletionNote).toBe(false);
+  });
+
+  test("pruning takes its turn, so a clear flagged during it is never silently dropped", async () => {
+    const inner = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440028";
+    // Fully synced and nothing queued: prunable when pruning reads the queue.
+    await seedSyncedEntry(inner, clientSessionId, []);
+
+    // A read that returns its snapshot late, like an IndexedDB read whose
+    // result lands after other work has run.
+    let holdNextRead = false;
+    let readTaken!: () => void;
+    const taken = new Promise<void>((resolve) => { readTaken = resolve; });
+    let releaseRead!: () => void;
+    const released = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const store: OfflineSessionQueueStore = {
+      loadEntries: async () => {
+        const snapshot = await inner.loadEntries();
+        if (holdNextRead) {
+          holdNextRead = false;
+          readTaken();
+          await released;
+        }
+        return snapshot;
+      },
+      saveEntries: (entries) => inner.saveEntries(entries),
+    };
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+
+    holdNextRead = true;
+    const pruning = coordinator.pruneCompletedEntries(testOwnerUserId);
+    await taken;
+    const clearing = coordinator.clearEndNote(clientSessionId, testOwnerUserId);
+    const clearOutcome = clearing.then(() => "cleared", (error: Error) => error.message);
+    await drainMicrotasks();
+    releaseRead();
+    await pruning;
+
+    // The prune ran first on its own read, so the clear must find no entry and
+    // say so — never report success for a flag the prune then threw away.
+    expect(await clearOutcome).toBe("entryNotFound");
+    expect(await inner.loadEntries()).toEqual([]);
+  });
+
+  test("an entry saved before the clear flag existed reads as having nothing to clear", async () => {
+    const legacy: PendingSessionEntry = {
+      clientSessionId: "550e8400-e29b-41d4-a716-446655440026",
+      ownerUserId: testOwnerUserId,
+      request: requestWithClientId(baseRequest(), "550e8400-e29b-41d4-a716-446655440026"),
+      thoughts: [],
+      serverSessionId: "server-legacy",
+      sessionSynced: true,
+      enqueuedAt: "2026-07-17T12:00:00.000Z",
+    };
+    const store = new InMemoryOfflineSessionQueueStore();
+    await store.saveEntries([legacy]);
+    const batches: SentBatch[] = [];
+    const coordinator = new WebSessionSyncCoordinator(store, recordingTransport(batches));
+
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(0);
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(0);
+    expect(batches).toEqual([]);
+  });
+
+  test("clearEndNote on an unknown sit throws entryNotFound", async () => {
+    const coordinator = new WebSessionSyncCoordinator(
+      new InMemoryOfflineSessionQueueStore(),
+      alwaysFailingSessionSyncTransport,
+    );
+
+    await expect(
+      coordinator.clearEndNote("550e8400-e29b-41d4-a716-446655440027", testOwnerUserId),
+    ).rejects.toThrow("entryNotFound");
   });
 });

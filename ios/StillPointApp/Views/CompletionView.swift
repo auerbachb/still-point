@@ -52,12 +52,24 @@ struct CompletionView: View {
     @State private var moodMatrix: [MoodKey: MoodMatrixEntry] = [:]
     @State private var moodMatrixSaved = false
     @State private var lastSavedMoodKey = ""
+    /// #792: the rows the server holds, so deselecting them clears them there.
+    @State private var persistedMood: [String: MoodMatrixEntry] = [:]
     @State private var isSavingMoodMatrix = false
     @State private var moodMatrixSaveError: String?
+
+    /// #792: where this sit stands in the offline queue — nil until it is read.
+    @State private var queueState: SessionSyncCoordinator.QueuedSessionState?
 
     private enum MoodMatrixColumn {
         case before
         case after
+    }
+
+    /// #792: the id ratings and mood are sent against. Nil until the queue says
+    /// the sit has a server row: a pending sit's `sessionId` is its provisional
+    /// client id, and every PATCH against it fails.
+    private var detailSessionId: String? {
+        queueState?.detailSessionId(handedSessionId: sessionId)
     }
 
     private var nextDuration: Int {
@@ -251,8 +263,10 @@ struct CompletionView: View {
                     }
                 }
 
-                // Post-session ratings (#521)
-                if !sessionId.isEmpty {
+                // Post-session ratings (#521). #792: hidden while the sit is
+                // pending sync, as on web — there is no server row to attach
+                // them to, so "save and return to home" leaves on the first tap.
+                if detailSessionId != nil {
                     ratingsSection
                     moodMatrixSection
                 }
@@ -318,6 +332,7 @@ struct CompletionView: View {
             }
         }
         .task(id: sessionId) {
+            await resolveQueueState()
             await loadPersistedSessionData()
         }
     }
@@ -479,7 +494,7 @@ struct CompletionView: View {
     }
 
     private func saveRatings() async {
-        guard !sessionId.isEmpty, !isSavingRatings else { return }
+        guard let detailSessionId, !isSavingRatings else { return }
         guard focusTouched || happinessTouched else { return }
         let key = ratingsSaveKey
         guard key != lastSavedRatingsKey else {
@@ -494,7 +509,7 @@ struct CompletionView: View {
             happinessRating: happinessTouched ? Int(happinessRating) : nil
         )
         do {
-            _ = try await APIClient.shared.updateSessionRatings(sessionId: sessionId, ratings: patch)
+            _ = try await APIClient.shared.updateSessionRatings(sessionId: detailSessionId, ratings: patch)
             isSavingRatings = false
             lastSavedRatingsKey = key
             ratingsSaved = true
@@ -704,22 +719,25 @@ struct CompletionView: View {
     }
 
     private func saveMoodMatrix() async {
-        guard !sessionId.isEmpty, !isSavingMoodMatrix else { return }
-        guard MoodMatrixLogic.isTouched(moodMatrix) else { return }
+        guard let detailSessionId, !isSavingMoodMatrix else { return }
         let key = moodSaveKey
         guard key != lastSavedMoodKey else {
-            moodMatrixSaved = true
+            moodMatrixSaved = !key.isEmpty
             moodMatrixSaveError = nil
             return
         }
         isSavingMoodMatrix = true
         moodMatrixSaveError = nil
-        let patch = MoodMatrixPatch(from: moodMatrix)
+        // #792: deselecting every cell clears the stored matrix; emptying one
+        // stored row deletes just that row.
+        let desired = MoodMatrixLogic.buildPayload(from: moodMatrix)
+        let patch = MoodMatrixPatch(from: moodMatrix, persisted: persistedMood)
         do {
-            _ = try await APIClient.shared.updateSessionMoodMatrix(sessionId: sessionId, patch: patch)
+            _ = try await APIClient.shared.updateSessionMoodMatrix(sessionId: detailSessionId, patch: patch)
             isSavingMoodMatrix = false
             lastSavedMoodKey = key
-            moodMatrixSaved = true
+            persistedMood = desired
+            moodMatrixSaved = !patch.clearsMatrix
         } catch is CancellationError {
             isSavingMoodMatrix = false
         } catch let error as APIError {
@@ -769,16 +787,32 @@ struct CompletionView: View {
         }
     }
 
+    /// #792: read once, when the screen opens — like web's `isPendingSync`, a
+    /// sit that syncs while the screen is up stays pending here. A failed read
+    /// leaves the state unread, which keeps ratings and mood hidden rather than
+    /// risk sending them against a provisional id.
+    @MainActor
+    private func resolveQueueState() async {
+        guard let ownerUserId = appVM.currentUser?.id else { return }
+        queueState = try? await SessionSyncCoordinator.shared.queuedSessionState(
+            clientSessionId: clientSessionId,
+            ownerUserId: ownerUserId
+        )
+    }
+
     @MainActor
     private func loadPersistedSessionData() async {
-        guard !sessionId.isEmpty else { return }
+        guard let detailSessionId else { return }
         moodMatrix = [:]
         moodMatrixSaved = false
         moodMatrixSaveError = nil
         do {
-            let (session, _) = try await APIClient.shared.getSessionBySessionId(sessionId)
+            let (session, _) = try await APIClient.shared.getSessionBySessionId(detailSessionId)
             if let stored = session.moodMatrix {
                 moodMatrix = MoodMatrixLogic.sanitizedStored(stored)
+                // #792: a loaded matrix is stored, so deselecting it is a clear.
+                persistedMood = MoodMatrixLogic.buildPayload(from: moodMatrix)
+                lastSavedMoodKey = moodSaveKey
             }
         } catch {
             // Non-blocking: recap still works when reload fails.
@@ -811,11 +845,13 @@ struct CompletionView: View {
         )
     }
 
+    /// Saves the trimmed note, or — #792 — clears the stored one once the field
+    /// is emptied. An empty note that was never saved sends nothing.
     private func saveEndNote() async {
         let noteToSave = trimmedEndNote
-        guard !noteToSave.isEmpty, !sessionId.isEmpty, !isSaving else { return }
+        guard !sessionId.isEmpty, !isSaving else { return }
         guard noteToSave != lastSavedNote else {
-            noteSaved = true
+            noteSaved = !noteToSave.isEmpty
             saveError = nil
             return
         }
@@ -823,42 +859,24 @@ struct CompletionView: View {
         isSaving = true
         saveError = nil
         do {
-            try await SessionSyncCoordinator.shared.appendEndNote(
-                clientSessionId: clientSessionId,
-                ownerUserId: ownerUserId,
-                note: noteToSave
-            )
+            if noteToSave.isEmpty {
+                try await SessionSyncCoordinator.shared.clearEndNote(
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId
+                )
+            } else {
+                try await SessionSyncCoordinator.shared.replaceEndNote(
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
+                    note: noteToSave
+                )
+            }
             isSaving = false
             lastSavedNote = noteToSave
-            noteSaved = true
+            noteSaved = !noteToSave.isEmpty
             logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
         } catch SessionSyncError.entryNotFound {
-            let request = BatchThoughtsRequest(
-                sessionId: sessionId,
-                dayNumber: dayNumber,
-                thoughts: [
-                    BatchThoughtsRequest.ThoughtInput(
-                        timeInSession: -1,
-                        text: noteToSave
-                    )
-                ]
-            )
-            do {
-                _ = try await APIClient.shared.batchThoughts(request)
-                isSaving = false
-                lastSavedNote = noteToSave
-                noteSaved = true
-                logUITestDiagnostic("completion.saveEndNote.success sessionId=\(sessionId)")
-            } catch let error as APIError {
-                print("Failed to save end note: \(error)")
-                isSaving = false
-                saveError = saveErrorMessage(for: error.status)
-                logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
-            } catch {
-                print("Failed to save end note: \(error)")
-                isSaving = false
-                saveError = "Could not save your note. Please try again."
-            }
+            await saveEndNoteToServer(noteToSave)
         } catch let error as APIError {
             print("Failed to save end note: \(error)")
             isSaving = false
@@ -872,9 +890,58 @@ struct CompletionView: View {
         }
     }
 
+    /// No sit in the queue under this client id — a buddy sit, which records
+    /// itself on the server — so the note goes straight to its session.
+    private func saveEndNoteToServer(_ noteToSave: String) async {
+        // #792: never the provisional id of a sit that was pending; the server
+        // has no row for it. The entry is gone now, so an unread state counts
+        // as not queued.
+        guard let targetSessionId = (queueState ?? .notQueued).detailSessionId(handedSessionId: sessionId) else {
+            isSaving = false
+            saveError = saveErrorMessage(for: 0)
+            logUITestDiagnostic("completion.saveEndNote.noServerSession clientSessionId=\(clientSessionId.uuidString)")
+            return
+        }
+        let request = noteToSave.isEmpty
+            ? BatchThoughtsRequest(
+                sessionId: targetSessionId,
+                dayNumber: dayNumber,
+                thoughts: [],
+                clearCompletionNote: true
+            )
+            : BatchThoughtsRequest(
+                sessionId: targetSessionId,
+                dayNumber: dayNumber,
+                thoughts: [
+                    BatchThoughtsRequest.ThoughtInput(
+                        timeInSession: -1,
+                        text: noteToSave
+                    )
+                ]
+            )
+        do {
+            _ = try await APIClient.shared.batchThoughts(request)
+            isSaving = false
+            lastSavedNote = noteToSave
+            noteSaved = !noteToSave.isEmpty
+            logUITestDiagnostic("completion.saveEndNote.success sessionId=\(targetSessionId)")
+        } catch let error as APIError {
+            print("Failed to save end note: \(error)")
+            isSaving = false
+            saveError = saveErrorMessage(for: error.status)
+            logUITestDiagnostic("completion.saveEndNote.apiError status=\(error.status) message=\(error.message)")
+        } catch {
+            print("Failed to save end note: \(error)")
+            isSaving = false
+            saveError = "Could not save your note. Please try again."
+        }
+    }
+
     private func scheduleNoteAutosave(for note: String) {
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !sessionId.isEmpty, trimmed != lastSavedNote else { return }
+        // #792: an empty note, or one matching the last save, is still
+        // scheduled. `saveEndNote` decides once any save in flight is done, so
+        // emptying the field while that save is on the wire still clears it.
+        guard !sessionId.isEmpty else { return }
         noteAutosaveTask?.cancel()
         noteAutosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 800_000_000)

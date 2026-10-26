@@ -4,11 +4,13 @@
  * Unit tests for the helper functions in @/lib/moodMatrix:
  *   - isMoodMatrixTouched: detects whether any cell has been selected
  *   - buildMoodMatrixPayload: strips untouched rows before sending to the API
+ *   - buildMoodMatrixPatch: clears or deletes rows the user emptied (#792)
  */
 import { describe, expect, test } from "vitest";
 import {
   isMoodMatrixTouched,
   buildMoodMatrixPayload,
+  buildMoodMatrixPatch,
   MOOD_KEYS,
   type MoodMatrixValue,
 } from "@/lib/moodMatrix";
@@ -119,5 +121,47 @@ describe("buildMoodMatrixPayload", () => {
     };
     const result = buildMoodMatrixPayload(value);
     expect(result.overall).toEqual({ before: null, after: 5 });
+  });
+});
+
+describe("buildMoodMatrixPatch (#792)", () => {
+  test("returns null — clear the stored matrix — once every cell is deselected", () => {
+    const current: MoodMatrixValue = {
+      calm: { before: null, after: null },
+      focus: { before: null, after: null },
+    };
+    expect(buildMoodMatrixPatch(current, { calm: { before: 2, after: 4 } })).toBeNull();
+  });
+
+  test("sends an all-null row for a stored row the user emptied", () => {
+    const current: MoodMatrixValue = {
+      calm: { before: null, after: null },
+      focus: { before: 3, after: 5 },
+    };
+    const persisted = {
+      calm: { before: 2, after: 4 },
+      focus: { before: 3, after: 4 },
+    };
+    expect(buildMoodMatrixPatch(current, persisted)).toEqual({
+      calm: { before: null, after: null },
+      focus: { before: 3, after: 5 },
+    });
+  });
+
+  test("leaves out rows that were never stored", () => {
+    const current: MoodMatrixValue = {
+      energy: { before: null, after: null },
+      overall: { before: 1, after: 2 },
+    };
+    expect(buildMoodMatrixPatch(current, {})).toEqual({ overall: { before: 1, after: 2 } });
+  });
+
+  test("matches buildMoodMatrixPayload when nothing stored was emptied", () => {
+    const current: MoodMatrixValue = {
+      calm: { before: 2, after: 4 },
+      anxiety: { before: 5, after: null },
+    };
+    expect(buildMoodMatrixPatch(current, { calm: { before: 1, after: 1 } }))
+      .toEqual(buildMoodMatrixPayload(current));
   });
 });

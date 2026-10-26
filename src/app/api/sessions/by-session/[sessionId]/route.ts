@@ -20,39 +20,65 @@ function isValidMoodValue(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
 }
 
-function isValidMoodEntry(entry: unknown): entry is { before: number | null; after: number | null } {
+type MoodRow = { before: number | null; after: number | null };
+
+/** Both cells are required keys; either may be null. A row with both null is
+ *  valid and means "delete this row" (#792). */
+function isValidMoodEntry(entry: unknown): entry is MoodRow {
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return false;
   const e = entry as Record<string, unknown>;
   const beforeOk = e.before === null || isValidMoodValue(e.before);
   const afterOk = e.after === null || isValidMoodValue(e.after);
-  return beforeOk && afterOk && (e.before !== null || e.after !== null);
+  return beforeOk && afterOk;
 }
 
-/** Validate a full moodMatrix payload object. Returns an error string or null. */
+/** Validate a moodMatrix payload. `null` clears the stored matrix (#792); `{}`
+ *  stays an error so that an empty body can never delete data. */
 function validateMoodMatrix(
   value: unknown,
-): { validated: Record<string, { before: number | null; after: number | null }> } | { error: string } {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return { error: "moodMatrix must be a JSON object" };
+): { validated: Record<string, MoodRow> | null } | { error: string } {
+  if (value === null) {
+    return { validated: null };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { error: "moodMatrix must be a JSON object or null" };
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj);
   if (keys.length === 0) {
     return { error: "moodMatrix must have at least one mood entry" };
   }
-  const validated: Record<string, { before: number | null; after: number | null }> = {};
+  const validated: Record<string, MoodRow> = {};
   for (const key of keys) {
     if (!(MOOD_KEYS as readonly string[]).includes(key)) {
       return { error: `Unknown mood key: ${key}` };
     }
     if (!isValidMoodEntry(obj[key])) {
       return {
-        error: `Invalid mood entry for ${key}: each entry must have before/after (1-5 or null, at least one non-null)`,
+        error: `Invalid mood entry for ${key}: each entry must have before/after (1-5 or null)`,
       };
     }
-    validated[key] = obj[key] as { before: number | null; after: number | null };
+    validated[key] = obj[key] as MoodRow;
   }
   return { validated };
+}
+
+/** Merge submitted rows into the stored matrix. An all-null row removes that
+ *  row, and a matrix left with no rows is stored as null — the same value GET
+ *  returns for a session with no mood recorded. */
+function mergeMoodMatrix(
+  prior: Record<string, MoodRow>,
+  submitted: Record<string, MoodRow>,
+): Record<string, MoodRow> | null {
+  const merged = { ...prior };
+  for (const [key, row] of Object.entries(submitted)) {
+    if (row.before === null && row.after === null) {
+      delete merged[key];
+    } else {
+      merged[key] = row;
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : null;
 }
 
 export const GET = withApiHandler(
@@ -127,7 +153,7 @@ export const PATCH = withApiHandler(
     }
     const updates: Partial<
       Record<(typeof RATING_FIELDS)[number], number> & {
-        moodMatrix: Record<string, { before: number | null; after: number | null }>;
+        moodMatrix: Record<string, MoodRow> | null;
       }
     > = {};
     const bodyObj = body as Record<string, unknown>;
@@ -141,26 +167,30 @@ export const PATCH = withApiHandler(
     }
 
     // #472: mood matrix — validate incoming rows and merge with persisted data.
+    // #792: `null` clears it; the update below still scopes to the owner, so a
+    // clear against another user's session is a 404 like any other write.
     if (bodyObj.moodMatrix !== undefined) {
       const result = validateMoodMatrix(bodyObj.moodMatrix);
       if ("error" in result) {
         return NextResponse.json({ error: result.error }, { status: 400 });
       }
 
-      const [existing] = await db
-        .select({ moodMatrix: sessions.moodMatrix })
-        .from(sessions)
-        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.user.userId)))
-        .limit(1);
+      if (result.validated === null) {
+        updates.moodMatrix = null;
+      } else {
+        const [existing] = await db
+          .select({ moodMatrix: sessions.moodMatrix })
+          .from(sessions)
+          .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.user.userId)))
+          .limit(1);
 
-      if (!existing) {
-        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+        if (!existing) {
+          return NextResponse.json({ error: "Session not found" }, { status: 404 });
+        }
+
+        const prior = (existing.moodMatrix as Record<string, MoodRow> | null) ?? {};
+        updates.moodMatrix = mergeMoodMatrix(prior, result.validated);
       }
-
-      const prior =
-        (existing.moodMatrix as Record<string, { before: number | null; after: number | null }> | null) ??
-        {};
-      updates.moodMatrix = { ...prior, ...result.validated };
     }
 
     if (Object.keys(updates).length === 0) {

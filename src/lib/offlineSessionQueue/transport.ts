@@ -7,6 +7,8 @@ export type SessionSyncTransport = {
     sessionId: string;
     dayNumber: number;
     thoughts: PendingSessionThought[];
+    /** #792: present (and true) only when the queued entry asks for a clear. */
+    clearCompletionNote?: true;
   }) => Promise<void>;
 };
 

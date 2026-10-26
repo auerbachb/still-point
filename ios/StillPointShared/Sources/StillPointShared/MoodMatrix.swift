@@ -102,19 +102,51 @@ public enum MoodMatrixLogic {
 
 /// #635: nil-omitting PATCH body `{ "moodMatrix": { … } }` for session recap saves.
 public struct MoodMatrixPatch: Encodable, Sendable {
+    /// Rows merged into the stored matrix. An all-nil row deletes that row
+    /// server-side (#792).
     public let entries: [String: MoodMatrixEntry]
+    /// #792: encodes `{ "moodMatrix": null }`, which deletes the stored matrix.
+    public let clearsMatrix: Bool
 
     public init(entries: [String: MoodMatrixEntry]) {
         self.entries = entries
+        self.clearsMatrix = false
     }
 
     public init(from value: [MoodKey: MoodMatrixEntry]) {
-        self.entries = MoodMatrixLogic.buildPayload(from: value)
+        self.init(entries: MoodMatrixLogic.buildPayload(from: value))
     }
+
+    /// #792: the patch that turns the stored matrix (`persisted`) into `value`.
+    /// A clear once no cell is left; otherwise the touched rows plus an all-nil
+    /// row for each stored row the user has since emptied.
+    public init(from value: [MoodKey: MoodMatrixEntry], persisted: [String: MoodMatrixEntry]) {
+        var entries = MoodMatrixLogic.buildPayload(from: value)
+        guard !entries.isEmpty else {
+            self = .clear
+            return
+        }
+        for key in persisted.keys where entries[key] == nil {
+            entries[key] = MoodMatrixEntry()
+        }
+        self.init(entries: entries)
+    }
+
+    private init(clearing: Void) {
+        self.entries = [:]
+        self.clearsMatrix = true
+    }
+
+    /// #792: delete the stored matrix.
+    public static let clear = MoodMatrixPatch(clearing: ())
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(entries, forKey: .moodMatrix)
+        if clearsMatrix {
+            try container.encodeNil(forKey: .moodMatrix)
+        } else {
+            try container.encode(entries, forKey: .moodMatrix)
+        }
     }
 
     private enum CodingKeys: String, CodingKey {

@@ -489,6 +489,9 @@ public struct BatchThoughtsRequest: Codable, Sendable {
     public let sessionId: String
     public let dayNumber: Int
     public let thoughts: [ThoughtInput]
+    /// #792: deletes the session's stored completion note. `nil` unless set,
+    /// so the key is left out and an ordinary batch encodes exactly as before.
+    public let clearCompletionNote: Bool?
 
     public struct ThoughtInput: Codable, Sendable {
         public let timeInSession: Int
@@ -500,10 +503,11 @@ public struct BatchThoughtsRequest: Codable, Sendable {
         }
     }
 
-    public init(sessionId: String, dayNumber: Int, thoughts: [ThoughtInput]) {
+    public init(sessionId: String, dayNumber: Int, thoughts: [ThoughtInput], clearCompletionNote: Bool = false) {
         self.sessionId = sessionId
         self.dayNumber = dayNumber
         self.thoughts = thoughts
+        self.clearCompletionNote = clearCompletionNote ? true : nil
     }
 }
 
