@@ -1,0 +1,303 @@
+import Foundation
+import StillPointShared
+
+/// Which practice day it is and what has been sat on it: the done-today flags, their
+/// midnight rollover, the 6:00 grace window that keeps an unfinished day open, and the
+/// per-track refresh from the server.
+///
+/// The flags and the grace-window state are stored properties, declared in
+/// `AppViewModel.swift`.
+extension AppViewModel {
+    func resetTrackCompletionBadges() {
+        primaryDoneToday = false
+        secondDoneToday = false
+        practiceDoneToday = false
+        secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
+        previousCalendarDayComplete = true
+        previousDayResolved = false
+        resolvedForCalendarDay = nil
+        previousDayRequest += 1
+        doneTodayFlagsStamp = nil
+    }
+
+    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
+    private func requiredSitsCompleteFromFlags() -> Bool {
+        let dual = currentUser?.dualTrackEnabled ?? false
+        // Local flags cover a sit that finished offline and has not reached the
+        // server badges yet. Without them the day stays open and the next sit
+        // before 6:00 is stored on yesterday again.
+        let primary = primaryDoneToday || primaryStandardDoneToday
+        let second = secondDoneToday || secondPracticeDoneToday
+        return dual ? (primary && second) : primary
+    }
+
+    private func previousDayAnswerIsCurrent(now: Date) -> Bool {
+        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now)
+    }
+
+    /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
+    func creditedSessionDate(now: Date = Date()) -> String {
+        rollOverDoneTodayFlagsIfNeeded(now: now)
+        return SessionCalendar.effectiveLocalIsoDate(
+            previousDayComplete: previousCalendarDayComplete,
+            now: now
+        )
+    }
+
+    /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
+    func creditedPracticeInstant(now: Date = Date()) -> Date {
+        let credited = creditedSessionDate(now: now)
+        let calendarToday = SessionCalendar.localIsoDate(now: now)
+        guard credited != calendarToday else { return now }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .hour, value: -1, to: start) ?? now
+    }
+
+    /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
+    private func resolvePreviousPracticeDay(now: Date) async {
+        let calendarDay = SessionCalendar.localIsoDate(now: now)
+        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
+            return
+        }
+        guard Calendar.current.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
+            previousCalendarDayComplete = true
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+            return
+        }
+        previousDayRequest += 1
+        let ticket = previousDayRequest
+        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
+        do {
+            let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
+            guard ticket == previousDayRequest else { return }
+            let dual = currentUser?.dualTrackEnabled ?? false
+            previousCalendarDayComplete = dual
+                ? (tracks.primary && tracks.second)
+                : tracks.primary
+            previousDayResolved = true
+            resolvedForCalendarDay = calendarDay
+        } catch {
+            guard ticket == previousDayRequest else { return }
+            let calendar = Calendar.current
+            if let stamp = doneTodayFlagsStamp,
+               let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+               calendar.isDate(stamp, inSameDayAs: yesterday) {
+                previousCalendarDayComplete = requiredSitsCompleteFromFlags()
+            } else {
+                previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
+            }
+            // Unresolved so the next refresh retries the lookup.
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
+        }
+    }
+
+    /// Retire the "done today" flags when the local day has advanced past the one
+    /// they describe, and re-stamp them onto the current day.
+    ///
+    /// The flags used to be cleared in exactly one place: the top of
+    /// `refreshTracksDoneToday()`, which is a network round-trip. The path that
+    /// actually crosses midnight with them raised is the one deliberately built to
+    /// need no network — `markPracticeDoneToday` -> `syncWidgetData()`, called the
+    /// instant a sit ends. A quick sit at 00:05, or a second-track sit, therefore
+    /// reached the snapshot with yesterday's primary-standard flag still true and
+    /// let it fold today into the standard-only set that extends `serverStreak`:
+    /// the exact inflation #679 exists to remove.
+    ///
+    /// Called before the flags are written and before they are read, so no caller
+    /// has to remember the rollover. The server-derived Home badges are rolled
+    /// over with the rest for the same reason and on the same fail-closed logic
+    /// the refresh failure path already uses: on a new day nothing has been sat
+    /// yet, and the next successful refresh restores the truth.
+    func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
+        let calendar = Calendar.current
+        if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
+            return
+        }
+        let hour = calendar.component(.hour, from: now)
+        if doneTodayFlagsStamp == nil {
+            // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
+            // says it is finished, unless that fetch already answered.
+            if !previousDayAnswerIsCurrent(now: now) {
+                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
+            }
+            doneTodayFlagsStamp = now
+            return
+        }
+        if hour < SessionCalendar.graceCutoffHour,
+           let stamp = doneTodayFlagsStamp,
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+           calendar.isDate(stamp, inSameDayAs: yesterday) {
+            if previousDayAnswerIsCurrent(now: now) {
+                if !previousCalendarDayComplete {
+                    return
+                }
+            } else if !requiredSitsCompleteFromFlags() {
+                previousCalendarDayComplete = false
+                return
+            }
+        }
+        // The previous day is finished, the clock is at or after 6:00, or the
+        // stamp is older than yesterday. Roll onto the calendar day. A resolved
+        // answer for *this* calendar day is kept. A stale one must not.
+        if !previousDayAnswerIsCurrent(now: now) {
+            previousCalendarDayComplete = true
+            previousDayResolved = false
+            resolvedForCalendarDay = nil
+        }
+        primaryDoneToday = false
+        secondDoneToday = false
+        practiceDoneToday = false
+        secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
+        doneTodayFlagsStamp = now
+    }
+
+    /// #240: derive per-track "completed a standard sit today" from a lightweight
+    /// server-side filtered query.
+    func refreshTracksDoneToday() async {
+        guard currentUser != nil else { return }
+        // Captured before the request: the `currentUser` check above only holds at
+        // entry, and everything below the await writes identity-scoped state
+        // (Home badges, the widget snapshot, the week history). Re-checked after,
+        // so a response that outlived its session cannot repaint badges or persist
+        // a widget snapshot for an account that has signed out or been switched.
+        let generation = authGeneration
+        // #699: and a ticket for *this* refresh, taken before the request so it
+        // records when this one left rather than when its answer happened to
+        // arrive. The generation above cannot stand in — the refreshes racing here
+        // all describe the same account, which is exactly the case it ignores.
+        let ticket = tracksDoneOrdering.nextTicket()
+        let now = Date()
+        // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
+        // otherwise assume the day is finished and credit the new calendar date.
+        await resolvePreviousPracticeDay(now: now)
+        // Two rollovers, because they cover different evidence. The stamp-based
+        // one below knows what *this process* claimed and when; the snapshot-based
+        // one here also catches a relaunch that inherited a stored snapshot from a
+        // previous day. Both are cheap and idempotent.
+        rollOverDoneTodayFlagsIfNeeded(now: now)
+        let prior = WidgetDataStore.load()
+        let priorRequired = (prior?.dualTrackEnabled ?? false)
+            ? ((prior?.primaryDoneToday ?? false) && (prior?.secondDoneToday ?? false))
+            : (prior?.primaryDoneToday ?? true)
+        if let prior, prior.isLoggedIn,
+           !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now),
+           !WidgetDataStore.graceKeepsPreviousPracticeDay(
+                lastUpdated: prior.lastUpdated,
+                now: now,
+                requiredSitsComplete: priorRequired
+           ) {
+            practiceDoneToday = false
+            secondPracticeDoneToday = false
+            // #679: same rollover as its siblings — yesterday's standard sit must
+            // not fold today into the standard-only set.
+            primaryStandardDoneToday = false
+        }
+        let today = creditedSessionDate(now: now)
+        do {
+            let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
+            // Identity first, deliberately: a response that outlived its session is
+            // not evidence about *this* one, and short-circuiting keeps it from
+            // advancing the barrier against the refresh that is still live.
+            guard generation == authGeneration,
+                  tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
+            primaryDoneToday = tracksDoneToday.primary
+            secondDoneToday = tracksDoneToday.second
+            if primaryDoneToday {
+                practiceDoneToday = true
+                // #679: the server confirming a primary standard sit today is the
+                // same fact the local flag records, so raise it here too. Like its
+                // siblings this only ever goes up — the failure path below clears
+                // the server badges, never the local flags.
+                primaryStandardDoneToday = true
+            }
+            if secondDoneToday {
+                secondPracticeDoneToday = true
+            }
+            if today != SessionCalendar.localIsoDate(now: now) {
+                let calendar = Calendar.current
+                let startToday = calendar.startOfDay(for: now)
+                if let evening = calendar.date(byAdding: .hour, value: -1, to: startToday) {
+                    doneTodayFlagsStamp = evening
+                }
+            }
+        } catch {
+            // #759: a cancelled request is not a failed one, and only a failure
+            // justifies what follows. Cancellation here always means replacement or
+            // teardown — every call site that cancels this refresh constructs its
+            // successor in the same run (`enterOfflineMode`,
+            // `refreshAfterReconnectInBackground`, the login catch-up), and the one
+            // that does not (`cancelIdentityScopedTasks`) is a session ending. So a
+            // cancelled request has nothing to correct: clearing the badges and
+            // persisting that at the `syncWidgetData()` below would fail closed on
+            // behalf of a request that never asked the server anything, leaving the
+            // widget briefly holding a value its replacement is about to overwrite.
+            // Returning outright rather than skipping the clear alone, because the
+            // snapshot write at the bottom is the half that reaches the widget.
+            //
+            // Deliberately asymmetric: the success path above has no matching
+            // cancellation check. A cancelled request that nonetheless came back
+            // with an answer holds real, current server data, and `shouldApply`
+            // has already established it is the newest word on today. Dropping it
+            // for being cancelled would throw away a fact nobody else is going to
+            // supply — the same loss #699 fixed in the other direction. Only the
+            // failure branch has nothing to contribute.
+            if RequestCancellation.isCancellation(error, taskIsCancelled: Task.isCancelled) { return }
+            // Non-fatal: fail closed so stale "done today" badges do not leak.
+            // Only the server-derived Home badges are cleared. The widget
+            // practice flags are local truth — a sit finished on this device,
+            // possibly offline and still queued for sync — and a failed status
+            // request is not the server contradicting them, just an absent
+            // answer. Clearing them here (and persisting that at the
+            // `syncWidgetData()` below) dropped a mark the user had already
+            // earned, and could break the day's streak until sync succeeded.
+            // Note the success path above only ever raises these flags, never
+            // lowers them; the failure path must not be the one exception.
+            // Midnight rollover is already handled at the top of this method.
+            //
+            // Ranked like the success path (#699), because failing closed is only
+            // right for the *newest* word on today. An absent answer says nothing
+            // the server has since confirmed is wrong, so a refresh that a later
+            // one already superseded must not clear badges that newer one just set.
+            //
+            // Ranked but *not* recorded, which is why this asks `isSuperseded` and
+            // the success path calls `shouldApply`. A failure observed nothing, so
+            // consuming the barrier would let it bar an *earlier* refresh still in
+            // flight — and that one comes back with real server data. Losing it is
+            // the mirror of the bug above and just as visible: a sit is flushed,
+            // `returnHome()`'s refresh is in flight, the network drops, the
+            // reconnect refresh fails instantly and clears the badges, and then the
+            // original success lands confirming the sit and is thrown away. The
+            // badge the user just earned stays dark until some later refresh.
+            guard generation == authGeneration,
+                  !tracksDoneOrdering.isSuperseded(ticket: ticket) else { return }
+            // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
+            // deliberately keeps the badges when a session is running, and it
+            // schedules this catch-up moments later against the same dead network
+            // — so clearing here would undo that preservation for the very sit it
+            // was meant to protect. Outside a session the reset stands, and the
+            // next successful refresh restores the truth either way.
+            if !isInSession {
+                primaryDoneToday = false
+                secondDoneToday = false
+            }
+        }
+        // Both branches above return early on a generation change or a superseded
+        // ticket, so reaching here means this refresh is both the live session's and
+        // still the newest word on today. A superseded one skips these two with
+        // nothing lost: the refresh that outranked it makes the same calls from a
+        // strictly fresher answer, and drops the `getSessions()` backfill this one
+        // would otherwise pay for a second time.
+        //
+        // A failure reaching here does not close the subject — it recorded nothing,
+        // so an earlier refresh still in flight can land afterwards and run these
+        // again from a real answer. That is the point: the second pass overwrites
+        // the fail-closed snapshot this one is about to persist.
+        syncWidgetData()
+        refreshWidgetWeekHistory()
+    }
+}

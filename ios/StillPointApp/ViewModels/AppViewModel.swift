@@ -1,77 +1,20 @@
 import SwiftUI
 import SwiftData
 import StillPointShared
-import os
 
-enum AppView: Equatable {
-    case auth
-    case home
-    case session(type: SessionType, track: Track)
-    case buddyHub
-    case buddyCalendar
-    case buddyCalendarWithBuddy(buddyId: String, buddyUsername: String)
-    case buddySession(sessionId: String)
-    case completion(
-        sessionId: String,
-        clientSessionId: UUID,
-        clearPercent: Int,
-        thoughtCount: Int,
-        thoughts: [CapturedThought],
-        dayNumber: Int,
-        sessionType: SessionType,
-        track: Track,
-        sessionCompleted: Bool,
-        duration: Int,
-        bonusSeconds: Int,
-        attentionLog: [AttentionEntry]?,
-        attentionElapsed: Double?,
-        ambientSoundSummary: AmbientSoundSummary?
-    )
-    case breathCounting
-    case logReason(date: String)
-    case history
-    case journal
-    case board
-    case settings
-
-    static func == (lhs: AppView, rhs: AppView) -> Bool {
-        switch (lhs, rhs) {
-        case (.auth, .auth), (.home, .home),
-             (.buddyHub, .buddyHub),
-             (.buddyCalendar, .buddyCalendar),
-             (.breathCounting, .breathCounting),
-             (.history, .history), (.journal, .journal), (.board, .board),
-             (.settings, .settings):
-            return true
-        case let (.session(lhsType, lhsTrack), .session(rhsType, rhsTrack)):
-            return lhsType == rhsType && lhsTrack == rhsTrack
-        case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
-            return lhsSessionId == rhsSessionId
-        case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):
-            return lhsId == rhsId && lhsName == rhsName
-        case let (.logReason(lhsDate), .logReason(rhsDate)):
-            return lhsDate == rhsDate
-        case (.completion, .completion):
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-struct CapturedThought: Identifiable {
-    let id = UUID()
-    let timeInSession: Int
-    let text: String
-}
-
+/// The root view model for a scene, owned by `RootView` (each `WindowGroup` scene
+/// builds its own).
+///
+/// This file holds the stored state and the identity transitions, the only code
+/// that bumps `authGeneration`. Behavior is split by concern across
+/// `AppViewModel+*.swift` (#700): Auth, Settings, PracticeDay, Widget, DeepLinks,
+/// Navigation and UITestSeeds. An extension cannot add stored properties, so the
+/// state each concern owns is still declared here. Members stay `private` where
+/// every use is in one file; the ones these files share are internal for that
+/// reason alone and are not entry points for views.
 @Observable
 @MainActor
 final class AppViewModel {
-    /// Diagnostic logger for `[E2E-DIAG]` lines. os_log is used (not `print`)
-    /// so the lines reach the xcresult bundle in CI. Issue #276.
-    private static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
-
     var currentView: AppView = .auth
     /// Selected tab in `MainTabView`, lifted here so non-tab views (e.g. the Home
     /// app-gate pill) can navigate to a tab. 0 = Home … 4 = Settings.
@@ -91,7 +34,7 @@ final class AppViewModel {
     var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
     /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
-    private var isSavingBreathSession = false
+    var isSavingBreathSession = false
     /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
     var trackingControlPrefsManager = TrackingControlPrefsManager()
     private var appBlockingManagerStorage: AppBlockingManager?
@@ -103,9 +46,9 @@ final class AppViewModel {
         appBlockingManagerStorage = manager
         return manager
     }
-    private var pendingBuddyInviteToken: String?
-    private var pendingSessionDeepLink: SessionType?
-    private var pendingLogReasonDate: String?
+    var pendingBuddyInviteToken: String?
+    var pendingSessionDeepLink: SessionType?
+    var pendingLogReasonDate: String?
 
     /// Persisted: keep device screen awake during an active sit when enabled.
     ///
@@ -149,18 +92,135 @@ final class AppViewModel {
     /// one across local midnight would claim a day that was never sat. Passed to
     /// `makeSnapshot` as `flagsAsOf` so the fold is retired at the boundary, and
     /// used by `rollOverDoneTodayFlagsIfNeeded()` to retire the flags themselves.
-    private var doneTodayFlagsStamp: Date?
+    var doneTodayFlagsStamp: Date?
     /// Whether every required sit for the previous calendar day is done.
     /// False before 6:00 keeps that day open. Defaults to finished so a daytime
     /// launch does not invent a grace window; a pre-6:00 launch resolves it.
-    private var previousCalendarDayComplete = true
+    var previousCalendarDayComplete = true
     /// Set once `resolvePreviousPracticeDay` has an answer, so a later rollover
     /// does not replace it with the pre-6:00 "unknown" default.
-    private var previousDayResolved = false
+    var previousDayResolved = false
     /// Calendar day `previousDayResolved` describes. A new morning must ask again.
-    private var resolvedForCalendarDay: String?
+    var resolvedForCalendarDay: String?
     /// Orders overlapping yesterday lookups so a slow answer cannot replace a newer one.
-    private var previousDayRequest = 0
+    var previousDayRequest = 0
+
+    /// Bumped on every identity transition — adopt, offline-adopt, sign-out,
+    /// logout. `@MainActor` serializes these mutations but an `await` is still a
+    /// suspension point, so a request that started under one identity can land
+    /// after another has taken over. Anything that applies a network result to
+    /// identity-scoped state captures this before its `await` and re-checks after,
+    /// rather than re-reading `currentUser` (which cannot distinguish "same user
+    /// throughout" from "signed out and back in").
+    private(set) var authGeneration: Int = 0
+
+    /// Identifies the newest in-flight `checkAuth()`. Separate from
+    /// `authGeneration`: this tracks *which check is latest* (so only it may drop
+    /// the loading overlay), not *which identity is live*.
+    var activeAuthCheckID: Int = 0
+
+    /// Orders the settings mutations against each other (#697): `SettingsView`'s
+    /// four toggles, `UsernameEditView`'s rename, and `enableDualTrack()`. Each
+    /// launches its own unstructured task and each response carries a *whole*
+    /// `UserDTO`, so without this an older PATCH landing last reinstates every
+    /// field as it stood when that request left — reverting a newer setting in
+    /// `currentUser` and, because #665 made the cached identity the offline source
+    /// of truth, in `CachedIdentityStore` too, where it survives a cold start.
+    ///
+    /// Deliberately separate from `authGeneration` and `activeAuthCheckID`. The
+    /// three answer different questions — "is this still the same account?", "is
+    /// this still the newest auth check?", and "is this still the newest word on
+    /// the user's settings?" — and the first two cannot express this one: every
+    /// site here is the *same* account throughout, which is exactly the case
+    /// `applyAuthenticatedUser` deliberately does not bump the generation for.
+    ///
+    /// Not scoped to writes. `checkAuth()` and `refreshAfterReconnect()` order their
+    /// `me()` responses through this too, as `.read`s, whenever they are merely
+    /// *re-confirming* the account already adopted. Both run on a scene activation,
+    /// so both can overlap a save in flight, and both adopt a whole `UserDTO` into
+    /// the same cached identity — an older read landing after a newer PATCH reverts
+    /// the setting with the identical blast radius, which makes it this race and not
+    /// a separate one. The read/write asymmetry is what makes sharing the guard safe:
+    /// a read describes the account only as of the moment it left, so a save the user
+    /// makes while it is in flight still wins.
+    ///
+    /// Adoption proper — a cold start, or any response naming a *different* account —
+    /// stays on `applyAuthenticatedUser`. There is nothing to order it against, and
+    /// routing it here would read as `.discarded`, which cannot distinguish "nothing
+    /// adopted yet" from "that session is gone" (#665).
+    var settingsOrdering = StaleResponseGuard()
+
+    /// Orders the `getTracksDoneToday` responses against each other (#699).
+    ///
+    /// Six callers reach `refreshTracksDoneToday()` — `checkAuth()`,
+    /// `refreshAfterReconnect()`, `returnHome()`, `performEnableDualTrack()`, and
+    /// the offline and login catch-up tasks — and nothing serializes them. The
+    /// three task-backed ones cancel only their *own* predecessor, the other three
+    /// are awaited inline with no handle at all, and the query is deliberately left
+    /// outside the settings queue because it hits a different endpoint. So two
+    /// refreshes for the same account and the same local day overlap routinely, and
+    /// the one that returns second is not the one that left second.
+    ///
+    /// A superseded response then writes twice over: it *assigns* the Home badges,
+    /// so `primaryDoneToday` / `secondDoneToday` go true -> false and un-check a
+    /// card the user has already earned, and it persists that view to the widget
+    /// snapshot. Its failure path is worse — it clears both badges to fail closed,
+    /// on top of a newer success.
+    ///
+    /// Its own guard rather than `settingsOrdering`: that one orders whole-`UserDTO`
+    /// adoptions, and a guard is per *subject*, so sharing it would let a Settings
+    /// PATCH bar a badge refresh and a badge refresh bar a PATCH.
+    ///
+    /// Neither existing generation covers this. `authGeneration` answers "is this
+    /// still the same account?", and every refresh racing here is the same account.
+    /// `WidgetData.writeGeneration` (#678) orders *store writes* across an await —
+    /// which is why `refreshWidgetWeekHistory()` uses it — but the Home badges are
+    /// in-memory state the store cannot see, and `syncWidgetData()` re-reads the
+    /// stored snapshot synchronously anyway, so nothing there is stale to merge
+    /// against. The staleness starts a layer above the store and has to stop there.
+    ///
+    /// Always a `.read`: the query observes today's completions and commits
+    /// nothing, so it is authoritative for the moment it left and nothing later.
+    ///
+    /// Only a *response* records itself here. The failure path ranks its ticket
+    /// with `isSuperseded(ticket:)` instead, so a request that threw cannot consume
+    /// the barrier against an earlier one still in flight — see the comment on that
+    /// guard for the sit-then-network-drop case it otherwise loses.
+    var tracksDoneOrdering = StaleResponseGuard()
+
+    /// In-flight identity-scoped background work, cancelled the moment the session
+    /// they were started for ends. The `authGeneration` re-checks are what make a
+    /// late result harmless; cancelling is how we stop paying for it at all.
+    private var offlineCatchUpTask: Task<Void, Never>?
+    var reconnectTask: Task<Void, Never>?
+    var loginCatchUpTask: Task<Void, Never>?
+    /// Buddy invite join/consume. One property: these are alternative routes into
+    /// the same invite flow and never need to run concurrently.
+    var buddyInviteTask: Task<Void, Never>?
+    /// Set while a pending invite is being joined. The token stays pending until
+    /// the server answers (#756), so a second consume must not POST it again.
+    var isConsumingBuddyInvite = false
+
+    /// Serializes every settings mutation in the app against every other one (#697).
+    ///
+    /// Issue #697 offers two mechanisms — serialize the writes, or tag each request
+    /// and reject a response older than the latest applied mutation. This is the
+    /// first, and it is the one that holds: with only one write in flight at a time,
+    /// each response describes the account *after* every earlier mutation committed,
+    /// so responses are adopted in intent order and are complete by construction.
+    /// See ``SettingsWriteQueue``.
+    let settingsWrites = SettingsWriteQueue()
+
+    /// In-flight widget history backfill, cancelled before a new one starts so a
+    /// slow earlier fetch can't overwrite a newer snapshot out of order.
+    var widgetHistoryTask: Task<Void, Never>?
+    /// Account and local day of the last widget-history attempt, plus when it
+    /// succeeded. A new day or another account always refetches. The same
+    /// account refetches after `widgetHistoryRefreshInterval` so a sit finished
+    /// on the web shows up the next time this app is foregrounded (#663).
+    var widgetHistoryRefreshUserId: String?
+    var widgetHistoryRefreshDay: String?
+    var widgetHistoryRefreshedAt: Date?
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -223,289 +283,11 @@ final class AppViewModel {
     // and #742 replaced that snapshot with a read of the shared store. Every other
     // stored property carries its own default.
 
-    func checkAuth() async {
-        let startedAt = Date()
-        // Not only the cold-start path: `RootView` also runs this on every
-        // `scenePhase == .active`, so it re-validates an *existing* session as
-        // often as it establishes a new one. A sign-out landing while `me()` is
-        // suspended would otherwise let the late response re-adopt the old account
-        // and route back into the authenticated UI (#665).
-        let generation = authGeneration
-        // Overlapping checks are possible (cold start immediately followed by a
-        // scene activation). Only the newest may drop the overlay: an older check
-        // finishing first would otherwise clear it while the newest is still
-        // awaiting `me()`, briefly exposing an intermediate or stale route.
-        activeAuthCheckID &+= 1
-        let checkID = activeAuthCheckID
-        // Raised inside the operation rather than here. Waiting for a place in line is
-        // an `await` of unbounded length — a queued save may be sitting on a camera or
-        // microphone prompt — and this overlay is opaque and full-screen
-        // (`RootView.swift`), so raising it now would hide the whole app for someone
-        // else's save on top of this check's own `me()`. Cleared here either way: the
-        // `defer` below is what pairs with it, so the overlay covers the follow-up work
-        // at the end of this function exactly as it did before the read was queued.
-        defer {
-            if checkID == activeAuthCheckID { isLoading = false }
-            // Diagnostic for issue #266 / #276. Gated on UI-test mode so we
-            // don't leak PII in production logs. Switched to os_log
-            // (Logger.notice) because `print()` from the app process is not
-            // captured by Xcode UI test xcresult bundles — that's why the
-            // prior diagnostic from PR #261 never showed up in CI.
-            if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
-                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                Self.diagLog.notice("[E2E-DIAG] checkAuth.done currentView=\(self.viewSlug(self.currentView), privacy: .public) currentUser=\(self.currentUser?.email ?? "nil", privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)")
-            }
-        }
-
-        // Enqueued rather than run outright: this read adopts a whole `UserDTO`, so a
-        // settings save whose PATCH left first would otherwise supersede it and put
-        // that save's response — which may predate today's sit — into `currentUser`
-        // and the offline cache (#697). Awaited, because the routing below and the
-        // overlay's own lifetime both depend on the answer.
-        //
-        // Only the read and its adoption are queued. Everything below needs the account
-        // but cannot contradict a settings `UserDTO` — the per-track badge query hits a
-        // different endpoint, and the invite/deep-link consumptions are not account
-        // writes at all — so holding the line through them would make every later
-        // toggle, `enableDualTrack()` and `returnHome()`'s post-sit read wait on network
-        // work that was never racing them. Same shape as `returnHome()`.
-        let check: Task<Int?, Never> = enqueueSettingsRead { [weak self] in
-            guard let self else { return nil }
-            return await self.performAuthCheck(startedAt: startedAt, generation: generation, checkID: checkID)
-        }
-        // `nil` covers every outcome that is not an adoption — a superseded check, no
-        // session, or the offline fallback — each of which finished its own work inside
-        // the operation and leaves nothing here to run.
-        guard let adopted = await check.value else { return }
-        // Re-checked because giving the queue turn back is itself a suspension point:
-        // a newer `checkAuth()` can have started while this one was resuming. Adopting
-        // the user is idempotent, but the route reset and the badge reset below are not
-        // — the reason the operation guards them on the check ID before adopting — and
-        // that guard cannot cover a change that lands after the operation returns.
-        guard checkID == activeAuthCheckID, adopted == authGeneration else { return }
-        resetTrackCompletionBadges()
-        currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
-        authStatusMessage = nil
-        lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-        PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
-        hydrateNotificationSuppressionPreference()
-        await refreshTracksDoneToday()
-        // The guard above only covered the route reset. The refresh is another
-        // suspension point, and everything below it is an identity-scoped side effect —
-        // the widget snapshot and three non-idempotent deep-link/invite consumptions —
-        // so none of it may run for a session that has since been replaced.
-        guard adopted == authGeneration else { return }
-        syncWidgetData()
-        await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
-        await consumePendingSessionDeepLinkIfNeeded()
-        await consumePendingLogReasonIfNeeded()
-    }
-
-    /// The body of `checkAuth()`, run from the settings queue.
-    ///
-    /// - Parameter startedAt: when the caller began, for the cold-start timing metric.
-    /// - Parameter generation: `authGeneration` as it was when the check was asked for.
-    /// - Parameter checkID: `activeAuthCheckID` as it was then, so a superseded check
-    ///   cannot route or sign out on behalf of a newer one.
-    /// - Returns: the generation the rest of `checkAuth()` belongs to, after an
-    ///   adoption — or `nil` for every other outcome, each of which is terminal and has
-    ///   already done its own work here.
-    private func performAuthCheck(startedAt: Date, generation: Int, checkID: Int) async -> Int? {
-        // Re-checked now that the queue turn has arrived: waiting for a place in line
-        // is an `await` like any other, so a sign-out or account switch can have landed
-        // while a slower save ahead of us was still resolving, and neither this read
-        // nor the routing under it belongs to the session that replaced ours.
-        guard generation == authGeneration, checkID == activeAuthCheckID else { return nil }
-        // Raised here rather than at the caller's entry, so the overlay means "this
-        // check's `me()` is in flight" again and not "somebody's settings save is".
-        // Cleared by the caller's `defer`, which is reached whichever way this returns.
-        isLoading = true
-        // Taken here, immediately before the request, so it records when this read
-        // left rather than when it was asked for (#697). Taken unconditionally even
-        // though only the re-confirmation branch below spends it — a ticket that goes
-        // unused leaves a gap and nothing else.
-        let settingsTicket = nextSettingsRequestTicket()
-
-        do {
-            if let user = try await APIClient.shared.me(today: creditedSessionDate()) {
-                // Paired with the check ID for the same reason as the terminal
-                // branches below. Adopting the user is idempotent, but the route
-                // reset and the badge reset under it are not: `RootView` starts a
-                // check from both `.task` and `scenePhase == .active`, and since
-                // re-confirming the same account does not move the generation, an
-                // older call landing after the newest one finished would send a
-                // user who has since navigated back to the initial view.
-                guard generation == authGeneration, checkID == activeAuthCheckID else { return nil }
-                // Re-confirming the account already on screen still goes through the
-                // settings ordering (#697). The queue turn above is what makes this
-                // response the newest word — no settings save can be in flight — so
-                // the guard is the backstop rather than the mechanism, and it is kept
-                // for the caller that reads the account without queueing. A superseded
-                // read would change nothing anyway: a newer settings write already
-                // described this account, `isOfflineMode` included, so the side effects
-                // below run either way; they are keyed to this being the newest check,
-                // not to the adoption.
-                if currentUser?.id == user.id {
-                    applySettingsResponse(
-                        user,
-                        startedAtGeneration: generation,
-                        requestTicket: settingsTicket,
-                        responseKind: .read
-                    )
-                } else {
-                    // A cold start, or an account switch. Nothing to order it
-                    // against, and the guards inside `applySettingsResponse` would
-                    // read it as `.discarded`.
-                    applyAuthenticatedUser(user)
-                }
-                // Re-captured deliberately, and handed back rather than used here.
-                // Adopting the user is itself an expected transition on a cold start
-                // (nil -> user), so the entry generation is stale from here on *by
-                // design* and reusing it would skip the side effects on every launch.
-                // The entry capture protects the decision to adopt; this one protects
-                // everything the caller runs after it.
-                return authGeneration
-            }
-            // `me()` swallows a 401 that is *not* `TOKEN_EXPIRED` and returns nil:
-            // the server answered, and the answer was "no session". Authoritative —
-            // but only for the session that asked. `checkAuth()` runs on every scene
-            // activation, so an older overlapping call must not sign out the account
-            // that has signed in since.
-            //
-            // The generation alone cannot express that. Re-confirming the *same*
-            // account is deliberately not a transition (`applyAuthenticatedUser`),
-            // so once a newer check has confirmed this user the generation is
-            // unchanged and an older check's "no session" would still pass this
-            // guard. `activeAuthCheckID` is the value that distinguishes newest
-            // from superseded — the same reason it gates the overlay above — so a
-            // stale answer can no longer sign the live account out.
-            guard generation == authGeneration, checkID == activeAuthCheckID else { return nil }
-            applySignedOut(cause: .signedOut, message: nil)
-        } catch {
-            // #665: a failed request is not a sign-out. `OfflineAuth` makes that
-            // call once, in the taxonomy #676 gave the widget, so the app and the
-            // widget can never disagree about what "signed out" means.
-            // Same reasoning as the nil branch, including the check-ID half: a
-            // transport failure belonging to a superseded call must not drag the
-            // current session into offline mode or sign it out, and after a newer
-            // check has re-confirmed the same account the generation no longer
-            // moves to say so.
-            guard generation == authGeneration, checkID == activeAuthCheckID else { return nil }
-            let cachedUser = CachedIdentityStore.load()
-            let outcome = OfflineAuth.outcome(for: error, hasCachedIdentity: cachedUser != nil)
-            // Matching on the pair keeps the cached user's presence and the
-            // outcome from drifting apart: without an identity to render there is
-            // nothing to fall back to, whatever the outcome says.
-            switch (outcome, cachedUser) {
-            case let (.offline(cause), .some(user)):
-                // Kept inside the operation, unlike the adoption path's follow-up: this
-                // is the outcome of the same `me()`, it establishes the offline
-                // identity rather than acting on one, and it is deliberately free of
-                // network `await`s (its catch-up is detached), so it holds the line for
-                // local work only.
-                await enterOfflineMode(user: user, cause: cause)
-                lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                return nil
-            case (.offline, .none), (.signedOut, _):
-                applySignedOut(cause: outcome.cause, message: Self.authStatusMessage(for: error))
-            }
-        }
-        lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-        return nil
-    }
-
-    /// Status line for a route to sign-in. Unchanged from the pre-#665 behavior:
-    /// whatever the server said, else the generic connection copy.
-    private static func authStatusMessage(for error: Error) -> String? {
-        (error as? APIError)?.message ?? "Connection failed. Please try again."
-    }
-
-    /// Bumped on every identity transition — adopt, offline-adopt, sign-out,
-    /// logout. `@MainActor` serializes these mutations but an `await` is still a
-    /// suspension point, so a request that started under one identity can land
-    /// after another has taken over. Anything that applies a network result to
-    /// identity-scoped state captures this before its `await` and re-checks after,
-    /// rather than re-reading `currentUser` (which cannot distinguish "same user
-    /// throughout" from "signed out and back in").
-    private var authGeneration: Int = 0
-
-    /// Identifies the newest in-flight `checkAuth()`. Separate from
-    /// `authGeneration`: this tracks *which check is latest* (so only it may drop
-    /// the loading overlay), not *which identity is live*.
-    private var activeAuthCheckID: Int = 0
-
-    /// Orders the settings mutations against each other (#697): `SettingsView`'s
-    /// four toggles, `UsernameEditView`'s rename, and `enableDualTrack()`. Each
-    /// launches its own unstructured task and each response carries a *whole*
-    /// `UserDTO`, so without this an older PATCH landing last reinstates every
-    /// field as it stood when that request left — reverting a newer setting in
-    /// `currentUser` and, because #665 made the cached identity the offline source
-    /// of truth, in `CachedIdentityStore` too, where it survives a cold start.
-    ///
-    /// Deliberately separate from `authGeneration` and `activeAuthCheckID`. The
-    /// three answer different questions — "is this still the same account?", "is
-    /// this still the newest auth check?", and "is this still the newest word on
-    /// the user's settings?" — and the first two cannot express this one: every
-    /// site here is the *same* account throughout, which is exactly the case
-    /// `applyAuthenticatedUser` deliberately does not bump the generation for.
-    ///
-    /// Not scoped to writes. `checkAuth()` and `refreshAfterReconnect()` order their
-    /// `me()` responses through this too, as `.read`s, whenever they are merely
-    /// *re-confirming* the account already adopted. Both run on a scene activation,
-    /// so both can overlap a save in flight, and both adopt a whole `UserDTO` into
-    /// the same cached identity — an older read landing after a newer PATCH reverts
-    /// the setting with the identical blast radius, which makes it this race and not
-    /// a separate one. The read/write asymmetry is what makes sharing the guard safe:
-    /// a read describes the account only as of the moment it left, so a save the user
-    /// makes while it is in flight still wins.
-    ///
-    /// Adoption proper — a cold start, or any response naming a *different* account —
-    /// stays on `applyAuthenticatedUser`. There is nothing to order it against, and
-    /// routing it here would read as `.discarded`, which cannot distinguish "nothing
-    /// adopted yet" from "that session is gone" (#665).
-    private var settingsOrdering = StaleResponseGuard()
-
-    /// Orders the `getTracksDoneToday` responses against each other (#699).
-    ///
-    /// Six callers reach `refreshTracksDoneToday()` — `checkAuth()`,
-    /// `refreshAfterReconnect()`, `returnHome()`, `performEnableDualTrack()`, and
-    /// the offline and login catch-up tasks — and nothing serializes them. The
-    /// three task-backed ones cancel only their *own* predecessor, the other three
-    /// are awaited inline with no handle at all, and the query is deliberately left
-    /// outside the settings queue because it hits a different endpoint. So two
-    /// refreshes for the same account and the same local day overlap routinely, and
-    /// the one that returns second is not the one that left second.
-    ///
-    /// A superseded response then writes twice over: it *assigns* the Home badges,
-    /// so `primaryDoneToday` / `secondDoneToday` go true -> false and un-check a
-    /// card the user has already earned, and it persists that view to the widget
-    /// snapshot. Its failure path is worse — it clears both badges to fail closed,
-    /// on top of a newer success.
-    ///
-    /// Its own guard rather than `settingsOrdering`: that one orders whole-`UserDTO`
-    /// adoptions, and a guard is per *subject*, so sharing it would let a Settings
-    /// PATCH bar a badge refresh and a badge refresh bar a PATCH.
-    ///
-    /// Neither existing generation covers this. `authGeneration` answers "is this
-    /// still the same account?", and every refresh racing here is the same account.
-    /// `WidgetData.writeGeneration` (#678) orders *store writes* across an await —
-    /// which is why `refreshWidgetWeekHistory()` uses it — but the Home badges are
-    /// in-memory state the store cannot see, and `syncWidgetData()` re-reads the
-    /// stored snapshot synchronously anyway, so nothing there is stale to merge
-    /// against. The staleness starts a layer above the store and has to stop there.
-    ///
-    /// Always a `.read`: the query observes today's completions and commits
-    /// nothing, so it is authoritative for the moment it left and nothing later.
-    ///
-    /// Only a *response* records itself here. The failure path ranks its ticket
-    /// with `isSuperseded(ticket:)` instead, so a request that threw cannot consume
-    /// the barrier against an earlier one still in flight — see the comment on that
-    /// guard for the sit-then-network-drop case it otherwise loses.
-    private var tracksDoneOrdering = StaleResponseGuard()
+    // MARK: - Identity transitions
 
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
-    private func applyAuthenticatedUser(_ user: UserDTO) {
+    func applyAuthenticatedUser(_ user: UserDTO) {
         // Only an actual *transition* invalidates in-flight work. Re-confirming the
         // same account (a reconnect refresh, a settings PATCH round-trip) is not a
         // transition, and bumping for it was wrong twice over: it made every
@@ -526,7 +308,7 @@ final class AppViewModel {
     /// over, which is the same predicate guarding the widget's stored week (#676).
     /// Before #665 every failure path ran this teardown, so a dropped connection
     /// wiped state the server never contradicted.
-    private func applySignedOut(cause: WidgetDataStore.SignedOutCause, message: String?) {
+    func applySignedOut(cause: WidgetDataStore.SignedOutCause, message: String?) {
         authGeneration &+= 1
         cancelIdentityScopedTasks()
         currentUser = nil
@@ -563,7 +345,7 @@ final class AppViewModel {
     /// the buddy-invite handoff are deliberately skipped — both are doomed without
     /// a network, and consuming a pending invite here would burn the token on a
     /// request that cannot succeed. `refreshAfterReconnect()` picks both up.
-    private func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
+    func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
         // Transition-only, matching `applyAuthenticatedUser`.
         if currentUser?.id != user.id { authGeneration &+= 1 }
         currentUser = user
@@ -609,21 +391,6 @@ final class AppViewModel {
         }
     }
 
-    /// In-flight identity-scoped background work, cancelled the moment the session
-    /// they were started for ends. The `authGeneration` re-checks are what make a
-    /// late result harmless; cancelling is how we stop paying for it at all.
-    private var offlineCatchUpTask: Task<Void, Never>?
-    private var reconnectTask: Task<Void, Never>?
-    private var loginCatchUpTask: Task<Void, Never>?
-    /// Buddy invite join/consume. One property: these are alternative routes into
-    /// the same invite flow and never need to run concurrently.
-    private var buddyInviteTask: Task<Void, Never>?
-    /// Set while a pending invite is being joined. The token stays pending until
-    /// the server answers (#756), so a second consume must not POST it again.
-    private var isConsumingBuddyInvite = false
-    /// Transient join failure. The token is kept; the next auth point retries it.
-    private static let buddyInviteRetryMessage = "Could not reach the server. We will retry your invite."
-
     private func cancelIdentityScopedTasks() {
         offlineCatchUpTask?.cancel()
         offlineCatchUpTask = nil
@@ -642,418 +409,6 @@ final class AppViewModel {
         widgetHistoryTask?.cancel()
         widgetHistoryTask = nil
         clearWidgetHistoryRefreshMarker()
-    }
-
-    /// #665: non-`async` entry point for the reconnect refresh so the view layer
-    /// hands ownership of the task to the view model instead of spawning an
-    /// unstructured one it cannot cancel.
-    func refreshAfterReconnectInBackground() {
-        reconnectTask?.cancel()
-        reconnectTask = Task { [weak self] in
-            guard let self else { return }
-            await self.refreshAfterReconnect()
-        }
-    }
-
-    /// #665: reconcile with the server once connectivity returns.
-    ///
-    /// Deliberately narrow. It refreshes identity and today's state *in place* and
-    /// never re-routes on success — re-running `checkAuth()` here would flash the
-    /// cold-start overlay and send the user back to Home, which is exactly the
-    /// user-visible reset offline-first exists to avoid (and would eject someone
-    /// mid-sit). Only an authoritative rejection moves anyone to sign-in.
-    ///
-    /// The queued-sit upload is the other half and already exists (#557):
-    /// `NetworkReachabilityMonitor` flushes the write queue on the same transition.
-    func refreshAfterReconnect() async {
-        guard currentUser != nil, currentView != .auth else { return }
-        // Captured before the await: signing out (or switching accounts) while
-        // `me()` is in flight must not let the response reinstate the old session.
-        // Applying it would resurrect a signed-out account *and* re-save the cached
-        // identity `applySignedOut` just tore down via `clearIfAuthoritative` (#676).
-        let generation = authGeneration
-        // Enqueued for the same reason as `checkAuth()`: this read adopts a whole
-        // `UserDTO`, and a settings save whose PATCH left first would otherwise
-        // supersede it wholesale (#697). And, as there, only the read and its adoption
-        // are queued — the badge refresh and the invite join below need the account but
-        // cannot contradict a settings `UserDTO`, so holding the line through them would
-        // park every later settings write behind network work that was never racing it.
-        let refresh: Task<Int?, Never> = enqueueSettingsRead { [weak self] in
-            guard let self else { return nil }
-            return await self.performReconnectRefresh(startedAtGeneration: generation)
-        }
-        // `nil` is every non-adopting outcome — a replaced session, a sign-out, or a
-        // request that still could not get through — and none of them has follow-up.
-        guard let adopted = await refresh.value else { return }
-        // Handing the queue turn back is a suspension point like any other, so the
-        // session can end between the adoption and here.
-        guard adopted == authGeneration else { return }
-        PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
-        hydrateNotificationSuppressionPreference()
-        await refreshTracksDoneToday()
-        // Re-checked again here: `refreshTracksDoneToday()` is itself a suspension
-        // point, so the session can end between the check above and this line.
-        // Consuming the invite is not idempotent — it burns the token and joins a
-        // session — so it must not run for a session that has since been replaced.
-        // (`consumePendingBuddyInviteIfNeeded`'s own `currentUser != nil` test cannot
-        // tell a new account from the old one.)
-        guard adopted == authGeneration else { return }
-        await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
-    }
-
-    /// The body of `refreshAfterReconnect()`, run from the settings queue.
-    ///
-    /// - Parameter generation: `authGeneration` as it was when the reconnect fired.
-    /// - Returns: the generation the rest of `refreshAfterReconnect()` belongs to, after
-    ///   an adoption — or `nil` when nothing was adopted and there is no follow-up.
-    private func performReconnectRefresh(startedAtGeneration generation: Int) async -> Int? {
-        // Re-checked now that the queue turn has arrived, as in `performAuthCheck`:
-        // the wait is an `await`, so the session that asked for this refresh may be
-        // gone, and applying the response would resurrect it (#665).
-        guard generation == authGeneration else { return nil }
-        // Same reasoning as `checkAuth()`: this is a read of an account already
-        // adopted, taken immediately before the request so it records when the read
-        // left. The queue turn already makes it the newest word; the ticket is the
-        // backstop (#697).
-        let settingsTicket = nextSettingsRequestTicket()
-        do {
-            guard let user = try await APIClient.shared.me(today: creditedSessionDate()) else {
-                guard generation == authGeneration else { return nil }
-                applySignedOut(cause: .signedOut, message: nil)
-                return nil
-            }
-            guard generation == authGeneration else { return nil }
-            // Ordered rather than adopted outright. A superseded read leaves
-            // `currentUser` on the newer settings response, which already cleared
-            // `isOfflineMode` on its way through `applyAuthenticatedUser`, so the
-            // reconnect still ends with the app online either way and the refreshes
-            // below still belong to this account. A reconnect that returns a
-            // *different* account is a legitimate transition and keeps adopting
-            // directly, as before — it is not this race, and the guard would read it
-            // as `.discarded`.
-            if currentUser?.id == user.id {
-                applySettingsResponse(
-                    user,
-                    startedAtGeneration: generation,
-                    requestTicket: settingsTicket,
-                    responseKind: .read
-                )
-            } else {
-                applyAuthenticatedUser(user)
-            }
-            // Re-captured after adoption and handed back, as in `performAuthCheck()`:
-            // if the reconnect ever returns a different account, that adoption is a
-            // legitimate transition and the caller's follow-up belongs to the account
-            // we just adopted.
-            return authGeneration
-        } catch let apiError as APIError where apiError.status == 401 {
-            // The cached identity outlived the server session — the accepted cost
-            // of sitting offline on a stale copy. Sign in again, now, rather than
-            // having been signed out back when the network dropped. Generation-
-            // guarded like the success path: a 401 for the *previous* session must
-            // not sign out an account that has since signed in.
-            guard generation == authGeneration else { return nil }
-            applySignedOut(cause: .unauthorized, message: apiError.message)
-            return nil
-        } catch {
-            // Still no usable answer: stay on local state, say nothing.
-            return nil
-        }
-    }
-
-    private func viewSlug(_ view: AppView) -> String {
-        switch view {
-        case .auth: return "auth"
-        case .home: return "home"
-        case .session: return "session"
-        case .buddyHub: return "buddyHub"
-        case .buddyCalendar: return "buddyCalendar"
-        case .buddyCalendarWithBuddy: return "buddyCalendarWithBuddy"
-        case .buddySession: return "buddySession"
-        case .completion: return "completion"
-        case .breathCounting: return "breathCounting"
-        case .logReason: return "logReason"
-        case .history: return "history"
-        case .journal: return "journal"
-        case .board: return "board"
-        case .settings: return "settings"
-        }
-    }
-
-    private static func truthy(_ value: String?) -> Bool {
-        guard let value else { return false }
-        return ["1", "true", "yes", "on"].contains(value.lowercased())
-    }
-
-    /// Initial tab index. Honors SP_UI_TEST_FORCE_SETTINGS_TAB (Settings = 4)
-    /// and SP_UI_TEST_FORCE_PROGRESS_TAB (Progress = 1).
-    private static func defaultSelectedTab() -> Int {
-        let env = ProcessInfo.processInfo.environment
-        if truthy(env["SP_UI_TEST_FORCE_SETTINGS_TAB"]) { return 4 }
-        if truthy(env["SP_UI_TEST_FORCE_PROGRESS_TAB"]) { return 1 }
-        return 0
-    }
-
-    /// Boot destination for authenticated UI-test launches. Seed knobs are
-    /// mutually exclusive; the first match wins.
-    private static func initialAuthenticatedView(from env: [String: String]) -> AppView {
-        if truthy(env["SP_UI_TEST_FORCE_START_SESSION"]) {
-            return .session(type: .standard, track: .primary)
-        }
-        if truthy(env["SP_UI_TEST_FORCE_BREATH_COUNTING"]) {
-            return .breathCounting
-        }
-        if truthy(env["SP_UI_TEST_FORCE_BUDDY_HUB"]) {
-            return .buddyHub
-        }
-        return .home
-    }
-
-    func didLogin(user: UserDTO) {
-        applyAuthenticatedUser(user)
-        // Re-captured after adoption, same rule as `checkAuth()`: signing in is
-        // itself the transition, so the generation to defend is the one that exists
-        // once this user is adopted.
-        let adopted = authGeneration
-        resetTrackCompletionBadges()
-        currentView = .home
-        // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
-        // across auth transitions now that selectedTab lives on the view model.
-        selectedTab = 0
-        authStatusMessage = nil
-        PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
-        hydrateNotificationSuppressionPreference()
-        // Retained and generation-guarded like the other identity-scoped catch-ups.
-        // `refreshTracksDoneToday()` self-guards, but it returns silently either
-        // way, so the caller cannot infer from it whether the session survived —
-        // hence the explicit re-check before the widget sync and the three
-        // non-idempotent consumptions.
-        loginCatchUpTask?.cancel()
-        loginCatchUpTask = Task { [weak self] in
-            guard let self else { return }
-            // #664: missed-day gap detection — the thing that *starts* a recovery
-            // ramp — runs only in `GET /api/auth/me`, never in the login response.
-            // Without this read a returning user who signs in after a gap gets no
-            // ramp for the whole visit: no badge, and today's sit at full length
-            // rather than the ramped one, until some later foreground happens to
-            // call `me()`. Web re-fetches at the same point for the same reason
-            // (#238).
-            //
-            // Enqueued and ticketed like the other whole-`UserDTO` reads: sign-in
-            // lands on Home, where a settings write can start while this is in
-            // flight, and adopting either response out of order drops the other's
-            // fields (#697).
-            let refresh: Task<Int?, Never> = self.enqueueSettingsRead { [weak self] in
-                guard let self else { return nil }
-                return await self.refreshUserFromServer(startedAtGeneration: adopted)
-            }
-            // `nil` is the session being gone — replaced while the read was in
-            // flight, or rejected outright by it; everything below is
-            // identity-scoped, and the consumptions below are not idempotent. A read
-            // that merely failed returns the entry generation, so a flaky network
-            // still leaves the badge refresh and the consumptions to run.
-            guard let live = await refresh.value else { return }
-            await self.refreshTracksDoneToday()
-            guard live == self.authGeneration else { return }
-            self.syncWidgetData()
-            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: live)
-            await self.consumePendingSessionDeepLinkIfNeeded()
-            await self.consumePendingLogReasonIfNeeded()
-        }
-    }
-
-    /// Fetch the server-synced suppress-during-session opt-in at an auth point so
-    /// `PushNotificationCoordinator.willPresent` reflects current server truth
-    /// even before the Notifications screen is opened this launch (#431).
-    private func hydrateNotificationSuppressionPreference() {
-        // Same class as the flagged sites, guarded pre-emptively: this reads a
-        // per-account server preference and applies it to a device-global
-        // controller, so a response arriving after a sign-out would push the old
-        // account's setting onto whoever is signed in next (#665).
-        let generation = authGeneration
-        let preferenceGeneration = SessionNotificationSuppressionController.preferenceGeneration
-        // This is a third independent reader of the same row, alongside the two in
-        // `NotificationPreferencesViewModel`, and nothing serializes it against
-        // them. Taken here rather than inside the `Task` so it records when the
-        // fetch was asked for, not when the task happened to be scheduled — a
-        // toggle saved in between must still win (#709).
-        let ticket = SessionNotificationSuppressionController.nextPreferenceRequestTicket()
-        Task { [weak self] in
-            guard let self else { return }
-            guard let prefs = try? await APIClient.shared.getNotificationPreferences() else { return }
-            guard generation == self.authGeneration else { return }
-            SessionNotificationSuppressionController.setSuppressPreferenceEnabled(
-                prefs.suppressDuringSession,
-                startedAtGeneration: preferenceGeneration,
-                requestTicket: ticket,
-                responseKind: .read
-            )
-        }
-    }
-
-    /// Snapshot of the live identity, taken by a caller that will apply a response
-    /// later. Capture this *before* an `await`, hand it back to
-    /// `applySettingsUser(_:startedAtGeneration:requestTicket:)`.
-    var identityGeneration: Int { authGeneration }
-
-    /// Serializes every settings mutation in the app against every other one (#697).
-    ///
-    /// Issue #697 offers two mechanisms — serialize the writes, or tag each request
-    /// and reject a response older than the latest applied mutation. This is the
-    /// first, and it is the one that holds: with only one write in flight at a time,
-    /// each response describes the account *after* every earlier mutation committed,
-    /// so responses are adopted in intent order and are complete by construction.
-    /// See ``SettingsWriteQueue``.
-    private let settingsWrites = SettingsWriteQueue()
-
-    /// Runs a settings mutation once every mutation enqueued before it has finished.
-    ///
-    /// Call this at the moment the user acts and put the *whole* round trip inside —
-    /// every `await` the mutation needs, including a permission prompt, and the
-    /// `applySettingsUser` that adopts its response. Enqueuing is what records the
-    /// order the user expressed their intent in; taking the ticket, prompting, or
-    /// sending outside the operation would let a later intent overtake an earlier
-    /// one, which is the inversion #697 exists to stop.
-    /// - Returns: the operation's task, for a caller that must not finish before its
-    ///   own save has. Discardable — a toggle reports progress through its own state
-    ///   instead.
-    @discardableResult
-    func enqueueSettingsWrite(_ operation: @escaping @Sendable @MainActor () async -> Void) -> Task<Void, Never> {
-        settingsWrites.enqueue(operation)
-    }
-
-    /// Runs a whole-account `me()` read on the same queue as the mutations (#697).
-    ///
-    /// The three reads that adopt a whole `UserDTO` — `checkAuth()`,
-    /// `refreshAfterReconnect()` and `returnHome()` — are enqueued rather than left to
-    /// overlap, because a ticket cannot settle a write that left *before* the read: no
-    /// number says whether that write committed before or after the read's snapshot,
-    /// so `StaleResponseGuard` breaks the tie in the write's favour and adopts its
-    /// whole response, dropping the server-derived fields (`currentDay`, the recovery
-    /// ramp, `secondTrackDay`) the read existed to refresh. Waiting for the queue
-    /// removes the tie instead of deciding it.
-    ///
-    /// The wait is an `await` like any other, so re-check the identity generation as
-    /// the operation's first statement: a queue turn can arrive under the account that
-    /// replaced the one that asked.
-    @discardableResult
-    func enqueueSettingsRead<T: Sendable>(_ operation: @escaping @Sendable @MainActor () async -> T) -> Task<T, Never> {
-        settingsWrites.enqueue(operation)
-    }
-
-    /// Ticket ranking one settings request against the `me()` reads racing it (#697,
-    /// #709).
-    ///
-    /// Take it immediately before the request's own `await`, so it records when the
-    /// request left. Ordering is `enqueueSettingsWrite`/`enqueueSettingsRead`'s job,
-    /// not this one's: the queue lets only one settings request be in flight at a
-    /// time, reads included, so every response is already the newest word when it
-    /// lands. The ticket stays as the backstop for any future caller that reads the
-    /// account without taking a place in line.
-    ///
-    /// A ticket whose request never returns (a permission denial that bails out
-    /// before the PATCH) is simply never handed back; it leaves a gap and nothing
-    /// else, since the guard only ever compares tickets for rank.
-    func nextSettingsRequestTicket() -> Int {
-        settingsOrdering.nextTicket()
-    }
-
-    /// Why a settings response was or was not adopted.
-    ///
-    /// Three-way rather than a Bool because the two rejections call for opposite
-    /// UI. A *superseded* response was accepted by the server and merely lost the
-    /// race to describe the account, so reverting the control the user just touched
-    /// would show them their own change being undone when in fact it took. A
-    /// *discarded* one belongs to a session that no longer exists, and reverting is
-    /// the honest answer there.
-    enum SettingsApplyOutcome {
-        /// Adopted into `currentUser` and the offline cache: this is the newest
-        /// word on the account.
-        case applied
-
-        /// A newer settings response has already been applied, so this one is no
-        /// longer the newest word. Nothing is reverted and nothing is reported as
-        /// failed — where this is a write, the server did commit it.
-        ///
-        /// Not reachable from any current caller: `enqueueSettingsWrite` and
-        /// `enqueueSettingsRead` share one queue, so a settings request — read or
-        /// write — never overlaps another and always outranks everything applied
-        /// before it. Kept because it is the honest answer for a caller that reads the
-        /// account without taking a place in line, and because the two rejections
-        /// still call for opposite UI if one ever appears.
-        case superseded
-
-        /// The response belongs to a session that is gone — signed out, or another
-        /// account signed in. None of it is safe to apply.
-        case discarded
-    }
-
-    /// - Parameter generation: `identityGeneration` as it was when the request
-    ///   started. Required rather than defaulted so a new call site cannot forget
-    ///   it and silently reintroduce the cross-session write (#665).
-    /// - Parameter ticket: `nextSettingsRequestTicket()` as taken when the request
-    ///   started. Also required, and for the same reason (#697).
-    /// - Returns: see ``SettingsApplyOutcome``. Callers that show success UI or
-    ///   revert a control must branch on this — a silently dropped response would
-    ///   otherwise be reported to the user as a saved change.
-    @discardableResult
-    func applySettingsUser(
-        _ user: UserDTO,
-        startedAtGeneration generation: Int,
-        requestTicket ticket: Int
-    ) -> SettingsApplyOutcome {
-        // `.write`: a PATCH response is server truth as of a commit, so it outranks
-        // every `me()` read still outstanding beside it.
-        //
-        // No repair follows it, because `enqueueSettingsWrite` leaves nothing to
-        // repair. The two ways a response could contradict a committed save both
-        // required a second write in flight — one whose response is the only carrier
-        // of its field (so dropping it stales `currentUser` and the cache #665 reads
-        // on the next offline launch), or one serialized before this save committed
-        // and adopted after it (so it carries the pre-save value). Serializing the
-        // writes makes both unreachable: this request left only after every earlier
-        // mutation had committed *and* been adopted, so its `UserDTO` carries all of
-        // them and nothing older can follow it.
-        return applySettingsResponse(
-            user,
-            startedAtGeneration: generation,
-            requestTicket: ticket,
-            responseKind: .write
-        )
-    }
-
-    /// Shared body of the settings-apply path. Split out so the `me()` reads that
-    /// race a save can reuse the identity guards while entering the ordering as a
-    /// `.read`.
-    @discardableResult
-    private func applySettingsResponse(
-        _ user: UserDTO,
-        startedAtGeneration generation: Int,
-        requestTicket ticket: Int,
-        responseKind kind: StaleResponseGuard.ResponseKind
-    ) -> SettingsApplyOutcome {
-        // The id check below cannot tell "same account throughout" from "signed out
-        // and signed back in as the same account" — and in the second case a
-        // response from the previous session would overwrite newer local fields,
-        // clear offline mode, and persist stale data to the cache. That is the case
-        // this generation check exists for (#665).
-        guard generation == authGeneration else { return .discarded }
-        guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return .discarded }
-        // Same account throughout, so the question left is which response is the
-        // newest word. Checked after the identity guards, not before: a response
-        // from a session that is gone must not consume a ticket on the live
-        // account's behalf and bar its genuine saves.
-        guard settingsOrdering.shouldApply(ticket: ticket, from: kind) else { return .superseded }
-        // Server-confirmed (a settings PATCH round-tripped), so the local copy is
-        // refreshed too — otherwise a rename or track opt-in would vanish on the
-        // next offline launch (#665).
-        applyAuthenticatedUser(user)
-        // #708: the widget orders and labels its rows by this period, so a change
-        // must reach the stored snapshot now rather than at the next sit.
-        if existing.longSessionPeriod != user.longSessionPeriod {
-            syncWidgetData()
-        }
-        return .applied
     }
 
     func didLogout() {
@@ -1109,1068 +464,5 @@ final class AppViewModel {
                 )
             }
         }
-    }
-
-    private func resetTrackCompletionBadges() {
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
-        previousCalendarDayComplete = true
-        previousDayResolved = false
-        resolvedForCalendarDay = nil
-        previousDayRequest += 1
-        doneTodayFlagsStamp = nil
-    }
-
-    /// Retire the "done today" flags when the local day has advanced past the one
-    /// they describe, and re-stamp them onto the current day.
-    ///
-    /// The flags used to be cleared in exactly one place: the top of
-    /// `refreshTracksDoneToday()`, which is a network round-trip. The path that
-    /// actually crosses midnight with them raised is the one deliberately built to
-    /// need no network — `markPracticeDoneToday` -> `syncWidgetData()`, called the
-    /// instant a sit ends. A quick sit at 00:05, or a second-track sit, therefore
-    /// reached the snapshot with yesterday's primary-standard flag still true and
-    /// let it fold today into the standard-only set that extends `serverStreak`:
-    /// the exact inflation #679 exists to remove.
-    ///
-    /// Called before the flags are written and before they are read, so no caller
-    /// has to remember the rollover. The server-derived Home badges are rolled
-    /// over with the rest for the same reason and on the same fail-closed logic
-    /// the refresh failure path already uses: on a new day nothing has been sat
-    /// yet, and the next successful refresh restores the truth.
-    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
-    private func requiredSitsCompleteFromFlags() -> Bool {
-        let dual = currentUser?.dualTrackEnabled ?? false
-        // Local flags cover a sit that finished offline and has not reached the
-        // server badges yet. Without them the day stays open and the next sit
-        // before 6:00 is stored on yesterday again.
-        let primary = primaryDoneToday || primaryStandardDoneToday
-        let second = secondDoneToday || secondPracticeDoneToday
-        return dual ? (primary && second) : primary
-    }
-
-    private func previousDayAnswerIsCurrent(now: Date) -> Bool {
-        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now)
-    }
-
-    /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
-    func creditedSessionDate(now: Date = Date()) -> String {
-        rollOverDoneTodayFlagsIfNeeded(now: now)
-        return SessionCalendar.effectiveLocalIsoDate(
-            previousDayComplete: previousCalendarDayComplete,
-            now: now
-        )
-    }
-
-    /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
-    private func creditedPracticeInstant(now: Date = Date()) -> Date {
-        let credited = creditedSessionDate(now: now)
-        let calendarToday = SessionCalendar.localIsoDate(now: now)
-        guard credited != calendarToday else { return now }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: now)
-        return calendar.date(byAdding: .hour, value: -1, to: start) ?? now
-    }
-
-    /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
-    private func resolvePreviousPracticeDay(now: Date) async {
-        let calendarDay = SessionCalendar.localIsoDate(now: now)
-        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
-            return
-        }
-        guard Calendar.current.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
-            previousCalendarDayComplete = true
-            previousDayResolved = true
-            resolvedForCalendarDay = calendarDay
-            return
-        }
-        previousDayRequest += 1
-        let ticket = previousDayRequest
-        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
-        do {
-            let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
-            guard ticket == previousDayRequest else { return }
-            let dual = currentUser?.dualTrackEnabled ?? false
-            previousCalendarDayComplete = dual
-                ? (tracks.primary && tracks.second)
-                : tracks.primary
-            previousDayResolved = true
-            resolvedForCalendarDay = calendarDay
-        } catch {
-            guard ticket == previousDayRequest else { return }
-            let calendar = Calendar.current
-            if let stamp = doneTodayFlagsStamp,
-               let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-               calendar.isDate(stamp, inSameDayAs: yesterday) {
-                previousCalendarDayComplete = requiredSitsCompleteFromFlags()
-            } else {
-                previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
-            }
-            // Unresolved so the next refresh retries the lookup.
-            previousDayResolved = false
-            resolvedForCalendarDay = nil
-        }
-    }
-
-    private func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
-        let calendar = Calendar.current
-        if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
-            return
-        }
-        let hour = calendar.component(.hour, from: now)
-        if doneTodayFlagsStamp == nil {
-            // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
-            // says it is finished, unless that fetch already answered.
-            if !previousDayAnswerIsCurrent(now: now) {
-                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
-            }
-            doneTodayFlagsStamp = now
-            return
-        }
-        if hour < SessionCalendar.graceCutoffHour,
-           let stamp = doneTodayFlagsStamp,
-           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-           calendar.isDate(stamp, inSameDayAs: yesterday) {
-            if previousDayAnswerIsCurrent(now: now) {
-                if !previousCalendarDayComplete {
-                    return
-                }
-            } else if !requiredSitsCompleteFromFlags() {
-                previousCalendarDayComplete = false
-                return
-            }
-        }
-        // The previous day is finished, the clock is at or after 6:00, or the
-        // stamp is older than yesterday. Roll onto the calendar day. A resolved
-        // answer for *this* calendar day is kept. A stale one must not.
-        if !previousDayAnswerIsCurrent(now: now) {
-            previousCalendarDayComplete = true
-            previousDayResolved = false
-            resolvedForCalendarDay = nil
-        }
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
-        doneTodayFlagsStamp = now
-    }
-
-    func beginSession(type: SessionType = .standard, track: Track = .primary) {
-        currentView = .session(type: type, track: track)
-    }
-
-    /// #240: opt into the dual-track fork, then refresh local user + badges.
-    func enableDualTrack() async {
-        // Serialized with every other settings mutation (#697). This is a user
-        // mutation returning the same whole `UserDTO` as the Settings toggles and the
-        // rename, and it races them identically — left outside the queue, a slow
-        // opt-in landing last would revert a newer rename in precisely the way the
-        // toggles no longer can. It is also the only settings write reachable from
-        // outside the Settings screen, so it is exactly the overlap that screen's own
-        // `isSavingSettings` gate cannot cover.
-        //
-        // Awaited rather than fired and forgotten so the caller's `Task` still
-        // represents the whole opt-in.
-        //
-        // The generation is captured *here*, synchronously with the tap, and not
-        // inside the operation: waiting for a turn is an await like any other, so a
-        // read taken after it would bind this opt-in to whatever account is live when
-        // the queue finally reaches it rather than the one the user tapped on. A tap
-        // that sat behind a slow Settings save while the session changed would then
-        // enable the fork on — and persist the `UserDTO` of — the account that
-        // replaced them (#665). Same capture-then-recheck shape as every Settings
-        // write.
-        let identityAtStart = authGeneration
-        await settingsWrites.enqueue { [weak self] in
-            guard let self else { return }
-            await self.performEnableDualTrack(startedAtGeneration: identityAtStart)
-        }.value
-    }
-
-    private func performEnableDualTrack(startedAtGeneration generation: Int) async {
-        // Re-checked now that the wait is over and before the request is issued:
-        // sending this would otherwise apply the previous user's intent to the
-        // account that replaced them.
-        guard generation == authGeneration else { return }
-        // Taken immediately before the request, so it records when this left and
-        // outranks the `me()` reads racing it (#697).
-        let ticket = nextSettingsRequestTicket()
-        do {
-            let updated = try await APIClient.shared.enableDualTrack()
-            let outcome = applySettingsUser(
-                updated,
-                startedAtGeneration: generation,
-                requestTicket: ticket
-            )
-            // `.discarded` means there is no session left to refresh badges for. The
-            // opt-in is otherwise adopted — nothing else can be in flight to
-            // supersede it — so `currentUser.dualTrackEnabled` is on before the
-            // refresh below, and Home's per-track cards, which render only inside
-            // that branch, have something to draw into. Ordered before the refresh so
-            // the badges it writes and the widget snapshot it persists both see the
-            // fork as on.
-            guard outcome != .discarded else { return }
-            await refreshTracksDoneToday()
-        } catch {
-            print("Failed to enable dual track: \(error)")
-        }
-    }
-
-    /// #240: derive per-track "completed a standard sit today" from a lightweight
-    /// server-side filtered query.
-    func refreshTracksDoneToday() async {
-        guard currentUser != nil else { return }
-        // Captured before the request: the `currentUser` check above only holds at
-        // entry, and everything below the await writes identity-scoped state
-        // (Home badges, the widget snapshot, the week history). Re-checked after,
-        // so a response that outlived its session cannot repaint badges or persist
-        // a widget snapshot for an account that has signed out or been switched.
-        let generation = authGeneration
-        // #699: and a ticket for *this* refresh, taken before the request so it
-        // records when this one left rather than when its answer happened to
-        // arrive. The generation above cannot stand in — the refreshes racing here
-        // all describe the same account, which is exactly the case it ignores.
-        let ticket = tracksDoneOrdering.nextTicket()
-        let now = Date()
-        // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
-        // otherwise assume the day is finished and credit the new calendar date.
-        await resolvePreviousPracticeDay(now: now)
-        // Two rollovers, because they cover different evidence. The stamp-based
-        // one below knows what *this process* claimed and when; the snapshot-based
-        // one here also catches a relaunch that inherited a stored snapshot from a
-        // previous day. Both are cheap and idempotent.
-        rollOverDoneTodayFlagsIfNeeded(now: now)
-        let prior = WidgetDataStore.load()
-        let priorRequired = (prior?.dualTrackEnabled ?? false)
-            ? ((prior?.primaryDoneToday ?? false) && (prior?.secondDoneToday ?? false))
-            : (prior?.primaryDoneToday ?? true)
-        if let prior, prior.isLoggedIn,
-           !WidgetDataStore.isSameLocalDay(prior.lastUpdated, now),
-           !WidgetDataStore.graceKeepsPreviousPracticeDay(
-                lastUpdated: prior.lastUpdated,
-                now: now,
-                requiredSitsComplete: priorRequired
-           ) {
-            practiceDoneToday = false
-            secondPracticeDoneToday = false
-            // #679: same rollover as its siblings — yesterday's standard sit must
-            // not fold today into the standard-only set.
-            primaryStandardDoneToday = false
-        }
-        let today = creditedSessionDate(now: now)
-        do {
-            let tracksDoneToday = try await APIClient.shared.getTracksDoneToday(date: today)
-            // Identity first, deliberately: a response that outlived its session is
-            // not evidence about *this* one, and short-circuiting keeps it from
-            // advancing the barrier against the refresh that is still live.
-            guard generation == authGeneration,
-                  tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
-            primaryDoneToday = tracksDoneToday.primary
-            secondDoneToday = tracksDoneToday.second
-            if primaryDoneToday {
-                practiceDoneToday = true
-                // #679: the server confirming a primary standard sit today is the
-                // same fact the local flag records, so raise it here too. Like its
-                // siblings this only ever goes up — the failure path below clears
-                // the server badges, never the local flags.
-                primaryStandardDoneToday = true
-            }
-            if secondDoneToday {
-                secondPracticeDoneToday = true
-            }
-            if today != SessionCalendar.localIsoDate(now: now) {
-                let calendar = Calendar.current
-                let startToday = calendar.startOfDay(for: now)
-                if let evening = calendar.date(byAdding: .hour, value: -1, to: startToday) {
-                    doneTodayFlagsStamp = evening
-                }
-            }
-        } catch {
-            // #759: a cancelled request is not a failed one, and only a failure
-            // justifies what follows. Cancellation here always means replacement or
-            // teardown — every call site that cancels this refresh constructs its
-            // successor in the same run (`enterOfflineMode`,
-            // `refreshAfterReconnectInBackground`, the login catch-up), and the one
-            // that does not (`cancelIdentityScopedTasks`) is a session ending. So a
-            // cancelled request has nothing to correct: clearing the badges and
-            // persisting that at the `syncWidgetData()` below would fail closed on
-            // behalf of a request that never asked the server anything, leaving the
-            // widget briefly holding a value its replacement is about to overwrite.
-            // Returning outright rather than skipping the clear alone, because the
-            // snapshot write at the bottom is the half that reaches the widget.
-            //
-            // Deliberately asymmetric: the success path above has no matching
-            // cancellation check. A cancelled request that nonetheless came back
-            // with an answer holds real, current server data, and `shouldApply`
-            // has already established it is the newest word on today. Dropping it
-            // for being cancelled would throw away a fact nobody else is going to
-            // supply — the same loss #699 fixed in the other direction. Only the
-            // failure branch has nothing to contribute.
-            if RequestCancellation.isCancellation(error, taskIsCancelled: Task.isCancelled) { return }
-            // Non-fatal: fail closed so stale "done today" badges do not leak.
-            // Only the server-derived Home badges are cleared. The widget
-            // practice flags are local truth — a sit finished on this device,
-            // possibly offline and still queued for sync — and a failed status
-            // request is not the server contradicting them, just an absent
-            // answer. Clearing them here (and persisting that at the
-            // `syncWidgetData()` below) dropped a mark the user had already
-            // earned, and could break the day's streak until sync succeeded.
-            // Note the success path above only ever raises these flags, never
-            // lowers them; the failure path must not be the one exception.
-            // Midnight rollover is already handled at the top of this method.
-            //
-            // Ranked like the success path (#699), because failing closed is only
-            // right for the *newest* word on today. An absent answer says nothing
-            // the server has since confirmed is wrong, so a refresh that a later
-            // one already superseded must not clear badges that newer one just set.
-            //
-            // Ranked but *not* recorded, which is why this asks `isSuperseded` and
-            // the success path calls `shouldApply`. A failure observed nothing, so
-            // consuming the barrier would let it bar an *earlier* refresh still in
-            // flight — and that one comes back with real server data. Losing it is
-            // the mirror of the bug above and just as visible: a sit is flushed,
-            // `returnHome()`'s refresh is in flight, the network drops, the
-            // reconnect refresh fails instantly and clears the badges, and then the
-            // original success lands confirming the sit and is thrown away. The
-            // badge the user just earned stays dark until some later refresh.
-            guard generation == authGeneration,
-                  !tracksDoneOrdering.isSuperseded(ticket: ticket) else { return }
-            // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
-            // deliberately keeps the badges when a session is running, and it
-            // schedules this catch-up moments later against the same dead network
-            // — so clearing here would undo that preservation for the very sit it
-            // was meant to protect. Outside a session the reset stands, and the
-            // next successful refresh restores the truth either way.
-            if !isInSession {
-                primaryDoneToday = false
-                secondDoneToday = false
-            }
-        }
-        // Both branches above return early on a generation change or a superseded
-        // ticket, so reaching here means this refresh is both the live session's and
-        // still the newest word on today. A superseded one skips these two with
-        // nothing lost: the refresh that outranked it makes the same calls from a
-        // strictly fresher answer, and drops the `getSessions()` backfill this one
-        // would otherwise pay for a second time.
-        //
-        // A failure reaching here does not close the subject — it recorded nothing,
-        // so an earlier refresh still in flight can land afterwards and run these
-        // again from a real answer. That is the point: the second pass overwrites
-        // the fail-closed snapshot this one is about to persist.
-        syncWidgetData()
-        refreshWidgetWeekHistory()
-    }
-
-    func beginBreathCounting() {
-        currentView = .breathCounting
-    }
-
-    /// Save a completed breath session and return to home.
-    ///
-    /// Local-first via the offline write queue (#557); non-fatal API failures no longer drop data.
-    func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
-        guard elapsedSeconds > 0 || breathCount > 0 else {
-            currentView = .home
-            scheduleBuddyInviteConsume()
-            return
-        }
-        guard !isSavingBreathSession else { return }
-        guard let ownerUserId = currentUser?.id else { return }
-        applyAppGateAfterSessionCompletion(unlock: true)
-        // #526: breath sessions always complete naturally; unlock if duration qualifies.
-        trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: true, duration: max(elapsedSeconds, 1))
-        isSavingBreathSession = true
-        defer { isSavingBreathSession = false }
-
-        let clientSessionId = UUID()
-
-        let request = CreateSessionRequest(
-            dayNumber: currentDay,
-            sessionType: .breath,
-            duration: max(elapsedSeconds, 1),
-            bonusSeconds: 0,
-            completed: true,
-            actualTime: elapsedSeconds,
-            clearPercent: 0,
-            thoughtCount: 0,
-            mindStateLog: [],
-            sessionDate: creditedSessionDate(),
-            breathCount: breathCount,
-            clientSessionId: clientSessionId
-        )
-
-        do {
-            _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
-                request: request,
-                clientSessionId: clientSessionId,
-                ownerUserId: ownerUserId,
-                thoughts: []
-            )
-            markPracticeDoneToday(sessionType: .breath, track: .primary)
-            localSaveFailed = false
-            currentView = .home
-        } catch {
-            print("Failed to persist breath session locally: \(error)")
-            // #703: a breath sit has no completion screen to say this on, so the
-            // offline indicator is the only place the loss can surface.
-            localSaveFailed = true
-            currentView = .home
-        }
-        // Breath exits skip `returnHome()`, so an invite held back by the
-        // `isInSession` guard during the sit is retried here.
-        scheduleBuddyInviteConsume()
-    }
-
-    func beginBuddySession() {
-        buddyInviteError = nil
-        currentView = .buddyHub
-    }
-
-    func openBuddyCalendar() {
-        currentView = .buddyCalendar
-    }
-
-    func openBuddyCalendarForBuddy(buddyId: String, username: String) {
-        currentView = .buddyCalendarWithBuddy(buddyId: buddyId, buddyUsername: username)
-    }
-
-    func closeBuddyCalendar() {
-        currentView = .buddyHub
-    }
-
-    func enterBuddySession(sessionId: String) {
-        buddyInviteError = nil
-        currentView = .buddySession(sessionId: sessionId)
-    }
-
-    func leaveBuddySession() {
-        currentView = .home
-        scheduleBuddyInviteConsume()
-    }
-
-    /// Every route into the invite flow joins through `consumePendingBuddyInviteIfNeeded`,
-    /// which holds `isConsumingBuddyInvite` for the whole request (#756), so two routes
-    /// cannot POST the same token. Retained and guarded like the other identity-scoped
-    /// work: the task body runs on a later main-actor turn, and consuming an invite is
-    /// not idempotent, so a sign-out in between must not let it burn the token against
-    /// whoever is signed in next (#665).
-    ///
-    /// No cancel of the previous task. A consume in flight would lose the server's
-    /// answer, and one not started yet would run its join already cancelled while
-    /// holding the in-flight flag, so this call would return without joining.
-    private func scheduleBuddyInviteConsume() {
-        guard !isConsumingBuddyInvite else { return }
-        let adopted = authGeneration
-        buddyInviteTask = Task { [weak self] in
-            guard let self else { return }
-            guard adopted == self.authGeneration else { return }
-            await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
-        }
-    }
-
-    func handleIncomingURL(_ url: URL) {
-        if let sessionType = SessionDeepLinkParser.sessionType(from: url) {
-            openSessionDeepLink(sessionType)
-            return
-        }
-        if handleNotificationDeepLink(url) {
-            return
-        }
-        guard let token = extractBuddyToken(from: url) else { return }
-        if currentUser == nil {
-            pendingBuddyInviteToken = token
-            return
-        }
-        if isInSession {
-            // Queue invite while preserving in-progress local session state.
-            pendingBuddyInviteToken = token
-            return
-        }
-        // The newest link replaces an older pending one, so a later retry never
-        // joins an invite the user has since moved past (#756). If a consume is
-        // already waiting on the server, it only clears the token it captured and
-        // picks this one up when it finishes.
-        pendingBuddyInviteToken = token
-        scheduleBuddyInviteConsume()
-    }
-
-    func handlePushDeepLink(_ url: URL) {
-        handleIncomingURL(url)
-    }
-
-    private func openSessionDeepLink(_ sessionType: SessionType) {
-        if currentUser == nil {
-            pendingSessionDeepLink = sessionType
-            return
-        }
-        if isInSession { return }
-        beginSession(type: sessionType)
-    }
-
-    private func consumePendingSessionDeepLinkIfNeeded() async {
-        guard currentUser != nil, let sessionType = pendingSessionDeepLink else { return }
-        guard !isInSession else { return }
-        pendingSessionDeepLink = nil
-        beginSession(type: sessionType)
-    }
-
-    func openLogReason(date: String) {
-        if currentUser == nil {
-            pendingLogReasonDate = date
-            return
-        }
-        if isInSession { return }
-        currentView = .logReason(date: date)
-    }
-
-    private func consumePendingLogReasonIfNeeded() async {
-        guard currentUser != nil, let date = pendingLogReasonDate else { return }
-        guard !isInSession else { return }
-        pendingLogReasonDate = nil
-        currentView = .logReason(date: date)
-    }
-
-    /// Shared app-gate side effect for any local session completion path (#590).
-    /// Keeps standard/quick (`completeSession`), breath (`completeBreathSession`), and
-    /// future completion handlers (#589 widget sync, etc.) aligned on one call site.
-    private func applyAppGateAfterSessionCompletion(unlock: Bool) {
-        if unlock {
-            appBlockingManager.unlockAfterCompletedSession()
-        } else {
-            appBlockingManager.prepareForSession()
-        }
-    }
-
-    func completeSession(
-        sessionId: String,
-        clientSessionId: UUID,
-        clearPercent: Int,
-        thoughtCount: Int,
-        thoughts: [CapturedThought],
-        dayNumber: Int,
-        sessionType: SessionType = .standard,
-        track: Track,
-        duration: Int,
-        bonusSeconds: Int = 0,
-        unlockAppGate: Bool,
-        attentionLog: [AttentionEntry]? = nil,
-        attentionElapsed: Double? = nil,
-        ambientSoundSummary: AmbientSoundSummary? = nil
-    ) {
-        // #684: every counted sit now earns widget credit on its own track — a
-        // second-track standard sit checks the Track Two row instead of being
-        // dropped, so partial two-a-day days are visible immediately.
-        // Gated on `unlockAppGate` (== the sit ran to its planned end):
-        // `endEarly()` leaves `completedNaturally` false while still setting
-        // `isComplete`, so it reaches this call site too. Crediting there would
-        // check a weekday row — and extend the streak — for a sit the user cut
-        // short.
-        if unlockAppGate {
-            markPracticeDoneToday(sessionType: sessionType, track: track)
-        }
-        applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
-        // #526: unlock hold-cluster controls if this sit qualifies (completed + ≥ 300 s planned).
-        trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: unlockAppGate, duration: duration)
-        currentView = .completion(
-            sessionId: sessionId,
-            clientSessionId: clientSessionId,
-            clearPercent: clearPercent,
-            thoughtCount: thoughtCount,
-            thoughts: thoughts,
-            dayNumber: dayNumber,
-            sessionType: sessionType,
-            track: track,
-            sessionCompleted: unlockAppGate,
-            duration: duration,
-            bonusSeconds: bonusSeconds,
-            attentionLog: attentionLog,
-            attentionElapsed: attentionElapsed,
-            ambientSoundSummary: ambientSoundSummary
-        )
-    }
-
-    func returnHome() async {
-        currentView = .home
-        selectedTab = 0
-        // Same hazard as `refreshAfterReconnect` (#665): the queue flush and the
-        // `me()` request below are both suspension points, so a sign-out or account
-        // switch can land mid-flight and a late response would otherwise restore the
-        // previous `currentUser` and re-save its cached identity after the session
-        // was invalidated.
-        let generation = authGeneration
-        if let ownerUserId = currentUser?.id {
-            do {
-                _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
-                // The flush is a suspension point; don't follow it with a prune for
-                // a session that has since been replaced. Both calls are explicitly
-                // scoped to the `ownerUserId` captured before the await, so neither
-                // can touch another account's rows — this only stops us doing more
-                // work on behalf of a session that is over.
-                guard generation == authGeneration else { return }
-                try await SessionSyncCoordinator.shared.pruneCompletedEntries(ownerUserId: ownerUserId)
-            } catch {
-                print("Failed to flush offline session queue: \(error)")
-            }
-        }
-        // Enqueued rather than issued straight away. `currentView` is set to `.home`
-        // on this function's first line, so the user is interactive on Home for the
-        // whole flush above and "Add second track" can start a settings write from
-        // there. A ticket cannot settle that: the opt-in's PATCH left *first*, and an
-        // accepted `.write` sets `applied = issued` (`StaleResponseGuard`), so its
-        // response supersedes this read whichever of the two took the lower number.
-        // If that PATCH left before the sit committed, adopting it wholesale drops the
-        // post-sit `currentDay` and recovery ramp this `me()` exists to fetch, and
-        // `applyAuthenticatedUser` re-saves the stale snapshot to the cache #665 reads
-        // on the next offline launch. Taking a place in line removes the ambiguity
-        // instead of deciding it: no settings write is outstanding when this read
-        // leaves, so its response is the newest word by construction.
-        let read: Task<Int?, Never> = enqueueSettingsRead { [weak self] in
-            guard let self else { return nil }
-            return await self.refreshUserFromServer(startedAtGeneration: generation)
-        }
-        // `nil` means the session that finished the sit is gone, so none of the
-        // identity-scoped work below belongs to this call any more.
-        guard let adopted = await read.value else { return }
-        await refreshTracksDoneToday()
-        // As in `refreshAfterReconnect`: re-checked because the refresh above is a
-        // suspension point, and consuming the invite burns a token against whatever
-        // session is live when it runs.
-        guard adopted == authGeneration else { return }
-        await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
-        await consumePendingLogReasonIfNeeded()
-    }
-
-    /// A `me()` read that reconciles the account already on screen, run from the
-    /// settings queue. Shared by `returnHome()` (post-sit) and `didLogin` (#664).
-    ///
-    /// A read that merely *fails* — no network, a 5xx, an undecodable body — is
-    /// dropped: neither caller is reacting to it, and the badge refresh and the
-    /// consumptions behind it are still worth running. A 401 is not that. It is the
-    /// server saying this session is over, and both callers gate non-idempotent work
-    /// on the answer — including `consumePendingBuddyInviteIfNeeded`, which joins
-    /// with the pending invite — so an authoritative rejection signs out and returns
-    /// `nil`, as in `performReconnectRefresh`, rather than letting that join run
-    /// against a session that is already gone.
-    ///
-    /// - Parameter generation: `authGeneration` as it was when the caller decided to
-    ///   refresh.
-    /// - Returns: the generation the caller's remaining work belongs to — the entry
-    ///   capture when the read did not land, or the live one after an adoption, so an
-    ///   expected adoption is never mistaken for the session being replaced — or `nil`
-    ///   when that session is gone and there is nothing left to finish.
-    private func refreshUserFromServer(startedAtGeneration generation: Int) async -> Int? {
-        // Re-checked now that the queue turn has arrived: waiting for a place in line
-        // is an `await` like any other, so a sign-out or account switch may have landed
-        // while a save ahead of us was still resolving (#665).
-        guard generation == authGeneration else { return nil }
-        // Taken immediately before the request, as at every other settings site, so it
-        // records when this read left. The queue turn is what makes the response the
-        // newest word; the ticket is the backstop (#697).
-        let settingsTicket = nextSettingsRequestTicket()
-        let user: UserDTO
-        do {
-            guard let fetched = try await APIClient.shared.me(today: creditedSessionDate()) else {
-                // `me()` returns nil for exactly one case: a 401 that is not
-                // `TOKEN_EXPIRED`. The server has rejected this session, so the work
-                // the caller gates on this answer must not run against it.
-                guard generation == authGeneration else { return nil }
-                applySignedOut(cause: .signedOut, message: nil)
-                return nil
-            }
-            user = fetched
-        } catch let apiError as APIError where apiError.status == 401 || apiError.status == 404 {
-            // The thrown authoritative shapes. 401 is `TOKEN_EXPIRED`, which `me()`
-            // throws rather than returning. 404 is `GET /api/auth/me`'s "User not
-            // found" (`src/app/api/auth/me/route.ts`): the session authenticated but
-            // its user row is gone, so the account is deleted, not unreachable.
-            // Same generation guard as the success path — a rejection belonging to
-            // the *previous* session must not sign out an account that has since
-            // signed in.
-            guard generation == authGeneration else { return nil }
-            applySignedOut(
-                cause: apiError.status == 401 ? .unauthorized : .signedOut,
-                message: apiError.message
-            )
-            return nil
-        } catch {
-            // Everything left is a read that never landed — no network, a 5xx, an
-            // undecodable body. Not a reason to skip the badge refresh and the
-            // deep-link consumptions, and never was.
-            return generation
-        }
-        guard generation == authGeneration else { return nil }
-        // This re-confirms the account already on screen, so it enters the same
-        // ordering as the auth-path reads (#697). Adoption proper — a response
-        // naming a *different* account — keeps going through `applyAuthenticatedUser`:
-        // there is nothing to order it against and the guard would read it as
-        // `.discarded`.
-        if currentUser?.id == user.id {
-            applySettingsResponse(
-                user,
-                startedAtGeneration: generation,
-                requestTicket: settingsTicket,
-                responseKind: .read
-            )
-        } else {
-            applyAuthenticatedUser(user)
-        }
-        return authGeneration
-    }
-
-    /// - Parameter generation: `authGeneration` as it was when the caller decided
-    ///   to consume the invite, threaded through to the join so the network result
-    ///   is checked against the identity that asked for it.
-    private func consumePendingBuddyInviteIfNeeded(startedAtGeneration generation: Int) async {
-        guard generation == authGeneration else { return }
-        guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
-        // A kept invite must not pull the user out of a sit or a buddy session they
-        // started after it failed. It stays queued for return-home or leave-session.
-        guard !isInSession else { return }
-        // The token stays pending for the whole request. Overlapping consumes
-        // (a cold start and a scene activation, return-home and leave-session)
-        // would otherwise POST it twice.
-        guard !isConsumingBuddyInvite else { return }
-        isConsumingBuddyInvite = true
-        defer { isConsumingBuddyInvite = false }
-
-        let outcome = await joinBuddySession(token: token, startedAtGeneration: generation)
-
-        // A newer invite may have replaced this one while the request was in flight.
-        // Join that one after this attempt drops the in-flight flag, and only for
-        // the session that is still current. A sign-out leaves the replacement
-        // alone so the next account does not inherit this call. If this one joined,
-        // the `isInSession` guard keeps the newer invite queued instead of replacing
-        // the session just opened.
-        guard pendingBuddyInviteToken == token else {
-            isConsumingBuddyInvite = false
-            if generation == authGeneration, pendingBuddyInviteToken != nil {
-                await consumePendingBuddyInviteIfNeeded(startedAtGeneration: generation)
-            }
-            return
-        }
-        // Sign-out via `didLogout` already nils the token. `applySignedOut` does not,
-        // so a generation change has to drop *this* attempt's token or the next
-        // account inherits it. A token stored since (pending != this one) is kept.
-        guard generation == authGeneration else {
-            pendingBuddyInviteToken = nil
-            return
-        }
-        switch outcome {
-        case .joined, .authoritativeRejection:
-            // Confirmed join, or the server rejected this invite. Either way it is spent.
-            pendingBuddyInviteToken = nil
-        case .transientFailure, .stale:
-            break
-        }
-    }
-
-    private enum BuddyInviteJoinOutcome {
-        case joined
-        case authoritativeRejection
-        case transientFailure
-        /// Cancelled, or the session that started the join is gone. Do not spend
-        /// the token and do not surface an error for it.
-        case stale
-    }
-
-    /// - Parameter generation: `authGeneration` at the point the join was decided.
-    ///   Required rather than defaulted, matching `applySettingsUser`, so a new
-    ///   call site cannot forget it and silently reintroduce the stale-write bug.
-    private func joinBuddySession(token: String, startedAtGeneration generation: Int) async -> BuddyInviteJoinOutcome {
-        do {
-            let sessionId = try await APIClient.shared.joinBuddySession(token: token)
-            // The request is a suspension point like every other identity-scoped
-            // network call here. The pre-task guards only decided whether to
-            // *start* the join; a sign-out or account switch landing while it was
-            // in flight must not route the replacement account into this session
-            // (#665).
-            guard generation == authGeneration else { return .stale }
-            buddyInviteError = nil
-            currentView = .buddySession(sessionId: sessionId)
-            return .joined
-        } catch is CancellationError {
-            // Cancellation is cooperative and does not by itself stop the code
-            // after this await. A sign-out's `cancelIdentityScopedTasks` must not
-            // surface the previous session's failure on whoever is signed in next.
-            return .stale
-        } catch let urlError as URLError where urlError.code == .cancelled {
-            return .stale
-        } catch {
-            guard generation == authGeneration else { return .stale }
-            switch BuddyInviteJoinFailure.classify(error) {
-            case .authoritative:
-                // A newer invite may already be queued. Don't paint this rejection
-                // over it; the consume that called this spends only this token.
-                if pendingBuddyInviteToken == token {
-                    if let apiError = error as? APIError {
-                        buddyInviteError = apiError.message
-                    } else {
-                        buddyInviteError = "Could not open buddy invite."
-                    }
-                }
-                return .authoritativeRejection
-            case .transient:
-                if pendingBuddyInviteToken == token {
-                    buddyInviteError = Self.buddyInviteRetryMessage
-                }
-                return .transientFailure
-            }
-        }
-    }
-
-    func openHomeFromNotification() {
-        guard currentUser != nil else { return }
-        if isInSession {
-            return
-        }
-        currentView = .home
-    }
-
-    private func handleNotificationDeepLink(_ url: URL) -> Bool {
-        let scheme = (url.scheme ?? "").lowercased()
-        guard scheme == "stillpoint" else { return false }
-        let host = (url.host ?? "").lowercased()
-        if host == "home" {
-            openHomeFromNotification()
-            return true
-        }
-        if host == "friends" {
-            // Friends management UI is web-only today; land on home until an iOS friends tab ships.
-            openHomeFromNotification()
-            return true
-        }
-        if host == "log-reason" {
-            let date = LogReasonDeepLinkParser.date(from: url)
-            openLogReason(date: date)
-            return true
-        }
-        return false
-    }
-
-    private func extractBuddyToken(from url: URL) -> String? {
-        BuddyInviteTokenParser.token(from: url)
-    }
-
-    /// Persist a widget snapshot to the App Group container and reload timelines.
-    /// Called from auth + session-completion flows; no extra API calls.
-    ///
-    /// `signedOutCause` distinguishes a real sign-out (wipe the shared blob) from
-    /// merely failing to reach the server at cold start — see #671 and
-    /// `WidgetDataStore.shouldClearStoredSnapshot(on:)`.
-    private func syncWidgetData(signedOutCause: WidgetDataStore.SignedOutCause = .signedOut) {
-        // Read site for all five flags, and the one every write path funnels
-        // through — including the network-free `markPracticeDoneToday` that can
-        // reach here first on a sit just after local midnight.
-        rollOverDoneTodayFlagsIfNeeded()
-        let practiceNow = creditedPracticeInstant()
-        let snapshot = WidgetDataStore.makeSnapshot(
-            user: currentUser,
-            primaryDoneToday: primaryDoneToday,
-            // #684: the widget's Track Two row is driven by the practice flag, not
-            // the server-derived Home badge, so a just-finished sit checks today
-            // immediately on the fast (network-free) path.
-            secondDoneToday: secondPracticeDoneToday,
-            practiceDoneToday: practiceDoneToday,
-            // #679: the Track One analogue of the line above — a standard sit that
-            // just finished is known here before the Home badge learns of it, and
-            // the standard-only set must see it now or the streak lags a round-trip.
-            primaryStandardDoneToday: primaryStandardDoneToday,
-            // Belt to the rollover's braces: the flags were just retired if the day
-            // had turned, and this tells `makeSnapshot` the day they describe so it
-            // refuses the same-day folds itself rather than trusting the caller.
-            now: practiceNow,
-            flagsAsOf: practiceNow
-        )
-        if snapshot.isLoggedIn {
-            WidgetDataStore.save(snapshot)
-        } else if WidgetDataStore.shouldClearStoredSnapshot(on: signedOutCause) {
-            WidgetDataStore.clear()
-            // #671: the next sign-in must re-backfill the week. Without this the
-            // once-per-account-per-day throttle below would suppress the fetch for
-            // the rest of the day, leaving the row blank on a sign-out/sign-in.
-            clearWidgetHistoryRefreshMarker()
-        }
-        WidgetTimelineReloader.reloadHabitWidget()
-    }
-
-    /// In-flight widget history backfill, cancelled before a new one starts so a
-    /// slow earlier fetch can't overwrite a newer snapshot out of order.
-    private var widgetHistoryTask: Task<Void, Never>?
-    /// Account and local day of the last widget-history attempt, plus when it
-    /// succeeded. A new day or another account always refetches. The same
-    /// account refetches after `widgetHistoryRefreshInterval` so a sit finished
-    /// on the web shows up the next time this app is foregrounded (#663).
-    private var widgetHistoryRefreshUserId: String?
-    private var widgetHistoryRefreshDay: String?
-    private var widgetHistoryRefreshedAt: Date?
-
-    private func clearWidgetHistoryRefreshMarker() {
-        widgetHistoryRefreshUserId = nil
-        widgetHistoryRefreshDay = nil
-        widgetHistoryRefreshedAt = nil
-    }
-
-    /// #84 follow-up: backfill the widget's 7-day completion row from real
-    /// session history so the weekday checkmarks reflect actual practice (not
-    /// just days seen since install). Runs as a cancellable task off the auth/home
-    /// path so it never blocks cold-start; a fetch failure keeps the
-    /// locally-accumulated week that `syncWidgetData()` already wrote.
-    private func refreshWidgetWeekHistory() {
-        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
-              let user = currentUser else { return }
-        // `/api/sessions` is the full history, so don't refetch on every
-        // foreground. Do refetch when the day or account changes, and again
-        // after a few minutes, so a sit saved on the web is not stuck behind
-        // a once-a-day in-memory guard (#663). Sign-out clears the marker.
-        let attemptedAt = Date()
-        guard WidgetDataStore.shouldRefreshWidgetHistory(
-            userId: user.id,
-            now: attemptedAt,
-            lastUserId: widgetHistoryRefreshUserId,
-            lastLocalDay: widgetHistoryRefreshDay,
-            lastSuccessAt: widgetHistoryRefreshedAt
-        ) else { return }
-        let attemptUserId = user.id
-        let attemptDay = WidgetDataStore.localDayString(attemptedAt)
-        widgetHistoryRefreshUserId = attemptUserId
-        widgetHistoryRefreshDay = attemptDay
-        widgetHistoryRefreshedAt = attemptedAt
-
-        widgetHistoryTask?.cancel()
-        widgetHistoryTask = Task {
-            // #678: the generation of the stored snapshot as it is *before* this
-            // task suspends. Every `WidgetDataStore` write advances it, so if a
-            // sit finishes — or `refreshTracksDoneToday()` learns from the server
-            // that today is already done — while `getSessions()` is in flight,
-            // the save below sees the move and merges onto that fresher snapshot
-            // instead of overwriting it with this pre-await view. Read here
-            // rather than outside the task so nothing can slip between the read
-            // and the `await`.
-            let baselineGeneration = WidgetDataStore.currentWriteGeneration()
-            guard let result = try? await APIClient.shared.getSessions() else {
-                // A cancelled attempt was replaced by a newer one. Only the
-                // attempt that still owns the marker may clear it.
-                if WidgetDataStore.failedAttemptOwnsWidgetHistoryMarker(
-                    cancelled: Task.isCancelled,
-                    markerUserId: widgetHistoryRefreshUserId,
-                    markerDay: widgetHistoryRefreshDay,
-                    markerAttemptedAt: widgetHistoryRefreshedAt,
-                    attemptUserId: attemptUserId,
-                    attemptDay: attemptDay,
-                    attemptedAt: attemptedAt
-                ) {
-                    clearWidgetHistoryRefreshMarker()
-                }
-                return
-            }
-            // Drop if superseded, or the account changed during the await.
-            guard !Task.isCancelled,
-                  let current = currentUser, current.id == user.id else { return }
-            let now = Date()
-            // #684: one completed-date set per track, so each weekday row is
-            // backfilled from that track's own sits.
-            let completed = WidgetDataStore.recentCompletedPracticeDates(from: result.sessions, now: now)
-            // Derive today's completion from the fetched sessions (consistent with
-            // `now`) rather than the in-memory flags, which could be stale past midnight.
-            let today = WidgetDataStore.localDayString(now)
-            let doneToday = completed.primary.contains(today)
-            let secondDone = completed.second.contains(today)
-            // #671: keep the server-computed streak (the same number the app and
-            // web history show) instead of discarding it — it's the only source
-            // that knows about days older than the widget's trailing-7 row. It is
-            // anchored onto a day, so it can only ever extend a run both rows
-            // already corroborate (#684 day-credit rule: either track keeps a day).
-            let snapshot = WidgetDataStore.makeSnapshot(
-                user: current,
-                primaryDoneToday: primaryDoneToday,
-                secondDoneToday: secondDone,
-                practiceDoneToday: doneToday,
-                now: now,
-                // Deliberately no `flagsAsOf` here. The two flags above are derived
-                // from `result.sessions` against this same `now`, so they are fresh
-                // by construction — stamping the set would retire freshly-computed
-                // truth if this fetch happened to span midnight. This path also
-                // supplies the authoritative sets below, so none of the same-day
-                // folds `flagsAsOf` guards are reachable from here.
-                completedPracticeDates: completed.primary,
-                secondCompletedPracticeDates: completed.second,
-                // #679: the days that actually produced `result.stats.streak` —
-                // completed standard sits on either track, the same policy web's
-                // `calculateSessionStats` applies. Persisted so a later day may
-                // extend that total only when the server would have counted it;
-                // the rows above also count quick and breath sits, so extending
-                // by them pushed the widget past the app and web.
-                completedStandardDates: WidgetDataStore.recentCompletedStandardDates(
-                    from: result.sessions,
-                    now: now
-                ),
-                serverStreak: result.stats.streak,
-                serverStreakDate: WidgetDataStore.serverStreakAnchorDate(from: result.sessions)
-            )
-            // Newest-wins (#678): merges rather than clobbers when the stored
-            // snapshot moved during the fetch, and declines to write at all if
-            // the container was cleared by a sign-out in the meantime.
-            WidgetDataStore.save(snapshot, ifWriteGeneration: baselineGeneration, now: now)
-            WidgetTimelineReloader.reloadHabitWidget()
-            // #526: backfill tracking-controls unlock from history so existing users
-            // who have a qualifying sit start in the unlocked state (mirrors web's
-            // syncTrackingUnlockFromSessions).
-            trackingControlPrefsManager.syncTrackingUnlockFromSessions(result.sessions)
-        }
-    }
-
-    /// Mark today as done on the completed sit's own track and push an immediate
-    /// widget snapshot, so that session's weekday row checks today right away
-    /// rather than waiting for the other session (#684).
-    /// Shared touchpoint with #590 completion-handler work — rebase carefully.
-    private func markPracticeDoneToday(sessionType: SessionType, track: Track) {
-        // BEFORE the writes below, never after. This sit belongs to the current
-        // local day; any flag still standing from yesterday does not. Rolling over
-        // first retires those and re-stamps onto today, so the flag raised just
-        // below survives the identical (now no-op) rollover inside
-        // `syncWidgetData()`. Doing it afterwards would clear the very sit that
-        // just finished.
-        rollOverDoneTodayFlagsIfNeeded()
-        switch sessionType {
-        case .quick, .breath:
-            // Quick and breath sits are Track One practice whichever track the
-            // user launched them from — they have no second-track counterpart.
-            practiceDoneToday = true
-        case .standard:
-            if track == .second {
-                secondPracticeDoneToday = true
-            } else {
-                practiceDoneToday = true
-                // #679: and record it as a *standard* sit. `practiceDoneToday` alone
-                // cannot say so — quick and breath sits raise it too — and the
-                // standard-only day set that extends `serverStreak` may only take
-                // days the server would have counted. Without this the flame stood
-                // still until `getTracksDoneToday` caught up.
-                primaryStandardDoneToday = true
-            }
-        }
-        // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay
-        // server-derived — this flag is the widget's own fast, network-free
-        // path, and the two are refreshed from different sources.
-        //
-        // Drop any in-flight `refreshWidgetWeekHistory()` fetch first (same
-        // pattern as `didLogout()`): a `getSessions()` call that started before
-        // this sit finished returns without it, so there is no point paying for
-        // the rest of it. Clearing the throttle key lets the next
-        // `refreshTracksDoneToday()` re-fetch and backfill from history once
-        // `returnHome()` has flushed the sit to the server.
-        //
-        // Not the guard against that fetch un-checking the row, though — it only
-        // covers writers that know to cancel, and `refreshTracksDoneToday()`
-        // raises `practiceDoneToday` from the server response and syncs without
-        // one. The store-level write generation is what actually makes a late
-        // backfill merge instead of overwrite (#678).
-        widgetHistoryTask?.cancel()
-        clearWidgetHistoryRefreshMarker()
-        syncWidgetData()
     }
 }
