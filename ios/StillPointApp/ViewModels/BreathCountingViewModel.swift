@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import StillPointShared
 
-// Mirrors the wall-clock pattern from SessionViewModel (see SessionViewModel.swift ~lines 42, 121, 289):
+// Mirrors the wall-clock pattern of the solo sit timer (see `startDate` in SessionTimerEngine.swift):
 // `startDate` is set once on first tap; elapsed is recomputed from Date() each tick so
 // backgrounding doesn't corrupt the counter.
 
