@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/dispatch-notifications",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/purge-consent-events",
+      "schedule": "0 4 * * *"
     }
   ]
 }

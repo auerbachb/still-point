@@ -9,6 +9,9 @@ flowchart LR
   iOS[Notifications screen] -->|GET/PATCH| PrefsAPI["/api/notifications/preferences"]
   Web[Notifications screen] -->|GET/PATCH| PrefsAPI
   PrefsAPI --> NP[(notification_preferences)]
+  PrefsAPI --> CE[(consent_events)]
+  PurgeCron["/api/cron/purge-consent-events"] --> Retention[consent-retention]
+  Retention --> CE
   Cron["/api/cron/dispatch-notifications"] --> Scheduler[notification-scheduler]
   Scheduler --> NP
   Scheduler --> Ledger[(notification_dispatches)]
@@ -27,7 +30,7 @@ flowchart LR
 | `notification_preferences` | One row per user: master `push_enabled`, per-type flags, reminder time/frequency, quiet hours, missed-sit call opt-in (`call_opt_in`, `call_phone_number`, `call_consent_at`, `call_window_start`, `call_window_stop`), IANA `tz`, `friend_request_notifications_enabled`, `suppress_during_session`, `session_active_until` (#709 server-side session signal, not user-editable) |
 | `notification_dispatches` | Unique `(user_id, notification_type, window_key)` — claim before send so cron retries do not double-send |
 | `call_attempts` | Outbound missed-sit Vapi call log (#599): phone, window key, status, optional `vapi_call_id` |
-| `consent_events` | Append-only consent log (#674): `user_id`, `channel` (`call` \| `sms`), `phone_number`, `event` (`granted` \| `revoked`), `disclosure_version`, `method`, `ip`, `created_at`. Opt-out appends `revoked` and does not delete prior rows. |
+| `consent_events` | Append-only consent log (#674): `user_id`, `channel` (`call` \| `sms`), `phone_number`, `event` (`granted` \| `revoked`), `disclosure_version`, `method`, `ip`, `created_at`. Opt-out appends `revoked` and does not delete prior rows. Purged by the daily retention job (see [Consent retention purge](#consent-retention-purge-789)). |
 | `web_push_subscriptions` | Browser push endpoints (#347) |
 
 Migrations: `drizzle/notification_preferences_345_incremental.sql`, `drizzle/web_push_subscriptions_347_incremental.sql`, `drizzle/notification_preferences_friend_request_359_incremental.sql`, `drizzle/notification_preferences_suppress_during_session_431_incremental.sql`, `drizzle/notification_preferences_dispatch_idx_531_incremental.sql`, `drizzle/notification_preferences_call_window_599_incremental.sql`, `drizzle/call_attempts_599_incremental.sql`, `drizzle/notification_preferences_session_active_709_incremental.sql`, `drizzle/notification_preferences_consent_events_674_incremental.sql`.
@@ -54,7 +57,7 @@ Call opt-in: `callOptIn: true` requires `callPhoneNumber` plus `callWindowStart`
 
 `GET /api/notifications/preferences` still returns `callConsentAt` as an ISO timestamp or `null`.
 
-Consent events are kept for at least five years after the latest event for that user and channel. Opt-out does not delete them. Deleting the account removes them immediately (`consent_events.user_id` cascades from `users`). That cascade is the only deletion path today: nothing purges rows after five years, so they stay until the account is deleted. Enforcing the window is tracked in #789. SMS may use the same table later; this path only writes `channel: call`.
+Consent events are kept for at least five years after the latest event for that user and channel. Opt-out does not delete them. The window is enforced by the daily `purge-consent-events` cron job (#789, [Consent retention purge](#consent-retention-purge-789)): it deletes a `(user_id, channel)` group only once that group's latest event is a revocation more than five years old, so it never touches a group that is still inside the window or whose consent is still granted. Deleting the account removes them immediately (`consent_events.user_id` cascades from `users`). SMS may use the same table later; this path only writes `channel: call`.
 
 ### `POST /api/notifications/session-state`
 
@@ -229,6 +232,16 @@ those — an app cannot suppress notifications it did not send.
 - **Missed-sit calls:** separate candidate query for `call_opt_in` users; cron JSON includes `callsInitiated` and `callCandidatesScanned`
 - **DST spring-forward gap (#531):** reminders scheduled inside the skipped local hour on spring-forward night (e.g. 02:30 `America/New_York`) are not delivered — cron ticks land at 01:55 then 03:00, both outside the 5-minute window. This is a once-per-year-per-timezone edge case; no catch-up pass is implemented yet.
 
+### Consent retention purge (#789)
+
+- **Route:** `GET|POST /api/cron/purge-consent-events`, implemented by `purgeExpiredConsentEvents()` in `src/lib/consent-retention.ts`
+- **Schedule:** daily at 04:00 UTC (`vercel.json` crons)
+- **Auth:** `Authorization: Bearer $CRON_SECRET` (required in production) — the same `isAuthorizedCron` check as the dispatcher (`src/lib/api/cronAuth.ts`)
+- **Rule:** deletes every row of a `(user_id, channel)` group only when the group's latest `created_at` is more than five years (`CONSENT_RETENTION_YEARS`) before the run **and** that latest event is `revoked`. A group with any event inside the window keeps all of its rows, older ones included. A group whose latest event is `granted` is consent still in force — opt-out always appends `revoked` — so it stays until the account is deleted, as does a group whose latest instant holds both a grant and a revocation.
+- **Cutoff:** the run time minus five calendar years (UTC), strict: a group whose latest event is exactly at the cutoff stays. A Feb 29 run uses Feb 28, so nothing younger than five years is purged.
+- **Idempotent:** one SQL statement, so a run deletes all of its groups or none. A rerun or a duplicate delivery deletes nothing new, an overlapping run skips rows already deleted, and a failed run leaves its rows for the next day's run.
+- **Response:** `{ ok, cutoff, deletedEvents, purgedGroups }`
+
 ## Settings UI (#359)
 
 - **iOS:** Settings → **Notifications** (`NavigationLink` → `NotificationsSettingsView`)
@@ -257,7 +270,7 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 ## Security
 
 - Never log raw APNs device tokens or Web Push subscription keys.
-- Cron endpoint must not be callable without `CRON_SECRET` in production.
+- Cron endpoints must not be callable without `CRON_SECRET` in production. Each `/api/cron/*` route runs `isAuthorizedCron` (`src/lib/api/cronAuth.ts`) and is listed in `publicExactPaths` in `src/middleware.ts`, whose JWT check would otherwise reject Vercel's `Bearer $CRON_SECRET`.
 
 ## Related issues
 
@@ -270,3 +283,5 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - #431 — Suppress notifications during a meditation session
 - #709 — No notifications during a session (server-side hold + on by default)
 - #599 — Missed-sit outbound Vapi phone calls
+- #674 — Append-only `consent_events` log
+- #789 — Five-year `consent_events` retention purge

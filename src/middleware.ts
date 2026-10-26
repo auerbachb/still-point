@@ -4,7 +4,10 @@ import { jwtVerify } from "jose";
 const COOKIE_NAME = "sp_token";
 
 const publicExactPaths = [
+  // Cron routes check CRON_SECRET themselves; Vercel's `Bearer $CRON_SECRET`
+  // is not a JWT, so the sp_token check below would 401 every scheduled call.
   "/api/cron/dispatch-notifications",
+  "/api/cron/purge-consent-events",
   "/api/auth/signup",
   "/api/auth/login",
   "/api/auth/logout",

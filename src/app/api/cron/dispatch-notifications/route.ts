@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/api/cronAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { getApnsConfigStatus } from "@/lib/apns";
 import { dispatchDueNotifications } from "@/lib/notification-scheduler";
-
-function isAuthorizedCron(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return process.env.NODE_ENV !== "production";
-  }
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${secret}`;
-}
 
 async function runDispatch(request: NextRequest): Promise<NextResponse> {
   if (!isAuthorizedCron(request)) {
