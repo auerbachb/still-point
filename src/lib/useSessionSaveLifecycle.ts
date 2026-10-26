@@ -52,8 +52,10 @@ export type CompletedSitInput = {
 };
 
 type UseSessionSaveLifecycleOptions = {
-  /** #666: the page's session generation; a save that settles after a sign-out
-   *  (or a different sign-in) must not change what is on screen. */
+  /** #666: the page's session generation. A save that settles after a sign-out
+   *  (or a different sign-in) cannot re-raise the offline strip or reopen the
+   *  completion screen. Abandon and breath still close the overlay when their
+   *  save settles, whichever session is open by then (#833). */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. A pending sit is
    *  remembered here. */

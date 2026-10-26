@@ -5,7 +5,8 @@ import { creditedLocalIsoDate, type PracticeDaySit } from "@/lib/sessionCalendar
 import { syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 
 type UseDualTrackForkOptions = {
-  /** #666: the page's session generation; a result from an ended session is dropped. */
+  /** #666: the page's session generation. A successful refresh from an ended
+   *  session is dropped; a failed one still clears the badges (#833). */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. Refreshed here. */
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;

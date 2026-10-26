@@ -7,8 +7,9 @@ import { creditedPracticeDate, practiceDaySit } from "@/lib/practiceDaySits";
 import { GRACE_CUTOFF_HOUR, type PracticeDaySit } from "@/lib/sessionCalendar";
 
 type UseAuthBootstrapOptions = {
-  /** #666: the page's monotonic session generation. Sign-in and sign-out bump
-   *  it; every adoption after an await checks it. */
+  /** #666: the page's monotonic session generation. An explicit sign-in or
+   *  sign-out bumps it, and every adoption after an await checks it. An
+   *  authoritative 401/403/404 clears `user` without bumping it (#833). */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. Null until a fetch lands. */
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;
