@@ -5,7 +5,7 @@ import type { ApnsPayload } from "@/lib/apns";
 import { calculateSessionStats, type SessionStatsInput } from "@/lib/constants";
 import { addDaysToIsoDate, isDayCompleteForEnabledTracks } from "@/lib/sessionCalendar";
 
-const DAILY_REMINDER_NOTIFICATION_TYPE = "daily_reminder";
+export const DAILY_REMINDER_NOTIFICATION_TYPE = "daily_reminder";
 export const MISS_A_DAY_NOTIFICATION_TYPE = "miss_a_day";
 const DAILY_REMINDER_DEEP_LINK = "stillpoint://home";
 

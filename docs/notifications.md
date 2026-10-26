@@ -242,6 +242,33 @@ those — an app cannot suppress notifications it did not send.
 - **Idempotent:** one SQL statement, so a run deletes all of its groups or none. A rerun or a duplicate delivery deletes nothing new, an overlapping run skips rows already deleted, and a failed run leaves its rows for the next day's run.
 - **Response:** `{ ok, cutoff, deletedEvents, purgedGroups }`
 
+## Measuring effectiveness (#675)
+
+`npm run report:notification-effectiveness` measures, for each nudge type over a trailing window, how often a completed sit followed the nudge on the same local practice day. It also gives a baseline: the same users' sit rate with and without a nudge. It answers whether the channels we already ship change sit rates, before a fourth channel (SMS, #672) is considered. The code is in `src/lib/notifications/effectiveness.ts` and the CLI is `scripts/report-notification-effectiveness.ts`.
+
+| Term | Meaning |
+|------|---------|
+| Day | The user's local practice day: the row's `window_key` date, matched to `sessions.session_date`. A weekly reminder's `YYYY-Www` key is that week's Monday. A call's `YYYY-MM-DDTHH` key is the day of that slot. No timestamp is converted to a date. |
+| Sent | Push (`daily_reminder`, `miss_a_day`, `failure_reason_reminder`): a `notification_dispatches` row. The row survives only if at least one device accepted the push. Call (`missed_sit_call`): a `call_attempts` row with status `initiated`. Ledger `missed_sit_call` rows are listed as not measured, because the scheduler keeps that claim when Vapi rejects the call. |
+| Converted | A completed sit credited to that day and saved (`sessions.created_at`) at or after the day's first send of that type. Several calls on one day are one nudged day. |
+| Conversion | Converted days ÷ nudged days, with a 95% Wilson interval. |
+| Baseline | For the users who got the nudge at least once: the sit rate on their nudged days, and on their days with no nudge of any kind (from signup to the window end). Users who never got a type are not in its row at all. |
+| Calls attempted but not placed | Days with a `failed` call attempt and no placed call. They are selected the same way as call days, so they are the closest thing to a holdout. They are not randomized. |
+
+**Reading it.** The selection effect dominates the baseline. Every nudge is skipped once the day already has a sit, so days without a nudge lean toward days the user had already sat, and nudged days are by construction days not yet sat. The gap between the two sit rates is therefore not the lift a nudge causes. Only a holdout can measure that. The type rows also overlap (the "Shared days" column), so they are not independent effects. When a row's interval is wide or overlaps another row's, the sample cannot tell them apart. At today's user counts, that may itself be the answer #675 asks for.
+
+**Running it against production.** The script runs only SELECTs and prints only aggregates, with no user ids, so its Markdown can go straight into a comment on #675. Read-only database access is enough. Pass the URL inline so it stays out of `.env` files:
+
+```bash
+POSTGRES_URL="$(npx neonctl connection-string --project-id <production project id>)" \
+  npm run report:notification-effectiveness -- --days 28
+```
+
+- `--days N` (default 28) and `--end YYYY-MM-DD` set the window. The default end is two days before today (UTC), the last day that has closed in every timezone, including the 6:00 grace window. A later `--end` adds a warning to the output.
+- `--json` prints the raw report instead of Markdown.
+- To keep the queries off production, point it at a fresh Neon branch of production. The results match production as of the branch point.
+- The connection host prints to stderr, so stdout is only the Markdown.
+
 ## Settings UI (#359)
 
 - **iOS:** Settings → **Notifications** (`NavigationLink` → `NotificationsSettingsView`)
@@ -266,6 +293,7 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 3. **Scheduler branch** — In `src/lib/notification-scheduler.ts` for scheduled types, or event handler for instant types. Roll back the dispatch row if delivery fails.
 4. **iOS + web** — Expose the flag on the Notifications screen; handle payload `type` / `deepLink` on tap.
 5. **Tests** — Preference validation, scheduler gating, idempotent `claimNotificationDispatch`.
+6. **Effectiveness** — If the type nudges a sit, add it to `LEDGER_NUDGE_TYPES` in `src/lib/notifications/effectiveness.ts`. Until then, the report lists its rows as not measured.
 
 ## Security
 
@@ -285,3 +313,4 @@ Master push off disables dependent controls in the UI and persists `pushEnabled:
 - #599 — Missed-sit outbound Vapi phone calls
 - #674 — Append-only `consent_events` log
 - #789 — Five-year `consent_events` retention purge
+- #675 — Nudge effectiveness report

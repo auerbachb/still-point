@@ -547,7 +547,9 @@ Two follow-ups are filed — neither is an SMS build:
   — a live gap in the already-shipped #599 call feature, independent of the SMS
   decision.
 - **[#675 — Measure notification effectiveness before adding a fourth channel](https://github.com/auerbachb/still-point/issues/675)**
-  — the measurement that gates revisiting this decision.
+  — the measurement that gates revisiting this decision. Run it with
+  `npm run report:notification-effectiveness` (`docs/notifications.md`,
+  "Measuring effectiveness").
 
 ## Sources
 
