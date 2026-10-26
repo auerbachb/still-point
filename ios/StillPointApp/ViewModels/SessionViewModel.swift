@@ -1,8 +1,5 @@
 import SwiftUI
 import Combine
-import UIKit
-import AVFoundation
-import CoreHaptics
 import StillPointShared
 
 @Observable
@@ -52,27 +49,9 @@ final class SessionViewModel {
     var soundPrefs: AudioEngine.SoundPrefs
 
     // Internal
-    private var startDate: Date?
-    private var pausedElapsed: Double = 0
-    private var timer: AnyCancellable?
-    private var lastTickSec = 0
-    private var lastCompletedMinuteBlockIndex = -1
-    /// Completed repeating-haptic intervals. Independent of the chime's minute blocks.
-    private var lastHapticIntervalIndex = 0
-    /// #554: last second announced via voice countdown; 0 means none yet this window.
-    private var lastVoiceCountdownSec = 0
+    /// #739: the sit's clock, its per-tick cues, and the haptic generators.
+    private let timerEngine: SessionTimerEngine
     private var controlHideTimer: AnyCancellable?
-    private let uiTestTimerMultiplier: Double
-
-    /// #712: the two generators behind `HapticCueLogic.Intensity`. Held for the
-    /// life of the sit rather than built per cue — a generator has to be
-    /// `prepare()`d to fire promptly, and one created at the moment of the
-    /// marker arrives noticeably after it.
-    private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
-    private let pronouncedHaptic = UINotificationFeedbackGenerator()
-    /// Plays beside the session audio engine. UIKit generators stay silent
-    /// once that engine is running, which a normal sit does by default (#794).
-    private var coreHapticEngine: CHHapticEngine?
 
     var remaining: Double {
         max(0, Double(totalSeconds) - elapsed)
@@ -124,9 +103,20 @@ final class SessionViewModel {
             recovery: recovery
         )
         self.soundPrefs = AudioEngine.loadPrefs()
-        self.uiTestTimerMultiplier = Self.resolveUITestTimerMultiplier()
+        self.timerEngine = SessionTimerEngine(timerMultiplier: Self.resolveUITestTimerMultiplier())
         // Initial mind state log entry
         self.mindStateLog = [MindStateEntry(time: 0, state: "clear")]
+        timerEngine.tickInputs = { [weak self] in
+            guard let self, self.isActive else { return nil }
+            return SessionTimerEngine.TickInputs(
+                totalSeconds: self.totalSeconds,
+                soundPrefs: self.soundPrefs,
+                isAbandoned: self.isAbandoned
+            )
+        }
+        timerEngine.onTick = { [weak self] outcome in
+            self?.handleTick(outcome)
+        }
     }
 
     /// Prepare the session screen. Shows the intro overlay unless permanently hidden or UI-test skip.
@@ -149,51 +139,20 @@ final class SessionViewModel {
     }
 
     func start() {
-        let resumeElapsed = pausedElapsed
-        let isResume =
-            resumeElapsed < Double(totalSeconds)
-            && (resumeElapsed > 0 || isPaused || isActive)
-
-        if isResume {
-            lastTickSec = Int(floor(resumeElapsed))
-            lastCompletedMinuteBlockIndex = SessionLogic.completedMinuteBlockIndex(
-                elapsed: resumeElapsed,
-                totalSeconds: totalSeconds
-            )
-            lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
-                elapsedSeconds: resumeElapsed,
-                durationSeconds: totalSeconds,
-                intervalSeconds: soundPrefs.hapticInterval.seconds
-            )
-            // Reset voice countdown state so resume re-announces the current second.
-            lastVoiceCountdownSec = 0
-        } else {
-            // Fresh session start: clear any carried timer/chime state.
+        let isResume = SessionTickLogic.isResume(
+            pausedElapsed: timerEngine.pausedElapsed,
+            totalSeconds: totalSeconds,
+            isPaused: isPaused,
+            isActive: isActive
+        )
+        if !isResume {
+            // Fresh session start: the engine clears its carried timer/chime state.
             elapsed = 0
-            pausedElapsed = 0
-            lastTickSec = 0
-            lastCompletedMinuteBlockIndex = -1
-            lastHapticIntervalIndex = 0
-            lastVoiceCountdownSec = 0
         }
 
         isActive = true
         isPaused = false
-        startDate = Date().addingTimeInterval(-(pausedElapsed / uiTestTimerMultiplier))
-        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion || soundPrefs.voiceCountdown {
-            AudioEngine.shared.warmUp()
-        }
-        if soundPrefs.voiceCountdown {
-            AudioEngine.shared.preloadVoiceCountdown()
-        }
-        // #712: deliberately outside the warm-up branch above. Haptics is the
-        // channel for a sitter who wants no sound, so a haptics-only sit must
-        // not activate the audio session — it would duck whatever else is
-        // playing for a sound we are never going to make.
-        if soundPrefs.haptics {
-            prepareHaptics()
-        }
-        startTimer()
+        timerEngine.start(resuming: isResume, totalSeconds: totalSeconds, soundPrefs: soundPrefs)
         scheduleControlHide()
     }
 
@@ -201,10 +160,8 @@ final class SessionViewModel {
         finalizeActiveHoldIfNeeded(at: elapsed)
         isPaused = true
         isActive = false
-        pausedElapsed = elapsed
-        timer?.cancel()
+        timerEngine.pause(at: elapsed)
         controlsVisible = true
-        AudioEngine.shared.cancelVoiceCountdownPlayback()
     }
 
     func resume() {
@@ -291,22 +248,10 @@ final class SessionViewModel {
         AudioEngine.savePrefs(soundPrefs)
 
         if next.haptics && !previous.haptics {
-            prepareHaptics()
+            timerEngine.prepareHaptics()
         }
 
-        let effects = CueModeLogic.transitionEffects(from: previous, to: next)
-        if effects.warmUp {
-            AudioEngine.shared.warmUp()
-        }
-        if effects.preloadVoiceCountdown {
-            AudioEngine.shared.preloadVoiceCountdown()
-        }
-        if effects.resetVoiceDedup {
-            lastVoiceCountdownSec = 0
-        }
-        if effects.cancelVoiceCountdown {
-            AudioEngine.shared.cancelVoiceCountdownPlayback()
-        }
+        timerEngine.apply(CueModeLogic.transitionEffects(from: previous, to: next))
     }
 
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {
@@ -340,48 +285,28 @@ final class SessionViewModel {
         if isHapticsToggle, soundPrefs.haptics {
             // Turned on mid-sit: prime the generators so the next minute marker
             // lands on time rather than a beat late.
-            prepareHaptics()
+            timerEngine.prepareHaptics()
         }
 
-        if effects.warmUp {
-            // #667: `start()` only warms the engine when a sound is already on, so a
-            // sit begun with everything off leaves the audio session inactive.
-            // Reactivate it here so the re-enabled sound is audible at its next
-            // scheduled play point — no restart required.
-            AudioEngine.shared.warmUp()
-        }
-        if effects.preloadVoiceCountdown {
-            // Voice countdown was just enabled — prime the buffer cache.
-            AudioEngine.shared.preloadVoiceCountdown()
-        }
-        if effects.resetVoiceDedup {
-            // Voice countdown was just disabled — reset dedup state so re-enabling
-            // during the same remaining second announces correctly (#554).
-            lastVoiceCountdownSec = 0
-        }
-        if effects.cancelVoiceCountdown {
-            AudioEngine.shared.cancelVoiceCountdownPlayback()
-        }
+        timerEngine.apply(effects)
     }
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
         finalizeActiveHoldIfNeeded(at: elapsed)
-        timer?.cancel()
+        timerEngine.stop()
         isActive = false
         isComplete = true
-        AudioEngine.shared.cancelVoiceCountdownPlayback()
         return (clearPercent, thoughtCount, capturedThoughts)
     }
 
     /// Abandon session — discard all data, don't save
     func abandon() {
         finalizeActiveHoldIfNeeded(at: elapsed)
-        timer?.cancel()
+        timerEngine.stop()
         isActive = false
         isAbandoned = true
         isComplete = true
-        AudioEngine.shared.cancelVoiceCountdownPlayback()
     }
 
     /// #557: stable local key for offline end-note sync during completion.
@@ -446,200 +371,25 @@ final class SessionViewModel {
 
     // MARK: - Private
 
-    private func startTimer() {
-        timer = Timer.publish(every: 0.05, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.tick()
-            }
-    }
-
-    private func tick() {
-        guard let startDate, isActive else { return }
-
-        let newElapsed = Date().timeIntervalSince(startDate) * uiTestTimerMultiplier
-
-        if newElapsed >= Double(totalSeconds) {
-            elapsed = Double(totalSeconds)
-            pausedElapsed = elapsed
-            finalizeActiveHoldIfNeeded(at: Double(totalSeconds))
-            timer?.cancel()
-            isActive = false
-            completedNaturally = true
-            isComplete = true
-            // Cancel any in-flight voice countdown clip before the completion cue.
-            AudioEngine.shared.cancelVoiceCountdownPlayback()
-            // Completion sound plays unconditionally even in voice countdown mode.
-            if soundPrefs.completion {
-                AudioEngine.shared.playCompletion()
-            }
-            // #712: the end cue, felt rather than heard. Not gated on
-            // `soundPrefs.completion` — silencing the bell must not silence the
-            // buzz — but it is the same moment, so a sitter with both on gets
-            // one event in two channels.
-            if let cue = HapticCueLogic.sessionEndCue(
-                hapticsEnabled: soundPrefs.haptics,
-                completedNaturally: completedNaturally,
-                isAbandoned: isAbandoned
-            ) {
-                fireHaptic(cue)
-            }
-            return
-        }
-
-        elapsed = newElapsed
-        pausedElapsed = newElapsed
-
-        let currentSec = Int(newElapsed)
-        let currentRemaining = max(0.0, Double(totalSeconds) - newElapsed)
-        let voiceActive = soundPrefs.voiceCountdown && VoiceCountdownLogic.isActive(remaining: currentRemaining)
-
-        // Voice countdown — fires once per second in the final minute.
-        // Mirrors BlockTimer.tsx: suppresses tick and per-minute chime while active.
-        if soundPrefs.voiceCountdown {
-            if VoiceCountdownLogic.shouldReset(remaining: currentRemaining) {
-                // Remaining went back above 60 s (e.g., bonus seconds added mid-final-minute).
-                if lastVoiceCountdownSec != 0 {
-                    lastVoiceCountdownSec = 0
-                    AudioEngine.shared.cancelVoiceCountdownPlayback()
-                }
-            } else if let sec = VoiceCountdownLogic.announceSecond(
-                remaining: currentRemaining,
-                lastAnnouncedSec: lastVoiceCountdownSec
-            ) {
-                lastVoiceCountdownSec = sec
-                AudioEngine.shared.playVoiceCountdown(seconds: sec)
-            }
-        }
-
-        // Tick sound — once per second; suppressed during voice countdown final minute.
-        if soundPrefs.tick && currentSec > lastTickSec {
-            lastTickSec = currentSec
-            if !voiceActive {
-                AudioEngine.shared.playTick()
-            }
-        }
-
-        // Advance minute-block boundary progress independent of mute state.
-        let chimeUpdate = SessionLogic.nextMinuteChimeUpdate(
-            elapsed: newElapsed,
-            totalSeconds: totalSeconds,
-            lastCompletedBlockIndex: lastCompletedMinuteBlockIndex
-        )
-        let crossedMinuteBoundary = chimeUpdate.updatedCompletedBlockIndex > lastCompletedMinuteBlockIndex
-        // `chimeCount` is non-nil only when a full minute is still to go; since
-        // #711 the bell is one strike, so the value survives purely as that gate
-        // and no longer sets how many strikes play.
-        let fullMinuteRemains = chimeUpdate.chimeCount != nil
-        if crossedMinuteBoundary {
-            lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
-            // Per-minute chime suppressed during voice countdown final minute.
-            if soundPrefs.chime, fullMinuteRemains, !voiceActive {
-                AudioEngine.shared.playChime()
-            }
-        }
-
-        // Repeating haptic uses its own interval, not the chime's minute blocks.
-        let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
-            elapsedSeconds: newElapsed,
-            durationSeconds: totalSeconds,
-            intervalSeconds: soundPrefs.hapticInterval.seconds,
-            lastCompletedIndex: lastHapticIntervalIndex
-        )
-        lastHapticIntervalIndex = hapticUpdate.completedIndex
-        if let cue = HapticCueLogic.repeatingCue(
-            hapticsEnabled: soundPrefs.haptics,
-            crossedBoundary: hapticUpdate.crossedBoundary,
-            isAbandoned: isAbandoned
-        ) {
-            fireHaptic(cue)
-        }
+    /// Mirrors one tick of the engine's clock into the state the session screen reads.
+    private func handleTick(_ outcome: SessionTickLogic.Outcome) {
+        elapsed = outcome.elapsed
+        guard outcome.completedNaturally else { return }
+        finalizeActiveHoldIfNeeded(at: outcome.elapsed)
+        isActive = false
+        completedNaturally = true
+        isComplete = true
     }
 
     func setHapticInterval(_ interval: HapticCueLogic.Interval) {
         guard soundPrefs.hapticInterval != interval else { return }
         soundPrefs.hapticInterval = interval
         AudioEngine.savePrefs(soundPrefs)
-        lastHapticIntervalIndex = HapticCueLogic.completedHapticIntervalIndex(
-            elapsedSeconds: elapsed,
-            durationSeconds: totalSeconds,
+        timerEngine.reseedHapticInterval(
+            elapsed: elapsed,
+            totalSeconds: totalSeconds,
             intervalSeconds: interval.seconds
         )
-    }
-
-    // MARK: - Haptics (#712)
-
-    /// Primes both generators. Cheap, and an unprepared generator fires late
-    /// enough that the tap no longer reads as marking the minute it belongs to.
-    private func prepareHaptics() {
-        gentleHaptic.prepare()
-        pronouncedHaptic.prepare()
-        startCoreHapticsIfNeeded()
-    }
-
-    private func startCoreHapticsIfNeeded() {
-        guard HapticPlayback.prefersCoreHaptics(
-            hardwareSupportsCoreHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics
-        ) else { return }
-        if let coreHapticEngine {
-            try? coreHapticEngine.start()
-            return
-        }
-        do {
-            let engine = try CHHapticEngine()
-            engine.playsHapticsOnly = true
-            engine.resetHandler = { [weak self] in
-                DispatchQueue.main.async {
-                    try? self?.coreHapticEngine?.start()
-                }
-            }
-            try engine.start()
-            coreHapticEngine = engine
-        } catch {
-            coreHapticEngine = nil
-        }
-    }
-
-    /// Plays a cue at the strength `HapticCueLogic` assigns it. Core Haptics
-    /// first, so a sit with sound on still vibrates. UIKit is the fallback.
-    private func fireHaptic(_ cue: HapticCueLogic.Cue) {
-        if coreHapticEngine == nil {
-            startCoreHapticsIfNeeded()
-        }
-        if playCoreHaptic(cue) { return }
-        switch HapticCueLogic.intensity(for: cue) {
-        case .gentle:
-            gentleHaptic.impactOccurred()
-            gentleHaptic.prepare()
-        case .pronounced:
-            pronouncedHaptic.notificationOccurred(.success)
-        }
-    }
-
-    private func playCoreHaptic(_ cue: HapticCueLogic.Cue) -> Bool {
-        guard let coreHapticEngine else { return false }
-        let events = HapticPlayback.transients(for: HapticCueLogic.intensity(for: cue)).map { tap in
-            CHHapticEvent(
-                eventType: .hapticTransient,
-                parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
-                ],
-                relativeTime: tap.relativeTime
-            )
-        }
-        do {
-            try coreHapticEngine.start()
-            let pattern = try CHHapticPattern(events: events, parameters: [])
-            let player = try coreHapticEngine.makePlayer(with: pattern)
-            try player.start(atTime: CHHapticTimeImmediate)
-            return true
-        } catch {
-            // A failed start leaves a dead engine. Clear the stored property,
-            // not the `guard let` binding, so the next cue can build another.
-            self.coreHapticEngine = nil
-            return false
-        }
     }
 
     private func finalizeActiveHoldIfNeeded(at time: Double) {

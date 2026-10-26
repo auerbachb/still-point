@@ -158,6 +158,7 @@
 		ECBA43498E873CC037F20AD8 /* 23.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5F29C698B66040CD6AE2303C /* 23.mp3 */; };
 		EE8F0D07AFA655F960F274F8 /* StillPointMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */; };
 		EEDB019C54A26A01C510C161 /* 19.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 44AE33840A7E2F2DC00B2CCF /* 19.mp3 */; };
+		F35737C317B60994A0FB1DC7 /* SessionTimerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */; };
 		F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85EAF998E3470CBB4056699F /* BlockGridView.swift */; };
 /* End PBXBuildFile section */
 
@@ -279,6 +280,7 @@
 		71997BDA906AB28487E78602 /* 24.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 24.mp3; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
 		7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
+		7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimerEngine.swift; sourceTree = "<group>"; };
 		7C825D8C3422EC8361A3BD6B /* 8.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 8.mp3; sourceTree = "<group>"; };
 		7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindStateBarView.swift; sourceTree = "<group>"; };
 		7D13B1D65F99CF21AA713D32 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
@@ -591,6 +593,7 @@
 				EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */,
 				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
 				A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */,
+				7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */,
 				5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */,
 				1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */,
 			);
@@ -1009,6 +1012,7 @@
 				9B4CD9DAB95BB371A571F154 /* SessionPhotoPicker.swift in Sources */,
 				2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */,
 				39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */,
+				F35737C317B60994A0FB1DC7 /* SessionTimerEngine.swift in Sources */,
 				4D652980F04840078B8FC938 /* SessionView.swift in Sources */,
 				AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */,
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
