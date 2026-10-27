@@ -53,7 +53,8 @@ final class AppViewModel {
     /// The same guard for `completeFocusSession` (#840).
     var focusSaveGate = GenerationOwnedGate()
     /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
-    var trackingControlPrefsManager = TrackingControlPrefsManager()
+    /// #1014: the snapshot seed gets an unlocked manager; see `launchTrackingControlPrefsManager`.
+    var trackingControlPrefsManager = AppViewModel.launchTrackingControlPrefsManager()
     private var appBlockingManagerStorage: AppBlockingManager?
     var appBlockingManager: AppBlockingManager {
         if let appBlockingManagerStorage {

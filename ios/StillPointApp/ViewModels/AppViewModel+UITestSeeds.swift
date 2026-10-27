@@ -34,4 +34,29 @@ extension AppViewModel {
         }
         return .home
     }
+
+    /// UserDefaults suite for the snapshot seed's tracking-control prefs (#1014).
+    /// Kept apart from `.standard` so the forced unlock never leaks into a later
+    /// UI-test launch on the same simulator, where the release-gate tests expect
+    /// a fresh install's locked state to be possible.
+    static let snapshotTrackingControlPrefsSuite = "StillPoint.UITest.SnapshotTrackingControlPrefs"
+
+    /// Tracking-control prefs for this launch. Under `SP_UI_TEST_SNAPSHOT_SEED`
+    /// (marketing screenshots) the hold cluster must render: the canned history
+    /// has no 5+ minute sit and the history backfill is skipped in UI-test mode,
+    /// so the seed would otherwise leave the controls locked (#1014). Every other
+    /// launch gets the normal `.standard`-backed manager.
+    static func launchTrackingControlPrefsManager(
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> TrackingControlPrefsManager {
+        guard truthy(env["SP_UI_TEST_MODE"]),
+              truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
+              let defaults = UserDefaults(suiteName: snapshotTrackingControlPrefsSuite) else {
+            return TrackingControlPrefsManager()
+        }
+        let manager = TrackingControlPrefsManager(defaults: defaults)
+        manager.trackingControlsUnlocked = true
+        manager.hideDistractionHyperfocusControls = false
+        return manager
+    }
 }
