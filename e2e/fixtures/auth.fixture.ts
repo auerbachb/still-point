@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type Route } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { calculateSessionStats, type SessionType } from "../../src/lib/constants";
 import { getLocalIsoDate } from "../../src/lib/sessionCalendar";
 import { DELETED_ACCOUNT_MESSAGE } from "../../src/lib/authErrors";
@@ -43,7 +43,7 @@ type AuthedContext = {
   password: string;
 };
 
-type MockApiState = {
+export type MockApiState = {
   authenticated: boolean;
   /** Set of emails whose accounts have been deleted.
    * Mirrors the real `accountDeletionLog` table: emails accumulate on delete and
@@ -82,223 +82,235 @@ function computeStats(sessions: SessionRecord[]) {
   };
 }
 
-function json(route: Route, status: number, body: unknown) {
-  return route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
+/** One stand-in API request, whatever carried it: `page.route` here, or the
+ *  stand-in origin's HTTP server for specs whose page a service worker controls
+ *  (`e2e/fixtures/stand-in-origin.ts`, #919). */
+export type MockApiRequest = { method: string; pathname: string; body: unknown };
+export type MockApiResponse = { status: number; body: unknown };
+
+function json(status: number, body: unknown): MockApiResponse {
+  return { status, body };
 }
 
 async function installMockApiRoutes(page: Page, state: MockApiState) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
-    const method = request.method();
-    const pathname = new URL(request.url()).pathname;
-
-    if (pathname === "/api/auth/me" && method === "GET") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      return json(route, 200, { user: state.user });
-    }
-
-    if (pathname === "/api/auth/signup" && method === "POST") {
-      const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
-      const email = String(body.email ?? "").trim().toLowerCase();
-      const username = String(body.username ?? "").trim();
-      const password = String(body.password ?? "");
-      if (!email || !username || !password) {
-        return json(route, 400, { error: "All fields required" });
-      }
-      state.credentials = { email, username, password };
-      state.user = {
-        id: `user-${Date.now()}`,
-        email,
-        username,
-        isPublic: false,
-        aphorismsEnabled: false,
-        attentionTrackingEnabled: false,
-        currentDay: 1,
-      };
-      state.authenticated = true;
-      // Mirror real backend: signing up with a previously-deleted email succeeds
-      // (the signup route doesn't check accountDeletionLog) and subsequent logins
-      // also succeed because the user row now exists again. Remove only this
-      // specific email — other deleted emails remain locked out.
-      state.deletedEmails.delete(email);
-      return json(route, 200, { user: state.user });
-    }
-
-    if (pathname === "/api/auth/login" && method === "POST") {
-      const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
-      const email = String(body.email ?? "").trim().toLowerCase();
-      const password = String(body.password ?? "");
-      if (state.deletedEmails.has(email)) {
-        return json(route, 410, { error: DELETED_ACCOUNT_MESSAGE });
-      }
-      if (email !== state.credentials.email || password !== state.credentials.password) {
-        return json(route, 401, { error: "Invalid credentials" });
-      }
-      state.authenticated = true;
-      return json(route, 200, { user: state.user });
-    }
-
-    if (pathname === "/api/auth/logout" && method === "POST") {
-      state.authenticated = false;
-      return json(route, 200, { ok: true });
-    }
-
-    if (pathname === "/api/auth/password-reset/request" && method === "POST") {
-      const body = (request.postDataJSON() ?? {}) as Partial<AuthedContext>;
-      const email = String(body.email ?? "").trim().toLowerCase();
-      if (!email || !email.includes("@")) {
-        return json(route, 400, { error: "A valid email is required" });
-      }
-      if (email === state.credentials.email) {
-        state.resetToken = `reset-${Date.now()}`;
-      }
-      return json(route, 200, {
-        message: "If an account exists for that email, a reset link will arrive shortly.",
-      });
-    }
-
-    if (pathname === "/api/auth/password-reset/confirm" && method === "POST") {
-      const body = (request.postDataJSON() ?? {}) as { token?: string; password?: string } | undefined;
-      if (!body?.token || String(body?.password ?? "").length < 8) {
-        return json(route, 400, { error: "Valid token and password of at least 8 characters required" });
-      }
-      if (!state.resetToken || body.token !== state.resetToken) {
-        return json(route, 400, { error: "Reset link is invalid or expired" });
-      }
-      state.credentials = { ...state.credentials, password: String(body.password) };
-      state.resetToken = null;
-      return json(route, 200, { ok: true });
-    }
-
-    if (pathname === "/api/settings" && method === "PATCH") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const body = (request.postDataJSON() ?? {}) as {
-        username?: string;
-        isPublic?: boolean;
-        aphorismsEnabled?: boolean;
-        attentionTrackingEnabled?: boolean;
-      };
-
-      let hasSupportedUpdate = false;
-
-      if (body.username !== undefined) {
-        hasSupportedUpdate = true;
-        const username = String(body.username).trim();
-        if (!isValidUsername(username)) {
-          return json(route, 400, { error: USERNAME_ERROR });
-        }
-        if (username.toLowerCase() === "taken_name") {
-          return json(route, 409, { error: "Username already taken" });
-        }
-        state.user.username = username;
-        state.credentials.username = username;
-      }
-      if (typeof body.isPublic === "boolean") {
-        hasSupportedUpdate = true;
-        state.user.isPublic = body.isPublic;
-      }
-      if (typeof body.aphorismsEnabled === "boolean") {
-        hasSupportedUpdate = true;
-        state.user.aphorismsEnabled = body.aphorismsEnabled;
-      }
-      if (typeof body.attentionTrackingEnabled === "boolean") {
-        hasSupportedUpdate = true;
-        state.user.attentionTrackingEnabled = body.attentionTrackingEnabled;
-      }
-      if (!hasSupportedUpdate) {
-        return json(route, 400, { error: "No supported settings provided" });
-      }
-      return json(route, 200, { user: state.user });
-    }
-
-    if (pathname === "/api/sessions" && method === "GET") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const sessions = [...state.sessions].sort((a, b) => b.dayNumber - a.dayNumber);
-      return json(route, 200, { sessions, stats: computeStats(sessions) });
-    }
-
-    if (pathname === "/api/sessions" && method === "POST") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const body = (request.postDataJSON() ?? {}) as Partial<SessionRecord>;
-      const session: SessionRecord = {
-        id: `session-${state.ids.session++}`,
-        dayNumber: Number(body.dayNumber ?? state.user.currentDay),
-        sessionType:
-          body.sessionType === "quick" || body.sessionType === "breath"
-            ? body.sessionType
-            : "standard",
-        duration: Number(body.duration ?? 60),
-        completed: Boolean(body.completed ?? true),
-        actualTime: Number(body.actualTime ?? body.duration ?? 60),
-        clearPercent: Number(body.clearPercent ?? 100),
-        thoughtCount: Number(body.thoughtCount ?? 0),
-        breathCount: typeof body.breathCount === "number" ? body.breathCount : undefined,
-        mindStateLog: Array.isArray(body.mindStateLog) ? body.mindStateLog : [],
-        sessionDate: String(body.sessionDate ?? getLocalIsoDate()),
-      };
-      state.sessions.push(session);
-      if (session.completed && session.sessionType === "standard") state.user.currentDay += 1;
-      return json(route, 200, { session });
-    }
-
-    if (pathname === "/api/board" && method === "GET") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const board = [
-        { username: "contemplative_practitioner", currentDay: 128, streak: 42, avgClear: 91 },
-        { username: state.user.username, currentDay: state.user.currentDay, streak: 9, avgClear: 84 },
-        { username: "quiet_mind", currentDay: 64, streak: 7, avgClear: 77 },
-        { username: "stillness_seeker_2026", currentDay: 31, streak: 3, avgClear: 68 },
-      ];
-      return json(route, 200, { board });
-    }
-
-    if (pathname === "/api/thoughts" && method === "GET") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const thoughts = [...state.thoughts].sort((a, b) => {
-        if (a.dayNumber !== b.dayNumber) {
-          return b.dayNumber - a.dayNumber;
-        }
-        return a.timeInSession - b.timeInSession;
-      });
-      return json(route, 200, { thoughts });
-    }
-
-    if (pathname === "/api/account" && method === "DELETE") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      // Model deletion: clear all account data and add this email to the deleted set.
-      // Other emails already in the set remain unaffected.
-      state.deletedEmails.add(state.credentials.email);
-      state.authenticated = false;
-      state.sessions = [];
-      state.thoughts = [];
-      state.resetToken = null;
-      return json(route, 200, { ok: true });
-    }
-
-    if (pathname === "/api/thoughts/batch" && method === "POST") {
-      if (!state.authenticated) return json(route, 401, { error: "Unauthorized" });
-      const body = request.postDataJSON() as
-        | { sessionId?: string; dayNumber?: number; thoughts?: Array<{ timeInSession: number; text: string }> }
-        | undefined;
-      const sessionId = body?.sessionId ?? `session-${Math.max(state.ids.session - 1, 1)}`;
-      const dayNumber = Number(body?.dayNumber ?? state.user.currentDay);
-      const created = (body?.thoughts ?? []).map((thought) => ({
-        id: `thought-${state.ids.thought++}`,
-        sessionId,
-        dayNumber,
-        timeInSession: Number(thought.timeInSession),
-        text: thought.text,
-      }));
-      state.thoughts.push(...created);
-      return json(route, 200, { thoughts: created });
-    }
-
-    return json(route, 404, { error: `No mock for ${method} ${pathname}` });
+    const { status, body } = handleMockApiRequest(state, {
+      method: request.method(),
+      pathname: new URL(request.url()).pathname,
+      body: request.postDataJSON(),
+    });
+    return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
+}
+
+/** The stand-in API: answers one request from `state`, as the real server would. */
+export function handleMockApiRequest(
+  state: MockApiState,
+  { method, pathname, body: requestBody }: MockApiRequest,
+): MockApiResponse {
+  if (pathname === "/api/auth/me" && method === "GET") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    return json(200, { user: state.user });
+  }
+
+  if (pathname === "/api/auth/signup" && method === "POST") {
+    const body = (requestBody ?? {}) as Partial<AuthedContext>;
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    if (!email || !username || !password) {
+      return json(400, { error: "All fields required" });
+    }
+    state.credentials = { email, username, password };
+    state.user = {
+      id: `user-${Date.now()}`,
+      email,
+      username,
+      isPublic: false,
+      aphorismsEnabled: false,
+      attentionTrackingEnabled: false,
+      currentDay: 1,
+    };
+    state.authenticated = true;
+    // Mirror real backend: signing up with a previously-deleted email succeeds
+    // (the signup route doesn't check accountDeletionLog) and subsequent logins
+    // also succeed because the user row now exists again. Remove only this
+    // specific email — other deleted emails remain locked out.
+    state.deletedEmails.delete(email);
+    return json(200, { user: state.user });
+  }
+
+  if (pathname === "/api/auth/login" && method === "POST") {
+    const body = (requestBody ?? {}) as Partial<AuthedContext>;
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const password = String(body.password ?? "");
+    if (state.deletedEmails.has(email)) {
+      return json(410, { error: DELETED_ACCOUNT_MESSAGE });
+    }
+    if (email !== state.credentials.email || password !== state.credentials.password) {
+      return json(401, { error: "Invalid credentials" });
+    }
+    state.authenticated = true;
+    return json(200, { user: state.user });
+  }
+
+  if (pathname === "/api/auth/logout" && method === "POST") {
+    state.authenticated = false;
+    return json(200, { ok: true });
+  }
+
+  if (pathname === "/api/auth/password-reset/request" && method === "POST") {
+    const body = (requestBody ?? {}) as Partial<AuthedContext>;
+    const email = String(body.email ?? "").trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      return json(400, { error: "A valid email is required" });
+    }
+    if (email === state.credentials.email) {
+      state.resetToken = `reset-${Date.now()}`;
+    }
+    return json(200, {
+      message: "If an account exists for that email, a reset link will arrive shortly.",
+    });
+  }
+
+  if (pathname === "/api/auth/password-reset/confirm" && method === "POST") {
+    const body = (requestBody ?? {}) as { token?: string; password?: string } | undefined;
+    if (!body?.token || String(body?.password ?? "").length < 8) {
+      return json(400, { error: "Valid token and password of at least 8 characters required" });
+    }
+    if (!state.resetToken || body.token !== state.resetToken) {
+      return json(400, { error: "Reset link is invalid or expired" });
+    }
+    state.credentials = { ...state.credentials, password: String(body.password) };
+    state.resetToken = null;
+    return json(200, { ok: true });
+  }
+
+  if (pathname === "/api/settings" && method === "PATCH") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const body = (requestBody ?? {}) as {
+      username?: string;
+      isPublic?: boolean;
+      aphorismsEnabled?: boolean;
+      attentionTrackingEnabled?: boolean;
+    };
+
+    let hasSupportedUpdate = false;
+
+    if (body.username !== undefined) {
+      hasSupportedUpdate = true;
+      const username = String(body.username).trim();
+      if (!isValidUsername(username)) {
+        return json(400, { error: USERNAME_ERROR });
+      }
+      if (username.toLowerCase() === "taken_name") {
+        return json(409, { error: "Username already taken" });
+      }
+      state.user.username = username;
+      state.credentials.username = username;
+    }
+    if (typeof body.isPublic === "boolean") {
+      hasSupportedUpdate = true;
+      state.user.isPublic = body.isPublic;
+    }
+    if (typeof body.aphorismsEnabled === "boolean") {
+      hasSupportedUpdate = true;
+      state.user.aphorismsEnabled = body.aphorismsEnabled;
+    }
+    if (typeof body.attentionTrackingEnabled === "boolean") {
+      hasSupportedUpdate = true;
+      state.user.attentionTrackingEnabled = body.attentionTrackingEnabled;
+    }
+    if (!hasSupportedUpdate) {
+      return json(400, { error: "No supported settings provided" });
+    }
+    return json(200, { user: state.user });
+  }
+
+  if (pathname === "/api/sessions" && method === "GET") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const sessions = [...state.sessions].sort((a, b) => b.dayNumber - a.dayNumber);
+    return json(200, { sessions, stats: computeStats(sessions) });
+  }
+
+  if (pathname === "/api/sessions" && method === "POST") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const body = (requestBody ?? {}) as Partial<SessionRecord>;
+    const session: SessionRecord = {
+      id: `session-${state.ids.session++}`,
+      dayNumber: Number(body.dayNumber ?? state.user.currentDay),
+      sessionType:
+        body.sessionType === "quick" || body.sessionType === "breath"
+          ? body.sessionType
+          : "standard",
+      duration: Number(body.duration ?? 60),
+      completed: Boolean(body.completed ?? true),
+      actualTime: Number(body.actualTime ?? body.duration ?? 60),
+      clearPercent: Number(body.clearPercent ?? 100),
+      thoughtCount: Number(body.thoughtCount ?? 0),
+      breathCount: typeof body.breathCount === "number" ? body.breathCount : undefined,
+      mindStateLog: Array.isArray(body.mindStateLog) ? body.mindStateLog : [],
+      sessionDate: String(body.sessionDate ?? getLocalIsoDate()),
+    };
+    state.sessions.push(session);
+    if (session.completed && session.sessionType === "standard") state.user.currentDay += 1;
+    return json(200, { session });
+  }
+
+  if (pathname === "/api/board" && method === "GET") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const board = [
+      { username: "contemplative_practitioner", currentDay: 128, streak: 42, avgClear: 91 },
+      { username: state.user.username, currentDay: state.user.currentDay, streak: 9, avgClear: 84 },
+      { username: "quiet_mind", currentDay: 64, streak: 7, avgClear: 77 },
+      { username: "stillness_seeker_2026", currentDay: 31, streak: 3, avgClear: 68 },
+    ];
+    return json(200, { board });
+  }
+
+  if (pathname === "/api/thoughts" && method === "GET") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const thoughts = [...state.thoughts].sort((a, b) => {
+      if (a.dayNumber !== b.dayNumber) {
+        return b.dayNumber - a.dayNumber;
+      }
+      return a.timeInSession - b.timeInSession;
+    });
+    return json(200, { thoughts });
+  }
+
+  if (pathname === "/api/account" && method === "DELETE") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    // Model deletion: clear all account data and add this email to the deleted set.
+    // Other emails already in the set remain unaffected.
+    state.deletedEmails.add(state.credentials.email);
+    state.authenticated = false;
+    state.sessions = [];
+    state.thoughts = [];
+    state.resetToken = null;
+    return json(200, { ok: true });
+  }
+
+  if (pathname === "/api/thoughts/batch" && method === "POST") {
+    if (!state.authenticated) return json(401, { error: "Unauthorized" });
+    const body = requestBody as
+      | { sessionId?: string; dayNumber?: number; thoughts?: Array<{ timeInSession: number; text: string }> }
+      | undefined;
+    const sessionId = body?.sessionId ?? `session-${Math.max(state.ids.session - 1, 1)}`;
+    const dayNumber = Number(body?.dayNumber ?? state.user.currentDay);
+    const created = (body?.thoughts ?? []).map((thought) => ({
+      id: `thought-${state.ids.thought++}`,
+      sessionId,
+      dayNumber,
+      timeInSession: Number(thought.timeInSession),
+      text: thought.text,
+    }));
+    state.thoughts.push(...created);
+    return json(200, { thoughts: created });
+  }
+
+  return json(404, { error: `No mock for ${method} ${pathname}` });
 }
 
 export const test = base.extend<AuthFixture>({
