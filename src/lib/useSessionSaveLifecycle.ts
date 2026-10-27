@@ -1,65 +1,27 @@
 import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
-import { combinedSitField, previewNextCombinedDuration } from "@/lib/combinedSit";
-import type { FocusCategory, SessionType, Track } from "@/lib/constants";
+import type { FocusCategory } from "@/lib/constants";
 import { focusActivityDayAfterCompletedSave, type FocusSessionResult } from "@/lib/focusActivity";
 import {
   getWebSessionSyncCoordinator,
-  type CreateSessionPayload,
   type PendingSessionThought,
 } from "@/lib/offlineSessionQueue";
 import { creditedPracticeDate, rememberStandardSit } from "@/lib/practiceDaySits";
 import { getLocalIsoDate, type PracticeDaySit } from "@/lib/sessionCalendar";
+import {
+  applyRetryOutcome,
+  buildBreathSessionRequest,
+  buildCompletionData,
+  buildFocusSessionRequest,
+  buildStandardSitRequest,
+  type CompletedSitInput,
+  type CompletionData,
+  type SessionSaveRequest,
+} from "@/lib/sessionSaveLifecycleLogic";
 import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
-import { previewNextStandardDuration } from "@/lib/userProgression";
 
-export type CompletionData = {
-  sessionId: string | null;
-  /** #558: stable local key for offline end-note sync during completion. */
-  clientSessionId: string | null;
-  /** #558: true when the sit is queued locally and awaiting server sync. */
-  isPendingSync: boolean;
-  /** #703: true when the sit reached neither the server nor this device. Never
-   *  true at the same time as `isPendingSync` — that conflation is the bug. */
-  notStored: boolean;
-  dayNumber: number;
-  sessionType: SessionType;
-  /** #240: which daily track this completed sit belonged to. */
-  track: Track;
-  duration: number;
-  bonusSeconds: number;
-  clearPercent: number;
-  thoughtCount: number;
-  thoughts: Array<{ timeInSession: number; text: string }>;
-  /** Planned duration of the *next* standard sit, accounting for recovery-ramp
-   *  advancement (#238) — computed with the same `advanceProgression` /
-   *  `sessionDurationForUser` the server uses, from the pre-save user state.
-   *  After a combined sit (#769), what the next two sits add up to. */
-  nextDuration: number;
-};
-
-/** What `SessionView` hands back when a sit ends — completed or abandoned. */
-export type CompletedSitInput = {
-  /** #930: which sit this is. Unique to the sit, and the same on every terminal
-   *  call made for it (one per `SessionView` mount). Only the save gate reads
-   *  it; it is not part of the saved request. */
-  sitKey: string;
-  dayNumber: number;
-  sessionType: SessionType;
-  track: Track;
-  /** #769: today's two sits done as one, on the primary track. `SessionView`
-   *  sets it only when true. */
-  combined?: boolean;
-  duration: number;
-  bonusSeconds: number;
-  completed: boolean;
-  actualTime: number;
-  clearPercent: number;
-  thoughtCount: number;
-  mindStateLog: Array<{ time: number; state: string }>;
-  thoughts: Array<{ timeInSession: number; text: string }>;
-};
+export type { CompletionData, CompletedSitInput };
 
 type UseSessionSaveLifecycleOptions = {
   /** #666: the page's session generation. A save that settles after a sign-out
@@ -83,6 +45,23 @@ type UseSessionSaveLifecycleOptions = {
  * #703 — every way a finished sit is written to the local queue (completed,
  * retried, abandoned, breath, focus), what the completion screen shows for it,
  * and whether a local write has failed on this device.
+ *
+ * #1004: this hook owns the orchestration; the pure mapping — save requests,
+ * the completion screen's data, the retry update — lives in
+ * `sessionSaveLifecycleLogic.ts`. What stays here, deliberately asymmetric:
+ *
+ * - Gates. A standard sit's save is gated per sit (`sitSavesRunningRef`, by
+ *   `sitKey`), because its save can outlive its screen; breath and focus saves
+ *   are gated per generation (`breathSavingRef`, `focusSavingRef`).
+ * - Refresh before the generation check. `saveCompletedSit` refreshes the user
+ *   and track badges itself, before its caller compares generations, so the
+ *   refresh runs even when the screen no longer belongs to this account.
+ * - The retry's client-id guard. A retry updates the completion screen only
+ *   while it still shows the same `clientSessionId`, not by generation.
+ * - Dates. Standard and breath saves use the credited practice date, pinned when
+ *   the sit ended; focus uses the plain calendar date.
+ * - Ids. Every client id is minted here (`crypto.randomUUID`), and a retry reuses
+ *   the first try's (#557).
  */
 export function useSessionSaveLifecycle({
   sessionGeneration,
@@ -167,7 +146,7 @@ export function useSessionSaveLifecycle({
   // entry is durable stays `pending` — see `resolveSessionSaveOutcome` for which
   // rejection means which.
   const saveSitToQueue = useCallback(async (
-    request: Omit<CreateSessionPayload, "clientSessionId">,
+    request: SessionSaveRequest,
     clientSessionId: string,
     ownerUserId: string,
     thoughts: PendingSessionThought[],
@@ -204,23 +183,9 @@ export function useSessionSaveLifecycle({
     sessionDate: string,
   ): Promise<SessionSaveOutcome> => {
     const outcome = await saveSitToQueue(
-      {
-        dayNumber: data.dayNumber,
-        sessionType: data.sessionType,
-        track: data.track,
-        // #769: the key only on a combined sit, so every other request is unchanged.
-        ...combinedSitField(data.combined),
-        duration: data.duration,
-        bonusSeconds: data.bonusSeconds,
-        completed: data.completed,
-        actualTime: data.actualTime,
-        clearPercent: data.clearPercent,
-        thoughtCount: data.thoughtCount,
-        mindStateLog: data.mindStateLog,
-        // Pinned by the caller when the sit ended, not recomputed here — a
-        // retry that crosses midnight must still be the same day's sit.
-        sessionDate,
-      },
+      // `sessionDate` is pinned by the caller when the sit ended, not recomputed
+      // here — a retry that crosses midnight must still be the same day's sit.
+      buildStandardSitRequest(data, sessionDate, data.completed),
       clientSessionId,
       ownerUserId,
       data.thoughts,
@@ -315,28 +280,7 @@ export function useSessionSaveLifecycle({
       // sit's — see `sitScreensClosedRef`.
       if (sitScreensClosedRef.current.has(data.sitKey)) return;
 
-      setCompletionData({
-        sessionId: outcome?.sessionId ?? null,
-        clientSessionId,
-        isPendingSync: outcome?.status === "pending",
-        notStored: outcome?.status === "notStored",
-        dayNumber: data.dayNumber,
-        sessionType: data.sessionType,
-        track: data.track,
-        duration: data.duration,
-        bonusSeconds: data.bonusSeconds,
-        clearPercent: data.clearPercent,
-        thoughtCount: data.thoughtCount,
-        thoughts: data.thoughts,
-        // #769: after a combined sit, "tomorrow" is what the next two sits add up to.
-        nextDuration: data.combined && user
-          ? previewNextCombinedDuration({
-            completed: data.completed,
-            currentDay: user.currentDay,
-            secondTrackDay: user.secondTrackDay ?? 1,
-          })
-          : previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
-      });
+      setCompletionData(buildCompletionData(data, outcome, clientSessionId, user));
       setOverlay("complete");
     } finally {
       // Let go once the save is over, however it ended: the gate holds only
@@ -374,16 +318,9 @@ export function useSessionSaveLifecycle({
       rememberStoredSit(pending.data, pending.sessionDate, outcome);
     }
 
-    setCompletionData((previous) => (
-      previous && previous.clientSessionId === pending.clientSessionId
-        ? {
-          ...previous,
-          sessionId: outcome.sessionId,
-          isPendingSync: outcome.status === "pending",
-          notStored: false,
-        }
-        : previous
-    ));
+    // Matched by client id, not generation: only the screen still showing this
+    // sit is updated — see `applyRetryOutcome`.
+    setCompletionData((previous) => applyRetryOutcome(previous, pending.clientSessionId, outcome));
   }, [sessionGeneration, user, saveCompletedSit, rememberStoredSit]);
 
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
@@ -404,24 +341,15 @@ export function useSessionSaveLifecycle({
         // classifier as a completed sit, so a sync error thrown after a durable
         // write does not withdraw a promise the queue is keeping.
         await saveSitToQueue(
-          {
-            dayNumber: data.dayNumber,
-            sessionType: data.sessionType,
-            track: data.track,
-            // #769: stored as what happened. Not completed, it credits nothing.
-            ...combinedSitField(data.combined),
-            duration: data.duration,
-            bonusSeconds: data.bonusSeconds,
-            completed: false,
-            actualTime: data.actualTime,
-            clearPercent: data.clearPercent,
-            thoughtCount: data.thoughtCount,
-            mindStateLog: data.mindStateLog,
-            sessionDate: creditedPracticeDate(
+          // #769: stored as what happened. Not completed, it credits nothing.
+          buildStandardSitRequest(
+            data,
+            creditedPracticeDate(
               loadedSitsRef.current,
               !!userRef.current?.dualTrackEnabled,
             ),
-          },
+            false,
+          ),
           crypto.randomUUID(),
           user.id,
           data.thoughts,
@@ -468,22 +396,14 @@ export function useSessionSaveLifecycle({
         // and it uses the same classifier so a sync error raised after a durable
         // write is not mistaken for one.
         await saveSitToQueue(
-          {
-            dayNumber: user.currentDay ?? 1,
-            sessionType: "breath",
-            duration: Math.max(result.elapsedSeconds, 1),
-            bonusSeconds: 0,
-            completed: true,
-            actualTime: result.elapsedSeconds,
-            clearPercent: 0,
-            thoughtCount: 0,
-            breathCount: result.breathCount,
-            mindStateLog: [],
-            sessionDate: creditedPracticeDate(
+          buildBreathSessionRequest(
+            result,
+            user.currentDay ?? 1,
+            creditedPracticeDate(
               loadedSitsRef.current,
               !!userRef.current?.dualTrackEnabled,
             ),
-          },
+          ),
           crypto.randomUUID(),
           user.id,
           [],
@@ -521,24 +441,10 @@ export function useSessionSaveLifecycle({
         // A missing counter (a server that predates #835) is day 1.
         const focusActivityDay = user.focusActivityDay ?? 1;
         const outcome = await saveSitToQueue(
-          {
-            dayNumber: focusActivityDay,
-            sessionType: "focus",
-            // The goal steps below the same whatever the category: there is
-            // one shared focus goal.
-            focusCategory,
-            duration: result.duration,
-            bonusSeconds: 0,
-            completed: result.completed,
-            actualTime: result.actualTime,
-            clearPercent: 0,
-            thoughtCount: 0,
-            mindStateLog: [],
-            // The plain calendar date, not `creditedPracticeDate`: that one
-            // credits the daily meditation sit, and would stamp a focus session
-            // saved before 6:00 onto yesterday while yesterday is still open.
-            sessionDate: getLocalIsoDate(),
-          },
+          // The goal steps below the same whatever the category: there is one
+          // shared focus goal. The plain calendar date, not
+          // `creditedPracticeDate` — see `buildFocusSessionRequest`.
+          buildFocusSessionRequest(result, focusActivityDay, focusCategory, getLocalIsoDate()),
           crypto.randomUUID(),
           user.id,
           [],
