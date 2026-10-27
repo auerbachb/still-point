@@ -59,13 +59,20 @@ class MockGain extends MockNode {
 
 class MockBufferSource extends MockNode {
   buffer: unknown = null;
+  onended: (() => void) | null = null;
+  /** When `start` scheduled the clip, and whether it was stopped (#922). */
+  startedAt: number | null = null;
+  stopped = false;
   constructor(private readonly ctx: MockAudioContext) {
     super();
   }
-  start() {
+  start(when = 0) {
+    this.startedAt = when;
     this.ctx.noteStarted();
   }
-  stop() {}
+  stop() {
+    this.stopped = true;
+  }
 }
 
 class MockAudioContext {
@@ -79,6 +86,8 @@ class MockAudioContext {
   resumeCallCount = 0;
   /** Every oscillator this context handed out, oldest first (#711). */
   oscillators: MockOscillator[] = [];
+  /** Every buffer source this context handed out, oldest first (#922). */
+  bufferSources: MockBufferSource[] = [];
 
   constructor() {
     // A context created outside a gesture (e.g. by a silent chime attempt while
@@ -101,10 +110,15 @@ class MockAudioContext {
     return new MockGain();
   }
   createBufferSource() {
-    return new MockBufferSource(this);
+    const source = new MockBufferSource(this);
+    this.bufferSources.push(source);
+    return source;
   }
   createBuffer() {
     return {};
+  }
+  async decodeAudioData() {
+    return { duration: 1.2 };
   }
 
   async resume() {
@@ -402,6 +416,63 @@ describe("resumeAudioContext — mid-session recovery (#710)", () => {
     const { subscribeAudioContextState } = await loadAudio();
     subscribeAudioContextState(() => {});
     expect(createdContexts).toHaveLength(0);
+  });
+});
+
+describe("playVoiceCountdown — one clip at a time (#922)", () => {
+  /** A running context with every clip loaded; `clips` lists those started since. */
+  async function loadedVoice() {
+    vi.stubGlobal("fetch", async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+    const audio = await loadAudio();
+    gesture.active = true;
+    await audio.unlockAudioContext();
+    gesture.active = false;
+    await audio.preloadVoiceCountdown();
+    const ctx = currentContext();
+    const before = ctx.bufferSources.length;
+    return { ...audio, ctx, clips: () => ctx.bufferSources.slice(before) };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("cuts off a clip when the next one starts right behind it", async () => {
+    const { ctx, playVoiceCountdown, clips } = await loadedVoice();
+
+    ctx.currentTime = 15;
+    expect(playVoiceCountdown(60)).toBe(true);
+    // A burst: the next update 50ms later announces 59.
+    ctx.currentTime = 15.05;
+    expect(playVoiceCountdown(59)).toBe(true);
+
+    const [sixty, fiftyNine] = clips();
+    expect(sixty.stopped).toBe(true);
+    expect(fiftyNine).toMatchObject({ startedAt: 15.05, stopped: false });
+  });
+
+  it("lets the clip from the second before finish its word", async () => {
+    const { ctx, playVoiceCountdown, clips } = await loadedVoice();
+
+    // "28" still speaks when "27" starts a second later; it plays out.
+    ctx.currentTime = 33;
+    playVoiceCountdown(28);
+    ctx.currentTime = 34;
+    playVoiceCountdown(27);
+
+    expect(clips().map(clip => clip.stopped)).toEqual([false, false]);
+  });
+
+  it("still stops every clip on cancel", async () => {
+    const { ctx, playVoiceCountdown, cancelVoiceCountdownPlayback, clips } = await loadedVoice();
+
+    ctx.currentTime = 33;
+    playVoiceCountdown(28);
+    ctx.currentTime = 34;
+    playVoiceCountdown(27);
+    cancelVoiceCountdownPlayback();
+
+    expect(clips().map(clip => clip.stopped)).toEqual([true, true]);
   });
 });
 

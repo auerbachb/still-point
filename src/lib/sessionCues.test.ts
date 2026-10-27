@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { SoundPrefs } from "@/lib/audio";
+import { countdownSeconds } from "@/lib/blockTimerGrid";
 import {
   INITIAL_CUE_CURSOR,
   followControlledVoice,
@@ -61,6 +62,13 @@ function updates(from: number, to: number): number[] {
   return out;
 }
 
+/** The voice cues among `cues`, as `[elapsed, second]`. */
+function spoken(cues: Array<[number, Cue]>): Array<[number, number]> {
+  return cues.flatMap(([elapsed, cue]) =>
+    cue.kind === "voice" ? [[elapsed, cue.second] as [number, number]] : [],
+  );
+}
+
 describe("cue cursors", () => {
   it("starts a fresh sit with nothing played, counting haptics in the chosen interval", () => {
     expect(freshCueCursor(TICK)).toEqual({ ...INITIAL_CUE_CURSOR, lastHapticInterval: 60 });
@@ -76,9 +84,10 @@ describe("cue cursors", () => {
       lastHapticIndex: 0,
       lastHapticInterval: 60,
     });
+    // 49.6 s left: the digits, and so the voice, are already on 50.
     expect(seededCueCursor(250.4, 300, { ...TICK, hapticInterval: "tenSeconds" })).toEqual({
       lastTickSec: 250,
-      lastVoiceSec: 49,
+      lastVoiceSec: 50,
       lastCompletedBlockIndex: 3,
       lastHapticIndex: 25,
       lastHapticInterval: 10,
@@ -109,6 +118,19 @@ describe("cue cursors", () => {
     expect(followControlledVoice(at(40), 30, 100).lastVoiceSec).toBe(61);
     expect(followControlledVoice(at(40), 50, 100).lastVoiceSec).toBe(50);
     expect(followControlledVoice(at(45), 60, 100).lastVoiceSec).toBe(45);
+    // Rounded up, as the plan announces: 49.5 s left is still second 50.
+    expect(followControlledVoice(at(40), 50.5, 100).lastVoiceSec).toBe(50);
+  });
+
+  it("does not re-announce the second a controlled step back lands inside", () => {
+    const spokeFifty = planCountdownCues(seededCueCursor(49.95, 100, VOICE), 50, 100, VOICE);
+    expect(spokeFifty.cues).toEqual([{ kind: "voice", second: 50 }]);
+    const ahead = planCountdownCues(spokeFifty.cursor, 51, 100, VOICE);
+    expect(ahead.cues).toEqual([{ kind: "voice", second: 49 }]);
+
+    // Back to 49.5 s left — second 50 again, already spoken.
+    const back = followControlledVoice(ahead.cursor, 50.5, 100);
+    expect(planCountdownCues(back, 50.5, 100, VOICE).cues).toEqual([]);
   });
 });
 
@@ -143,19 +165,53 @@ describe("planCountdownCues — voice countdown", () => {
   });
 
   it("opens the final minute with 60 and then counts each second down to 1", () => {
-    const { cues } = run(freshCueCursor(VOICE), updates(14.9, 75), 75, VOICE);
-    const voice = cues.filter(([, cue]) => cue.kind === "voice");
-    expect(voice.map(([, cue]) => (cue.kind === "voice" ? cue.second : 0))).toEqual(
-      Array.from({ length: 60 }, (_, i) => 60 - i),
-    );
-    expect(voice[0]).toEqual([15, { kind: "voice", second: 60 }]);
-    expect(voice[1]).toEqual([15.05, { kind: "voice", second: 59 }]);
-    expect(voice.at(-1)).toEqual([73.05, { kind: "voice", second: 1 }]);
+    const voice = spoken(run(freshCueCursor(VOICE), updates(14.9, 75), 75, VOICE).cues);
+    expect(voice.map(([, second]) => second)).toEqual(Array.from({ length: 60 }, (_, i) => 60 - i));
+    expect(voice[0]).toEqual([15, 60]);
+    expect(voice[1]).toEqual([16, 59]);
+    expect(voice.at(-1)).toEqual([74, 1]);
+  });
+
+  // #922: web spoke "60" and then "59" one 50ms update later, on top of each
+  // other. These updates land off the whole-second grid, as a real interval
+  // does: the first inside the final minute has 59.97 s left.
+  it("holds 60 for the first second of the final minute and speaks 59 a second later", () => {
+    const voice = spoken(run(freshCueCursor(VOICE), updates(14.98, 17), 75, VOICE).cues);
+    expect(voice.slice(0, 2)).toEqual([
+      [15.03, 60],
+      [16.03, 59],
+    ]);
   });
 
   it("still opens with 60 when the first update lands inside the final minute", () => {
     const planned = planCountdownCues(freshCueCursor(VOICE), 15.03, 75, VOICE);
     expect(planned.cues).toEqual([{ kind: "voice", second: 60 }]);
+  });
+
+  it("opens with 60 on a first update with only 59.1 s left, then waits for 59", () => {
+    const opened = planCountdownCues(freshCueCursor(VOICE), 15.9, 75, VOICE);
+    expect(opened.cues).toEqual([{ kind: "voice", second: 60 }]);
+    const held = planCountdownCues(opened.cursor, 15.95, 75, VOICE);
+    expect(held.cues).toEqual([]);
+    expect(planCountdownCues(held.cursor, 16, 75, VOICE).cues).toEqual([{ kind: "voice", second: 59 }]);
+  });
+
+  it("opens with 59 when the first update already has under 59 s left", () => {
+    const planned = planCountdownCues(freshCueCursor(VOICE), 16.1, 75, VOICE);
+    expect(planned.cues).toEqual([{ kind: "voice", second: 59 }]);
+  });
+
+  it("speaks the second the digits show, a second apart, however late the updates land", () => {
+    for (const lateMs of [0, 3, 27, 49]) {
+      const elapsed = updates(14.9, 74.95).map(at => at + lateMs / 1000);
+      const voice = spoken(run(freshCueCursor(VOICE), elapsed, 75, VOICE).cues);
+
+      expect(voice.map(([, second]) => second)).toEqual(Array.from({ length: 60 }, (_, i) => 60 - i));
+      for (const [at, second] of voice) expect(countdownSeconds(at, 75)).toBe(second);
+      for (let i = 1; i < voice.length; i++) {
+        expect(voice[i][0] - voice[i - 1][0]).toBeCloseTo(1, 6);
+      }
+    }
   });
 
   it("cancels a countdown in progress when the sit moves back above a minute", () => {

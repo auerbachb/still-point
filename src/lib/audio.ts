@@ -16,29 +16,46 @@ const voiceBuffers = new Map<number, AudioBuffer>();
 let voicePreloadPromise: Promise<void> | null = null;
 let voicePlaybackEpoch = 0;
 let lastVoiceCountdownPlayedSec = 61;
-/** Clips that have started and not yet ended. Cancel stops these (#793). */
-const activeVoiceSources = new Set<AudioBufferSourceNode>();
+/**
+ * Clips that have started and not yet ended, each with the context time it
+ * started at. Cancel stops all of them (#793); a new clip stops recent ones (#922).
+ */
+const activeVoiceSources = new Map<AudioBufferSourceNode, number>();
+/**
+ * #922: a clip that started less than this long before the next one gives way
+ * to it. The countdown steps once a second, so a clip this recent belongs to a
+ * burst — a late entry into the final minute, a clock that jumped, a clip that
+ * loaded late — and the newer number is the right one. The clip from the
+ * second before plays out: several bundled clips still speak past 1 s ("27"
+ * runs to 1.15 s), and stopping them would cut the word off.
+ */
+const VOICE_BURST_WINDOW_S = 0.5;
 
-function trackVoiceSource(source: AudioBufferSourceNode): void {
-  activeVoiceSources.add(source);
+function trackVoiceSource(source: AudioBufferSourceNode, startedAt: number): void {
+  activeVoiceSources.set(source, startedAt);
   source.onended = () => {
     activeVoiceSources.delete(source);
   };
 }
 
-/** Drop any in-flight voice countdown playback queued by async buffer loads. */
-export function cancelVoiceCountdownPlayback(): void {
-  voicePlaybackEpoch++;
-  lastVoiceCountdownPlayedSec = 61;
-  const playing = [...activeVoiceSources];
-  activeVoiceSources.clear();
-  for (const source of playing) {
+/** Stops the tracked clips that started after `startedAfter` — all of them by default. */
+function stopVoiceSources(startedAfter = -Infinity): void {
+  for (const [source, startedAt] of activeVoiceSources) {
+    if (startedAt <= startedAfter) continue;
+    activeVoiceSources.delete(source);
     try {
       source.stop();
     } catch {
       // stop() throws if the source never started or already ended.
     }
   }
+}
+
+/** Drop any in-flight voice countdown playback queued by async buffer loads. */
+export function cancelVoiceCountdownPlayback(): void {
+  voicePlaybackEpoch++;
+  lastVoiceCountdownPlayedSec = 61;
+  stopVoiceSources();
 }
 
 export type AudioUnlockResult = "unlocked" | "blocked" | "unavailable";
@@ -304,8 +321,12 @@ export function playVoiceCountdown(seconds: number): boolean {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    source.start(ctx.currentTime);
-    trackVoiceSource(source);
+    const now = ctx.currentTime;
+    // #922: a burst of updates cannot stack clips — one still in its first
+    // half second gives way to this one.
+    stopVoiceSources(now - VOICE_BURST_WINDOW_S);
+    source.start(now);
+    trackVoiceSource(source, now);
     lastVoiceCountdownPlayedSec = seconds;
     return true;
   } catch {

@@ -4,11 +4,13 @@
  * Sits over two minutes are minute blocks then a final minute in ten-second
  * blocks; shorter sits are ten-second blocks only. The minute-block index is
  * also what times the minute chime, so its cap matters as much as the drawing.
+ * The digits' rounding is what the voice countdown speaks (#922).
  */
 import { describe, expect, it } from "vitest";
 import {
   buildBlocks,
   completedMinuteBlockIndex,
+  countdownSeconds,
   minuteBlockCount,
   usesMinuteBlocks,
 } from "./blockTimerGrid";
@@ -85,6 +87,28 @@ describe("buildBlocks", () => {
       expect(last.startTime).toBeLessThan(total);
       expect(last.startTime + last.duration).toBeGreaterThanOrEqual(total);
     }
+  });
+});
+
+describe("countdownSeconds", () => {
+  it("rounds the time left up, as the iOS digits do", () => {
+    expect(countdownSeconds(0, 600)).toBe(600);
+    expect(countdownSeconds(0.05, 600)).toBe(600);
+    expect(countdownSeconds(1, 600)).toBe(599);
+    expect(countdownSeconds(1.003, 600)).toBe(599);
+  });
+
+  it("reads 60 through the whole first second of the final minute", () => {
+    expect(countdownSeconds(539.97, 600)).toBe(61);
+    expect(countdownSeconds(540, 600)).toBe(60);
+    expect(countdownSeconds(540.97, 600)).toBe(60);
+    expect(countdownSeconds(541, 600)).toBe(59);
+  });
+
+  it("reaches 0 only once the sit is over", () => {
+    expect(countdownSeconds(599.99, 600)).toBe(1);
+    expect(countdownSeconds(600, 600)).toBe(0);
+    expect(countdownSeconds(605, 600)).toBe(0);
   });
 });
 
