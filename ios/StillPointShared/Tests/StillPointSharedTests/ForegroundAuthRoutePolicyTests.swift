@@ -31,12 +31,20 @@ final class ForegroundAuthRoutePolicyTests: XCTestCase {
     }
 
     /// Outside a session the overlay covers the screen while `me()` is in flight.
-    func testOverlayIsRaisedAtRest() {
-        XCTAssertTrue(ForegroundAuthRoutePolicy.shouldRaiseLoadingOverlay(isInSession: false))
+    func testOverlayIsShownAtRestWhileLoading() {
+        XCTAssertTrue(ForegroundAuthRoutePolicy.shouldShowLoadingOverlay(isLoading: true, isInSession: false))
     }
 
-    /// During a session the overlay would hide the timer, so it stays down.
-    func testOverlayIsNotRaisedDuringASession() {
-        XCTAssertFalse(ForegroundAuthRoutePolicy.shouldRaiseLoadingOverlay(isInSession: true))
+    /// During a session the overlay would hide the timer, so it stays down. This also
+    /// covers a sit that starts while the request is already in flight: the flag is
+    /// up, but the overlay is not drawn over the session.
+    func testOverlayIsNotShownDuringASessionWhileLoading() {
+        XCTAssertFalse(ForegroundAuthRoutePolicy.shouldShowLoadingOverlay(isLoading: true, isInSession: true))
+    }
+
+    /// No request in flight, no overlay, wherever the user is.
+    func testOverlayIsNotShownWhenNotLoading() {
+        XCTAssertFalse(ForegroundAuthRoutePolicy.shouldShowLoadingOverlay(isLoading: false, isInSession: false))
+        XCTAssertFalse(ForegroundAuthRoutePolicy.shouldShowLoadingOverlay(isLoading: false, isInSession: true))
     }
 }

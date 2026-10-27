@@ -354,6 +354,13 @@ final class AppViewModel {
         return false
     }
 
+    /// Whether `RootView` draws the full-screen loading overlay: an auth check's
+    /// `me()` is in flight and no session is on screen (#852). Read at draw time, so a
+    /// sit that starts while the request is in flight is never covered by it.
+    var showsLoadingOverlay: Bool {
+        ForegroundAuthRoutePolicy.shouldShowLoadingOverlay(isLoading: isLoading, isInSession: isInSession)
+    }
+
     // No initializer: the wake-lock preference is the only thing this used to seed,
     // and #742 replaced that snapshot with a read of the shared store. Every other
     // stored property carries its own default.

@@ -22,9 +22,13 @@
 /// - `.breathCounting`: the count in progress.
 /// - `.focusPicker` and `.focusActivity`: the focus flow and the sit it starts (#840).
 ///
-/// The full-screen loading overlay is opaque, so raising it mid-sit would cover the
+/// The full-screen loading overlay is opaque, so showing it mid-sit would cover the
 /// timer for the length of the `me()` request. The session already shows valid
-/// content, so the overlay is not raised there.
+/// content, so the overlay is not shown there. The rule is applied where the overlay
+/// is drawn rather than where the flag is raised: a session can also start while the
+/// request is already in flight (a session deep link opens one straight away for a
+/// signed-in user), and a raise-time check would leave that sit covered until the
+/// request ends.
 ///
 /// The pending session, log-reason and buddy-invite consumers each check
 /// `isInSession` already, so they leave their links queued during a sit and
@@ -42,12 +46,13 @@ public enum ForegroundAuthRoutePolicy {
         !isInSession || identityChanged
     }
 
-    /// `true` when the check should raise the full-screen loading overlay while its
-    /// `me()` request is in flight.
+    /// `true` when the full-screen loading overlay should be drawn.
     ///
-    /// - Parameter isInSession: whether a session view is on screen when the request
-    ///   is about to leave.
-    public static func shouldRaiseLoadingOverlay(isInSession: Bool) -> Bool {
-        !isInSession
+    /// - Parameter isLoading: whether an auth check's `me()` request is in flight.
+    /// - Parameter isInSession: whether a session view is on screen now. Read at draw
+    ///   time, so a session that starts while the request is in flight is uncovered
+    ///   as soon as it appears.
+    public static func shouldShowLoadingOverlay(isLoading: Bool, isInSession: Bool) -> Bool {
+        isLoading && !isInSession
     }
 }

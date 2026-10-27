@@ -164,12 +164,10 @@ extension AppViewModel {
         // Raised here rather than at the caller's entry, so the overlay means "this
         // check's `me()` is in flight" again and not "somebody's settings save is".
         // Cleared by the caller's `defer`, which is reached whichever way this returns.
-        // #852: not raised mid-sit. The overlay is opaque and full-screen, and the sit
-        // on screen is already valid content, so it would only hide the timer for the
-        // length of `me()`. See `ForegroundAuthRoutePolicy`.
-        if ForegroundAuthRoutePolicy.shouldRaiseLoadingOverlay(isInSession: isInSession) {
-            isLoading = true
-        }
+        // #852: raised mid-sit too, but `showsLoadingOverlay` does not draw it over a
+        // session, including one that starts while `me()` is in flight. See
+        // `ForegroundAuthRoutePolicy`.
+        isLoading = true
         // Taken here, immediately before the request, so it records when this read
         // left rather than when it was asked for (#697). Taken unconditionally even
         // though only the re-confirmation branch below spends it — a ticket that goes
