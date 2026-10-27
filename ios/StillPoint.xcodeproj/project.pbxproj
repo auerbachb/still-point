@@ -37,11 +37,13 @@
 		214C8E0D29060034400C22BA /* SettingsSessionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */; };
 		2387CAB41D16E36550FB047A /* 41.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 112EE9026F8169958E58EA43 /* 41.mp3 */; };
 		25FBDBD24F739006CC114774 /* HapticCuePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */; };
+		28A26FD004B3D21899D12484 /* WidgetSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E4EF5A9F8C90CBD9D5CA5A /* WidgetSyncCoordinator.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
 		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
 		2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */; };
 		30AEF9D9DF3820CF00E882E3 /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */; };
 		32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */; };
+		37C49D8DB0FBE68121D0E89A /* DeepLinkCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A06CF870C831AE727052B94 /* DeepLinkCoordinator.swift */; };
 		380184EFB74132B005AEB0B8 /* 2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8F148BF8102DAF3A29A0BB13 /* 2.mp3 */; };
 		39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF304356E66657666901E4F /* SessionStateBadge.swift */; };
 		39B0A335763543857EC8F4C9 /* FocusCategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A8D4465D84DC0B443F6A4B /* FocusCategoryPickerView.swift */; };
@@ -317,6 +319,7 @@
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
 		863EFBE318A791C3784682DA /* 50.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 50.mp3; sourceTree = "<group>"; };
 		8807A08DBDE8A121951350FD /* AppleSignInController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInController.swift; sourceTree = "<group>"; };
+		8A06CF870C831AE727052B94 /* DeepLinkCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkCoordinator.swift; sourceTree = "<group>"; };
 		8AFE37D74C08EB62742A3CC7 /* 35.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 35.mp3; sourceTree = "<group>"; };
 		8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedExerciseViewModel.swift; sourceTree = "<group>"; };
 		8DF4F7FCFF2ADC4C4AB58684 /* 9.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 9.mp3; sourceTree = "<group>"; };
@@ -385,6 +388,7 @@
 		E17D1E13F75A9811452B4895 /* 51.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 51.mp3; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E892E8EB42C0764E814EEA26 /* 38.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 38.mp3; sourceTree = "<group>"; };
+		E9E4EF5A9F8C90CBD9D5CA5A /* WidgetSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSyncCoordinator.swift; sourceTree = "<group>"; };
 		EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPermissionHelper.swift; sourceTree = "<group>"; };
 		ED37F3314647BC15A050C270 /* HabitWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidget.swift; sourceTree = "<group>"; };
 		EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIDevice+Portrait.swift"; sourceTree = "<group>"; };
@@ -538,6 +542,7 @@
 			isa = PBXGroup;
 			children = (
 				AEAEBFB5D2DCD9FFD7B6D5FD /* BuddyInviteTokenParser.swift */,
+				8A06CF870C831AE727052B94 /* DeepLinkCoordinator.swift */,
 				52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */,
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
 				9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */,
@@ -639,6 +644,7 @@
 				7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */,
 				5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */,
 				B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */,
+				E9E4EF5A9F8C90CBD9D5CA5A /* WidgetSyncCoordinator.swift */,
 				1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */,
 			);
 			path = Managers;
@@ -1062,6 +1068,7 @@
 				4804AD5A1343CF783381C649 /* CompletionStatsSection.swift in Sources */,
 				F456682335023A512CFD51BD /* CompletionThoughtsSection.swift in Sources */,
 				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
+				37C49D8DB0FBE68121D0E89A /* DeepLinkCoordinator.swift in Sources */,
 				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
 				5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */,
 				1505292FB2D8A162DD13F8CC /* FocusActivityView.swift in Sources */,
@@ -1112,6 +1119,7 @@
 				2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */,
 				C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */,
 				B0604DFFDD3FDF43609DF099 /* WidgetHistoryRefresher.swift in Sources */,
+				28A26FD004B3D21899D12484 /* WidgetSyncCoordinator.swift in Sources */,
 				32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

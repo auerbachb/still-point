@@ -1,6 +1,6 @@
 /// #856: where a buddy-invite join the server accepted may take the user.
 ///
-/// `AppViewModel.consumePendingBuddyInviteIfNeeded` decides whether to *start* a join
+/// `DeepLinkCoordinator.consumePendingBuddyInviteIfNeeded` decides whether to *start* a join
 /// before the request: someone signed in, an invite pending, no sit running. The request
 /// is a suspension point, so the screen that decision was made for can be gone by the
 /// time the server answers. The join used to re-check only the identity generation, then

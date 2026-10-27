@@ -8,9 +8,9 @@ import XCTest
 @MainActor
 private final class PendingLinkScreen {
     enum Link: Equatable {
-        /// `pendingSessionDeepLink`.
+        /// `PendingDeepLinks.sessionType`.
         case session
-        /// `pendingLogReasonDate`.
+        /// `PendingDeepLinks.logReasonDate`.
         case logReason
     }
 

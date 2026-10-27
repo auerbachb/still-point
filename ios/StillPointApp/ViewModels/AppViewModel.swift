@@ -12,6 +12,14 @@ import StillPointShared
 /// state each concern owns is still declared here. Members stay `private` where
 /// every use is in one file; the ones these files share are internal for that
 /// reason alone and are not entry points for views.
+///
+/// Two concerns are stateful sub-coordinators this view model owns (#1061):
+/// `DeepLinkCoordinator` (`deepLinks`: the pending links, `buddyInviteError`, and the
+/// invite consume) and `WidgetSyncCoordinator` (`widgetSync`: the widget snapshot
+/// sync and week-history backfill). Each holds a weak reference back and reads the
+/// identity state from here. This file remains the only writer of `authGeneration`
+/// and the only owner of the identity transitions; they call into the coordinators
+/// only to cancel or clear.
 @Observable
 @MainActor
 final class AppViewModel {
@@ -45,7 +53,13 @@ final class AppViewModel {
     var isLoading = true
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
-    var buddyInviteError: String?
+    /// The last buddy-invite failure, shown by `HomeView` and `BuddySessionHubView`.
+    /// #1061: stored on `deepLinks`, which is `@Observable`, so a view reading this
+    /// still re-renders when it changes.
+    var buddyInviteError: String? {
+        get { deepLinks.buddyInviteError }
+        set { deepLinks.buddyInviteError = newValue }
+    }
     /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
     /// Owned by the identity generation whose End took it, so a save still running for a
     /// previous account can neither swallow the next account's End nor free its gate (#854).
@@ -64,9 +78,18 @@ final class AppViewModel {
         appBlockingManagerStorage = manager
         return manager
     }
-    var pendingBuddyInviteToken: String?
-    var pendingSessionDeepLink: SessionType?
-    var pendingLogReasonDate: String?
+    /// #1061: incoming links, their pending copies, and the buddy-invite consume.
+    /// Created on first use with `self` as its weak owner; there is no initializer
+    /// for a stored default to reference `self` from.
+    @ObservationIgnored private var deepLinksStorage: DeepLinkCoordinator?
+    var deepLinks: DeepLinkCoordinator {
+        if let deepLinksStorage {
+            return deepLinksStorage
+        }
+        let coordinator = DeepLinkCoordinator(owner: self)
+        deepLinksStorage = coordinator
+        return coordinator
+    }
 
     /// Persisted: keep device screen awake during an active sit when enabled.
     ///
@@ -216,15 +239,7 @@ final class AppViewModel {
     private var offlineCatchUpTask: Task<Void, Never>?
     var reconnectTask: Task<Void, Never>?
     var loginCatchUpTask: Task<Void, Never>?
-    /// Buddy invite join/consume. One property: these are alternative routes into
-    /// the same invite flow and never need to run concurrently.
-    var buddyInviteTask: Task<Void, Never>?
-    /// The invite joins in flight. The token stays pending until the server answers
-    /// (#756), so a second consume must not POST it again. Each consume owns its own
-    /// attempt and releases only that one, so a previous account's join still in
-    /// flight after a sign-out neither blocks the next account's consume nor frees
-    /// the gate under it (#989). See ``BuddyInviteConsumeGate``.
-    var buddyInviteConsumeGate = BuddyInviteConsumeGate()
+    // The buddy invite's task and consume gate are `deepLinks`'s (#1061).
 
     /// Serializes every settings mutation in the app against every other one (#697).
     ///
@@ -236,10 +251,19 @@ final class AppViewModel {
     /// See ``SettingsWriteQueue``.
     let settingsWrites = SettingsWriteQueue()
 
-    /// This scene's widget history backfill: its in-flight fetch, and the marker
-    /// that throttles the next one (#663). The background refresh runs the same
-    /// backfill with one of its own (`BackgroundRefreshScheduler`).
-    let widgetHistory = WidgetHistoryRefresher()
+    /// #1061: the widget snapshot sync and this scene's week-history backfill: its
+    /// in-flight fetch, and the marker that throttles the next one (#663). The
+    /// background refresh runs the same backfill with one of its own
+    /// (`BackgroundRefreshScheduler`). Created on first use, like `deepLinks`.
+    @ObservationIgnored private var widgetSyncStorage: WidgetSyncCoordinator?
+    var widgetSync: WidgetSyncCoordinator {
+        if let widgetSyncStorage {
+            return widgetSyncStorage
+        }
+        let coordinator = WidgetSyncCoordinator(owner: self)
+        widgetSyncStorage = coordinator
+        return coordinator
+    }
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -497,15 +521,14 @@ final class AppViewModel {
     private func cancelReplacedAccountTasks() {
         offlineCatchUpTask?.cancel()
         offlineCatchUpTask = nil
-        buddyInviteTask?.cancel()
-        buddyInviteTask = nil
+        deepLinks.cancelBuddyInviteTask()
         // The widget history backfill is identity-scoped too. Its own key check is
         // `"userId|localDay"`, which a sign-out and sign-in on the *same* account
         // within the same day would satisfy — so a late response could land in the
         // freshly rebuilt snapshot. Clearing the key also forces a re-backfill
         // rather than leaving the row blank. `didLogout` cancelled this already;
         // `applySignedOut` did not, which is the gap this closes.
-        widgetHistory.cancel()
+        widgetSync.cancelHistoryRefresh()
     }
 
     /// #916: removes the previous account's local state when a different account
@@ -566,10 +589,9 @@ final class AppViewModel {
         // `defer`, so an offline sign-out still does), but didLogout is reachable
         // on its own — belt and braces rather than a single fragile path.
         CachedIdentityStore.clear()
-        pendingBuddyInviteToken = nil
-        pendingSessionDeepLink = nil
-        pendingLogReasonDate = nil
-        buddyInviteError = nil
+        // The pending links and `buddyInviteError`. Only an explicit logout drops the
+        // links; `applySignedOut` keeps them for the next sign-in.
+        deepLinks.clearForLogout()
         authStatusMessage = nil
         // #703: the not-stored warning is about one account's sit. Left set, the
         // next user to go offline on this device sees a red strip for a failure
