@@ -1,6 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
+import { pipeline } from "node:stream";
 import tls from "node:tls";
 import type { AddressInfo } from "node:net";
 import type { MockApiRequest, MockApiResponse } from "./auth.fixture";
@@ -133,11 +134,18 @@ export async function startStandInOrigin(upstream: string): Promise<StandInOrigi
       },
       (upstreamResponse) => {
         response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
-        upstreamResponse.pipe(response);
+        // pipeline, not pipe: an upstream that closes mid-response errors its
+        // stream, and this destroys the browser's response instead of leaving
+        // it open or crashing the server on an unhandled error.
+        pipeline(upstreamResponse, response, (error) => {
+          if (error) request.socket.destroy();
+        });
       },
     );
     forwarded.on("error", () => request.socket.destroy());
-    request.pipe(forwarded);
+    pipeline(request, forwarded, (error) => {
+      if (error) request.socket.destroy();
+    });
   });
 
   server.on("connection", (socket) => {
