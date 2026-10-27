@@ -208,6 +208,32 @@ export function useSessionSaveLifecycle({
     return outcome;
   }, [saveSitToQueue, refreshTodayTracks, refreshUserFromServer]);
 
+  // A pending sit is not on the server yet, so the refresh inside the save
+  // cannot see it. Remember it so the next sit in this grace window knows
+  // yesterday's required sits. A combined sit (#769) is remembered as done
+  // for both tracks; an ended-early or not-stored one is not remembered.
+  // Shared by the first save and its retry, so a sit stored only on retry is
+  // remembered the same way.
+  const rememberStoredSit = useCallback((
+    data: CompletedSitInput,
+    sessionDate: string,
+    outcome: SessionSaveOutcome | null,
+  ) => {
+    if (
+      data.completed
+      && data.sessionType === "standard"
+      && outcome
+      && outcome.status !== "notStored"
+    ) {
+      loadedSitsRef.current = rememberStandardSit(
+        loadedSitsRef.current,
+        sessionDate,
+        data.track,
+        data.combined === true,
+      );
+    }
+  }, [loadedSitsRef]);
+
   // #703 — cross-client note on the completion view. iOS never renders one for a
   // sit it could not store: `SessionViewModel.saveSession` returns nil when the
   // local write throws, and `SessionViewModel.completeSit` puts up the "Session
@@ -244,23 +270,7 @@ export function useSessionSaveLifecycle({
 
     if (generation !== sessionGeneration.current) return;
 
-    // A pending sit is not on the server yet, so the refresh inside the save
-    // cannot see it. Remember it so the next sit in this grace window knows
-    // yesterday's required sits. A combined sit (#769) is remembered as done
-    // for both tracks; an ended-early or not-stored one is not remembered.
-    if (
-      data.completed
-      && data.sessionType === "standard"
-      && outcome
-      && outcome.status !== "notStored"
-    ) {
-      loadedSitsRef.current = rememberStandardSit(
-        loadedSitsRef.current,
-        sessionDate,
-        data.track,
-        data.combined === true,
-      );
-    }
+    rememberStoredSit(data, sessionDate, outcome);
 
     setCompletionData({
       sessionId: outcome?.sessionId ?? null,
@@ -285,7 +295,7 @@ export function useSessionSaveLifecycle({
         : previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
     });
     setOverlay("complete");
-  }, [sessionGeneration, loadedSitsRef, userRef, user, saveCompletedSit, setOverlay]);
+  }, [sessionGeneration, loadedSitsRef, userRef, user, saveCompletedSit, rememberStoredSit, setOverlay]);
 
   // #703: retry the local save without leaving the completion screen — the web
   // counterpart of the iOS "Session could not be saved" alert's Retry button.
@@ -297,6 +307,8 @@ export function useSessionSaveLifecycle({
       throw new Error("Failed to save session");
     }
 
+    // The #666 guard, as in `handleSessionComplete`: the save below suspends.
+    const generation = sessionGeneration.current;
     const outcome = await saveCompletedSit(
       pending.data,
       pending.clientSessionId,
@@ -305,6 +317,12 @@ export function useSessionSaveLifecycle({
     );
     if (outcome.status === "notStored") {
       throw new Error("Failed to save session");
+    }
+
+    // The first try was not stored, so it was not remembered then. A retry
+    // that settles after a sign-out leaves the next account's sits alone.
+    if (generation === sessionGeneration.current) {
+      rememberStoredSit(pending.data, pending.sessionDate, outcome);
     }
 
     setCompletionData((previous) => (
@@ -317,7 +335,7 @@ export function useSessionSaveLifecycle({
         }
         : previous
     ));
-  }, [user, saveCompletedSit]);
+  }, [sessionGeneration, user, saveCompletedSit, rememberStoredSit]);
 
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
     // #833: the save below waits on the server flush, so a sign-out and a new

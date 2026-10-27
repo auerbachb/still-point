@@ -439,6 +439,34 @@ describe("useSessionSaveLifecycle — a combined sit (#892)", () => {
     expect(saveCall(1).request.sessionDate).toBe("2026-10-27");
   });
 
+  test("before 6:00, a combined sit stored only on retry still closes yesterday", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0)); // local Oct 27, 5:30
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queue.saveCompletedSession
+      .mockRejectedValueOnce(new LocalSessionWriteError("queueWriteFailed"))
+      .mockImplementation(async (_request, clientSessionId: string) => queued(clientSessionId));
+    const hook = await renderLifecycle(DUAL);
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(combinedSit());
+    });
+    expect(hook.loadedSitsRef.current).toBeNull();
+    // The retry is stored on this device and waits to sync.
+    await act(async () => {
+      await hook.current().handleRetryCompletionSave();
+    });
+    expect(hook.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary", combined: true },
+    ]);
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit({ dayNumber: 201 }));
+    });
+    // The retried sit closed both of yesterday's tracks, so the next one is today's.
+    expect(saveCall(2).request.sessionDate).toBe("2026-10-27");
+  });
+
   test("control: before 6:00, the sit after a queued plain primary sit still credits yesterday", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0));
@@ -493,6 +521,54 @@ describe("useSessionSaveLifecycle — retry from the completion screen (#703)", 
     });
     // A later successful save is the proof storage works again.
     expect(hook.current().localWriteFailed).toBe(false);
+  });
+
+  test("a retry that lands as pending is remembered for the grace window", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queue.saveCompletedSession
+      .mockRejectedValueOnce(new LocalSessionWriteError("queueWriteFailed"))
+      .mockImplementationOnce(async (_request, clientSessionId: string) => queued(clientSessionId));
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit({ track: "second" }));
+    });
+    // Not stored, so nothing was remembered then.
+    expect(hook.loadedSitsRef.current).toBeNull();
+
+    await act(async () => {
+      await hook.current().handleRetryCompletionSave();
+    });
+
+    expect(hook.current().completionData).toMatchObject({ isPendingSync: true, notStored: false });
+    expect(hook.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: saveCall(1).request.sessionDate, track: "second" },
+    ]);
+  });
+
+  test("a retry that settles after a sign-out leaves the next account's sits alone", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const retry = deferred<SavedSessionResult>();
+    queue.saveCompletedSession
+      .mockRejectedValueOnce(new LocalSessionWriteError("queueWriteFailed"))
+      .mockReturnValueOnce(retry.promise);
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+    let done!: Promise<void>;
+    await act(async () => {
+      done = hook.current().handleRetryCompletionSave();
+    });
+    // A sign-out lands while the retry is suspended.
+    hook.sessionGeneration.current += 1;
+    await act(async () => {
+      retry.resolve(queued(saveCall(1).clientSessionId));
+      await done;
+    });
+
+    expect(hook.loadedSitsRef.current).toBeNull();
   });
 
   test("rejects while the sit is still not stored, so the banner keeps its retry", async () => {
