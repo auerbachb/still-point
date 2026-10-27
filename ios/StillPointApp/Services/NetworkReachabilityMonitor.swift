@@ -7,6 +7,9 @@ import StillPointShared
 final class NetworkReachabilityMonitor {
     private(set) var isConnected = true
     var ownerUserIdProvider: (@MainActor () -> String?)?
+    /// #840: called after a flush that uploaded at least one sit, so the account is
+    /// re-read once the server has it (web's `onSynced`, #666).
+    var onSynced: (@MainActor () -> Void)?
 
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.brettonauerbach.stillpoint.network-reachability")
@@ -34,9 +37,16 @@ final class NetworkReachabilityMonitor {
     func flushOfflineQueue(ownerUserId: String?) async {
         guard let ownerUserId, !ownerUserId.isEmpty else { return }
         do {
-            _ = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
+            let syncedCount = try await SessionSyncCoordinator.shared.flushPending(ownerUserId: ownerUserId)
+            if syncedCount > 0 {
+                onSynced?()
+            }
         } catch {
             print("Failed to flush offline session queue on reconnect: \(error)")
+            // A flush that throws partway has still uploaded every entry before the
+            // failing one, and its count is lost with the throw. Re-read anyway: the
+            // read is idempotent and a failed one is dropped (`refreshUserAfterSync`).
+            onSynced?()
         }
     }
 }

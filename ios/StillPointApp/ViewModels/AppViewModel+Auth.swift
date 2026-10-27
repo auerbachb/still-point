@@ -380,6 +380,8 @@ extension AppViewModel {
         case .buddySession: return "buddySession"
         case .completion: return "completion"
         case .breathCounting: return "breathCounting"
+        case .focusPicker: return "focusPicker"
+        case .focusActivity: return "focusActivity"
         case .logReason: return "logReason"
         case .history: return "history"
         case .journal: return "journal"
@@ -477,6 +479,29 @@ extension AppViewModel {
                 requestTicket: ticket,
                 responseKind: .read
             )
+        }
+    }
+
+    /// #840: re-reads the account once a sit this device saved has reached the server,
+    /// as web's `onSynced` does (#666). `NetworkReachabilityMonitor` calls it after a
+    /// queue flush that uploaded something, and `completeFocusSession` after a
+    /// completed focus session saved straight to the server.
+    ///
+    /// The scene-activation `checkAuth()`, the reconnect refresh and the queue flush
+    /// start independently, so a `me()` that wins the race returns the counters as
+    /// they stood before the upload, and keeps them until some later read: the
+    /// meditation day, and the focus goal `completeFocusSession` had already stepped.
+    ///
+    /// Queued like the other whole-`UserDTO` reads (#697), so it runs after any read or
+    /// settings write enqueued before it. Nothing waits on it: every step of
+    /// `refreshUserFromServer` is checked against the generation captured here, so a
+    /// read that outlives its session changes nothing.
+    func refreshUserAfterSync() {
+        guard currentUser != nil, currentView != .auth else { return }
+        let generation = authGeneration
+        enqueueSettingsRead { [weak self] () async -> Int? in
+            guard let self else { return nil }
+            return await self.refreshUserFromServer(startedAtGeneration: generation)
         }
     }
 

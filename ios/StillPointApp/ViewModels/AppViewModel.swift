@@ -50,6 +50,8 @@ final class AppViewModel {
     /// Owned by the identity generation whose End took it, so a save still running for a
     /// previous account can neither swallow the next account's End nor free its gate (#854).
     var breathSaveGate = GenerationOwnedGate()
+    /// The same guard for `completeFocusSession` (#840).
+    var focusSaveGate = GenerationOwnedGate()
     /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
     var trackingControlPrefsManager = TrackingControlPrefsManager()
     private var appBlockingManagerStorage: AppBlockingManager?
@@ -284,11 +286,27 @@ final class AppViewModel {
         StillPoint.blockCount(forDuration: secondTrackDuration)
     }
 
+    // MARK: - #840 Focus activity
+
+    /// The focus goal counter (clamped to >= 1 for defensive upstream data).
+    var focusActivityDay: Int {
+        max(currentUser?.focusActivityDay ?? 1, 1)
+    }
+
+    /// The next focus session's goal, in seconds. One goal for every category.
+    var focusGoalSeconds: Int {
+        StillPoint.focusDuration(forDay: focusActivityDay)
+    }
+
     var isInSession: Bool {
         if case .session = currentView { return true }
         if case .buddySession = currentView { return true }
         if case .completion = currentView { return true }
         if case .breathCounting = currentView { return true }
+        // #840: the picker counts too, so buddy invites and deep links are held back
+        // from it and from the session it starts, as during breath counting.
+        if case .focusPicker = currentView { return true }
+        if case .focusActivity = currentView { return true }
         return false
     }
 

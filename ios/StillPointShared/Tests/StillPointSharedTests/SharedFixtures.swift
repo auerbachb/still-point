@@ -302,6 +302,55 @@ struct FocusDurationFixture: Decodable {
     let advanceFocusActivityDay: [AdvanceCase]
 }
 
+struct FocusActivityFixture: Decodable {
+    struct SecondsCase: Decodable {
+        let seconds: Int
+        let expected: String
+    }
+    struct ShowsHoursCase: Decodable {
+        let goalSeconds: Int
+        let expected: Bool
+    }
+    struct RemainingCase: Decodable {
+        let name: String
+        let elapsedMs: Double
+        let goalSeconds: Int
+        let expected: Int
+    }
+    struct Result: Decodable {
+        let duration: Int
+        let actualTime: Int
+        let completed: Bool
+    }
+    struct ResolveEndCase: Decodable {
+        let name: String
+        let elapsedMs: Double
+        let goalSeconds: Int
+        /// "expired" or "ended".
+        let reason: String
+        /// nil: nothing to save.
+        let expected: Result?
+    }
+    struct DayAfterSaveCase: Decodable {
+        let name: String
+        let currentDay: Int
+        let sessionDay: Int
+        let expected: Int
+    }
+    struct Category: Decodable {
+        let id: String
+        let label: String
+        let description: String
+    }
+    let formatGoal: [SecondsCase]
+    let countdownDisplay: [SecondsCase]
+    let countdownShowsHours: [ShowsHoursCase]
+    let remainingSeconds: [RemainingCase]
+    let resolveEnd: [ResolveEndCase]
+    let focusActivityDayAfterCompletedSave: [DayAfterSaveCase]
+    let categories: [Category]
+}
+
 // MARK: - Fixture -> SessionDTO helpers
 
 extension HistoryJourneyFixture.Session {

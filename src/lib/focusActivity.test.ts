@@ -8,6 +8,8 @@ import {
   formatFocusGoal,
   resolveFocusEnd,
 } from "./focusActivity";
+import { FOCUS_ACTIVITIES } from "./focusActivityContent";
+import { loadSharedFixture, type FocusActivityFixture } from "./testing/sharedFixtures";
 
 const START = Date.UTC(2026, 9, 26, 12, 0, 0);
 const at = (seconds: number) => START + seconds * 1000;
@@ -182,5 +184,55 @@ describe("focusActivityDayAfterCompletedSave (#836)", () => {
   test("keeps stepping past the goal cap: only the goal holds there", () => {
     expect(focusActivityDayAfterCompletedSave(120, 120)).toBe(121);
     expect(focusSessionDuration(121)).toBe(7200);
+  });
+});
+
+// #840: the iOS suite (`FocusActivityLogicTests.swift`) reads the same file, so
+// the rules the iOS timer duplicates from this one cannot drift apart.
+describe("focus timer — shared fixture (#840)", () => {
+  const fixture = loadSharedFixture<FocusActivityFixture>("focusActivity.json");
+  const HOUR_FONT_SIZE = "min(96px, 16vw)";
+  const MINUTE_FONT_SIZE = "min(120px, 22vw)";
+
+  test("every case list has cases", () => {
+    expect(fixture.formatGoal.length).toBeGreaterThan(0);
+    expect(fixture.countdownDisplay.length).toBeGreaterThan(0);
+    expect(fixture.countdownShowsHours.length).toBeGreaterThan(0);
+    expect(fixture.remainingSeconds.length).toBeGreaterThan(0);
+    expect(fixture.resolveEnd.length).toBeGreaterThan(0);
+    expect(fixture.focusActivityDayAfterCompletedSave.length).toBeGreaterThan(0);
+  });
+
+  test.each(fixture.formatGoal)("formatFocusGoal $seconds", ({ seconds, expected }) => {
+    expect(formatFocusGoal(seconds)).toBe(expected);
+  });
+
+  test.each(fixture.countdownDisplay)("formatFocusCountdown $seconds", ({ seconds, expected }) => {
+    expect(formatFocusCountdown(seconds)).toBe(expected);
+  });
+
+  test.each(fixture.countdownShowsHours)("focusCountdownFontSize $goalSeconds", ({ goalSeconds, expected }) => {
+    expect(focusCountdownFontSize(goalSeconds)).toBe(expected ? HOUR_FONT_SIZE : MINUTE_FONT_SIZE);
+  });
+
+  test.each(fixture.remainingSeconds)("focusRemainingSeconds: $name", ({ elapsedMs, goalSeconds, expected }) => {
+    expect(focusRemainingSeconds(START, START + elapsedMs, goalSeconds)).toBe(expected);
+  });
+
+  test.each(fixture.resolveEnd)("resolveFocusEnd: $name", ({ elapsedMs, goalSeconds, reason, expected }) => {
+    expect(resolveFocusEnd({ startMs: START, nowMs: START + elapsedMs, goalSeconds, reason })).toEqual(expected);
+  });
+
+  test.each(fixture.focusActivityDayAfterCompletedSave)(
+    "focusActivityDayAfterCompletedSave: $name",
+    ({ currentDay, sessionDay, expected }) => {
+      expect(focusActivityDayAfterCompletedSave(currentDay, sessionDay)).toBe(expected);
+    },
+  );
+
+  test("the picker's categories, in order, with their card copy", () => {
+    expect(FOCUS_ACTIVITIES).toEqual(
+      fixture.categories.map(({ id, label, description }) => ({ id, label, description })),
+    );
   });
 });

@@ -21,6 +21,7 @@
 		13ED52B747CBA05F9C319B13 /* SessionIntroOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */; };
 		14128F1D1515631B936676D7 /* 47.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 657B14DE776B226E709E5310 /* 47.mp3 */; };
 		14DD37B6F44770A1F6D9847C /* 38.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = E892E8EB42C0764E814EEA26 /* 38.mp3 */; };
+		1505292FB2D8A162DD13F8CC /* FocusActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6AB58AC12FA2FC042004ACA /* FocusActivityView.swift */; };
 		15177B86F124B5A10AB03456 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C683A9F0586D58020E60DD87 /* RootView.swift */; };
 		1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D356465C1B0F69C57FE47A80 /* SettingsView.swift */; };
 		16D87676D7D5950871924E92 /* 54.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FE14509C600B7DF0C1CEFC5D /* 54.mp3 */; };
@@ -43,6 +44,7 @@
 		32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */; };
 		380184EFB74132B005AEB0B8 /* 2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8F148BF8102DAF3A29A0BB13 /* 2.mp3 */; };
 		39045EBEEF3AF94277B45E02 /* SessionStateBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF304356E66657666901E4F /* SessionStateBadge.swift */; };
+		39B0A335763543857EC8F4C9 /* FocusCategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A8D4465D84DC0B443F6A4B /* FocusCategoryPickerView.swift */; };
 		3AD114B1095E5A14BABFA49B /* SPCapsuleButtonStyleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */; };
 		3B0DCBB737A17FDF8AF30A68 /* 53.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 085AB5EC3C680F94156BCA42 /* 53.mp3 */; };
 		3B9EB6E328C7AFFA6D553709 /* 45.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6F9B11790CB09A75A0B5631C /* 45.mp3 */; };
@@ -67,6 +69,7 @@
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */; };
 		51B53277A3BDDAB470D972A7 /* 13.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A4D5CDCC6607777AB0F9F27F /* 13.mp3 */; };
+		541E925BE3AF12CE7B18082E /* FocusActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B6995EFA6ECE7D5ACA22CA5 /* FocusActivityViewModel.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
 		55E69CE2B979C65A530CD865 /* 22.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDB6682B1106045ACD87DE8D /* 22.mp3 */; };
 		5B36B0EBF7D72B4EA03F659F /* LogReasonDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */; };
@@ -220,6 +223,7 @@
 		085AB5EC3C680F94156BCA42 /* 53.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 53.mp3; sourceTree = "<group>"; };
 		08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSessionSection.swift; sourceTree = "<group>"; };
 		09DD5F417FDE26DAF6433E65 /* PathwayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathwayView.swift; sourceTree = "<group>"; };
+		0B6995EFA6ECE7D5ACA22CA5 /* FocusActivityViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityViewModel.swift; sourceTree = "<group>"; };
 		0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBoardView.swift; sourceTree = "<group>"; };
 		0D147E22AE19B02C80DE77AF /* 36.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 36.mp3; sourceTree = "<group>"; };
 		0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardViewModel.swift; sourceTree = "<group>"; };
@@ -298,6 +302,7 @@
 		7D4870AA6067BE7239DF3130 /* PushNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationCoordinator.swift; sourceTree = "<group>"; };
 		7DCC941059B8B1A654597CC5 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
 		814985B238F7288CD8852173 /* AppViewModel+Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Auth.swift"; sourceTree = "<group>"; };
+		81A8D4465D84DC0B443F6A4B /* FocusCategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCategoryPickerView.swift; sourceTree = "<group>"; };
 		8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPCapsuleButtonStyle.swift; sourceTree = "<group>"; };
 		85EAF998E3470CBB4056699F /* BlockGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockGridView.swift; sourceTree = "<group>"; };
 		863EFBE318A791C3784682DA /* 50.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 50.mp3; sourceTree = "<group>"; };
@@ -359,6 +364,7 @@
 		D2EC092F3B8AAC729171318C /* 32.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 32.mp3; sourceTree = "<group>"; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D42537E2971BBE032F2C6B88 /* 18.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 18.mp3; sourceTree = "<group>"; };
+		D6AB58AC12FA2FC042004ACA /* FocusActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		D8E7347FEB94D061D8E129C8 /* AppViewModel+Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Settings.swift"; sourceTree = "<group>"; };
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
@@ -420,6 +426,8 @@
 				A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */,
 				4976183C8621BCA485D0B82D /* BreathCountingView.swift */,
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
+				D6AB58AC12FA2FC042004ACA /* FocusActivityView.swift */,
+				81A8D4465D84DC0B443F6A4B /* FocusCategoryPickerView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
 				EF4338DB1EB8862D368A1AC7 /* LogReasonView.swift */,
@@ -721,6 +729,7 @@
 				ABE274D36C519BE1A4EB6708 /* BreathCountingViewModel.swift */,
 				0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */,
 				48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */,
+				0B6995EFA6ECE7D5ACA22CA5 /* FocusActivityViewModel.swift */,
 				8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
 				6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */,
@@ -1018,6 +1027,9 @@
 				9ECB83ED063EDAA82E88004B /* CompletionView.swift in Sources */,
 				C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */,
 				5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */,
+				1505292FB2D8A162DD13F8CC /* FocusActivityView.swift in Sources */,
+				541E925BE3AF12CE7B18082E /* FocusActivityViewModel.swift in Sources */,
+				39B0A335763543857EC8F4C9 /* FocusCategoryPickerView.swift in Sources */,
 				9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */,
 				4A807BC7D119912827067A44 /* GuidedExerciseOverlayView.swift in Sources */,
 				70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */,
