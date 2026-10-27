@@ -30,8 +30,17 @@ describe("parseBuildTag (#707)", () => {
     "ios-v1.0.3-build31-rc1",
     "ios-vfoo-build3",
     "v1.0.3-build31",
+    "ios-v1.0.3-build9007199254740992", // Number.MAX_SAFE_INTEGER + 1 would round
+    "ios-v1.0.3-build99999999999999999999",
   ])("rejects %s", (name) => {
     expect(parseBuildTag(name)).toBeNull();
+  });
+
+  test("reads N exactly up to Number.MAX_SAFE_INTEGER", () => {
+    expect(parseBuildTag("ios-v1.0.3-build9007199254740991")).toEqual({
+      marketing: "1.0.3",
+      buildNumber: Number.MAX_SAFE_INTEGER,
+    });
   });
 
   test("buildTagName is the inverse", () => {
@@ -73,6 +82,14 @@ describe("nextBuildNumber (#707)", () => {
   test("refuses to guess when no build tag exists", () => {
     expect(() => nextBuildNumber(["ios-v1.0.3"])).toThrow(/No ios-v<marketing>-build<N> tags/);
   });
+
+  test("keeps advancing past a tag too large to read exactly", () => {
+    expect(nextBuildNumber(["ios-v1.0.3-build31", "ios-v1.0.3-build9007199254740993"])).toBe(32);
+  });
+
+  test("refuses a next number it cannot hold exactly", () => {
+    expect(() => nextBuildNumber(["ios-v1.0.3-build9007199254740991"])).toThrow(/largest/);
+  });
 });
 
 describe("readMarketingVersion (#707)", () => {
@@ -111,16 +128,32 @@ describe("readMarketingVersion (#707)", () => {
 });
 
 describe("buildNumberFromTag (#707)", () => {
+  // What origin holds once the manual tag is pushed: the tag itself is among them.
+  const onOrigin = ["ios-v1.0.3", "ios-v1.0.3-build39", "ios-v1.0.3-build40", "ios-v1.0.3-build41"];
+
   test("returns N for a tag that matches the commit's marketing version", () => {
-    expect(buildNumberFromTag("ios-v1.0.3-build41", "1.0.3")).toBe(41);
+    expect(buildNumberFromTag("ios-v1.0.3-build41", "1.0.3", onOrigin)).toBe(41);
   });
 
   test("rejects a tag outside the scheme", () => {
-    expect(() => buildNumberFromTag("ios-v1.0.3-buildX", "1.0.3")).toThrow(/does not follow/);
+    expect(() => buildNumberFromTag("ios-v1.0.3-buildX", "1.0.3", onOrigin)).toThrow(/does not follow/);
+  });
+
+  test("rejects an N too large to read exactly instead of rounding it", () => {
+    expect(() => buildNumberFromTag("ios-v1.0.3-build9007199254740993", "1.0.3", onOrigin)).toThrow(
+      /does not follow/,
+    );
   });
 
   test("rejects a tag that names another marketing version", () => {
-    expect(() => buildNumberFromTag("ios-v1.0.4-build41", "1.0.3")).toThrow(/MARKETING_VERSION 1\.0\.3/);
+    expect(() => buildNumberFromTag("ios-v1.0.4-build41", "1.0.3", onOrigin)).toThrow(/MARKETING_VERSION 1\.0\.3/);
+  });
+
+  test("rejects an N a tag for another marketing version already holds", () => {
+    const tags = [...onOrigin, "ios-v1.0.4-build40"];
+    expect(() => buildNumberFromTag("ios-v1.0.4-build40", "1.0.4", tags)).toThrow(
+      /Build number 40 is already taken by ios-v1\.0\.3-build40\. Delete ios-v1\.0\.4-build40 and push ios-v1\.0\.4-build42 instead\./,
+    );
   });
 });
 
@@ -192,6 +225,13 @@ describe("claimBuildTag (#707)", { timeout: 30_000 }, () => {
 
   const quiet = { log: () => {}, retryDelayMs: 0 };
 
+  /** A git call that cannot reach origin; it throws, as gitRunner does, unless allowFailure is set. */
+  const unreachable = (args: string[], options?: { allowFailure?: boolean }) => {
+    const stderr = "fatal: unable to access remote";
+    if (!options?.allowFailure) throw new Error(`git ${args.join(" ")} failed (exit 128): ${stderr}`);
+    return { status: 128, stdout: "", stderr };
+  };
+
   test("pushes an annotated tag for 1 + the highest build", async () => {
     const { git, commit, peeledOnOrigin } = setup();
     const sha = commit("ios change");
@@ -262,6 +302,46 @@ describe("claimBuildTag (#707)", { timeout: 30_000 }, () => {
 
     expect(result).toEqual({ tag: "ios-v1.0.3-build32", buildNumber: 32, attempts: 1 });
     expect(remoteTags().has("ios-v1.0.3-build33")).toBe(false);
+  });
+
+  test("a tag listing that fails after a lost push reply is retried, not fatal", async () => {
+    const { git, commit, remoteTags } = setup();
+    const sha = commit("ios change");
+    let pushed = false;
+    let listingFailed = false;
+    const flakyGit: typeof git = (args, options) => {
+      if (args[0] === "push") {
+        pushed = true;
+        git(args, options);
+        return { status: 1, stdout: "", stderr: "connection reset" };
+      }
+      if (args[0] === "ls-remote" && pushed && !listingFailed) {
+        listingFailed = true;
+        return unreachable(args, options);
+      }
+      return git(args, options);
+    };
+
+    const result = await claimBuildTag({ sha, marketing: "1.0.3", git: flakyGit, ...quiet });
+
+    expect(result).toEqual({ tag: "ios-v1.0.3-build32", buildNumber: 32, attempts: 1 });
+    expect(remoteTags().has("ios-v1.0.3-build33")).toBe(false);
+  });
+
+  test("gives up when origin's tags cannot be listed", async () => {
+    const { git, commit } = setup();
+    const sha = commit("ios change");
+    let listings = 0;
+    const offlineGit: typeof git = (args, options) => {
+      if (args[0] !== "ls-remote") return git(args, options);
+      listings += 1;
+      return unreachable(args, options);
+    };
+
+    await expect(
+      claimBuildTag({ sha, marketing: "1.0.3", git: offlineGit, maxAttempts: 2, ...quiet }),
+    ).rejects.toThrow(/ls-remote --tags --refs origin failed \(exit 128\)/);
+    expect(listings).toBe(2);
   });
 
   test("gives up after maxAttempts", async () => {

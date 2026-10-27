@@ -9,9 +9,10 @@ name: Build & Upload to TestFlight
 #
 # The tag sets the build number: <n> becomes CFBundleVersion, whatever
 # CURRENT_PROJECT_VERSION in ios/project.yml says, so no bump commit is needed
-# (#707). Pick <n> = 1 + the highest existing ios-v*-build* tag; if another cut
-# already took it, the tag push is rejected. <marketing> must equal
-# MARKETING_VERSION in ios/project.yml at the tagged commit.
+# (#707). Pick <n> = 1 + the highest existing ios-v*-build* tag. If another cut
+# already took it, the tag push is rejected; if that cut tagged another
+# marketing version, the build-number job refuses the tag instead. <marketing>
+# must equal MARKETING_VERSION in ios/project.yml at the tagged commit.
 #
 # Unlike ios-testflight-auto.yml, this path intentionally does NOT run the
 # e2e gates (e2e-mobile.yml, e2e-ios.yml) — it's the break-glass path for
@@ -45,10 +46,10 @@ jobs:
     outputs:
       build_number: ${{ steps.tag.outputs.build_number }}
     steps:
+      # Credentials stay persisted (a read-only token): the tag check lists
+      # origin's build tags.
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0

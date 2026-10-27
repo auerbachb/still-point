@@ -16,8 +16,9 @@
  *     on <sha>. The tag push is the lock: if another cut already took N, the
  *     push is rejected, and the claim re-reads the tags and tries again.
  *   node scripts/ci/ios-testflight-build-number.mjs from-tag <tag>
- *     Manual path (ios-testflight.yml). Checks a pushed tag against the scheme
- *     and ios/project.yml's MARKETING_VERSION, and returns its N.
+ *     Manual path (ios-testflight.yml). Checks a pushed tag against the scheme,
+ *     ios/project.yml's MARKETING_VERSION and the build tags on origin, and
+ *     returns its N.
  *
  * Both commands write `tag` and `build_number` to $GITHUB_OUTPUT when it is set,
  * and print them otherwise.
@@ -35,12 +36,16 @@ const BUILD_TAG_RE = /^ios-v(\d+(?:\.\d+){0,2})-build([1-9]\d*)$/;
 
 /**
  * @param {string} name tag name, without `refs/tags/`
- * @returns {{ marketing: string, buildNumber: number } | null} null for any tag outside the scheme
+ * @returns {{ marketing: string, buildNumber: number } | null} null for any tag
+ *   outside the scheme, including one whose N is too large to hold exactly
  */
 export function parseBuildTag(name) {
   const match = BUILD_TAG_RE.exec(name);
   if (!match) return null;
-  return { marketing: match[1], buildNumber: Number(match[2]) };
+  // Past Number.MAX_SAFE_INTEGER, Number() rounds, and N would no longer match the tag.
+  const buildNumber = Number(match[2]);
+  if (!Number.isSafeInteger(buildNumber)) return null;
+  return { marketing: match[1], buildNumber };
 }
 
 /**
@@ -86,6 +91,9 @@ export function nextBuildNumber(tagNames) {
         "Push a tag for the last uploaded build (for example ios-v1.0.3-build31) and re-run.",
     );
   }
+  if (!Number.isSafeInteger(highest + 1)) {
+    throw new Error(`Build number ${highest} is the largest this script can count from.`);
+  }
   return highest + 1;
 }
 
@@ -109,22 +117,33 @@ export function readMarketingVersion(projectYml) {
 }
 
 /**
- * N from a manually pushed tag. The tag must follow the scheme and name the
- * marketing version the tagged commit builds.
+ * N from a manually pushed tag. The tag must follow the scheme, name the
+ * marketing version the tagged commit builds, and carry an N that no other
+ * build tag on origin holds. The counter spans marketing versions, so a tag for
+ * another version still owns its number.
  *
  * @param {string} tag
  * @param {string} marketing MARKETING_VERSION at the tagged commit
+ * @param {Iterable<string>} remoteTagNames tags on origin; `tag` itself may be among them
  */
-export function buildNumberFromTag(tag, marketing) {
+export function buildNumberFromTag(tag, marketing, remoteTagNames) {
   const parsed = parseBuildTag(tag);
   if (!parsed) {
     throw new Error(
-      `Tag ${tag} does not follow ios-v<marketing>-build<N> (N a positive integer with no leading zero).`,
+      `Tag ${tag} does not follow ios-v<marketing>-build<N> (N a positive integer with no leading zero, at most ${Number.MAX_SAFE_INTEGER}).`,
     );
   }
   if (parsed.marketing !== marketing) {
     throw new Error(
       `Tag ${tag} names marketing version ${parsed.marketing}, but ${PROJECT_YML} at this commit has MARKETING_VERSION ${marketing}.`,
+    );
+  }
+  const names = [...remoteTagNames];
+  const holder = names.find((name) => name !== tag && parseBuildTag(name)?.buildNumber === parsed.buildNumber);
+  if (holder) {
+    throw new Error(
+      `Build number ${parsed.buildNumber} is already taken by ${holder}. ` +
+        `Delete ${tag} and push ${buildTagName(marketing, nextBuildNumber(names))} instead.`,
     );
   }
   return parsed.buildNumber;
@@ -151,12 +170,29 @@ export function gitRunner(cwd, env = process.env) {
   };
 }
 
+/** @param {number} ms */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
+ * Tags on `remote`. Listing is read-only, so a failed `ls-remote` (a network
+ * blip, a GitHub 5xx) is retried with back-off instead of failing the cut.
+ *
  * @param {Git} git
  * @param {string} remote
+ * @param {{ attempts?: number, retryDelayMs?: number, log?: (message: string) => void }} [retry]
  */
-function listRemoteTags(git, remote) {
-  return parseLsRemoteTags(git(["ls-remote", "--tags", "--refs", remote]).stdout);
+async function listRemoteTags(git, remote, { attempts = 3, retryDelayMs = 2000, log = console.log } = {}) {
+  const args = ["ls-remote", "--tags", "--refs", remote];
+  for (let attempt = 1; attempt < attempts; attempt += 1) {
+    const result = git(args, { allowFailure: true });
+    if (result.status === 0) return parseLsRemoteTags(result.stdout);
+    log(`Listing tags on ${remote} failed (exit ${result.status}), retrying: ${result.stderr.trim()}`);
+    await sleep(retryDelayMs * attempt);
+  }
+  // The last try throws the git error.
+  return parseLsRemoteTags(git(args).stdout);
 }
 
 /**
@@ -168,8 +204,9 @@ function listRemoteTags(git, remote) {
  * @param {string} options.marketing MARKETING_VERSION at `sha`
  * @param {Git} [options.git]
  * @param {string} [options.remote]
- * @param {number} [options.maxAttempts]
- * @param {number} [options.retryDelayMs] back-off after a push that failed without another cut's tag appearing
+ * @param {number} [options.maxAttempts] tries for the claim, and for each tag listing within it
+ * @param {number} [options.retryDelayMs] back-off after a failed tag listing, or after a push that
+ *   failed without another cut's tag appearing
  * @param {(message: string) => void} [options.log]
  * @returns {Promise<{ tag: string, buildNumber: number, attempts: number }>}
  */
@@ -182,8 +219,9 @@ export async function claimBuildTag({
   retryDelayMs = 2000,
   log = console.log,
 }) {
+  const retry = { attempts: maxAttempts, retryDelayMs, log };
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const buildNumber = nextBuildNumber(listRemoteTags(git, remote).keys());
+    const buildNumber = nextBuildNumber((await listRemoteTags(git, remote, retry)).keys());
     const tag = buildTagName(marketing, buildNumber);
 
     // A local tag left by an earlier attempt would make `git tag` refuse.
@@ -196,7 +234,7 @@ export async function claimBuildTag({
 
     // The push failed: either another cut took N first, or the push itself
     // broke. A tag object identical to ours on the remote means it landed.
-    const remoteObject = listRemoteTags(git, remote).get(tag);
+    const remoteObject = (await listRemoteTags(git, remote, retry)).get(tag);
     if (remoteObject === localObject) return { tag, buildNumber, attempts: attempt };
 
     git(["tag", "-d", tag], { allowFailure: true });
@@ -204,9 +242,7 @@ export async function claimBuildTag({
       log(`${tag} was taken by another cut; trying the next build number.`);
     } else {
       log(`Pushing ${tag} failed: ${push.stderr.trim()}`);
-      if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
-      }
+      if (attempt < maxAttempts) await sleep(retryDelayMs * attempt);
     }
   }
   throw new Error(`Could not claim a TestFlight build number after ${maxAttempts} attempts.`);
@@ -246,7 +282,8 @@ async function main(argv) {
     return;
   }
 
-  const buildNumber = buildNumberFromTag(arg, marketing);
+  const remoteTags = await listRemoteTags(gitRunner(), "origin");
+  const buildNumber = buildNumberFromTag(arg, marketing, remoteTags.keys());
   console.log(`Tag ${arg} builds ${marketing} (${buildNumber}).`);
   setOutputs({ tag: arg, build_number: buildNumber });
 }
