@@ -38,7 +38,10 @@ export type SessionSaveOutcome =
  *   queue write succeeded, so the entry is durably on this device and
  *   `flushPending` will retry it on reconnect. Calling it `notStored` is the
  *   same false report as #703, only inverted: it hides a sit that is safe and
- *   withdraws a promise the queue is in fact keeping.
+ *   withdraws a promise the queue is in fact keeping. #978: only a 401 or 403
+ *   is retried. Any other permanent answer parks the entry, kept on the device
+ *   but never sent again, and it is still `pending` here until the UI has a
+ *   state for it (#982).
  *
  * `clientSessionId` is the sit's #557 idempotency key, which is exactly what a
  * durable-but-unsent entry is keyed by — the same provisional id the

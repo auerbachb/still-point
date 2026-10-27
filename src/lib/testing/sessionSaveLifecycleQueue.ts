@@ -22,4 +22,5 @@ import { vi } from "vitest";
  */
 export const queue = {
   saveCompletedSession: vi.fn(),
+  resolvedServerSessionId: vi.fn(async (): Promise<string | null> => null),
 };

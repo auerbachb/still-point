@@ -52,9 +52,9 @@ describe("resolveSessionSaveOutcome (#703)", () => {
   /**
    * The inverse of the #703 regression: the queue write landed and only the
    * *upload* was refused (a non-retryable 4xx, which the coordinator rethrows
-   * out of `flushEntry`). The sit is on this device and `flushPending` retries
-   * it on reconnect, so calling it notStored would hide a safe sit and withdraw
-   * a promise the queue is keeping.
+   * out of `flushEntry`). The sit is on this device — parked since #978, or
+   * retried on reconnect after a 401 or 403 — so calling it notStored would hide
+   * a safe sit and withdraw a promise the queue is keeping.
    */
   test("a sync error thrown after a durable write is pending, not notStored", () => {
     for (const reason of [

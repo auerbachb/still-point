@@ -11,6 +11,7 @@ import {
   sit,
   synced,
   resetSessionSaveLifecycleHarness,
+  USER,
 } from "./testing/sessionSaveLifecycleHarness";
 import { queue } from "./testing/sessionSaveLifecycleQueue";
 
@@ -123,6 +124,39 @@ describe("useSessionSaveLifecycle — completed sit (#703)", () => {
       notStored: false,
     });
     expect(hook.current().localWriteFailed).toBe(false);
+  });
+
+  test("#978: a sit whose session row went up before its thoughts were turned down re-reads the user", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queue.saveCompletedSession.mockRejectedValueOnce(
+      Object.assign(new Error("Batch thoughts failed (400)"), { status: 400, permanent: true }),
+    );
+    queue.resolvedServerSessionId.mockResolvedValueOnce("server-1");
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+
+    const { clientSessionId } = saveCall(0);
+    expect(queue.resolvedServerSessionId).toHaveBeenCalledWith(clientSessionId, USER.id);
+    expect(hook.current().completionData?.isPendingSync).toBe(true);
+    expect(hook.refreshUserFromServer).toHaveBeenCalledTimes(1);
+  });
+
+  test("#978: a sit turned down before its session row went up does not re-read the user", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queue.saveCompletedSession.mockRejectedValueOnce(
+      Object.assign(new Error("Create session failed (400)"), { status: 400, permanent: true }),
+    );
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+
+    expect(queue.resolvedServerSessionId).toHaveBeenCalledTimes(1);
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
   });
 
   test("an abandoned standard sit through onComplete neither refreshes nor is remembered", async () => {

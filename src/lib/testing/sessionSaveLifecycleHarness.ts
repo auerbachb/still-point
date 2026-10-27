@@ -166,6 +166,8 @@ export async function resetSessionSaveLifecycleHarness() {
     await view.unmount();
   }
   queue.saveCompletedSession.mockReset();
+  queue.resolvedServerSessionId.mockReset();
+  queue.resolvedServerSessionId.mockResolvedValue(null);
   vi.useRealTimers();
   vi.restoreAllMocks();
 }
