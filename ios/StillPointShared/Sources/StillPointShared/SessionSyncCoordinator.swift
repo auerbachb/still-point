@@ -130,7 +130,7 @@ public actor SessionSyncCoordinator {
                     clientSessionId: clientSessionId,
                     ownerUserId: ownerUserId,
                     request: requestWithId,
-                    thoughts: thoughts
+                    thoughts: Self.withClientThoughtIds(thoughts)
                 ))
                 try queueStore.saveEntries(entries)
             }
@@ -341,7 +341,11 @@ public actor SessionSyncCoordinator {
                     sessionId: serverSessionId,
                     dayNumber: entry.request.dayNumber,
                     thoughts: sent.map {
-                        BatchThoughtsRequest.ThoughtInput(timeInSession: $0.timeInSession, text: $0.text)
+                        BatchThoughtsRequest.ThoughtInput(
+                            timeInSession: $0.timeInSession,
+                            text: $0.text,
+                            clientThoughtId: $0.clientThoughtId
+                        )
                     },
                     clearCompletionNote: sentClear
                 )
@@ -355,7 +359,11 @@ public actor SessionSyncCoordinator {
                 // Only drop what this batch sent. A note replaced while the
                 // request was in flight (#753 autosave) stays queued, and a clear
                 // asked for after a request that carried none stays set (#792).
-                entries[index].thoughts.removeAll { sent.contains($0) }
+                // #971: the answer is not read. A replay the server had already
+                // stored answers `[]`, and still acknowledges what it sent.
+                entries[index].thoughts.removeAll { queued in
+                    sent.contains { Self.isSameThought($0, queued) }
+                }
                 if sentClear {
                     entries[index].clearCompletionNote = false
                 }
@@ -367,6 +375,33 @@ public actor SessionSyncCoordinator {
         }
 
         return Self.sessionDTO(from: entry.request, id: serverSessionId)
+    }
+
+    /// #971: an id for each in-session thought, given before the entry is first
+    /// saved, so every upload of it sends the same one. A batch the server stored
+    /// but whose response was lost (a dropped connection, the app suspended
+    /// mid-request) is then not stored twice when it is sent again (#948). The
+    /// end note gets none: the server replaces it instead. Lowercased, like web's
+    /// `crypto.randomUUID()`.
+    private static func withClientThoughtIds(_ thoughts: [PendingSessionThought]) -> [PendingSessionThought] {
+        thoughts.map { thought in
+            guard thought.timeInSession != -1, thought.clientThoughtId == nil else { return thought }
+            return PendingSessionThought(
+                timeInSession: thought.timeInSession,
+                text: thought.text,
+                clientThoughtId: UUID().uuidString.lowercased()
+            )
+        }
+    }
+
+    /// #971: whether a thought the batch sent is this queued one. A thought with
+    /// an id is matched by it. One queued before ids existed, and the end note,
+    /// are matched by time and text, as before.
+    private static func isSameThought(_ sent: PendingSessionThought, _ queued: PendingSessionThought) -> Bool {
+        if sent.clientThoughtId != nil || queued.clientThoughtId != nil {
+            return sent.clientThoughtId == queued.clientThoughtId
+        }
+        return sent.timeInSession == queued.timeInSession && sent.text == queued.text
     }
 
     private static func requestWithClientId(

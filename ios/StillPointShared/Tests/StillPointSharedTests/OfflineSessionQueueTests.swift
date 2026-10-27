@@ -299,8 +299,10 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         )
 
         let thoughts = try store.loadEntries()[0].thoughts
+        // #971: the in-session thought was given an id when the sit was queued.
+        let midSitId = try XCTUnwrap(thoughts.first?.clientThoughtId)
         XCTAssertEqual(thoughts, [
-            PendingSessionThought(timeInSession: 12, text: "mid-sit"),
+            PendingSessionThought(timeInSession: 12, text: "mid-sit", clientThoughtId: midSitId),
             PendingSessionThought(timeInSession: -1, text: "revised note"),
         ])
     }
