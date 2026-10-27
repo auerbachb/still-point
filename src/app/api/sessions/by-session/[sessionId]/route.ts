@@ -9,11 +9,9 @@ import { eq, and, asc, sql, type SQL } from "drizzle-orm";
 
 type RouteContext = RouteParams<{ sessionId: string }>;
 
-const RATING_FIELDS = ["focusRating", "happinessRating"] as const;
-
-function isValidRating(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 10;
-}
+/** #766: the retired session ratings (#109). Older builds still send them, so
+ *  PATCH accepts these keys with any value and never writes them. */
+const LEGACY_RATING_KEYS = ["focusRating", "happinessRating"] as const;
 
 /** Mood matrix cells use a 1–5 scale (compact 5-box tap UI). */
 function isValidMoodValue(value: unknown): value is number {
@@ -137,11 +135,16 @@ export const GET = withApiHandler(
   },
 );
 
-/** #109: post-hoc CompletionScreen ratings update, matching the existing
- *  pattern of adding data to a session after it was created (see
- *  POST /api/thoughts/batch for the completion-note equivalent). */
+/** #472: post-hoc CompletionScreen mood update, matching the existing pattern
+ *  of adding data to a session after it was created (see
+ *  POST /api/thoughts/batch for the completion-note equivalent).
+ *
+ *  #766: the session ratings are retired, but older builds still send
+ *  `focusRating` / `happinessRating` and expect a save to succeed. The route
+ *  accepts those keys with any value and ignores them; a body that carries
+ *  nothing else returns the stored row unchanged. */
 export const PATCH = withApiHandler(
-  "Update session ratings",
+  "Update session mood",
   async (request: NextRequest, context: RouteContext) => {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
@@ -160,20 +163,8 @@ export const PATCH = withApiHandler(
     if (body === null || typeof body !== "object" || Array.isArray(body)) {
       return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
     }
-    const updates: Partial<
-      Record<(typeof RATING_FIELDS)[number], number> & {
-        moodMatrix: SQL | null;
-      }
-    > = {};
+    const updates: { moodMatrix?: SQL | null } = {};
     const bodyObj = body as Record<string, unknown>;
-
-    for (const field of RATING_FIELDS) {
-      if (bodyObj[field] === undefined) continue;
-      if (!isValidRating(bodyObj[field])) {
-        return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 });
-      }
-      updates[field] = bodyObj[field] as number;
-    }
 
     // #472: mood matrix — validate incoming rows and merge with persisted data.
     // #792: `null` clears it. #834: the merge runs inside the update below, which
@@ -189,7 +180,23 @@ export const PATCH = withApiHandler(
     }
 
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No supported ratings provided" }, { status: 400 });
+      if (!LEGACY_RATING_KEYS.some((key) => Object.hasOwn(bodyObj, key))) {
+        return NextResponse.json({ error: "No supported fields provided" }, { status: 400 });
+      }
+
+      // #766: a save from an older build that carried only ratings. It reads
+      // the row rather than writing it, scoped to the owner like every write,
+      // so it succeeds without storing the retired values.
+      const [session] = await db.select()
+        .from(sessions)
+        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.user.userId)))
+        .limit(1);
+
+      if (!session) {
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({ session });
     }
 
     const [updated] = await db

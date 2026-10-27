@@ -55,7 +55,7 @@ export const users = pgTable("users", {
   /** #765: the focus goal counter, one for every focus category. Each completed
    *  `focus` session adds one; nothing else touches it (no recovery ramp). The
    *  goal is `focusDurationForDay(focusActivityDay)`. Unrelated to the
-   *  per-session `focusRating` self-report. */
+   *  deprecated per-session `focusRating` column (#766). */
   focusActivityDay: integer("focus_activity_day").default(1).notNull(),
   /** #708: whether the long (primary) session is the morning or evening sit.
    *  am | pm. The short track is the opposite. A label only — sits are not
@@ -506,9 +506,17 @@ export const sessions = pgTable("sessions", {
     sampleCount: number;
   }>(),
   sessionDate: date("session_date").notNull(),
-  /** #109: post-session self-report ratings (1-10), null until set via the
-   *  by-session PATCH route from the CompletionScreen sliders. */
+  /** @deprecated #109's post-session focus self-report (1-10), retired under
+   *  Issue #766. Legacy data with no writer since then: the by-session PATCH
+   *  route accepts the field from older builds and ignores it. Read-only —
+   *  never reuse it for new data, and drop it only with explicit owner
+   *  sign-off (drizzle/README.md "Deprecated columns"). */
   focusRating: integer("focus_rating"),
+  /** @deprecated #109's post-session happiness self-report (1-10), retired
+   *  under Issue #766. Legacy data with no writer since then: the by-session
+   *  PATCH route accepts the field from older builds and ignores it.
+   *  Read-only — never reuse it for new data, and drop it only with explicit
+   *  owner sign-off (drizzle/README.md "Deprecated columns"). */
   happinessRating: integer("happiness_rating"),
   /** #472: before/after mood matrix captured retrospectively at the recap.
    *  Shape: { [moodKey: string]: { before: number | null; after: number | null } }
