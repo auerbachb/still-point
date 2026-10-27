@@ -11,6 +11,17 @@ import { eq, desc } from "drizzle-orm";
 import { sessions } from "@/db/schema";
 import { isUuid } from "@/lib/friends";
 
+/**
+ * #769: absent or null is an ordinary sit, as for `completed`, `sessionType`
+ * and `track`. Returns null for any other non-boolean value.
+ */
+function parseCombined(value: unknown): boolean | null {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  return typeof value === "boolean" ? value : null;
+}
+
 export const GET = withApiHandler("Get sessions", async (request: NextRequest) => {
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
@@ -35,6 +46,7 @@ export const GET = withApiHandler("Get sessions", async (request: NextRequest) =
     buddySessionId: sessions.buddySessionId,
     breathCount: sessions.breathCount,
     track: sessions.track,
+    combined: sessions.combined,
     ambientSoundSummary: sessions.ambientSoundSummary,
   })
     .from(sessions)
@@ -102,6 +114,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
   const completed = parseCompleted(body.completed);
   const sessionType = parseOptionalSessionType(body.sessionType);
   const track = parseOptionalTrack(body.track);
+  const combined = parseCombined(body.combined);
   const breathCountRaw = body.breathCount;
   const breathCount =
     sessionType === "breath" && typeof breathCountRaw === "number" && Number.isFinite(breathCountRaw)
@@ -125,6 +138,15 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
   if (!track) {
     return NextResponse.json({ error: "Invalid track" }, { status: 400 });
   }
+  if (combined === null) {
+    return NextResponse.json({ error: "Invalid combined value" }, { status: 400 });
+  }
+  // #769: check the shape only. Whether a combined sit should have been offered
+  // (dual-track on, both tracks due, no recovery) is the clients' rule; refusing
+  // a sit someone has already finished would lose it.
+  if (combined && (sessionType !== "standard" || track !== "primary")) {
+    return NextResponse.json({ error: "Invalid combined session" }, { status: 400 });
+  }
 
   const clientSessionIdRaw = body.clientSessionId;
   let clientSessionId: string | null = null;
@@ -146,6 +168,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
       dayNumber,
       sessionType,
       track,
+      combined,
       duration,
       bonusSeconds,
       completed,

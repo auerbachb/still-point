@@ -530,6 +530,7 @@ function mapSessionRow(row: Record<string, unknown>): typeof sessions.$inferSele
     dayNumber: Number(row.day_number),
     sessionType: String(row.session_type),
     track: String(row.track),
+    combined: Boolean(row.combined),
     duration: Number(row.duration),
     bonusSeconds: Number(row.bonus_seconds),
     completed: Boolean(row.completed),
@@ -561,8 +562,18 @@ const activeRecoverySql = sql`(
  * `shouldAdvance` (a completed standard sit) drives the meditation columns;
  * `shouldAdvanceFocus` (a completed focus session, #765) drives only
  * `focus_activity_day`. The two never both hold for one session.
+ *
+ * `combined` (#769) marks today's two sits done as one. The row is a primary
+ * sit, so `current_day` and the recovery ramp move exactly as for any primary
+ * sit, and `second_track_day` moves too when dual-track is on. Each counter is
+ * one CASE, so neither can move by more than one.
  */
-function progressionUpdateSql(shouldAdvance: boolean, track: Track, shouldAdvanceFocus: boolean) {
+function progressionUpdateSql(
+  shouldAdvance: boolean,
+  track: Track,
+  shouldAdvanceFocus: boolean,
+  combined = false,
+) {
   return sql`
     current_day = case
       when not ${shouldAdvance} or ${track} <> 'primary' then u.current_day
@@ -596,7 +607,8 @@ function progressionUpdateSql(shouldAdvance: boolean, track: Track, shouldAdvanc
       else null
     end,
     second_track_day = case
-      when not ${shouldAdvance} or ${track} <> 'second' or not u.dual_track_enabled
+      when not ${shouldAdvance} or not u.dual_track_enabled
+        or (${track} <> 'second' and not ${combined})
       then u.second_track_day
       else u.second_track_day + 1
     end,
@@ -619,6 +631,7 @@ export async function atomicCreateSessionWithProgression(params: {
   const shouldAdvanceFocus = shouldAdvanceFocusDay(params.sessionType, params.completed);
   const { session, userId, track } = params;
   const clientSessionId = session.clientSessionId ?? null;
+  const combined = session.combined === true;
 
   if (clientSessionId) {
     const [existing] = await db
@@ -643,8 +656,8 @@ export async function atomicCreateSessionWithProgression(params: {
       ),
       inserted as (
         insert into sessions (
-          user_id, client_session_id, buddy_session_id, day_number, session_type, track, duration,
-          bonus_seconds, completed, actual_time, clear_percent, thought_count,
+          user_id, client_session_id, buddy_session_id, day_number, session_type, track, combined,
+          duration, bonus_seconds, completed, actual_time, clear_percent, thought_count,
           breath_count, mind_state_log, attention_log, ambient_sound_summary, session_date
         )
         values (
@@ -654,6 +667,7 @@ export async function atomicCreateSessionWithProgression(params: {
           ${session.dayNumber},
           ${session.sessionType ?? "standard"},
           ${session.track ?? "primary"},
+          ${combined},
           ${session.duration},
           ${session.bonusSeconds ?? 0},
           ${session.completed},
@@ -670,7 +684,7 @@ export async function atomicCreateSessionWithProgression(params: {
       ),
       progressed as (
         update users u
-        set ${progressionUpdateSql(shouldAdvance, track, shouldAdvanceFocus)}
+        set ${progressionUpdateSql(shouldAdvance, track, shouldAdvanceFocus, combined)}
         from locked l
         where u.id = l.id
         returning u.id

@@ -25,7 +25,7 @@ let userId: string;
 const EXPECTED_SESSION_KEYS = [
   "id", "dayNumber", "sessionType", "duration", "bonusSeconds", "completed",
   "actualTime", "clearPercent", "thoughtCount", "mindStateLog", "attentionLog",
-  "sessionDate", "createdAt", "buddySessionId", "breathCount", "track", "ambientSoundSummary",
+  "sessionDate", "createdAt", "buddySessionId", "breathCount", "track", "combined", "ambientSoundSummary",
 ].sort();
 
 /** Columns that must never reach the client from the history list. */
@@ -112,10 +112,30 @@ describe("GET /api/sessions — projection contract (#612)", () => {
 
     expect(session.sessionType).toBe("breath");
     expect(session.track).toBe("second");
+    expect(session.combined).toBe(false);
     expect(session.clearPercent).toBe(74);
     expect(session.breathCount).toBe(24);
     expect(session.ambientSoundSummary.sampleCount).toBe(120);
     expect(session.mindStateLog).toEqual([{ time: 0, state: "clear" }]);
+  });
+
+  test("returns a combined sit's flag (#890)", async () => {
+    await db.insert(sessions).values({
+      userId,
+      dayNumber: 56,
+      sessionType: "standard",
+      track: "primary",
+      combined: true,
+      duration: 680,
+      completed: true,
+      actualTime: 680,
+      clearPercent: 81,
+      sessionDate: "2026-06-11",
+    });
+
+    const body = await (await GET(getRequest())).json();
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0]).toMatchObject({ combined: true, track: "primary", sessionType: "standard" });
   });
 
   test("returns the stats object the iOS StatsDTO consumes", async () => {

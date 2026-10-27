@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { sessions } from "@/db/schema";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
-import { isValidSessionCalendarDate } from "@/lib/sessionCalendar";
+import { isValidSessionCalendarDate, tracksCredited } from "@/lib/sessionCalendar";
 
 export const GET = withApiHandler(
   "Get track completion",
@@ -18,7 +18,7 @@ export const GET = withApiHandler(
     }
 
     const completedTracks = await db
-      .select({ track: sessions.track })
+      .select({ track: sessions.track, combined: sessions.combined })
       .from(sessions)
       .where(and(
         eq(sessions.userId, auth.user.userId),
@@ -27,11 +27,13 @@ export const GET = withApiHandler(
         eq(sessions.sessionType, "standard"),
         inArray(sessions.track, ["primary", "second"]),
       ));
+    // #769: a combined sit is one primary row that counts for both tracks.
+    const credited = completedTracks.map(tracksCredited);
 
     return NextResponse.json({
       tracksDoneToday: {
-        primary: completedTracks.some((session) => session.track === "primary"),
-        second: completedTracks.some((session) => session.track === "second"),
+        primary: credited.some((tracks) => tracks.primary),
+        second: credited.some((tracks) => tracks.second),
       },
     });
   },

@@ -6,6 +6,7 @@ import {
   isDayCompleteForEnabledTracks,
   todayLocalIsoDate,
   isValidSessionCalendarDate,
+  tracksCredited,
   type PracticeDaySit,
 } from "./sessionCalendar";
 
@@ -52,6 +53,28 @@ describe("getLocalIsoDate", () => {
 function sit(sessionDate: string, track: "primary" | "second" | null = "primary"): PracticeDaySit {
   return { completed: true, sessionType: "standard", sessionDate, track };
 }
+
+/** #769: today's two sits done as one, stored on the primary track. */
+function combinedSit(sessionDate: string, overrides: Partial<PracticeDaySit> = {}): PracticeDaySit {
+  return { ...sit(sessionDate, "primary"), combined: true, ...overrides };
+}
+
+describe("tracksCredited (#890)", () => {
+  test.each<[string, Pick<PracticeDaySit, "track" | "combined">, { primary: boolean; second: boolean }]>([
+    ["a primary row", { track: "primary" }, { primary: true, second: false }],
+    ["a second-track row", { track: "second" }, { primary: false, second: true }],
+    ["a row with no track", {}, { primary: true, second: false }],
+    ["a row with a null track", { track: null }, { primary: true, second: false }],
+    ["a combined primary row", { track: "primary", combined: true }, { primary: true, second: true }],
+    ["a combined row with no track", { combined: true }, { primary: true, second: true }],
+    ["a combined second-track row", { track: "second", combined: true }, { primary: true, second: true }],
+    ["a row with combined false", { track: "primary", combined: false }, { primary: true, second: false }],
+    ["a second-track row with combined false", { track: "second", combined: false }, { primary: false, second: true }],
+    ["a row with combined null", { track: "second", combined: null }, { primary: false, second: true }],
+  ])("%s", (_label, row, expected) => {
+    expect(tracksCredited(row)).toEqual(expected);
+  });
+});
 
 describe("effectiveTodayLocalIsoDate", () => {
   // Local wall clock. 6:00:00 is the new day; the grace window is [00:00, 06:00).
@@ -119,6 +142,23 @@ describe("isDayCompleteForEnabledTracks", () => {
   test("a sit on another day does not complete this one", () => {
     expect(isDayCompleteForEnabledTracks([sit("2026-10-06")], "2026-10-07", false)).toBe(false);
   });
+
+  test("one completed combined sit closes a two-a-day day (#890)", () => {
+    expect(isDayCompleteForEnabledTracks([combinedSit("2026-10-07")], "2026-10-07", true)).toBe(true);
+  });
+
+  test("a combined sit closes a single-track day, as any primary sit does (#890)", () => {
+    expect(isDayCompleteForEnabledTracks([combinedSit("2026-10-07")], "2026-10-07", false)).toBe(true);
+  });
+
+  test("an ended-early, quick or other-day combined sit does not close a two-a-day day (#890)", () => {
+    const sits: PracticeDaySit[] = [
+      combinedSit("2026-10-07", { completed: false }),
+      combinedSit("2026-10-07", { sessionType: "quick" }),
+      combinedSit("2026-10-06"),
+    ];
+    expect(isDayCompleteForEnabledTracks(sits, "2026-10-07", true)).toBe(false);
+  });
 });
 
 describe("creditedLocalIsoDate", () => {
@@ -147,5 +187,18 @@ describe("creditedLocalIsoDate", () => {
   test("6:00am credits the new day even when yesterday is unfinished", () => {
     const sixAm = new Date(2026, 9, 8, 6, 0, 0);
     expect(creditedLocalIsoDate([], false, sixAm)).toBe("2026-10-08");
+  });
+
+  test("5:30am two-a-day whose yesterday was closed by a combined sit credits the new day (#890)", () => {
+    const fiveThirty = new Date(2026, 9, 8, 5, 30, 0);
+    expect(creditedLocalIsoDate([combinedSit("2026-10-07")], true, fiveThirty)).toBe("2026-10-08");
+    // Control: the same primary sit, not combined, leaves yesterday open.
+    expect(creditedLocalIsoDate([sit("2026-10-07", "primary")], true, fiveThirty)).toBe("2026-10-07");
+  });
+
+  test("5:30am two-a-day with an ended-early combined sit yesterday still credits yesterday (#890)", () => {
+    const fiveThirty = new Date(2026, 9, 8, 5, 30, 0);
+    expect(creditedLocalIsoDate([combinedSit("2026-10-07", { completed: false })], true, fiveThirty))
+      .toBe("2026-10-07");
   });
 });

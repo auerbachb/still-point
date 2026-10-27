@@ -21,7 +21,28 @@ export type PracticeDaySit = {
   sessionDate?: string | null;
   /** Missing track counts as primary, matching pre-#240 rows. */
   track?: string | null;
+  /** #769: today's two sits done as one, so the row counts for both tracks. */
+  combined?: boolean | null;
 };
+
+/** Which daily tracks a sit row counts for. */
+export type TracksCredited = { primary: boolean; second: boolean };
+
+/**
+ * #769: the one rule for which tracks a row credits. A combined row credits
+ * both; any other row credits its own track, and a missing track is primary.
+ *
+ * Attribution only, from the row's shape. Callers still decide which rows count
+ * (completed, standard, on the day), and whether the user's counters moved does
+ * not enter into it: a single-track account's combined or second-track sit
+ * never moves `second_track_day`, and the single-track rule reads only the
+ * primary credit.
+ */
+export function tracksCredited(sit: Pick<PracticeDaySit, "track" | "combined">): TracksCredited {
+  if (sit.combined === true) return { primary: true, second: true };
+  const second = sit.track === "second";
+  return { primary: !second, second };
+}
 
 /** Strict `YYYY-MM-DD` that parses as a real UTC calendar day and round-trips. */
 export function isValidSessionCalendarDate(value: string | undefined | null): boolean {
@@ -79,7 +100,8 @@ export function getLocalIsoDate(offsetDays = 0): string {
 /**
  * Whether `isoDay` has every required standard sit.
  * Single-track: the primary sit. Two-a-day (`dualTrackEnabled`): primary and second.
- * The day stays open until both are done; one finished sit does not close it.
+ * The day stays open until both are done; one finished sit does not close it,
+ * unless it is a combined sit (#769), which counts for both.
  */
 export function isDayCompleteForEnabledTracks(
   sits: readonly PracticeDaySit[],
@@ -90,8 +112,9 @@ export function isDayCompleteForEnabledTracks(
   let second = false;
   for (const sit of sits) {
     if (!sit.completed || sit.sessionType !== "standard" || sit.sessionDate !== isoDay) continue;
-    if (sit.track === "second") second = true;
-    else primary = true;
+    const credited = tracksCredited(sit);
+    if (credited.primary) primary = true;
+    if (credited.second) second = true;
   }
   return dualTrackEnabled ? primary && second : primary;
 }

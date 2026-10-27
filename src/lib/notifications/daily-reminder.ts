@@ -115,7 +115,8 @@ export async function userCompletedSessionOnDate(
 /**
  * True when `yesterdayIso` still has a required standard sit open, so a
  * notification must not treat that day as missed. Two-a-day stays open until
- * both tracks have a completed standard sit.
+ * both tracks have a completed standard sit; a combined sit (#769) counts for
+ * both.
  */
 export async function previousPracticeDayStillOpen(
   userId: string,
@@ -133,6 +134,7 @@ export async function previousPracticeDayStillOpen(
       sessionType: sessions.sessionType,
       sessionDate: sessions.sessionDate,
       track: sessions.track,
+      combined: sessions.combined,
     })
     .from(sessions)
     .where(

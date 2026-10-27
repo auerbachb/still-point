@@ -479,6 +479,9 @@ export const sessions = pgTable("sessions", {
    *  10-minute-capped) or `second` (opt-in dual track). Defaults to `primary` so
    *  every pre-#240 row is attributed to the original track. */
   track: varchar("track", { length: 16 }).notNull().default("primary"),
+  /** #769: today's two sits done as one. Stored on the primary track; a completed
+   *  one also advances the second track (`tracksCredited` in `sessionCalendar.ts`). */
+  combined: boolean("combined").notNull().default(false),
   duration: integer("duration").notNull(),
   /** Seconds added via in-session +1/+5 extensions beyond `duration` (#90). */
   bonusSeconds: integer("bonus_seconds").notNull().default(0),
