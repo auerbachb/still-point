@@ -55,6 +55,43 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### iOS shared package tests (`swift test`)
+
+`ios/StillPointShared` runs its unit tests with `swift test`, the same suite as the required `StillPointShared swift test` check. It needs **full Xcode as the active developer directory**. Command Line Tools alone cannot build the package: they lack the SwiftData macro plugin, which the `@Model` types in `Sources/StillPointShared/Models/` need, and they lack XCTest. The failure aborts the whole package build, so no test runs, not even the pure-logic ones.
+
+Check which toolchain is active:
+
+```bash
+xcode-select -p   # needs …/Xcode.app/Contents/Developer, not /Library/Developer/CommandLineTools
+```
+
+With Command Line Tools active, the build fails with:
+
+```text
+error: external macro implementation type 'SwiftDataMacros.PersistentModelMacro' could not be found for macro 'Model()'; plugin for module 'SwiftDataMacros' not found
+```
+
+Some Command Line Tools installs fail even earlier, while loading `Package.swift`. An upgrade can leave an older `PackageDescription` interface behind:
+
+```text
+error: 'stillpointshared': Invalid manifest (compiled with: ["/Library/Developer/CommandLineTools/usr/bin/swiftc", …])
+Undefined symbols for architecture arm64:
+  "PackageDescription.Package.__allocating_init(name: Swift.String, defaultLocalization: …
+```
+
+Either way, the fix is to select Xcode:
+
+```bash
+# Machine-wide (asks for an admin password)
+sudo xcode-select -s /Applications/Xcode.app
+
+# Or for one command, with no sudo (the form an agent can run)
+cd ios/StillPointShared
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+```
+
+If Xcode lives somewhere else, such as `Xcode-beta.app`, use that path. Without Xcode installed, the suite cannot run locally. Install Xcode, or treat the `StillPointShared swift test` CI check as the first real run and say so in the PR.
+
 ## Building
 
 Production builds use the standard Next.js build path (without `--turbopack`) for stability:
