@@ -418,6 +418,8 @@ Include this walkthrough in App Review notes for Guideline 5.1.1(v):
 
 **Upload fails with authentication error:** regenerate App Store Connect API key and update GitHub secrets.
 
+**Upload fails with `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`:** the Account Holder must clear Agreements, Tax, and Banking in Apple Developer / App Store Connect before uploads succeed.
+
 **Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. A retry after a failed upload keeps its number; shipping a commit again needs a new cut. A build uploaded outside CI isn't in the tags, so a later cut can collide with it (see [Version numbering](#version-numbering)). To move the counter past such a build, cut a [manual tag](#manual-tag-break-glass) above its number.
 
 **A merge didn't cut a build:** check that it changed iOS app code (see [Automatic: merge iOS app code](#automatic-merge-ios-app-code-default)), then look for a red e2e gate in the **Auto TestFlight on merge** runs. A merge that lands while a cut is queued is built by that later cut. To cut `main` now, run the workflow manually from the Actions tab.
