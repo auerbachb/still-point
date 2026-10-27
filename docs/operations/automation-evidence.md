@@ -19,6 +19,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | Both |
 | Machine-readable preflight | `npm run ios:app-store:dry-run` | Both |
 | Archive + upload binary to App Store Connect / TestFlight | `xcodebuild -exportArchive` with API key | TestFlight (`ios-testflight.yml`) |
+| Build number for the App Store binary | Claims the next `ios-v<marketing>-build<N>` tag (`scripts/ci/ios-testflight-build-number.mjs`), passed to `gym` as `CURRENT_PROJECT_VERSION` (#838) | App Store release (`ios-app-store-release.yml`) |
 | Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`); `submit_for_review` is false unless `SUBMIT_FOR_REVIEW=1` |
 
 ## Automated locally or on a Mac runner (Fastlane)
@@ -26,7 +27,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Lane (`ios/` directory) | Purpose |
 |-------------------------|---------|
 | `bundle exec fastlane preflight` | Runs the Node dry-run (same as `npm run ios:app-store:dry-run` from repo root). |
-| `bundle exec fastlane build` | `gym` → IPA (no upload). |
+| `bundle exec fastlane build` | `gym` → IPA (no upload). `IOS_BUILD_NUMBER` sets `CURRENT_PROJECT_VERSION`; `beta` and `release` build through this lane. |
 | `bundle exec fastlane beta` | `gym` + `pilot` (TestFlight upload). |
 | `bundle exec fastlane metadata_only` | `deliver` metadata only (no binary). |
 | `bundle exec fastlane release` | Preflight (unless `SKIP_PREFLIGHT=1`) + `gym` + `deliver` (binary + metadata). |

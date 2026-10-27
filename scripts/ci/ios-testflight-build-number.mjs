@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 /**
- * TestFlight build numbers for the iOS release workflows (issue #707).
+ * TestFlight build numbers for the iOS release workflows (issues #707, #838).
  *
  * The `ios-v<marketing>-build<N>` tags on origin are the build-number source of
- * truth. Every TestFlight cut pushes one, and the next cut takes the highest N
- * + 1 across all marketing versions. Nothing commits a bump to `main`: the
- * reusable build (ios-testflight-build.yml) passes N to xcodebuild as
+ * truth. Every TestFlight cut and every App Store release run pushes one, and
+ * the next one takes the highest N + 1 across all marketing versions. Nothing
+ * commits a bump to `main`: the reusable build (ios-testflight-build.yml) passes
+ * N to xcodebuild, and the Fastlane `build` lane passes it to gym, as
  * CURRENT_PROJECT_VERSION, so the value in ios/project.yml is only the default
  * for local builds.
  *
  * Usage (from the repo root, in a checkout of the commit being built):
- *   node scripts/ci/ios-testflight-build-number.mjs claim <sha>
- *     Auto path (ios-testflight-auto.yml). Takes N = 1 + the highest build tag
- *     on origin and pushes an annotated ios-v<MARKETING_VERSION>-build<N> tag
- *     on <sha>. The tag push is the lock: if another cut already took N, the
- *     push is rejected, and the claim re-reads the tags and tries again.
+ *   node scripts/ci/ios-testflight-build-number.mjs claim <sha> [--cut <description>]
+ *     Auto path (ios-testflight-auto.yml) and App Store release
+ *     (ios-app-store-release.yml). Takes N = 1 + the highest build tag on
+ *     origin and pushes an annotated ios-v<MARKETING_VERSION>-build<N> tag on
+ *     <sha>, even when <sha> already carries a build tag. The tag push is the
+ *     lock: if another cut already took N, the push is rejected, and the claim
+ *     re-reads the tags and tries again. `--cut` names the cut in the tag's
+ *     message (default "auto cut").
  *   node scripts/ci/ios-testflight-build-number.mjs from-tag <tag>
  *     Manual path (ios-testflight.yml). Checks a pushed tag against the scheme,
  *     ios/project.yml's MARKETING_VERSION and the build tags on origin, and
@@ -74,27 +78,40 @@ export function parseLsRemoteTags(output) {
 }
 
 /**
+ * The `ios-v*-build<N>` tag with the highest N, compared numerically across
+ * marketing versions. On a tie the first one listed wins.
+ *
+ * @param {Iterable<string>} tagNames
+ * @returns {{ name: string, marketing: string, buildNumber: number } | null} null when no tag follows the scheme
+ */
+export function highestBuildTag(tagNames) {
+  /** @type {{ name: string, marketing: string, buildNumber: number } | null} */
+  let highest = null;
+  for (const name of tagNames) {
+    const parsed = parseBuildTag(name);
+    if (parsed && (!highest || parsed.buildNumber > highest.buildNumber)) highest = { name, ...parsed };
+  }
+  return highest;
+}
+
+/**
  * 1 + the highest N among `ios-v*-build<N>` tags. The counter is global, not
  * per marketing version, so a new marketing version continues the sequence.
  *
  * @param {Iterable<string>} tagNames
  */
 export function nextBuildNumber(tagNames) {
-  let highest = 0;
-  for (const name of tagNames) {
-    const parsed = parseBuildTag(name);
-    if (parsed && parsed.buildNumber > highest) highest = parsed.buildNumber;
-  }
-  if (highest === 0) {
+  const highest = highestBuildTag(tagNames);
+  if (!highest) {
     throw new Error(
       "No ios-v<marketing>-build<N> tags on origin, so there is no build number to continue from. " +
         "Push a tag for the last uploaded build (for example ios-v1.0.3-build31) and re-run.",
     );
   }
-  if (!Number.isSafeInteger(highest + 1)) {
-    throw new Error(`Build number ${highest} is the largest this script can count from.`);
+  if (!Number.isSafeInteger(highest.buildNumber + 1)) {
+    throw new Error(`Build number ${highest.buildNumber} is the largest this script can count from.`);
   }
-  return highest + 1;
+  return highest.buildNumber + 1;
 }
 
 /**
@@ -141,14 +158,7 @@ export function buildNumberFromTag(tag, marketing, remoteTagNames) {
     );
   }
   const names = [...remoteTagNames];
-  /** @type {{ name: string, buildNumber: number } | null} */
-  let highest = null;
-  for (const name of names) {
-    const other = name === tag ? null : parseBuildTag(name);
-    if (other && (!highest || other.buildNumber > highest.buildNumber)) {
-      highest = { name, buildNumber: other.buildNumber };
-    }
-  }
+  const highest = highestBuildTag(names.filter((name) => name !== tag));
   if (highest && highest.buildNumber >= parsed.buildNumber) {
     throw new Error(
       `Tag ${tag} needs a build number above ${highest.name}, the highest build tag on origin. ` +
@@ -204,6 +214,9 @@ async function listRemoteTags(git, remote, { attempts = 3, retryDelayMs = 2000, 
   return parseLsRemoteTags(git(args).stdout);
 }
 
+/** What the tag message calls a claim made without `--cut`: the auto path's merge cut. */
+const DEFAULT_CUT = "auto cut";
+
 /**
  * Claims the next build number by pushing its tag on `sha`. The push is
  * atomic on the remote, so two cuts can never get the same N.
@@ -211,6 +224,7 @@ async function listRemoteTags(git, remote, { attempts = 3, retryDelayMs = 2000, 
  * @param {object} options
  * @param {string} options.sha commit to tag
  * @param {string} options.marketing MARKETING_VERSION at `sha`
+ * @param {string} [options.cut] which cut this is, for the tag message
  * @param {Git} [options.git]
  * @param {string} [options.remote]
  * @param {number} [options.maxAttempts] tries for the claim, and for each tag listing within it
@@ -222,6 +236,7 @@ async function listRemoteTags(git, remote, { attempts = 3, retryDelayMs = 2000, 
 export async function claimBuildTag({
   sha,
   marketing,
+  cut = DEFAULT_CUT,
   git = gitRunner(),
   remote = "origin",
   maxAttempts = 3,
@@ -235,7 +250,7 @@ export async function claimBuildTag({
 
     // A local tag left by an earlier attempt would make `git tag` refuse.
     git(["tag", "-d", tag], { allowFailure: true });
-    git(["tag", "-a", tag, "-m", `TestFlight build ${buildNumber} (auto cut)`, sha]);
+    git(["tag", "-a", tag, "-m", `TestFlight build ${buildNumber} (${cut})`, sha]);
     const localObject = git(["rev-parse", `refs/tags/${tag}`]).stdout.trim();
 
     const push = git(["push", remote, `refs/tags/${tag}`], { allowFailure: true });
@@ -274,20 +289,35 @@ function appendSummary(markdown) {
   }
 }
 
+/**
+ * @param {string[]} argv command-line arguments after the script path
+ * @returns {{ command: "claim" | "from-tag", arg: string, cut?: string } | null} null for a usage error
+ */
+export function parseCommand(argv) {
+  const [command, arg, ...options] = argv;
+  if ((command !== "claim" && command !== "from-tag") || !arg || arg.startsWith("--")) return null;
+  if (options.length === 0) return { command, arg };
+  if (command === "claim" && options.length === 2 && options[0] === "--cut" && options[1].trim() !== "") {
+    return { command, arg, cut: options[1] };
+  }
+  return null;
+}
+
 /** @param {string[]} argv */
 async function main(argv) {
-  const [command, arg] = argv;
-  if (!["claim", "from-tag"].includes(command ?? "") || !arg) {
-    console.error("usage: ios-testflight-build-number.mjs claim <sha> | from-tag <tag>");
+  const parsed = parseCommand(argv);
+  if (!parsed) {
+    console.error("usage: ios-testflight-build-number.mjs claim <sha> [--cut <description>] | from-tag <tag>");
     process.exit(2);
   }
+  const { command, arg, cut = DEFAULT_CUT } = parsed;
   const marketing = readMarketingVersion(fs.readFileSync(PROJECT_YML, "utf8"));
 
   if (command === "claim") {
-    const { tag, buildNumber, attempts } = await claimBuildTag({ sha: arg, marketing });
+    const { tag, buildNumber, attempts } = await claimBuildTag({ sha: arg, marketing, cut });
     console.log(`Claimed build ${buildNumber}: pushed ${tag} on ${arg} (attempt ${attempts}).`);
     setOutputs({ tag, build_number: buildNumber });
-    appendSummary(`TestFlight build **${buildNumber}**: pushed \`${tag}\` on \`${arg}\`.`);
+    appendSummary(`TestFlight build **${buildNumber}** (${cut}): pushed \`${tag}\` on \`${arg}\`.`);
     return;
   }
 

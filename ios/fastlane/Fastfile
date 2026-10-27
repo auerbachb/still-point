@@ -53,6 +53,30 @@ def google_signin_xcargs
   provided.map { |key, value| "#{key}=#{value.shellescape}" }.join(" ")
 end
 
+# CFBundleVersion for the app and both extensions (#838). Build numbers live in the
+# ios-v<marketing>-build<N> tags, not in project.yml (#707): the App Store release workflow
+# claims N the way the TestFlight cuts do (scripts/ci/ios-testflight-build-number.mjs) and
+# passes it as IOS_BUILD_NUMBER. Every target's Info.plist reads $(CURRENT_PROJECT_VERSION),
+# so one command-line setting covers them all. Unset returns nil, so a local build keeps the
+# project.yml default; a value that is set but not a positive integer is a hard error, never
+# a silent fallback to that stale default.
+def build_number_xcargs
+  build_number = ENV["IOS_BUILD_NUMBER"]
+  return nil if build_number.nil?
+
+  unless build_number.match?(/\A[1-9][0-9]*\z/)
+    UI.user_error!("IOS_BUILD_NUMBER must be a positive integer with no leading zero (got #{build_number.inspect}).")
+  end
+
+  "CURRENT_PROJECT_VERSION=#{build_number}"
+end
+
+# Everything gym passes to xcodebuild as build settings; nil when there is nothing to add.
+def build_xcargs
+  xcargs = [google_signin_xcargs, build_number_xcargs].compact.join(" ")
+  xcargs.empty? ? nil : xcargs
+end
+
 platform :ios do
   desc "Regenerate App Store screenshot candidates (15–20 per device via SnapshotTests)"
   lane :screenshots do
@@ -149,7 +173,7 @@ platform :ios do
     sh("cd #{repo_root.shellescape} && npm run ios:app-store:dry-run -- --release-owner #{release_owner.shellescape}")
   end
 
-  desc "Build Release IPA (no upload). Requires Xcode project generated (xcodegen)."
+  desc "Build Release IPA (no upload). Requires Xcode project generated (xcodegen). Set IOS_BUILD_NUMBER to override CURRENT_PROJECT_VERSION."
   lane :build do
     gym(
       project: "StillPoint.xcodeproj",
@@ -159,7 +183,7 @@ platform :ios do
       output_directory: ENV["GYM_OUTPUT_DIRECTORY"] || "build",
       output_name: "StillPoint.ipa",
       clean: !%w[1 true yes on].include?(ENV["GYM_NO_CLEAN"].to_s.strip.downcase),
-      xcargs: google_signin_xcargs
+      xcargs: build_xcargs
     )
   end
 

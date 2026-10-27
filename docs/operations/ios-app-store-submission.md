@@ -24,7 +24,7 @@ Pick a path by intent. All TestFlight uploads share the reusable build workflow 
 |------|---------|----------|----------|
 | **Auto TestFlight** (default) | Any merge to `main` that changes iOS app code | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) → `ios-testflight-build.yml` | Always. Merged iOS app code reaches TestFlight, and the build number moves by itself. |
 | **Manual TestFlight tag** (break-glass) | Push `ios-v<marketing>-build<n>` (e.g. `ios-v1.0.3-build41`) | [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) → `ios-testflight-build.yml` | You need a specific commit/build by hand, or e2e infra blocked the auto path. |
-| **App Store release** | Push strict semver `ios-vMAJOR.MINOR.PATCH` (no `-build`; must match `MARKETING_VERSION`) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Shipping metadata + binary via Fastlane after TestFlight validation. |
+| **App Store release** | Push strict semver `ios-vMAJOR.MINOR.PATCH` (no `-build`; must match `MARKETING_VERSION`) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Shipping metadata + binary via Fastlane after TestFlight validation. The run claims its own `ios-v<marketing>-build<N>` tag, so the binary gets a new build number (#838); it can't finish a run until #910 lands. |
 
 ### Auto TestFlight (default)
 
@@ -36,7 +36,7 @@ Pick a path by intent. All TestFlight uploads share the reusable build workflow 
 
 ### Manual TestFlight tag (break-glass)
 
-1. Pick the next build number: 1 + the highest `ios-v*-build*` tag (`git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1`). The tags, and the workflow's check, miss builds uploaded some other way (Xcode Organizer, the Fastlane lanes). If App Store Connect → **TestFlight** lists a higher build number, start above that one.
+1. Pick the next build number: 1 + the highest `ios-v*-build*` tag (`git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1`). The tags, and the workflow's check, miss builds uploaded some other way (Xcode Organizer, or the Fastlane lanes run locally). If App Store Connect → **TestFlight** lists a higher build number, start above that one.
 2. Tag the commit and push: `git tag ios-v1.0.3-build41 <commit> && git push origin ios-v1.0.3-build41`. The tag sets the build number, so no `ios/project.yml` bump is needed. Its marketing version must match `MARKETING_VERSION` at that commit.
 3. Confirm [Build & Upload to TestFlight](../../.github/workflows/ios-testflight.yml) is green and the build reaches **Ready to Test** in App Store Connect → **TestFlight**.
 
@@ -65,7 +65,7 @@ GitHub Actions holds distribution signing material as secrets (values never appe
 
 - **Signing error in CI:** verify certificate validity and that the provisioning profile bundle ID matches.
 - **Upload authentication error:** regenerate the App Store Connect API key and update GitHub secrets.
-- **Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. TestFlight cuts take theirs from the `ios-v*-build*` tags. Shipping a commit again is a new cut with a new tag, while **Re-run failed jobs** on a cut whose build or upload failed keeps its number.
+- **Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. TestFlight cuts and App Store release runs take theirs from the `ios-v*-build*` tags. Shipping a commit again is a new cut with a new tag, while **Re-run failed jobs** on a run whose build or upload failed keeps its number.
 - **`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`:** Account Holder must clear Agreements, Tax, and Banking in Apple Developer / App Store Connect before uploads succeed.
 
 The App Store release workflow maps `APPSTORE_*` secrets to Fastlane's `APP_STORE_CONNECT_API_*` environment names at runtime (see [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml)).
@@ -106,6 +106,15 @@ The command reads `README.md`, `ios/RELEASING.md`, this runbook, `.github/workfl
 
 Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to let the dry run query App Store Connect builds and version records. Add `-- --require-live` when a real submission must fail fast if live API validation cannot run. The script does not submit for review; submission remains blocked until the generated human gates are approved.
 
+**Which build it checks (#838):**
+
+- **Default:** the highest `ios-v*-build*` tag on origin, which is the latest TestFlight cut.
+- **A different build you validated:** pass its tag, for example `-- --intended-tag ios-v1.0.3-build41`. The flag takes only a build tag.
+- **No build tags:** it falls back to `CURRENT_PROJECT_VERSION` in `ios/project.yml` and warns, because that value no longer names a real build.
+- **App Store release workflow:** it passes the tag that the run claimed.
+
+A tag shows that a build was cut, not that App Store Connect processed it, so keep `--require-live` for a real submission.
+
 ## Release checklist (Phases A–F)
 
 Assumes a **TestFlight build is already uploaded** and agreements are clear unless noted.
@@ -117,7 +126,7 @@ Assumes a **TestFlight build is already uploaded** and agreements are clear unle
 | 1 | [ ] **Apple Developer + App Store Connect:** all **Agreements, Tax, and Banking** are signed with no **Action required** items. | Account Holder / Admin | Screenshot or written confirmation. Uploads fail with `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED` until clean. |
 | 2 | [ ] **GitHub Actions:** latest **Build & Upload to TestFlight** workflow for the intended `ios-v*` tag is green. | Engineering | Link the successful run for [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) or [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml). |
 | 3 | [ ] **TestFlight:** intended build is visible in App Store Connect → **TestFlight** and is not stuck **Processing** or marked **Invalid**. | Engineering | Capture build status and processing timestamp. |
-| 4 | [ ] **Version / build:** `ios/project.yml` `MARKETING_VERSION` matches the intended submission, and the attached build is the one its `ios-v<marketing>-build<N>` tag names. TestFlight build numbers come from those tags, not from `CURRENT_PROJECT_VERSION` (#707). | Engineering | Paste version/build values; compare against prior Connect uploads. |
+| 4 | [ ] **Version / build:** `ios/project.yml` `MARKETING_VERSION` matches the intended submission, and the attached build is the one its `ios-v<marketing>-build<N>` tag names. TestFlight and App Store release build numbers come from those tags, not from `CURRENT_PROJECT_VERSION` (#707, #838). | Engineering | Paste version/build values; compare against prior Connect uploads. |
 | 5 | [ ] **Release-readiness artifacts:** [`ios/PARITY_CHECKLIST.md`](../../ios/PARITY_CHECKLIST.md) and [`ios/QA_CHECKLIST.md`](../../ios/QA_CHECKLIST.md) signed off for App Store path (required by `ios-app-store-release.yml`). | Engineering + Product | Required checkboxes checked before App Store tag push. |
 
 ### Phase B — App Store version record
