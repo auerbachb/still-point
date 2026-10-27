@@ -276,3 +276,84 @@ describe("public/sw.js thought ids (#948)", () => {
     expect(saves).toEqual([[{ ...queuedSit("legacy", true), thoughts: [] }]]);
   });
 });
+
+describe("public/sw.js end-note clear (#980)", () => {
+  /** Records each request's URL and parsed body, answering 2xx. */
+  function answeringWorker() {
+    const requests: { url: string; body: unknown }[] = [];
+    const sw = loadServiceWorker(async (url, init) => {
+      requests.push({ url, body: JSON.parse(String(init.body)) });
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    return { sw, requests };
+  }
+
+  test("a synced entry with only a queued clear is uploaded with the flag, which is cleared after a 2xx", async () => {
+    const sit = { ...queuedSit("clear-only", true), thoughts: [], clearCompletionNote: true };
+    const { sw, requests } = answeringWorker();
+    const saves = sw.useQueue([sit]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(requests).toEqual([
+      {
+        url: "/api/thoughts/batch",
+        body: { sessionId: "server-clear-only", dayNumber: 3, thoughts: [], clearCompletionNote: true },
+      },
+    ]);
+    expect(saves).toEqual([[{ ...sit, clearCompletionNote: false }]]);
+  });
+
+  test("an entry with thoughts and a queued clear sends both in one batch, and both are cleared after a 2xx", async () => {
+    const sit = { ...queuedSit("combined", true), clearCompletionNote: true };
+    const { sw, requests } = answeringWorker();
+    const saves = sw.useQueue([sit]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(requests).toEqual([
+      {
+        url: "/api/thoughts/batch",
+        body: {
+          sessionId: "server-combined",
+          dayNumber: 3,
+          thoughts: [{ timeInSession: 42, text: "a thought in combined" }],
+          clearCompletionNote: true,
+        },
+      },
+    ]);
+    expect(saves).toEqual([[{ ...sit, thoughts: [], clearCompletionNote: false }]]);
+  });
+
+  test("a clear whose upload fails stays queued, and the sync fails so the browser retries it", async () => {
+    const sit = { ...queuedSit("fails", true), thoughts: [], clearCompletionNote: true };
+    const sw = loadServiceWorker(async () => ({ ok: false, status: 503, text: async () => "unavailable" }));
+    const saves = sw.useQueue([sit]);
+
+    await expect(sw.sync()).rejects.toThrow("unavailable");
+    // Nothing changed, so nothing was saved: the flag is still set.
+    expect(saves).toEqual([]);
+  });
+
+  test("a clear whose upload timed out stays queued", async () => {
+    const sit = { ...queuedSit("times-out", true), thoughts: [], clearCompletionNote: true };
+    const sw = loadServiceWorker((_url, init) => rejectOnAbort(init.signal));
+    const saves = sw.useQueue([sit]);
+    const outcome = sw.sync().then(() => "resolved", (error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
+
+    expect(((await outcome) as DOMException).name).toBe("AbortError");
+    expect(saves).toEqual([]);
+  });
+
+  test("a synced entry with no thoughts and no queued clear is not uploaded", async () => {
+    const { sw, requests } = answeringWorker();
+    const saves = sw.useQueue([{ ...queuedSit("done", true), thoughts: [] }]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(requests).toEqual([]);
+    expect(saves).toEqual([]);
+  });
+});
