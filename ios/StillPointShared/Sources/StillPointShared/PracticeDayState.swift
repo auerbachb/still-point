@@ -89,11 +89,7 @@ public struct PracticeDayState: Sendable {
     /// Back to a launch: nothing sat, nothing known about yesterday, and any
     /// yesterday lookup still in flight disowned.
     public mutating func reset() {
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
+        clearDoneTodayFlags()
         previousCalendarDayComplete = true
         previousDayResolved = false
         resolvedForCalendarDay = nil
@@ -104,6 +100,8 @@ public struct PracticeDayState: Sendable {
         tracksDoneRead += 1
     }
 
+    // MARK: - Tracks-done badge query
+
     /// A credited-day badge query is leaving (#1071). Until the answer it returns is
     /// applied, the flags are not an answer. Returns the read number to pass back to
     /// ``applyTracksDoneAnswer(_:creditedDate:now:read:calendar:)``.
@@ -113,41 +111,7 @@ public struct PracticeDayState: Sendable {
         return tracksDoneRead
     }
 
-    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
-    /// Weighed while the flags describe yesterday.
-    private func requiredSitsCompleteFromFlags(dualTrack: Bool, now: Date, calendar: Calendar) -> Bool {
-        // Local flags cover a sit that finished offline and has not reached the
-        // server badges yet. Without them the day stays open and the next sit
-        // before 6:00 is stored on yesterday again.
-        //
-        // #970: the yesterday lookup's answer covers the opposite case, a sit that
-        // is on the server only (sat on another device, on the web, or in an
-        // earlier app run) while the badge query that would report it has failed
-        // or not answered. Without it, two-a-day lost that sit, and a sit here on
-        // the other track could not close the day.
-        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1, calendar: calendar)
-        let server = previousDayTracks?.day == yesterday ? previousDayTracks?.tracks : nil
-        let primary = primaryDoneToday || primaryStandardDoneToday || server?.primary == true
-        let second = secondDoneToday || secondPracticeDoneToday || server?.second == true
-        return dualTrack ? (primary && second) : primary
-    }
-
-    private func previousDayAnswerIsCurrent(now: Date, calendar: Calendar) -> Bool {
-        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now, calendar: calendar)
-    }
-
-    /// An instant on the day a sit at `now` is credited to: 23:00 on the previous
-    /// calendar day before 6:00 while that day is open, else `now`. The rollover
-    /// stamps the flags with it, so the stamp names the day they describe (#969).
-    /// A badge answer about yesterday moves the stamp to the same instant
-    /// (``applyTracksDoneAnswer(_:creditedDate:now:calendar:)``).
-    private func creditedDayStamp(now: Date, calendar: Calendar) -> Date {
-        WidgetDataStore.practiceInstant(
-            previousDayComplete: previousCalendarDayComplete,
-            now: now,
-            calendar: calendar
-        )
-    }
+    // MARK: - Credited practice day
 
     /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
     public mutating func creditedSessionDate(now: Date, dualTrack: Bool, calendar: Calendar = .current) -> String {
@@ -164,12 +128,10 @@ public struct PracticeDayState: Sendable {
     public mutating func creditedPracticeInstant(now: Date, dualTrack: Bool, calendar: Calendar = .current) -> Date {
         // The rollover `creditedSessionDate(now:)` runs, so the answer read below is current.
         rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
-        return WidgetDataStore.practiceInstant(
-            previousDayComplete: previousCalendarDayComplete,
-            now: now,
-            calendar: calendar
-        )
+        return creditedDayStamp(now: now, calendar: calendar)
     }
+
+    // MARK: - Previous-day lookup
 
     /// The start of a lookup of whether yesterday is finished. Before 6:00 an
     /// unknown answer keeps it open.
@@ -178,14 +140,11 @@ public struct PracticeDayState: Sendable {
     ///   nothing to ask: yesterday is already known to be finished, or it is 6:00 or
     ///   later, which finishes it.
     public mutating func beginPreviousDayRead(now: Date, calendar: Calendar = .current) -> Int? {
-        let calendarDay = SessionCalendar.localIsoDate(now: now, calendar: calendar)
-        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
+        if previousCalendarDayComplete && previousDayAnswerIsCurrent(now: now, calendar: calendar) {
             return nil
         }
-        guard calendar.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
-            previousCalendarDayComplete = true
-            previousDayResolved = true
-            resolvedForCalendarDay = calendarDay
+        guard isBeforeGraceCutoff(now, calendar: calendar) else {
+            resolvePreviousDayAsComplete(now: now, calendar: calendar)
             return nil
         }
         previousDayRequest += 1
@@ -222,17 +181,17 @@ public struct PracticeDayState: Sendable {
         calendar: Calendar = .current
     ) {
         guard ticket == previousDayRequest else { return }
-        if let stamp = doneTodayFlagsStamp,
-           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-           calendar.isDate(stamp, inSameDayAs: yesterday) {
+        if flagsDescribeYesterday(now: now, calendar: calendar) {
             previousCalendarDayComplete = requiredSitsCompleteFromFlags(dualTrack: dualTrack, now: now, calendar: calendar)
         } else {
-            previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
+            previousCalendarDayComplete = !isBeforeGraceCutoff(now, calendar: calendar)
         }
         // Unresolved so the next refresh retries the lookup.
         previousDayResolved = false
         resolvedForCalendarDay = nil
     }
+
+    // MARK: - Tracks-done badge answers
 
     /// The credited-day badge query's answer: `getTracksDoneToday(date:)` for
     /// `creditedDate`, the day ``creditedSessionDate(now:dualTrack:calendar:)`` gave
@@ -305,6 +264,8 @@ public struct PracticeDayState: Sendable {
         doneTodayFlagsKnown = false
     }
 
+    // MARK: - Rollover and completion
+
     /// Retire the "done today" flags when the local day has advanced past the one
     /// they describe, and re-stamp them onto the day a sit is now credited to.
     ///
@@ -326,12 +287,12 @@ public struct PracticeDayState: Sendable {
         if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
             return
         }
-        let hour = calendar.component(.hour, from: now)
+        let beforeCutoff = isBeforeGraceCutoff(now, calendar: calendar)
         if doneTodayFlagsStamp == nil {
             // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
             // says it is finished, unless that fetch already answered.
             if !previousDayAnswerIsCurrent(now: now, calendar: calendar) {
-                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
+                previousCalendarDayComplete = !beforeCutoff
             }
             // #969: onto the day a sit is now credited to, which is yesterday while
             // it is open. Stamped with `now`, a launch before 6:00 put the flags on
@@ -341,10 +302,7 @@ public struct PracticeDayState: Sendable {
             doneTodayFlagsStamp = creditedDayStamp(now: now, calendar: calendar)
             return
         }
-        if hour < SessionCalendar.graceCutoffHour,
-           let stamp = doneTodayFlagsStamp,
-           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-           calendar.isDate(stamp, inSameDayAs: yesterday) {
+        if beforeCutoff, flagsDescribeYesterday(now: now, calendar: calendar) {
             if requiredSitsCompleteFromFlags(dualTrack: dualTrack, now: now, calendar: calendar) {
                 // #894: the flags describe yesterday and hold every required sit, so
                 // yesterday is finished, whatever the server last said about it. An
@@ -356,9 +314,7 @@ public struct PracticeDayState: Sendable {
                 // still in flight changes nothing when it lands, answered or failed.
                 // Web keeps a sit remembered across the same read
                 // (`mergeRememberedSits`, PR #878).
-                previousCalendarDayComplete = true
-                previousDayResolved = true
-                resolvedForCalendarDay = SessionCalendar.localIsoDate(now: now, calendar: calendar)
+                resolvePreviousDayAsComplete(now: now, calendar: calendar)
                 previousDayRequest += 1
             } else if previousDayAnswerIsCurrent(now: now, calendar: calendar) {
                 if !previousCalendarDayComplete {
@@ -377,11 +333,7 @@ public struct PracticeDayState: Sendable {
             previousDayResolved = false
             resolvedForCalendarDay = nil
         }
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
+        clearDoneTodayFlags()
         // #1071: the answer was about the day just retired; the new one has none yet.
         doneTodayFlagsKnown = false
         // The calendar day, unless a current answer keeps yesterday open after a
@@ -426,5 +378,74 @@ public struct PracticeDayState: Sendable {
             // caught up.
             primaryStandardDoneToday = true
         }
+    }
+
+    // MARK: - Private helpers
+
+    /// Lowers the five "done today" flags. Their stamp and `doneTodayFlagsKnown`
+    /// are the caller's to set, since a reset and a rollover set them differently.
+    private mutating func clearDoneTodayFlags() {
+        primaryDoneToday = false
+        secondDoneToday = false
+        practiceDoneToday = false
+        secondPracticeDoneToday = false
+        primaryStandardDoneToday = false
+    }
+
+    /// Whether `now` falls before 6:00, while the previous calendar day can still be open.
+    private func isBeforeGraceCutoff(_ now: Date, calendar: Calendar) -> Bool {
+        calendar.component(.hour, from: now) < SessionCalendar.graceCutoffHour
+    }
+
+    /// Whether the flags' stamp falls on the calendar day before `now`'s, i.e. the
+    /// flags describe yesterday.
+    private func flagsDescribeYesterday(now: Date, calendar: Calendar) -> Bool {
+        guard let stamp = doneTodayFlagsStamp,
+              let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))
+        else { return false }
+        return calendar.isDate(stamp, inSameDayAs: yesterday)
+    }
+
+    /// Records yesterday as finished, and that answer as `now`'s calendar day's.
+    private mutating func resolvePreviousDayAsComplete(now: Date, calendar: Calendar) {
+        previousCalendarDayComplete = true
+        previousDayResolved = true
+        resolvedForCalendarDay = SessionCalendar.localIsoDate(now: now, calendar: calendar)
+    }
+
+    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
+    /// Weighed while the flags describe yesterday.
+    private func requiredSitsCompleteFromFlags(dualTrack: Bool, now: Date, calendar: Calendar) -> Bool {
+        // Local flags cover a sit that finished offline and has not reached the
+        // server badges yet. Without them the day stays open and the next sit
+        // before 6:00 is stored on yesterday again.
+        //
+        // #970: the yesterday lookup's answer covers the opposite case, a sit that
+        // is on the server only (sat on another device, on the web, or in an
+        // earlier app run) while the badge query that would report it has failed
+        // or not answered. Without it, two-a-day lost that sit, and a sit here on
+        // the other track could not close the day.
+        let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1, calendar: calendar)
+        let server = previousDayTracks?.day == yesterday ? previousDayTracks?.tracks : nil
+        let primary = primaryDoneToday || primaryStandardDoneToday || server?.primary == true
+        let second = secondDoneToday || secondPracticeDoneToday || server?.second == true
+        return dualTrack ? (primary && second) : primary
+    }
+
+    private func previousDayAnswerIsCurrent(now: Date, calendar: Calendar) -> Bool {
+        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now, calendar: calendar)
+    }
+
+    /// An instant on the day a sit at `now` is credited to: 23:00 on the previous
+    /// calendar day before 6:00 while that day is open, else `now`. The rollover
+    /// stamps the flags with it, so the stamp names the day they describe (#969).
+    /// A badge answer about yesterday moves the stamp to the same instant
+    /// (``applyTracksDoneAnswer(_:creditedDate:now:calendar:)``).
+    private func creditedDayStamp(now: Date, calendar: Calendar) -> Date {
+        WidgetDataStore.practiceInstant(
+            previousDayComplete: previousCalendarDayComplete,
+            now: now,
+            calendar: calendar
+        )
     }
 }
