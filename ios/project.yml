@@ -9,6 +9,8 @@ options:
 packages:
   StillPointShared:
     path: StillPointShared
+  StillPointModels:
+    path: StillPointModels
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "9.0.0"
@@ -25,6 +27,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: StillPointShared
+      - package: StillPointModels
       - package: GoogleSignIn
         product: GoogleSignIn
       - target: StillPointMonitor

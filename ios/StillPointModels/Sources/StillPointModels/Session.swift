@@ -1,4 +1,5 @@
 import Foundation
+import StillPointShared
 import SwiftData
 
 @Model
