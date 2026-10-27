@@ -68,7 +68,7 @@ test.describe("password reset", () => {
     await page.getByPlaceholder("email").fill(mockApiState.credentials.email);
     await page.getByPlaceholder("password").fill("new-password-123");
     await page.getByRole("button", { name: "Enter" }).click();
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
   });
 
   test("request response does not enumerate accounts", async ({ page }) => {

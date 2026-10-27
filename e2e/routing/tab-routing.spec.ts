@@ -10,7 +10,7 @@ test.describe("tab routing reflects in URL (#292)", () => {
   test("@smoke /app resolves to the Progress tab", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await page.goto("/app");
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
   });
 
   test("nav buttons push per-tab routes", async ({ page, ensureLoggedIn }) => {
@@ -58,14 +58,14 @@ test.describe("tab routing reflects in URL (#292)", () => {
     await ensureLoggedIn();
     await page.goto("/app/not-a-real-tab");
     await expect(page).toHaveURL(/\/app\/progress$/);
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
   });
 
   test("active session overlay keeps the tab URL intact", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await page.goto("/app/progress");
 
-    await page.getByRole("button", { name: "Begin" }).click();
+    await page.getByRole("button", { name: "Begin", exact: true }).click();
     // Session controls render and the URL stays on the Progress tab.
     await expect(page.getByRole("button", { name: "pause" })).toBeVisible();
     await expect(page).toHaveURL(/\/app\/progress$/);
@@ -122,10 +122,10 @@ test.describe("tab routing reflects in URL (#292)", () => {
     await page.goto("/app/history");
     await expect(page).toHaveURL(/\/app\/history$/);
     await page.goto("/app/progress");
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
 
     // Start a session (overlay) on the Progress tab.
-    await page.getByRole("button", { name: "Begin" }).click();
+    await page.getByRole("button", { name: "Begin", exact: true }).click();
     await expect(page.getByRole("button", { name: "pause" })).toBeVisible();
 
     // Going back must land on History with its content, not a session view

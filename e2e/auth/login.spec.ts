@@ -20,7 +20,7 @@ test.describe("mobile auth and shell", () => {
     await expectMinimumTapTarget(enterButton, "auth enter button");
     await tap(enterButton);
 
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     await expect(beginButton).toBeVisible();
     await expectMinimumTapTarget(beginButton, "home begin button");
     await expectVisibleInViewport(page, beginButton, "home begin button");

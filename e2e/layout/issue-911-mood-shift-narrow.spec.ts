@@ -24,7 +24,7 @@ type Rect = { left: number; right: number; top: number; bottom: number; width: n
  *  only renders for a sit the server holds, which the mocked API answers at once. */
 async function openRecap(page: Page, ensureLoggedIn: () => Promise<unknown>) {
   await ensureLoggedIn();
-  await tap(page.getByRole("button", { name: "Begin" }));
+  await tap(page.getByRole("button", { name: "Begin", exact: true }));
   await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
   await expect(page.getByRole("heading", { name: /Day .* Complete/i })).toBeVisible();
   await expect(page.getByTestId("mood-matrix")).toBeVisible();

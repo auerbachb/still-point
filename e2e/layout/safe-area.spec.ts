@@ -12,7 +12,7 @@ test.describe("mobile safe-area and bottom bar behavior", () => {
   test("home and nav controls stay visible above iOS-like bottom safe area", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
 
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     const homeNav = page.getByRole("button", { name: /^home$/i });
     await expect(beginButton).toBeVisible();
     await expect(homeNav).toBeVisible();
@@ -29,7 +29,7 @@ test.describe("mobile safe-area and bottom bar behavior", () => {
 
   test("session action row remains reachable and not hidden by browser chrome", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
 
     const endEarlyButton = page.getByRole("button", { name: /end early/i });
     const abandonButton = page.getByRole("button", { name: "abandon" });
@@ -45,7 +45,7 @@ test.describe("mobile safe-area and bottom bar behavior", () => {
 
   test("no overlap between sticky mobile nav and completion return control", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
     await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
 
     const returnButton = page.getByRole("button", { name: "save and return to home" });

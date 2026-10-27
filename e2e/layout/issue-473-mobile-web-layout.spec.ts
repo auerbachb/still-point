@@ -110,7 +110,7 @@ for (const width of MOBILE_WIDTHS) {
     }) => {
       await ensureLoggedIn();
       await page.goto("/app");
-      const begin = page.getByRole("button", { name: "Begin" });
+      const begin = page.getByRole("button", { name: "Begin", exact: true });
       await begin.evaluate((el: HTMLElement) => el.click());
       await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
 

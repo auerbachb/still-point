@@ -34,7 +34,7 @@ test.describe("mobile overflow and scrolling", () => {
 
     await ensureLoggedIn();
     await expectNoHorizontalOverflow(page);
-    await expectVisibleInViewport(page, page.getByRole("button", { name: "Begin" }), "home begin button");
+    await expectVisibleInViewport(page, page.getByRole("button", { name: "Begin", exact: true }), "home begin button");
   });
 
   test("history long list scrolls and sticky nav does not permanently cover rows", async ({
@@ -103,7 +103,7 @@ test.describe("mobile overflow and scrolling", () => {
     await expectMinimumTapTarget(enterButton, "auth enter button");
 
     await ensureLoggedIn();
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     await expectMinimumTapTarget(beginButton, "home begin button");
 
     await tap(beginButton);
@@ -122,8 +122,8 @@ test.describe("mobile overflow and scrolling", () => {
       content: "html { font-size: 120% !important; }",
     });
 
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page, 2);
-    await expectVisibleInViewport(page, page.getByRole("button", { name: "Begin" }), "scaled begin button");
+    await expectVisibleInViewport(page, page.getByRole("button", { name: "Begin", exact: true }), "scaled begin button");
   });
 });
