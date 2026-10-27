@@ -18,6 +18,10 @@ runs:
   using: composite
   steps:
     - name: Clean up keychain and provisioning profiles
+      # The caller's `if: always()` only starts this action. A composite step
+      # still defaults to `if: success()`, which reads the job status, so a
+      # failed build would skip this step and leave the signing files behind.
+      if: always()
       shell: bash
       env:
         REMOVE_PRIVATE_KEYS: ${{ inputs.remove-private-keys }}
