@@ -232,3 +232,37 @@ final class DurationRecoveryTests: XCTestCase {
         )
     }
 }
+
+// MARK: - #896 combined sit
+
+extension DurationRecoveryTests {
+    func testPreviewNextCombinedDuration() {
+        let user = UserDTO(
+            id: "u", email: "e@example.com", username: "u", isPublic: false,
+            currentDay: 45, dualTrackEnabled: true, secondTrackDay: 10
+        )
+        XCTAssertEqual(
+            DurationRecovery.previewNextCombinedDuration(completed: true, user: user),
+            StillPoint.duration(forDay: 46) + StillPoint.duration(forDay: 11)
+        )
+        XCTAssertEqual(DurationRecovery.previewNextCombinedDuration(completed: false, user: user), 650)
+        XCTAssertEqual(
+            DurationRecovery.previewNextCombinedDuration(completed: true, user: nil),
+            StillPoint.baseDuration * 2
+        )
+    }
+
+    /// The one-track preview is left alone.
+    func testStandardPreviewIgnoresCombined() {
+        let user = UserDTO(
+            id: "u", email: "e@example.com", username: "u", isPublic: false,
+            currentDay: 45, dualTrackEnabled: true, secondTrackDay: 10
+        )
+        XCTAssertEqual(
+            DurationRecovery.previewNextStandardDuration(
+                sessionType: .standard, completed: true, track: .primary, user: user
+            ),
+            StillPoint.duration(forDay: 46)
+        )
+    }
+}

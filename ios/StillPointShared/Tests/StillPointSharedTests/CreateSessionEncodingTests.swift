@@ -123,3 +123,77 @@ final class CreateSessionEncodingTests: XCTestCase {
         XCTAssertEqual(object["duration"] as? Int, 240)
     }
 }
+
+// MARK: - #896 combined sit
+
+extension CreateSessionEncodingTests {
+    private func combinedRequest(_ combined: Bool?) -> CreateSessionRequest {
+        let base = (dayNumber: 30, duration: 1200, sessionDate: "2026-10-27")
+        if let combined {
+            return CreateSessionRequest(
+                dayNumber: base.dayNumber, duration: base.duration, completed: true,
+                actualTime: base.duration, clearPercent: 90, thoughtCount: 0, mindStateLog: [],
+                sessionDate: base.sessionDate, combined: combined
+            )
+        }
+        return CreateSessionRequest(
+            dayNumber: base.dayNumber, duration: base.duration, completed: true,
+            actualTime: base.duration, clearPercent: 90, thoughtCount: 0, mindStateLog: [],
+            sessionDate: base.sessionDate
+        )
+    }
+
+    /// An ordinary sit has no `combined` key, so it encodes exactly as before #896.
+    func testCreateSessionRequestOmitsCombinedWhenFalse() throws {
+        XCTAssertFalse(combinedRequest(nil).combined)
+        for request in [combinedRequest(nil), combinedRequest(false)] {
+            let data = try JSONEncoder().encode(request)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertNil(object["combined"])
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        XCTAssertEqual(
+            try encoder.encode(combinedRequest(false)),
+            try encoder.encode(combinedRequest(nil))
+        )
+    }
+
+    func testCreateSessionRequestIncludesCombinedWhenTrue() throws {
+        let data = try JSONEncoder().encode(combinedRequest(true))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["combined"] as? Bool, true)
+        XCTAssertEqual(object["track"] as? String, "primary")
+        XCTAssertEqual(object["sessionType"] as? String, "standard")
+    }
+
+    /// The hand-written coding keeps every other key: optionals still drop out when
+    /// nil and round-trip when set.
+    func testCreateSessionRequestRoundTripsEveryField() throws {
+        let clientSessionId = UUID()
+        let request = CreateSessionRequest(
+            dayNumber: 4, sessionType: .breath, duration: 240, bonusSeconds: 30, completed: true,
+            actualTime: 270, clearPercent: 70, thoughtCount: 2,
+            mindStateLog: [MindStateEntry(time: 0, state: "clear")],
+            attentionLog: [AttentionEntry(time: 1, state: "away")],
+            sessionDate: "2026-10-27", breathCount: 12, track: .second,
+            clientSessionId: clientSessionId, combined: true
+        )
+        let decoded = try JSONDecoder().decode(CreateSessionRequest.self, from: JSONEncoder().encode(request))
+        XCTAssertEqual(decoded.dayNumber, 4)
+        XCTAssertEqual(decoded.sessionType, .breath)
+        XCTAssertEqual(decoded.bonusSeconds, 30)
+        XCTAssertEqual(decoded.actualTime, 270)
+        XCTAssertEqual(decoded.attentionLog?.first?.state, "away")
+        XCTAssertEqual(decoded.breathCount, 12)
+        XCTAssertEqual(decoded.track, .second)
+        XCTAssertEqual(decoded.clientSessionId, clientSessionId)
+        XCTAssertTrue(decoded.combined)
+
+        let plain = try JSONEncoder().encode(combinedRequest(nil))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: plain) as? [String: Any])
+        for key in ["attentionLog", "breathCount", "focusCategory", "clientSessionId", "ambientSoundSummary"] {
+            XCTAssertNil(object[key], key)
+        }
+    }
+}

@@ -105,25 +105,38 @@ public enum SessionCalendar {
         public var sessionDate: String
         /// `nil` counts as the primary track, matching pre-dual-track rows.
         public var track: String?
+        /// #896: a combined sit (#769) counts for both tracks. `nil` is not combined.
+        public var combined: Bool?
 
-        public init(completed: Bool, isStandard: Bool, sessionDate: String, track: String?) {
+        public init(
+            completed: Bool,
+            isStandard: Bool,
+            sessionDate: String,
+            track: String?,
+            combined: Bool? = nil
+        ) {
             self.completed = completed
             self.isStandard = isStandard
             self.sessionDate = sessionDate
             self.track = track
+            self.combined = combined
         }
     }
 
     /// Single-track: the primary standard sit. Two-a-day: primary and second.
+    /// A combined sit credits both (`CombinedSit.tracksCredited`, #896), so it
+    /// alone completes a two-a-day day and closes the before-6:00 grace window.
     public static func isDayComplete(sits: [PracticeDaySit], isoDay: String, dualTrackEnabled: Bool) -> Bool {
         var primary = false
         var second = false
         for sit in sits where sit.completed && sit.isStandard && sit.sessionDate == isoDay {
-            if sit.track == "second" {
-                second = true
-            } else {
-                primary = true
-            }
+            // An unknown track string reads as nil, i.e. primary, as on web.
+            let credited = CombinedSit.tracksCredited(
+                track: sit.track.flatMap(Track.init(rawValue:)),
+                combined: sit.combined
+            )
+            if credited.primary { primary = true }
+            if credited.second { second = true }
         }
         return dualTrackEnabled ? (primary && second) : primary
     }

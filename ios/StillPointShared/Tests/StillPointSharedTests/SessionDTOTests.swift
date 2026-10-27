@@ -382,3 +382,45 @@ final class SessionDTOTests: XCTestCase {
         XCTAssertEqual(decoded.focusCategory, .listening)
     }
 }
+
+// MARK: - #896 combined sit
+
+extension SessionDTOTests {
+    private func decodeCombined(_ fragment: String) throws -> SessionDTO {
+        let json = """
+        {"id":"c1","dayNumber":30,"sessionType":"standard","duration":1200,"completed":true,\
+        "clearPercent":80,"thoughtCount":0,"sessionDate":"2026-10-27","track":"primary"\(fragment)}
+        """
+        return try JSONDecoder().decode(SessionDTO.self, from: Data(json.utf8))
+    }
+
+    func testDecodesCombinedTrue() throws {
+        XCTAssertEqual(try decodeCombined(#","combined":true"#).combined, true)
+    }
+
+    func testDecodesCombinedFalse() throws {
+        XCTAssertEqual(try decodeCombined(#","combined":false"#).combined, false)
+    }
+
+    func testMissingOrNullCombinedReadsAsNotCombined() throws {
+        XCTAssertNil(try decodeCombined("").combined)
+        XCTAssertNil(try decodeCombined(#","combined":null"#).combined)
+    }
+
+    /// A wrong-typed value reads as not combined and never fails the history list.
+    func testWrongTypedCombinedReadsAsNotCombined() throws {
+        let s = try decodeCombined(#","combined":"yes""#)
+        XCTAssertNil(s.combined)
+        XCTAssertEqual(s.id, "c1")
+        XCTAssertNil(try decodeCombined(#","combined":1"#).combined)
+    }
+
+    func testInitializerDefaultsCombinedToNil() {
+        let s = SessionDTO(
+            id: "c2", dayNumber: 1, duration: 60, completed: true, actualTime: 60,
+            clearPercent: 0, thoughtCount: 0, mindStateLog: nil, sessionDate: "2026-10-27",
+            buddySessionId: nil
+        )
+        XCTAssertNil(s.combined)
+    }
+}

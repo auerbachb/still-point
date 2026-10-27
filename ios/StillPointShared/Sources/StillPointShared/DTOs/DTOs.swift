@@ -210,6 +210,11 @@ public struct SessionDTO: Codable, Sendable {
     public let ambientSoundSummary: AmbientSoundSummary?
     /// #472 / #635: before/after mood matrix (1–5 per cell); nil until set via PATCH.
     public let moodMatrix: [String: MoodMatrixEntry]?
+    /// #769 / #896: today's two sits done as one. One standard row on the primary
+    /// track that counts for both tracks (`CombinedSit.tracksCredited`). Decoded
+    /// permissively like `track`: missing, null, or a wrong-typed value reads as
+    /// nil, which callers treat as not combined.
+    public let combined: Bool?
 
     public init(
         id: String,
@@ -230,7 +235,8 @@ public struct SessionDTO: Codable, Sendable {
         focusCategory: FocusCategory? = nil,
         track: Track? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil,
-        moodMatrix: [String: MoodMatrixEntry]? = nil
+        moodMatrix: [String: MoodMatrixEntry]? = nil,
+        combined: Bool? = nil
     ) {
         self.id = id
         self.dayNumber = dayNumber
@@ -251,6 +257,7 @@ public struct SessionDTO: Codable, Sendable {
         self.track = track
         self.ambientSoundSummary = ambientSoundSummary
         self.moodMatrix = moodMatrix
+        self.combined = combined
     }
 
     /// #612: decode defensively. Identity/structural fields stay strict — a row missing
@@ -286,13 +293,14 @@ public struct SessionDTO: Codable, Sendable {
         breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
         ambientSoundSummary = try? c.decode(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
         moodMatrix = try? c.decode([String: MoodMatrixEntry].self, forKey: .moodMatrix)
+        combined = try? c.decode(Bool.self, forKey: .combined)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
         case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
         case createdAt, buddySessionId, breathCount, focusCategory, track, ambientSoundSummary
-        case moodMatrix
+        case moodMatrix, combined
     }
 }
 
@@ -464,6 +472,11 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let clientSessionId: UUID?
     /// #563: ambient sound level summary; omitted when capture was off or mic was denied.
     public let ambientSoundSummary: AmbientSoundSummary?
+    /// #769 / #896: today's two sits done as one. Defaults to false. The key is left
+    /// out of the JSON when false, so an ordinary request (and the queue entry stored
+    /// from it) encodes exactly as it did before; a queue entry written by an older
+    /// build has no key and decodes as not combined.
+    public let combined: Bool
 
     public init(
         dayNumber: Int,
@@ -481,7 +494,8 @@ public struct CreateSessionRequest: Codable, Sendable {
         focusCategory: FocusCategory? = nil,
         track: Track = .primary,
         clientSessionId: UUID? = nil,
-        ambientSoundSummary: AmbientSoundSummary? = nil
+        ambientSoundSummary: AmbientSoundSummary? = nil,
+        combined: Bool = false
     ) {
         self.dayNumber = dayNumber
         self.sessionType = sessionType
@@ -499,6 +513,61 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.track = track
         self.clientSessionId = clientSessionId
         self.ambientSoundSummary = ambientSoundSummary
+        self.combined = combined
+    }
+
+    // Hand-written only so `combined` can be omitted when false and tolerated when
+    // absent; every other key keeps the synthesized behaviour (optionals are left
+    // out when nil and read with `decodeIfPresent`).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dayNumber = try c.decode(Int.self, forKey: .dayNumber)
+        sessionType = try c.decode(SessionType.self, forKey: .sessionType)
+        duration = try c.decode(Int.self, forKey: .duration)
+        bonusSeconds = try c.decode(Int.self, forKey: .bonusSeconds)
+        completed = try c.decode(Bool.self, forKey: .completed)
+        actualTime = try c.decode(Int.self, forKey: .actualTime)
+        clearPercent = try c.decode(Int.self, forKey: .clearPercent)
+        thoughtCount = try c.decode(Int.self, forKey: .thoughtCount)
+        mindStateLog = try c.decode([MindStateEntry].self, forKey: .mindStateLog)
+        attentionLog = try c.decodeIfPresent([AttentionEntry].self, forKey: .attentionLog)
+        sessionDate = try c.decode(String.self, forKey: .sessionDate)
+        breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
+        focusCategory = try c.decodeIfPresent(FocusCategory.self, forKey: .focusCategory)
+        track = try c.decode(Track.self, forKey: .track)
+        clientSessionId = try c.decodeIfPresent(UUID.self, forKey: .clientSessionId)
+        ambientSoundSummary = try c.decodeIfPresent(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
+        combined = try c.decodeIfPresent(Bool.self, forKey: .combined) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(dayNumber, forKey: .dayNumber)
+        try c.encode(sessionType, forKey: .sessionType)
+        try c.encode(duration, forKey: .duration)
+        try c.encode(bonusSeconds, forKey: .bonusSeconds)
+        try c.encode(completed, forKey: .completed)
+        try c.encode(actualTime, forKey: .actualTime)
+        try c.encode(clearPercent, forKey: .clearPercent)
+        try c.encode(thoughtCount, forKey: .thoughtCount)
+        try c.encode(mindStateLog, forKey: .mindStateLog)
+        try c.encodeIfPresent(attentionLog, forKey: .attentionLog)
+        try c.encode(sessionDate, forKey: .sessionDate)
+        try c.encodeIfPresent(breathCount, forKey: .breathCount)
+        try c.encodeIfPresent(focusCategory, forKey: .focusCategory)
+        try c.encode(track, forKey: .track)
+        try c.encodeIfPresent(clientSessionId, forKey: .clientSessionId)
+        try c.encodeIfPresent(ambientSoundSummary, forKey: .ambientSoundSummary)
+        if combined {
+            try c.encode(true, forKey: .combined)
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
+        case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
+        case breathCount, focusCategory, track, clientSessionId, ambientSoundSummary
+        case combined
     }
 }
 

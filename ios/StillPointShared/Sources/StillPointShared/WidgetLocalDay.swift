@@ -77,7 +77,8 @@ extension WidgetDataStore {
                     completed: session.completed,
                     isStandard: session.sessionType == .standard,
                     sessionDate: session.sessionDate,
-                    track: session.track?.rawValue
+                    track: session.track?.rawValue,
+                    combined: session.combined
                 )
             },
             isoDay: previousDay,
