@@ -18,11 +18,13 @@ public enum VoiceBurstLogic {
     /// Mirrors `VOICE_BURST_WINDOW_S` in `src/lib/audio.ts`.
     public static let voiceBurstWindowSeconds: TimeInterval = 0.5
 
-    /// Voice players `AudioEngine` keeps, so the clip from the second before
-    /// can finish while the next one starts. The longest bundled clip lasts
-    /// 1.7 s, so at the one-second step the clip from two seconds back has
-    /// always ended by the time its player is needed again.
-    public static let playerCount = 2
+    /// Voice players `AudioEngine` keeps, so every clip outside the burst
+    /// window plays out while later ones start, as on web. A new clip stops
+    /// any clip that started less than `voiceBurstWindowSeconds` before it, so
+    /// the clips still holding a player started at least that far apart. When
+    /// all four hold one, the clip that started first is at least 2 s old, and
+    /// the longest bundled clip lasts 1.7 s, so it has always ended.
+    public static let playerCount = 4
 
     /// Whether a clip that started at `startedAt` stops when the next one starts
     /// at `nextStart`. Same comparison as web's
@@ -64,8 +66,8 @@ public enum VoiceBurstLogic {
         ///
         /// Every clip inside the burst window stops and frees its player. The
         /// new clip takes the first free player or, when every player holds a
-        /// clip, the one whose clip started first — the one most likely to have
-        /// ended already.
+        /// clip, the one whose clip started first, which has already ended
+        /// (see `playerCount`).
         public mutating func start(at now: TimeInterval) -> Plan {
             var stop: [Int] = []
             for (player, startedAt) in startTimes.enumerated() {

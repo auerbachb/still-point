@@ -63,20 +63,50 @@ final class VoiceBurstLogicTests: XCTestCase {
         XCTAssertEqual(clips.start(at: 34.05), VoiceBurstLogic.Plan(stop: [1], playOn: 1))
     }
 
-    func testOneSecondStepsAlternateBetweenTwoPlayersAndStopNothing() {
+    func testOneSecondStepsRotateThroughThePlayersAndStopNothing() {
         var clips = VoiceBurstLogic.Clips()
-        let plans = (0..<5).map { clips.start(at: 30 + Double($0)) }
-        XCTAssertEqual(plans.map(\.playOn), [0, 1, 0, 1, 0])
+        let plans = (0..<6).map { clips.start(at: 30 + Double($0)) }
+        XCTAssertEqual(plans.map(\.playOn), [0, 1, 2, 3, 0, 1])
         XCTAssertTrue(plans.allSatisfy { $0.stop.isEmpty })
     }
 
     func testFullPlayersReplaceTheClipThatStartedFirst() {
         var clips = VoiceBurstLogic.Clips()
-        _ = clips.start(at: 10)   // player 0
-        _ = clips.start(at: 10.5) // player 1; the clip on player 0 plays out
-        // Neither clip is in the burst window, so the new one takes the player
-        // whose clip started first.
-        XCTAssertEqual(clips.start(at: 11.1), VoiceBurstLogic.Plan(stop: [], playOn: 0))
+        for start in [10.0, 10.5, 11.0, 11.5] {
+            _ = clips.start(at: start) // players 0 to 3; each earlier clip plays out
+        }
+        // No clip is in the burst window, so the new one takes the player whose
+        // clip started first.
+        XCTAssertEqual(clips.start(at: 12.1), VoiceBurstLogic.Plan(stop: [], playOn: 0))
+    }
+
+    func testNumberHalfASecondAfterTwoOthersLeavesTheFirstPlaying() {
+        var clips = VoiceBurstLogic.Clips()
+        _ = clips.start(at: 0)   // player 0
+        _ = clips.start(at: 0.5) // player 1
+        // The clip from 0 s may still be speaking and is outside the burst
+        // window, so the number at 1 s must not take its player.
+        XCTAssertEqual(clips.start(at: 1), VoiceBurstLogic.Plan(stop: [], playOn: 2))
+    }
+
+    func testNumbersHalfASecondApartNeverCutOffAClipStillPlaying() {
+        // Web lets every clip outside the burst window play out, however many
+        // overlap. "27" holds the longest bundled clip buffer.
+        let longestClipSeconds = 1.7
+        var clips = VoiceBurstLogic.Clips()
+        var heldSince: [Int: TimeInterval] = [:]
+        for step in 0..<12 {
+            let now = 10 + 0.5 * Double(step)
+            let plan = clips.start(at: now)
+            XCTAssertEqual(plan.stop, [], "no clip is in the burst window at \(now)")
+            if let startedAt = heldSince[plan.playOn] {
+                XCTAssertGreaterThanOrEqual(
+                    now - startedAt, longestClipSeconds,
+                    "the clip from \(startedAt) lost its player at \(now)"
+                )
+            }
+            heldSince[plan.playOn] = now
+        }
     }
 
     func testBurstWindowCountsFromWhenAClipBeganToPlay() {

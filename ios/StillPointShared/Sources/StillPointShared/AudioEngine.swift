@@ -324,8 +324,9 @@ public final class AudioEngine: @unchecked Sendable {
     /// PCM buffers keyed by remaining-seconds value (1–60), populated by preload.
     private var voiceBufferCache: [Int: AVAudioPCMBuffer] = [:]
     /// Persistent voice-countdown players, keyed by `VoiceBurstLogic` player
-    /// index and attached lazily on first play. Two of them let the clip from
-    /// the second before finish while the next one starts (#941).
+    /// index and attached lazily on first play. There are enough of them that
+    /// every clip outside the burst window finishes while later ones start
+    /// (#941; `VoiceBurstLogic.playerCount`).
     private var voicePlayerNodes: [Int: AVAudioPlayerNode] = [:]
     /// Which voice player holds a clip, and since when (#941).
     private var voiceClips = VoiceBurstLogic.Clips()
@@ -402,7 +403,7 @@ public final class AudioEngine: @unchecked Sendable {
         }
         // #941: only a clip that started under half a second ago stops — a burst
         // (`VoiceBurstLogic.voiceBurstWindowSeconds`, web's `VOICE_BURST_WINDOW_S`).
-        // The clip from the second before plays out on the other player.
+        // The clip from the second before plays out on its own player.
         let plan = voiceClips.start(at: ProcessInfo.processInfo.systemUptime)
         stopVoicePlayers(plan.stop)
         let player = voicePlayer(plan.playOn, format: buffer.format)
@@ -416,8 +417,8 @@ public final class AudioEngine: @unchecked Sendable {
         // here, not from when this clip was planned.
         voiceClips.moveStart(of: plan.playOn, to: ProcessInfo.processInfo.systemUptime)
         // .interrupts replaces only what this player still holds and starts the
-        // new clip immediately. At the one-second step that is the clip from two
-        // seconds back, which has already ended.
+        // new clip immediately. A clip it still holds has already ended
+        // (`VoiceBurstLogic.playerCount`).
         player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         player.play()
     }
