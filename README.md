@@ -320,7 +320,7 @@ Advisory (do not require on `main`):
 - `pr-e2e-smoke (advisory)` — fast optional web smoke on PRs
 - `e2e coverage nudge (advisory)` — neutral reminder when UI changes lack e2e updates
 
-Comprehensive e2e (`web-e2e-smoke` / `web-e2e-critical`, native iOS lanes, mobile-web matrix) runs **nightly on main** and **gates iOS TestFlight releases** (the automatic cut on iOS merges to `main`) — not on every PR.
+Comprehensive e2e does not run on every PR. Web smoke + critical (`web-e2e-smoke` / `web-e2e-critical`) run **nightly on main**; the mobile-web matrix and native iOS lanes **gate iOS TestFlight releases** (the automatic cut on iOS merges to `main`).
 
 Notes:
 
