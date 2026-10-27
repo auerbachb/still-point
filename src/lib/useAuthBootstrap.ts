@@ -8,16 +8,18 @@ import { GRACE_CUTOFF_HOUR, type PracticeDaySit } from "@/lib/sessionCalendar";
 
 type UseAuthBootstrapOptions = {
   /** #666: the page's monotonic session generation. A sign-in, an explicit
-   *  sign-out, and an authoritative 401/403/404 (#833) all bump it, and every
-   *  adoption after an await checks it. */
+   *  sign-out, an authoritative 401/403/404 (#833), and another account
+   *  replacing the one on screen (#868) all bump it, and every adoption after an
+   *  await checks it. */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. Null until a fetch lands. */
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;
   /** `useOnlineStatus()`: link state, which prompts a re-check and never concludes one. */
   isOnline: boolean;
-  /** Clears account-scoped local state. Runs on both teardowns — an explicit
-   *  sign-out and an authoritative 401/403/404 — never on a failure that only
-   *  means the server could not be reached. */
+  /** Clears account-scoped local state. Runs on every teardown — an explicit
+   *  sign-out, an authoritative 401/403/404, and another account replacing the
+   *  one on screen (#868) — never on a failure that only means the server could
+   *  not be reached. */
   onAccountTeardown: () => void;
 };
 
@@ -48,6 +50,27 @@ export function useAuthBootstrap({
   const onAccountTeardownRef = useRef(onAccountTeardown);
   onAccountTeardownRef.current = onAccountTeardown;
 
+  // #868: installs a user that the server or the cached identity returned.
+  // Every tab shares the session cookie and the cached identity, so once
+  // another tab signs out and back in as someone else, this tab's next re-check,
+  // user re-read or cached fallback hands it that account. That is a change of
+  // session. As on a sign-out, the previous account's requests still in flight
+  // are invalidated, its sits dropped and its local state torn down, all before
+  // the new user is installed. The same account again, or the first user after
+  // none, is only installed.
+  const adoptUser = useCallback((incoming: User) => {
+    const onScreen = userRef.current;
+    if (onScreen && onScreen.id !== incoming.id) {
+      sessionGeneration.current += 1;
+      loadedSitsRef.current = null;
+      onAccountTeardownRef.current();
+    }
+    // Set now rather than at the next render, so an adoption that lands before
+    // that render compares against this account, not the one it replaced.
+    userRef.current = incoming;
+    setUser(incoming);
+  }, [sessionGeneration, loadedSitsRef]);
+
   // #666: re-read the user from the server after an action that moves account
   // state (a completed sit advancing the day number, say). The result is dropped
   // if the session changed while the request was in flight — see
@@ -64,10 +87,10 @@ export function useAuthBootstrap({
     void api
       .me(date)
       .then(({ user: u }) => {
-        if (generation === sessionGeneration.current) setUser(u);
+        if (generation === sessionGeneration.current) adoptUser(u);
       })
       .catch(() => {});
-  }, [sessionGeneration, loadedSitsRef]);
+  }, [sessionGeneration, loadedSitsRef, adoptUser]);
 
   // #666: the single place a server-confirmed user reaches the local copy that
   // survives a reload with no network — the web analogue of the iOS
@@ -102,7 +125,9 @@ export function useAuthBootstrap({
       // from drifting apart: without an identity to render there is nothing to
       // fall back to, whatever the outcome says.
       if (outcome.action === "offline" && cachedUser) {
-        setUser(cachedUser);
+        // #868: the cache lives in `localStorage`, so another tab may have
+        // rewritten it with whoever signed in there.
+        adoptUser(cachedUser);
         setRunningFromCache(true);
         setAuthError(null);
         setAuthChecked(true);
@@ -186,7 +211,7 @@ export function useAuthBootstrap({
             }
           }
           if (freshUser) {
-            setUser(freshUser);
+            adoptUser(freshUser);
             setRunningFromCache(false);
             setAuthError(null);
             setAuthChecked(true);
@@ -209,7 +234,7 @@ export function useAuthBootstrap({
     return () => {
       cancelled = true;
     };
-  }, [authRetryKey, sessionGeneration, loadedSitsRef]);
+  }, [authRetryKey, sessionGeneration, loadedSitsRef, adoptUser]);
 
   // #666: coming back online, re-run the bootstrap so the on-screen state
   // refreshes from the server and the offline indicator clears on its own. Only

@@ -467,6 +467,147 @@ describe("useAuthBootstrap — an authoritative sign-out mid-flight (#833)", () 
   });
 });
 
+type AuthView = Awaited<ReturnType<typeof renderAuth>>;
+
+/** One of A's sits, loaded before another account arrives. */
+const SIT_OF_A: PracticeDaySit = { completed: true, sessionType: "standard", sessionDate: "2026-10-26" };
+
+/** A signed in from the cached identity, with the server out of reach. */
+async function runningFromCacheAsA(): Promise<AuthView> {
+  saveCachedUser(USER_A);
+  fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  const auth = await renderAuth({ isOnline: false });
+  await settle();
+  return auth;
+}
+
+/** A signed in and confirmed by the server. */
+async function signedInAsA(): Promise<AuthView> {
+  fetchMock.mockResolvedValueOnce(respond(200, { user: USER_A }));
+  const auth = await renderAuth();
+  await settle();
+  return auth;
+}
+
+/** `start` puts A on screen; `adopt` has the path install `incoming`. */
+type AdoptionPath = {
+  start: () => Promise<AuthView>;
+  adopt: (auth: AuthView, incoming: User) => Promise<void>;
+};
+
+/**
+ * The three paths that install whatever account the server or the cache
+ * returns. Every tab shares the session cookie and the cached identity, so once
+ * another tab signs out and back in as B, each of them can hand this tab B.
+ */
+const ADOPTION_PATHS: Array<[string, AdoptionPath]> = [
+  [
+    "a re-check on reconnect",
+    {
+      start: runningFromCacheAsA,
+      adopt: async (auth, incoming) => {
+        fetchMock.mockResolvedValueOnce(respond(200, { user: incoming }));
+        await auth.setOnline(true);
+        await settle();
+      },
+    },
+  ],
+  [
+    "a user re-read",
+    {
+      start: signedInAsA,
+      adopt: async (auth, incoming) => {
+        mocks.me.mockResolvedValueOnce({ user: incoming });
+        await act(async () => {
+          auth.current().refreshUserFromServer();
+        });
+        await settle();
+      },
+    },
+  ],
+  [
+    "the cached identity on an offline re-check",
+    {
+      start: runningFromCacheAsA,
+      adopt: async (auth, incoming) => {
+        // The tab that signed in cached its account, and the re-check on focus
+        // still cannot reach the server, so it falls back to that cache.
+        saveCachedUser(incoming);
+        fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        await act(async () => {
+          window.dispatchEvent(new Event("focus"));
+        });
+        await settle();
+      },
+    },
+  ],
+];
+
+describe("useAuthBootstrap — another tab signs in as someone else (#868)", () => {
+  describe.each(ADOPTION_PATHS)("through %s", (_path, { start, adopt }) => {
+    test("a different account is a change of session, torn down before it is installed", async () => {
+      const auth = await start();
+      auth.loadedSitsRef.current = [SIT_OF_A];
+      // What the teardown found when it ran: the generation already bumped, the
+      // sits already dropped, and A still the account on screen.
+      const teardowns: Array<{ generation: number; sits: PracticeDaySit[] | null; onScreen?: string }> = [];
+      auth.onAccountTeardown.mockImplementation(() => {
+        teardowns.push({
+          generation: auth.sessionGeneration.current,
+          sits: auth.loadedSitsRef.current,
+          onScreen: auth.current().user?.id,
+        });
+      });
+
+      await adopt(auth, USER_B);
+
+      expect(teardowns).toEqual([{ generation: 1, sits: null, onScreen: USER_A.id }]);
+      expect(auth.current().user).toEqual(USER_B);
+      expect(auth.sessionGeneration.current).toBe(1);
+      expect(auth.loadedSitsRef.current).toBeNull();
+      expect(loadCachedUser()).toEqual(USER_B);
+    });
+
+    test("the same account again is not a change of session", async () => {
+      const auth = await start();
+      const sits = [SIT_OF_A];
+      auth.loadedSitsRef.current = sits;
+      const fresher = { ...USER_A, currentDay: 6 };
+
+      await adopt(auth, fresher);
+
+      expect(auth.current().user).toEqual(fresher);
+      expect(auth.sessionGeneration.current).toBe(0);
+      expect(auth.loadedSitsRef.current).toBe(sits);
+      expect(auth.onAccountTeardown).not.toHaveBeenCalled();
+    });
+  });
+
+  test("a re-read the previous account started cannot reinstall it over the new one", async () => {
+    const auth = await signedInAsA();
+
+    // Two re-reads are in flight when another tab signs in as B. The server
+    // answered the first while A was still signed in, but that answer arrives last.
+    const first = deferred<{ user: User }>();
+    const second = deferred<{ user: User }>();
+    mocks.me.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    await act(async () => {
+      auth.current().refreshUserFromServer();
+      auth.current().refreshUserFromServer();
+    });
+    second.resolve({ user: USER_B });
+    await settle();
+    expect(auth.current().user).toEqual(USER_B);
+
+    first.resolve({ user: USER_A });
+    await settle();
+
+    expect(auth.current().user).toEqual(USER_B);
+    expect(loadCachedUser()).toEqual(USER_B);
+    expect(auth.onAccountTeardown).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("useAuthBootstrap — practice day before 6:00 (#797)", () => {
   test("asks for the day still open, then refines it once dual-track is known", async () => {
     vi.setSystemTime(new Date(2026, 9, 26, 5, 0, 0)); // local Oct 26, 5:00

@@ -119,7 +119,7 @@ export default function StillPoint() {
     loadedSitsRef,
     isOnline,
     // Declared below, because it clears state owned by the hooks that follow.
-    // The auth hook only calls it from a sign-out, never while rendering.
+    // The auth hook only calls it when an account leaves the screen, never while rendering.
     onAccountTeardown: () => clearAccountScopedLocalState(),
   });
 
