@@ -80,7 +80,7 @@ final class SnapshotTests: XCTestCase {
         )
         snapshot("08-completion-note-saved", timeWaitingForIdle: 0)
 
-        tapStable(app.buttons["completion.returnButton"], in: app)
+        tapReturnButton(in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 12))
 
         XCTAssertTrue(app.buttons["home.quickMinuteButton"].waitForExistence(timeout: 8))
@@ -89,7 +89,8 @@ final class SnapshotTests: XCTestCase {
         tapStable(app.buttons["session.endEarlyButton"], in: app)
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].waitForExistence(timeout: 25))
         snapshot("17-quick-minute-complete", timeWaitingForIdle: 0)
-        tapStable(app.buttons["completion.returnButton"], in: app)
+        tapReturnButton(in: app)
+        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 12))
 
         XCTAssertTrue(app.buttons["home.beginButton"].waitForExistence(timeout: 12))
         tapStable(app.buttons["home.beginButton"], in: app)
@@ -211,9 +212,62 @@ final class SnapshotTests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: duration)
     }
 
+    /// Coordinate taps do not scroll, so bring the element on screen first. Otherwise a tap on
+    /// an element below the fold lands off-screen, and one on an element scrolled above the
+    /// fold lands on the status bar (scroll-to-top) instead of the element.
     private func tapStable(_ element: XCUIElement, in app: XCUIApplication) {
         XCTAssertTrue(element.waitForExistence(timeout: 12))
+        scrollElementIntoVisibleFrame(element, in: app)
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    /// The completion recap is taller than the screen, so the return button starts below the
+    /// fold (#956). Scroll it into view as the release-gate tests in `StillPointAppUITests.swift`
+    /// do, with extra swipes for shorter devices.
+    private func tapReturnButton(in app: XCUIApplication) {
+        let returnButton = app.buttons["completion.returnButton"]
+        XCTAssertTrue(returnButton.waitForExistence(timeout: 12))
+        scrollElementIntoVisibleFrame(returnButton, in: app, maxSwipes: 8)
+        tapStable(returnButton, in: app)
+    }
+
+    /// Top band (status bar / Dynamic Island) where a tap scrolls to top instead of hitting content.
+    private let statusBarBand: CGFloat = 60
+
+    private func isElementInVisibleFrame(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let frame = element.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        var visible = app.frame.insetBy(dx: -1, dy: -1)
+        visible.origin.y += statusBarBand
+        visible.size.height -= statusBarBand
+        // An open keyboard (e.g. after typing the completion note) covers the bottom of the
+        // app frame; a center under it would tap a key, so treat that area as off-screen.
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists, !keyboard.frame.isEmpty, keyboard.frame.minY < visible.maxY {
+            visible.size.height = max(0, keyboard.frame.minY - visible.minY)
+        }
+        return !frame.isEmpty
+            && frame.width > 1
+            && frame.height > 1
+            && visible.contains(center)
+    }
+
+    /// Like `StillPointAppUITests.scrollElementIntoVisibleFrame`, but swipes down when the
+    /// element sits above the visible frame (e.g. Begin after scrolling Home to the FAQ).
+    private func scrollElementIntoVisibleFrame(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 4
+    ) {
+        for _ in 0 ..< maxSwipes {
+            if isElementInVisibleFrame(element, in: app) { return }
+            if element.frame.midY < app.frame.minY + statusBarBand {
+                app.swipeDown()
+            } else {
+                app.swipeUp()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
     }
 
     private func waitForRoot(_ slug: String, in app: XCUIApplication, message: String) {

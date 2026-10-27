@@ -127,7 +127,7 @@ When a `.newPassword` field takes focus, iOS 26 replaces the keyboard with a "Us
 
 ### Scroll before tapping anything low on the completion recap
 
-The recap (ratings, mood grid, photo button) is taller than the screen, so `completion.returnButton` starts below the fold. `tapByStableCenter` does not scroll, so call `scrollElementIntoVisibleFrame` first.
+The recap (mood grid, photo button) is taller than the screen, so `completion.returnButton` starts below the fold. `tapByStableCenter` does not scroll, so call `scrollElementIntoVisibleFrame` first.
 
 ## VoiceOver smoke steps (manual fallback)
 
