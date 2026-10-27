@@ -426,9 +426,10 @@ final class SessionViewModel {
     /// The alert's "Continue without saving": the completion screen, with no
     /// stored session behind it.
     ///
-    /// The payload is the one this button sent from `SessionView` before #724:
-    /// no session id, and no attention log, so an unsaved sit's completion
-    /// screen shows no gaze summary.
+    /// The payload has no session id, so that screen saves nothing: its note is
+    /// never sent, no photo can be added, and ratings and mood stay hidden. The
+    /// attention log goes along as it does from `completeSit`, so the screen
+    /// shows the same gaze summary a saved sit's does (#873).
     @MainActor
     func continueWithoutSaving(appVM: AppViewModel) {
         appVM.completeSession(
@@ -443,6 +444,8 @@ final class SessionViewModel {
             duration: plannedSeconds,
             bonusSeconds: bonusSeconds,
             unlockAppGate: completedNaturally,
+            attentionLog: attentionLog,
+            attentionElapsed: attentionLog != nil ? elapsed : nil,
             ambientSoundSummary: ambientSoundSummary
         )
     }
