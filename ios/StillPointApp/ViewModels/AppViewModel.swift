@@ -216,9 +216,12 @@ final class AppViewModel {
     /// Buddy invite join/consume. One property: these are alternative routes into
     /// the same invite flow and never need to run concurrently.
     var buddyInviteTask: Task<Void, Never>?
-    /// Set while a pending invite is being joined. The token stays pending until
-    /// the server answers (#756), so a second consume must not POST it again.
-    var isConsumingBuddyInvite = false
+    /// The invite joins in flight. The token stays pending until the server answers
+    /// (#756), so a second consume must not POST it again. Each consume owns its own
+    /// attempt and releases only that one, so a previous account's join still in
+    /// flight after a sign-out neither blocks the next account's consume nor frees
+    /// the gate under it (#989). See ``BuddyInviteConsumeGate``.
+    var buddyInviteConsumeGate = BuddyInviteConsumeGate()
 
     /// Serializes every settings mutation in the app against every other one (#697).
     ///
