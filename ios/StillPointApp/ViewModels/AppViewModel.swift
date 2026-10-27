@@ -53,13 +53,6 @@ final class AppViewModel {
     var isLoading = true
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?
-    /// The last buddy-invite failure, shown by `HomeView` and `BuddySessionHubView`.
-    /// #1061: stored on `deepLinks`, which is `@Observable`, so a view reading this
-    /// still re-renders when it changes.
-    var buddyInviteError: String? {
-        get { deepLinks.buddyInviteError }
-        set { deepLinks.buddyInviteError = newValue }
-    }
     /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
     /// Owned by the identity generation whose End took it, so a save still running for a
     /// previous account can neither swallow the next account's End nor free its gate (#854).
