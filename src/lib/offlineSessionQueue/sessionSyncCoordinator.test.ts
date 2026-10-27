@@ -1107,6 +1107,46 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     ]);
   });
 
+  test("a queue that cannot be read after a refusal does not stop the sits behind it", async () => {
+    const readFailure = new Error("queue unreadable");
+    /** Fails the one read that follows the park being saved. */
+    class FailsReadAfterParkStore extends CopyingQueueStore {
+      private failNextLoad = false;
+      private failed = false;
+      override async loadEntries(): Promise<PendingSessionEntry[]> {
+        if (this.failNextLoad) {
+          this.failNextLoad = false;
+          throw readFailure;
+        }
+        return super.loadEntries();
+      }
+      override async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+        await super.saveEntries(entries);
+        if (!this.failed && entries.some((entry) => entry.parked)) {
+          this.failed = true;
+          this.failNextLoad = true;
+        }
+      }
+    }
+    const store = new FailsReadAfterParkStore();
+    await store.saveEntries([queuedSit(rejectedSit), queuedSit(sitBehind)]);
+    const uploads = stubApi((path, body) =>
+      path === "/api/sessions" && body.clientSessionId === rejectedSit
+        ? { status: 400, text: '{"error":"Invalid track"}' }
+        : undefined,
+    );
+
+    // The read failure is handed back once the sit behind has had its turn.
+    await expect(new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId))
+      .rejects.toBe(readFailure);
+    expect(uploads).toEqual([
+      `/api/sessions ${rejectedSit}`,
+      `/api/sessions ${sitBehind}`,
+      `/api/thoughts/batch server-${sitBehind}`,
+    ]);
+    expect((await store.loadEntries())[1]).toEqual({ ...syncedSit(sitBehind), thoughts: [] });
+  });
+
   test.each([401, 403])("a %i leaves its sit queued as it was, and a later flush sends it", async (status) => {
     const store = new CopyingQueueStore();
     await store.saveEntries([queuedSit(rejectedSit), queuedSit(sitBehind)]);

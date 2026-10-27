@@ -237,9 +237,15 @@ export class WebSessionSyncCoordinator {
           refusal ??= { error };
           // Its session row can have gone up before its thoughts were turned
           // down. The row moves the server's progression all the same, so the
-          // sit counts and `onSynced` still runs.
-          if (!entry.sessionSynced && (await this.resolvedServerSessionId(entry.clientSessionId, ownerUserId))) {
-            syncedCount += 1;
+          // sit counts and `onSynced` still runs. A queue that cannot be read
+          // here is a failure like any other: handed back once every sit has
+          // had its turn, not thrown past the sits behind this one.
+          if (!entry.sessionSynced) {
+            try {
+              if (await this.resolvedServerSessionId(entry.clientSessionId, ownerUserId)) syncedCount += 1;
+            } catch (readError) {
+              failure ??= { error: readError };
+            }
           }
         } else {
           // #947: any other failure, such as a queue that cannot be read or a
