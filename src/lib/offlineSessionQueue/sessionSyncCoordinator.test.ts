@@ -1,4 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { UPLOAD_TIMEOUT_MS } from "./constants";
 import { InMemoryOfflineSessionQueueStore, type OfflineSessionQueueStore } from "./queueStore";
 import {
   LocalSessionWriteError,
@@ -9,7 +10,7 @@ import {
   requestWithClientId,
 } from "./sessionSyncCoordinator";
 import { liveSessionSyncTransport, type SessionSyncTransport } from "./transport";
-import type { PendingSessionEntry } from "./types";
+import type { PendingSessionEntry, PendingSessionThought } from "./types";
 
 const testOwnerUserId = "user-test-558";
 
@@ -153,7 +154,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
     const entries = await store.loadEntries();
     expect(entries[0]!.thoughts).toEqual([
-      { timeInSession: 12, text: "mid-sit" },
+      { timeInSession: 12, text: "mid-sit", clientThoughtId: expect.any(String) },
       { timeInSession: -1, text: "revised note" },
     ]);
   });
@@ -399,7 +400,7 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     await coordinator.clearEndNote(clientSessionId, testOwnerUserId);
 
     const [entry] = await store.loadEntries();
-    expect(entry!.thoughts).toEqual([{ timeInSession: 12, text: "mid-sit" }]);
+    expect(entry!.thoughts).toEqual([{ timeInSession: 12, text: "mid-sit", clientThoughtId: expect.any(String) }]);
     // No server row yet, so there is no stored note to delete.
     expect(entry!.clearCompletionNote).toBe(false);
   });
@@ -604,5 +605,178 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     await expect(
       coordinator.clearEndNote("550e8400-e29b-41d4-a716-446655440027", testOwnerUserId),
     ).rejects.toThrow("entryNotFound");
+  });
+});
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Settles only once `signal` aborts, rejecting the way `fetch` does then. */
+function rejectOnAbort(signal: RequestInit["signal"]): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+  });
+}
+
+type BatchBody = { sessionId: string; thoughts: PendingSessionThought[] };
+
+/**
+ * A stand-in for the API behind `liveSessionSyncTransport`. Like the real
+ * route (#948), it stores a thought once per id and every thought without one,
+ * and it stores a batch before it answers, so a batch whose answer never
+ * arrives is stored all the same. `stallBatches` such answers are withheld
+ * until the request aborts.
+ */
+function stubServer({ stallBatches = 0 } = {}) {
+  const stored: PendingSessionThought[] = [];
+  const batches: BatchBody[] = [];
+  let stalled!: () => void;
+  const batchStalled = new Promise<void>((resolve) => { stalled = resolve; });
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    if (url === "/api/sessions") {
+      return { ok: true, status: 201, json: async () => ({ session: { id: "server-948" } }) };
+    }
+    const body = JSON.parse(String(init.body)) as BatchBody;
+    batches.push(body);
+    for (const thought of body.thoughts) {
+      if (!thought.clientThoughtId || !stored.some((t) => t.clientThoughtId === thought.clientThoughtId)) {
+        stored.push(thought);
+      }
+    }
+    if (stallBatches > 0) {
+      stallBatches -= 1;
+      stalled();
+      return rejectOnAbort(init.signal);
+    }
+    return { ok: true, status: 200, json: async () => ({ thoughts: [] }) };
+  }));
+  return { stored, batches, batchStalled };
+}
+
+describe("WebSessionSyncCoordinator thought ids (#948)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  test("each in-session thought is queued with its own id before the first upload, and the end note gets none", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440040";
+    const captured = [
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: 30, text: "car door" },
+    ];
+    let queuedAtFirstUpload: PendingSessionThought[] | null = null;
+    const offline: SessionSyncTransport = {
+      ...alwaysFailingSessionSyncTransport,
+      createSession: async () => {
+        queuedAtFirstUpload ??= (await store.loadEntries())[0]!.thoughts;
+        throw new TypeError("Network unavailable");
+      },
+    };
+    const coordinator = new WebSessionSyncCoordinator(store, offline);
+
+    await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, captured);
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "offline note");
+
+    const [entry] = await store.loadEntries();
+    expect(entry!.thoughts).toEqual([
+      { timeInSession: 12, text: "rain", clientThoughtId: expect.stringMatching(UUID) },
+      { timeInSession: 12, text: "rain", clientThoughtId: expect.stringMatching(UUID) },
+      { timeInSession: 30, text: "car door", clientThoughtId: expect.stringMatching(UUID) },
+      { timeInSession: -1, text: "offline note" },
+    ]);
+    // The same words twice are two thoughts, so two ids.
+    const ids = entry!.thoughts.slice(0, 3).map((thought) => thought.clientThoughtId);
+    expect(new Set(ids).size).toBe(3);
+    // Already saved when the first upload began, so every attempt sends them.
+    expect(queuedAtFirstUpload).toEqual(entry!.thoughts.slice(0, 3));
+    expect(captured).toEqual([
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: 30, text: "car door" },
+    ]);
+
+    // Saving the sit again, as the completion screen's retry does, keeps them.
+    await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, captured);
+    expect((await store.loadEntries())[0]!.thoughts.slice(0, 3).map((thought) => thought.clientThoughtId))
+      .toEqual(ids);
+  });
+
+  test("a batch the server stored before its upload timed out is sent again with the same ids, and each thought is stored once", async () => {
+    vi.useFakeTimers();
+    const server = stubServer({ stallBatches: 1 });
+    const store = new InMemoryOfflineSessionQueueStore();
+    const coordinator = new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440041";
+
+    const saving = coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, [
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: 30, text: "car door" },
+    ]);
+    await server.batchStalled;
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
+
+    // The upload timed out, so the thoughts stay queued, though the server has them.
+    expect(await saving).toMatchObject({ isPendingSync: true });
+    const queued = (await store.loadEntries())[0]!.thoughts;
+    expect(queued).toHaveLength(2);
+    expect(server.stored).toEqual(queued);
+
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(1);
+
+    expect(server.batches.map((batch) => batch.thoughts)).toEqual([queued, queued]);
+    expect(server.stored).toEqual(queued);
+    expect((await store.loadEntries())[0]!.thoughts).toEqual([]);
+  });
+
+  test("an entry queued before ids existed still flushes, sending its thoughts as queued", async () => {
+    const server = stubServer();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440042";
+    const legacyThoughts = [
+      { timeInSession: 12, text: "rain" },
+      { timeInSession: -1, text: "a note" },
+    ];
+    const store = new InMemoryOfflineSessionQueueStore();
+    await store.saveEntries([{
+      clientSessionId,
+      ownerUserId: testOwnerUserId,
+      request: requestWithClientId(baseRequest(), clientSessionId),
+      thoughts: legacyThoughts,
+      serverSessionId: null,
+      sessionSynced: false,
+      enqueuedAt: "2026-07-17T12:00:00.000Z",
+    }]);
+
+    expect(await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId))
+      .toBe(1);
+
+    // No ids are backfilled: the batch is the one sent before #948.
+    expect(server.batches).toEqual([{ sessionId: "server-948", dayNumber: 1, thoughts: legacyThoughts }]);
+    expect((await store.loadEntries())[0]).toMatchObject({ sessionSynced: true, thoughts: [] });
+  });
+
+  test("a thought is acknowledged by its own id, not by another with the same time and text", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440043";
+    const sent = { timeInSession: 12, text: "rain", clientThoughtId: "94800000-0000-4000-8000-000000000041" };
+    const twin = { timeInSession: 12, text: "rain", clientThoughtId: "94800000-0000-4000-8000-000000000042" };
+    await seedSyncedEntry(store, clientSessionId, [sent]);
+
+    // A second thought with the same words is queued while the batch is out. A
+    // new array, as an IndexedDB read would hand out: the in-memory store
+    // shares the one this batch was built from.
+    const transport: SessionSyncTransport = {
+      ...alwaysFailingSessionSyncTransport,
+      batchThoughts: async () => {
+        const entries = await store.loadEntries();
+        entries[0]!.thoughts = [...entries[0]!.thoughts, twin];
+        await store.saveEntries(entries);
+      },
+    };
+
+    await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
+
+    expect((await store.loadEntries())[0]!.thoughts).toEqual([twin]);
   });
 });

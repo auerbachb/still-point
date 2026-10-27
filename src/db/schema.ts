@@ -573,9 +573,18 @@ export const thoughts = pgTable("thoughts", {
   dayNumber: integer("day_number").notNull(),
   timeInSession: integer("time_in_session").notNull(),
   text: varchar("text", { length: 1000 }).notNull(),
+  /** #948: the web offline queue's replay key for an in-session thought, so a
+   *  batch sent again after its response was lost stores the thought once.
+   *  Null for completion notes, iOS, and thoughts queued before #948. */
+  clientThoughtId: uuid("client_thought_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdx: index("idx_thoughts_user").on(table.userId, table.dayNumber),
+  /** #948: idempotent batch inserts — one row per user per client thought id. */
+  userClientThoughtUnique: uniqueIndex("thoughts_user_client_thought_unique").on(
+    table.userId,
+    table.clientThoughtId,
+  ).where(sql`${table.clientThoughtId} is not null`),
 }));
 
 /** pending | accepted | rejected | cancelled */

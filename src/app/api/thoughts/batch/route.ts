@@ -81,6 +81,21 @@ export const POST = withApiHandler("Batch thoughts", async (request: NextRequest
     return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
   }
 
+  // #948: a client thought id names one thought, so a batch that repeats one is
+  // malformed. An id on the completion note is never stored
+  // (`storedClientThoughtId` in atomic.ts), so it is not counted.
+  const clientThoughtIds = normalized.flatMap((t) =>
+    t.timeInSession !== -1 && t.clientThoughtId ? [t.clientThoughtId] : [],
+  );
+  if (new Set(clientThoughtIds).size !== clientThoughtIds.length) {
+    console.warn("Batch thoughts rejected duplicate client thought ids", {
+      sessionId,
+      userId: auth.user.userId,
+      clientThoughtIdCount: clientThoughtIds.length,
+    });
+    return NextResponse.json({ error: "Invalid thoughts payload" }, { status: 400 });
+  }
+
   const completionNote = normalized.filter((t) => t.timeInSession === -1).at(-1) ?? null;
   const rowsToInsert = [
     ...normalized.filter((t) => t.timeInSession !== -1),

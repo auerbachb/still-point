@@ -4,6 +4,11 @@ import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 export type PendingSessionThought = {
   timeInSession: number;
   text: string;
+  /** #948: minted when the sit is queued and saved with it, so every upload of
+   *  this thought — from any tab or the service worker — sends the same id and
+   *  the server stores it once. Absent on the end note, which the server
+   *  replaces, and on thoughts queued before #948, which upload as before. */
+  clientThoughtId?: string;
 };
 
 /** POST /api/sessions body with the #557 client idempotency key attached. */
