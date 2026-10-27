@@ -133,6 +133,15 @@ export async function startStandInOrigin(upstream: string): Promise<StandInOrigi
         headers: upstreamHeaders(request.headers),
       },
       (upstreamResponse) => {
+        // The connection was dropped (or the origin made unreachable) while the
+        // dev server was still answering — the service worker's background
+        // route-data refreshes (#967) can outlive a switch to offline. Piping
+        // into the destroyed response would throw, so drop the answer instead.
+        if (response.destroyed || !reachable) {
+          upstreamResponse.destroy();
+          request.socket.destroy();
+          return;
+        }
         response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
         // pipeline, not pipe: an upstream that closes mid-response errors its
         // stream, and this destroys the browser's response instead of leaving
