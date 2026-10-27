@@ -189,7 +189,7 @@ struct HomeView: View {
         let manager = appVM.appBlockingManager
         if manager.hasSelection {
             Button {
-                appVM.selectedTab = 4
+                appVM.selectedTab = MainTab.settings.rawValue
             } label: {
                 HStack(spacing: SPSpacing.s2) {
                     Image(systemName: manager.isUnlocked ? "lock.open" : "lock")
@@ -415,7 +415,7 @@ private struct AppGateOnboardingSheet: View {
             VStack(spacing: SPSpacing.s2) {
                 Button {
                     isPresented = false
-                    appVM.selectedTab = 4
+                    appVM.selectedTab = MainTab.settings.rawValue
                 } label: {
                     Text("Choose apps")
                         .font(SPFont.mono(13, weight: .medium))

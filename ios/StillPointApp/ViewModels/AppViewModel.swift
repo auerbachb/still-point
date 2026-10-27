@@ -17,7 +17,8 @@ import StillPointShared
 final class AppViewModel {
     var currentView: AppView = .auth
     /// Selected tab in `MainTabView`, lifted here so non-tab views (e.g. the Home
-    /// app-gate pill) can navigate to a tab. 0 = Home … 4 = Settings.
+    /// app-gate pill) can navigate to a tab. Holds a `MainTab` raw value, which is
+    /// the `TabView` selection tag.
     var selectedTab: Int = AppViewModel.defaultSelectedTab()
     var currentUser: UserDTO?
     /// #665: true while the app is running from its local copy of identity and
@@ -29,6 +30,18 @@ final class AppViewModel {
     /// reconnect" promise, which is false for as long as storage refuses writes.
     /// A later successful save clears it — that is the proof storage works again.
     var localSaveFailed = false
+    /// #665/#703/#717: what the offline strip has to say right now, or `nil` when
+    /// it has nothing — connected, with the sit safely on the device. A failed
+    /// local write raises it whether or not the app is offline: that failure is
+    /// not a connectivity failure, and a breath sit has no completion screen to
+    /// surface it on. The rule lives in the shared `OfflineIndicatorCopy` so the
+    /// web strip raises and lowers on exactly the same conditions.
+    ///
+    /// #749: the one place the strip's inputs are combined. `MainTabView` reads
+    /// only this, so a new cross-tab banner input is added here, not in the view.
+    var offlineIndicatorState: OfflineIndicatorCopy.State? {
+        OfflineIndicatorCopy.state(offline: isOfflineMode, sitNotStored: localSaveFailed)
+    }
     var isLoading = true
     var authStatusMessage: String?
     var lastColdStartAuthCheckMs: Int?

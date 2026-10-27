@@ -49,6 +49,7 @@
 		3DD94CD008394385332E2476 /* 34.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 4E0BB1EDF1994530B03012DD /* 34.mp3 */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
+		3F80728F64716D6C41752A83 /* TabBarAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9978D1E5B100991F2FBF53AB /* TabBarAppearance.swift */; };
 		3F857D13B6573BC89F19D5D6 /* 14.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 90E0B21C4EC373501602C81F /* 14.mp3 */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
 		438303F73906D6285D985654 /* 52.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C7E369849AAFAC053093EAF /* 52.mp3 */; };
@@ -315,6 +316,7 @@
 		9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		95B9BFB54C47EA75C997B1AC /* 7.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 7.mp3; sourceTree = "<group>"; };
 		96564931B9635CCC906F2C4C /* 27.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 27.mp3; sourceTree = "<group>"; };
+		9978D1E5B100991F2FBF53AB /* TabBarAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarAppearance.swift; sourceTree = "<group>"; };
 		99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsVisibilitySection.swift; sourceTree = "<group>"; };
 		9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Widget.swift"; sourceTree = "<group>"; };
 		A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
@@ -511,6 +513,7 @@
 				52A1CBF3B5A6592CB7B27AC9 /* LogReasonDeepLinkParser.swift */,
 				D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */,
 				9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */,
+				9978D1E5B100991F2FBF53AB /* TabBarAppearance.swift */,
 			);
 			path = Navigation;
 			sourceTree = "<group>";
@@ -1045,6 +1048,7 @@
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
 				DFB99FF0486CEB1EEDE70DFE /* SettingsVisibilitySection.swift in Sources */,
 				E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */,
+				3F80728F64716D6C41752A83 /* TabBarAppearance.swift in Sources */,
 				B41D20D3939E0F51F7471F44 /* ThoughtCaptureView.swift in Sources */,
 				2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */,
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
