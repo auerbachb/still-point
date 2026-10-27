@@ -78,8 +78,8 @@ function readQueuedSessions(page: import("@playwright/test").Page, dbName: strin
 }
 
 test.describe("offline-first web PWA", () => {
-  // The worker is what these two specs test, so they opt back in to it. The config
-  // blocks it everywhere else: on WebKit it hides API calls from page.route (#862).
+  // These two specs test the worker, so they opt back in; the config blocks it (#862).
+  // On WebKit the worker then hides their API calls from page.route; #863 and #864 track it.
   test.describe(() => {
     test.use({ serviceWorkers: "allow" });
 
