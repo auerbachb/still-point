@@ -119,7 +119,8 @@ export default function StillPoint() {
     loadedSitsRef,
     isOnline,
     // Declared below, because it clears state owned by the hooks that follow.
-    // The auth hook only calls it when an account leaves the screen, never while rendering.
+    // The auth hook calls it only from a teardown (a sign-out, an authoritative
+    // 401/403/404, or another account replacing this one), never while rendering.
     onAccountTeardown: () => clearAccountScopedLocalState(),
   });
 
@@ -165,11 +166,23 @@ export default function StillPoint() {
     // their own preference arrives.
     clearSuppressDuringSessionPref();
     // #709: the report queue is account-scoped for the same reason, so it is
-    // dropped here rather than at the one call site that used to do it. Both
-    // teardowns reach this helper — an explicit sign-out and an authoritative
-    // 401/403/404 — and a report still queued under this account would otherwise
-    // survive the second of them and drain under the next account's cookie.
+    // dropped here rather than at the one call site that used to do it. Every
+    // teardown reaches this helper — an explicit sign-out, an authoritative
+    // 401/403/404, and another account replacing this one (#868) — and a report
+    // still queued under this account would otherwise survive the last two and
+    // drain under the next account's cookie.
     resetSessionStateReports();
+    // #868: whatever the previous account had open goes with it, here rather than
+    // in the sign-out handler that used to close it. A sit, its completion screen
+    // and a buddy room act as whoever is signed in now, so left open when another
+    // account replaces this one they would save and post as that account. A save
+    // that the teardown's generation bump drops would also leave its ended sit on
+    // screen, with nothing left to close it.
+    buddyInviteInFlight.current = false;
+    setBuddySessionId(null);
+    setBuddyCalendarMessage(null);
+    setOverlay(null);
+    setCompletionData(null);
   };
 
   // Redirect legacy `?view=` deep links and unknown tab slugs to their routes.
@@ -286,14 +299,6 @@ export default function StillPoint() {
     // (e.g. /app?buddy=<token> or a deep-linked tab) survives sign-in and the
     // buddy-invite / ?view= effects above can still consume it.
     signIn(userData);
-    setOverlay(null);
-  };
-
-  const handleLogout = () => {
-    signOut();
-    buddyInviteInFlight.current = false;
-    setBuddySessionId(null);
-    setBuddyCalendarMessage(null);
     setOverlay(null);
   };
 
@@ -697,7 +702,8 @@ export default function StillPoint() {
           onUsernameChange={(username) =>
             setUser((prev) => (prev ? { ...prev, username } : prev))
           }
-          onLogout={handleLogout}
+          // The account teardown closes the buddy room and any overlay (#868).
+          onLogout={signOut}
         />
       )}
     </div>
