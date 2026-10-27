@@ -7,6 +7,8 @@ const OFFLINE_IDB_NAME = "stillpoint-offline-v1";
 const OFFLINE_IDB_STORE = "session-queue";
 const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
 const OFFLINE_QUEUE_LOCK_NAME = "stillpoint-session-queue";
+/** #907: one upload's deadline; constants.ts explains its size. */
+const UPLOAD_TIMEOUT_MS = 60 * 1000;
 const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
 const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
@@ -128,18 +130,41 @@ function saveOfflineEntries(db, entries) {
   });
 }
 
-async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+/*
+ * #907: each upload is aborted after UPLOAD_TIMEOUT_MS. The flush below holds
+ * the queue lock across its uploads, so one that never settled would keep every
+ * tab's queue writes waiting until the sync event ran out. A rejection ends the
+ * flush, and what it had not sent stays queued for the next one.
+ *
+ * `readBody: false` resolves on the status alone, as the page's `batchThoughts`
+ * does. The server has stored a thoughts batch once it answers 2xx, so a body
+ * that stalls after that must not fail the upload and send the batch again.
+ * The unread body is cancelled, so it does not hold its connection open.
+ */
+async function postJson(url, body, { readBody = true } = {}) {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+    if (!readBody) {
+      void res.body?.cancel().catch(() => {});
+      return null;
+    }
+    // Awaited inside the try, so the deadline still covers the body.
+    return await res.json();
+  } finally {
+    clearTimeout(deadline);
   }
-  return res.json();
 }
 
 async function readOfflineOwnerUserId() {
@@ -164,29 +189,38 @@ async function flushOfflineQueueFromSw() {
   try {
     const entries = await loadOfflineEntries(db);
     let changed = false;
-    for (const entry of entries) {
-      if (entry.ownerUserId !== ownerUserId) continue;
-      if (entry.sessionSynced && (!entry.thoughts || entry.thoughts.length === 0)) {
-        continue;
+    try {
+      for (const entry of entries) {
+        if (entry.ownerUserId !== ownerUserId) continue;
+        if (entry.sessionSynced && (!entry.thoughts || entry.thoughts.length === 0)) {
+          continue;
+        }
+        if (!entry.sessionSynced) {
+          const data = await postJson("/api/sessions", entry.request);
+          entry.serverSessionId = data.session?.id ?? null;
+          entry.sessionSynced = true;
+          changed = true;
+        }
+        if (entry.serverSessionId && entry.thoughts?.length > 0) {
+          await postJson(
+            "/api/thoughts/batch",
+            {
+              sessionId: entry.serverSessionId,
+              dayNumber: entry.request.dayNumber,
+              thoughts: entry.thoughts,
+            },
+            { readBody: false },
+          );
+          entry.thoughts = [];
+          changed = true;
+        }
       }
-      if (!entry.sessionSynced) {
-        const data = await postJson("/api/sessions", entry.request);
-        entry.serverSessionId = data.session?.id ?? null;
-        entry.sessionSynced = true;
-        changed = true;
+    } finally {
+      // #907: saved when an upload fails or times out too, so the batches sent
+      // before it are not sent again; the server would store their thoughts twice.
+      if (changed) {
+        await saveOfflineEntries(db, entries);
       }
-      if (entry.serverSessionId && entry.thoughts?.length > 0) {
-        await postJson("/api/thoughts/batch", {
-          sessionId: entry.serverSessionId,
-          dayNumber: entry.request.dayNumber,
-          thoughts: entry.thoughts,
-        });
-        entry.thoughts = [];
-        changed = true;
-      }
-    }
-    if (changed) {
-      await saveOfflineEntries(db, entries);
     }
   } finally {
     db.close();
@@ -297,9 +331,18 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("sync", (event) => {
   if (event.tag !== OFFLINE_SYNC_TAG) return;
   event.waitUntil(
-    withOfflineQueueLock(() => flushOfflineQueueFromSw())
-      .then(() => notifyClientsToFlush())
-      .catch(() => notifyClientsToFlush()),
+    // #907: a failed flush, such as an upload that timed out, still fails the
+    // event once the tabs are told. The browser then retries the sync later, so
+    // a queued sit is retried even when no tab is open to flush it. Telling the
+    // tabs is best-effort: it never fails a sync that sent everything, and never
+    // replaces the flush's own error.
+    withOfflineQueueLock(() => flushOfflineQueueFromSw()).then(
+      () => notifyClientsToFlush().catch(() => {}),
+      async (error) => {
+        await notifyClientsToFlush().catch(() => {});
+        throw error;
+      },
+    ),
   );
 });
 
