@@ -189,7 +189,12 @@ export function gitRunner(cwd, env = process.env) {
   };
 }
 
-/** @param {number} ms */
+/**
+ * Intentional infra back-off between git network retries — not a test wait.
+ * Allow-listed in `ALLOWED_SLEEP_LINES_BY_PATH` (scripts/e2e/check-no-naked-sleep.mjs),
+ * per docs/testing/e2e-policy.md §3; keep this helper and its call sites in sync with that entry.
+ * @param {number} ms
+ */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
