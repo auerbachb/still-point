@@ -35,6 +35,10 @@ actor UITestAPIStore {
     /// #887: Settings requests received since launch. In memory only, so each launch
     /// counts from zero.
     private var settingsRequestCount = 0
+    /// #957: set by the first `getSessions` call under `SP_UI_TEST_FORCE_SESSIONS_FAILURE=once`,
+    /// which is the one that fails. In memory only, so each launch fails its first
+    /// History load again.
+    private var isSessionsFailureSpent = false
 
     private static let maxFailureReasonLength = 1000
 
@@ -67,7 +71,13 @@ actor UITestAPIStore {
     /// app is not running in UI-test mode. Emits the same `[E2E-DIAG]` lines the
     /// original `APIClient.init` did so CI xcresult logs are unchanged.
     static func fromProcessInfo(defaultsKey: String = "StillPoint.UITest.Store") -> UITestAPIStore? {
-        guard let config = UITestConfig.fromProcessInfo() else {
+        make(environment: ProcessInfo.processInfo.environment, defaultsKey: defaultsKey)
+    }
+
+    /// Builds the store from the given `SP_UI_TEST_*` environment. `fromProcessInfo`
+    /// passes the process environment; unit tests pass their own (#957).
+    static func make(environment: [String: String], defaultsKey: String) -> UITestAPIStore? {
+        guard let config = UITestConfig.from(environment: environment) else {
             APIClient.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=NO")
             return nil
         }
@@ -273,10 +283,7 @@ actor UITestAPIStore {
 
     func getSessions(today: String? = nil) throws -> (sessions: [SessionDTO], stats: StatsDTO) {
         try ensureAuthenticated()
-
-        if config.forceSessionsFailure {
-            throw APIError(status: 503, message: "Failed to load sessions. Check your connection.")
-        }
+        try failSessionsLoadIfForced()
 
         let sortedSessions = store.sessions.sorted { $0.sessionDate < $1.sessionDate }
         let todayIso: String
@@ -305,6 +312,27 @@ actor UITestAPIStore {
         return (sortedSessions, stats)
     }
 
+    private static var sessionsFailure: APIError {
+        APIError(status: 503, message: "Failed to load sessions. Check your connection.")
+    }
+
+    /// Throws the forced sessions failure: on every call in the always mode, and on
+    /// the first call only in the once mode (#957). The check and the update run in
+    /// one synchronous actor-isolated step, so two loads cannot both take the one
+    /// failure.
+    private func failSessionsLoadIfForced() throws {
+        switch config.sessionsFailureMode {
+        case .none:
+            return
+        case .always:
+            throw Self.sessionsFailure
+        case .once:
+            guard !isSessionsFailureSpent else { return }
+            isSessionsFailureSpent = true
+            throw Self.sessionsFailure
+        }
+    }
+
     private func localTodayIsoDate() -> String {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
@@ -316,8 +344,10 @@ actor UITestAPIStore {
     func getTracksDoneToday(date: String) throws -> TracksDoneTodayDTO {
         try ensureAuthenticated()
 
-        if config.forceSessionsFailure {
-            throw APIError(status: 503, message: "Failed to load sessions. Check your connection.")
+        // #957: only the always mode fails this endpoint. The once mode is for the
+        // History load alone, so the track refresh at launch cannot spend its failure.
+        if config.sessionsFailureMode == .always {
+            throw Self.sessionsFailure
         }
 
         var primary = false
@@ -808,12 +838,34 @@ actor UITestAPIStore {
 
 // MARK: - Launch config
 
+/// How `SP_UI_TEST_FORCE_SESSIONS_FAILURE` fails the sessions endpoints (#957).
+enum UITestSessionsFailureMode: Equatable, Sendable {
+    /// No forced failure.
+    case none
+    /// `getSessions` and `getTracksDoneToday` fail with a 503 on every call
+    /// (`1`, `true`, `yes`, `on`).
+    case always
+    /// Only the first `getSessions` call in the process fails with a 503, and
+    /// `getTracksDoneToday` never fails (`once`). Lets a UI test tap History's Retry
+    /// and see the next load succeed.
+    case once
+
+    /// Reads the variable's value. Case-insensitive and not trimmed, like the other
+    /// `SP_UI_TEST_*` flags. Any other value, or no value, is `none`.
+    static func parse(_ value: String?) -> UITestSessionsFailureMode {
+        guard let value else { return .none }
+        let lowered = value.lowercased()
+        if lowered == "once" { return .once }
+        return ["1", "true", "yes", "on"].contains(lowered) ? .always : .none
+    }
+}
+
 private struct UITestConfig: Sendable {
     let seedAuthenticated: Bool
     let resetStore: Bool
     let forceLaunchOffline: Bool
     let forceTokenExpired: Bool
-    let forceSessionsFailure: Bool
+    let sessionsFailureMode: UITestSessionsFailureMode
     /// #875: every `createSession` fails as a dead network does
     /// (`SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE`), so a completed sit stays
     /// pending sync.
@@ -828,15 +880,14 @@ private struct UITestConfig: Sendable {
     /// (`SP_UI_TEST_SECOND_ACCOUNT`).
     let secondAccount: Bool
 
-    static func fromProcessInfo() -> UITestConfig? {
-        let env = ProcessInfo.processInfo.environment
+    static func from(environment env: [String: String]) -> UITestConfig? {
         guard truthy(env["SP_UI_TEST_MODE"]) else { return nil }
         return UITestConfig(
             seedAuthenticated: truthy(env["SP_UI_TEST_SEED_AUTH"]),
             resetStore: truthy(env["SP_UI_TEST_RESET_STORE"]),
             forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
-            forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
+            sessionsFailureMode: UITestSessionsFailureMode.parse(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
             forceCreateSessionFailure: truthy(env["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"]),
             forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
             snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),

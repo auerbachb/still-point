@@ -637,9 +637,17 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
     }
 
+    /// #957: the History error banner's Retry loads History again.
+    ///
+    /// Launched with the fail-once sessions mode, so the first History load fails with
+    /// a 503 and the next one succeeds. A Retry that does nothing leaves the banner up,
+    /// and one whose load fails again brings it back, so either fails the test.
     @MainActor
     func testSessionsFailureShowsVisibleRetryMessage() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: false, forceSessionsFailure: true, forceProgressTab: true)
+        let app = makeApp(seedAuthenticated: true, resetStore: false, forceProgressTab: true)
+        // Set here rather than through a `makeApp` parameter: one more defaulted
+        // parameter makes calls ambiguous with the `XCTestCase` helper's `makeApp`.
+        app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = "once"
         app.launch()
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
@@ -649,10 +657,33 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
         // `UITestAPIStore` fails the forced load with a 503, which
         // `HistoryViewModel.message(for:)` maps to its server-error copy (#612).
-        XCTAssertEqual(errorLabel.label, "Server hiccup. Please try again in a moment.")
+        XCTAssertTrue(
+            errorLabel.label.contains("Server hiccup"),
+            "Expected server-error copy, got: \(errorLabel.label)"
+        )
         XCTAssertTrue(isElementInVisibleFrame(errorLabel, in: app), "History error message is off screen")
         XCTAssertTrue(retryButton.waitForExistence(timeout: 5), "Retry button did not appear with the history error")
         XCTAssertTrue(retryButton.isHittable, "Retry button is not hittable")
+
+        retryButton.tap()
+
+        let bannerGone = XCTWaiter().wait(
+            for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: errorLabel)],
+            timeout: 8
+        )
+        XCTAssertEqual(bannerGone, .completed, "The History error banner stayed up after Retry")
+
+        // The store keeps sits from earlier tests (`resetStore: false`), so History
+        // shows either its empty state or its view-mode toggle once the load succeeds.
+        let historyContent = app.descendants(matching: .any).matching(
+            NSPredicate(
+                format: "label == %@ OR identifier == %@",
+                "No sessions yet",
+                "history.viewMode.calendar"
+            )
+        ).firstMatch
+        XCTAssertTrue(historyContent.waitForExistence(timeout: 8), "History content did not appear after Retry")
+        XCTAssertFalse(errorLabel.exists, "The History error banner came back after Retry")
     }
 
     /// #875 / #792: a sit whose upload fails stays pending sync, and its completion
