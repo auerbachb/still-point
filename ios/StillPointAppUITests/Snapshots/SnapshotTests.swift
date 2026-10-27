@@ -212,14 +212,18 @@ final class SnapshotTests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: duration)
     }
 
+    /// Coordinate taps do not scroll, so bring the element on screen first. Otherwise a tap on
+    /// an element below the fold lands off-screen, and one on an element scrolled above the
+    /// fold lands on the status bar (scroll-to-top) instead of the element.
     private func tapStable(_ element: XCUIElement, in app: XCUIApplication) {
         XCTAssertTrue(element.waitForExistence(timeout: 12))
+        scrollElementIntoVisibleFrame(element, in: app)
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     /// The completion recap is taller than the screen, so the return button starts below the
-    /// fold and `tapStable` (which does not scroll) would tap off-screen (#956). Mirrors the
-    /// release-gate tests' `scrollElementIntoVisibleFrame` usage in `StillPointAppUITests.swift`.
+    /// fold (#956). Scroll it into view as the release-gate tests in `StillPointAppUITests.swift`
+    /// do, with extra swipes for shorter devices.
     private func tapReturnButton(in app: XCUIApplication) {
         let returnButton = app.buttons["completion.returnButton"]
         XCTAssertTrue(returnButton.waitForExistence(timeout: 12))
@@ -227,15 +231,23 @@ final class SnapshotTests: XCTestCase {
         tapStable(returnButton, in: app)
     }
 
+    /// Top band (status bar / Dynamic Island) where a tap scrolls to top instead of hitting content.
+    private let statusBarBand: CGFloat = 60
+
     private func isElementInVisibleFrame(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         let frame = element.frame
         let center = CGPoint(x: frame.midX, y: frame.midY)
+        var visible = app.frame.insetBy(dx: -1, dy: -1)
+        visible.origin.y += statusBarBand
+        visible.size.height -= statusBarBand
         return !frame.isEmpty
             && frame.width > 1
             && frame.height > 1
-            && app.frame.insetBy(dx: -1, dy: -1).contains(center)
+            && visible.contains(center)
     }
 
+    /// Like `StillPointAppUITests.scrollElementIntoVisibleFrame`, but swipes down when the
+    /// element sits above the visible frame (e.g. Begin after scrolling Home to the FAQ).
     private func scrollElementIntoVisibleFrame(
         _ element: XCUIElement,
         in app: XCUIApplication,
@@ -243,7 +255,11 @@ final class SnapshotTests: XCTestCase {
     ) {
         for _ in 0 ..< maxSwipes {
             if isElementInVisibleFrame(element, in: app) { return }
-            app.swipeUp()
+            if element.frame.midY < app.frame.minY + statusBarBand {
+                app.swipeDown()
+            } else {
+                app.swipeUp()
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         }
     }
