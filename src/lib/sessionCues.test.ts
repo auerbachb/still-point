@@ -115,11 +115,31 @@ describe("cue cursors", () => {
 
   it("keeps a controlled voice cursor from dropping below the current second", () => {
     const at = (lastVoiceSec: number) => ({ ...INITIAL_CUE_CURSOR, lastVoiceSec });
-    expect(followControlledVoice(at(40), 30, 100).lastVoiceSec).toBe(61);
+    // Above the final minute it is left for the plan to reset (#844).
+    expect(followControlledVoice(at(40), 30, 100).lastVoiceSec).toBe(40);
     expect(followControlledVoice(at(40), 50, 100).lastVoiceSec).toBe(50);
     expect(followControlledVoice(at(45), 60, 100).lastVoiceSec).toBe(45);
     // Rounded up, as the plan announces: 49.5 s left is still second 50.
     expect(followControlledVoice(at(40), 50.5, 100).lastVoiceSec).toBe(50);
+  });
+
+  // #844: the reset above the final minute used to happen here, before the
+  // plan, which left the plan's cancel unreachable on the controlled path.
+  it("cancels a clip in flight when a controlled step back leaves the final minute", () => {
+    const spoke = planCountdownCues(seededCueCursor(87.5, 100, VOICE), 88, 100, VOICE);
+    expect(spoke.cues).toEqual([{ kind: "voice", second: 12 }]);
+
+    const back = followControlledVoice(spoke.cursor, 30, 100);
+    const planned = planCountdownCues(back, 30, 100, VOICE);
+    expect(planned.cues).toEqual([{ kind: "cancelVoice" }]);
+    expect(planned.cursor.lastVoiceSec).toBe(61);
+  });
+
+  it("re-arms the countdown above the final minute outside voice mode too", () => {
+    const stale = { ...seededCueCursor(30, 100, TICK), lastVoiceSec: 12 };
+    const planned = planCountdownCues(stale, 30.05, 100, TICK);
+    expect(planned.cues).toEqual([]);
+    expect(planned.cursor.lastVoiceSec).toBe(61);
   });
 
   it("does not re-announce the second a controlled step back lands inside", () => {
