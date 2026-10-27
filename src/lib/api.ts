@@ -86,9 +86,6 @@ export type Session = {
   createdAt: string;
   /** Present when this row was created from a completed buddy sit (#119). */
   buddySessionId?: string | null;
-  /** #109: post-session self-report ratings (1-10), null until rated. */
-  focusRating?: number | null;
-  happinessRating?: number | null;
   /** #472: before/after mood matrix (1–5 per cell), null until submitted. */
   moodMatrix?: MoodMatrixPayload | null;
 };
@@ -264,15 +261,14 @@ export const api = {
   getSession: (dayNumber: number) =>
     request<{ session: Session; thoughts: Thought[] }>(`/api/sessions/${dayNumber}`),
 
-  /** #109/#472: post-hoc ratings + mood-matrix update from the CompletionScreen. */
-  updateSessionRatings: (
+  /** #472: post-hoc mood-matrix update from the CompletionScreen. It carries
+   *  only the mood: the web retired its session ratings under #766. */
+  updateSessionMoodMatrix: (
     sessionId: string,
     data: {
-      focusRating?: number;
-      happinessRating?: number;
       /** #472: mood matrix payload — partial keys allowed. #792: `null` clears
        *  the stored matrix, and an all-null row deletes that row. */
-      moodMatrix?: MoodMatrixPayload | null;
+      moodMatrix: MoodMatrixPayload | null;
     },
   ) =>
     request<{ session: Session }>(`/api/sessions/by-session/${sessionId}`, {

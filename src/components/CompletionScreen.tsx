@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BLOCK_DURATION, type SessionType } from "@/lib/constants";
-import { RatingSlider } from "@/components/RatingSlider";
 import {
   MoodMatrix,
   type MoodEntry,
@@ -14,7 +13,6 @@ import {
   COMPLETION_AUTOSAVE_MS,
   COMPLETION_RETURN_LABEL,
   noteTextToAutosave,
-  ratingsAutosavePayload,
 } from "@/lib/completionAutosave";
 
 type CompletionScreenProps = {
@@ -33,10 +31,6 @@ type CompletionScreenProps = {
   /** #792: delete the stored note once the field is emptied. Offered under the
    *  same conditions as `onSaveNote`; without it an emptied field is not saved. */
   onClearNote?: () => Promise<void>;
-  /** #109: post-session self-report; omitted (no sliders rendered) when there is
-   *  no persisted session to attach ratings to. Only touched slider values are
-   *  included in the payload; untouched ones are omitted for partial-update. */
-  onSaveRatings?: (ratings: { focusRating?: number; happinessRating?: number }) => Promise<void>;
   /** #472: before/after mood matrix; omitted when there is no persisted session.
    *  Payload holds the rows the user tapped, plus an all-null row for each
    *  saved row since emptied (#792), which the server deletes. */
@@ -55,8 +49,6 @@ type CompletionScreenProps = {
   compact?: boolean;
 };
 
-const DEFAULT_RATING = 5;
-
 export function CompletionScreen({
   dayNumber,
   sessionType = "standard",
@@ -69,7 +61,6 @@ export function CompletionScreen({
   onReturn,
   onSaveNote,
   onClearNote,
-  onSaveRatings,
   onSaveMoodMatrix,
   onClearMoodMatrix,
   notStored = false,
@@ -80,13 +71,6 @@ export function CompletionScreen({
   const [noteSaved, setNoteSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [focusRating, setFocusRating] = useState(DEFAULT_RATING);
-  const [happinessRating, setHappinessRating] = useState(DEFAULT_RATING);
-  const [focusTouched, setFocusTouched] = useState(false);
-  const [happinessTouched, setHappinessTouched] = useState(false);
-  const [ratingsSaved, setRatingsSaved] = useState(false);
-  const [savingRatings, setSavingRatings] = useState(false);
-  const [ratingsSaveError, setRatingsSaveError] = useState(false);
   // #472: mood matrix state
   const [moodMatrix, setMoodMatrix] = useState<MoodMatrixValue>({});
   const [moodMatrixSaved, setMoodMatrixSaved] = useState(false);
@@ -98,21 +82,17 @@ export function CompletionScreen({
   const [returning, setReturning] = useState(false);
   const onSaveNoteRef = useRef(onSaveNote);
   const onClearNoteRef = useRef(onClearNote);
-  const onSaveRatingsRef = useRef(onSaveRatings);
   const onSaveMoodMatrixRef = useRef(onSaveMoodMatrix);
   const onClearMoodMatrixRef = useRef(onClearMoodMatrix);
   onSaveNoteRef.current = onSaveNote;
   onClearNoteRef.current = onClearNote;
-  onSaveRatingsRef.current = onSaveRatings;
   onSaveMoodMatrixRef.current = onSaveMoodMatrix;
   onClearMoodMatrixRef.current = onClearMoodMatrix;
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ratingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // What the server holds, as far as this screen knows. `null` and `{}` mean
   // nothing stored, so emptying a field that was saved is a clear (#792).
   const lastSavedNote = useRef<string | null>(null);
-  const lastSavedRatings = useRef<string | null>(null);
   const lastSavedMood = useRef<Record<string, MoodEntry>>({});
   // A write that failed may still have landed, so until the next one succeeds
   // the stored value is a guess and every write is sent (#792).
@@ -168,29 +148,6 @@ export function CompletionScreen({
     }
   }
 
-  async function persistRatings(payload: {
-    focusRating?: number;
-    happinessRating?: number;
-  }): Promise<void> {
-    const save = onSaveRatingsRef.current;
-    const key = JSON.stringify(payload);
-    if (!save || key === lastSavedRatings.current) return;
-    setSavingRatings(true);
-    try {
-      setRatingsSaveError(false);
-      await save(payload);
-      lastSavedRatings.current = key;
-      setRatingsSaved(true);
-    } catch (err) {
-      console.error("Failed to save ratings:", err);
-      setRatingsSaveError(true);
-      setRatingsSaved(false);
-      throw err;
-    } finally {
-      setSavingRatings(false);
-    }
-  }
-
   /** The request that stores `patch`; a `null` patch (nothing selected) is a clear. */
   function moodWrite(patch: Record<string, MoodEntry> | null): (() => Promise<void>) | null {
     if (patch === null) return onClearMoodMatrixRef.current ?? null;
@@ -243,26 +200,6 @@ export function CompletionScreen({
   }, [note]);
 
   useEffect(() => {
-    const payload = ratingsAutosavePayload({
-      focusRating,
-      happinessRating,
-      focusTouched,
-      happinessTouched,
-    });
-    if (!onSaveRatingsRef.current || !payload) return;
-    if (JSON.stringify(payload) === lastSavedRatings.current) return;
-    if (ratingsTimer.current) clearTimeout(ratingsTimer.current);
-    ratingsTimer.current = setTimeout(() => {
-      ratingsTimer.current = null;
-      void track(() => persistRatings(payload)).catch(() => {});
-    }, COMPLETION_AUTOSAVE_MS);
-    return () => {
-      if (ratingsTimer.current) clearTimeout(ratingsTimer.current);
-      ratingsTimer.current = null;
-    };
-  }, [focusRating, happinessRating, focusTouched, happinessTouched]);
-
-  useEffect(() => {
     if (!onSaveMoodMatrixRef.current && !onClearMoodMatrixRef.current) return;
     if (moodTimer.current) clearTimeout(moodTimer.current);
     const matrix = moodMatrix;
@@ -288,28 +225,17 @@ export function CompletionScreen({
       clearTimeout(noteTimer.current);
       noteTimer.current = null;
     }
-    if (ratingsTimer.current) {
-      clearTimeout(ratingsTimer.current);
-      ratingsTimer.current = null;
-    }
     if (moodTimer.current) {
       clearTimeout(moodTimer.current);
       moodTimer.current = null;
     }
     setReturning(true);
     const trimmed = noteTextToAutosave(note);
-    const ratings = ratingsAutosavePayload({
-      focusRating,
-      happinessRating,
-      focusTouched,
-      happinessTouched,
-    });
-    // Every field is attempted even when an earlier one fails; otherwise the
-    // next tap would leave without ever trying the later saves. An emptied
-    // note or matrix that was saved flushes as a clear (#792).
+    // The mood is attempted even when the note fails; otherwise the next tap
+    // would leave without ever trying it. An emptied note or matrix that was
+    // saved flushes as a clear (#792).
     const results = await Promise.allSettled([
       track(() => persistNote(trimmed)),
-      ratings ? track(() => persistRatings(ratings)) : Promise.resolve(),
       track(() => persistMood(moodMatrix)),
     ]);
     await inflight.current;
@@ -539,46 +465,6 @@ export function CompletionScreen({
               note saved
             </div>
           ) : saving ? (
-            <div style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "11px", color: "var(--fg-3)",
-              letterSpacing: "0.09em",
-            }}>
-              saving...
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {/* Post-session ratings (#109) */}
-      {onSaveRatings && (
-        <div style={{
-          width: "100%", maxWidth: "min(380px, calc(100vw - 40px))",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: "14px",
-        }}>
-          <RatingSlider label="Focus" value={focusRating} onChange={(v) => { setFocusRating(v); setFocusTouched(true); setRatingsSaved(false); }} disabled={returning} />
-          <RatingSlider label="Happiness" value={happinessRating} onChange={(v) => { setHappinessRating(v); setHappinessTouched(true); setRatingsSaved(false); }} disabled={returning} />
-          {ratingsSaveError ? (
-            <div
-              role="alert"
-              aria-live="assertive"
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "11px", color: "var(--accent-danger)",
-                letterSpacing: "0.09em",
-              }}
-            >
-              failed to save
-            </div>
-          ) : ratingsSaved ? (
-            <div style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "11px", color: "var(--accent-green-dim)",
-              letterSpacing: "0.09em",
-            }}>
-              ratings saved
-            </div>
-          ) : savingRatings ? (
             <div style={{
               fontFamily: "var(--font-mono)",
               fontSize: "11px", color: "var(--fg-3)",
