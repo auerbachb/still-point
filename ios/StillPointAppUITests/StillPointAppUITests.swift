@@ -75,28 +75,47 @@ final class StillPointAppUITests: XCTestCase {
 
         waitForRoot("auth", in: app, failureMessage: "Auth screen did not appear", assertColdStart: false)
 
+        // iOS 26 replaces the keyboard with a "Use Strong Password?" panel as soon as a
+        // `.newPassword` field takes focus, and the panel swallows typed input (#867: one
+        // "•" reached the field and "Begin the journey" stayed disabled). The panel is a
+        // remote view whose frames XCUITest reports relative to the panel, not the screen
+        // (Close at y=16 while drawn from y=476), so tapping it away is unreliable. Type the
+        // password while the form is still in Log In mode, where the field is a
+        // `.password` field, and move focus to the email field before switching, so the
+        // field is never focused as a new password.
+        let passwordField = app.secureTextFields["auth.passwordField"]
+        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
+        passwordField.tapAndType(password, in: app)
+
+        let emailField = app.textFields["auth.emailField"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
+        emailField.tapAndType(email, in: app)
+
         // Switch to Sign Up mode
         let signUpToggle = app.buttons["auth.signUpToggleButton"]
         XCTAssertTrue(signUpToggle.waitForExistence(timeout: 5), "Sign Up toggle did not appear")
         tapByStableCenter(signUpToggle, in: app)
 
-        // Fill signup form
-        let emailField = app.textFields["auth.emailField"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tapAndType(email, in: app)
-
         let usernameField = app.textFields["auth.usernameField"]
         XCTAssertTrue(usernameField.waitForExistence(timeout: 5), "Username field did not appear after switching to Sign Up mode")
         usernameField.tapAndType(username, in: app)
-
-        let passwordField = app.secureTextFields["auth.passwordField"]
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tapAndType(password, in: app)
-
+        // Return ends editing, so no keyboard-dismiss swipe can start on the password field.
+        usernameField.typeText("\n")
         dismissKeyboardIfPresent(in: app)
+
+        XCTAssertEqual(
+            (passwordField.value as? String)?.count,
+            password.count,
+            "Password did not carry over to Sign Up mode"
+        )
 
         let submitButton = app.buttons["auth.submitButton"]
         XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
+        let submitEnabled = XCTWaiter().wait(
+            for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: submitButton)],
+            timeout: 5
+        )
+        XCTAssertEqual(submitEnabled, .completed, "Begin the journey stayed disabled with the sign-up form filled")
         tapByStableCenter(submitButton, in: app)
 
         XCTAssertTrue(
@@ -437,7 +456,13 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(completionTitle.waitForExistence(timeout: 25))
         XCTAssertTrue(completionTitle.label.localizedCaseInsensitiveContains("quick minute"))
 
-        tapByStableCenter(app.buttons["completion.returnButton"], in: app)
+        // The recap is taller than the screen, so the return button starts below the fold
+        // (#867: y=1255 in an 874pt window). Scroll as the full-session test does; the
+        // helper stops once the button is on screen, and the extra swipes cover shorter
+        // devices.
+        let returnButton = app.buttons["completion.returnButton"]
+        scrollElementIntoVisibleFrame(returnButton, in: app, maxSwipes: 8)
+        XCTAssertTrue(tapByStableCenter(returnButton, in: app, timeout: 12))
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 8))
         XCTAssertTrue(dayLabel.waitForExistence(timeout: 5), "Day counter should remain 1 after quick minute")
     }
@@ -619,10 +644,15 @@ final class StillPointAppUITests: XCTestCase {
 
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let errorLabel = app.staticTexts["history.errorMessage"]
+        let retryButton = app.buttons["Retry"].firstMatch
 
         XCTAssertTrue(errorLabel.waitForExistence(timeout: 8))
-        XCTAssertTrue(errorLabel.label.localizedCaseInsensitiveContains("failed")
-                        || errorLabel.label.localizedCaseInsensitiveContains("connection"))
+        // `UITestAPIStore` fails the forced load with a 503, which
+        // `HistoryViewModel.message(for:)` maps to its server-error copy (#612).
+        XCTAssertEqual(errorLabel.label, "Server hiccup. Please try again in a moment.")
+        XCTAssertTrue(isElementInVisibleFrame(errorLabel, in: app), "History error message is off screen")
+        XCTAssertTrue(retryButton.waitForExistence(timeout: 5), "Retry button did not appear with the history error")
+        XCTAssertTrue(retryButton.isHittable, "Retry button is not hittable")
     }
 
     /// Status text during launch may be attached to `AuthView` or the transient

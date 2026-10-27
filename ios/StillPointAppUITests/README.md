@@ -116,6 +116,14 @@ Concrete case: the v1 commit (`d9e69aa`) of [#319](https://github.com/auerbachb/
 - **Already-quiescent flows** (authenticated boot, lighter session config, no fresh transition in flight): `tap(_:thenWaitForRoot:in:)` is fine.
 - **Right after a transition** (fresh login → home → tap, layout/animation likely still settling): use direct `.tap()` + explicit `waitForExistence` for the destination root.
 
+### Never focus the Sign Up password field on iOS 26
+
+When a `.newPassword` field takes focus, iOS 26 replaces the keyboard with a "Use Strong Password?" panel. The panel swallows `typeText` (only one character arrives). Its Close and Fill Strong Password buttons sit in a remote view whose frames XCUITest reports relative to the panel, not the screen, so a tap on them can't be relied on to land. `testSignupHappyPath` therefore types the password in Log In mode, where the field is a `.password` field. It moves focus to the email field before switching to Sign Up. Evidence: [run 40418500104](https://github.com/auerbachb/still-point/actions/runs/40418500104), [#867](https://github.com/auerbachb/still-point/issues/867).
+
+### Scroll before tapping anything low on the completion recap
+
+The recap (ratings, mood grid, photo button) is taller than the screen, so `completion.returnButton` starts below the fold. `tapByStableCenter` does not scroll, so call `scrollElementIntoVisibleFrame` first.
+
 ## VoiceOver smoke steps (manual fallback)
 
 1. Enable VoiceOver in the simulator (`Settings -> Accessibility -> VoiceOver`).
