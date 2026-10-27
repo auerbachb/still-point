@@ -172,6 +172,13 @@ public actor APIClient {
         clearLocalSessionArtifacts()
     }
 
+    /// UI-test mode only (#887); a no-op otherwise. `RootView` calls this when the
+    /// scene goes to the background, which arms the held `me()` read a UI test asks
+    /// for with `SP_UI_TEST_HOLD_ME_SECONDS`. See `UITestAPIStore.armHeldMeRead()`.
+    public func uiTestSceneDidEnterBackground() async {
+        await uiTestAPIStore?.armHeldMeRead()
+    }
+
     public func me(today: String? = nil) async throws -> UserDTO? {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.me(today: today)

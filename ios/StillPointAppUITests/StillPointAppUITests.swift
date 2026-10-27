@@ -655,6 +655,85 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(retryButton.isHittable, "Retry button is not hittable")
     }
 
+    /// #887 / #851: a Settings save that waits behind a `me()` read which adopts a
+    /// different account is dropped by the identity guard, and the control then shows
+    /// the account now on screen rather than the change made on the account before.
+    ///
+    /// Staged with three `UITestAPIStore` fixtures: a held `me()` read (armed by the
+    /// scene going to the background, so it is the scene-activation `checkAuth()` read
+    /// when the app comes back), a second account that read answers as, and the
+    /// Settings request counter `RootView` shows on `uiTest.settingsRequestCount`.
+    ///
+    /// The first account has Aphorisms off, the test turns it on, and the second
+    /// account has it off. A control that kept the change would end on, so the
+    /// toggle ending off is the re-sync. The counter staying at zero is what proves
+    /// the save waited behind the read: a save that went first would have been sent.
+    @MainActor
+    func testAphorismsToggleResyncsWhenHeldReadAdoptsSecondAccount() throws {
+        let holdSeconds: Double = 8
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            forceSettingsTab: true,
+            holdMeSeconds: holdSeconds,
+            secondAccount: true
+        )
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["settings.title"].waitForExistence(timeout: launchTimeout),
+            "Settings did not appear at launch"
+        )
+        let usernameDisplay = app.staticTexts["settings.usernameDisplay"]
+        XCTAssertTrue(usernameDisplay.waitForExistence(timeout: 8))
+        XCTAssertEqual(usernameDisplay.label, "ios_fixture", "Expected the first account on Settings")
+
+        let requestCount = app.otherElements["uiTest.settingsRequestCount"]
+        XCTAssertTrue(requestCount.waitForExistence(timeout: 5), "Settings request counter marker missing")
+        XCTAssertEqual(requestCount.value as? String, "0")
+
+        let toggle = app.switches["settings.aphorismsToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 8), "Aphorisms toggle did not appear")
+        scrollElementIntoVisibleFrame(toggle, in: app, maxSwipes: 6)
+        XCTAssertEqual(toggle.value as? String, "0", "The first account starts with Aphorisms off")
+
+        // Background arms the hold; coming back runs the scene-activation check, whose
+        // `me()` waits `holdSeconds` holding the settings queue.
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        app.activate()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "Settings did not come back on screen")
+
+        // The save queues behind the held read, so its in-flight flag stays up and
+        // disables the toggle until the read lets go.
+        tapSwitch(toggle, in: app)
+        XCTAssertEqual(toggle.value as? String, "1", "The tap did not turn Aphorisms on")
+        XCTAssertFalse(toggle.isEnabled, "The save was not waiting behind the held read")
+
+        let adopted = XCTWaiter().wait(
+            for: [XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "label == %@", "ios_second"),
+                object: usernameDisplay
+            )],
+            timeout: holdSeconds + 15
+        )
+        XCTAssertEqual(adopted, .completed, "The held read did not adopt the second account")
+        let reenabled = XCTWaiter().wait(
+            for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: toggle)],
+            timeout: 10
+        )
+        XCTAssertEqual(reenabled, .completed, "The toggle stayed disabled after the dropped save")
+
+        XCTAssertEqual(toggle.value as? String, "0", "The toggle kept the first account's change instead of the second account's value")
+        XCTAssertEqual(requestCount.value as? String, "0", "The dropped save sent a Settings request")
+
+        // Control: the counter does see a save that is sent, so the zero above is not
+        // a counter that never moves.
+        tapSwitch(toggle, in: app)
+        waitForAccessibilityValue(requestCount, "1", timeout: 10)
+        XCTAssertEqual(toggle.value as? String, "1")
+    }
+
     /// Status text during launch may be attached to `AuthView` or the transient
     /// loading overlay in `RootView` (same copy, different accessibility ids).
     private func launchAuthStatusStaticText(in app: XCUIApplication) -> XCUIElement {
@@ -677,7 +756,10 @@ final class StillPointAppUITests: XCTestCase {
         forceSessionsFailure: Bool = false,
         appBlockingSelected: Bool = false,
         forceProgressTab: Bool = false,
-        forceUsernameConflict: Bool = false
+        forceSettingsTab: Bool = false,
+        forceUsernameConflict: Bool = false,
+        holdMeSeconds: Double? = nil,
+        secondAccount: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -693,8 +775,10 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_BUDDY_HUB"] = "0"
         app.launchEnvironment["SP_UI_TEST_APP_BLOCKING_SELECTED"] = appBlockingSelected ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_PROGRESS_TAB"] = forceProgressTab ? "1" : "0"
-        app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = forceSettingsTab ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_HOLD_ME_SECONDS"] = holdMeSeconds.map { String($0) } ?? "0"
+        app.launchEnvironment["SP_UI_TEST_SECOND_ACCOUNT"] = secondAccount ? "1" : "0"
         return app
     }
 
@@ -805,6 +889,16 @@ final class StillPointAppUITests: XCTestCase {
         }
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         return true
+    }
+
+    /// Taps a SwiftUI `Toggle` on its switch. The element's frame spans the label
+    /// too, and a tap on the label does not flip the switch, so this taps near the
+    /// trailing edge, where the switch is drawn.
+    private func tapSwitch(_ toggle: XCUIElement, in app: XCUIApplication) {
+        guard let frame = stableFrame(for: toggle, in: app) else { return }
+        toggle.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.width - 26, dy: frame.height / 2))
+            .tap()
     }
 
     private func isElementInVisibleFrame(_ element: XCUIElement, in app: XCUIApplication) -> Bool {

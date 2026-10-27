@@ -25,6 +25,7 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - Airplane-mode style launch failure message (`testLaunchOfflineShowsUserVisibleMessage`)
 - Token expiry re-auth path (`testTokenExpiryRoutesToReauthMessage`)
 - Failed sessions API displays visible error (no silent hang) (`testSessionsFailureShowsVisibleRetryMessage`)
+- Settings save dropped by an account switch re-syncs the control from the account on screen (`testAphorismsToggleResyncsWhenHeldReadAdoptsSecondAccount`, #887)
 
 Cold-start acceptance guard used by tests: **auth check must complete within 8,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`). Raised from 5,000 ms in [#334](https://github.com/auerbachb/still-point/issues/334) to absorb macos-26/iOS-26 simulator contention. The guard is asserted only on `seedAuthenticated: false` cold-start paths (boot to auth); authenticated boots and seeded relaunches pass `assertColdStart: false`.
 
@@ -44,6 +45,10 @@ The app reads these launch environment keys in UI test mode:
 - `SP_UI_TEST_FORCE_BREATH_COUNTING=1` (boot directly to breath counting screen)
 - `SP_UI_TEST_FORCE_BUDDY_HUB=1` (boot directly to buddy session hub)
 - `SP_UI_TEST_FORCE_SETTINGS_TAB=1` (boot to Settings tab in the main shell)
+- `SP_UI_TEST_HOLD_ME_SECONDS=<double>` (#887: the first `me()` read after the app goes to the background — the scene-activation auth check when it comes back — waits this long before answering, holding the settings queue so a Settings save made meanwhile waits behind it)
+- `SP_UI_TEST_SECOND_ACCOUNT=1` (#887: that held read answers as a second account, `ios_second`, so the app adopts a different account while Settings stays on screen)
+
+`RootView` also shows a UI-test-only marker, `uiTest.settingsRequestCount`, whose accessibility value is the number of Settings requests the fake backend has received since launch (#887).
 - `SP_UI_TEST_SNAPSHOT_SEED=1` (Fastlane snapshot lane — canned sessions, thoughts, and practitioners board for marketing captures; use with `SP_UI_TEST_RESET_STORE=1` on first launch)
 
 Fixture login account (used when auth screen is shown):
