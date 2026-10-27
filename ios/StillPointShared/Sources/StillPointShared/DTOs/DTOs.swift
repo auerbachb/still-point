@@ -2,39 +2,43 @@ import Foundation
 
 // MARK: - API Response Types (matching web app's api.ts)
 
+/// Stored properties are `private(set) var` rather than `let` only so the copy
+/// helpers in the extension below can change one field on a copy. Callers outside
+/// this file still see them as read-only, and a new field no longer has to be
+/// threaded through every helper.
 public struct UserDTO: Codable, Sendable {
-    public let id: String
-    public let email: String
-    public let username: String
-    public let isPublic: Bool
-    public let currentDay: Int
+    public private(set) var id: String
+    public private(set) var email: String
+    public private(set) var username: String
+    public private(set) var isPublic: Bool
+    public private(set) var currentDay: Int
     /// #88: opt-in pre-session aphorism shown on Home. Decoded permissively so
     /// responses from a server that predates this field (or cached fixtures)
     /// still decode, defaulting to off.
-    public let aphorismsEnabled: Bool
+    public private(set) var aphorismsEnabled: Bool
     /// #113: opt-in iOS ARKit gaze attention tracking during sessions.
-    public let attentionTrackingEnabled: Bool
+    public private(set) var attentionTrackingEnabled: Bool
     /// #240: dual-track fork. `dualTrackEnabled` gates the opt-in second daily
     /// track; `secondTrackDay` is its independent day counter. Both decoded
     /// permissively so a server that predates #240 defaults to single-track.
-    public let dualTrackEnabled: Bool
-    public let secondTrackDay: Int
+    public private(set) var dualTrackEnabled: Bool
+    public private(set) var secondTrackDay: Int
     /// #708: whether the long (primary) session is the morning or evening sit.
     /// The short track is the opposite. A label only — sits are not locked to
     /// the clock. Missing on older servers decodes as `.am`.
-    public let longSessionPeriod: SessionPeriod
+    public private(set) var longSessionPeriod: SessionPeriod
     /// #238: miss-a-day recovery ramp. All three are nil when not recovering.
-    public let recoveryTargetDay: Int?
-    public let recoveryCurrentStep: Int?
-    public let recoveryTotalSteps: Int?
+    public private(set) var recoveryTargetDay: Int?
+    public private(set) var recoveryCurrentStep: Int?
+    public private(set) var recoveryTotalSteps: Int?
     /// #563: opt-in ambient sound level capture during solo sits. Decoded
     /// permissively so older server responses (pre-#563) default to off.
-    public let ambientSoundEnabled: Bool
+    public private(set) var ambientSoundEnabled: Bool
     /// #765: the focus goal counter; the goal is
     /// `StillPoint.focusDuration(forDay: focusActivityDay)`. Unrelated to the
     /// meditation `currentDay`. Missing on older servers (and in identities cached
     /// before #839) decodes as 1.
-    public let focusActivityDay: Int
+    public private(set) var focusActivityDay: Int
 
     public init(
         id: String,
@@ -77,10 +81,10 @@ public struct UserDTO: Codable, Sendable {
         username = try c.decode(String.self, forKey: .username)
         isPublic = try c.decode(Bool.self, forKey: .isPublic)
         currentDay = try c.decode(Int.self, forKey: .currentDay)
-        aphorismsEnabled = try c.decodeIfPresent(Bool.self, forKey: .aphorismsEnabled) ?? false
-        attentionTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .attentionTrackingEnabled) ?? false
-        dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled) ?? false
-        secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay) ?? 1
+        aphorismsEnabled = try c.decodeIfPresent(Bool.self, forKey: .aphorismsEnabled, default: false)
+        attentionTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .attentionTrackingEnabled, default: false)
+        dualTrackEnabled = try c.decodeIfPresent(Bool.self, forKey: .dualTrackEnabled, default: false)
+        secondTrackDay = try c.decodeIfPresent(Int.self, forKey: .secondTrackDay, default: 1)
         if let raw = try c.decodeIfPresent(String.self, forKey: .longSessionPeriod),
            let period = SessionPeriod(rawValue: raw) {
             longSessionPeriod = period
@@ -90,8 +94,8 @@ public struct UserDTO: Codable, Sendable {
         recoveryTargetDay = try c.decodeIfPresent(Int.self, forKey: .recoveryTargetDay)
         recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
         recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
-        ambientSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .ambientSoundEnabled) ?? false
-        focusActivityDay = try c.decodeIfPresent(Int.self, forKey: .focusActivityDay) ?? 1
+        ambientSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .ambientSoundEnabled, default: false)
+        focusActivityDay = try c.decodeIfPresent(Int.self, forKey: .focusActivityDay, default: 1)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -120,63 +124,34 @@ extension UserDTO {
         ambientSoundEnabled: Bool? = nil,
         focusActivityDay: Int? = nil
     ) -> UserDTO {
-        UserDTO(
-            id: id,
-            email: email,
-            username: username ?? self.username,
-            isPublic: isPublic ?? self.isPublic,
-            currentDay: currentDay,
-            aphorismsEnabled: aphorismsEnabled ?? self.aphorismsEnabled,
-            attentionTrackingEnabled: attentionTrackingEnabled ?? self.attentionTrackingEnabled,
-            dualTrackEnabled: dualTrackEnabled ?? self.dualTrackEnabled,
-            secondTrackDay: secondTrackDay ?? self.secondTrackDay,
-            longSessionPeriod: longSessionPeriod ?? self.longSessionPeriod,
-            recoveryTargetDay: recoveryTargetDay,
-            recoveryCurrentStep: recoveryCurrentStep,
-            recoveryTotalSteps: recoveryTotalSteps,
-            ambientSoundEnabled: ambientSoundEnabled ?? self.ambientSoundEnabled,
-            focusActivityDay: focusActivityDay ?? self.focusActivityDay
-        )
+        var copy = self
+        if let username { copy.username = username }
+        if let isPublic { copy.isPublic = isPublic }
+        if let aphorismsEnabled { copy.aphorismsEnabled = aphorismsEnabled }
+        if let attentionTrackingEnabled { copy.attentionTrackingEnabled = attentionTrackingEnabled }
+        if let dualTrackEnabled { copy.dualTrackEnabled = dualTrackEnabled }
+        if let secondTrackDay { copy.secondTrackDay = secondTrackDay }
+        if let longSessionPeriod { copy.longSessionPeriod = longSessionPeriod }
+        if let ambientSoundEnabled { copy.ambientSoundEnabled = ambientSoundEnabled }
+        if let focusActivityDay { copy.focusActivityDay = focusActivityDay }
+        return copy
     }
 
     func updatingProgression(_ state: DurationRecovery.ProgressionState) -> UserDTO {
-        UserDTO(
-            id: id,
-            email: email,
-            username: username,
-            isPublic: isPublic,
-            currentDay: state.currentDay,
-            aphorismsEnabled: aphorismsEnabled,
-            attentionTrackingEnabled: attentionTrackingEnabled,
-            dualTrackEnabled: dualTrackEnabled,
-            secondTrackDay: secondTrackDay,
-            longSessionPeriod: longSessionPeriod,
-            recoveryTargetDay: state.recoveryTargetDay,
-            recoveryCurrentStep: state.recoveryCurrentStep,
-            recoveryTotalSteps: state.recoveryTotalSteps,
-            ambientSoundEnabled: ambientSoundEnabled,
-            focusActivityDay: focusActivityDay
-        )
+        var copy = self
+        copy.currentDay = state.currentDay
+        copy.recoveryTargetDay = state.recoveryTargetDay
+        copy.recoveryCurrentStep = state.recoveryCurrentStep
+        copy.recoveryTotalSteps = state.recoveryTotalSteps
+        return copy
     }
 
     func updatingRecovery(targetDay: Int, currentStep: Int, totalSteps: Int) -> UserDTO {
-        UserDTO(
-            id: id,
-            email: email,
-            username: username,
-            isPublic: isPublic,
-            currentDay: currentDay,
-            aphorismsEnabled: aphorismsEnabled,
-            attentionTrackingEnabled: attentionTrackingEnabled,
-            dualTrackEnabled: dualTrackEnabled,
-            secondTrackDay: secondTrackDay,
-            longSessionPeriod: longSessionPeriod,
-            recoveryTargetDay: targetDay,
-            recoveryCurrentStep: currentStep,
-            recoveryTotalSteps: totalSteps,
-            ambientSoundEnabled: ambientSoundEnabled,
-            focusActivityDay: focusActivityDay
-        )
+        var copy = self
+        copy.recoveryTargetDay = targetDay
+        copy.recoveryCurrentStep = currentStep
+        copy.recoveryTotalSteps = totalSteps
+        return copy
     }
 }
 
@@ -375,18 +350,18 @@ public struct StatsDTO: Codable, Sendable {
         // #612: decoded permissively. A server-side NaN (e.g. avg over zero sessions)
         // serializes to JSON `null`, which a required `decode` would reject — failing the
         // whole Progress load. Default to 0; `enrich` recomputes period fields client-side.
-        streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
-        avgClearPercent = try c.decodeIfPresent(Int.self, forKey: .avgClearPercent) ?? 0
-        avgThoughtsPerSession = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerSession) ?? 0
-        avgThoughtsPerMinute = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerMinute) ?? 0
+        streak = try c.decodeIfPresent(Int.self, forKey: .streak, default: 0)
+        avgClearPercent = try c.decodeIfPresent(Int.self, forKey: .avgClearPercent, default: 0)
+        avgThoughtsPerSession = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerSession, default: 0)
+        avgThoughtsPerMinute = try c.decodeIfPresent(Double.self, forKey: .avgThoughtsPerMinute, default: 0)
         bonusMinutesTotal = try c.decodeIfPresent(Int.self, forKey: .bonusMinutesTotal)
-        trailing4WeekDays = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekDays) ?? 0
-        trailing4WeekDayPercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekDayPercent) ?? 0
-        trailing4WeekTotalTime = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekTotalTime) ?? 0
-        trailing4WeekTimePercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekTimePercent) ?? 0
-        totalTimeAllTime = try c.decodeIfPresent(Int.self, forKey: .totalTimeAllTime) ?? 0
-        progressTo10kHours = try c.decodeIfPresent(Double.self, forKey: .progressTo10kHours) ?? 0
-        mindStateTrends = try c.decodeIfPresent(MindStateTrendStats.self, forKey: .mindStateTrends) ?? .empty
+        trailing4WeekDays = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekDays, default: 0)
+        trailing4WeekDayPercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekDayPercent, default: 0)
+        trailing4WeekTotalTime = try c.decodeIfPresent(Int.self, forKey: .trailing4WeekTotalTime, default: 0)
+        trailing4WeekTimePercent = try c.decodeIfPresent(Double.self, forKey: .trailing4WeekTimePercent, default: 0)
+        totalTimeAllTime = try c.decodeIfPresent(Int.self, forKey: .totalTimeAllTime, default: 0)
+        progressTo10kHours = try c.decodeIfPresent(Double.self, forKey: .progressTo10kHours, default: 0)
+        mindStateTrends = try c.decodeIfPresent(MindStateTrendStats.self, forKey: .mindStateTrends, default: .empty)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -418,12 +393,8 @@ public struct StatsDTO: Codable, Sendable {
             ? HistoryMindStateTrends.calculateTrendStats(sessions: sessions, todayIso: todayIso)
             : nil
 
-        func pickInt(_ baseValue: Int, _ computed: Int?) -> Int {
-            guard baseValue == 0, let computed else { return baseValue }
-            return computed
-        }
-
-        func pickDouble(_ baseValue: Double, _ computed: Double?) -> Double {
+        /// Keeps a non-zero server value; a zero is replaced by the computed one when present.
+        func pick<T: Numeric>(_ baseValue: T, _ computed: T?) -> T {
             guard baseValue == 0, let computed else { return baseValue }
             return computed
         }
@@ -434,13 +405,14 @@ public struct StatsDTO: Codable, Sendable {
             avgThoughtsPerSession: base.avgThoughtsPerSession,
             avgThoughtsPerMinute: base.avgThoughtsPerMinute,
             bonusMinutesTotal: base.bonusMinutesTotal,
-            trailing4WeekDays: pickInt(base.trailing4WeekDays, period?.trailing4WeekDays),
-            trailing4WeekDayPercent: pickDouble(base.trailing4WeekDayPercent, period?.trailing4WeekDayPercent),
-            trailing4WeekTotalTime: pickInt(base.trailing4WeekTotalTime, period?.trailing4WeekTotalTime),
-            trailing4WeekTimePercent: pickDouble(base.trailing4WeekTimePercent, period?.trailing4WeekTimePercent),
-            totalTimeAllTime: pickInt(base.totalTimeAllTime, period?.totalTimeAllTime),
-            progressTo10kHours: pickDouble(base.progressTo10kHours, period?.progressTo10kHours),
-            mindStateTrends: needsTrends ? trends! : base.mindStateTrends
+            trailing4WeekDays: pick(base.trailing4WeekDays, period?.trailing4WeekDays),
+            trailing4WeekDayPercent: pick(base.trailing4WeekDayPercent, period?.trailing4WeekDayPercent),
+            trailing4WeekTotalTime: pick(base.trailing4WeekTotalTime, period?.trailing4WeekTotalTime),
+            trailing4WeekTimePercent: pick(base.trailing4WeekTimePercent, period?.trailing4WeekTimePercent),
+            totalTimeAllTime: pick(base.totalTimeAllTime, period?.totalTimeAllTime),
+            progressTo10kHours: pick(base.progressTo10kHours, period?.progressTo10kHours),
+            // `trends` is computed exactly when `needsTrends` is true.
+            mindStateTrends: trends ?? base.mindStateTrends
         )
     }
 }
@@ -537,7 +509,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         track = try c.decode(Track.self, forKey: .track)
         clientSessionId = try c.decodeIfPresent(UUID.self, forKey: .clientSessionId)
         ambientSoundSummary = try c.decodeIfPresent(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
-        combined = try c.decodeIfPresent(Bool.self, forKey: .combined) ?? false
+        combined = try c.decodeIfPresent(Bool.self, forKey: .combined, default: false)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -953,17 +925,17 @@ public struct NotificationPreferencesDTO: Codable, Sendable, Equatable {
         dailyReminderEnabled = try c.decode(Bool.self, forKey: .dailyReminderEnabled)
         missADayEnabled = try c.decode(Bool.self, forKey: .missADayEnabled)
         friendRequestNotificationsEnabled =
-            try c.decodeIfPresent(Bool.self, forKey: .friendRequestNotificationsEnabled) ?? true
+            try c.decodeIfPresent(Bool.self, forKey: .friendRequestNotificationsEnabled, default: true)
         failureReasonReminderEnabled =
-            try c.decodeIfPresent(Bool.self, forKey: .failureReasonReminderEnabled) ?? false
+            try c.decodeIfPresent(Bool.self, forKey: .failureReasonReminderEnabled, default: false)
         // On by default (#709): a server that omits the field must not read as
         // "notifications allowed during sits".
-        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession) ?? true
+        suppressDuringSession = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringSession, default: true)
         dailyReminderTime = try c.decode(String.self, forKey: .dailyReminderTime)
         dailyReminderFrequency = try c.decode(DailyReminderFrequency.self, forKey: .dailyReminderFrequency)
         quietHoursStart = try c.decodeIfPresent(String.self, forKey: .quietHoursStart)
         quietHoursEnd = try c.decodeIfPresent(String.self, forKey: .quietHoursEnd)
-        callOptIn = try c.decodeIfPresent(Bool.self, forKey: .callOptIn) ?? false
+        callOptIn = try c.decodeIfPresent(Bool.self, forKey: .callOptIn, default: false)
         callPhoneNumber = try c.decodeIfPresent(String.self, forKey: .callPhoneNumber)
         callConsentAt = try c.decodeIfPresent(String.self, forKey: .callConsentAt)
         callWindowStart = try c.decodeIfPresent(String.self, forKey: .callWindowStart)
@@ -1049,51 +1021,24 @@ public struct NotificationPreferencesPatch: Encodable, Sendable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        // A nil field is left out (not changed). The `String??` fields can also be
+        // cleared: `.some(nil)` is sent as JSON null.
         var c = encoder.container(keyedBy: CodingKeys.self)
-        if let pushEnabled { try c.encode(pushEnabled, forKey: .pushEnabled) }
-        if let dailyReminderEnabled { try c.encode(dailyReminderEnabled, forKey: .dailyReminderEnabled) }
-        if let missADayEnabled { try c.encode(missADayEnabled, forKey: .missADayEnabled) }
-        if let friendRequestNotificationsEnabled {
-            try c.encode(friendRequestNotificationsEnabled, forKey: .friendRequestNotificationsEnabled)
-        }
-        if let failureReasonReminderEnabled {
-            try c.encode(failureReasonReminderEnabled, forKey: .failureReasonReminderEnabled)
-        }
-        if let suppressDuringSession { try c.encode(suppressDuringSession, forKey: .suppressDuringSession) }
-        if let dailyReminderTime { try c.encode(dailyReminderTime, forKey: .dailyReminderTime) }
-        if let dailyReminderFrequency { try c.encode(dailyReminderFrequency, forKey: .dailyReminderFrequency) }
-        if let quietHoursStart {
-            switch quietHoursStart {
-            case .none: try c.encodeNil(forKey: .quietHoursStart)
-            case .some(let value): try c.encode(value, forKey: .quietHoursStart)
-            }
-        }
-        if let quietHoursEnd {
-            switch quietHoursEnd {
-            case .none: try c.encodeNil(forKey: .quietHoursEnd)
-            case .some(let value): try c.encode(value, forKey: .quietHoursEnd)
-            }
-        }
-        if let callOptIn { try c.encode(callOptIn, forKey: .callOptIn) }
-        if let callPhoneNumber {
-            switch callPhoneNumber {
-            case .none: try c.encodeNil(forKey: .callPhoneNumber)
-            case .some(let value): try c.encode(value, forKey: .callPhoneNumber)
-            }
-        }
-        if let callWindowStart {
-            switch callWindowStart {
-            case .none: try c.encodeNil(forKey: .callWindowStart)
-            case .some(let value): try c.encode(value, forKey: .callWindowStart)
-            }
-        }
-        if let callWindowStop {
-            switch callWindowStop {
-            case .none: try c.encodeNil(forKey: .callWindowStop)
-            case .some(let value): try c.encode(value, forKey: .callWindowStop)
-            }
-        }
-        if let tz { try c.encode(tz, forKey: .tz) }
+        try c.encodeIfPresent(pushEnabled, forKey: .pushEnabled)
+        try c.encodeIfPresent(dailyReminderEnabled, forKey: .dailyReminderEnabled)
+        try c.encodeIfPresent(missADayEnabled, forKey: .missADayEnabled)
+        try c.encodeIfPresent(friendRequestNotificationsEnabled, forKey: .friendRequestNotificationsEnabled)
+        try c.encodeIfPresent(failureReasonReminderEnabled, forKey: .failureReasonReminderEnabled)
+        try c.encodeIfPresent(suppressDuringSession, forKey: .suppressDuringSession)
+        try c.encodeIfPresent(dailyReminderTime, forKey: .dailyReminderTime)
+        try c.encodeIfPresent(dailyReminderFrequency, forKey: .dailyReminderFrequency)
+        try c.encodeClearable(quietHoursStart, forKey: .quietHoursStart)
+        try c.encodeClearable(quietHoursEnd, forKey: .quietHoursEnd)
+        try c.encodeIfPresent(callOptIn, forKey: .callOptIn)
+        try c.encodeClearable(callPhoneNumber, forKey: .callPhoneNumber)
+        try c.encodeClearable(callWindowStart, forKey: .callWindowStart)
+        try c.encodeClearable(callWindowStop, forKey: .callWindowStop)
+        try c.encodeIfPresent(tz, forKey: .tz)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -1162,5 +1107,27 @@ public struct SubmitFailureReasonRequest: Encodable, Sendable {
     public init(reasonDate: String, text: String) {
         self.reasonDate = reasonDate
         self.text = text
+    }
+}
+
+// MARK: - Coding helpers
+
+private extension KeyedDecodingContainer {
+    /// `decodeIfPresent` with a fallback for an absent or null key, for the
+    /// additive fields an older server (or a cached payload) may not send.
+    func decodeIfPresent<T: Decodable>(_ type: T.Type, forKey key: Key, default fallback: T) throws -> T {
+        try decodeIfPresent(type, forKey: key) ?? fallback
+    }
+}
+
+private extension KeyedEncodingContainer {
+    /// Encodes a PATCH field that can be cleared: outer nil leaves the key out,
+    /// `.some(nil)` sends JSON null, and `.some(value)` sends the value.
+    mutating func encodeClearable<T: Encodable>(_ value: T??, forKey key: Key) throws {
+        switch value {
+        case .none: return
+        case .some(.none): try encodeNil(forKey: key)
+        case .some(.some(let inner)): try encode(inner, forKey: key)
+        }
     }
 }
