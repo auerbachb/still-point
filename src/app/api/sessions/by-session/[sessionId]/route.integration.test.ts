@@ -31,6 +31,19 @@ function patchRequest(sessionId: string, body: unknown): NextRequest {
   });
 }
 
+async function seedMood(matrix: Record<string, { before: number | null; after: number | null }>) {
+  const res = await PATCH(
+    patchRequest(sessionId, { moodMatrix: matrix }),
+    { params: Promise.resolve({ sessionId }) },
+  );
+  expect(res.status).toBe(200);
+}
+
+async function storedMood() {
+  const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+  return row!.moodMatrix;
+}
+
 beforeAll(async () => {
   db = await getTestDb();
 
@@ -322,19 +335,6 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
  * while keeping the rest.
  */
 describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix clear (#792)", () => {
-  async function seedMood(matrix: Record<string, { before: number | null; after: number | null }>) {
-    const res = await PATCH(
-      patchRequest(sessionId, { moodMatrix: matrix }),
-      { params: Promise.resolve({ sessionId }) },
-    );
-    expect(res.status).toBe(200);
-  }
-
-  async function storedMood() {
-    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-    return row!.moodMatrix;
-  }
-
   test("moodMatrix: null clears the stored matrix", async () => {
     await seedMood({ calm: { before: 2, after: 4 }, focus: { before: 3, after: 5 } });
 
@@ -448,6 +448,78 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix clear (#792
       patchRequest(sessionId, { moodMatrix: null }),
       { params: Promise.resolve({ sessionId }) },
     );
+
+    expect(res.status).toBe(404);
+    expect(await storedMood()).toEqual({ calm: { before: 2, after: 4 } });
+  });
+});
+
+/**
+ * Issue #834 — the merge reads the stored matrix in the UPDATE itself, so two
+ * PATCHes that overlap can no longer both merge from one earlier snapshot.
+ * PGlite runs one statement at a time, but overlapping handlers still
+ * interleave the way the old read-then-write lost rows: every read ran before
+ * any write.
+ */
+describe("PATCH /api/sessions/by-session/[sessionId] — overlapping mood writes (#834)", () => {
+  function patchMood(matrix: Record<string, { before: number | null; after: number | null }>) {
+    return PATCH(
+      patchRequest(sessionId, { moodMatrix: matrix }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+  }
+
+  test("overlapping PATCHes each keep their row", async () => {
+    const rows = {
+      calm:    { before: 2, after: 4 },
+      focus:   { before: 3, after: 5 },
+      energy:  { before: 1, after: 3 },
+      anxiety: { before: 4, after: 2 },
+      overall: { before: 3, after: 5 },
+    };
+
+    const responses = await Promise.all(
+      Object.entries(rows).map(([key, row]) => patchMood({ [key]: row })),
+    );
+
+    expect(responses.map((res) => res.status)).toEqual([200, 200, 200, 200, 200]);
+    expect(await storedMood()).toEqual(rows);
+  });
+
+  test("a row delete overlapping a row set: the deleted row stays gone and the new row lands", async () => {
+    await seedMood({ calm: { before: 2, after: 4 }, focus: { before: 3, after: 5 } });
+
+    const responses = await Promise.all([
+      patchMood({ calm: { before: null, after: null } }),
+      patchMood({ energy: { before: 1, after: 3 } }),
+    ]);
+
+    expect(responses.map((res) => res.status)).toEqual([200, 200]);
+    expect(await storedMood()).toEqual({
+      focus: { before: 3, after: 5 },
+      energy: { before: 1, after: 3 },
+    });
+  });
+
+  test("a mood write to a session that does not exist returns 404", async () => {
+    const missingId = "6f1c2a4e-8b3d-4c5e-9f60-718293a4b5c6";
+
+    const res = await PATCH(
+      patchRequest(missingId, { moodMatrix: { calm: { before: 2, after: 4 } } }),
+      { params: Promise.resolve({ sessionId: missingId }) },
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  test("a mood write against another user's session returns 404 and changes nothing", async () => {
+    await seedMood({ calm: { before: 2, after: 4 } });
+    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other109@test.local" });
+
+    const res = await patchMood({
+      calm: { before: null, after: null },
+      focus: { before: 1, after: 1 },
+    });
 
     expect(res.status).toBe(404);
     expect(await storedMood()).toEqual({ calm: { before: 2, after: 4 } });

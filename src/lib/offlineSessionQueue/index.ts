@@ -1,6 +1,7 @@
 export {
   OFFLINE_IDB_NAME,
   OFFLINE_IDB_STORE,
+  OFFLINE_QUEUE_LOCK_NAME,
   OFFLINE_SYNC_TAG,
 } from "./constants";
 export { IndexedDbOfflineSessionQueueStore, defaultOfflineSessionQueueStore } from "./idbStore";
