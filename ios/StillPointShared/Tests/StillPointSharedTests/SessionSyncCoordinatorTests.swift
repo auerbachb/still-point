@@ -65,19 +65,31 @@ struct SessionSyncCoordinatorTests {
 
     @Test func testFlushPendingSkipsEntriesOwnedByAnotherUser() async throws {
         let store = InMemoryOfflineSessionQueueStore()
-        let coordinator = offlineCoordinator(store: store)
         let clientSessionId = UUID()
-
-        _ = try await coordinator.saveCompletedSession(
+        _ = try await offlineCoordinator(store: store).saveCompletedSession(
             request: QueuedSitFixtures.request(clientSessionId: clientSessionId),
             clientSessionId: clientSessionId,
             ownerUserId: "user-a",
             thoughts: []
         )
+        // A fresh recorder over the same queue, so only the flushes below are counted.
+        let recorder = CreateRequestRecorder()
+        let coordinator = SessionSyncCoordinator(
+            queueStore: store,
+            transport: recordingOfflineTransport(recorder)
+        )
 
         let flushed = try await coordinator.flushPending(ownerUserId: "user-b")
         #expect(flushed == 0)
+        #expect(await recorder.requests.isEmpty)
         #expect(try store.loadEntries().count == 1)
+
+        // Control: the owner's flush does reach the transport, so the empty
+        // recording above is the owner check at work, not a recorder that sees nothing.
+        _ = try await coordinator.flushPending(ownerUserId: "user-a")
+        let ownerUploads = await recorder.requests
+        #expect(ownerUploads.count == 1)
+        #expect(ownerUploads.first?.clientSessionId == clientSessionId)
     }
 
     @Test func testProvisionalSessionDTOUsesClientId() {
@@ -106,6 +118,8 @@ struct SessionSyncCoordinatorTests {
             ownerUserId: testOwnerUserId,
             thoughts: [PendingSessionThought(timeInSession: 12, text: "mid-sit")]
         )
+        // #971: the in-session thought was given an id when the sit was queued.
+        let midSitId = try #require(try store.loadEntries()[0].thoughts.first?.clientThoughtId)
         for note in ["first draft", "revised note"] {
             try await coordinator.replaceEndNote(
                 clientSessionId: clientSessionId,
@@ -114,9 +128,9 @@ struct SessionSyncCoordinatorTests {
             )
         }
 
+        // Replacing the end note keeps the mid-sit thought's id, so a retried
+        // upload is still recognized server-side as the same thought.
         let thoughts = try store.loadEntries()[0].thoughts
-        // #971: the in-session thought was given an id when the sit was queued.
-        let midSitId = try #require(thoughts.first?.clientThoughtId)
         #expect(
             thoughts == [
                 PendingSessionThought(timeInSession: 12, text: "mid-sit", clientThoughtId: midSitId),
@@ -178,19 +192,21 @@ struct SessionSyncCoordinatorTests {
             transport: SessionSyncTransport(
                 createSession: { request in
                     await recorder.record(request)
+                    // Production keeps only the server id from this response and
+                    // rebuilds the session from the request (`sessionDTO(from:id:)`).
+                    // Every other field is a placeholder with no category, so the
+                    // category below can only have come from the request.
                     return SessionDTO(
                         id: "server-839",
-                        dayNumber: request.dayNumber,
-                        sessionType: request.sessionType,
-                        duration: request.duration,
-                        completed: request.completed,
-                        actualTime: request.actualTime,
-                        clearPercent: request.clearPercent,
-                        thoughtCount: request.thoughtCount,
-                        mindStateLog: request.mindStateLog,
-                        sessionDate: request.sessionDate,
-                        buddySessionId: nil,
-                        focusCategory: request.focusCategory
+                        dayNumber: 0,
+                        duration: 0,
+                        completed: false,
+                        actualTime: nil,
+                        clearPercent: 0,
+                        thoughtCount: 0,
+                        mindStateLog: nil,
+                        sessionDate: "",
+                        buddySessionId: nil
                     )
                 },
                 batchThoughts: { _ in [] }
@@ -206,8 +222,10 @@ struct SessionSyncCoordinatorTests {
 
         #expect(!result.isPendingSync)
         #expect(result.session.id == "server-839")
+        #expect(result.session.sessionType == .focus)
         #expect(result.session.focusCategory == .writing)
         let uploaded = await recorder.requests
+        #expect(uploaded.count == 1)
         #expect(uploaded.first?.focusCategory == .writing)
     }
 
