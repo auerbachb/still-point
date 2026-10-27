@@ -74,7 +74,7 @@ Naked sleeps are banned for test synchronization:
 
 - disallowed: `waitForTimeout(...)`, `sleep(...)`, `Thread.sleep`, `Task.sleep` in test code/workflows
 - allowed exception: bounded infra backoff in non-test provisioning steps (documented inline). The checker accepts it in two forms:
-  - a workflow shell retry written as `sleep $((attempt * N))`
+  - a workflow shell retry written as `sleep $((attempt * N))`, alone on its line, in a file under `.github/workflows/` only. The same text in an `e2e/` spec or any other script still fails (Issue #935).
   - named lines of a non-test provisioning script, listed in `ALLOWED_SLEEP_LINES_BY_PATH` (`scripts/e2e/check-no-naked-sleep.mjs`). Each entry names one repo-relative path and the exact line text it allows, and its comment says what the back-off retries. A pattern must match the whole line, so a sleep written any other way in that file still fails. Matching is by text, not by line number or count, so another line in that file with exactly an allowed text passes too. The only entry today is the `git ls-remote` / tag-push retry in `scripts/ci/ios-testflight-build-number.mjs` (Issue #920). Never add an entry for a file under `e2e/` or for any other test code.
 
 Enforcement:
