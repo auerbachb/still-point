@@ -66,8 +66,6 @@ final class SessionDTOTests: XCTestCase {
           "mindStateLog": [],
           "sessionDate": "2026-06-10",
           "userId": "leaked-user-id",
-          "focusRating": 7,
-          "happinessRating": 9,
           "someFutureField": {"nested": true}
         }
         """.data(using: .utf8)!
@@ -75,6 +73,43 @@ final class SessionDTOTests: XCTestCase {
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
         XCTAssertEqual(s.id, "s2")
         XCTAssertEqual(s.clearPercent, 50)
+    }
+
+    /// #766: iOS no longer models the retired session ratings (#521), but the server keeps
+    /// returning the two legacy numbers, so a session that still carries them must decode,
+    /// with its mood matrix intact beside them.
+    func testDecodesLegacyRatingKeysAlongsideMoodMatrix() throws {
+        let json = """
+        {
+          "id": "s11",
+          "dayNumber": 4,
+          "sessionType": "standard",
+          "duration": 120,
+          "completed": true,
+          "actualTime": 120,
+          "clearPercent": 70,
+          "thoughtCount": 1,
+          "sessionDate": "2026-10-27",
+          "focusRating": 7,
+          "happinessRating": 9,
+          "moodMatrix": {
+            "focus": { "before": 2, "after": 4 },
+            "happiness": { "before": 3, "after": 5 },
+            "overall": { "before": null, "after": 4 }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let s = try JSONDecoder().decode(SessionDTO.self, from: json)
+        XCTAssertEqual(s.id, "s11")
+        XCTAssertEqual(s.dayNumber, 4)
+        XCTAssertEqual(s.clearPercent, 70)
+        // `moodMatrix` decodes with `try?`, so a silent nil would hide a failure.
+        let mood = try XCTUnwrap(s.moodMatrix)
+        XCTAssertEqual(mood.count, 3)
+        XCTAssertEqual(mood[MoodKey.focus.rawValue], MoodMatrixEntry(before: 2, after: 4))
+        XCTAssertEqual(mood[MoodKey.happiness.rawValue], MoodMatrixEntry(before: 3, after: 5))
+        XCTAssertEqual(mood[MoodKey.overall.rawValue], MoodMatrixEntry(before: nil, after: 4))
     }
 
     /// A response that predates the optional fields (bonusSeconds, actualTime, track,

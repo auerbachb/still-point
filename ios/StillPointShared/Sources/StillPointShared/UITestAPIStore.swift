@@ -362,41 +362,6 @@ actor UITestAPIStore {
         return (session, thoughts)
     }
 
-    /// #521: update focus/happiness ratings for a session (mirrors PATCH /api/sessions/by-session/{id}).
-    func updateSessionRatings(sessionId: String, ratings: SessionRatingsPatch) throws -> SessionDTO {
-        try ensureAuthenticated()
-
-        guard let idx = store.sessions.firstIndex(where: { $0.id == sessionId }) else {
-            throw APIError(status: 404, message: "Session not found")
-        }
-
-        let existing = store.sessions[idx]
-        let updated = SessionDTO(
-            id: existing.id,
-            dayNumber: existing.dayNumber,
-            sessionType: existing.sessionType,
-            duration: existing.duration,
-            bonusSeconds: existing.bonusSeconds,
-            completed: existing.completed,
-            actualTime: existing.actualTime,
-            clearPercent: existing.clearPercent,
-            thoughtCount: existing.thoughtCount,
-            mindStateLog: existing.mindStateLog,
-            attentionLog: existing.attentionLog,
-            sessionDate: existing.sessionDate,
-            createdAt: existing.createdAt,
-            buddySessionId: existing.buddySessionId,
-            breathCount: existing.breathCount,
-            track: existing.track,
-            ambientSoundSummary: existing.ambientSoundSummary,
-            focusRating: ratings.focusRating ?? existing.focusRating,
-            happinessRating: ratings.happinessRating ?? existing.happinessRating
-        )
-        store.sessions[idx] = updated
-        persist()
-        return updated
-    }
-
     /// #635: merge mood matrix rows (mirrors PATCH /api/sessions/by-session/{id} merge semantics).
     /// #792: a clear patch empties the matrix, and an all-nil row deletes that row.
     func updateSessionMoodMatrix(sessionId: String, patch: MoodMatrixPatch) throws -> SessionDTO {
@@ -433,8 +398,6 @@ actor UITestAPIStore {
             breathCount: existing.breathCount,
             track: existing.track,
             ambientSoundSummary: existing.ambientSoundSummary,
-            focusRating: existing.focusRating,
-            happinessRating: existing.happinessRating,
             moodMatrix: merged.isEmpty ? nil : merged
         )
         store.sessions[idx] = updated
