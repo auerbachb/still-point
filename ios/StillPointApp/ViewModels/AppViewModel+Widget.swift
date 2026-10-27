@@ -87,7 +87,12 @@ extension AppViewModel {
     /// widget snapshot, so that session's weekday row checks today right away
     /// rather than waiting for the other session (#684).
     /// Shared touchpoint with #590 completion-handler work — rebase carefully.
-    func markPracticeDoneToday(sessionType: SessionType, track: Track) {
+    ///
+    /// - Parameter combined: #898, today's two sits done as one (#769). It counts
+    ///   for both tracks (`CombinedSit.tracksCredited`), so it raises the flags a
+    ///   standard sit raises on each track — Track One's and
+    ///   `secondPracticeDoneToday` — before the one widget refresh below.
+    func markPracticeDoneToday(sessionType: SessionType, track: Track, combined: Bool = false) {
         // #839: a focus session is not meditation practice (#765). It checks no
         // widget row and raises none of the flags, so it leaves before
         // `recordCompletion` (and its rollover) and the widget refresh, as
@@ -97,12 +102,20 @@ extension AppViewModel {
         if PracticeCompletionFlags.raised(sessionType: sessionType, track: track).isEmpty { return }
         // Rolls the flags over first, then raises this sit's own; see
         // `PracticeDayState.recordCompletion` for why the order matters.
-        practiceDay.recordCompletion(
-            sessionType: sessionType,
-            track: track,
-            now: Date(),
-            dualTrack: dualTrackEnabled
-        )
+        let now = Date()
+        if combined {
+            // A combined sit is a standard sit on the primary track; it also
+            // checks Track Two's row as a second-track standard sit would.
+            practiceDay.recordCompletion(sessionType: .standard, track: .primary, now: now, dualTrack: dualTrackEnabled)
+            practiceDay.recordCompletion(sessionType: .standard, track: .second, now: now, dualTrack: dualTrackEnabled)
+        } else {
+            practiceDay.recordCompletion(
+                sessionType: sessionType,
+                track: track,
+                now: now,
+                dualTrack: dualTrackEnabled
+            )
+        }
         // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay
         // server-derived — this flag is the widget's own fast, network-free
         // path, and the two are refreshed from different sources.

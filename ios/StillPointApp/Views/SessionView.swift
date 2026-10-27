@@ -35,7 +35,7 @@ struct SessionView: View {
     @State private var ambientSoundManager = AmbientSoundManager()
     @State private var guidedExerciseVM = GuidedExerciseViewModel()
 
-    init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary) {
+    init(appVM: AppViewModel, sessionType: SessionType = .standard, track: Track = .primary, combined: Bool = false) {
         self.appVM = appVM
         // #240: the second track uses its own day counter; the primary track uses currentDay.
         let day = track == .second ? appVM.secondTrackDay : appVM.currentDay
@@ -44,7 +44,10 @@ struct SessionView: View {
             dayNumber: day,
             sessionType: sessionType,
             track: track,
-            recovery: recovery
+            recovery: recovery,
+            // #898: a combined sit (#769) plans Track One's and Track Two's lengths
+            // together, read from the same counters the Home cards show.
+            combinedSecondTrackDay: combined ? appVM.secondTrackDay : nil
         ))
         // #669: restore the last-used view mode before the first frame so a sit
         // that should start minimal never flashes the full screen first.

@@ -290,6 +290,29 @@ final class AppViewModel {
         StillPoint.blockCount(forDuration: secondTrackDuration)
     }
 
+    // MARK: - #898 Combine today's sits
+
+    /// Whether Home offers today's two sits as one (#769): a dual-track account
+    /// with neither track done today and no recovery ramp running. Reads the same
+    /// server-derived flags the track cards' badges do, and only once they are the
+    /// newest refresh's answer for the practice day (#1071, web's
+    /// `tracksDoneTodayKnown`): before it, while a newer one is in flight, after a
+    /// failed one or after a sign-out, "neither done" may miss a sit on another device.
+    var combineOffered: Bool {
+        practiceDay.doneTodayFlagsKnown && CombinedSit.isCombineOffered(
+            dualTrackEnabled: dualTrackEnabled,
+            primaryDoneToday: primaryDoneToday,
+            secondDoneToday: secondDoneToday,
+            recoveryActive: activeRecovery != nil
+        )
+    }
+
+    /// Planned length (seconds) of a combined sit: Track One's and Track Two's
+    /// sits added together, from the counters the track cards show.
+    var combinedDuration: Int {
+        CombinedSit.combinedDuration(currentDay: currentDay, secondTrackDay: secondTrackDay)
+    }
+
     // MARK: - #840 Focus activity
 
     /// The focus goal counter (clamped to >= 1 for defensive upstream data).

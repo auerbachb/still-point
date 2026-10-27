@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var showAppGateOnboarding = false
     /// #240: dismiss the fork prompt for this session (may reappear on a later visit).
     @State private var forkDismissed = false
+    /// #898: the "Combine today's sits?" confirmation is up.
+    @State private var showCombineConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -47,6 +49,14 @@ struct HomeView: View {
                             identifier: "home.trackTwo",
                             onBegin: { appVM.beginSession(track: .second) }
                         )
+                        // #898: today's two sits as one, directly under Track Two.
+                        // Absent, not disabled, when not offered. Suppressed during
+                        // UI tests, as the fork card is: it would push the quick
+                        // minute, breath and buddy buttons down.
+                        if appVM.combineOffered
+                            && ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
+                            combineSitsAction
+                        }
                     }
                     .padding(.horizontal, SPSpacing.s2)
                 } else {
@@ -308,6 +318,48 @@ struct HomeView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(SPColor.border1))
         .accessibilityIdentifier(identifier)
+    }
+
+    /// #898: today's two sits done as one (#769), offered quietly. The tap starts
+    /// nothing: it asks first, says splitting the sits is better, and makes "Keep
+    /// them separate" the prominent choice. Only "Combine anyway" starts the sit.
+    /// The wording is web's (#895), character for character.
+    ///
+    /// An alert rather than a `confirmationDialog`: a dialog drops its cancel-role
+    /// button when it shows as a popover, and "Keep them separate" is the choice
+    /// that must always be on screen.
+    private var combineSitsAction: some View {
+        Button {
+            showCombineConfirmation = true
+        } label: {
+            Text("Combine today's sits")
+                .font(SPFont.mono(12))
+                .tracking(1)
+                .foregroundStyle(Color(SPColor.fg3))
+                .underline()
+                .frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("home.combineButton")
+        .alert("Combine today's sits?", isPresented: $showCombineConfirmation) {
+            Button("Keep them separate", role: .cancel) {}
+                .accessibilityIdentifier("home.combineKeepSeparateButton")
+            Button("Combine anyway") {
+                // The offer can lapse while the alert is up (a refresh lands);
+                // nothing starts unless it still stands.
+                guard appVM.combineOffered else { return }
+                withAnimation { appVM.beginSession(combined: true) }
+            }
+            .accessibilityIdentifier("home.combineConfirmButton")
+        } message: {
+            Text(Self.combineConfirmationMessage(duration: appVM.combinedDuration))
+        }
+    }
+
+    /// The confirmation's text, length as minutes and seconds ("14:10").
+    private static func combineConfirmationMessage(duration: Int) -> String {
+        "Splitting your sits is better. Two separate sits suit your practice more than one long one, so combine only if you can't sit twice today."
+            + "\n\n"
+            + "This will be one \(BreathCounting.elapsedDisplay(duration)) sit, and it counts for both tracks."
     }
 
     /// #240: fork choice presented once the primary track passes the 10-minute mark.

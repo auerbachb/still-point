@@ -710,4 +710,97 @@ final class PracticeDayStateTests: XCTestCase {
             XCTAssertEqual(state.doneTodayFlagsStamp, lastUsed, "a focus session on \(track) rolled the flags over")
         }
     }
+
+    // MARK: - Whether the flags are an answer (#1071, web's `tracksDoneTodayKnown`)
+
+    /// A launched state whose newest badge query answered "neither done" at 9:00 today.
+    private func answeredNeitherDone() -> PracticeDayState {
+        var state = PracticeDayState()
+        state.reset()
+        state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
+        let read = state.beginTracksDoneRead()
+        state.applyTracksDoneAnswer(
+            TracksDoneTodayDTO(primary: false, second: false),
+            creditedDate: today, now: october(27, 9), read: read, calendar: newYork
+        )
+        return state
+    }
+
+    func testTheFlagsAreNotAnAnswerBeforeTheFirstBadgeQueryLands() {
+        var state = PracticeDayState()
+        XCTAssertFalse(state.doneTodayFlagsKnown, "a fresh state read as answered")
+        state.reset()
+        state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
+        _ = state.beginTracksDoneRead()
+        XCTAssertFalse(state.doneTodayFlagsKnown, "the flags read as answered while the first query was in flight")
+    }
+
+    func testTheNewestAnswerMakesTheFlagsKnown() {
+        XCTAssertTrue(answeredNeitherDone().doneTodayFlagsKnown)
+    }
+
+    func testANewerQueryInFlightMakesTheFlagsUnknownAndAnOlderAnswerDoesNotRestoreThem() {
+        var state = PracticeDayState()
+        state.reset()
+        state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
+        let older = state.beginTracksDoneRead()
+        _ = state.beginTracksDoneRead()
+        XCTAssertFalse(state.doneTodayFlagsKnown)
+
+        state.applyTracksDoneAnswer(
+            TracksDoneTodayDTO(primary: false, second: false),
+            creditedDate: today, now: october(27, 9), read: older, calendar: newYork
+        )
+
+        XCTAssertFalse(state.doneTodayFlagsKnown, "an older answer read as known while a newer query was in flight")
+    }
+
+    func testAFailedBadgeQueryLeavesTheFlagsUnknown() {
+        var state = answeredNeitherDone()
+        _ = state.beginTracksDoneRead()
+        state.applyFailedTracksDoneRead(now: october(27, 9, 5), dualTrack: true, calendar: newYork)
+        XCTAssertFalse(state.doneTodayFlagsKnown, "a failed query's local fallback read as an answer")
+    }
+
+    func testASignOutOrAccountSwitchMakesTheFlagsUnknown() {
+        var state = answeredNeitherDone()
+        state.reset()
+        XCTAssertFalse(state.doneTodayFlagsKnown, "the previous account's answer survived a reset")
+    }
+
+    func testAnAnswerThatLeftBeforeAResetDoesNotMakeTheFlagsKnown() {
+        var state = PracticeDayState()
+        state.reset()
+        state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
+        let read = state.beginTracksDoneRead()
+        state.reset()
+        state.applyTracksDoneAnswer(
+            TracksDoneTodayDTO(primary: false, second: false),
+            creditedDate: today, now: october(27, 9), read: read, calendar: newYork
+        )
+        XCTAssertFalse(state.doneTodayFlagsKnown, "an answer from before the reset read as known")
+    }
+
+    func testASitFinishedHereMakesTheFlagsUnknownUntilTheNextAnswer() {
+        var state = answeredNeitherDone()
+        state.recordCompletion(sessionType: .standard, track: .primary, now: october(27, 10), dualTrack: true, calendar: newYork)
+        XCTAssertFalse(state.doneTodayFlagsKnown, "an answer from before the sit read as current")
+    }
+
+    func testANewDayMakesYesterdaysAnswerUnknown() {
+        var state = answeredNeitherDone()
+        state.rollOverIfNeeded(now: october(28, 9), dualTrack: true, calendar: newYork)
+        XCTAssertFalse(state.doneTodayFlagsKnown, "yesterday's answer was read as today's")
+    }
+
+    /// With the flags known, the offer behaves as before: the rule is `CombinedSit`'s.
+    func testAKnownNeitherDoneAnswerStillOffersTheCombinedSit() {
+        let state = answeredNeitherDone()
+        XCTAssertTrue(state.doneTodayFlagsKnown && CombinedSit.isCombineOffered(
+            dualTrackEnabled: true,
+            primaryDoneToday: state.primaryDoneToday,
+            secondDoneToday: state.secondDoneToday,
+            recoveryActive: false
+        ))
+    }
 }

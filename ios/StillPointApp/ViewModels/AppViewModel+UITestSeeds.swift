@@ -24,7 +24,7 @@ extension AppViewModel {
     /// mutually exclusive; the first match wins.
     static func initialAuthenticatedView(from env: [String: String]) -> AppView {
         if truthy(env["SP_UI_TEST_FORCE_START_SESSION"]) {
-            return .session(type: .standard, track: .primary)
+            return .session(type: .standard, track: .primary, combined: false)
         }
         if truthy(env["SP_UI_TEST_FORCE_BREATH_COUNTING"]) {
             return .breathCounting

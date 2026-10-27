@@ -9,6 +9,9 @@ final class SessionViewModel {
     let sessionType: SessionType
     /// #240: which daily track this sit advances.
     let track: Track
+    /// #898: today's two sits done as one (#769). Always a standard sit on the
+    /// primary track; saved with `combined: true` and credited to both tracks.
+    let combined: Bool
     let plannedSeconds: Int
     var bonusSeconds: Int = 0
 
@@ -98,15 +101,28 @@ final class SessionViewModel {
         "\(minutes):\(String(format: "%02d", seconds))"
     }
 
-    init(dayNumber: Int, sessionType: SessionType = .standard, track: Track = .primary, recovery: DurationRecovery.RecoveryFields = .none) {
+    /// - Parameter combinedSecondTrackDay: #898, Track Two's day for a combined sit
+    ///   (#769), whose planned length adds Track Two's sit to Track One's. `nil` for
+    ///   any other sit. A combined sit is always standard on the primary track, so
+    ///   `sessionType` and `track` are overridden when this is set.
+    init(
+        dayNumber: Int,
+        sessionType: SessionType = .standard,
+        track: Track = .primary,
+        recovery: DurationRecovery.RecoveryFields = .none,
+        combinedSecondTrackDay: Int? = nil
+    ) {
+        let combined = combinedSecondTrackDay != nil
         self.dayNumber = dayNumber
-        self.sessionType = sessionType
-        self.track = track
+        self.sessionType = combined ? .standard : sessionType
+        self.track = combined ? .primary : track
+        self.combined = combined
         self.plannedSeconds = Self.resolveTotalSeconds(
             for: dayNumber,
-            sessionType: sessionType,
-            track: track,
-            recovery: recovery
+            sessionType: self.sessionType,
+            track: self.track,
+            recovery: recovery,
+            combinedSecondTrackDay: combinedSecondTrackDay
         )
         self.soundPrefs = AudioEngine.loadPrefs()
         self.timerEngine = SessionTimerEngine(timerMultiplier: Self.resolveUITestTimerMultiplier())
@@ -370,7 +386,9 @@ final class SessionViewModel {
             sessionDate: creditedDate,
             track: track,
             clientSessionId: clientSessionId,
-            ambientSoundSummary: ambientSoundSummary
+            ambientSoundSummary: ambientSoundSummary,
+            // #898: true only for a combined sit; omitted from the body otherwise.
+            combined: combined
         )
 
         let pendingThoughts = capturedThoughts.map {
@@ -459,7 +477,8 @@ final class SessionViewModel {
                 unlockAppGate: completedNaturally,
                 attentionLog: attentionLog,
                 attentionElapsed: SessionCompletionLogic.attentionElapsed(attentionLog: attentionLog, elapsed: elapsed),
-                ambientSoundSummary: ambientSoundSummary
+                ambientSoundSummary: ambientSoundSummary,
+                combined: combined
             )
         }
     }
@@ -498,7 +517,8 @@ final class SessionViewModel {
             unlockAppGate: completedNaturally,
             attentionLog: attentionLog,
             attentionElapsed: SessionCompletionLogic.attentionElapsed(attentionLog: attentionLog, elapsed: elapsed),
-            ambientSoundSummary: ambientSoundSummary
+            ambientSoundSummary: ambientSoundSummary,
+            combined: combined
         )
     }
 
@@ -571,12 +591,22 @@ final class SessionViewModel {
         for dayNumber: Int,
         sessionType: SessionType,
         track: Track,
-        recovery: DurationRecovery.RecoveryFields
+        recovery: DurationRecovery.RecoveryFields,
+        combinedSecondTrackDay: Int?
     ) -> Int {
         let env = ProcessInfo.processInfo.environment
+        // The UI-test override wins for a combined sit too.
         guard let override = env["SP_UI_TEST_SESSION_SECONDS"],
               let overrideSeconds = Int(override),
               overrideSeconds > 0 else {
+            if let combinedSecondTrackDay {
+                // #898: never offered during recovery (`CombinedSit.isCombineOffered`),
+                // so the plain ramp lengths are the whole story.
+                return CombinedSit.combinedDuration(
+                    currentDay: dayNumber,
+                    secondTrackDay: combinedSecondTrackDay
+                )
+            }
             if track == .second {
                 return StillPoint.duration(for: sessionType, day: dayNumber)
             }

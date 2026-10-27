@@ -798,22 +798,10 @@ struct HistoryView: View {
 
     // MARK: - Session Label Helpers
 
+    /// #898: the choice lives in `StillPointShared` (`HistorySessionLabel`) so
+    /// `swift test` covers it, a combined sit's "Combined" included.
     private func sessionLabel(session: SessionDTO, index: Int) -> String {
-        switch session.sessionType {
-        case .quick:
-            return "Quick \(index)"
-        case .breath:
-            if let count = session.breathCount, count > 0 {
-                return "Breath \(count)b"
-            }
-            return "Breath \(index)"
-        case .standard:
-            return "Session \(index)"
-        case .focus:
-            // #839: "Focus · Reading", or "Focus" with no category, as on web. No
-            // per-day number.
-            return FocusCategory.sessionLabel(for: session.focusCategory)
-        }
+        HistorySessionLabel.label(for: session, indexInDay: index)
     }
 
     private func sessionLabelColor(session: SessionDTO) -> Color {

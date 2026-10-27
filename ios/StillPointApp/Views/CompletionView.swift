@@ -21,6 +21,9 @@ struct CompletionView: View {
     let attentionElapsed: Double?
     /// #563: ambient sound level summary; nil when capture was off or mic was denied.
     let ambientSoundSummary: AmbientSoundSummary?
+    /// #898: today's two sits done as one (#769). Its "tomorrow" is the next two
+    /// sits added up.
+    let combined: Bool
 
     @State private var endNote = ""
     @State private var noteSaved = false
@@ -62,7 +65,13 @@ struct CompletionView: View {
     }
 
     private var nextDuration: Int {
-        DurationRecovery.previewNextStandardDuration(
+        if combined {
+            return DurationRecovery.previewNextCombinedDuration(
+                completed: sessionCompleted,
+                user: appVM.currentUser
+            )
+        }
+        return DurationRecovery.previewNextStandardDuration(
             sessionType: sessionType,
             completed: sessionCompleted,
             track: track,
