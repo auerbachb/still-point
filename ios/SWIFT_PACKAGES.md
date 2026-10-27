@@ -6,11 +6,11 @@ What each toolchain can run:
 
 | Command | Full Xcode | Command Line Tools only |
 |---|---|---|
-| `swift test` in `ios/StillPointShared` | Yes | No. Every suite imports XCTest, which ships only with Xcode: `no such module 'XCTest'`. |
+| `swift test` in `ios/StillPointShared` | Yes | No. Most suites use Swift Testing (`import Testing`), but three still import XCTest, which ships only with Xcode: `no such module 'XCTest'`. |
 | `swift build` in `ios/StillPointShared` | Yes | Should work, since nothing in the package needs SwiftData any more. Not verified: the Command Line Tools 27.0 install used for #870 could not load any `Package.swift` (the `Invalid manifest` failure below). |
 | `swift build` in `ios/StillPointModels` | Yes | No. The SwiftData macro plugin ships only with Xcode: `plugin for module 'SwiftDataMacros' not found`. |
 
-**XCTest decision:** the suites stay on XCTest for now, so `swift test` still needs full Xcode. Moving them to swift-testing, which Command Line Tools do ship, is tracked in Issue [#1072](https://github.com/auerbachb/still-point/issues/1072).
+**Test framework:** the suites use Swift Testing (`import Testing`), which Command Line Tools do ship. Three still import XCTest: `PendingDeepLinksTests`, `AuthCheckOwnershipLocalLinksTests`, and `BuddyInviteJoinRoutingTests`. Until they move too, `swift test` still needs full Xcode. Finishing that migration is tracked in Issue [#1072](https://github.com/auerbachb/still-point/issues/1072).
 
 Check which toolchain is active:
 

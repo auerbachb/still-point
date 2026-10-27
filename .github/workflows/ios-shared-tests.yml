@@ -66,10 +66,12 @@ jobs:
 
       # StillPointShared is a pure SwiftPM package, so `swift test` builds and runs
       # the suite without xcodegen/xcodebuild (the same path agents use locally,
-      # where the app's Xcode project can't be parsed). It still needs full Xcode,
-      # not just Command Line Tools, because every suite imports XCTest, which
-      # ships only with Xcode; the macOS runner image has Xcode selected. For local
-      # runs, see README "iOS shared package tests" (issues #682, #870). Wall-clock
+      # where the app's Xcode project can't be parsed). Most suites use Swift
+      # Testing (`import Testing`), but a few still import XCTest, which ships
+      # only with Xcode, so this still needs full Xcode rather than Command Line
+      # Tools until issue #1072 finishes the migration; the macOS runner image has
+      # Xcode selected. For local runs, see ios/SWIFT_PACKAGES.md (issues #682,
+      # #870, #1135). Wall-clock
       # is dominated by macOS runner spin-up + the package build. Runs only when
       # either package (or this workflow) changed.
       - name: Run StillPointShared unit tests
