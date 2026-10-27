@@ -88,6 +88,9 @@ export default function StillPoint() {
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   // #240: which track the in-progress standard sit belongs to.
   const [activeTrack, setActiveTrack] = useState<Track>("primary");
+  // #769: the in-progress sit is today's two sits done as one. Every way into a
+  // sit sets it, so it never carries over from an earlier sit.
+  const [activeCombined, setActiveCombined] = useState(false);
   // #837: what the running focus session is for, set by the picker before the
   // timer opens. The only way into the timer is through the picker.
   const [activeFocusCategory, setActiveFocusCategory] = useState<FocusCategory | null>(null);
@@ -226,6 +229,8 @@ export default function StillPoint() {
     // track explicitly — without this, a stale `second` track from an earlier
     // interaction would incorrectly attribute this auto-started sit.
     setActiveTrack("primary");
+    // #769: nor may a combined flag left from an earlier sit add Track Two's length.
+    setActiveCombined(false);
     setOverlay("session");
     router.replace(rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB));
   }, [user, authChecked, rawTab, router]);
@@ -246,6 +251,8 @@ export default function StillPoint() {
         setBuddyInviteError(null);
         setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync));
         setBuddySessionId(sessionId);
+        // #769: a buddy sit is never combined.
+        setActiveCombined(false);
         setOverlay(null);
         buddyInviteInFlight.current = false;
         router.replace(pathForTab("buddy"));
@@ -315,9 +322,16 @@ export default function StillPoint() {
     setOverlay(null);
   };
 
-  const handleBegin = (sessionType: SessionType = "standard", track: Track = "primary") => {
-    setActiveSessionType(sessionType);
-    setActiveTrack(track);
+  // #769: `combined` starts today's two sits as one, which is always a standard
+  // sit on the primary track. Every other start leaves it false.
+  const handleBegin = (
+    sessionType: SessionType = "standard",
+    track: Track = "primary",
+    { combined = false }: { combined?: boolean } = {},
+  ) => {
+    setActiveSessionType(combined ? "standard" : sessionType);
+    setActiveTrack(combined ? "primary" : track);
+    setActiveCombined(combined);
     setOverlay("session");
   };
 
@@ -566,6 +580,8 @@ export default function StillPoint() {
           recovery={activeTrack === "second" ? NO_RECOVERY : userRecovery}
           sessionType={activeSessionType}
           track={activeTrack}
+          combined={activeCombined}
+          secondTrackDay={user.secondTrackDay ?? 1}
           onComplete={handleSessionComplete}
           onAbandon={handleSessionAbandon}
         />
@@ -693,6 +709,8 @@ export default function StillPoint() {
           onEnterSession={(id, calendarSync) => {
             setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync ?? undefined));
             setBuddySessionId(id);
+            // #769: a buddy sit is never combined.
+            setActiveCombined(false);
           }}
           onBack={handleBuddyExit}
         />

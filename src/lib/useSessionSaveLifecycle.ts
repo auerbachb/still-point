@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
+import { combinedSitField, previewNextCombinedDuration } from "@/lib/combinedSit";
 import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 import { focusActivityDayAfterCompletedSave, type FocusSessionResult } from "@/lib/focusActivity";
 import {
@@ -33,7 +34,8 @@ export type CompletionData = {
   thoughts: Array<{ timeInSession: number; text: string }>;
   /** Planned duration of the *next* standard sit, accounting for recovery-ramp
    *  advancement (#238) — computed with the same `advanceProgression` /
-   *  `sessionDurationForUser` the server uses, from the pre-save user state. */
+   *  `sessionDurationForUser` the server uses, from the pre-save user state.
+   *  After a combined sit (#769), what the next two sits add up to. */
   nextDuration: number;
 };
 
@@ -42,6 +44,9 @@ export type CompletedSitInput = {
   dayNumber: number;
   sessionType: SessionType;
   track: Track;
+  /** #769: today's two sits done as one, on the primary track. `SessionView`
+   *  sets it only when true. */
+  combined?: boolean;
   duration: number;
   bonusSeconds: number;
   completed: boolean;
@@ -169,6 +174,8 @@ export function useSessionSaveLifecycle({
         dayNumber: data.dayNumber,
         sessionType: data.sessionType,
         track: data.track,
+        // #769: the key only on a combined sit, so every other request is unchanged.
+        ...combinedSitField(data.combined),
         duration: data.duration,
         bonusSeconds: data.bonusSeconds,
         completed: data.completed,
@@ -239,14 +246,20 @@ export function useSessionSaveLifecycle({
 
     // A pending sit is not on the server yet, so the refresh inside the save
     // cannot see it. Remember it so the next sit in this grace window knows
-    // yesterday's required sits.
+    // yesterday's required sits. A combined sit (#769) is remembered as done
+    // for both tracks; an ended-early or not-stored one is not remembered.
     if (
       data.completed
       && data.sessionType === "standard"
       && outcome
       && outcome.status !== "notStored"
     ) {
-      loadedSitsRef.current = rememberStandardSit(loadedSitsRef.current, sessionDate, data.track);
+      loadedSitsRef.current = rememberStandardSit(
+        loadedSitsRef.current,
+        sessionDate,
+        data.track,
+        data.combined === true,
+      );
     }
 
     setCompletionData({
@@ -262,7 +275,14 @@ export function useSessionSaveLifecycle({
       clearPercent: data.clearPercent,
       thoughtCount: data.thoughtCount,
       thoughts: data.thoughts,
-      nextDuration: previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
+      // #769: after a combined sit, "tomorrow" is what the next two sits add up to.
+      nextDuration: data.combined && user
+        ? previewNextCombinedDuration({
+          completed: data.completed,
+          currentDay: user.currentDay,
+          secondTrackDay: user.secondTrackDay ?? 1,
+        })
+        : previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
     });
     setOverlay("complete");
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveCompletedSit, setOverlay]);
@@ -315,6 +335,8 @@ export function useSessionSaveLifecycle({
           dayNumber: data.dayNumber,
           sessionType: data.sessionType,
           track: data.track,
+          // #769: stored as what happened. Not completed, it credits nothing.
+          ...combinedSitField(data.combined),
           duration: data.duration,
           bonusSeconds: data.bonusSeconds,
           completed: false,

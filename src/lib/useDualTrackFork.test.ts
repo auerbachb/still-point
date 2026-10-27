@@ -39,6 +39,11 @@ function row(sessionDate: string, track?: "primary" | "second", completed = true
   return { completed, sessionType: "standard", sessionDate, track, duration: 600 } as Session;
 }
 
+/** #769: today's two sits done as one — a primary row the server marks combined. */
+function combinedRow(sessionDate: string, completed = true): Session {
+  return { ...row(sessionDate, "primary", completed), combined: true, duration: 850 } as Session;
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -259,6 +264,69 @@ describe("useDualTrackFork — today's badges (#240)", () => {
       forkDismissed: false,
       tracksDoneToday: { primary: false, second: false },
     });
+  });
+});
+
+describe("useDualTrackFork — a combined sit (#892)", () => {
+  const DUAL: User = { ...USER, dualTrackEnabled: true, secondTrackDay: 20 };
+
+  test("one combined row checks off both tracks for the day", async () => {
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
+    const fork = await renderFork({ user: DUAL });
+
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
+  });
+
+  test("a queued combined sit checks off both tracks while it waits to sync", async () => {
+    mocks.getSessions.mockResolvedValue({ sessions: [] });
+    const fork = await renderFork({ user: DUAL });
+    fork.loadedSitsRef.current = rememberStandardSit(null, "2026-10-26", "primary", true);
+
+    await act(async () => {
+      await fork.current().refreshTodayTracks();
+    });
+
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
+  });
+
+  test("once it has synced, the remembered sit and the server's combined row are one sit", async () => {
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
+    const fork = await renderFork({ user: DUAL });
+    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, "2026-10-26", "primary", true);
+
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
+    await act(async () => {
+      await fork.current().refreshTodayTracks();
+    });
+
+    expect(fork.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary", combined: true },
+    ]);
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
+  });
+
+  test("before 6:00, yesterday's combined sit has closed it, so the badges are the new day's", async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0)); // local Oct 27, 5:30
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
+    const fork = await renderFork({ user: DUAL });
+
+    // Both of Oct 26's tracks are done, so 5:30 already belongs to Oct 27.
+    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+  });
+
+  test("control: before 6:00, a plain primary sit leaves a two-a-day yesterday open", async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0));
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
+    const fork = await renderFork({ user: DUAL });
+
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
+  });
+
+  test("an ended-early combined sit checks off nothing", async () => {
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26", false)] });
+    const fork = await renderFork({ user: DUAL });
+
+    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
   });
 });
 

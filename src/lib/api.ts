@@ -67,6 +67,9 @@ export type Session = {
   focusCategory?: FocusCategory | null;
   /** #240: which daily track this sit advanced ("primary" | "second"). */
   track?: "primary" | "second";
+  /** #769: today's two sits done as one. Stored on the primary track, it counts
+   *  for both (`tracksCredited`); omitted by a server that predates #890. */
+  combined?: boolean;
   completed: boolean;
   actualTime: number | null;
   clearPercent: number;
@@ -243,6 +246,9 @@ export const api = {
     focusCategory?: FocusCategory | null;
     /** #240: which daily track this sit advanced. Defaults to "primary" server-side. */
     track?: "primary" | "second";
+    /** #769: today's two sits done as one, on the primary track. Sent only when
+     *  true, so an ordinary sit's body is unchanged. */
+    combined?: boolean;
     completed: boolean;
     actualTime: number;
     clearPercent: number;

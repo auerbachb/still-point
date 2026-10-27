@@ -192,3 +192,26 @@ export type DurationForDayFixture = {
     expected: number;
   }>;
 };
+
+export type CombinedSitFixture = {
+  combinedDuration: Array<{
+    name: string;
+    currentDay: number;
+    secondTrackDay: number;
+    expected: number;
+  }>;
+  isCombineOffered: Array<{
+    name: string;
+    dualTrackEnabled: boolean;
+    primaryDoneToday: boolean;
+    secondDoneToday: boolean;
+    recoveryActive: boolean;
+    expected: boolean;
+  }>;
+  tracksCredited: Array<{
+    name: string;
+    track: string | null;
+    combined: boolean | null;
+    expected: { primary: boolean; second: boolean };
+  }>;
+};

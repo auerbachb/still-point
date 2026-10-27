@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
+import { combinedDurationForUser, combinedSitField } from "@/lib/combinedSit";
 import { type SessionType, type Track } from "@/lib/constants";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
 import { BlockTimer } from "./BlockTimer";
@@ -118,10 +119,17 @@ type SessionViewProps = {
   sessionType?: SessionType;
   /** #240: which daily track this sit belongs to; echoed back in the payloads. */
   track?: Track;
+  /** #769: today's two sits done as one. The caller runs it as a standard sit
+   *  on the primary track, with the primary day as `currentDay`. */
+  combined?: boolean;
+  /** #769: Track Two's day, which a combined sit's planned length adds in. */
+  secondTrackDay?: number;
   onComplete: (data: {
     dayNumber: number;
     sessionType: SessionType;
     track: Track;
+    /** #769: present, and true, only for a combined sit. */
+    combined?: boolean;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -135,6 +143,8 @@ type SessionViewProps = {
     dayNumber: number;
     sessionType: SessionType;
     track: Track;
+    /** #769: present, and true, only for a combined sit. */
+    combined?: boolean;
     duration: number;
     bonusSeconds: number;
     completed: boolean;
@@ -150,9 +160,22 @@ const mono: CSSProperties = {
   fontFamily: "var(--font-mono)",
 };
 
-export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = "standard", track = "primary", onComplete, onAbandon }: SessionViewProps) {
+export function SessionView({
+  currentDay,
+  recovery = NO_RECOVERY,
+  sessionType = "standard",
+  track = "primary",
+  combined = false,
+  secondTrackDay = 1,
+  onComplete,
+  onAbandon,
+}: SessionViewProps) {
   const isMobile = useIsMobile();
-  const plannedSeconds = sessionDurationForUser(sessionType, currentDay, recovery);
+  // #769: a combined sit is one sit as long as both tracks' sits together.
+  // Bonus time, pause and the tracking unlock all work from this, as for any sit.
+  const plannedSeconds = combined
+    ? combinedDurationForUser(currentDay, secondTrackDay)
+    : sessionDurationForUser(sessionType, currentDay, recovery);
   const [bonusSeconds, setBonusSeconds] = useState(0);
   const totalSeconds = plannedSeconds + bonusSeconds;
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -327,6 +350,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
       dayNumber: currentDay,
       sessionType,
       track,
+      ...combinedSitField(combined),
       duration: plannedSeconds,
       bonusSeconds,
       completed: true,
@@ -336,7 +360,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
       mindStateLog: resolvedLog,
       thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, sessionType, track, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
+  }, [currentDay, sessionType, track, combined, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
@@ -489,6 +513,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
       dayNumber: currentDay,
       sessionType,
       track,
+      ...combinedSitField(combined),
       duration: plannedSeconds,
       bonusSeconds,
       completed: false,
@@ -511,6 +536,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
       dayNumber: currentDay,
       sessionType,
       track,
+      ...combinedSitField(combined),
       duration: plannedSeconds,
       bonusSeconds,
       completed: false,

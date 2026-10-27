@@ -1,0 +1,28 @@
+{
+  "algorithm": "combinedSit",
+  "description": "Golden values for today's two sits done as one (#769). Web: combinedDurationForUser and isCombineOffered in src/lib/combinedSit.ts, and tracksCredited in src/lib/sessionCalendar.ts. The iOS suite loads the same file in #896. A combined sit's planned length is both tracks' durationForDay added together and ignores recovery; it is offered only to a dual-track account with neither track done today and no recovery ramp running; and a combined row credits both tracks, whatever its track.",
+  "combinedDuration": [
+    { "name": "both tracks at the 10-minute cap", "currentDay": 55, "secondTrackDay": 55, "expected": 1200 },
+    { "name": "Track One past the cap, Track Two on day 20", "currentDay": 200, "secondTrackDay": 20, "expected": 850 },
+    { "name": "Track One past the cap, Track Two on day 1", "currentDay": 56, "secondTrackDay": 1, "expected": 660 },
+    { "name": "Track Two one day short of the cap", "currentDay": 56, "secondTrackDay": 54, "expected": 1190 },
+    { "name": "both tracks on day 1", "currentDay": 1, "secondTrackDay": 1, "expected": 120 },
+    { "name": "both tracks below the cap", "currentDay": 45, "secondTrackDay": 10, "expected": 650 }
+  ],
+  "isCombineOffered": [
+    { "name": "dual-track, neither track done, no recovery", "dualTrackEnabled": true, "primaryDoneToday": false, "secondDoneToday": false, "recoveryActive": false, "expected": true },
+    { "name": "a single-track account", "dualTrackEnabled": false, "primaryDoneToday": false, "secondDoneToday": false, "recoveryActive": false, "expected": false },
+    { "name": "Track One already done today", "dualTrackEnabled": true, "primaryDoneToday": true, "secondDoneToday": false, "recoveryActive": false, "expected": false },
+    { "name": "Track Two already done today", "dualTrackEnabled": true, "primaryDoneToday": false, "secondDoneToday": true, "recoveryActive": false, "expected": false },
+    { "name": "a recovery ramp running", "dualTrackEnabled": true, "primaryDoneToday": false, "secondDoneToday": false, "recoveryActive": true, "expected": false }
+  ],
+  "tracksCredited": [
+    { "name": "a primary row", "track": "primary", "combined": false, "expected": { "primary": true, "second": false } },
+    { "name": "a second-track row", "track": "second", "combined": false, "expected": { "primary": false, "second": true } },
+    { "name": "a row with no track counts as primary", "track": null, "combined": null, "expected": { "primary": true, "second": false } },
+    { "name": "a combined primary row", "track": "primary", "combined": true, "expected": { "primary": true, "second": true } },
+    { "name": "a combined row with no track", "track": null, "combined": true, "expected": { "primary": true, "second": true } },
+    { "name": "a combined second-track row", "track": "second", "combined": true, "expected": { "primary": true, "second": true } },
+    { "name": "combined null on a second-track row", "track": "second", "combined": null, "expected": { "primary": false, "second": true } }
+  ]
+}
