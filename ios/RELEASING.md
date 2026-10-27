@@ -222,9 +222,11 @@ npm run ios:app-store:dry-run
 The report in `artifacts/ios-app-store-dry-run/` confirms source-of-truth
 docs, release-readiness checklists, workflow secret references, version/build
 values, App Store Connect API readiness, human-owned gates, and fallback
-paths. For live App Store Connect build/version validation, provide
-`APPSTORE_APP_ID` plus the App Store Connect API key environment variables
-and rerun with `-- --require-live`.
+paths. To have it check App Store Connect live, provide `APPSTORE_APP_ID` plus
+the App Store Connect API key environment variables and rerun with
+`-- --require-live`. The live check fails unless the intended build exists and
+is processed (`VALID`). It lists the version records but does not check which
+build is attached to the version, so confirm that on the version page.
 
 The dry run checks one **intended build** (#838). By default that's the highest
 `ios-v*-build*` tag on origin: the most recently claimed build number, by any lane (see
