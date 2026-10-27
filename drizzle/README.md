@@ -105,6 +105,11 @@ only exist in the excluded `0000_romantic_night_nurse.sql` baseline, plus
 guards), so this file is a pure no-op on prod/preview where the schema already
 exists.
 
+`drizzle/1_notification_preferences_incremental.sql` (#858) extends it the same
+way for two more ordering hazards (see below). It is a single
+`CREATE TABLE IF NOT EXISTS` with the table's full current definition, so it is
+also a no-op wherever `notification_preferences` already exists.
+
 ### Sort-order convention
 
 The runner excludes files matching `/^\d{4}_/` (exactly four digits then
@@ -125,6 +130,22 @@ and `buddy_session_participants_user_index_incremental.sql` sort before
 The bootstrap file resolves this by creating `buddy_sessions` and
 `buddy_session_participants` with their full current definitions so those index
 files are no-ops on existing DBs and valid operations on fresh ones.
+
+The same hazard exists for columns (#858). `notification_preferences_dispatch_idx_531_incremental.sql`
+indexes `failure_reason_reminder_enabled`, which
+`notification_preferences_failure_reason_441_incremental.sql` adds, and
+`notification_preferences_session_active_709_incremental.sql` changes the default
+of `suppress_during_session`, which
+`notification_preferences_suppress_during_session_431_incremental.sql` adds. Both
+sort before the file they depend on. `1_notification_preferences_incremental.sql`
+creates the table with every current column, so on a fresh DB the later
+`ADD COLUMN IF NOT EXISTS` files are no-ops and the final defaults stand. A file
+that only ran `ADD COLUMN` could not sort first: the table does not exist until
+`notification_preferences_345_incremental.sql`.
+
+`scripts/apply-migrations.test.ts` replays every managed file, in runner order,
+on an empty PGlite database, so `npm run test:unit` fails when a new file sorts
+before something it needs, and names that file.
 
 If you add a new table that is referenced by an earlier-sorting file, add it to
 `0_core_tables_incremental.sql` following the append-only rule for that file:
