@@ -119,22 +119,25 @@ extension AppViewModel {
             // supply — the same loss #699 fixed in the other direction. Only the
             // failure branch has nothing to contribute.
             if RequestCancellation.isCancellation(error, taskIsCancelled: Task.isCancelled) { return }
-            // Non-fatal: fail closed so stale "done today" badges do not leak.
-            // Only the server-derived Home badges are cleared. The widget
-            // practice flags are local truth — a sit finished on this device,
-            // possibly offline and still queued for sync — and a failed status
-            // request is not the server contradicting them, just an absent
-            // answer. Clearing them here (and persisting that at the
-            // `syncWidgetData()` below) dropped a mark the user had already
-            // earned, and could break the day's streak until sync succeeded.
-            // Note the success path above only ever raises these flags, never
-            // lowers them; the failure path must not be the one exception.
-            // Midnight rollover is already handled at the top of this method.
+            // Non-fatal. #1021 (web parity with #961): the Home badges fall back
+            // to the sits this app run remembers for the practice day — the #679
+            // local standard-sit flags — instead of clearing. Those flags are
+            // local truth: a sit finished on this device, possibly offline and
+            // still queued for sync, or one an earlier badge answer reported. A
+            // failed status request is not the server contradicting them, just an
+            // absent answer, so a sit finished offline shows as done on Home, as
+            // it does on web (`loadedSitsRef` in `useDualTrackFork.ts`). The flags
+            // themselves are only read, never lowered: clearing them here (and
+            // persisting that at the `syncWidgetData()` below) dropped a mark the
+            // user had already earned, and could break the day's streak until
+            // sync succeeded. Stale badges still do not leak: the fallback rolls
+            // the flags over at the moment it reads them, so after midnight (or
+            // 6:00 in the grace window) it shows neither track done.
             //
-            // Ranked like the success path (#699), because failing closed is only
-            // right for the *newest* word on today. An absent answer says nothing
-            // the server has since confirmed is wrong, so a refresh that a later
-            // one already superseded must not clear badges that newer one just set.
+            // Ranked like the success path (#699), because only the *newest* word
+            // on today may set the badges. An absent answer says nothing the
+            // server has since confirmed is wrong, so a refresh that a later one
+            // already superseded must not overwrite badges that newer one just set.
             //
             // Ranked but *not* recorded, which is why this asks `isSuperseded` and
             // the success path calls `shouldApply`. A failure observed nothing, so
@@ -142,19 +145,22 @@ extension AppViewModel {
             // flight — and that one comes back with real server data. Losing it is
             // the mirror of the bug above and just as visible: a sit is flushed,
             // `returnHome()`'s refresh is in flight, the network drops, the
-            // reconnect refresh fails instantly and clears the badges, and then the
-            // original success lands confirming the sit and is thrown away. The
-            // badge the user just earned stays dark until some later refresh.
+            // reconnect refresh fails instantly and resets the badges, and then the
+            // original success lands confirming the sit and is thrown away. A sit
+            // on another device that only that answer reported stays dark until
+            // some later refresh.
             guard generation == authGeneration,
                   !tracksDoneOrdering.isSuperseded(ticket: ticket) else { return }
-            // Failing closed is right at rest, but not mid-sit. `enterOfflineMode`
-            // deliberately keeps the badges when a session is running, and it
-            // schedules this catch-up moments later against the same dead network
-            // — so clearing here would undo that preservation for the very sit it
-            // was meant to protect. Outside a session the reset stands, and the
-            // next successful refresh restores the truth either way.
+            // At rest only, not mid-sit. `enterOfflineMode` deliberately keeps the
+            // badges when a session is running, and it schedules this catch-up
+            // moments later against the same dead network — so replacing them here
+            // would undo that preservation for the very sit it was meant to
+            // protect. Outside a session the fallback stands, and the next
+            // successful refresh restores the server's truth either way. `Date()`
+            // rather than `now`: the rollover is about when the flags are read,
+            // and the request may have outlived the hour it left in.
             if !isInSession {
-                practiceDay.applyFailedTracksDoneRead()
+                practiceDay.applyFailedTracksDoneRead(now: Date(), dualTrack: dualTrackEnabled)
             }
         }
         // Both branches above return early on a generation change or a superseded
@@ -167,7 +173,7 @@ extension AppViewModel {
         // A failure reaching here does not close the subject — it recorded nothing,
         // so an earlier refresh still in flight can land afterwards and run these
         // again from a real answer. That is the point: the second pass overwrites
-        // the fail-closed snapshot this one is about to persist.
+        // the local-flags fallback snapshot this one is about to persist.
         syncWidgetData()
         refreshWidgetWeekHistory()
     }

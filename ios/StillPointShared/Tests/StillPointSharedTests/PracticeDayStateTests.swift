@@ -76,7 +76,7 @@ private final class PracticeDayScreen {
                 calendar: calendar
             )
         case .failed:
-            state.applyFailedTracksDoneRead()
+            state.applyFailedTracksDoneRead(now: now, dualTrack: dualTrack, calendar: calendar)
         }
         state.rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
     }
@@ -551,8 +551,9 @@ final class PracticeDayStateTests: XCTestCase {
         XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 40)), today)
     }
 
-    /// Unchanged: a badge query that answered is not lost to a later one that fails. Its
-    /// primary sit is kept in a local flag (#679), and only the Home badges fail closed.
+    /// A badge query that answered is not lost to a later one that fails. Its primary
+    /// sit is kept in a local flag (#679), and since #1021 the Home badges fall back to
+    /// that flag rather than clearing.
     func testTwoADayKeepsAnEarlierBadgeAnswerAcrossAFailedBadgeQuery() async {
         let screen = makeScreen()
         screen.dualTrack = true
@@ -560,7 +561,8 @@ final class PracticeDayStateTests: XCTestCase {
         XCTAssertTrue(screen.state.primaryDoneToday)
 
         await screen.refresh(at: october(27, 3, 10), yesterday: .failed, badges: .failed)
-        XCTAssertFalse(screen.state.primaryDoneToday, "a failed badge query left a Home badge on")
+        XCTAssertTrue(screen.state.primaryDoneToday, "a failed badge query cleared a sit the session remembers")
+        XCTAssertFalse(screen.state.secondDoneToday, "a failed badge query invented a Track Two sit")
         XCTAssertTrue(screen.state.primaryStandardDoneToday, "a failed badge query dropped the sit it had reported")
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
@@ -619,6 +621,74 @@ final class PracticeDayStateTests: XCTestCase {
             screen.creditedSessionDate(at: october(27, 3, 40)), yesterday,
             "the answer about yesterday outlived a reset"
         )
+    }
+
+    // MARK: - Home badges after a failed badge query (#1021, web parity with #961)
+
+    /// The issue's case: a primary standard sit finished offline, so the badge query
+    /// fails. Home shows it as done from the local flag instead of neither-done.
+    func testAFailedBadgeQueryShowsAPrimarySitFinishedOffline() async {
+        let screen = makeScreen()
+        screen.finishSit(.standard, at: october(27, 9))
+
+        await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
+
+        XCTAssertTrue(screen.state.primaryDoneToday, "a sit finished offline showed as not done on Home")
+        XCTAssertFalse(screen.state.secondDoneToday)
+    }
+
+    /// Two-a-day: the fallback is per track, so a Track Two sit finished offline lights
+    /// only the Track Two badge.
+    func testTwoADayFailedBadgeQueryShowsOnlyTheTrackSatOffline() async {
+        let screen = makeScreen()
+        screen.dualTrack = true
+        screen.finishSit(.standard, track: .second, at: october(27, 9))
+
+        await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
+
+        XCTAssertFalse(screen.state.primaryDoneToday, "a Track Two sit lit the Track One badge")
+        XCTAssertTrue(screen.state.secondDoneToday, "a Track Two sit finished offline showed as not done on Home")
+    }
+
+    /// The badges mean a *standard* sit (#240). A quick or breath sit raises the
+    /// widget's practice flag but not the standard one, so it does not light a badge.
+    func testAFailedBadgeQueryDoesNotCountAQuickOrBreathSitAsAStandardOne() async {
+        for sessionType in [SessionType.quick, .breath] {
+            let screen = makeScreen()
+            screen.finishSit(sessionType, at: october(27, 9))
+
+            await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
+
+            XCTAssertTrue(screen.state.practiceDoneToday)
+            XCTAssertFalse(screen.state.primaryDoneToday, "a \(sessionType) sit lit the standard-sit badge")
+        }
+    }
+
+    /// No stale badge past the day: a sit from yesterday afternoon, then a failed
+    /// badge query the next morning after 6:00, shows neither track done.
+    func testAFailedBadgeQueryOnANewDayShowsNeitherTrackDone() async {
+        let screen = makeScreen()
+        screen.dualTrack = true
+        screen.finishSit(.standard, at: october(26, 21))
+        screen.finishSit(.standard, track: .second, at: october(26, 22))
+
+        await screen.refresh(at: october(27, 9), yesterday: .failed, badges: .failed)
+
+        XCTAssertFalse(screen.state.primaryDoneToday, "yesterday's Track One sit leaked onto today's badge")
+        XCTAssertFalse(screen.state.secondDoneToday, "yesterday's Track Two sit leaked onto today's badge")
+    }
+
+    /// The fallback rolls the flags over when it reads them, not only when the query
+    /// left: a query that left before midnight and failed after it shows neither done.
+    func testAFailedBadgeQueryThatOutlivedTheDayShowsNeitherTrackDone() {
+        var state = PracticeDayState()
+        state.rollOverIfNeeded(now: october(26, 20), dualTrack: false, calendar: newYork)
+        state.recordCompletion(sessionType: .standard, track: .primary, now: october(26, 21), dualTrack: false, calendar: newYork)
+
+        state.applyFailedTracksDoneRead(now: october(27, 9), dualTrack: false, calendar: newYork)
+
+        XCTAssertFalse(state.primaryDoneToday, "a sit from the day before reached today's badge")
+        XCTAssertFalse(state.primaryStandardDoneToday)
     }
 
     // MARK: - Focus sessions (#839)

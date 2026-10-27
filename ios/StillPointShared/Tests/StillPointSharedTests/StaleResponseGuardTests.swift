@@ -221,9 +221,9 @@ final class StaleResponseGuardTests: XCTestCase {
         XCTAssertTrue(ordering.shouldApply(ticket: second, from: .read))
     }
 
-    /// The failure path. `refreshTracksDoneToday()` fails closed by clearing both
-    /// Home badges, which is right only for the newest refresh: an absent answer
-    /// is not the server contradicting the success that just landed.
+    /// The failure path. `refreshTracksDoneToday()` resets both Home badges to the
+    /// local flags (#1021), which is right only for the newest refresh: an absent
+    /// answer is not the server contradicting the success that just landed.
     func testStaleRefreshFailureCannotClearWhatANewerRefreshSet() {
         var ordering = StaleResponseGuard()
         let slowRefresh = ordering.nextTicket()
