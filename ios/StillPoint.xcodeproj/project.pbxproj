@@ -86,6 +86,7 @@
 		69607B53AA6B1E3D62AC7A15 /* 3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = F05568F31FE83D1EC32A9173 /* 3.mp3 */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
 		6D02D1A8A6D6A077223C172A /* SettingsAphorismsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */; };
+		6D5661FAF0389EF6A259840B /* AppViewModel+SessionCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC381822F1638511A88DC85B /* AppViewModel+SessionCompletion.swift */; };
 		6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */; };
 		70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */; };
 		74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7766937C968433C205A250C /* HistoryView.swift */; };
@@ -355,6 +356,7 @@
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
 		B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHistoryRefresher.swift; sourceTree = "<group>"; };
+		BC381822F1638511A88DC85B /* AppViewModel+SessionCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+SessionCompletion.swift"; sourceTree = "<group>"; };
 		BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionTrackingManager.swift; sourceTree = "<group>"; };
 		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
 		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
@@ -730,6 +732,7 @@
 				AD7F00E504C2F6E3886CC48E /* AppViewModel+DeepLinks.swift */,
 				F0FC90BC5AE7D1078AAAFA70 /* AppViewModel+Navigation.swift */,
 				0529C848DF3CC0C22DD23CEB /* AppViewModel+PracticeDay.swift */,
+				BC381822F1638511A88DC85B /* AppViewModel+SessionCompletion.swift */,
 				D8E7347FEB94D061D8E129C8 /* AppViewModel+Settings.swift */,
 				407C13CECF97B6E3B783A89C /* AppViewModel+UITestSeeds.swift */,
 				9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */,
@@ -1020,6 +1023,7 @@
 				9F48C1CE1206C88274B6B716 /* AppViewModel+DeepLinks.swift in Sources */,
 				BBF548B1FAB4296935A585E9 /* AppViewModel+Navigation.swift in Sources */,
 				D308C134146578962D614B71 /* AppViewModel+PracticeDay.swift in Sources */,
+				6D5661FAF0389EF6A259840B /* AppViewModel+SessionCompletion.swift in Sources */,
 				442E9E9DDDA6A919AF6FC2DB /* AppViewModel+Settings.swift in Sources */,
 				97FDA808FB1CFD7C22FB1327 /* AppViewModel+UITestSeeds.swift in Sources */,
 				02C84A596AC776C93BCB72CA /* AppViewModel+Widget.swift in Sources */,
