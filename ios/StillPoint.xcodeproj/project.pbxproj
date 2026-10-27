@@ -104,6 +104,7 @@
 		840761F5A9A217D4441A7FB5 /* BuddyWaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0005AAA572020F3028B9F /* BuddyWaitingRoomView.swift */; };
 		84DD3D592ACAFBE5FC6AEC28 /* 6.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3CB4E2EFAF45CA35CD5F45C8 /* 6.mp3 */; };
 		876C14C4E33DCE5A9D4F15EB /* 32.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = D2EC092F3B8AAC729171318C /* 32.mp3 */; };
+		87C484667FCA94F1A4C6404E /* AppViewModel+TracksDoneRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D60C6655F95D946BC60BEF /* AppViewModel+TracksDoneRefresh.swift */; };
 		898E0D6ED681686E28EB329D /* PathwayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09DD5F417FDE26DAF6433E65 /* PathwayView.swift */; };
 		89ED5EFB8F1DDCD3BAC2E6D2 /* 56.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 17583EAA0BE13F36F1DF9877 /* 56.mp3 */; };
 		8A353E6C36EA771941CFF33D /* AttentionTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */; };
@@ -373,6 +374,7 @@
 		D15A7FF17302B1E2FD147920 /* StillPoint.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillPoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2EC092F3B8AAC729171318C /* 32.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 32.mp3; sourceTree = "<group>"; };
 		D356465C1B0F69C57FE47A80 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D3D60C6655F95D946BC60BEF /* AppViewModel+TracksDoneRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+TracksDoneRefresh.swift"; sourceTree = "<group>"; };
 		D42537E2971BBE032F2C6B88 /* 18.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 18.mp3; sourceTree = "<group>"; };
 		D6AB58AC12FA2FC042004ACA /* FocusActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityView.swift; sourceTree = "<group>"; };
 		D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
@@ -734,6 +736,7 @@
 				0529C848DF3CC0C22DD23CEB /* AppViewModel+PracticeDay.swift */,
 				BC381822F1638511A88DC85B /* AppViewModel+SessionCompletion.swift */,
 				D8E7347FEB94D061D8E129C8 /* AppViewModel+Settings.swift */,
+				D3D60C6655F95D946BC60BEF /* AppViewModel+TracksDoneRefresh.swift */,
 				407C13CECF97B6E3B783A89C /* AppViewModel+UITestSeeds.swift */,
 				9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */,
 				B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */,
@@ -1025,6 +1028,7 @@
 				D308C134146578962D614B71 /* AppViewModel+PracticeDay.swift in Sources */,
 				6D5661FAF0389EF6A259840B /* AppViewModel+SessionCompletion.swift in Sources */,
 				442E9E9DDDA6A919AF6FC2DB /* AppViewModel+Settings.swift in Sources */,
+				87C484667FCA94F1A4C6404E /* AppViewModel+TracksDoneRefresh.swift in Sources */,
 				97FDA808FB1CFD7C22FB1327 /* AppViewModel+UITestSeeds.swift in Sources */,
 				02C84A596AC776C93BCB72CA /* AppViewModel+Widget.swift in Sources */,
 				55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */,
