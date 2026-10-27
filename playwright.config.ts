@@ -25,6 +25,11 @@ export default defineConfig({
     video: "retain-on-failure",
     actionTimeout: 12_000,
     navigationTimeout: 20_000,
+    // The app registers /sw.js on every /app load (#558). Once it controls the
+    // page, WebKit sends the page's fetches through it and page.route never sees
+    // them, so mocked specs reach the real server (#862). Specs that need the
+    // worker opt back in with test.use({ serviceWorkers: "allow" }).
+    serviceWorkers: "block",
   },
   webServer: shouldReuseExternalServer
     ? undefined

@@ -17,6 +17,11 @@ import { tap, tapWithControlReveal } from "../utils/mobile-helpers";
  * together on reconnect.
  */
 
+// The service worker is what these specs test, so opt back in to it
+// (playwright.config.ts blocks it everywhere else). On WebKit, page.route stops
+// seeing the API calls once the worker controls the page (#862).
+test.use({ serviceWorkers: "allow" });
+
 /** Route-level kill switch for the mocked API, layered over the auth fixture. */
 async function installApiOfflineSwitch(page: import("@playwright/test").Page) {
   const state = { offline: false };
