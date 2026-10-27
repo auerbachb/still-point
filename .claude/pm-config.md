@@ -34,7 +34,7 @@ No OKRs set — run `/pm-okr` to set objectives. `/pm` ranking falls back to rep
 
 - Backlog convention: `long-term` and `human-work` labels mark parked / non-agent work (~23 of 37 open issues); rank agent work from the remainder.
 - iOS build-only compile bugs surface late: no per-PR archive CI (cost decision), and local `xcodebuild` can't parse the project (objectVersion 77) — only `ios/StillPointShared` `swift test` validates locally, and only with full Xcode selected (next note).
-- `swift test` needs full Xcode as the active developer directory. Command Line Tools lack the SwiftData macro plugin and XCTest, so the build dies with `plugin for module 'SwiftDataMacros' not found` (or `Invalid manifest` on a stale CLT install). Check `xcode-select -p`. The no-sudo fix is `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. Details: README "iOS shared package tests" (#682). Package split to drop the requirement: #870.
+- `swift test` needs full Xcode as the active developer directory. Command Line Tools lack the SwiftData macro plugin and XCTest, so the build dies with `plugin for module 'SwiftDataMacros' not found` (or `Invalid manifest` on a stale CLT install). Check `xcode-select -p`. The no-sudo fix, run from `ios/StillPointShared`, is `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. Details: README "iOS shared package tests" (#682). Package split to drop the requirement: #870.
 - Web is the feature vanguard; iOS follows via parity issues (the #519–#529 batch from the 2026-07-02 codebase review is nearly done — #521/#526/#529 remain).
 - 2026-07-23: standing merge authorization granted in chat (see session records); the #519–#529 parity batch and #616 all shipped 2026-07-22/23.
 
