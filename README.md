@@ -57,46 +57,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### iOS shared package tests (`swift test`)
 
-`ios/StillPointShared` runs its unit tests with `swift test`, the same suite as the required `StillPointShared swift test` check. The SwiftData `@Model` types (`User`, `Session`, `Thought`) live in a separate package, `ios/StillPointModels`, which depends on `StillPointShared`. Only the `StillPoint` app target links it; the widget and monitor extensions use `StillPointShared` alone (Issue [#870](https://github.com/auerbachb/still-point/issues/870)). So `StillPointShared` no longer needs the SwiftData macro plugin. The only macros it uses are the Observation macros, and Command Line Tools ship that plugin.
-
-What each toolchain can run:
-
-| Command | Full Xcode | Command Line Tools only |
-|---|---|---|
-| `swift test` in `ios/StillPointShared` | Yes | No. Every suite imports XCTest, which ships only with Xcode: `no such module 'XCTest'`. |
-| `swift build` in `ios/StillPointShared` | Yes | Should work, since nothing in the package needs SwiftData any more. Not verified: the Command Line Tools 27.0 install used for #870 could not load any `Package.swift` (the `Invalid manifest` failure below). |
-| `swift build` in `ios/StillPointModels` | Yes | No. The SwiftData macro plugin ships only with Xcode: `plugin for module 'SwiftDataMacros' not found`. |
-
-**XCTest decision:** the suites stay on XCTest for now, so `swift test` still needs full Xcode. Moving them to swift-testing, which Command Line Tools do ship, is tracked in Issue [#1072](https://github.com/auerbachb/still-point/issues/1072).
-
-Check which toolchain is active:
-
-```bash
-xcode-select -p   # needs …/Xcode.app/Contents/Developer, not /Library/Developer/CommandLineTools
-```
-
-Some Command Line Tools installs fail even before compiling, while loading `Package.swift`. An upgrade can leave an older `PackageDescription` interface behind:
-
-```text
-error: 'stillpointshared': Invalid manifest (compiled with: ["/Library/Developer/CommandLineTools/usr/bin/swiftc", …])
-Undefined symbols for architecture arm64:
-  "PackageDescription.Package.__allocating_init(name: Swift.String, defaultLocalization: …
-```
-
-Either way, the fix is to select Xcode:
-
-```bash
-# Machine-wide (asks for an admin password)
-sudo xcode-select -s /Applications/Xcode.app
-
-# Or for one command, with no sudo (the form an agent can run)
-cd ios/StillPointShared
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
-cd ../StillPointModels
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build
-```
-
-If Xcode lives somewhere else, such as `Xcode-beta.app`, use that path. Without Xcode installed, neither command can run locally. Install Xcode, or treat the `StillPointShared swift test` CI check as the first real run and say so in the PR. That check runs `swift test` in `ios/StillPointShared` and then `swift build` in `ios/StillPointModels` whenever either package changes. When neither changes, it passes as a no-op.
+`swift test` in `ios/StillPointShared`, and `swift build` in `ios/StillPointModels`, need full Xcode as the active developer directory, not Command Line Tools. The toolchain table, the `Invalid manifest` failure, and the no-sudo `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test` fix are in [ios/SWIFT_PACKAGES.md](ios/SWIFT_PACKAGES.md).
 
 ## Building
 
@@ -250,25 +211,6 @@ echo "your_test_db_url" | npx vercel env add POSTGRES_URL_TEST preview
 
 Production should continue to use the production Neon URL for `POSTGRES_URL`.
 
-The app is live at [www.still-point.me](https://www.still-point.me/).
-
-## Release operations
-
-All iOS release and App Store submission work must reference:
-
-- [iOS release / TestFlight runbook](ios/RELEASING.md)
-- [iOS App Store submission and delegation runbook](docs/operations/ios-app-store-submission.md)
-
-Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. **TestFlight** uploads run automatically after merges to `main` that change iOS app code (via [`.github/workflows/ios-testflight-auto.yml`](.github/workflows/ios-testflight-auto.yml); no label or version bump; a burst of merges ships in fewer builds, and no merge is left out of the next one), or manually on `ios-v*-build*` tags (via [`.github/workflows/ios-testflight.yml`](.github/workflows/ios-testflight.yml)). **App Store** metadata + binary automation runs on strict `ios-vMAJOR.MINOR.PATCH` tags (matching `MARKETING_VERSION` in `ios/project.yml`) via [`.github/workflows/ios-app-store-release.yml`](.github/workflows/ios-app-store-release.yml) and Fastlane under `ios/fastlane/`. The App Store submission runbook identifies which App Store Connect steps are automatable through Apple's API and which still require an Account Holder/Admin or human release decision. For automated vs manual steps, see [docs/operations/automation-evidence.md](docs/operations/automation-evidence.md).
-
-Before the next live App Store submission, run the AI-assisted dry run and save its generated evidence:
-
-```bash
-npm run ios:app-store:dry-run
-```
-
-The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks both iOS workflows' required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. It checks the build named by the highest `ios-v*-build*` tag on origin; pass `-- --intended-tag ios-v<marketing>-build<N>` to check a different one. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
-
 ### Neon (database)
 
 Serverless Postgres hosted on [Neon](https://neon.tech). The connection uses `@neondatabase/serverless` with HTTP queries (no persistent connections).
@@ -297,6 +239,23 @@ gh pr create --title "..."       # create pull request
 
 Automated code review on pull requests via [CodeRabbit](https://coderabbit.ai). Reviews are posted as PR comments — no local setup needed.
 
+## Release operations
+
+All iOS release and App Store submission work must reference:
+
+- [iOS release / TestFlight runbook](ios/RELEASING.md)
+- [iOS App Store submission and delegation runbook](docs/operations/ios-app-store-submission.md)
+
+Use these files as the source of truth when creating GitHub issues, delegating release tasks, or asking AI coding agents to prepare release work. The release lanes (automatic TestFlight on iOS merges to `main`, the break-glass `ios-v*-build*` tag, and the `ios-vMAJOR.MINOR.PATCH` App Store tag) are summarized at the top of [ios/RELEASING.md](ios/RELEASING.md). For automated vs manual steps, see [docs/operations/automation-evidence.md](docs/operations/automation-evidence.md).
+
+Before the next live App Store submission, run the AI-assisted dry run and save its generated evidence:
+
+```bash
+npm run ios:app-store:dry-run
+```
+
+What it checks, which build it targets, and its `--intended-tag` / `--require-live` flags: [AI-assisted dry run](docs/operations/ios-app-store-submission.md#ai-assisted-dry-run).
+
 ## E2E policy and runbooks
 
 Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env guardrails, artifact policy, flake triage rubric, tags/lanes, visual+perf scope, merge gates, and reproducibility) are documented in:
@@ -308,31 +267,7 @@ Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env
 
 ## Merge gates (current)
 
-Branch protection on `main` requires **`typecheck`** and **`StillPointShared swift test`**. Issue [#588](https://github.com/auerbachb/still-point/issues/588) adds the fast merge gate — **`unit-tests`** (#434), **`build`**, and **`Info.plist in sync with project.yml`** (#439) — and **removes e2e from required PR checks** (supersedes #537). See [docs/testing/branch-protection.md](docs/testing/branch-protection.md) and [docs/testing/e2e-strategy.md](docs/testing/e2e-strategy.md).
-
-What should be green before merge:
-
-- `typecheck` — full-project `tsc --noEmit` (includes test files)
-- `unit-tests` — Jest/unit suite (#434)
-- `StillPointShared swift test` — shared Swift parity suite plus a `swift build` of `ios/StillPointModels` (no-op pass when neither package changed; issues #463, #870)
-- `build` — repeatable clean Next builds + design-token parity lint
-- `Info.plist in sync with project.yml` — XcodeGen drift guard (no-op when plist inputs unchanged; #439/#588)
-- `Vercel` — preview deployment completed successfully
-- `Vercel Agent Review` — Vercel's automated review completed
-- `Vercel Preview Comments` — preview comment bot completed
-- `CodeRabbit` — review completed with no blocking findings
-
-Advisory (do not require on `main`):
-
-- `pr-e2e-smoke (advisory)` — fast optional web smoke on PRs
-- `e2e coverage nudge (advisory)` — neutral reminder when UI changes lack e2e updates
-
-Comprehensive e2e does not run on every PR. Web smoke + critical (`web-e2e-smoke` / `web-e2e-critical`) run **nightly on main**; the mobile-web matrix and native iOS lanes **gate iOS TestFlight releases** (the automatic cut on iOS merges to `main`).
-
-Notes:
-
-- The GitHub Actions workflows **Build & Upload to TestFlight** (`ios-v*-build*` tags) and **iOS App Store release (Fastlane)** (`ios-vMAJOR.MINOR.PATCH` tags) are **release-only** and are not pull-request merge gates.
-- Repo admins can apply the #588 check list with `node scripts/ci/sync-main-required-checks.mjs --apply` (dry-run first; requires confirmation).
+The required status checks on `main`, the advisory lanes, and the path-filter trap are listed in [docs/testing/branch-protection.md](docs/testing/branch-protection.md). Read the live list with `gh api repos/auerbachb/still-point/branches/main/protection --jq '.required_status_checks.contexts'`. Vercel and CodeRabbit checks also report on every PR. Comprehensive e2e does not run on PRs; see [docs/testing/e2e-strategy.md](docs/testing/e2e-strategy.md).
 
 ## Project structure
 
