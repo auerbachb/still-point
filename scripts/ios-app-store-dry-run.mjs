@@ -346,7 +346,14 @@ function ascGet(pathname, jwt) {
   });
 }
 
-async function queryAsc(project) {
+/**
+ * Looks the intended build up in App Store Connect, with the newest builds of its
+ * marketing version and its App Store version for the report.
+ *
+ * @param {{ marketingVersion?: string, buildNumber?: string }} project the intended build
+ * @param {(pathname: string, jwt: string) => Promise<any>} [get] GETs an ASC API path
+ */
+export async function queryAsc(project, get = ascGet) {
   if (!project.marketingVersion || !project.buildNumber) {
     return { live: false, reason: "There is no intended build to look up; see A2." };
   }
@@ -359,14 +366,23 @@ async function queryAsc(project) {
     };
   }
 
-  const buildQuery = `/v1/builds?filter[app]=${encodeURIComponent(appId)}&filter[preReleaseVersion.version]=${encodeURIComponent(project.marketingVersion)}&include=preReleaseVersion,buildBetaDetail&sort=-uploadedDate&limit=10`;
+  const buildFilter = `filter[app]=${encodeURIComponent(appId)}&filter[preReleaseVersion.version]=${encodeURIComponent(project.marketingVersion)}`;
+  const buildQuery = `/v1/builds?${buildFilter}&include=preReleaseVersion,buildBetaDetail&sort=-uploadedDate&limit=10`;
+  // By its exact build number: an --intended-tag build can be older than all ten
+  // of the newest builds above (#838).
+  const intendedBuildQuery = `/v1/builds?${buildFilter}&filter[version]=${encodeURIComponent(project.buildNumber)}&limit=1`;
   const versionQuery = `/v1/appStoreVersions?filter[app]=${encodeURIComponent(appId)}&filter[platform]=IOS&filter[versionString]=${encodeURIComponent(project.marketingVersion)}&include=build&limit=5`;
-  const [builds, versions] = await Promise.all([ascGet(buildQuery, jwt), ascGet(versionQuery, jwt)]);
-  const intendedBuild = builds.data?.find((build) => build.attributes?.version === String(project.buildNumber));
+  const [builds, intendedBuilds, versions] = await Promise.all([
+    get(buildQuery, jwt),
+    get(intendedBuildQuery, jwt),
+    get(versionQuery, jwt),
+  ]);
+  const intendedBuild = intendedBuilds.data?.find((build) => build.attributes?.version === String(project.buildNumber));
   return {
     live: true,
     appId,
     buildQuery,
+    intendedBuildQuery,
     versionQuery,
     intendedBuild: intendedBuild
       ? {

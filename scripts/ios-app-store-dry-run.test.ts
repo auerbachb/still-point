@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { gitRunner } from "./ci/ios-testflight-build-number.mjs";
-import { listBuildTags, resolveIntendedBuild } from "./ios-app-store-dry-run.mjs";
+import { listBuildTags, queryAsc, resolveIntendedBuild } from "./ios-app-store-dry-run.mjs";
 
 const REPO_ROOT = process.cwd();
 const DRY_RUN = path.join(REPO_ROOT, "scripts/ios-app-store-dry-run.mjs");
@@ -129,6 +130,49 @@ describe("listBuildTags (#838)", () => {
       throw new Error("spawnSync git ENOENT");
     };
     expect(listBuildTags(missingGit, () => {})).toBeNull();
+  });
+});
+
+describe("queryAsc (#838)", () => {
+  // Twelve VALID 1.0.3 builds, 31 down to 20, newest upload first.
+  const uploads = Array.from({ length: 12 }, (_, i) => ({
+    id: `build-${31 - i}`,
+    attributes: { version: String(31 - i), processingState: "VALID" },
+  }));
+
+  /** An App Store Connect holding `uploads` that honors filter[version] and limit. */
+  async function fakeAsc(pathname: string) {
+    const url = new URL(pathname, "https://api.appstoreconnect.apple.com");
+    if (url.pathname === "/v1/appStoreVersions") return { data: [] };
+    const version = url.searchParams.get("filter[version]");
+    const matching = version === null ? uploads : uploads.filter((build) => build.attributes.version === version);
+    return { data: matching.slice(0, Number(url.searchParams.get("limit"))) };
+  }
+
+  beforeEach(() => {
+    const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+    vi.stubEnv("APPSTORE_APP_ID", "1234567890");
+    vi.stubEnv("APPSTORE_API_KEY_ID", "TESTKEYID");
+    vi.stubEnv("APPSTORE_API_ISSUER_ID", "test-issuer");
+    vi.stubEnv("APPSTORE_API_PRIVATE_KEY", privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("finds an --intended-tag build older than the ten newest builds", async () => {
+    expect(uploads.slice(0, 10).map((build) => build.attributes.version)).not.toContain("21");
+
+    const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "21" }, fakeAsc);
+
+    expect(asc).toMatchObject({ live: true, intendedBuild: { id: "build-21", version: "21", processingState: "VALID" } });
+  });
+
+  test("still reports a build App Store Connect doesn't have as missing", async () => {
+    const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "40" }, fakeAsc);
+
+    expect(asc).toMatchObject({ live: true, intendedBuild: null });
   });
 });
 
