@@ -914,8 +914,10 @@ struct HistoryView: View {
                 .frame(width: 72, alignment: .trailing)
 
             GeometryReader { geo in
+                // #839: capped at full width, like the session bars. `maxDuration`
+                // is drawn from past sessions only, so today's goal can be longer.
                 let barFraction = vm.maxDuration > 0
-                    ? CGFloat(todayDuration) / CGFloat(vm.maxDuration)
+                    ? min(1, CGFloat(todayDuration) / CGFloat(vm.maxDuration))
                     : 0
                 let barWidth = geo.size.width * barFraction
 
