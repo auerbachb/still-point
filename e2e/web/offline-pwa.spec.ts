@@ -38,14 +38,40 @@ async function installApiOfflineSwitch(page: import("@playwright/test").Page) {
   };
 }
 
+/** Home's day readout: the large day number directly above its
+ *  "day · 60s · 6 blocks" caption. */
+function homeDayNumber(page: import("@playwright/test").Page) {
+  return page.getByText(/^day · \d+s · \d+ blocks$/).locator("xpath=preceding-sibling::*[1]");
+}
+
 /** Wait until the service worker actually controls the page, so a reload with
- *  the network off is served from the precached app shell rather than failing. */
+ *  the network off is served from the precached app shell rather than failing.
+ *  Polled with expect.poll: waitForFunction does not await an async predicate,
+ *  so the pending promise it returned counted as "done" on the first check. */
 async function waitForServiceWorkerControl(page: import("@playwright/test").Page) {
-  await page.waitForFunction(async () => {
-    if (!("serviceWorker" in navigator)) return false;
-    const registration = await navigator.serviceWorker.getRegistration("/");
-    return Boolean(registration?.active) && Boolean(navigator.serviceWorker.controller);
-  }, undefined, { timeout: 20_000 });
+  await expect
+    .poll(() => page.evaluate(async () => {
+      if (!("serviceWorker" in navigator)) return false;
+      const registration = await navigator.serviceWorker.getRegistration("/");
+      return Boolean(registration?.active) && Boolean(navigator.serviceWorker.controller);
+    }), { message: "the service worker should control the page", timeout: 20_000 })
+    .toBe(true);
+}
+
+/** Wait until every `/_next/static/` asset this page loaded is in Cache Storage.
+ *  The dev server marks them no-store, so after an offline reload only the
+ *  worker's cache can serve them, and without them the app never boots. */
+async function waitForAppShellCached(page: import("@playwright/test").Page) {
+  await expect
+    .poll(() => page.evaluate(async () => {
+      const assets = performance
+        .getEntriesByType("resource")
+        .map((entry) => entry.name)
+        .filter((name) => new URL(name).pathname.startsWith("/_next/static/"));
+      const cached = await Promise.all(assets.map((url) => caches.match(url)));
+      return assets.length > 0 && cached.every(Boolean);
+    }), { message: "the worker should cache the app's scripts", timeout: 20_000 })
+    .toBe(true);
 }
 
 function readQueuedSessions(page: import("@playwright/test").Page, dbName: string, storeName: string) {
@@ -79,29 +105,45 @@ function readQueuedSessions(page: import("@playwright/test").Page, dbName: strin
 
 test.describe("offline-first web PWA", () => {
   // These two specs test the worker, so they opt back in; the config blocks it (#862).
-  // On WebKit the worker then hides their API calls from page.route; #863 and #864 track it.
+  // On WebKit the worker then hides their API calls from page.route; #919 and #864 track it.
   test.describe(() => {
     test.use({ serviceWorkers: "allow" });
 
     test("@critical reload with no connection lands on the app, not an auth error", async ({
       page,
+      browserName,
       ensureLoggedIn,
       mockApiState,
     }) => {
+      test.skip(
+        browserName === "webkit",
+        "WebKit hides a worker-controlled page's API calls from page.route, and an offline reload " +
+          "throws there (PR #880); tracked in #919",
+      );
       const network = await installApiOfflineSwitch(page);
       await ensureLoggedIn();
       await waitForServiceWorkerControl(page);
 
-      // The signed-in day number the offline view has to reproduce.
-      const expectedDay = mockApiState.user.currentDay;
-      await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
+      // The signed-in day number the offline view has to reproduce. Not the
+      // sign-up default, so after the offline reload only the cached identity
+      // can show it.
+      const expectedDay = 12;
+      mockApiState.user.currentDay = expectedDay;
+      // One online launch with the worker in control, as an installed app has had:
+      // the app adopts (and caches) the new day, and its scripts now pass through
+      // the worker, which caches them for the offline reload.
+      await page.reload();
+      await expect(homeDayNumber(page)).toBeVisible();
+      await expect(homeDayNumber(page)).toHaveText(String(expectedDay));
+      await waitForAppShellCached(page);
 
       await network.goOffline();
       await page.reload();
 
       // The normal app, from cache — no sign-in screen, no "Unable to verify".
       await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
-      await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
+      await expect(homeDayNumber(page)).toBeVisible();
+      await expect(homeDayNumber(page)).toHaveText(String(expectedDay));
       await expect(page.getByText(/unable to verify your sign-in/i)).toHaveCount(0);
       await expect(page.getByRole("button", { name: /sign up/i })).toHaveCount(0);
 
