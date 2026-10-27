@@ -126,6 +126,86 @@ final class OfflineSessionQueueTests: XCTestCase {
         XCTAssertNil(loaded.first?.request.focusCategory)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
     }
+
+    /// #983: a sit queued by a build from before parking has no `parked` key. It
+    /// decodes as never turned down, and a flush sends it as before.
+    func testFileStoreLoadsAndFlushesAnEntryQueuedBeforeParkingExisted() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let fileURL = directory.appendingPathComponent(OfflineSessionQueue.fileName)
+        let clientSessionId = UUID()
+        let legacyQueue = """
+        [{"clearCompletionNote":false,"clientSessionId":"\(clientSessionId.uuidString)",\
+        "enqueuedAt":"2026-10-20T08:00:00Z","ownerUserId":"\(testOwnerUserId)",\
+        "request":{"actualTime":120,"bonusSeconds":0,"clearPercent":80,\
+        "clientSessionId":"\(clientSessionId.uuidString)","completed":true,"dayNumber":2,\
+        "duration":120,"mindStateLog":[],"sessionDate":"2026-10-20","sessionType":"standard",\
+        "thoughtCount":0,"track":"primary"},"sessionSynced":false,"thoughts":[]}]
+        """
+        try Data(legacyQueue.utf8).write(to: fileURL)
+        let store = FileOfflineSessionQueueStore(fileURL: fileURL)
+
+        let loaded = try store.loadEntries()
+
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertNil(loaded.first?.parked)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+
+        let coordinator = SessionSyncCoordinator(
+            queueStore: store,
+            transport: SessionSyncTransport(
+                createSession: { SessionSyncCoordinator.sessionDTO(from: $0, id: "server-legacy") },
+                batchThoughts: { _ in [] }
+            )
+        )
+        let pending = try await coordinator.pendingCount(ownerUserId: testOwnerUserId)
+        XCTAssertEqual(pending, 1)
+        let flushed = try await coordinator.flushPending(ownerUserId: testOwnerUserId)
+        XCTAssertEqual(flushed, 1)
+        let flushedEntry = try store.loadEntries().first
+        XCTAssertEqual(flushedEntry?.serverSessionId, "server-legacy")
+        XCTAssertNil(flushedEntry?.parked)
+    }
+
+    /// #983: a parked entry keeps its answer through the file store.
+    func testFileStoreRoundTripsAParkedEntry() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = FileOfflineSessionQueueStore(
+            fileURL: directory.appendingPathComponent(OfflineSessionQueue.fileName)
+        )
+        let clientSessionId = UUID()
+        let parked = PendingSessionParked(
+            at: Date(timeIntervalSince1970: 1_790_000_000),
+            status: 400,
+            message: "Invalid track"
+        )
+        try store.saveEntries([PendingSessionEntry(
+            clientSessionId: clientSessionId,
+            ownerUserId: testOwnerUserId,
+            request: CreateSessionRequest(
+                dayNumber: 1,
+                duration: 60,
+                completed: true,
+                actualTime: 60,
+                clearPercent: 50,
+                thoughtCount: 0,
+                mindStateLog: [],
+                sessionDate: "2026-10-27",
+                clientSessionId: clientSessionId
+            ),
+            thoughts: [],
+            parked: parked
+        )])
+
+        XCTAssertEqual(try store.loadEntries().first?.parked, parked)
+    }
 }
 
 /// Records every create request a transport is handed.

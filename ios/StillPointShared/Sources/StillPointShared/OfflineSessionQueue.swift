@@ -18,6 +18,26 @@ public struct PendingSessionThought: Codable, Sendable, Equatable {
     }
 }
 
+/// #983: the answer that turned a queued sit down for good, as web keeps it
+/// since #978 (`ParkedSession` in `src/lib/offlineSessionQueue/types.ts`).
+public struct PendingSessionParked: Codable, Sendable, Equatable {
+    /// How much of the server's text is kept, as web's `PARKED_MESSAGE_MAX_LENGTH`.
+    public static let messageMaxLength = 200
+
+    /// When the answer came back.
+    public let at: Date
+    /// Its HTTP status.
+    public let status: Int
+    /// The server's `error` text, cut to `messageMaxLength` characters.
+    public let message: String
+
+    public init(at: Date = Date(), status: Int, message: String) {
+        self.at = at
+        self.status = status
+        self.message = String(message.prefix(Self.messageMaxLength))
+    }
+}
+
 /// Durable local record of a completed sit awaiting server sync (#557).
 public struct PendingSessionEntry: Codable, Sendable, Identifiable {
     public var id: UUID { clientSessionId }
@@ -32,6 +52,11 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
     /// #792: the stored completion note must be deleted on the next flush. Only
     /// set once the sit has a server row that could hold a note.
     public var clearCompletionNote: Bool
+    /// #983: set once the server answers this sit with a permanent 4xx other
+    /// than 401 or 403. No flush sends a parked entry again, and it stays queued
+    /// as the record of the sit. Entries queued before #983, and every entry
+    /// never turned down, have none.
+    public var parked: PendingSessionParked?
 
     public init(
         clientSessionId: UUID,
@@ -41,7 +66,8 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         serverSessionId: String? = nil,
         sessionSynced: Bool = false,
         enqueuedAt: Date = Date(),
-        clearCompletionNote: Bool = false
+        clearCompletionNote: Bool = false,
+        parked: PendingSessionParked? = nil
     ) {
         self.clientSessionId = clientSessionId
         self.ownerUserId = ownerUserId
@@ -51,12 +77,19 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         self.sessionSynced = sessionSynced
         self.enqueuedAt = enqueuedAt
         self.clearCompletionNote = clearCompletionNote
+        self.parked = parked
     }
 
     /// The entry still owes the server something: its session row, queued
     /// thoughts, or a completion-note clear (#792).
     var awaitsSync: Bool {
         !sessionSynced || !thoughts.isEmpty || clearCompletionNote
+    }
+
+    /// #983: the entry owes the server something that a flush will still send.
+    /// A parked entry is sent again by no flush.
+    var awaitsFlush: Bool {
+        awaitsSync && parked == nil
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -68,6 +101,7 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         case sessionSynced
         case enqueuedAt
         case clearCompletionNote
+        case parked
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,6 +121,8 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         enqueuedAt = try container.decodeIfPresent(Date.self, forKey: .enqueuedAt) ?? .distantPast
         // A row persisted before #792 never asked for a clear.
         clearCompletionNote = try container.decodeIfPresent(Bool.self, forKey: .clearCompletionNote) ?? false
+        // A row persisted before #983 was never parked.
+        parked = try container.decodeIfPresent(PendingSessionParked.self, forKey: .parked)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -99,6 +135,7 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         try container.encode(sessionSynced, forKey: .sessionSynced)
         try container.encode(enqueuedAt, forKey: .enqueuedAt)
         try container.encode(clearCompletionNote, forKey: .clearCompletionNote)
+        try container.encodeIfPresent(parked, forKey: .parked)
     }
 }
 

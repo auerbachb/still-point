@@ -842,6 +842,12 @@ struct CompletionView: View {
             logUITestDiagnostic("completion.saveEndNote.success clientSessionId=\(clientSessionId.uuidString)")
         } catch SessionSyncError.entryNotFound {
             await saveEndNoteToServer(noteToSave)
+        } catch SessionSyncError.entryParked {
+            // #983: retrying cannot help — the server turned this sit down.
+            isSaving = false
+            noteSaved = false
+            saveError = "This sit couldn't be saved to your account, so its note can't be either."
+            logUITestDiagnostic("completion.saveEndNote.parked clientSessionId=\(clientSessionId.uuidString)")
         } catch let error as APIError {
             print("Failed to save end note: \(error)")
             isSaving = false
