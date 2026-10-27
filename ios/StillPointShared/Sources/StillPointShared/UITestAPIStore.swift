@@ -17,7 +17,8 @@ public enum UITestSettingsRequests {
 /// When the app launches with `SP_UI_TEST_MODE` set, `APIClient` builds one of
 /// these actors and delegates every request to it instead of hitting the
 /// network. It owns the in-memory + `UserDefaults`-persisted fake backend
-/// (`UITestStore`) plus the launch config (`UITestConfig`).
+/// (`UITestStore`, in `UITestStore.swift`) plus the launch config (`UITestConfig`,
+/// in `UITestConfig.swift`).
 ///
 /// The actor deliberately does NOT touch the `URLSession`, cookies, keychain
 /// token, or `URLCredentialStorage` — those are owned by `APIClient`. Instead,
@@ -52,7 +53,13 @@ actor UITestAPIStore {
         self.store = store
         self.defaultsKey = defaultsKey
         self.resetStore = config.resetStore
-        self.notificationPreferences = NotificationPreferencesDTO(
+        self.notificationPreferences = Self.defaultNotificationPreferences()
+    }
+
+    /// Notification preferences a fresh launch starts with. Kept in memory only, so
+    /// every launch starts from these.
+    private static func defaultNotificationPreferences() -> NotificationPreferencesDTO {
+        NotificationPreferencesDTO(
             pushEnabled: false,
             dailyReminderEnabled: false,
             missADayEnabled: false,
@@ -66,6 +73,8 @@ actor UITestAPIStore {
             tz: TimeZone.current.identifier
         )
     }
+
+    // MARK: - Construction
 
     /// Builds the store from `SP_UI_TEST_*` env vars, or returns `nil` when the
     /// app is not running in UI-test mode. Emits the same `[E2E-DIAG]` lines the
@@ -82,44 +91,11 @@ actor UITestAPIStore {
             return nil
         }
 
-        let defaults = UserDefaults.standard
         if config.resetStore {
-            // Wipe ALL persisted state, not just the UI-test store. State that
-            // bled across tests previously: Keychain auth tokens, cookies, URL
-            // credentials, AudioEngine sound prefs. Issue #266 surfaced this
-            // when the runner script started actually running tests after the
-            // silent-skip fix from issue #253.
-            // Note: the SwiftData store is wiped earlier in
-            // `StillPointApp.init()`, before `.modelContainer(...)` opens
-            // its SQLite files (issue #276). The offline write queue (#557)
-            // is stored separately and cleared here on UI-test reset.
-            OfflineSessionQueue.removePersistedQueue()
-            defaults.removeObject(forKey: defaultsKey)
-            AudioEngine.resetPersistedPrefs()
-            SessionIntroPrefs.resetPersistedPrefs()
-            // #669: a leftover minimal-view preference would start every subsequent
-            // UI test with the session chrome collapsed to the countdown alone.
-            MinimalSessionViewPrefs.resetPersistedPrefs()
-            // #730: clearing the key restores the opt-out default (on), so a test that
-            // toggled the wake lock off cannot leave later runs starting opted out.
-            WakeLockPrefs.resetPersistedPrefs()
-            LastAuthProvider.resetPersisted()
-            // Flush the in-memory cache to cfprefsd so the immediately
-            // following read sees the cleared state. Issue #266 follow-up.
-            defaults.synchronize()
+            resetPersistedState(defaultsKey: defaultsKey)
         }
 
-        let resolvedStore: UITestStore
-        if config.snapshotSeed {
-            resolvedStore = UITestStore.makeSnapshot(seedAuthenticated: config.seedAuthenticated)
-            persist(store: resolvedStore, key: defaultsKey)
-        } else if let persistedData = defaults.data(forKey: defaultsKey),
-                  let persistedStore = try? JSONDecoder().decode(UITestStore.self, from: persistedData) {
-            resolvedStore = persistedStore
-        } else {
-            resolvedStore = UITestStore.makeDefault(seedAuthenticated: config.seedAuthenticated)
-            persist(store: resolvedStore, key: defaultsKey)
-        }
+        let resolvedStore = resolveStore(config: config, defaultsKey: defaultsKey)
 
         // Diagnostic for issue #266 / #276. Use os_log so the line lands
         // in the xcresult bundle — `print()` from the app process is not
@@ -134,21 +110,52 @@ actor UITestAPIStore {
     /// failure off, for the package's unit tests of the fake server's rules. It
     /// persists under `defaultsKey`, so a test passes its own key and removes it.
     static func makeForUnitTests(user: UserDTO, defaultsKey: String) -> UITestAPIStore {
-        let config = UITestConfig(
-            seedAuthenticated: true,
-            resetStore: false,
-            forceLaunchOffline: false,
-            forceTokenExpired: false,
-            sessionsFailureMode: .none,
-            forceCreateSessionFailure: false,
-            forceUsernameConflict: false,
-            snapshotSeed: false,
-            holdMeSeconds: nil,
-            secondAccount: false
-        )
         var store = UITestStore.makeDefault(seedAuthenticated: true)
         store.user = user
-        return UITestAPIStore(config: config, store: store, defaultsKey: defaultsKey)
+        return UITestAPIStore(config: .unitTest, store: store, defaultsKey: defaultsKey)
+    }
+
+    /// Wipes ALL persisted state, not just the UI-test store. State that bled
+    /// across tests previously: Keychain auth tokens, cookies, URL credentials,
+    /// AudioEngine sound prefs. Issue #266 surfaced this when the runner script
+    /// started actually running tests after the silent-skip fix from issue #253.
+    ///
+    /// Note: the SwiftData store is wiped earlier in `StillPointApp.init()`, before
+    /// `.modelContainer(...)` opens its SQLite files (issue #276). The offline write
+    /// queue (#557) is stored separately and cleared here on UI-test reset.
+    private static func resetPersistedState(defaultsKey: String) {
+        let defaults = UserDefaults.standard
+        OfflineSessionQueue.removePersistedQueue()
+        defaults.removeObject(forKey: defaultsKey)
+        AudioEngine.resetPersistedPrefs()
+        SessionIntroPrefs.resetPersistedPrefs()
+        // #669: a leftover minimal-view preference would start every subsequent
+        // UI test with the session chrome collapsed to the countdown alone.
+        MinimalSessionViewPrefs.resetPersistedPrefs()
+        // #730: clearing the key restores the opt-out default (on), so a test that
+        // toggled the wake lock off cannot leave later runs starting opted out.
+        WakeLockPrefs.resetPersistedPrefs()
+        LastAuthProvider.resetPersisted()
+        // Flush the in-memory cache to cfprefsd so the immediately
+        // following read sees the cleared state. Issue #266 follow-up.
+        defaults.synchronize()
+    }
+
+    /// The store this launch starts from: the snapshot seed when requested, else the
+    /// persisted store, else a fresh default. A seeded or fresh store is persisted
+    /// at once.
+    private static func resolveStore(config: UITestConfig, defaultsKey: String) -> UITestStore {
+        if config.snapshotSeed {
+            let snapshot = UITestStore.makeSnapshot(seedAuthenticated: config.seedAuthenticated)
+            snapshot.persist(key: defaultsKey)
+            return snapshot
+        }
+        if let persisted = UITestStore.load(key: defaultsKey) {
+            return persisted
+        }
+        let fresh = UITestStore.makeDefault(seedAuthenticated: config.seedAuthenticated)
+        fresh.persist(key: defaultsKey)
+        return fresh
     }
 
     // MARK: - Auth
@@ -231,19 +238,10 @@ actor UITestAPIStore {
     }
 
     func me(today: String? = nil) async throws -> UserDTO? {
-        if isHeldMeReadArmed, let holdSeconds = config.holdMeSeconds {
-            isHeldMeReadArmed = false
-            // An actor suspension, so every other request still reaches the store
-            // while this one waits: a Settings save the app wrongly sent beside the
-            // read would be counted, not blocked.
-            try? await Task.sleep(nanoseconds: UInt64(holdSeconds * 1_000_000_000))
-            if config.secondAccount, store.isAuthenticated {
-                switchToSecondAccount()
-            }
-        }
+        await waitOutHeldMeReadIfArmed()
 
         if config.forceLaunchOffline {
-            throw APIError(status: 0, message: "No internet connection")
+            throw Self.offlineError
         }
 
         if config.forceTokenExpired {
@@ -260,34 +258,56 @@ actor UITestAPIStore {
 
         guard store.isAuthenticated else { return nil }
 
-        if DurationRecovery.activeRecovery(DurationRecovery.recoveryFields(from: store.user)) == nil {
-            let todayIso: String
-            if let today, SessionCalendar.isValidSessionCalendarDate(today) {
-                todayIso = today
-            } else {
-                todayIso = SessionCalendar.localTodayIsoDate()
-            }
+        startMissedDayRecoveryIfNeeded(today: today)
+        return store.user
+    }
 
-            let lastPrimary = store.sessions
-                .filter { $0.completed && $0.sessionType == .standard && ($0.track ?? .primary) == .primary }
-                .max(by: { $0.sessionDate < $1.sessionDate })
+    /// #887: spends an armed hold, waiting the configured time and then, with a
+    /// second account configured, switching to it.
+    private func waitOutHeldMeReadIfArmed() async {
+        guard isHeldMeReadArmed, let holdSeconds = config.holdMeSeconds else { return }
+        isHeldMeReadArmed = false
+        // An actor suspension, so every other request still reaches the store
+        // while this one waits: a Settings save the app wrongly sent beside the
+        // read would be counted, not blocked.
+        try? await Task.sleep(nanoseconds: UInt64(holdSeconds * 1_000_000_000))
+        if config.secondAccount, store.isAuthenticated {
+            switchToSecondAccount()
+        }
+    }
 
-            if let recovery = DurationRecovery.detectMissedDayGap(
-                lastCompletedSessionDate: lastPrimary?.sessionDate,
-                todayIso: todayIso,
-                currentDay: store.user.currentDay,
-                recovery: DurationRecovery.recoveryFields(from: store.user)
-            ) {
-                store.user = store.user.updatingRecovery(
-                    targetDay: recovery.recoveryTargetDay,
-                    currentStep: recovery.recoveryCurrentStep,
-                    totalSteps: recovery.recoveryTotalSteps
-                )
-                persist()
-            }
+    /// Starts a recovery ramp when no ramp is active and a missed-day gap separates
+    /// the last completed primary sit from `today`, as `/api/auth/me` does. An
+    /// invalid or missing `today` falls back to the local calendar day.
+    private func startMissedDayRecoveryIfNeeded(today: String?) {
+        guard DurationRecovery.activeRecovery(DurationRecovery.recoveryFields(from: store.user)) == nil else {
+            return
         }
 
-        return store.user
+        let todayIso: String
+        if let today, SessionCalendar.isValidSessionCalendarDate(today) {
+            todayIso = today
+        } else {
+            todayIso = SessionCalendar.localTodayIsoDate()
+        }
+
+        let lastPrimary = store.sessions
+            .filter { $0.completed && $0.sessionType == .standard && ($0.track ?? .primary) == .primary }
+            .max(by: { $0.sessionDate < $1.sessionDate })
+
+        guard let recovery = DurationRecovery.detectMissedDayGap(
+            lastCompletedSessionDate: lastPrimary?.sessionDate,
+            todayIso: todayIso,
+            currentDay: store.user.currentDay,
+            recovery: DurationRecovery.recoveryFields(from: store.user)
+        ) else { return }
+
+        store.user = store.user.updatingRecovery(
+            targetDay: recovery.recoveryTargetDay,
+            currentStep: recovery.recoveryCurrentStep,
+            totalSteps: recovery.recoveryTotalSteps
+        )
+        persist()
     }
 
     // MARK: - Device Tokens
@@ -311,12 +331,17 @@ actor UITestAPIStore {
         if let today, !today.isEmpty {
             todayIso = today
         } else {
-            todayIso = localTodayIsoDate()
+            todayIso = SessionCalendar.localTodayIsoDate()
         }
+        return (sortedSessions, Self.stats(for: sortedSessions, todayIso: todayIso))
+    }
+
+    /// The History stats block, computed from `sortedSessions` as `/api/sessions` does.
+    private static func stats(for sortedSessions: [SessionDTO], todayIso: String) -> StatsDTO {
         let base = SessionStatistics.calculateStats(for: sortedSessions)
         let period = HistoryStats.calculatePeriodStats(sessions: sortedSessions, todayIso: todayIso)
         let trends = HistoryMindStateTrends.calculateTrendStats(sessions: sortedSessions, todayIso: todayIso)
-        let stats = StatsDTO(
+        return StatsDTO(
             streak: base.streak,
             avgClearPercent: base.avgClearPercent,
             avgThoughtsPerSession: base.avgThoughtsPerSession,
@@ -330,11 +355,6 @@ actor UITestAPIStore {
             progressTo10kHours: period.progressTo10kHours,
             mindStateTrends: trends
         )
-        return (sortedSessions, stats)
-    }
-
-    private static var sessionsFailure: APIError {
-        APIError(status: 503, message: "Failed to load sessions. Check your connection.")
     }
 
     /// Throws the forced sessions failure: on every call in the always mode, and on
@@ -352,14 +372,6 @@ actor UITestAPIStore {
             isSessionsFailureSpent = true
             throw Self.sessionsFailure
         }
-    }
-
-    private func localTodayIsoDate() -> String {
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.calendar = Calendar(identifier: .gregorian)
-        return df.string(from: Date())
     }
 
     func getTracksDoneToday(date: String) throws -> TracksDoneTodayDTO {
@@ -392,7 +404,7 @@ actor UITestAPIStore {
         // (`SessionSyncCoordinator.rejectsTheSit`), so the sit stays queued and
         // pending sync instead of being parked.
         if config.forceCreateSessionFailure {
-            throw APIError(status: 0, message: "No internet connection")
+            throw Self.offlineError
         }
 
         // #896: as `POST /api/sessions` does (#769), a combined sit must be a
@@ -432,48 +444,62 @@ actor UITestAPIStore {
         store.sessions.append(session)
 
         if data.completed && data.sessionType == .standard {
-            // #240: a `second`-track sit advances the second-track counter (only when
-            // opted in); a `primary` sit advances currentDay / recovery ramp (#238).
-            if data.track == .second {
-                let nextSecond = store.user.dualTrackEnabled
-                    ? StillPoint.advanceSecondTrackDay(sessionType: data.sessionType, completed: data.completed, secondTrackDay: store.user.secondTrackDay)
-                    : store.user.secondTrackDay
-                store.user = store.user.updating(secondTrackDay: nextSecond)
-            } else {
-                let next = DurationRecovery.advanceProgression(
-                    sessionType: data.sessionType,
-                    completed: data.completed,
-                    state: DurationRecovery.ProgressionState(
-                        currentDay: store.user.currentDay,
-                        recovery: DurationRecovery.recoveryFields(from: store.user)
-                    )
-                )
-                store.user = store.user.updatingProgression(next)
-                // #896: as the server's `progressionUpdateSql` does (#890), a completed
-                // combined sit also moves Track Two on a day (only when opted in). One
-                // ended early never reaches this block, so it moves neither.
-                if data.combined && store.user.dualTrackEnabled {
-                    store.user = store.user.updating(secondTrackDay: StillPoint.advanceSecondTrackDay(
-                        sessionType: data.sessionType,
-                        completed: data.completed,
-                        secondTrackDay: store.user.secondTrackDay
-                    ))
-                }
-            }
+            advanceTrackProgression(after: data)
         }
-
-        // #839: the server's `focus_activity_day` step: only a completed focus
-        // session moves the focus goal, by one. The block above never runs for one.
-        if StillPoint.shouldAdvanceFocusDay(sessionType: data.sessionType, completed: data.completed) {
-            store.user = store.user.updating(focusActivityDay: StillPoint.advanceFocusActivityDay(
-                sessionType: data.sessionType,
-                completed: data.completed,
-                focusActivityDay: store.user.focusActivityDay
-            ))
-        }
+        advanceFocusDayIfNeeded(after: data)
 
         persist()
         return session
+    }
+
+    /// Moves the counters a completed standard sit advances. Callers persist.
+    private func advanceTrackProgression(after data: CreateSessionRequest) {
+        // #240: a `second`-track sit advances the second-track counter (only when
+        // opted in); a `primary` sit advances currentDay / recovery ramp (#238).
+        if data.track == .second {
+            advanceSecondTrackDayIfOptedIn(after: data)
+            return
+        }
+
+        let next = DurationRecovery.advanceProgression(
+            sessionType: data.sessionType,
+            completed: data.completed,
+            state: DurationRecovery.ProgressionState(
+                currentDay: store.user.currentDay,
+                recovery: DurationRecovery.recoveryFields(from: store.user)
+            )
+        )
+        store.user = store.user.updatingProgression(next)
+        // #896: as the server's `progressionUpdateSql` does (#890), a completed
+        // combined sit also moves Track Two on a day (only when opted in). One
+        // ended early never reaches this method, so it moves neither.
+        if data.combined {
+            advanceSecondTrackDayIfOptedIn(after: data)
+        }
+    }
+
+    /// #240: Track Two moves only for a user who opted into the dual-track fork.
+    private func advanceSecondTrackDayIfOptedIn(after data: CreateSessionRequest) {
+        guard store.user.dualTrackEnabled else { return }
+        store.user = store.user.updating(secondTrackDay: StillPoint.advanceSecondTrackDay(
+            sessionType: data.sessionType,
+            completed: data.completed,
+            secondTrackDay: store.user.secondTrackDay
+        ))
+    }
+
+    /// #839: the server's `focus_activity_day` step: only a completed focus
+    /// session moves the focus goal, by one. `advanceTrackProgression` never runs
+    /// for one. Callers persist.
+    private func advanceFocusDayIfNeeded(after data: CreateSessionRequest) {
+        guard StillPoint.shouldAdvanceFocusDay(sessionType: data.sessionType, completed: data.completed) else {
+            return
+        }
+        store.user = store.user.updating(focusActivityDay: StillPoint.advanceFocusActivityDay(
+            sessionType: data.sessionType,
+            completed: data.completed,
+            focusActivityDay: store.user.focusActivityDay
+        ))
     }
 
     /// #240: opt into the dual-track fork (enable a second daily track).
@@ -488,7 +514,7 @@ actor UITestAPIStore {
         try ensureAuthenticated()
 
         guard let session = store.sessions.first(where: { $0.id == sessionId }) else {
-            throw APIError(status: 404, message: "Session not found")
+            throw Self.sessionNotFound
         }
 
         let thoughts = store.thoughts.filter { $0.sessionId == session.id }
@@ -502,7 +528,7 @@ actor UITestAPIStore {
         try ensureAuthenticated()
 
         guard let idx = store.sessions.firstIndex(where: { $0.id == sessionId }) else {
-            throw APIError(status: 404, message: "Session not found")
+            throw Self.sessionNotFound
         }
 
         let existing = store.sessions[idx]
@@ -514,28 +540,7 @@ actor UITestAPIStore {
                 merged[key] = entry
             }
         }
-        let updated = SessionDTO(
-            id: existing.id,
-            dayNumber: existing.dayNumber,
-            sessionType: existing.sessionType,
-            duration: existing.duration,
-            bonusSeconds: existing.bonusSeconds,
-            completed: existing.completed,
-            actualTime: existing.actualTime,
-            clearPercent: existing.clearPercent,
-            thoughtCount: existing.thoughtCount,
-            mindStateLog: existing.mindStateLog,
-            attentionLog: existing.attentionLog,
-            sessionDate: existing.sessionDate,
-            createdAt: existing.createdAt,
-            buddySessionId: existing.buddySessionId,
-            breathCount: existing.breathCount,
-            focusCategory: existing.focusCategory,
-            track: existing.track,
-            ambientSoundSummary: existing.ambientSoundSummary,
-            moodMatrix: merged.isEmpty ? nil : merged,
-            combined: existing.combined
-        )
+        let updated = existing.replacingMoodMatrix(merged.isEmpty ? nil : merged)
         store.sessions[idx] = updated
         persist()
         return updated
@@ -596,6 +601,7 @@ actor UITestAPIStore {
 
     // MARK: - Settings
 
+    /// Each `nil` argument leaves that field as it is.
     func updateSettings(
         isPublic: Bool?,
         username: String?,
@@ -609,13 +615,7 @@ actor UITestAPIStore {
         recordSettingsRequest()
         try ensureAuthenticated()
 
-        var nextUsername = store.user.username
-        var nextIsPublic = store.user.isPublic
-        var nextAphorismsEnabled = store.user.aphorismsEnabled
-        var nextAttentionTrackingEnabled = store.user.attentionTrackingEnabled
-        var nextAmbientSoundEnabled = store.user.ambientSoundEnabled
-        var nextLongSessionPeriod = store.user.longSessionPeriod
-
+        var validatedUsername: String?
         if let username {
             let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
             if config.forceUsernameConflict {
@@ -624,36 +624,16 @@ actor UITestAPIStore {
             guard UsernameValidation.isValid(trimmed) else {
                 throw APIError(status: 400, message: UsernameValidation.errorMessage)
             }
-            nextUsername = trimmed
-        }
-
-        if let isPublic {
-            nextIsPublic = isPublic
-        }
-
-        if let aphorismsEnabled {
-            nextAphorismsEnabled = aphorismsEnabled
-        }
-
-        if let attentionTrackingEnabled {
-            nextAttentionTrackingEnabled = attentionTrackingEnabled
-        }
-
-        if let ambientSoundEnabled {
-            nextAmbientSoundEnabled = ambientSoundEnabled
-        }
-
-        if let longSessionPeriod {
-            nextLongSessionPeriod = longSessionPeriod
+            validatedUsername = trimmed
         }
 
         store.user = store.user.updating(
-            username: nextUsername,
-            isPublic: nextIsPublic,
-            aphorismsEnabled: nextAphorismsEnabled,
-            attentionTrackingEnabled: nextAttentionTrackingEnabled,
-            longSessionPeriod: nextLongSessionPeriod,
-            ambientSoundEnabled: nextAmbientSoundEnabled
+            username: validatedUsername,
+            isPublic: isPublic,
+            aphorismsEnabled: aphorismsEnabled,
+            attentionTrackingEnabled: attentionTrackingEnabled,
+            longSessionPeriod: longSessionPeriod,
+            ambientSoundEnabled: ambientSoundEnabled
         )
         persist()
         return store.user
@@ -669,41 +649,11 @@ actor UITestAPIStore {
         try ensureAuthenticated()
 
         let current = notificationPreferences
-        var quietStart = current.quietHoursStart
-        var quietEnd = current.quietHoursEnd
-        var callPhone = current.callPhoneNumber
-        var callWindowStart = current.callWindowStart
-        var callWindowStop = current.callWindowStop
-        if let quietHoursStart = patch.quietHoursStart {
-            switch quietHoursStart {
-            case .none: quietStart = nil
-            case .some(let value): quietStart = value
-            }
-        }
-        if let quietHoursEnd = patch.quietHoursEnd {
-            switch quietHoursEnd {
-            case .none: quietEnd = nil
-            case .some(let value): quietEnd = value
-            }
-        }
-        if let callPhoneNumber = patch.callPhoneNumber {
-            switch callPhoneNumber {
-            case .none: callPhone = nil
-            case .some(let value): callPhone = value
-            }
-        }
-        if let callWindowStartPatch = patch.callWindowStart {
-            switch callWindowStartPatch {
-            case .none: callWindowStart = nil
-            case .some(let value): callWindowStart = value
-            }
-        }
-        if let callWindowStopPatch = patch.callWindowStop {
-            switch callWindowStopPatch {
-            case .none: callWindowStop = nil
-            case .some(let value): callWindowStop = value
-            }
-        }
+        let quietStart = Self.applying(patch.quietHoursStart, to: current.quietHoursStart)
+        let quietEnd = Self.applying(patch.quietHoursEnd, to: current.quietHoursEnd)
+        let callPhone = Self.applying(patch.callPhoneNumber, to: current.callPhoneNumber)
+        let callWindowStart = Self.applying(patch.callWindowStart, to: current.callWindowStart)
+        let callWindowStop = Self.applying(patch.callWindowStop, to: current.callWindowStop)
 
         let nextCallOptIn = patch.callOptIn ?? current.callOptIn
         if nextCallOptIn {
@@ -713,16 +663,12 @@ actor UITestAPIStore {
                   let start = callWindowStart,
                   let stop = callWindowStop,
                   start != stop else {
-                throw APIError(
-                    status: 400,
-                    message: "callOptIn requires callPhoneNumber plus callWindowStart and callWindowStop",
-                    code: "VALIDATION_ERROR"
-                )
+                throw Self.validationError("callOptIn requires callPhoneNumber plus callWindowStart and callWindowStop")
             }
         }
         let nextCallConsentAt: String? = {
             if patch.callOptIn == true && !current.callOptIn {
-                return ISO8601DateFormatter().string(from: Date())
+                return Self.nowTimestamp()
             }
             // Opt-out keeps the last grant time. Revocation is an audit event on
             // the server (#674); this test double only mirrors the cache column.
@@ -753,12 +699,19 @@ actor UITestAPIStore {
         return next
     }
 
+    /// Applies one clearable patch field: an absent field (`nil`) keeps `current`,
+    /// an explicit null (`.some(nil)`) clears it, and a value replaces it.
+    private static func applying(_ patch: String??, to current: String?) -> String? {
+        guard let patch else { return current }
+        return patch
+    }
+
     // MARK: - Failure reasons
 
     func getFailureReason(date: String) throws -> FailureReasonLookupDTO {
         try ensureAuthenticated()
         guard SessionCalendar.isValidSessionCalendarDate(date) else {
-            throw APIError(status: 400, message: "date must be YYYY-MM-DD", code: "VALIDATION_ERROR")
+            throw Self.validationError("date must be YYYY-MM-DD")
         }
         if let row = store.failureReasons[date] {
             return FailureReasonLookupDTO(exists: true, failureReason: row)
@@ -768,27 +721,9 @@ actor UITestAPIStore {
 
     func submitFailureReason(_ request: SubmitFailureReasonRequest) throws -> FailureReasonDTO {
         try ensureAuthenticated()
-        guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
-            throw APIError(status: 400, message: "reasonDate must be YYYY-MM-DD", code: "VALIDATION_ERROR")
-        }
-        let maxAllowedDate = WidgetDataStore.localDayString(Date())
-        guard request.reasonDate <= maxAllowedDate else {
-            throw APIError(status: 400, message: "reasonDate cannot be in the future", code: "VALIDATION_ERROR")
-        }
+        let trimmed = try Self.validatedFailureReasonText(request)
 
-        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw APIError(status: 400, message: "text must not be empty", code: "VALIDATION_ERROR")
-        }
-        guard trimmed.count <= Self.maxFailureReasonLength else {
-            throw APIError(
-                status: 400,
-                message: "text must be at most \(Self.maxFailureReasonLength) characters",
-                code: "VALIDATION_ERROR"
-            )
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
+        let now = Self.nowTimestamp()
         if let existing = store.failureReasons[request.reasonDate] {
             let updated = FailureReasonDTO(
                 id: existing.id,
@@ -812,6 +747,27 @@ actor UITestAPIStore {
         store.failureReasons[request.reasonDate] = created
         persist()
         return created
+    }
+
+    /// Checks a failure-reason submission as the server does, in the server's order,
+    /// and returns its trimmed text.
+    private static func validatedFailureReasonText(_ request: SubmitFailureReasonRequest) throws -> String {
+        guard SessionCalendar.isValidSessionCalendarDate(request.reasonDate) else {
+            throw validationError("reasonDate must be YYYY-MM-DD")
+        }
+        let maxAllowedDate = WidgetDataStore.localDayString(Date())
+        guard request.reasonDate <= maxAllowedDate else {
+            throw validationError("reasonDate cannot be in the future")
+        }
+
+        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw validationError("text must not be empty")
+        }
+        guard trimmed.count <= maxFailureReasonLength else {
+            throw validationError("text must be at most \(maxFailureReasonLength) characters")
+        }
+        return trimmed
     }
 
     // MARK: - Second account (#887)
@@ -838,6 +794,25 @@ actor UITestAPIStore {
         persist()
     }
 
+    // MARK: - Errors
+
+    /// Fails as a dead network does: status 0, which the app never treats as a rejection.
+    private static var offlineError: APIError {
+        APIError(status: 0, message: "No internet connection")
+    }
+
+    private static var sessionsFailure: APIError {
+        APIError(status: 503, message: "Failed to load sessions. Check your connection.")
+    }
+
+    private static var sessionNotFound: APIError {
+        APIError(status: 404, message: "Session not found")
+    }
+
+    private static func validationError(_ message: String) -> APIError {
+        APIError(status: 400, message: message, code: "VALIDATION_ERROR")
+    }
+
     // MARK: - Helpers
 
     private func recordSettingsRequest() {
@@ -859,297 +834,39 @@ actor UITestAPIStore {
     }
 
     private func persist() {
-        Self.persist(store: store, key: defaultsKey)
+        store.persist(key: defaultsKey)
     }
 
-    private static func persist(store: UITestStore, key: String) {
-        guard let encoded = try? JSONEncoder().encode(store) else { return }
-        UserDefaults.standard.set(encoded, forKey: key)
-    }
-
-    private static func utcTodayIsoDate() -> String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
-        return String(format: "%04d-%02d-%02d", components.year!, components.month!, components.day!)
+    /// The current time as an ISO 8601 timestamp, as the server stamps rows.
+    private static func nowTimestamp() -> String {
+        ISO8601DateFormatter().string(from: Date())
     }
 }
 
-// MARK: - Launch config
-
-/// How `SP_UI_TEST_FORCE_SESSIONS_FAILURE` fails the sessions endpoints (#957).
-enum UITestSessionsFailureMode: Equatable, Sendable {
-    /// No forced failure.
-    case none
-    /// `getSessions` and `getTracksDoneToday` fail with a 503 on every call
-    /// (`1`, `true`, `yes`, `on`).
-    case always
-    /// Only the first `getSessions` call in the process fails with a 503, and
-    /// `getTracksDoneToday` never fails (`once`). Lets a UI test tap History's Retry
-    /// and see the next load succeed.
-    case once
-
-    /// Reads the variable's value. Case-insensitive and not trimmed, like the other
-    /// `SP_UI_TEST_*` flags. Any other value, or no value, is `none`.
-    static func parse(_ value: String?) -> UITestSessionsFailureMode {
-        guard let value else { return .none }
-        let lowered = value.lowercased()
-        if lowered == "once" { return .once }
-        return ["1", "true", "yes", "on"].contains(lowered) ? .always : .none
-    }
-}
-
-private struct UITestConfig: Sendable {
-    let seedAuthenticated: Bool
-    let resetStore: Bool
-    let forceLaunchOffline: Bool
-    let forceTokenExpired: Bool
-    let sessionsFailureMode: UITestSessionsFailureMode
-    /// #875: every `createSession` fails as a dead network does
-    /// (`SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE`), so a completed sit stays
-    /// pending sync.
-    let forceCreateSessionFailure: Bool
-    let forceUsernameConflict: Bool
-    /// Deterministic marketing/scenario data for Fastlane snapshot runs (Issue #325).
-    let snapshotSeed: Bool
-    /// #887: how long the held `me()` read waits, in seconds
-    /// (`SP_UI_TEST_HOLD_ME_SECONDS`). `nil` when no read is held.
-    let holdMeSeconds: Double?
-    /// #887: the held `me()` read answers as the second account
-    /// (`SP_UI_TEST_SECOND_ACCOUNT`).
-    let secondAccount: Bool
-
-    static func from(environment env: [String: String]) -> UITestConfig? {
-        guard truthy(env["SP_UI_TEST_MODE"]) else { return nil }
-        return UITestConfig(
-            seedAuthenticated: truthy(env["SP_UI_TEST_SEED_AUTH"]),
-            resetStore: truthy(env["SP_UI_TEST_RESET_STORE"]),
-            forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
-            forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
-            sessionsFailureMode: UITestSessionsFailureMode.parse(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
-            forceCreateSessionFailure: truthy(env["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"]),
-            forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
-            snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
-            holdMeSeconds: env["SP_UI_TEST_HOLD_ME_SECONDS"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil },
-            secondAccount: truthy(env["SP_UI_TEST_SECOND_ACCOUNT"])
-        )
-    }
-
-    private static func truthy(_ value: String?) -> Bool {
-        guard let value else { return false }
-        return ["1", "true", "yes", "on"].contains(value.lowercased())
-    }
-}
-
-// MARK: - Persisted store
-
-private struct UITestStore: Codable, Sendable {
-    var user: UserDTO
-    var loginEmail: String
-    var loginPassword: String
-    var isAuthenticated: Bool
-    var sessions: [SessionDTO]
-    var thoughts: [ThoughtDTO]
-    var failureReasons: [String: FailureReasonDTO]
-    var nextSessionOrdinal: Int
-    var nextThoughtOrdinal: Int
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        user = try container.decode(UserDTO.self, forKey: .user)
-        loginEmail = try container.decode(String.self, forKey: .loginEmail)
-        loginPassword = try container.decode(String.self, forKey: .loginPassword)
-        isAuthenticated = try container.decode(Bool.self, forKey: .isAuthenticated)
-        sessions = try container.decode([SessionDTO].self, forKey: .sessions)
-        thoughts = try container.decode([ThoughtDTO].self, forKey: .thoughts)
-        failureReasons =
-            try container.decodeIfPresent([String: FailureReasonDTO].self, forKey: .failureReasons) ?? [:]
-        nextSessionOrdinal = try container.decode(Int.self, forKey: .nextSessionOrdinal)
-        nextThoughtOrdinal = try container.decode(Int.self, forKey: .nextThoughtOrdinal)
-    }
-
-    init(
-        user: UserDTO,
-        loginEmail: String,
-        loginPassword: String,
-        isAuthenticated: Bool,
-        sessions: [SessionDTO],
-        thoughts: [ThoughtDTO],
-        failureReasons: [String: FailureReasonDTO],
-        nextSessionOrdinal: Int,
-        nextThoughtOrdinal: Int
-    ) {
-        self.user = user
-        self.loginEmail = loginEmail
-        self.loginPassword = loginPassword
-        self.isAuthenticated = isAuthenticated
-        self.sessions = sessions
-        self.thoughts = thoughts
-        self.failureReasons = failureReasons
-        self.nextSessionOrdinal = nextSessionOrdinal
-        self.nextThoughtOrdinal = nextThoughtOrdinal
-    }
-
-    static func makeDefault(seedAuthenticated: Bool) -> UITestStore {
-        let fixtureUser = UserDTO(
-            id: "ui-user-1",
-            email: "ios.fixture@stillpoint.test",
-            username: "ios_fixture",
-            isPublic: false,
-            currentDay: 1
-        )
-        return UITestStore(
-            user: fixtureUser,
-            loginEmail: fixtureUser.email,
-            loginPassword: "stillpoint-pass",
-            isAuthenticated: seedAuthenticated,
-            sessions: [],
-            thoughts: [],
-            failureReasons: [:],
-            nextSessionOrdinal: 1,
-            nextThoughtOrdinal: 1
-        )
-    }
-
-    /// Rich canned history, journal rows, and board-relevant profile for Fastlane screenshots.
-    static func makeSnapshot(seedAuthenticated: Bool) -> UITestStore {
-        let fixtureUser = UserDTO(
-            id: "snapshot-user-1",
-            email: "snapshot@stillpoint.test",
-            username: "still_snapshot",
-            isPublic: true,
-            currentDay: 9,
-            aphorismsEnabled: true
-        )
-
-        let sessions: [SessionDTO] = [
-            SessionDTO(
-                id: "snap-sess-1",
-                dayNumber: 4,
-                sessionType: .standard,
-                duration: 120,
-                bonusSeconds: 60,
-                completed: true,
-                actualTime: 125,
-                clearPercent: 74,
-                thoughtCount: 2,
-                mindStateLog: [],
-                sessionDate: "2026-01-05",
-                createdAt: "2026-01-05T08:30:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-sess-2",
-                dayNumber: 4,
-                sessionType: .standard,
-                duration: 120,
-                bonusSeconds: nil,
-                completed: true,
-                actualTime: 118,
-                clearPercent: 81,
-                thoughtCount: 1,
-                mindStateLog: [],
-                sessionDate: "2026-01-05",
-                createdAt: "2026-01-05T19:15:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-sess-3",
-                dayNumber: 5,
-                sessionType: .standard,
-                duration: 130,
-                bonusSeconds: 300,
-                completed: true,
-                actualTime: 400,
-                clearPercent: 69,
-                thoughtCount: 4,
-                mindStateLog: [],
-                sessionDate: "2026-01-06",
-                createdAt: "2026-01-06T07:00:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-sess-4",
-                dayNumber: 6,
-                sessionType: .standard,
-                duration: 140,
-                bonusSeconds: nil,
-                completed: true,
-                actualTime: 140,
-                clearPercent: 88,
-                thoughtCount: 0,
-                mindStateLog: [],
-                sessionDate: "2026-01-07",
-                createdAt: "2026-01-07T12:20:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-sess-5",
-                dayNumber: 7,
-                sessionType: .standard,
-                duration: 150,
-                bonusSeconds: nil,
-                completed: true,
-                actualTime: 150,
-                clearPercent: 72,
-                thoughtCount: 3,
-                mindStateLog: [],
-                sessionDate: "2026-01-08",
-                createdAt: "2026-01-08T06:45:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-sess-6",
-                dayNumber: 8,
-                sessionType: .standard,
-                duration: 160,
-                bonusSeconds: 120,
-                completed: true,
-                actualTime: 265,
-                clearPercent: 79,
-                thoughtCount: 2,
-                mindStateLog: [],
-                sessionDate: "2026-01-09",
-                createdAt: "2026-01-09T21:05:00Z",
-                buddySessionId: nil
-            ),
-            SessionDTO(
-                id: "snap-quick-1",
-                dayNumber: 8,
-                sessionType: .quick,
-                duration: StillPoint.quickDuration,
-                bonusSeconds: nil,
-                completed: true,
-                actualTime: StillPoint.quickDuration,
-                clearPercent: 62,
-                thoughtCount: 1,
-                mindStateLog: [],
-                sessionDate: "2026-01-09",
-                createdAt: "2026-01-09T08:10:00Z",
-                buddySessionId: nil
-            ),
-        ]
-
-        let thoughts: [ThoughtDTO] = [
-            ThoughtDTO(id: "snap-th-1", sessionId: "snap-sess-1", dayNumber: 4, timeInSession: 42, text: "Planning the week instead of watching the timer."),
-            ThoughtDTO(id: "snap-th-2", sessionId: "snap-sess-1", dayNumber: 4, timeInSession: 96, text: "Sound of traffic — came back to the breath."),
-            ThoughtDTO(id: "snap-th-3", sessionId: "snap-sess-3", dayNumber: 5, timeInSession: 55, text: "Should I adjust tomorrow's sit length?"),
-            ThoughtDTO(id: "snap-th-4", sessionId: "snap-sess-3", dayNumber: 5, timeInSession: 200, text: "Lost thread for a moment; noticed and returned."),
-            ThoughtDTO(id: "snap-th-5", sessionId: "snap-sess-5", dayNumber: 7, timeInSession: 22, text: "Flash of an old conversation."),
-            ThoughtDTO(id: "snap-th-6", sessionId: "snap-sess-6", dayNumber: 8, timeInSession: 140, text: "Room felt quieter toward the end."),
-            ThoughtDTO(id: "snap-th-7", sessionId: "snap-quick-1", dayNumber: 8, timeInSession: 12, text: "Quick reset between meetings."),
-        ]
-
-        return UITestStore(
-            user: fixtureUser,
-            loginEmail: fixtureUser.email,
-            loginPassword: "snapshot-pass",
-            isAuthenticated: seedAuthenticated,
-            sessions: sessions,
-            thoughts: thoughts,
-            failureReasons: [:],
-            nextSessionOrdinal: 100,
-            nextThoughtOrdinal: 100
+private extension SessionDTO {
+    /// This session with `moodMatrix` replaced and every other field kept.
+    func replacingMoodMatrix(_ moodMatrix: [String: MoodMatrixEntry]?) -> SessionDTO {
+        SessionDTO(
+            id: id,
+            dayNumber: dayNumber,
+            sessionType: sessionType,
+            duration: duration,
+            bonusSeconds: bonusSeconds,
+            completed: completed,
+            actualTime: actualTime,
+            clearPercent: clearPercent,
+            thoughtCount: thoughtCount,
+            mindStateLog: mindStateLog,
+            attentionLog: attentionLog,
+            sessionDate: sessionDate,
+            createdAt: createdAt,
+            buddySessionId: buddySessionId,
+            breathCount: breathCount,
+            focusCategory: focusCategory,
+            track: track,
+            ambientSoundSummary: ambientSoundSummary,
+            moodMatrix: moodMatrix,
+            combined: combined
         )
     }
 }
