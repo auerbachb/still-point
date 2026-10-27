@@ -9,6 +9,7 @@ extension XCTestCase {
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
         forceSessionsFailure: Bool = false,
+        forceCreateSessionFailure: Bool = false,
         appBlockingSelected: Bool = false,
         forceProgressTab: Bool = false,
         forceSettingsTab: Bool = false,
@@ -26,6 +27,7 @@ extension XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = forceLaunchOffline ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"] = forceCreateSessionFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = forceStartSession ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_BREATH_COUNTING"] = forceBreathCounting ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_BUDDY_HUB"] = forceBuddyHub ? "1" : "0"

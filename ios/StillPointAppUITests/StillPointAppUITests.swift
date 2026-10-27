@@ -655,6 +655,117 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(retryButton.isHittable, "Retry button is not hittable")
     }
 
+    /// #875 / #792: a sit whose upload fails stays pending sync, and its completion
+    /// screen hides the mood ratings — there is no server row to attach them to —
+    /// while the note stays usable, and "save and return to home" leaves on the
+    /// first tap.
+    ///
+    /// `SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE` makes `UITestAPIStore.createSession`
+    /// fail as a dead network does, so the sit is queued, not parked. The mood check
+    /// runs after the note's "Saved" indicator, by which time the screen has read
+    /// the sit's queue state; `testSyncedCompletionShowsMoodRatings` is the control
+    /// that shows the same check finds the ratings on a synced sit.
+    @MainActor
+    func testPendingSyncCompletionHidesMoodAndReturnsOnFirstTap() throws {
+        let app = finishSitToCompletion(forceCreateSessionFailure: true)
+
+        let noteEditor = app.textViews["completion.endNoteEditor"]
+        XCTAssertTrue(noteEditor.waitForExistence(timeout: 8), "The note stays on a pending sit's completion screen")
+        scrollElementIntoVisibleFrame(noteEditor, in: app, maxSwipes: 6)
+        noteEditor.tapAndType("pending sit note", in: app)
+        XCTAssertTrue(
+            app.staticTexts["completion.savedIndicator"].waitForExistence(timeout: 10),
+            "The note on a pending sit was not saved to the queue"
+        )
+        XCTAssertEqual(moodRatingCells(in: app).count, 0, "Mood ratings shown on a sit pending sync")
+        XCTAssertFalse(app.staticTexts["MOOD SHIFT"].exists, "Mood section shown on a sit pending sync")
+
+        // The note editor keeps the keyboard up, and a swipe down does not lower it
+        // here, so the button is scrolled clear of the keyboard instead.
+        let returnButton = app.buttons["completion.returnButton"]
+        scrollElementIntoVisibleFrame(returnButton, in: app, maxSwipes: 8)
+        scrollElementAboveKeyboard(returnButton, in: app)
+        XCTAssertTrue(tapByStableCenter(returnButton, in: app, timeout: 12))
+        XCTAssertTrue(
+            app.otherElements["root.currentView.home"].waitForExistence(timeout: 8),
+            "One tap on save and return to home did not leave a pending sit's completion screen"
+        )
+    }
+
+    /// #875: control for `testPendingSyncCompletionHidesMoodAndReturnsOnFirstTap`. A
+    /// sit that syncs shows the mood ratings, so the absence asserted there is the
+    /// pending-sync gate, not a query that never matches.
+    @MainActor
+    func testSyncedCompletionShowsMoodRatings() throws {
+        let app = finishSitToCompletion(forceCreateSessionFailure: false)
+        let firstCell = moodRatingCells(in: app).firstMatch
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 10), "Mood ratings missing on a synced sit")
+    }
+
+    /// Swipes the screen up until `element` sits above the on-screen keyboard. A
+    /// no-op without a keyboard. `isElementInVisibleFrame` counts the area under the
+    /// keyboard as visible, so a tap there lands on the keyboard instead.
+    private func scrollElementAboveKeyboard(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 4,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let keyboard = app.keyboards.firstMatch
+        for _ in 0..<maxSwipes {
+            guard keyboard.exists else { return }
+            if element.frame.maxY <= keyboard.frame.minY { return }
+            app.scrollViews.firstMatch.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+        if keyboard.exists {
+            XCTAssertLessThanOrEqual(
+                element.frame.maxY,
+                keyboard.frame.minY,
+                "Could not scroll the element clear of the keyboard",
+                file: file,
+                line: line
+            )
+        }
+    }
+
+    /// Mood matrix cells on the completion screen (`completion.moodMatrix.<mood>.<side>.<level>`).
+    private func moodRatingCells(in app: XCUIApplication) -> XCUIElementQuery {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "completion.moodMatrix."))
+    }
+
+    /// Launches straight into a short standard sit and ends it, returning the app on
+    /// the completion screen.
+    @MainActor
+    private func finishSitToCompletion(
+        forceCreateSessionFailure: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> XCUIApplication {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            sessionSeconds: 10,
+            timerMultiplier: 2.0,
+            forceCreateSessionFailure: forceCreateSessionFailure
+        )
+        app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "1"
+        app.launch()
+
+        waitForRoot("session", in: app, failureMessage: "Session screen did not appear", assertColdStart: false)
+        let completionRoot = app.otherElements["root.currentView.completion"]
+        if !completionRoot.waitForExistence(timeout: 3) {
+            let endEarlyButton = app.buttons["session.endEarlyButton"]
+            if endEarlyButton.waitForExistence(timeout: 8) {
+                tapByStableCenter(endEarlyButton, in: app)
+            }
+        }
+        XCTAssertTrue(completionRoot.waitForExistence(timeout: 35), "Completion screen did not appear", file: file, line: line)
+        XCTAssertTrue(app.staticTexts["completion.dayTitle"].waitForExistence(timeout: 8), file: file, line: line)
+        return app
+    }
+
     /// #887 / #851: a Settings save that waits behind a `me()` read which adopts a
     /// different account is dropped by the identity guard, and the control then shows
     /// the account now on screen rather than the change made on the account before.
@@ -754,6 +865,7 @@ final class StillPointAppUITests: XCTestCase {
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
         forceSessionsFailure: Bool = false,
+        forceCreateSessionFailure: Bool = false,
         appBlockingSelected: Bool = false,
         forceProgressTab: Bool = false,
         forceSettingsTab: Bool = false,
@@ -770,6 +882,7 @@ final class StillPointAppUITests: XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = forceLaunchOffline ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"] = forceCreateSessionFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_BREATH_COUNTING"] = "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_BUDDY_HUB"] = "0"

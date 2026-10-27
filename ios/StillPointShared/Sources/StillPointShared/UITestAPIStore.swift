@@ -115,7 +115,7 @@ actor UITestAPIStore {
         // in the xcresult bundle — `print()` from the app process is not
         // captured by Xcode UI test runs, which is why the prior
         // [E2E-DIAG] prints from PR #261 never showed up in CI logs.
-        APIClient.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(config.seedAuthenticated, privacy: .public) resetStore=\(config.resetStore, privacy: .public) forceOffline=\(config.forceLaunchOffline, privacy: .public) forceTokenExpired=\(config.forceTokenExpired, privacy: .public) finalIsAuthenticated=\(resolvedStore.isAuthenticated, privacy: .public)")
+        APIClient.diagLog.notice("[E2E-DIAG] APIClient.init uiTestMode=YES seedAuth=\(config.seedAuthenticated, privacy: .public) resetStore=\(config.resetStore, privacy: .public) forceOffline=\(config.forceLaunchOffline, privacy: .public) forceTokenExpired=\(config.forceTokenExpired, privacy: .public) forceCreateSessionFailure=\(config.forceCreateSessionFailure, privacy: .public) finalIsAuthenticated=\(resolvedStore.isAuthenticated, privacy: .public)")
 
         return UITestAPIStore(config: config, store: resolvedStore, defaultsKey: defaultsKey)
     }
@@ -336,6 +336,13 @@ actor UITestAPIStore {
 
     func createSession(_ data: CreateSessionRequest) throws -> SessionDTO {
         try ensureAuthenticated()
+
+        // #875: fail as a dead network does. Status 0 is never a rejection
+        // (`SessionSyncCoordinator.rejectsTheSit`), so the sit stays queued and
+        // pending sync instead of being parked.
+        if config.forceCreateSessionFailure {
+            throw APIError(status: 0, message: "No internet connection")
+        }
 
         if let clientSessionId = data.clientSessionId?.uuidString,
            let existing = store.sessions.first(where: { $0.id == clientSessionId }) {
@@ -807,6 +814,10 @@ private struct UITestConfig: Sendable {
     let forceLaunchOffline: Bool
     let forceTokenExpired: Bool
     let forceSessionsFailure: Bool
+    /// #875: every `createSession` fails as a dead network does
+    /// (`SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE`), so a completed sit stays
+    /// pending sync.
+    let forceCreateSessionFailure: Bool
     let forceUsernameConflict: Bool
     /// Deterministic marketing/scenario data for Fastlane snapshot runs (Issue #325).
     let snapshotSeed: Bool
@@ -826,6 +837,7 @@ private struct UITestConfig: Sendable {
             forceLaunchOffline: truthy(env["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"]),
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
             forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
+            forceCreateSessionFailure: truthy(env["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"]),
             forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
             snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
             holdMeSeconds: env["SP_UI_TEST_HOLD_ME_SECONDS"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil },

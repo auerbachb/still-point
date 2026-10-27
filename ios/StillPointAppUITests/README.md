@@ -26,6 +26,7 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - Token expiry re-auth path (`testTokenExpiryRoutesToReauthMessage`)
 - Failed sessions API displays visible error (no silent hang) (`testSessionsFailureShowsVisibleRetryMessage`)
 - Settings save dropped by an account switch re-syncs the control from the account on screen (`testAphorismsToggleResyncsWhenHeldReadAdoptsSecondAccount`, #887)
+- A sit left pending sync hides the mood ratings, keeps the note, and leaves on the first "save and return to home" tap (`testPendingSyncCompletionHidesMoodAndReturnsOnFirstTap`, #875)
 
 Cold-start acceptance guard used by tests: **auth check must complete within 8,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`). Raised from 5,000 ms in [#334](https://github.com/auerbachb/still-point/issues/334) to absorb macos-26/iOS-26 simulator contention. The guard is asserted only on `seedAuthenticated: false` cold-start paths (boot to auth); authenticated boots and seeded relaunches pass `assertColdStart: false`.
 
@@ -41,6 +42,7 @@ The app reads these launch environment keys in UI test mode:
 - `SP_UI_TEST_FORCE_LAUNCH_OFFLINE=1` (simulate failed API/airplane mode on launch)
 - `SP_UI_TEST_FORCE_TOKEN_EXPIRED=1` (simulate expired token during cold-start auth check)
 - `SP_UI_TEST_FORCE_SESSIONS_FAILURE=1` (optional sessions API failure simulation)
+- `SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE=1` (#875: every `createSession` fails as a dead network does, so a completed sit stays pending sync)
 - `SP_UI_TEST_FORCE_USERNAME_CONFLICT=1` (simulate username taken on settings save)
 - `SP_UI_TEST_FORCE_BREATH_COUNTING=1` (boot directly to breath counting screen)
 - `SP_UI_TEST_FORCE_BUDDY_HUB=1` (boot directly to buddy session hub)
