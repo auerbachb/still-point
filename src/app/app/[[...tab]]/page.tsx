@@ -32,6 +32,7 @@ import { resetTrackingUnlockOnLogout } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
 import { resetSessionStateReports } from "@/lib/web-push-client";
 import { clearSuppressDuringSessionPref } from "@/lib/sessionSuppressionPrefs";
+import { clearSwRouteDataCache } from "@/lib/swRouteDataCache";
 import { NO_RECOVERY, previewNextStandardDuration, recoveryFieldsOf } from "@/lib/userProgression";
 import { useAuthBootstrap } from "@/lib/useAuthBootstrap";
 import { useDualTrackFork } from "@/lib/useDualTrackFork";
@@ -222,6 +223,9 @@ export default function StillPoint() {
     // still queued under this account would otherwise survive the last two and
     // drain under the next account's cookie.
     resetSessionStateReports();
+    // #967: the worker's stored route data was rendered for this account, so an
+    // offline move under the next one must not be answered with it.
+    void clearSwRouteDataCache();
     // #868: whatever the previous account had open goes with it, here rather than
     // in the sign-out handler that used to close it. A sit, its completion screen
     // and a buddy room act as whoever is signed in now, so left open when another

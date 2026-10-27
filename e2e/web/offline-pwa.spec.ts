@@ -28,6 +28,9 @@ import { tap, tapWithControlReveal } from "../utils/mobile-helpers";
  * stays up while offline and drops and returns on reconnect, so the page still
  * gets its `online` event: on WebKit, a worker-controlled page cannot navigate
  * under `setOffline(true)` (PR #880), and these specs navigate offline.
+ *
+ * The worker's own fetches cross the stand-in too, so offline its route-data
+ * refreshes (#967) fail like everything else and it answers from its cache.
  */
 
 /** The connection switch, over both ways the API can answer: the auth
@@ -140,6 +143,20 @@ async function primeOfflineLaunch(
   await waitForAppShellCached(page);
 }
 
+/** Wait until the worker holds the route data for `path` (#967). It fetches
+ *  every app route's payload after an online document load, and an offline
+ *  `router.push` to that route stays in the page only once it is stored.
+ *  Keep the cache name and key in sync with RSC_CACHE and RSC_KEY_ORIGIN in
+ *  public/sw.js. */
+async function waitForRouteDataCached(page: Page, path: string) {
+  await expect
+    .poll(() => page.evaluate(async (routePath) => {
+      const cache = await caches.open("stillpoint-rsc-v1");
+      return Boolean(await cache.match(`https://still-point.internal/__rsc__${routePath}`));
+    }, path), { message: `the worker should store the route data for ${path}`, timeout: 60_000 })
+    .toBe(true);
+}
+
 /** Every row of the offline session queue, read straight from IndexedDB. */
 function readQueuedSessions(page: Page) {
   return page.evaluate(
@@ -233,6 +250,7 @@ test.describe("offline-first web PWA", () => {
         },
         onReloaded: expectHomeDay,
       });
+      await waitForRouteDataCached(page, pathForTab("journal"));
 
       await reloadOffline(page, network);
 
@@ -245,6 +263,14 @@ test.describe("offline-first web PWA", () => {
       // ...with the indicator up while it runs from the local copy.
       await expect(offlineIndicator(page)).toBeVisible();
       await expect(offlineIndicator(page)).toContainText(/offline/i);
+
+      // A tab switch offline is an in-app move in this same document (#967),
+      // not a full load of the destination.
+      await markSameDocument(page);
+      await tap(page.getByRole("button", { name: "journal", exact: true }));
+      await expect(page).toHaveURL(new RegExp(`${pathForTab("journal")}$`));
+      await expect(offlineIndicator(page)).toBeVisible();
+      expect(await isSameDocument(page), "a tab switch offline stays in the same document").toBe(true);
     });
 
     workerTest("a full sit completes offline, queues, and syncs on reconnect", async ({
@@ -258,9 +284,13 @@ test.describe("offline-first web PWA", () => {
       await primeOfflineLaunch(page, {
         onReloaded: () => expect(beginButton(page)).toBeVisible(),
       });
+      await waitForRouteDataCached(page, pathForTab(DEFAULT_TAB));
 
       await reloadOffline(page, network);
       await expect(offlineIndicator(page)).toBeVisible();
+      // Set on the offline launch's document, so every check below can tell
+      // that nothing replaced it: not the return home, not the reconnect.
+      await markSameDocument(page);
 
       // A whole sit, start to saved, with nothing reachable.
       await tap(beginButton(page));
@@ -276,16 +306,17 @@ test.describe("offline-first web PWA", () => {
       });
       expect(mockApiState.sessions.length, "nothing reached the server while offline").toBe(0);
 
-      // Offline, the router cannot fetch Home's server payload, so Next.js falls
-      // back to a full load of the page, which the worker serves from its cache.
-      // That load lands after the tap returns. Reconnecting while it was under
-      // way replaced the page in the middle of the checks below (#864), so wait
-      // for it here, still offline.
+      // Offline, the router's fetch of Home's route data fails, and the worker
+      // answers it from its cache (#967), so the return home is an in-app move
+      // in this same document rather than a full page load.
       await tap(page.getByRole("button", { name: "save and return to home" }));
-      await page.waitForURL(`**${pathForTab(DEFAULT_TAB)}`);
+      await expect(page).toHaveURL(new RegExp(`${pathForTab(DEFAULT_TAB)}$`));
       await expect(beginButton(page)).toBeVisible();
       await expect(offlineIndicator(page)).toBeVisible();
-      await markSameDocument(page);
+      expect(
+        await isSameDocument(page),
+        "returning home offline stays in the same document",
+      ).toBe(true);
 
       // Back online. setOffline(false) fires the browser's own `online` event,
       // and the page's reconnect flush uploads the sit through the stand-in API.
