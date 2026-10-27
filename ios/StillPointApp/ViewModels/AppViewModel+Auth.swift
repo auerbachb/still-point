@@ -419,6 +419,16 @@ extension AppViewModel {
             guard live == self.authGeneration else { return }
             self.syncWidgetData()
             await self.consumePendingBuddyInviteIfNeeded(startedAtGeneration: live)
+            // The invite join is the last suspension point here, and an identity change
+            // can land while it is in flight (#857). A sign-out cancels this task and the
+            // join with it, but cancelling does not stop the code below, and adopting a
+            // different account cancels nothing. Same rule as `checkAuth()` after its
+            // join: the two local links stay pending for the account that is live by
+            // then. Neither consumer suspends, so no check is needed between them.
+            guard AuthCheckOwnership.ownsLocalLinks(
+                startedAtGeneration: live,
+                liveGeneration: self.authGeneration
+            ) else { return }
             await self.consumePendingSessionDeepLinkIfNeeded()
             await self.consumePendingLogReasonIfNeeded()
         }

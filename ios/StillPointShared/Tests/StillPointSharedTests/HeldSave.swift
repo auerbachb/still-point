@@ -2,7 +2,8 @@
 /// sign-out can land in. Built on `AsyncStream`, like the held upload in
 /// `SessionSyncCoordinatorEndNoteClearTests`, so nothing here sleeps.
 ///
-/// Shared by `GenerationScopedWorkTests` and `GenerationOwnedGateTests`.
+/// Shared by `GenerationScopedWorkTests` and `GenerationOwnedGateTests`, and by
+/// `AuthCheckOwnershipLocalLinksTests`, where it holds a buddy-invite join open (#857).
 struct HeldSave<Value: Sendable>: Sendable {
     private let value: Value
     private let started: AsyncStream<Void>

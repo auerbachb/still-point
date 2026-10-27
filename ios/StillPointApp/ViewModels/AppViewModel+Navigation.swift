@@ -235,6 +235,15 @@ extension AppViewModel {
         // session is live when it runs.
         guard adopted == authGeneration else { return }
         await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
+        // Re-checked for the log-reason link, as `checkAuth()` does after its join
+        // (#857). The join is a network request, and this runs in a task the calling
+        // view started, which a sign-out does not cancel, so a sign-out and a sign-in as
+        // someone else can both land before it returns. A link pending by then belongs
+        // to that account, and the flow that signed it in opens it in its own order.
+        guard AuthCheckOwnership.ownsLocalLinks(
+            startedAtGeneration: adopted,
+            liveGeneration: authGeneration
+        ) else { return }
         await consumePendingLogReasonIfNeeded()
     }
 }
