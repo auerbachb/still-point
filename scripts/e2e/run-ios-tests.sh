@@ -233,6 +233,17 @@ is_retriable_failure() {
   if grep -qE 'Failed to set device orientation:' "$log"; then
     return 0
   fi
+  # Simulator background-assertion timeout (issue #955). XCTest cannot take a
+  # background assertion on the target app and reports it as a method-level
+  # error frame, which the method-frame check below would read as a test bug:
+  #   "error: -[StillPointAppUITests.SPCapsuleButtonStyleUITests testXxx] :
+  #    Failed to get background assertion for target app with pid NNN:
+  #    Timed out while acquiring background assertion."
+  # Seen on all three SPCapsuleButtonStyleUITests tests in ios-e2e-critical,
+  # attempt 1 of https://github.com/auerbachb/still-point/actions/runs/40453121968
+  if grep -q 'Timed out while acquiring background assertion' "$log"; then
+    return 0
+  fi
   # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
   # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Must precede
   # the broad UI-query timeout grep so real assertion failures are not masked.
