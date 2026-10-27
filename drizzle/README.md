@@ -160,6 +160,26 @@ introspects `src/db/schema.ts` directly and applies the delta in one step
 without the ledger overhead. Use `npm run db:migrate` when you need the
 ledgered incremental path (CI, Vercel, ephemeral e2e branches).
 
+## Deprecated columns
+
+These columns are kept as legacy data. Nothing writes them any more, and they
+must never be reused for new data.
+
+- **`sessions.focus_rating`, `sessions.happiness_rating`** — the post-session
+  self-report ratings (1-10) that `sessions_ratings_109_incremental.sql` added.
+  Issue #766 retired them: neither client sends them, and the by-session PATCH
+  route accepts them from older builds and ignores them. The stored values and
+  both `sessions_*_rating_range` CHECK constraints stay, and the by-session
+  `GET` still returns the values. Nothing was backfilled into `mood_matrix`.
+
+Dropping them needs explicit owner sign-off and confirmation that the older
+builds that send ratings are gone. Migrations run during the build, while the
+previous deployment still serves traffic, so do it in two steps: first deploy
+code that no longer reads the columns (`src/db/schema.ts`, `mapSessionRow` in
+`src/db/atomic.ts`), then add a **new** migration file that runs
+`DROP CONSTRAINT IF EXISTS` for both checks and then `DROP COLUMN IF EXISTS`.
+Never edit `sessions_ratings_109_incremental.sql` (see the golden rule above).
+
 ---
 
 ## `db:reconcile` helper

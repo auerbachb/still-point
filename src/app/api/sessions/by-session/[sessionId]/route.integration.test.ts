@@ -1,12 +1,14 @@
 /**
- * Issue #109 — post-session survey (focus + happiness).
- *
  * Route-level persistence tests for PATCH /api/sessions/by-session/[sessionId]
  * against a real in-process Postgres (PGlite), mirroring the pattern used for
  * POST /api/thoughts/batch (another post-hoc CompletionScreen add).
+ *
+ * Issue #109 added the route for the post-session ratings (focus + happiness).
+ * Issue #766 retired them: the route now ignores those fields, and the legacy
+ * tests prove the stored values never change (#891).
  */
 import { NextRequest } from "next/server";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { sessions, users } from "@/db/schema";
 import { closeTestDb, getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb";
@@ -18,16 +20,24 @@ vi.mock("@/db", async () => ({ db: await getTestDb() }));
 
 import { GET, PATCH } from "./route";
 
+/** #766: the legacy ratings every seeded session starts with. No test sends
+ *  either value, so a PATCH that wrote one of the columns would show. */
+const LEGACY_RATINGS = { focusRating: 4, happinessRating: 9 } as const;
+
 let db: TestDb;
 let userId: string;
 let otherUserId: string;
 let sessionId: string;
 
 function patchRequest(sessionId: string, body: unknown): NextRequest {
+  return rawPatchRequest(sessionId, JSON.stringify(body));
+}
+
+function rawPatchRequest(sessionId: string, body: string): NextRequest {
   return new NextRequest(`http://test.local/api/sessions/by-session/${sessionId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -42,6 +52,11 @@ async function seedMood(matrix: Record<string, { before: number | null; after: n
 async function storedMood() {
   const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
   return row!.moodMatrix;
+}
+
+async function storedLegacyRatings() {
+  const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+  return { focusRating: row!.focusRating, happinessRating: row!.happinessRating };
 }
 
 beforeAll(async () => {
@@ -75,6 +90,7 @@ beforeEach(async () => {
       thoughtCount: 0,
       mindStateLog: [],
       sessionDate: "2026-06-11",
+      ...LEGACY_RATINGS,
     })
     .returning({ id: sessions.id });
   sessionId = session!.id;
@@ -84,79 +100,118 @@ afterAll(async () => {
   await closeTestDb();
 });
 
-describe("PATCH /api/sessions/by-session/[sessionId] — ratings", () => {
-  test("sets both focusRating and happinessRating", async () => {
+/**
+ * Issue #766 — the session ratings are retired, but older builds still send
+ * `focusRating` / `happinessRating`. The route accepts them with any value,
+ * never writes them, and answers a ratings-only save with the stored row.
+ */
+describe("PATCH /api/sessions/by-session/[sessionId] — legacy ratings (#766)", () => {
+  afterEach(() => {
+    // Restores the db.update spy even when an assertion throws mid-test.
+    vi.restoreAllMocks();
+  });
+
+  test("a ratings-only body returns 200 with the stored row and runs no UPDATE", async () => {
+    const update = vi.spyOn(db, "update");
+
     const res = await PATCH(
-      patchRequest(sessionId, { focusRating: 7, happinessRating: 9 }),
+      patchRequest(sessionId, { focusRating: 7, happinessRating: 2 }),
       { params: Promise.resolve({ sessionId }) },
     );
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.session.focusRating).toBe(7);
-    expect(json.session.happinessRating).toBe(9);
-
-    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-    expect(row!.focusRating).toBe(7);
-    expect(row!.happinessRating).toBe(9);
+    expect(json.session.id).toBe(sessionId);
+    expect(json.session.focusRating).toBe(LEGACY_RATINGS.focusRating);
+    expect(json.session.happinessRating).toBe(LEGACY_RATINGS.happinessRating);
+    expect(update).not.toHaveBeenCalled();
+    expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
   });
 
-  test("sets a single rating, leaving the other null", async () => {
+  test.each(["focusRating", "happinessRating"])("a body with only %s returns 200 and changes nothing", async (key) => {
     const res = await PATCH(
-      patchRequest(sessionId, { focusRating: 4 }),
+      patchRequest(sessionId, { [key]: 7 }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
+  });
+
+  test.each([0, 11, 1.5, -1, "great", null, { score: 7 }])(
+    "accepts the invalid legacy value %j with 200, never 400, and changes nothing",
+    async (value) => {
+      const res = await PATCH(
+        patchRequest(sessionId, { focusRating: value, happinessRating: value }),
+        { params: Promise.resolve({ sessionId }) },
+      );
+
+      expect(res.status).toBe(200);
+      expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
+    },
+  );
+
+  test("legacy ratings beside a moodMatrix: the mood is saved and the ratings are ignored", async () => {
+    const res = await PATCH(
+      patchRequest(sessionId, {
+        focusRating: 7,
+        happinessRating: 2,
+        moodMatrix: { overall: { before: 2, after: 5 } },
+      }),
       { params: Promise.resolve({ sessionId }) },
     );
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.session.focusRating).toBe(4);
-    expect(json.session.happinessRating).toBeNull();
+    expect(json.session.moodMatrix).toEqual({ overall: { before: 2, after: 5 } });
+    expect(json.session.focusRating).toBe(LEGACY_RATINGS.focusRating);
+    expect(json.session.happinessRating).toBe(LEGACY_RATINGS.happinessRating);
+    expect(await storedMood()).toEqual({ overall: { before: 2, after: 5 } });
+    expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
   });
 
-  test("a later PATCH overwrites a prior rating (revisable)", async () => {
-    await PATCH(
-      patchRequest(sessionId, { focusRating: 2, happinessRating: 2 }),
-      { params: Promise.resolve({ sessionId }) },
-    );
+  test("legacy ratings beside an invalid moodMatrix still fail with 400", async () => {
     const res = await PATCH(
-      patchRequest(sessionId, { focusRating: 8 }),
-      { params: Promise.resolve({ sessionId }) },
-    );
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.session.focusRating).toBe(8);
-    expect(json.session.happinessRating).toBe(2);
-  });
-
-  test.each([0, 11, 1.5, -1])("rejects out-of-range/non-integer rating %s with 400", async (value) => {
-    const res = await PATCH(
-      patchRequest(sessionId, { focusRating: value }),
+      patchRequest(sessionId, { focusRating: 7, moodMatrix: { calm: { before: 6, after: 3 } } }),
       { params: Promise.resolve({ sessionId }) },
     );
 
     expect(res.status).toBe(400);
-    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-    expect(row!.focusRating).toBeNull();
+    expect(await storedMood()).toBeNull();
+    expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
   });
 
-  test("rejects non-numeric rating with 400", async () => {
+  test.each([{}, { foo: 1 }])("a body with no supported field (%j) fails with 400", async (body) => {
     const res = await PATCH(
-      patchRequest(sessionId, { focusRating: "great" }),
+      patchRequest(sessionId, body),
       { params: Promise.resolve({ sessionId }) },
     );
 
     expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("No supported fields provided");
   });
 
-  test("empty body (no supported fields) fails visibly with 400", async () => {
+  test("another user's session returns 404 on a ratings-only body and persists nothing", async () => {
+    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other109@test.local" });
+
     const res = await PATCH(
-      patchRequest(sessionId, {}),
+      patchRequest(sessionId, { focusRating: 6, happinessRating: 6 }),
       { params: Promise.resolve({ sessionId }) },
     );
 
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("No supported ratings provided");
+    expect(res.status).toBe(404);
+    expect(await storedLegacyRatings()).toEqual(LEGACY_RATINGS);
+  });
+
+  test("a ratings-only body for a session that does not exist returns 404", async () => {
+    const missingId = "6f1c2a4e-8b3d-4c5e-9f60-718293a4b5c6";
+
+    const res = await PATCH(
+      patchRequest(missingId, { focusRating: 6 }),
+      { params: Promise.resolve({ sessionId: missingId }) },
+    );
+
+    expect(res.status).toBe(404);
   });
 
   test("invalid session id returns 400", async () => {
@@ -168,20 +223,6 @@ describe("PATCH /api/sessions/by-session/[sessionId] — ratings", () => {
     expect(res.status).toBe(400);
   });
 
-  test("another user's session id returns 404 and persists nothing", async () => {
-    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other109@test.local" });
-
-    const res = await PATCH(
-      patchRequest(sessionId, { focusRating: 6, happinessRating: 6 }),
-      { params: Promise.resolve({ sessionId }) },
-    );
-
-    expect(res.status).toBe(404);
-    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-    expect(row!.focusRating).toBeNull();
-    expect(row!.happinessRating).toBeNull();
-  });
-
   test("unauthenticated request returns 401", async () => {
     getCurrentUser.mockResolvedValue(null);
 
@@ -191,6 +232,41 @@ describe("PATCH /api/sessions/by-session/[sessionId] — ratings", () => {
     );
 
     expect(res.status).toBe(401);
+  });
+
+  test("invalid JSON returns 400", async () => {
+    const res = await PATCH(
+      rawPatchRequest(sessionId, '{"focusRating": 5'),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid JSON body");
+  });
+
+  test.each([
+    { name: "an array", body: [{ focusRating: 5 }] },
+    { name: "null", body: null },
+  ])("a non-object body ($name) returns 400", async ({ body }) => {
+    const res = await PATCH(
+      patchRequest(sessionId, body),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Request body must be a JSON object");
+  });
+
+  test("GET by-session still returns the stored legacy ratings", async () => {
+    const res = await GET(
+      new NextRequest(`http://test.local/api/sessions/by-session/${sessionId}`),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    const { session } = await res.json();
+    expect(session.focusRating).toBe(LEGACY_RATINGS.focusRating);
+    expect(session.happinessRating).toBe(LEGACY_RATINGS.happinessRating);
   });
 });
 
@@ -231,7 +307,7 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
     expect(json.session.moodMatrix).toEqual(matrix);
   });
 
-  test("can combine moodMatrix and ratings in a single PATCH", async () => {
+  test("a moodMatrix PATCH can carry a legacy rating, which is ignored (#766)", async () => {
     const res = await PATCH(
       patchRequest(sessionId, {
         focusRating: 7,
@@ -242,7 +318,7 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.session.focusRating).toBe(7);
+    expect(json.session.focusRating).toBe(LEGACY_RATINGS.focusRating);
     expect(json.session.moodMatrix).toEqual({ overall: { before: 2, after: 5 } });
   });
 
@@ -468,8 +544,8 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix clear (#792
     expect(res.status).toBe(200);
     const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
     expect(row!.moodMatrix).toBeNull();
-    expect(row!.focusRating).toBe(6);
-    expect(row!.happinessRating).toBe(8);
+    expect(row!.focusRating).toBe(LEGACY_RATINGS.focusRating);
+    expect(row!.happinessRating).toBe(LEGACY_RATINGS.happinessRating);
   });
 
   test("an empty moodMatrix object still fails with 400 and clears nothing", async () => {
