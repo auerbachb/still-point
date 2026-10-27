@@ -642,9 +642,13 @@ final class StillPointAppUITests: XCTestCase {
     /// Launched with the fail-once sessions mode, so the first History load fails with
     /// a 503 and the next one succeeds. A Retry that does nothing leaves the banner up,
     /// and one whose load fails again brings it back, so either fails the test.
+    ///
+    /// `resetStore: true` so the launch does not inherit an earlier test's persisted
+    /// store: a store left signed out would ignore `seedAuthenticated`, and one with
+    /// sits would change what History shows after the Retry.
     @MainActor
     func testSessionsFailureShowsVisibleRetryMessage() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: false, forceProgressTab: true)
+        let app = makeApp(seedAuthenticated: true, resetStore: true, forceProgressTab: true)
         // Set here rather than through a `makeApp` parameter: one more defaulted
         // parameter makes calls ambiguous with the `XCTestCase` helper's `makeApp`.
         app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = "once"
@@ -673,15 +677,8 @@ final class StillPointAppUITests: XCTestCase {
         )
         XCTAssertEqual(bannerGone, .completed, "The History error banner stayed up after Retry")
 
-        // The store keeps sits from earlier tests (`resetStore: false`), so History
-        // shows either its empty state or its view-mode toggle once the load succeeds.
-        let historyContent = app.descendants(matching: .any).matching(
-            NSPredicate(
-                format: "label == %@ OR identifier == %@",
-                "No sessions yet",
-                "history.viewMode.calendar"
-            )
-        ).firstMatch
+        // The reset store starts with no sits, so a successful load shows History's empty state.
+        let historyContent = app.staticTexts["No sessions yet"].firstMatch
         XCTAssertTrue(historyContent.waitForExistence(timeout: 8), "History content did not appear after Retry")
         XCTAssertFalse(errorLabel.exists, "The History error banner came back after Retry")
     }
