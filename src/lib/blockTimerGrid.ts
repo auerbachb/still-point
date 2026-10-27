@@ -1,6 +1,6 @@
 /**
- * #732: the block grid a sit is drawn as, and the minute-block arithmetic the
- * minute chime is timed from.
+ * #732: the block grid a sit is drawn as, the seconds its countdown digits
+ * show, and the minute-block arithmetic the minute chime is timed from.
  *
  * A sit longer than two minutes is drawn as one block per minute, then its final
  * minute in ten-second blocks; anything shorter is ten-second blocks throughout.
@@ -18,6 +18,19 @@ export type BlockDef = {
   label: string;
   type: "minute" | "second";
 };
+
+/**
+ * The whole seconds the countdown digits show at `elapsedSeconds`: the time
+ * left, rounded up. The digits read 1:00 through the whole first second of the
+ * final minute and 0:00 only once the sit is over, as iOS
+ * `SessionViewModel.displaySeconds` does.
+ *
+ * #922: the voice countdown speaks this number, so the number heard is the one
+ * on screen as each clip starts.
+ */
+export function countdownSeconds(elapsedSeconds: number, totalSeconds: number): number {
+  return Math.ceil(Math.max(0, totalSeconds - elapsedSeconds));
+}
 
 /** Whether the sit is long enough (over two minutes) to be drawn in minute blocks. */
 export function usesMinuteBlocks(totalSeconds: number): boolean {

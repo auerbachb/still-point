@@ -10,7 +10,11 @@
  * test, instead of another branch threaded through three clocks.
  */
 import type { SoundPrefs } from "@/lib/audio";
-import { completedMinuteBlockIndex, usesMinuteBlocks } from "@/lib/blockTimerGrid";
+import {
+  completedMinuteBlockIndex,
+  countdownSeconds,
+  usesMinuteBlocks,
+} from "@/lib/blockTimerGrid";
 import {
   completedHapticIntervalIndex,
   hapticIntervalSeconds,
@@ -84,7 +88,7 @@ export function seededCueCursor(
   const hapticInterval = hapticIntervalSeconds(prefs?.hapticInterval);
   return {
     lastTickSec: Math.floor(elapsed),
-    lastVoiceSec: totalSeconds - elapsed <= 60 ? Math.floor(totalSeconds - elapsed) : 61,
+    lastVoiceSec: totalSeconds - elapsed <= 60 ? countdownSeconds(elapsed, totalSeconds) : 61,
     lastCompletedBlockIndex: completedMinuteBlockIndex(elapsed, totalSeconds),
     lastHapticIndex: completedHapticIntervalIndex(elapsed, totalSeconds, hapticInterval),
     lastHapticInterval: hapticInterval,
@@ -112,7 +116,7 @@ export function rewoundCueCursor(
  * Applied to every parent-controlled update before it is planned. Above the
  * final minute the voice cursor resets quietly; inside it, the cursor never
  * drops below the current second, so a step back does not re-announce a second
- * already spoken.
+ * already spoken. The current second is rounded as the plan announces it.
  */
 export function followControlledVoice(
   cursor: CueCursor,
@@ -122,7 +126,10 @@ export function followControlledVoice(
   const remaining = totalSeconds - elapsed;
   return {
     ...cursor,
-    lastVoiceSec: remaining > 60 ? 61 : Math.max(cursor.lastVoiceSec, Math.floor(remaining)),
+    lastVoiceSec:
+      remaining > 60
+        ? 61
+        : Math.max(cursor.lastVoiceSec, countdownSeconds(elapsed, totalSeconds)),
   };
 }
 
@@ -157,11 +164,12 @@ export function planCountdownCues(
         next.lastVoiceSec = 61;
       }
     } else if (voiceActive) {
-      let announceSec = Math.floor(remaining);
-      if (announceSec < 1) announceSec = 1;
-      if (remaining > 59 && next.lastVoiceSec > 60) {
-        announceSec = 60;
-      }
+      // #922: the number the digits show — rounded up, as iOS
+      // `VoiceCountdownLogic.announceSecond` rounds it, and 1–60 inside this
+      // window. "60" holds the whole first second of the final minute, and
+      // each later number starts as the digits reach it, a second after the
+      // one before.
+      const announceSec = countdownSeconds(elapsed, totalSeconds);
       if (announceSec !== next.lastVoiceSec) {
         next.lastVoiceSec = announceSec;
         cues.push({ kind: "voice", second: announceSec });

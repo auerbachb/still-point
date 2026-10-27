@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { MindStateBar } from "./MindStateBar";
 import type { SoundPrefs } from "@/lib/audio";
-import { buildBlocks, usesMinuteBlocks, type BlockDef } from "@/lib/blockTimerGrid";
+import { buildBlocks, countdownSeconds, usesMinuteBlocks, type BlockDef } from "@/lib/blockTimerGrid";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useElapsedClock, type SyncClock } from "@/lib/useElapsedClock";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -92,9 +92,9 @@ export function BlockTimer({
   const minuteBlocks = blocks.filter(b => b.type === "minute");
   const secondBlocks = blocks.filter(b => b.type === "second");
 
-  const remaining = Math.max(0, totalSeconds - elapsed);
-  const minutes = Math.floor(remaining / 60);
-  const seconds = Math.floor(remaining % 60);
+  const shownSeconds = countdownSeconds(elapsed, totalSeconds);
+  const minutes = Math.floor(shownSeconds / 60);
+  const seconds = shownSeconds % 60;
 
   const renderBlock = (block: BlockDef) => {
     const blockEnd = block.startTime + block.duration;

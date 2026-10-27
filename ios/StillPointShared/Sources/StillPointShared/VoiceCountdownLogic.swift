@@ -2,7 +2,7 @@ import Foundation
 
 /// Pure countdown-number selection logic for voice-countdown mode.
 /// Mirrors the announce-second selection of `planCountdownCues` in web's
-/// `src/lib/sessionCues.ts`, apart from the rounding noted in `announceSecond`.
+/// `src/lib/sessionCues.ts`, rounding included.
 /// Free of AVFoundation dependencies — testable on macOS with `swift test`.
 public enum VoiceCountdownLogic {
 
@@ -16,9 +16,8 @@ public enum VoiceCountdownLogic {
     public static func announceSecond(remaining: Double, lastAnnouncedSec: Int) -> Int? {
         guard remaining > 0 && remaining <= 60 else { return nil }
         // Rounds up, clamped to 1–60, so the spoken second matches the iOS
-        // countdown digits, which round up too. Web's `planCountdownCues` floors,
-        // as its digits do, but still speaks 60 when its first final-minute
-        // update lands with 59.x s left.
+        // countdown digits, which round up too. Web's `planCountdownCues` speaks
+        // its digits' second, which rounds up the same way (#922).
         let candidate = max(1, min(60, Int(ceil(remaining))))
         guard candidate != lastAnnouncedSec else { return nil }
         return candidate
