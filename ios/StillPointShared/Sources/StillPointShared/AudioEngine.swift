@@ -323,8 +323,12 @@ public final class AudioEngine: @unchecked Sendable {
 
     /// PCM buffers keyed by remaining-seconds value (1–60), populated by preload.
     private var voiceBufferCache: [Int: AVAudioPCMBuffer] = [:]
-    /// Persistent player node for voice countdown; attached lazily on first play.
-    private var voicePlayerNode: AVAudioPlayerNode?
+    /// Persistent voice-countdown players, keyed by `VoiceBurstLogic` player
+    /// index and attached lazily on first play. Two of them let the clip from
+    /// the second before finish while the next one starts (#941).
+    private var voicePlayerNodes: [Int: AVAudioPlayerNode] = [:]
+    /// Which voice player holds a clip, and since when (#941).
+    private var voiceClips = VoiceBurstLogic.Clips()
     /// Incremented on every play or cancel to invalidate in-flight stale completions.
     private var voicePlaybackEpoch: Int = 0
 
@@ -379,46 +383,70 @@ public final class AudioEngine: @unchecked Sendable {
         }
     }
 
-    /// Schedule and play `buffer` on the voice player node.
+    /// Schedule and play `buffer` on a voice player.
     /// Must be called on serialQueue.
     private func _doPlayVoiceBuffer(_ buffer: AVAudioPCMBuffer) {
         // #768: the media server is gone. Rebuilding here would create an
         // engine it cannot run, and this clip would play into that graph.
         guard AudioRecoveryLogic.shouldPlayCue(mediaServicesLost: mediaServicesAreUnavailable()) else { return }
         // #710: same pre-attach rebuild as playSynthesized(), and it must run
-        // before voicePlayerNode is read — a rebuild drops that node.
+        // before voicePlayerNodes is read — a rebuild drops those nodes.
         rebuildEngineIfNeeded()
 
-        // Lazily create and attach the player node using the buffer's decoded format.
-        let player: AVAudioPlayerNode
-        if let existing = voicePlayerNode {
-            player = existing
-        } else {
-            let node = AVAudioPlayerNode()
-            player = node
-            voicePlayerNode = node
-            engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
+        // #941: a clip plays out only while the engine keeps running. A clip the
+        // engine paused mid-word (backgrounding, an interruption) would resume
+        // over this one once the engine restarts, so it stops first — as it did
+        // when every clip shared one `.interrupts` player.
+        if !engine.isRunning {
+            stopVoicePlayers(voiceClips.stopAll())
         }
+        // #941: only a clip that started under half a second ago stops — a burst
+        // (`VoiceBurstLogic.voiceBurstWindowSeconds`, web's `VOICE_BURST_WINDOW_S`).
+        // The clip from the second before plays out on the other player.
+        let plan = voiceClips.start(at: ProcessInfo.processInfo.systemUptime)
+        stopVoicePlayers(plan.stop)
+        let player = voicePlayer(plan.playOn, format: buffer.format)
 
         // #710: an AVAudioPlayerNode raises when started while its engine is not
         // running, so recovery has to succeed before scheduling. When it does not,
         // this clip is dropped and the next second's play retries from scratch.
         guard ensureEngineRunning() else { return }
-        // .interrupts cancels any in-progress buffer and starts the new one immediately.
+        // .interrupts replaces only what this player still holds and starts the
+        // new clip immediately. At the one-second step that is the clip from two
+        // seconds back, which has already ended.
         player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         player.play()
     }
 
-    /// Cancel any in-flight voice countdown playback.
-    /// Call on pause, session completion, or session unmount.
+    /// The voice player at `index`, attached and connected with the clip's
+    /// decoded `format` on first use. Must be called on serialQueue.
+    private func voicePlayer(_ index: Int, format: AVAudioFormat) -> AVAudioPlayerNode {
+        if let existing = voicePlayerNodes[index] {
+            return existing
+        }
+        let node = AVAudioPlayerNode()
+        voicePlayerNodes[index] = node
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: format)
+        return node
+    }
+
+    /// Stops the voice players at `indices`. Must be called on serialQueue.
+    private func stopVoicePlayers(_ indices: [Int]) {
+        for index in indices {
+            voicePlayerNodes[index]?.stop()
+        }
+    }
+
+    /// Cancel any in-flight voice countdown playback, stopping every clip still
+    /// playing at once. Call on pause, session completion, or session unmount.
     public func cancelVoiceCountdownPlayback() {
         serialQueue.async { [self] in self._cancelVoiceCountdownPlayback() }
     }
 
     private func _cancelVoiceCountdownPlayback() {
         voicePlaybackEpoch += 1
-        voicePlayerNode?.stop()
+        stopVoicePlayers(voiceClips.stopAll())
     }
 
     // MARK: - Voice Countdown Asset Helpers
@@ -520,7 +548,8 @@ public final class AudioEngine: @unchecked Sendable {
     /// and starting the engine — the replacement would be started bare (#262).
     private func rebuildEngine() {
         graphEpoch &+= 1
-        voicePlayerNode = nil
+        voicePlayerNodes.removeAll()
+        voiceClips = VoiceBurstLogic.Clips()
         engine = AVAudioEngine()
         needsEngineRebuild = false
         consecutiveStartFailures = 0
@@ -533,17 +562,19 @@ public final class AudioEngine: @unchecked Sendable {
         rebuildEngine()
     }
 
-    /// Drops the persistent voice-countdown player so the next clip reattaches
-    /// and reconnects it. Must be called on `serialQueue`.
+    /// Drops the persistent voice-countdown players so the next clip reattaches
+    /// and reconnects the one it plays on. Must be called on `serialQueue`.
     ///
     /// An `AVAudioEngineConfigurationChange` breaks every connection into the
-    /// main mixer. The node survives but plays into nothing, which left the voice
+    /// main mixer. The nodes survive but play into nothing, which left the voice
     /// countdown silent for the rest of the sit (#710).
-    private func discardVoicePlayerNode() {
-        guard let node = voicePlayerNode else { return }
-        voicePlayerNode = nil
-        node.stop()
-        engine.detach(node)
+    private func discardVoicePlayerNodes() {
+        for node in voicePlayerNodes.values {
+            node.stop()
+            engine.detach(node)
+        }
+        voicePlayerNodes.removeAll()
+        voiceClips = VoiceBurstLogic.Clips()
     }
 
     /// Current main-mixer output format, repairing the session first when the
@@ -615,7 +646,7 @@ public final class AudioEngine: @unchecked Sendable {
         //
         // A nil/unrecognized object is treated as ours on purpose: skipping
         // recovery is the #710 failure itself (silence for the rest of the sit),
-        // while an unnecessary discard costs at most one re-created voice node.
+        // while an unnecessary discard costs at most re-creating the voice players.
         let postingEngine = notification.object as? AVAudioEngine
 
         serialQueue.async { [weak self] in
@@ -630,14 +661,14 @@ public final class AudioEngine: @unchecked Sendable {
             // I/O format, so it posts no further configuration change.
             self.configureAudioSession()
 
-            // Only our engine tearing itself down invalidates the voice node.
-            // Discarding it for a capture-engine notification would stop an
+            // Only our engine tearing itself down invalidates the voice nodes.
+            // Discarding them for a capture-engine notification would stop an
             // in-progress countdown clip for no reason.
             let isFromOwnEngine: Bool? = postingEngine.map { $0 === self.engine }
             guard AudioRecoveryLogic.shouldDiscardVoiceNode(
                 onConfigurationChangeFromOwnEngine: isFromOwnEngine
             ) else { return }
-            self.discardVoicePlayerNode()
+            self.discardVoicePlayerNodes()
             // The engine has stopped and every mixer connection is broken.
             // Starting that same engine again can report success while the tick
             // stays silent (#768). The next cue replaces the graph before
