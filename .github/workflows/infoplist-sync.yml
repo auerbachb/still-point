@@ -35,7 +35,7 @@ jobs:
             exit 0
           fi
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || true)"
-          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/project\.yml$|ios/StillPointApp/Info\.plist$|\.github/workflows/infoplist-sync\.yml$)'; then
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/project\.yml$|ios/StillPointApp/Info\.plist$|\.github/workflows/infoplist-sync\.yml$|\.github/actions/ios-xcodegen/)'; then
             echo "ios=true" >> "$GITHUB_OUTPUT"
           else
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -53,26 +53,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install XcodeGen
+      - name: Install XcodeGen and generate Xcode project
         if: needs.changes.outputs.ios == 'true'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          for attempt in 1 2 3; do
-            if brew install xcodegen; then
-              exit 0
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              sleep $((attempt * 10))
-            fi
-          done
-          echo "Failed to install xcodegen after 3 attempts."
-          exit 1
-
-      - name: Generate Xcode project
-        if: needs.changes.outputs.ios == 'true'
-        working-directory: ios
-        run: xcodegen generate
+        uses: ./.github/actions/ios-xcodegen
 
       - name: Verify committed Info.plist matches XcodeGen output
         if: needs.changes.outputs.ios == 'true'

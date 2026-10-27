@@ -60,24 +60,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install XcodeGen
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          for attempt in 1 2 3; do
-            if brew install xcodegen; then
-              exit 0
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              sleep $((attempt * 10))
-            fi
-          done
-          echo "Failed to install xcodegen after 3 attempts."
-          exit 1
-
-      - name: Generate Xcode project
-        working-directory: ios
-        run: xcodegen generate
+      - name: Install XcodeGen and generate Xcode project
+        uses: ./.github/actions/ios-xcodegen
 
       # iOS UITest retries are controlled by `scripts/e2e/run-ios-tests.sh` (2nd arg =
       # MAX_RETRIES). `package.json` passes `1` for both smoke and critical (`e2e:ios:*`),
