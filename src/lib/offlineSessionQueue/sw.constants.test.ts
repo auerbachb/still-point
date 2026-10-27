@@ -2,8 +2,12 @@
  * Issue #1118 — `public/sw.js` cannot import `./constants`, so it keeps its own
  * copy of the constants it shares with the tabs. This runs the real worker
  * script in a `node:vm` context and checks every export of `./constants`
- * against it, so a constant added on one side only, or changed on one side
- * only, fails here instead of drifting silently.
+ * against it, so a shared export missing from the worker, or changed on one
+ * side only, fails here instead of drifting silently.
+ *
+ * The check runs from `./constants` outward: a constant added to `public/sw.js`
+ * alone is not an export, so nothing here sees it. Add a shared constant to
+ * `./constants` first and this test then requires the worker copy.
  */
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
