@@ -7,6 +7,7 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
 import { BreathCountView } from "@/components/BreathCountView";
+import { FocusActivityView, unlockFocusCompletionAudio } from "@/components/FocusActivityView";
 import { CompletionScreen } from "@/components/CompletionScreen";
 import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
@@ -23,7 +24,7 @@ import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 import { api, ApiError } from "@/lib/api";
 import { DEFAULT_TAB, isTab, pathForTab, type Tab } from "@/lib/appTabs";
 import type { SessionType, Track } from "@/lib/constants";
-import { isDualTrackEligible } from "@/lib/duration";
+import { focusSessionDuration, isDualTrackEligible } from "@/lib/duration";
 import type { PracticeDaySit } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
@@ -37,8 +38,9 @@ import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 // Transient flows that overlay the active tab without changing the URL.
 // "breath" hides nav/header and renders BreathCountView full-screen, matching
-// the iOS breath-counting mode (#376).
-type Overlay = "session" | "breath" | "complete";
+// the iOS breath-counting mode (#376). "focus" does the same for the focus
+// activity timer (#836).
+type Overlay = "session" | "breath" | "focus" | "complete";
 
 /** A completion-note write for a sit that has a server row: a new note, or
  *  `clearCompletionNote` with no thoughts to delete it (#792). A pending sit
@@ -141,11 +143,13 @@ export default function StillPoint() {
     handleRetryCompletionSave,
     handleSessionAbandon,
     handleBreathEnd,
+    handleFocusEnd,
   } = useSessionSaveLifecycle({
     sessionGeneration,
     loadedSitsRef,
     user,
     userRef,
+    setUser,
     refreshUserFromServer,
     refreshTodayTracks,
     setOverlay,
@@ -337,7 +341,7 @@ export default function StillPoint() {
   }, [user, setCompletionData, refreshTodayTracks, refreshUserFromServer]);
 
   const inBuddyRoom = tab === "buddy" && !!buddySessionId;
-  const isImmersive = overlay === "session" || overlay === "breath" || inBuddyRoom;
+  const isImmersive = overlay === "session" || overlay === "breath" || overlay === "focus" || inBuddyRoom;
 
   // Loading state
   if (!authChecked) {
@@ -557,6 +561,13 @@ export default function StillPoint() {
         <BreathCountView onEnd={handleBreathEnd} />
       )}
 
+      {overlay === "focus" && (
+        <FocusActivityView
+          goalSeconds={focusSessionDuration(user.focusActivityDay ?? 1)}
+          onEnd={handleFocusEnd}
+        />
+      )}
+
       {overlay === "complete" && completionData && (
         <CompletionScreen
           dayNumber={completionData.dayNumber}
@@ -636,6 +647,11 @@ export default function StillPoint() {
           onDismissFork={() => setForkDismissed(true)}
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
+          focusActivityDay={user.focusActivityDay ?? 1}
+          onFocusActivity={() => {
+            unlockFocusCompletionAudio();
+            setOverlay("focus");
+          }}
           onBuddy={() => {
             setBuddySessionId(null);
             setBuddyCalendarMessage(null);

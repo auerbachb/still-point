@@ -8,7 +8,9 @@ export type PendingSessionThought = {
 
 /** POST /api/sessions body with the #557 client idempotency key attached. */
 export type CreateSessionPayload = {
+  /** The meditation day; for a `focus` session (#836), the `focusActivityDay`. */
   dayNumber: number;
+  /** Includes `focus` (#765), so a focus session saved offline queues and syncs like a sit. */
   sessionType: SessionType;
   track?: Track;
   duration: number;

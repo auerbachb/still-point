@@ -7,6 +7,8 @@ import {
 
 export type MindStateTrendSessionInput = {
   sessionDate?: string;
+  /** #836: `focus` sessions are skipped; absent counts as a sit. */
+  sessionType?: string;
   actualTime?: number | null;
   duration: number;
   mindStateLog?: Array<{ time: number; state: string }> | null;
@@ -111,6 +113,9 @@ export function calculateMindStateTrendStats(
 
   for (const session of sessions) {
     if (!isValidSessionCalendarDate(session.sessionDate)) continue;
+    // #836: a focus session tracks no mind state, so its empty log would read
+    // as up to two hours of aware time and swamp the sit averages.
+    if (session.sessionType === "focus") continue;
     const composition = compositionForSession(session);
     if (composition.totalSeconds <= 0) continue;
 
