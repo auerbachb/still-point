@@ -3,7 +3,8 @@
 /// `SessionSyncCoordinatorEndNoteClearTests`, so nothing here sleeps.
 ///
 /// Shared by `GenerationScopedWorkTests` and `GenerationOwnedGateTests`, and by
-/// `AuthCheckOwnershipLocalLinksTests`, where it holds a buddy-invite join open (#857).
+/// `AuthCheckOwnershipLocalLinksTests` and `BuddyInviteJoinRoutingTests`, where it holds
+/// a buddy-invite join open (#857, #856).
 struct HeldSave<Value: Sendable>: Sendable {
     private let value: Value
     private let started: AsyncStream<Void>

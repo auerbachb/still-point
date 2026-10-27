@@ -136,6 +136,13 @@ final class AppViewModel {
     /// the loading overlay), not *which identity is live*.
     var activeAuthCheckID: Int = 0
 
+    /// #856: true from the moment the newest `checkAuth()` starts until it resets the
+    /// route, or ends without doing so. That reset replaces whatever is on screen with
+    /// the initial view, so a buddy-invite join that returns in between does not route.
+    /// It leaves the invite pending, and the check consumes it after the reset. The rule
+    /// is `BuddyInviteJoinRouting`'s.
+    var isAuthCheckRouteResetPending = false
+
     /// Orders the settings mutations against each other (#697): `SettingsView`'s
     /// four toggles, `UsernameEditView`'s rename, and `enableDualTrack()`. Each
     /// launches its own unstructured task and each response carries a *whole*
