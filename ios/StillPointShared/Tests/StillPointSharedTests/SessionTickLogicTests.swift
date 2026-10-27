@@ -90,6 +90,22 @@ final class SessionTickLogicTests: XCTestCase {
         XCTAssertFalse(SessionTickLogic.isResume(pausedElapsed: 300, totalSeconds: 300, isPaused: false, isActive: true))
     }
 
+    /// #848: Pause then End Early leaves a paused clock that `isResume` would
+    /// pick back up, so an ended sit has to refuse the start before that.
+    func testASitThatHasEndedNeverStartsAgain() {
+        XCTAssertTrue(SessionTickLogic.isResume(pausedElapsed: 125.5, totalSeconds: 300, isPaused: true, isActive: false))
+        // Ran out, or ended early.
+        XCTAssertFalse(SessionTickLogic.canStart(isComplete: true, isAbandoned: false))
+        // Abandoned.
+        XCTAssertFalse(SessionTickLogic.canStart(isComplete: true, isAbandoned: true))
+        XCTAssertFalse(SessionTickLogic.canStart(isComplete: false, isAbandoned: true))
+    }
+
+    func testASitThatHasNotEndedMayStart() {
+        // Not yet begun, running, or paused.
+        XCTAssertTrue(SessionTickLogic.canStart(isComplete: false, isAbandoned: false))
+    }
+
     func testResumingSeedsEachCursorFromThePausedElapsedTime() {
         let resumed = SessionTickLogic.Cursor.resuming(at: 130.4, totalSeconds: 260, hapticIntervalSeconds: 60)
         XCTAssertEqual(resumed, cursor(tick: 130, minuteBlock: 1, hapticInterval: 2, voice: 0))

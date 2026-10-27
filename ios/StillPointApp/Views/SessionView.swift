@@ -806,6 +806,8 @@ struct SessionView: View {
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.pauseResumeButton")
+                // #848: an ended sit stays on screen while it saves; neither Pause nor Resume applies.
+                .disabled(vm.isComplete || vm.isAbandoned)
 
                 // End Early — sets isComplete, onChange handles save + navigation
                 Button {

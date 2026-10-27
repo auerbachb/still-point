@@ -99,6 +99,18 @@ public enum SessionTickLogic {
         public let effects: Effects
     }
 
+    /// #848: whether starting the timer may run the clock at all. A sit that
+    /// has ended — run out, ended early or abandoned — stays stopped, so a
+    /// Resume that lands before the completion screen replaces the session
+    /// screen restarts neither its clock nor its cues.
+    ///
+    /// Checked before `isResume`, which cannot refuse a start: End Early and
+    /// Abandon leave the clock where it stopped, which reads as a resume, and
+    /// a `false` there begins the sit again from zero.
+    public static func canStart(isComplete: Bool, isAbandoned: Bool) -> Bool {
+        !isComplete && !isAbandoned
+    }
+
     /// Whether starting the timer picks a paused sit back up rather than
     /// beginning a new one. A clock that already reached the duration always
     /// begins again.
