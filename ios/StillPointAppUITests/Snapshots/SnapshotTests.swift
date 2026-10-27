@@ -240,6 +240,12 @@ final class SnapshotTests: XCTestCase {
         var visible = app.frame.insetBy(dx: -1, dy: -1)
         visible.origin.y += statusBarBand
         visible.size.height -= statusBarBand
+        // An open keyboard (e.g. after typing the completion note) covers the bottom of the
+        // app frame; a center under it would tap a key, so treat that area as off-screen.
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists, !keyboard.frame.isEmpty, keyboard.frame.minY < visible.maxY {
+            visible.size.height = max(0, keyboard.frame.minY - visible.minY)
+        }
         return !frame.isEmpty
             && frame.width > 1
             && frame.height > 1
