@@ -248,7 +248,14 @@ export default function StillPoint() {
     // #769: nor may a combined flag left from an earlier sit add Track Two's length.
     setActiveCombined(false);
     setOverlay("session");
-    router.replace(rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB));
+    // #990: a `?buddy=` invite in the same link waits for this sit, so it survives the
+    // param consumption; the invite effect joins once the sit ends.
+    router.replace(
+      pathKeepingBuddyInvite(
+        rawTab && isTab(rawTab) ? pathForTab(rawTab) : pathForTab(DEFAULT_TAB),
+        window.location.search,
+      ),
+    );
   }, [user, authChecked, rawTab, router]);
 
   useEffect(() => {

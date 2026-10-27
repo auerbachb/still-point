@@ -52,6 +52,12 @@ describe("pathKeepingBuddyInvite", () => {
     );
   });
 
+  test("drops a consumed ?session= deep link but keeps the invite beside it", () => {
+    expect(pathKeepingBuddyInvite("/app/progress", "?session=quick&buddy=abc123")).toBe(
+      "/app/progress?buddy=abc123",
+    );
+  });
+
   test("leaves the path alone with no invite", () => {
     expect(pathKeepingBuddyInvite("/app/progress", "")).toBe("/app/progress");
     expect(pathKeepingBuddyInvite("/app/progress", "?buddy=%20")).toBe("/app/progress");
