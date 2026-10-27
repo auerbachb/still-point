@@ -1,20 +1,23 @@
 import Foundation
+import StillPointShared
 
 /// Launch seeds for UI tests. `SP_UI_TEST_*` environment flags pick the starting tab
-/// and the first authenticated route; with none set, these are tab 0 and Home.
+/// and the first authenticated route; with none set, these are the Home tab and Home.
 extension AppViewModel {
     private static func truthy(_ value: String?) -> Bool {
         guard let value else { return false }
         return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
-    /// Initial tab index. Honors SP_UI_TEST_FORCE_SETTINGS_TAB (Settings = 4)
-    /// and SP_UI_TEST_FORCE_PROGRESS_TAB (Progress = 1).
+    /// Initial tab, as a `MainTab` raw value. Reads SP_UI_TEST_FORCE_SETTINGS_TAB
+    /// and SP_UI_TEST_FORCE_PROGRESS_TAB; which of them wins is
+    /// `MainTab.initial(forceSettings:forceProgress:)`.
     static func defaultSelectedTab() -> Int {
         let env = ProcessInfo.processInfo.environment
-        if truthy(env["SP_UI_TEST_FORCE_SETTINGS_TAB"]) { return 4 }
-        if truthy(env["SP_UI_TEST_FORCE_PROGRESS_TAB"]) { return 1 }
-        return 0
+        return MainTab.initial(
+            forceSettings: truthy(env["SP_UI_TEST_FORCE_SETTINGS_TAB"]),
+            forceProgress: truthy(env["SP_UI_TEST_FORCE_PROGRESS_TAB"])
+        ).rawValue
     }
 
     /// Boot destination for authenticated UI-test launches. Seed knobs are

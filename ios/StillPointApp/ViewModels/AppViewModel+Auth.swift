@@ -381,7 +381,7 @@ extension AppViewModel {
         currentView = .home
         // Reset to Home so a prior session's tab (e.g. Settings) doesn't leak
         // across auth transitions now that selectedTab lives on the view model.
-        selectedTab = 0
+        selectedTab = MainTab.home.rawValue
         authStatusMessage = nil
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         hydrateNotificationSuppressionPreference()
