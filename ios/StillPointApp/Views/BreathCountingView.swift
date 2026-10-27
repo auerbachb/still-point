@@ -82,10 +82,14 @@ struct BreathCountingView: View {
                 Spacer()
                 Button {
                     let result = vm.end()
+                    // #854: read here, with the tap. The task starts a turn later,
+                    // when another account may already be signed in.
+                    let generation = appVM.authGeneration
                     Task {
                         await appVM.completeBreathSession(
                             elapsedSeconds: result.elapsed,
-                            breathCount: result.breaths
+                            breathCount: result.breaths,
+                            startedAtGeneration: generation
                         )
                     }
                 } label: {

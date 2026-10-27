@@ -18,7 +18,8 @@ private final class AccountScreen {
     func signOut() { generation += 1 }
     func signIn() { generation += 1 }
 
-    /// What `SessionViewModel.completeSit(appVM:)` does with a save once it settles.
+    /// What `SessionViewModel.completeSit(appVM:startedAtGeneration:)` does with a
+    /// save once it settles.
     func show(_ outcome: SessionCompletionLogic.SaveOutcome, sit: String) {
         if let failed = SessionCompletionLogic.localSaveFailed(after: outcome) {
             localSaveFailed = failed

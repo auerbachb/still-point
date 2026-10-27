@@ -15,8 +15,8 @@
 /// too, so a save that spans it is discarded as well.
 ///
 /// The operation itself always runs to the end, so discarding a result never undoes
-/// the save: a sit that reached the queue stays there and syncs under the account
-/// that sat it. Only what the result would have changed on screen is dropped.
+/// the save or takes the sit back out of the queue. Only what the result would have
+/// changed on screen is dropped.
 ///
 /// ```swift
 /// let generation = authGeneration

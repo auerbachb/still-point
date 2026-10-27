@@ -16,7 +16,20 @@ extension AppViewModel {
     /// Save a completed breath session and return to home.
     ///
     /// Local-first via the offline write queue (#557); non-fatal API failures no longer drop data.
-    func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
+    ///
+    /// - Parameter generation: `authGeneration`, read by the End tap itself. This runs
+    ///   from a task that starts a main-actor turn after the tap, so a read taken here
+    ///   would belong to whoever is signed in by then (#854).
+    func completeBreathSession(
+        elapsedSeconds: Int,
+        breathCount: Int,
+        startedAtGeneration generation: Int
+    ) async {
+        // #854: an identity transition that landed between the tap and this task has
+        // made the screen another account's. The owner, day and credited date read
+        // below would be that account's too, so nothing is saved and its route is
+        // left alone.
+        guard generation == authGeneration else { return }
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
             scheduleBuddyInviteConsume()
@@ -26,7 +39,6 @@ extension AppViewModel {
         // as someone else can land before it settles. The gate belongs to the account
         // that tapped End, so a save still running for a previous account neither
         // swallows this End nor frees this one's gate.
-        let generation = authGeneration
         guard breathSaveGate.acquire(for: generation) else { return }
         defer { breathSaveGate.release(for: generation) }
         guard let ownerUserId = currentUser?.id else { return }

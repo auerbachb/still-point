@@ -45,7 +45,8 @@ final class SessionViewModel {
     var showGuidedExercise = false
     /// Pre-session intro overlay; gates `start()` until dismissed (#560).
     var showIntroOverlay = false
-    /// #724: the "Session could not be saved" alert, raised by `completeSit(appVM:)`.
+    /// #724: the "Session could not be saved" alert, raised by
+    /// `completeSit(appVM:startedAtGeneration:)`.
     var showSaveError = false
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
@@ -389,8 +390,16 @@ final class SessionViewModel {
     /// A save that settles after a sign-out shows nothing, whatever its outcome:
     /// by then the screen belongs to another session, even when the same account
     /// has signed back in (#854). The save itself is not undone.
+    ///
+    /// - Parameter generation: `appVM.authGeneration`, read where the sit ended or
+    ///   Retry was tapped. This runs from a task that starts a main-actor turn
+    ///   later, so a read taken here would belong to whoever is signed in by then.
     @MainActor
-    func completeSit(appVM: AppViewModel) async {
+    func completeSit(appVM: AppViewModel, startedAtGeneration generation: Int) async {
+        // #854: an identity transition that landed before this task started has made
+        // the screen another account's, and `ownerUserId` below would be that
+        // account's. Nothing is saved or shown for it.
+        guard generation == appVM.authGeneration else { return }
         guard let ownerUserId = appVM.currentUser?.id else {
             applySaveOutcome(.noSignedInUser, appVM: appVM)
             return
@@ -402,7 +411,7 @@ final class SessionViewModel {
         // under another generation does none of it. Web: `handleSessionComplete`
         // (#666).
         await GenerationScopedWork.run(
-            startedAt: appVM.authGeneration,
+            startedAt: generation,
             liveGeneration: { appVM.authGeneration }
         ) {
             // Persist session before navigating to completion screen
