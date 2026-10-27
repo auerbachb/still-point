@@ -21,7 +21,7 @@ QA owner: iOS QA DRI
 | Buddy create/join/start | Two participants can create, join, ready, and start | ✅ Pass | Deep-link invite join path validated. |
 | Buddy leave/cancel + personal completion save | Exit/cancel behavior and personal save remain correct | ✅ Pass | Session teardown and return navigation verified. |
 | Delete account safety flow | Two-step confirmation then sign-out/auth screen | ✅ Pass | Matches App Review guideline flow in `RELEASING.md`. |
-| **Camera/mic permission regression (#433)** | Buddy-video WKWebView `getUserMedia` grant succeeds; gaze-tracking camera consent is shown on first `attentionTrackingEnabled` toggle | ⬜ | `BuddyVideoWebView.swift` (getUserMedia path); `SettingsView.swift` (gaze toggle); `NSCameraUsageDescription` + `NSMicrophoneUsageDescription` in `ios/project.yml`. |
+| **Camera/mic permission regression (#433)** | Buddy-video WKWebView `getUserMedia` grant succeeds; gaze-tracking camera consent is shown on first `attentionTrackingEnabled` toggle | ⬜ | `BuddyVideoWebView.swift` (getUserMedia path); `Views/Settings/SettingsSessionSection.swift` (gaze toggle); `NSCameraUsageDescription` + `NSMicrophoneUsageDescription` in `ios/project.yml`. |
 | **Deep-link routing regression (#433)** | Push-tap and `stillpoint://buddy/…` invite links open the correct screen on cold start and from background | ⬜ | `.onOpenURL` in `RootView.swift`; custom-scheme `stillpoint://` only — no universal-links/associated-domains path exists. |
 
 ## 2) Platform checks
