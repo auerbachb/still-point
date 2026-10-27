@@ -228,6 +228,7 @@ jobs:
           node scripts/ci/ios-testflight-build-number.mjs claim "$SHA" --cut "App Store release $RELEASE_TAG"
 
   fastlane-release:
+    name: Build and upload with Fastlane
     needs: build-number
     runs-on: macos-26
     timeout-minutes: 45
@@ -266,7 +267,7 @@ jobs:
           echo "iPhoneOS SDK: ${SDK_VERSION}"
           [[ "${SDK_VERSION%%.*}" -ge 26 ]]
 
-      - name: Install XcodeGen (retry on transient Homebrew failures)
+      - name: Install XcodeGen
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         shell: bash
@@ -347,17 +348,15 @@ jobs:
             echo "WIDGET_PP_UUID=${WIDGET_PP_UUID}"
           } >> "$GITHUB_ENV"
 
-      - name: Fastlane release (preflight, gym, deliver)
+      - name: Fastlane release (gym, deliver)
         working-directory: ios
         env:
-          # Map existing GitHub Actions secrets → Fastlane standard env (spaceship / deliver).
+          # Map the APPSTORE_* secrets to Fastlane's standard env (spaceship / deliver).
+          # The Fastfile reads these first and falls back to the APPSTORE_* names
+          # only when they are unset, so the secrets are bound once, here.
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          # Same secrets (explicit refs keep ios:app-store:dry-run B2 checks satisfied).
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
-          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           # Native Google Sign-In client IDs (#344 / #471). The Fastfile `build` lane
           # feeds these into gym's xcargs so the App Store IPA also ships a working iOS
           # Google client ID + reversed-client-ID URL scheme. Empty/unset → no-op.
@@ -368,6 +367,9 @@ jobs:
           # claimed (#838). The Fastfile `build` lane passes it to gym as
           # CURRENT_PROJECT_VERSION, so project.yml's stale default never ships.
           IOS_BUILD_NUMBER: ${{ needs.build-number.outputs.build_number }}
+          # The release lane's preflight is the dry run the evidence step above already
+          # ran for this build (with --intended-tag), so skip it here. RELEASE_OWNER
+          # only reaches that preflight; it stays set for a run with SKIP_PREFLIGHT unset.
           RELEASE_OWNER: ${{ github.actor }}
           SKIP_PREFLIGHT: "1"
           # Harness default: upload binary + metadata only — omit SUBMIT_FOR_REVIEW (deliver uses submit_for_review: false).
