@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "start": "next start",
     "db:seed": "tsx scripts/seed.ts",
+    "report:notification-effectiveness": "tsx scripts/report-notification-effectiveness.ts",
     "generate:voice-countdown": "tsx scripts/generate-voice-countdown.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
