@@ -513,10 +513,15 @@ public struct BatchThoughtsRequest: Codable, Sendable {
     public struct ThoughtInput: Codable, Sendable {
         public let timeInSession: Int
         public let text: String
+        /// #971: the queued thought's replay key (#948). `nil` unless set, so the
+        /// key is left out: the end note, a thought queued before #971, and every
+        /// `RecordBuddyPersonalSessionRequest` thought encode exactly as before.
+        public let clientThoughtId: String?
 
-        public init(timeInSession: Int, text: String) {
+        public init(timeInSession: Int, text: String, clientThoughtId: String? = nil) {
             self.timeInSession = timeInSession
             self.text = text
+            self.clientThoughtId = clientThoughtId
         }
     }
 

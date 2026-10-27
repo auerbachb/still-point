@@ -84,7 +84,9 @@ final class SessionSyncCoordinatorEndNoteClearTests: XCTestCase {
         try await coordinator.clearEndNote(clientSessionId: clientSessionId, ownerUserId: owner)
 
         let entry = try XCTUnwrap(store.loadEntries().first)
-        XCTAssertEqual(entry.thoughts, [PendingSessionThought(timeInSession: 12, text: "mid-sit")])
+        // #971: the in-session thought keeps the id it was queued with.
+        let midSitId = try XCTUnwrap(entry.thoughts.first?.clientThoughtId)
+        XCTAssertEqual(entry.thoughts, [PendingSessionThought(timeInSession: 12, text: "mid-sit", clientThoughtId: midSitId)])
         // No server row yet, so there is no stored note to delete.
         XCTAssertFalse(entry.clearCompletionNote)
     }

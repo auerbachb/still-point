@@ -4,10 +4,17 @@ import Foundation
 public struct PendingSessionThought: Codable, Sendable, Equatable {
     public let timeInSession: Int
     public let text: String
+    /// #971: minted when the sit is queued and saved with it, so every upload of
+    /// this thought sends the same id and the server stores it once (#948). Nil
+    /// on the end note, which the server replaces, and on thoughts queued by a
+    /// build from before #971, which upload as before. Optional, so such an
+    /// entry still decodes, and a nil id leaves the key out of the saved queue.
+    public let clientThoughtId: String?
 
-    public init(timeInSession: Int, text: String) {
+    public init(timeInSession: Int, text: String, clientThoughtId: String? = nil) {
         self.timeInSession = timeInSession
         self.text = text
+        self.clientThoughtId = clientThoughtId
     }
 }
 
