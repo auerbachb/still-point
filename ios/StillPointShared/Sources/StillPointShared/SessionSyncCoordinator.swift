@@ -289,6 +289,11 @@ public actor SessionSyncCoordinator {
             guard entries[index].ownerUserId == ownerUserId else {
                 throw SessionSyncError.ownerMismatch
             }
+            // #983: a parked sit is never sent again, so a note written to it
+            // would only be kept on this device. Say so instead of reporting it saved.
+            guard entries[index].parked == nil else {
+                throw SessionSyncError.entryParked
+            }
 
             // #753: autosave can run again as the note is edited. Keep one end note
             // and replace its text. A second -1 in the same batch is rejected.
@@ -506,4 +511,6 @@ public enum SessionSyncError: Error, Sendable {
     case entryNotFound
     case missingOwnerUserId
     case ownerMismatch
+    /// #983: the server turned the sit down for good, so its note cannot reach it.
+    case entryParked
 }

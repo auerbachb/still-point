@@ -186,6 +186,42 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
         XCTAssertTrue(SessionSyncCoordinator.rejectsTheSit(APIError(status: 422, message: "x")))
     }
 
+    func testANoteOnAParkedSitIsRefusedNotReportedSaved() async throws {
+        let rejected = queuedSit(
+            sessionSynced: true,
+            thoughts: [PendingSessionThought(timeInSession: 10, text: "a thought", clientThoughtId: "t-1")]
+        )
+        let uploads = RejectingUploads()
+        await uploads.answerBatch(
+            for: "server-\(rejected.clientSessionId.uuidString)",
+            with: APIError(status: 404, message: "Session not found")
+        )
+        let (coordinator, store) = makeCoordinator([rejected], uploads: uploads)
+        _ = try await coordinator.flushPending(ownerUserId: owner)
+        XCTAssertNotNil(try entry(rejected.clientSessionId, in: store)?.parked)
+
+        do {
+            try await coordinator.replaceEndNote(
+                clientSessionId: rejected.clientSessionId,
+                ownerUserId: owner,
+                note: "never sent"
+            )
+            XCTFail("a note on a parked sit must not be reported saved")
+        } catch SessionSyncError.entryParked {
+            // expected
+        }
+        do {
+            try await coordinator.clearEndNote(clientSessionId: rejected.clientSessionId, ownerUserId: owner)
+            XCTFail("clearing the note of a parked sit must not be reported saved")
+        } catch SessionSyncError.entryParked {
+            // expected
+        }
+
+        let kept = try XCTUnwrap(try entry(rejected.clientSessionId, in: store))
+        XCTAssertFalse(kept.thoughts.contains { $0.timeInSession == -1 })
+        XCTAssertFalse(kept.clearCompletionNote)
+    }
+
     func testTheParkedMessageIsCut() {
         let parked = PendingSessionParked(status: 400, message: String(repeating: "x", count: 500))
         XCTAssertEqual(parked.message.count, PendingSessionParked.messageMaxLength)
