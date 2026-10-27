@@ -148,8 +148,8 @@ final class SessionViewModel {
         // #848: a sit that has ended never restarts its clock or its cues.
         // Returning before `isPaused` changes also keeps the session screen
         // from resuming the trackers its completion handler stopped.
-        guard SessionTickLogic.canStart(isComplete: isComplete, isAbandoned: isAbandoned) else { return }
-        let isResume = SessionTickLogic.isResume(
+        guard SessionLifecycleLogic.canStart(isComplete: isComplete, isAbandoned: isAbandoned) else { return }
+        let isResume = SessionLifecycleLogic.isResume(
             pausedElapsed: timerEngine.pausedElapsed,
             totalSeconds: totalSeconds,
             isPaused: isPaused,
@@ -328,7 +328,7 @@ final class SessionViewModel {
     /// #987: whether End Early and Abandon may act — false once the sit has
     /// run out, been ended early, or been abandoned.
     var canEndSession: Bool {
-        SessionTickLogic.canEndSession(isComplete: isComplete, isAbandoned: isAbandoned)
+        SessionLifecycleLogic.canEndSession(isComplete: isComplete, isAbandoned: isAbandoned)
     }
 
     /// #557: stable local key for offline end-note sync during completion.

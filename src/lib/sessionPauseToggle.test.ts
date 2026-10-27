@@ -5,7 +5,7 @@
  * out, `SessionView` left its "resume" button live while the save was in
  * flight, and a tap restarted the clock and cues, and could save a second sit.
  * `SessionView` has no component harness, so the rule it applies to that button
- * and to `togglePause` is tested here, as iOS tests `SessionTickLogic.canStart`
+ * and to `togglePause` is tested here, as iOS tests `SessionLifecycleLogic.canStart`
  * (#848).
  */
 import { describe, expect, test } from "vitest";

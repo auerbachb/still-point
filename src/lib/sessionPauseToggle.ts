@@ -12,7 +12,7 @@
  * `completed: true`, which saved a second sit, even for a sit that had been
  * abandoned.
  *
- * The web counterpart of iOS `SessionTickLogic.canStart` (#848). iOS marks an
+ * The web counterpart of iOS `SessionLifecycleLogic.canStart` (#848). iOS marks an
  * ended sit with two flags (`isComplete`, `isAbandoned`); web has one.
  */
 export function canTogglePause({ sessionFinished }: { sessionFinished: boolean }): boolean {
