@@ -10,7 +10,17 @@
  * step completes (#559), so sparse sitters are not stuck re-entering recovery at
  * the same day forever before they can climb toward the 10-minute cap.
  */
-import { BASE_DURATION, BLOCK_DURATION, FORK_DAY, QUICK_DURATION, durationForDay, shouldAdvanceDay, type SessionType } from "./constants";
+import {
+  BASE_DURATION,
+  BLOCK_DURATION,
+  FORK_DAY,
+  QUICK_DURATION,
+  durationForDay,
+  focusDurationForDay,
+  shouldAdvanceDay,
+  shouldAdvanceFocusDay,
+  type SessionType,
+} from "./constants";
 import { daysBetweenIsoDatesInclusive } from "./sessionCalendar";
 
 /** Recovery ramps back to the prior duration level over at most this many sessions. */
@@ -101,13 +111,18 @@ export function recoveryStepDuration(targetDay: number, totalSteps: number, step
 }
 
 /** The shared duration function (#238): every planner/display for a sit's length
- *  must go through this so normal and recovery modes never drift apart. */
+ *  must go through this so normal and recovery modes never drift apart.
+ *
+ *  #765: a focus session is not a meditation sit. Pass the user's
+ *  `focusActivityDay` as `currentDay`; the result is the focus goal and the
+ *  meditation recovery ramp never applies. */
 export function sessionDurationForUser(
   sessionType: SessionType,
   currentDay: number,
   recovery: RecoveryFields,
 ): number {
   if (sessionType === "quick") return QUICK_DURATION;
+  if (sessionType === "focus") return focusSessionDuration(currentDay);
   const active = activeRecovery(recovery);
   if (active) {
     return recoveryStepDuration(active.recoveryTargetDay, active.recoveryTotalSteps, active.recoveryCurrentStep);
@@ -194,4 +209,23 @@ export function advanceSecondTrackDay(
   secondTrackDay: number,
 ): number {
   return shouldAdvanceDay(sessionType, completed) ? secondTrackDay + 1 : secondTrackDay;
+}
+
+/**
+ * Advance the focus goal counter (#765) after a session save. One counter is
+ * shared by every focus category, with no recovery ramp and no once-a-day
+ * limit: each completed focus session bumps it by one, and anything else
+ * (an ended-early focus session, any meditation sit) leaves it unchanged.
+ */
+export function advanceFocusActivityDay(
+  sessionType: SessionType,
+  completed: boolean,
+  focusActivityDay: number,
+): number {
+  return shouldAdvanceFocusDay(sessionType, completed) ? focusActivityDay + 1 : focusActivityDay;
+}
+
+/** The focus goal in seconds for a user's `focusActivityDay` (#765). */
+export function focusSessionDuration(focusActivityDay: number): number {
+  return focusDurationForDay(focusActivityDay);
 }

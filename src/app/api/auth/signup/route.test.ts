@@ -191,3 +191,37 @@ describe("POST /api/auth/signup uniqueness handling", () => {
     expect(hashPassword).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/auth/signup response payload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectLimit.mockResolvedValue([]);
+    hashPassword.mockResolvedValue("hashed");
+    createToken.mockResolvedValue("token");
+  });
+
+  test("returns focusActivityDay with the new user (#835)", async () => {
+    insertReturning.mockResolvedValue([
+      {
+        id: "u1",
+        email: "alice@example.com",
+        username: "alice",
+        passwordHash: "hashed",
+        isPublic: false,
+        currentDay: 1,
+        secondTrackDay: 1,
+        focusActivityDay: 1,
+      },
+    ]);
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      makeRequest({ email: "alice@example.com", username: "alice", password: "password123" }),
+    );
+
+    expect(response.status).toBe(200);
+    const { user } = await response.json();
+    expect(user).toMatchObject({ id: "u1", secondTrackDay: 1, focusActivityDay: 1 });
+    expect(user).not.toHaveProperty("passwordHash");
+  });
+});

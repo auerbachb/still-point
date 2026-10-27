@@ -19,6 +19,7 @@ const RETURN_FIELDS = {
   recoveryTotalSteps: users.recoveryTotalSteps,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
+  focusActivityDay: users.focusActivityDay,
   longSessionPeriod: users.longSessionPeriod,
 };
 

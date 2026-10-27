@@ -1,4 +1,4 @@
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDispatches, sessions, users } from "@/db/schema";
 import type { ApnsPayload } from "@/lib/apns";
@@ -87,6 +87,11 @@ export async function loadUserStreak(
   return streakFromSessions(rows);
 }
 
+/**
+ * True when the user meditated on `sessionDate`: any completed sit counts
+ * (standard, quick or breath), but a focus session (#765) does not, so a reading
+ * session never silences the reminder or the missed-day nudge.
+ */
 export async function userCompletedSessionOnDate(
   userId: string,
   sessionDate: string,
@@ -99,6 +104,7 @@ export async function userCompletedSessionOnDate(
         eq(sessions.userId, userId),
         eq(sessions.sessionDate, sessionDate),
         eq(sessions.completed, true),
+        ne(sessions.sessionType, "focus"),
       ),
     )
     .limit(1);

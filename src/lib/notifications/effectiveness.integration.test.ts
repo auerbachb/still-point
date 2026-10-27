@@ -60,11 +60,11 @@ async function callAttempt(userId: string, windowKey: string, status: "initiated
   });
 }
 
-async function sit(userId: string, sessionDate: string, savedAt: string, completed = true) {
+async function sit(userId: string, sessionDate: string, savedAt: string, completed = true, sessionType = "standard") {
   await db.insert(sessions).values({
     userId,
     dayNumber: 1,
-    sessionType: "standard",
+    sessionType,
     track: "primary",
     duration: 60,
     completed,
@@ -99,6 +99,7 @@ beforeAll(async () => {
   await sit(la, "2026-10-05", "2026-10-06T05:30:00Z"); // 22:30 local: converts the 10-05 reminder
   await sit(la, "2026-10-06", "2026-10-06T16:00:00Z"); // next local day, so it must not
   await sit(la, "2026-10-07", "2026-10-08T05:00:00Z", false); // not completed
+  await sit(la, "2026-10-07", "2026-10-08T06:00:00Z", true, "focus"); // a focus session is not a sit (#835)
 
   // Tokyo.
   await dispatch(tokyo, "miss_a_day", "2026-10-01", "2026-09-30T23:30:00Z"); // 08:30 local on 10-01

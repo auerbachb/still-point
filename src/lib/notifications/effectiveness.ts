@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts, notificationDispatches, sessions, users } from "@/db/schema";
 import {
@@ -425,8 +425,9 @@ export function computeNudgeEffectiveness(
 
 /**
  * Completed sits credited to a day in the window: the bulk form of
- * `userCompletedSessionOnDate()`, with the same predicate (`completed`, matched on
- * the local `session_date`) in one query instead of one per user-day.
+ * `userCompletedSessionOnDate()`, with the same predicate (`completed`, not a
+ * `focus` session (#765), matched on the local `session_date`) in one query
+ * instead of one per user-day.
  *
  * `sessions.created_at` has no time zone. Its `now()` default stores UTC under
  * Neon's UTC session time zone, which is how Drizzle reads it back, so it orders
@@ -447,6 +448,7 @@ async function loadCompletedSits(userIds: string[], reportWindow: ReportWindow):
       and(
         inArray(sessions.userId, userIds),
         eq(sessions.completed, true),
+        ne(sessions.sessionType, "focus"),
         gte(sessions.sessionDate, reportWindow.start),
         lte(sessions.sessionDate, reportWindow.end),
       ),

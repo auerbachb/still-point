@@ -24,6 +24,7 @@ vi.mock("@/db/schema", () => ({
     ambientSoundEnabled: "ambientSoundEnabled",
     dualTrackEnabled: "dualTrackEnabled",
     secondTrackDay: "secondTrackDay",
+    focusActivityDay: "focusActivityDay",
     longSessionPeriod: "longSessionPeriod",
     recoveryTargetDay: "recoveryTargetDay",
     recoveryCurrentStep: "recoveryCurrentStep",
@@ -327,6 +328,38 @@ describe("PATCH /api/settings", () => {
         recoveryCurrentStep: 2,
         recoveryTotalSteps: 4,
       },
+    });
+  });
+
+  // Issue #835: an omitted column is reset on iOS by an unrelated toggle
+  // (#664), so the focus goal counter must ride along on every PATCH.
+  test("a PATCH on an account at focus goal day 5 still returns 5", async () => {
+    const storedRow: Record<string, unknown> = {
+      id: userId,
+      email: "user@example.com",
+      username: "existing",
+      isPublic: false,
+      currentDay: 40,
+      secondTrackDay: 1,
+      focusActivityDay: 5,
+    };
+    dbUpdateReturning.mockImplementation((projection: Record<string, unknown>) =>
+      Promise.resolve([
+        Object.fromEntries(
+          Object.keys(projection).map((column) => [column, storedRow[column]]),
+        ),
+      ]),
+    );
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(buildRequest({ isPublic: true }));
+
+    expect(res.status).toBe(200);
+    expect(dbUpdateReturning.mock.calls[0]![0]).toMatchObject({
+      focusActivityDay: "focusActivityDay",
+    });
+    await expect(res.json()).resolves.toMatchObject({
+      user: { focusActivityDay: 5 },
     });
   });
 });
