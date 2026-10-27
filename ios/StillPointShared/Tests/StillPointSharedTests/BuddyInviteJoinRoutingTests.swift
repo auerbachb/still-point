@@ -25,8 +25,8 @@ private final class InviteScreen {
     private(set) var pendingInvite: String?
     /// Every invite a consume sent to the server, in order.
     private(set) var joinsSent: [String] = []
-    /// `AppViewModel.isConsumingBuddyInvite`.
-    private var isConsuming = false
+    /// `AppViewModel.buddyInviteConsumeGate`.
+    private var gate = BuddyInviteConsumeGate()
     /// `AppViewModel.activeAuthCheckID`.
     private var newestCheckID = 0
     /// `AppViewModel.isAuthCheckRouteResetPending`.
@@ -62,6 +62,18 @@ private final class InviteScreen {
         screen = .signIn
     }
 
+    /// `didLogin` adopting an account after a sign-out: a new generation.
+    func signIn(_ account: String) {
+        generation += 1
+        signedIn = account
+        screen = .home
+    }
+
+    /// `handleIncomingURL` storing a newer invite link.
+    func receiveInvite(_ invite: String) {
+        pendingInvite = invite
+    }
+
     /// `checkAuth()` as it starts. It takes the next check ID, and its route reset is
     /// pending from here.
     func startCheck() -> Int {
@@ -89,9 +101,9 @@ private final class InviteScreen {
         let generation = self.generation
         return Task {
             guard generation == self.generation, signedIn != nil, let invite = pendingInvite else { return }
-            guard !isInSession, !isConsuming else { return }
-            isConsuming = true
-            defer { isConsuming = false }
+            guard !isInSession,
+                  let attempt = gate.acquire(generation: generation, token: invite) else { return }
+            defer { gate.release(attempt) }
             joinsSent.append(invite)
             let sessionID = await join.perform()
             let decision = BuddyInviteJoinRouting.decision(
@@ -105,7 +117,8 @@ private final class InviteScreen {
             }
             // A moved generation drops this attempt's invite, so the next account does
             // not inherit it. Otherwise only a join that routed spends it.
-            if generation != self.generation || decision == .route {
+            // Only this attempt's own invite: a newer one stored meanwhile is kept.
+            if pendingInvite == invite, generation != self.generation || decision == .route {
                 pendingInvite = nil
             }
         }
@@ -356,5 +369,76 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         await consume.value
         XCTAssertEqual(screen.screen, .signIn, "the late join routed the signed-out screen")
         XCTAssertNil(screen.pendingInvite)
+    }
+
+    // MARK: - #989: the in-flight gate across a sign-out
+
+    /// The previous account's join is still out when the next account signs in with
+    /// an invite of its own. The next account's first consume joins at once instead of
+    /// returning at a flag the stale join still holds.
+    func testANextAccountsFirstConsumeIsNotBlockedByAStaleJoin() async {
+        let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
+        let staleJoin = HeldSave(settlingWith: "buddy-1")
+        let stale = screen.consumeInvite(joining: staleJoin)
+        await staleJoin.untilStarted()
+
+        screen.signOut()
+        screen.receiveInvite("invite-2")
+        screen.signIn("user-b")
+        await consumeAgain(on: screen, joining: "buddy-2")
+
+        XCTAssertEqual(screen.screen, .buddySession("buddy-2"), "the stale join blocked the next account's consume")
+        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-2"])
+
+        staleJoin.settle()
+        await stale.value
+        XCTAssertEqual(screen.screen, .buddySession("buddy-2"), "the stale join routed the next account")
+    }
+
+    /// The stale join returns while the next account's join is in flight. Its release
+    /// must not free the gate under the newer attempt, or a second consume of the same
+    /// account would POST that token again.
+    func testAStaleJoinsReleaseDoesNotFreeANewerAttempt() async {
+        let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
+        let staleJoin = HeldSave(settlingWith: "buddy-1")
+        let stale = screen.consumeInvite(joining: staleJoin)
+        await staleJoin.untilStarted()
+
+        screen.signOut()
+        screen.receiveInvite("invite-2")
+        screen.signIn("user-b")
+        let liveJoin = HeldSave(settlingWith: "buddy-2")
+        let live = screen.consumeInvite(joining: liveJoin)
+        await liveJoin.untilStarted()
+
+        staleJoin.settle()
+        await stale.value
+        // An overlapping consume for the live account: return-home, say.
+        await consumeAgain(on: screen, joining: "buddy-2")
+        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-2"], "the live token was posted twice")
+
+        liveJoin.settle()
+        await live.value
+        XCTAssertEqual(screen.screen, .buddySession("buddy-2"))
+        XCTAssertNil(screen.pendingInvite)
+    }
+
+    /// A sign-out that keeps the pending invite (`applySignedOut`) must not let the next
+    /// account POST the token the stale join is still posting. The stale join drops it.
+    func testTheNextAccountCannotRepostTheTokenAStaleJoinHolds() async {
+        let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
+        let staleJoin = HeldSave(settlingWith: "buddy-1")
+        let stale = screen.consumeInvite(joining: staleJoin)
+        await staleJoin.untilStarted()
+
+        screen.signOut()
+        screen.signIn("user-b")
+        await consumeAgain(on: screen, joining: "buddy-1")
+        XCTAssertEqual(screen.joinsSent, ["invite-1"], "the next account posted the stale join's token")
+
+        staleJoin.settle()
+        await stale.value
+        XCTAssertNil(screen.pendingInvite, "the stale join's token was inherited")
+        XCTAssertEqual(screen.screen, .home)
     }
 }

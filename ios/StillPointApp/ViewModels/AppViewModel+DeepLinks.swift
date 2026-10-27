@@ -11,7 +11,7 @@ extension AppViewModel {
     private static let buddyInviteRetryMessage = "Could not reach the server. We will retry your invite."
 
     /// Every route into the invite flow joins through `consumePendingBuddyInviteIfNeeded`,
-    /// which holds `isConsumingBuddyInvite` for the whole request (#756), so two routes
+    /// which holds an attempt in `buddyInviteConsumeGate` for the whole request (#756), so two routes
     /// cannot POST the same token. Retained and guarded like the other identity-scoped
     /// work: the task body runs on a later main-actor turn, and consuming an invite is
     /// not idempotent, so a sign-out in between must not let it burn the token against
@@ -21,7 +21,7 @@ extension AppViewModel {
     /// answer, and one not started yet would run its join already cancelled while
     /// holding the in-flight flag, so this call would return without joining.
     func scheduleBuddyInviteConsume() {
-        guard !isConsumingBuddyInvite else { return }
+        guard !buddyInviteConsumeGate.blocks(generation: authGeneration, token: pendingBuddyInviteToken) else { return }
         let adopted = authGeneration
         buddyInviteTask = Task { [weak self] in
             guard let self else { return }
@@ -105,10 +105,11 @@ extension AppViewModel {
         guard !isInSession else { return }
         // The token stays pending for the whole request. Overlapping consumes
         // (a cold start and a scene activation, return-home and leave-session)
-        // would otherwise POST it twice.
-        guard !isConsumingBuddyInvite else { return }
-        isConsumingBuddyInvite = true
-        defer { isConsumingBuddyInvite = false }
+        // would otherwise POST it twice. The attempt is this call's own (#989): a
+        // previous account's join still in flight blocks only its own token, and its
+        // release cannot free the gate for this one.
+        guard let attempt = buddyInviteConsumeGate.acquire(generation: generation, token: token) else { return }
+        defer { buddyInviteConsumeGate.release(attempt) }
 
         let outcome = await joinBuddySession(token: token, startedAtGeneration: generation)
 
@@ -119,7 +120,7 @@ extension AppViewModel {
         // the `isInSession` guard keeps the newer invite queued instead of replacing
         // the session just opened.
         guard pendingBuddyInviteToken == token else {
-            isConsumingBuddyInvite = false
+            buddyInviteConsumeGate.release(attempt)
             if generation == authGeneration, pendingBuddyInviteToken != nil {
                 await consumePendingBuddyInviteIfNeeded(startedAtGeneration: generation)
             }
