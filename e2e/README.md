@@ -18,7 +18,7 @@ npx playwright install --with-deps chromium webkit
 npm run test:e2e
 ```
 
-Service workers are blocked for every spec (`serviceWorkers: "block"` in `playwright.config.ts`). Once `/sw.js` controls a page, WebKit stops showing that page's `fetch()` calls to `page.route` (and `browserContext.route`), so the mocks would be skipped and the real server would answer. A spec that needs the real worker opts back in with `test.use({ serviceWorkers: "allow" })`, as `e2e/web/offline-pwa.spec.ts` does. On WebKit, such a spec cannot count on the mocks once the worker is in control.
+Service workers are blocked for every spec (`serviceWorkers: "block"` in `playwright.config.ts`). Once `/sw.js` controls a page, WebKit stops showing that page's `fetch()` calls to `page.route` (and `browserContext.route`), so the mocks would be skipped and the real server would answer. A spec that needs the real worker opts back in with `test.use({ serviceWorkers: "allow" })` inside a `test.describe`, so the specs around it keep the block, as the two worker specs in `e2e/web/offline-pwa.spec.ts` do. On WebKit, such a spec cannot count on the mocks once the worker is in control.
 
 ### Credentialed run against a remote app (CI / preview)
 

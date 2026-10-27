@@ -17,11 +17,6 @@ import { tap, tapWithControlReveal } from "../utils/mobile-helpers";
  * together on reconnect.
  */
 
-// The service worker is what these specs test, so opt back in to it
-// (playwright.config.ts blocks it everywhere else). On WebKit, page.route stops
-// seeing the API calls once the worker controls the page (#862).
-test.use({ serviceWorkers: "allow" });
-
 /** Route-level kill switch for the mocked API, layered over the auth fixture. */
 async function installApiOfflineSwitch(page: import("@playwright/test").Page) {
   const state = { offline: false };
@@ -83,72 +78,80 @@ function readQueuedSessions(page: import("@playwright/test").Page, dbName: strin
 }
 
 test.describe("offline-first web PWA", () => {
-  test("@critical reload with no connection lands on the app, not an auth error", async ({
-    page,
-    ensureLoggedIn,
-    mockApiState,
-  }) => {
-    const network = await installApiOfflineSwitch(page);
-    await ensureLoggedIn();
-    await waitForServiceWorkerControl(page);
+  // The worker is what these two specs test, so they opt back in to it. The config
+  // blocks it everywhere else: on WebKit it hides API calls from page.route (#862).
+  test.describe(() => {
+    test.use({ serviceWorkers: "allow" });
 
-    // The signed-in day number the offline view has to reproduce.
-    const expectedDay = mockApiState.user.currentDay;
-    await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
+    test("@critical reload with no connection lands on the app, not an auth error", async ({
+      page,
+      ensureLoggedIn,
+      mockApiState,
+    }) => {
+      const network = await installApiOfflineSwitch(page);
+      await ensureLoggedIn();
+      await waitForServiceWorkerControl(page);
 
-    await network.goOffline();
-    await page.reload();
+      // The signed-in day number the offline view has to reproduce.
+      const expectedDay = mockApiState.user.currentDay;
+      await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
 
-    // The normal app, from cache — no sign-in screen, no "Unable to verify".
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
-    await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
-    await expect(page.getByText(/unable to verify your sign-in/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /sign up/i })).toHaveCount(0);
+      await network.goOffline();
+      await page.reload();
 
-    // ...with the indicator up while it runs from the local copy.
-    await expect(page.getByTestId("offline-indicator")).toBeVisible();
-    await expect(page.getByTestId("offline-indicator")).toContainText(/offline/i);
+      // The normal app, from cache — no sign-in screen, no "Unable to verify".
+      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByText(new RegExp(`Day\\s*${expectedDay}\\b`, "i")).first()).toBeVisible();
+      await expect(page.getByText(/unable to verify your sign-in/i)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /sign up/i })).toHaveCount(0);
+
+      // ...with the indicator up while it runs from the local copy.
+      await expect(page.getByTestId("offline-indicator")).toBeVisible();
+      await expect(page.getByTestId("offline-indicator")).toContainText(/offline/i);
+    });
+
+    test("a full sit completes offline, queues, and syncs on reconnect", async ({
+      page,
+      ensureLoggedIn,
+      mockApiState,
+    }) => {
+      const network = await installApiOfflineSwitch(page);
+      await ensureLoggedIn();
+      await waitForServiceWorkerControl(page);
+
+      await network.goOffline();
+      await page.reload();
+      await expect(page.getByTestId("offline-indicator")).toBeVisible();
+
+      // A whole sit, start to saved, with nothing reachable.
+      await tap(page.getByRole("button", { name: "Begin" }));
+      await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+      await expect(page.getByRole("heading", { name: /Complete/i })).toBeVisible();
+
+      // It went to the offline queue rather than being lost.
+      await expect
+        .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
+        .toBeGreaterThan(0);
+      expect(mockApiState.sessions.length, "nothing reached the server while offline").toBe(0);
+
+      await tap(page.getByRole("button", { name: "save and return to home" }));
+
+      // Back online: the queue drains, and the indicator clears on its own once
+      // the bootstrap re-runs successfully — no reload, no sign-in flash.
+      await network.goOnline();
+      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+      await expect
+        .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
+        .toBe(0);
+      expect(mockApiState.sessions.length, "the queued sit reached the server").toBeGreaterThan(0);
+      await expect(page.getByTestId("offline-indicator")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    });
   });
 
-  test("a full sit completes offline, queues, and syncs on reconnect", async ({
-    page,
-    ensureLoggedIn,
-    mockApiState,
-  }) => {
-    const network = await installApiOfflineSwitch(page);
-    await ensureLoggedIn();
-    await waitForServiceWorkerControl(page);
-
-    await network.goOffline();
-    await page.reload();
-    await expect(page.getByTestId("offline-indicator")).toBeVisible();
-
-    // A whole sit, start to saved, with nothing reachable.
-    await tap(page.getByRole("button", { name: "Begin" }));
-    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
-    await expect(page.getByRole("heading", { name: /Complete/i })).toBeVisible();
-
-    // It went to the offline queue rather than being lost.
-    await expect
-      .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
-      .toBeGreaterThan(0);
-    expect(mockApiState.sessions.length, "nothing reached the server while offline").toBe(0);
-
-    await tap(page.getByRole("button", { name: "save and return to home" }));
-
-    // Back online: the queue drains, and the indicator clears on its own once
-    // the bootstrap re-runs successfully — no reload, no sign-in flash.
-    await network.goOnline();
-    await page.evaluate(() => window.dispatchEvent(new Event("online")));
-
-    await expect
-      .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
-      .toBe(0);
-    expect(mockApiState.sessions.length, "the queued sit reached the server").toBeGreaterThan(0);
-    await expect(page.getByTestId("offline-indicator")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
-  });
-
+  // No worker here, so on WebKit too the reload's /api/auth/me reaches the
+  // stand-in and the 401 below comes from mockApiState, not the real server.
   test("a rejected session still signs you out, unlike a dead network", async ({
     page,
     ensureLoggedIn,
