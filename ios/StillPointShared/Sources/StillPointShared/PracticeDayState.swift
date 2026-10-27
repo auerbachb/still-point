@@ -361,10 +361,13 @@ public struct PracticeDayState: Sendable {
         dualTrack: Bool,
         calendar: Calendar = .current
     ) {
+        // #832: which flags this sit raises is `PracticeCompletionFlags`' decision;
+        // the mapping and its rationale live there. Only ever raised, never lowered.
+        let raised = PracticeCompletionFlags.raised(sessionType: sessionType, track: track)
         // #839: a focus session is not meditation practice (#765). It raises none
         // of the flags below, so it leaves before the rollover too, and changes
         // nothing here. `markPracticeDoneToday` never sends one.
-        if sessionType == .focus { return }
+        if raised.isEmpty { return }
         // BEFORE the writes below, never after. This sit belongs to the current
         // local day; any flag still standing from yesterday does not. Rolling over
         // first retires those and re-stamps onto today, so the flag raised just
@@ -372,26 +375,16 @@ public struct PracticeDayState: Sendable {
         // `syncWidgetData()`. Doing it afterwards would clear the very sit that
         // just finished.
         rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
-        switch sessionType {
-        case .quick, .breath:
-            // Quick and breath sits are Track One practice whichever track the
-            // user launched them from — they have no second-track counterpart.
+        if raised.contains(.practice) {
             practiceDoneToday = true
-        case .standard:
-            if track == .second {
-                secondPracticeDoneToday = true
-            } else {
-                practiceDoneToday = true
-                // #679: and record it as a *standard* sit. `practiceDoneToday` alone
-                // cannot say so — quick and breath sits raise it too — and the
-                // standard-only day set that extends `serverStreak` may only take
-                // days the server would have counted. Without this the flame stood
-                // still until `getTracksDoneToday` caught up.
-                primaryStandardDoneToday = true
-            }
-        case .focus:
-            // Returned above, before the rollover.
-            return
+        }
+        if raised.contains(.secondPractice) {
+            secondPracticeDoneToday = true
+        }
+        if raised.contains(.primaryStandard) {
+            // #679: without this the flame stood still until `getTracksDoneToday`
+            // caught up.
+            primaryStandardDoneToday = true
         }
     }
 }

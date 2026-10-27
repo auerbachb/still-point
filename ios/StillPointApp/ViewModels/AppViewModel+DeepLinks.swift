@@ -222,25 +222,22 @@ extension AppViewModel {
         currentView = .home
     }
 
+    /// Applies the route `NotificationDeepLinkRoute` decides (#832). `false` means
+    /// the URL is not a notification link and `handleIncomingURL` continues to the
+    /// next route. `true` claims it, even when navigation is then suppressed.
     private func handleNotificationDeepLink(_ url: URL) -> Bool {
-        let scheme = (url.scheme ?? "").lowercased()
-        guard scheme == "stillpoint" else { return false }
-        let host = (url.host ?? "").lowercased()
-        if host == "home" {
+        guard let route = NotificationDeepLinkRoute.route(for: url) else { return false }
+        switch route {
+        case .home:
             openHomeFromNotification()
-            return true
-        }
-        if host == "friends" {
+        case .friends:
             // Friends management UI is web-only today; land on home until an iOS friends tab ships.
             openHomeFromNotification()
-            return true
-        }
-        if host == "log-reason" {
+        case .logReason:
             let date = LogReasonDeepLinkParser.date(from: url)
             openLogReason(date: date)
-            return true
         }
-        return false
+        return true
     }
 
     private func extractBuddyToken(from url: URL) -> String? {

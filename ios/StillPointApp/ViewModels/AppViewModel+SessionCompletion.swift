@@ -259,7 +259,7 @@ extension AppViewModel {
 
     func returnHome() async {
         currentView = .home
-        selectedTab = 0
+        selectedTab = MainTab.home.rawValue
         // Same hazard as `refreshAfterReconnect` (#665): the queue flush and the
         // `me()` request below are both suspension points, so a sign-out or account
         // switch can land mid-flight and a late response would otherwise restore the

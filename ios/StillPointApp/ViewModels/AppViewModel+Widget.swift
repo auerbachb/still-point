@@ -91,8 +91,10 @@ extension AppViewModel {
         // #839: a focus session is not meditation practice (#765). It checks no
         // widget row and raises none of the flags, so it leaves before
         // `recordCompletion` (and its rollover) and the widget refresh, as
-        // `sessionCountsForWidgetPractice` does.
-        if sessionType == .focus { return }
+        // `sessionCountsForWidgetPractice` does. Which flags a sit raises is
+        // `PracticeCompletionFlags.raised(sessionType:track:)` (#832); an empty set
+        // is a session that raises none.
+        if PracticeCompletionFlags.raised(sessionType: sessionType, track: track).isEmpty { return }
         // Rolls the flags over first, then raises this sit's own; see
         // `PracticeDayState.recordCompletion` for why the order matters.
         practiceDay.recordCompletion(
