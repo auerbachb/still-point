@@ -12,6 +12,9 @@ import Foundation
 /// minute blocks, `VoiceCountdownLogic`, `HapticCueLogic` — and this type only
 /// composes them, in the order the tick loop has always applied them.
 ///
+/// Whether a sit may start, resume or end at all is not a tick's question;
+/// those gates live in `SessionLifecycleLogic` (#1024).
+///
 /// Free of UIKit / AVFoundation so it compiles and runs under `swift test` on macOS.
 public enum SessionTickLogic {
 
@@ -99,42 +102,6 @@ public enum SessionTickLogic {
         public let effects: Effects
     }
 
-    /// #848: whether starting the timer may run the clock at all. A sit that
-    /// has ended — run out, ended early or abandoned — stays stopped, so a
-    /// Resume that lands before the completion screen replaces the session
-    /// screen restarts neither its clock nor its cues.
-    ///
-    /// Checked before `isResume`, which cannot refuse a start: End Early and
-    /// Abandon leave the clock where it stopped, which reads as a resume, and
-    /// a `false` there begins the sit again from zero.
-    public static func canStart(isComplete: Bool, isAbandoned: Bool) -> Bool {
-        !isComplete && !isAbandoned
-    }
-
-    /// #987: whether End Early or Abandon may act. A sit ends once — it runs
-    /// out, is ended early, or is abandoned — and after that neither button
-    /// does anything. The session screen stays up while the save runs, so
-    /// without this an Abandon tapped then went Home, and the completion
-    /// screen opened over Home when the save settled.
-    ///
-    /// Mirrors web's `canEndSession` (`src/lib/sessionEndGuard.ts`, #930).
-    public static func canEndSession(isComplete: Bool, isAbandoned: Bool) -> Bool {
-        !isComplete && !isAbandoned
-    }
-
-    /// Whether starting the timer picks a paused sit back up rather than
-    /// beginning a new one. A clock that already reached the duration always
-    /// begins again.
-    public static func isResume(
-        pausedElapsed: Double,
-        totalSeconds: Int,
-        isPaused: Bool,
-        isActive: Bool
-    ) -> Bool {
-        pausedElapsed < Double(totalSeconds)
-            && (pausedElapsed > 0 || isPaused || isActive)
-    }
-
     /// Advances the sit to `elapsed` and returns what that tick owes.
     ///
     /// - Parameters:
@@ -152,109 +119,169 @@ public enum SessionTickLogic {
         cursor: Cursor
     ) -> Outcome {
         if elapsed >= Double(totalSeconds) {
-            return Outcome(
-                elapsed: Double(totalSeconds),
-                completedNaturally: true,
-                cursor: cursor,
-                effects: Effects(
-                    // Cancel any in-flight voice countdown clip before the completion cue.
-                    cancelVoiceCountdown: true,
-                    voiceCountdownSecond: nil,
-                    playTick: false,
-                    playChime: false,
-                    // Completion sound plays unconditionally even in voice countdown mode.
-                    playCompletion: prefs.completion,
-                    // #712: the end cue, felt rather than heard. Not gated on
-                    // `prefs.completion` — silencing the bell must not silence the
-                    // buzz — but it is the same moment, so a sitter with both on
-                    // gets one event in two channels.
-                    haptic: HapticCueLogic.sessionEndCue(
-                        hapticsEnabled: prefs.haptics,
-                        completedNaturally: true,
-                        isAbandoned: isAbandoned
-                    )
-                )
-            )
+            return completingOutcome(totalSeconds: totalSeconds, prefs: prefs, isAbandoned: isAbandoned, cursor: cursor)
         }
 
         var next = cursor
-        let currentSec = Int(elapsed)
         let remaining = max(0.0, Double(totalSeconds) - elapsed)
         let voiceActive = prefs.voiceCountdown && VoiceCountdownLogic.isActive(remaining: remaining)
 
-        // Voice countdown — fires once per second in the final minute.
-        // Suppresses tick and per-minute chime while active (`voiceActive`: the
-        // toggle on and 60 s or less left). The only bell inside that window is
-        // the one that opens the final minute; every earlier bell follows the
-        // chime switch. Web's `planCountdownCues` in `src/lib/sessionCues.ts`
-        // applies the same bell rule (#853).
-        var cancelVoiceCountdown = false
-        var voiceCountdownSecond: Int?
-        if prefs.voiceCountdown {
-            if VoiceCountdownLogic.shouldReset(remaining: remaining) {
-                // Remaining went back above 60 s (e.g., bonus seconds added mid-final-minute).
-                if next.lastVoiceCountdownSec != 0 {
-                    next.lastVoiceCountdownSec = 0
-                    cancelVoiceCountdown = true
-                }
-            } else if let sec = VoiceCountdownLogic.announceSecond(
-                remaining: remaining,
-                lastAnnouncedSec: next.lastVoiceCountdownSec
-            ) {
-                next.lastVoiceCountdownSec = sec
-                voiceCountdownSecond = sec
-            }
-        }
-
-        // Tick sound — once per second; suppressed during voice countdown final minute.
-        var playTick = false
-        if prefs.tick && currentSec > next.lastTickSec {
-            next.lastTickSec = currentSec
-            playTick = !voiceActive
-        }
-
-        // Advance minute-block boundary progress independent of mute state.
-        let chimeUpdate = SessionLogic.nextMinuteChimeUpdate(
+        // Each step reads and moves only its own field of `next`, so their
+        // order matters only for the order `Effects` lists the cues in.
+        let voice = voiceCountdownStep(remaining: remaining, prefs: prefs, cursor: &next)
+        let playTick = tickStep(elapsed: elapsed, prefs: prefs, voiceActive: voiceActive, cursor: &next)
+        let playChime = chimeStep(
             elapsed: elapsed,
             totalSeconds: totalSeconds,
-            lastCompletedBlockIndex: next.lastCompletedMinuteBlockIndex
+            prefs: prefs,
+            voiceActive: voiceActive,
+            cursor: &next
         )
-        var playChime = false
-        if chimeUpdate.updatedCompletedBlockIndex > next.lastCompletedMinuteBlockIndex {
-            next.lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
-            // `chimeCount` is non-nil only when a full minute is still to go; since
-            // #711 the bell is one strike, so the value survives purely as that gate
-            // and no longer sets how many strikes play.
-            let fullMinuteRemains = chimeUpdate.chimeCount != nil
-            // Per-minute chime suppressed during voice countdown final minute.
-            playChime = prefs.chime && fullMinuteRemains && !voiceActive
-        }
-
-        // Repeating haptic uses its own interval, not the chime's minute blocks.
-        let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
-            elapsedSeconds: elapsed,
-            durationSeconds: totalSeconds,
-            intervalSeconds: prefs.hapticInterval.seconds,
-            lastCompletedIndex: next.lastHapticIntervalIndex
+        let haptic = hapticStep(
+            elapsed: elapsed,
+            totalSeconds: totalSeconds,
+            prefs: prefs,
+            isAbandoned: isAbandoned,
+            cursor: &next
         )
-        next.lastHapticIntervalIndex = hapticUpdate.completedIndex
 
         return Outcome(
             elapsed: elapsed,
             completedNaturally: false,
             cursor: next,
             effects: Effects(
-                cancelVoiceCountdown: cancelVoiceCountdown,
-                voiceCountdownSecond: voiceCountdownSecond,
+                cancelVoiceCountdown: voice.cancel,
+                voiceCountdownSecond: voice.second,
                 playTick: playTick,
                 playChime: playChime,
                 playCompletion: false,
-                haptic: HapticCueLogic.repeatingCue(
+                haptic: haptic
+            )
+        )
+    }
+
+    // MARK: - One rule per cue
+
+    /// The tick that ends the sit: it owes the completion cues and none of the
+    /// running ones, and leaves the cursor where it was.
+    private static func completingOutcome(
+        totalSeconds: Int,
+        prefs: AudioEngine.SoundPrefs,
+        isAbandoned: Bool,
+        cursor: Cursor
+    ) -> Outcome {
+        Outcome(
+            elapsed: Double(totalSeconds),
+            completedNaturally: true,
+            cursor: cursor,
+            effects: Effects(
+                // Cancel any in-flight voice countdown clip before the completion cue.
+                cancelVoiceCountdown: true,
+                voiceCountdownSecond: nil,
+                playTick: false,
+                playChime: false,
+                // Completion sound plays unconditionally even in voice countdown mode.
+                playCompletion: prefs.completion,
+                // #712: the end cue, felt rather than heard. Not gated on
+                // `prefs.completion` — silencing the bell must not silence the
+                // buzz — but it is the same moment, so a sitter with both on
+                // gets one event in two channels.
+                haptic: HapticCueLogic.sessionEndCue(
                     hapticsEnabled: prefs.haptics,
-                    crossedBoundary: hapticUpdate.crossedBoundary,
+                    completedNaturally: true,
                     isAbandoned: isAbandoned
                 )
             )
+        )
+    }
+
+    /// Voice countdown — fires once per second in the final minute.
+    ///
+    /// While it is active (`voiceActive`: the toggle on and 60 s or less left)
+    /// it silences the tick and the per-minute chime; see `tickStep` and
+    /// `chimeStep`.
+    private static func voiceCountdownStep(
+        remaining: Double,
+        prefs: AudioEngine.SoundPrefs,
+        cursor: inout Cursor
+    ) -> (cancel: Bool, second: Int?) {
+        guard prefs.voiceCountdown else { return (false, nil) }
+        if VoiceCountdownLogic.shouldReset(remaining: remaining) {
+            // Remaining went back above 60 s (e.g., bonus seconds added mid-final-minute).
+            guard cursor.lastVoiceCountdownSec != 0 else { return (false, nil) }
+            cursor.lastVoiceCountdownSec = 0
+            return (true, nil)
+        }
+        guard let sec = VoiceCountdownLogic.announceSecond(
+            remaining: remaining,
+            lastAnnouncedSec: cursor.lastVoiceCountdownSec
+        ) else { return (false, nil) }
+        cursor.lastVoiceCountdownSec = sec
+        return (false, sec)
+    }
+
+    /// Tick sound — once per second; suppressed during voice countdown final minute.
+    /// The cursor moves only while the tick sound is on.
+    private static func tickStep(
+        elapsed: Double,
+        prefs: AudioEngine.SoundPrefs,
+        voiceActive: Bool,
+        cursor: inout Cursor
+    ) -> Bool {
+        let currentSec = Int(elapsed)
+        guard prefs.tick && currentSec > cursor.lastTickSec else { return false }
+        cursor.lastTickSec = currentSec
+        return !voiceActive
+    }
+
+    /// Minute bell. The block cursor advances independent of mute state, so
+    /// unmuting never replays a strike.
+    ///
+    /// The only bell inside the voice-countdown window is the one that opens
+    /// the final minute; every earlier bell follows the chime switch. Web's
+    /// `planCountdownCues` in `src/lib/sessionCues.ts` applies the same bell
+    /// rule (#853).
+    private static func chimeStep(
+        elapsed: Double,
+        totalSeconds: Int,
+        prefs: AudioEngine.SoundPrefs,
+        voiceActive: Bool,
+        cursor: inout Cursor
+    ) -> Bool {
+        let chimeUpdate = SessionLogic.nextMinuteChimeUpdate(
+            elapsed: elapsed,
+            totalSeconds: totalSeconds,
+            lastCompletedBlockIndex: cursor.lastCompletedMinuteBlockIndex
+        )
+        guard chimeUpdate.updatedCompletedBlockIndex > cursor.lastCompletedMinuteBlockIndex else { return false }
+        cursor.lastCompletedMinuteBlockIndex = chimeUpdate.updatedCompletedBlockIndex
+        // `chimeCount` is non-nil only when a full minute is still to go; since
+        // #711 the bell is one strike, so the value survives purely as that gate
+        // and no longer sets how many strikes play.
+        let fullMinuteRemains = chimeUpdate.chimeCount != nil
+        // Per-minute chime suppressed during voice countdown final minute.
+        return prefs.chime && fullMinuteRemains && !voiceActive
+    }
+
+    /// Repeating haptic — uses its own interval, not the chime's minute blocks.
+    private static func hapticStep(
+        elapsed: Double,
+        totalSeconds: Int,
+        prefs: AudioEngine.SoundPrefs,
+        isAbandoned: Bool,
+        cursor: inout Cursor
+    ) -> HapticCueLogic.Cue? {
+        let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
+            elapsedSeconds: elapsed,
+            durationSeconds: totalSeconds,
+            intervalSeconds: prefs.hapticInterval.seconds,
+            lastCompletedIndex: cursor.lastHapticIntervalIndex
+        )
+        cursor.lastHapticIntervalIndex = hapticUpdate.completedIndex
+        return HapticCueLogic.repeatingCue(
+            hapticsEnabled: prefs.haptics,
+            crossedBoundary: hapticUpdate.crossedBoundary,
+            isAbandoned: isAbandoned
         )
     }
 }
