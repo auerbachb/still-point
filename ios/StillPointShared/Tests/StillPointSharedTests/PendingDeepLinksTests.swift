@@ -82,12 +82,21 @@ final class PendingDeepLinksTests: XCTestCase {
         XCTAssertEqual(links.takeLogReason(isSignedIn: true, isInSession: inSession), "2026-10-01")
     }
 
-    func testSignedInAndIdleOpensANewLinkWithoutTouchingTheSlot() {
+    func testSignedInAndIdleOpensANewLinkAndQueuesNothing() {
         var links = PendingDeepLinks()
         XCTAssertEqual(links.receiveSession(.focus, isSignedIn: true, isInSession: false), .open(.focus))
         XCTAssertEqual(links.receiveLogReason(date: "2026-10-01", isSignedIn: true, isInSession: false), .open("2026-10-01"))
         XCTAssertEqual(links.receiveBuddyInvite(token: "tok-a", isSignedIn: true, isInSession: false), .scheduleConsume)
         XCTAssertEqual(links, PendingDeepLinks(buddyInviteToken: "tok-a"))
+    }
+
+    func testSignedInAndIdleOpeningANewLinkDropsTheOlderQueuedOne() {
+        var links = PendingDeepLinks(sessionType: .standard, logReasonDate: "2026-10-01")
+        XCTAssertEqual(links.receiveSession(.focus, isSignedIn: true, isInSession: false), .open(.focus))
+        XCTAssertEqual(links.receiveLogReason(date: "2026-10-02", isSignedIn: true, isInSession: false), .open("2026-10-02"))
+        XCTAssertNil(links.takeSession(isSignedIn: true, isInSession: false))
+        XCTAssertNil(links.takeLogReason(isSignedIn: true, isInSession: false))
+        XCTAssertTrue(links.isEmpty)
     }
 
     // MARK: - Suppressed while in a session

@@ -7,7 +7,9 @@
 ///
 /// - A session link or log-reason link is held while nobody is signed in, opened at
 ///   once when someone is signed in and not in a session, and ignored during a
-///   session. An ignored link leaves an earlier queued one in place.
+///   session. An opened link clears an older queued one of its kind, so a later
+///   auth catch-up cannot replace it with the stale link. An ignored link leaves an
+///   earlier queued one in place.
 /// - A buddy invite token is always stored. A consume is scheduled only when
 ///   someone is signed in and not in a session; otherwise it waits for the next
 ///   auth point, return-home, or leave-session.
@@ -23,7 +25,8 @@
 public struct PendingDeepLinks: Sendable, Equatable {
     /// What a session or log-reason link should do now.
     public enum Receipt<Value: Sendable & Equatable>: Sendable, Equatable {
-        /// Signed in and not in a session: open it now. The slot is untouched.
+        /// Signed in and not in a session: open it now. The slot is cleared: this newer
+        /// link supersedes any older queued one, which must not reopen on auth catch-up.
         case open(Value)
         /// Nobody is signed in: the slot now holds this link.
         case queued
@@ -125,6 +128,7 @@ public struct PendingDeepLinks: Sendable, Equatable {
             return .queued
         }
         if isInSession { return .ignored }
+        slot = nil
         return .open(value)
     }
 
