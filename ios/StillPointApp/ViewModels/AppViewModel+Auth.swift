@@ -72,7 +72,7 @@ extension AppViewModel {
         // the user is idempotent, but the route reset and the badge reset below are not
         // — the reason the operation guards them on the check ID before adopting — and
         // that guard cannot cover a change that lands after the operation returns.
-        guard checkID == activeAuthCheckID, adopted == authGeneration else { return }
+        guard isCurrentAuthCheck(checkID, adoptedAt: adopted) else { return }
         resetTrackCompletionBadges()
         currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
         authStatusMessage = nil
@@ -83,12 +83,37 @@ extension AppViewModel {
         // The guard above only covered the route reset. The refresh is another
         // suspension point, and everything below it is an identity-scoped side effect —
         // the widget snapshot and three non-idempotent deep-link/invite consumptions —
-        // so none of it may run for a session that has since been replaced.
-        guard adopted == authGeneration else { return }
+        // so none of it may run for a session that has since been replaced, nor for a
+        // check that a newer one has since superseded. The second case matters for the
+        // same account too: a superseded check that got past here would open a pending
+        // link just before the newer check's route reset sent the user back to the
+        // initial view (#827). Stopping here loses nothing. The links stay pending for
+        // the newest check, which consumes them after its own route reset — or, if it
+        // ends without adopting, the offline fallback opens the local ones and a sign-out
+        // keeps all three for the next sign-in. Every path the newest check can end on
+        // writes the widget snapshot, so skipping it here costs nothing either.
+        guard isCurrentAuthCheck(checkID, adoptedAt: adopted) else { return }
         syncWidgetData()
         await consumePendingBuddyInviteIfNeeded(startedAtGeneration: adopted)
+        // The invite join is the last suspension point here, and a newer check can start
+        // while it is in flight. Same rule as above for the two local links. Neither
+        // consumer suspends, so no check is needed between them.
+        guard isCurrentAuthCheck(checkID, adoptedAt: adopted) else { return }
         await consumePendingSessionDeepLinkIfNeeded()
         await consumePendingLogReasonIfNeeded()
+    }
+
+    /// Whether the check that took `checkID` and adopted the account at `generation`
+    /// may still act for it: still the newest check, for an account that is still the
+    /// live one. Every step `checkAuth()` takes after the adoption is gated on this; see
+    /// `AuthCheckOwnership` for why both halves are needed (#827).
+    private func isCurrentAuthCheck(_ checkID: Int, adoptedAt generation: Int) -> Bool {
+        AuthCheckOwnership.isCurrent(
+            checkID: checkID,
+            newestCheckID: activeAuthCheckID,
+            generation: generation,
+            liveGeneration: authGeneration
+        )
     }
 
     /// The body of `checkAuth()`, run from the settings queue.
