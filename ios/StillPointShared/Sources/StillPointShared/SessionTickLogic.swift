@@ -160,7 +160,9 @@ public enum SessionTickLogic {
         let voiceActive = prefs.voiceCountdown && VoiceCountdownLogic.isActive(remaining: remaining)
 
         // Voice countdown — fires once per second in the final minute.
-        // Mirrors BlockTimer.tsx: suppresses tick and per-minute chime while active.
+        // Suppresses tick and per-minute chime while active. Web's counterpart is
+        // `planCountdownCues` in `src/lib/sessionCues.ts`, which instead suppresses
+        // both for the whole sit in voice mode (#853).
         var cancelVoiceCountdown = false
         var voiceCountdownSecond: Int?
         if prefs.voiceCountdown {

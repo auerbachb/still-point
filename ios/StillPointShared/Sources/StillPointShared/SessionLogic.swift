@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Block Definitions (matches web BlockTimer.tsx)
+// MARK: - Block Definitions (matches web `src/lib/blockTimerGrid.ts`)
 
 public struct BlockDef: Identifiable, Sendable {
     public let id: String
@@ -81,7 +81,7 @@ public enum SessionLogic {
     }
 
     /// Build block definitions for a session of given duration.
-    /// Matches the web app's BlockTimer.tsx block-building algorithm exactly.
+    /// Matches `buildBlocks` in the web app's `src/lib/blockTimerGrid.ts` exactly.
     public static func buildBlocks(totalSeconds: Int) -> [BlockDef] {
         let useMinuteBlocks = usesMinuteBlocks(totalSeconds: totalSeconds)
         var blocks: [BlockDef] = []
