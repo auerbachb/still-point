@@ -110,8 +110,8 @@ App Store release path.
    git push origin ios-v1.0.3-build41
    ```
    If the push is rejected because the tag already exists, another cut took that number;
-   use the next one. The workflow also refuses a number that a tag for another marketing
-   version already holds.
+   use the next one. The workflow also refuses a number that is not above every other build
+   tag, including one already used under another marketing version.
 3. The [Build & Upload to TestFlight](../.github/workflows/ios-testflight.yml) workflow
    (`ios-v*-build*` tags) builds the tagged commit with the tag's build number and uploads it
    to TestFlight. No `project.yml` bump commit is needed. (A tag push runs the workflow as it
@@ -181,7 +181,7 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 - **Auto TestFlight:** a merge to `main` that changes iOS app code triggers [`.github/workflows/ios-testflight-auto.yml`](../.github/workflows/ios-testflight-auto.yml). The workflow claims the next `ios-v<marketing>-build<n>` tag and calls [`.github/workflows/ios-testflight-build.yml`](../.github/workflows/ios-testflight-build.yml).
 - **Manual TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build41`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
 - **App Store automation:** push a strict semver tag `ios-vMAJOR.MINOR.PATCH` that **equals** `MARKETING_VERSION` to trigger [`.github/workflows/ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml).
-- The uploaded marketing version comes from `ios/project.yml`; the TestFlight build number comes from the tag. The manual path rejects a tag whose marketing version differs from `ios/project.yml` or whose build number another `ios-v*-build*` tag already holds, and the App Store workflow enforces tag ↔ `MARKETING_VERSION`.
+- The uploaded marketing version comes from `ios/project.yml`; the TestFlight build number comes from the tag. The manual path rejects a tag whose marketing version differs from `ios/project.yml` or whose build number is not above every other `ios-v*-build*` tag, and the App Store workflow enforces tag ↔ `MARKETING_VERSION`.
 - Every upload needs a new build number. A re-upload of the same commit is a new cut with a new tag.
 
 ## Regenerate candidate App Store screenshots (Issue #325)
@@ -241,7 +241,7 @@ Canonical **deliverable** App Store Connect strings for English (U.S.) live in [
 Before "Add for Review," verify the following in App Store Connect:
 
 - [ ] Version record created for current `MARKETING_VERSION`.
-- [ ] Build selected matches current `CURRENT_PROJECT_VERSION`.
+- [ ] Build selected is the TestFlight build you validated; its build number is the N in its `ios-v<marketing>-build<N>` tag.
 - [ ] Description reflects latest shipping behavior.
 - [ ] **Privacy Policy URL** is `https://still-point.me/privacy`.
 - [ ] Support URL is configured and reachable.

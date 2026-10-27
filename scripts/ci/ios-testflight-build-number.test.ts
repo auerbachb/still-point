@@ -150,10 +150,19 @@ describe("buildNumberFromTag (#707)", () => {
   });
 
   test("rejects an N a tag for another marketing version already holds", () => {
-    const tags = [...onOrigin, "ios-v1.0.4-build40"];
-    expect(() => buildNumberFromTag("ios-v1.0.4-build40", "1.0.4", tags)).toThrow(
-      /Build number 40 is already taken by ios-v1\.0\.3-build40\. Delete ios-v1\.0\.4-build40 and push ios-v1\.0\.4-build42 instead\./,
+    expect(() => buildNumberFromTag("ios-v1.0.4-build41", "1.0.4", [...onOrigin, "ios-v1.0.4-build41"])).toThrow(
+      /Tag ios-v1\.0\.4-build41 needs a build number above ios-v1\.0\.3-build41, the highest build tag on origin\. Delete ios-v1\.0\.4-build41 and push ios-v1\.0\.4-build42 instead\./,
     );
+  });
+
+  test("rejects an unused N below the highest build tag", () => {
+    expect(() => buildNumberFromTag("ios-v1.0.3-build38", "1.0.3", [...onOrigin, "ios-v1.0.3-build38"])).toThrow(
+      /above ios-v1\.0\.3-build41, .* push ios-v1\.0\.3-build42 instead/,
+    );
+  });
+
+  test("accepts an N that skips ahead of the highest build tag", () => {
+    expect(buildNumberFromTag("ios-v1.0.3-build45", "1.0.3", [...onOrigin, "ios-v1.0.3-build45"])).toBe(45);
   });
 });
 

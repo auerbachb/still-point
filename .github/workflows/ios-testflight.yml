@@ -10,9 +10,10 @@ name: Build & Upload to TestFlight
 # The tag sets the build number: <n> becomes CFBundleVersion, whatever
 # CURRENT_PROJECT_VERSION in ios/project.yml says, so no bump commit is needed
 # (#707). Pick <n> = 1 + the highest existing ios-v*-build* tag. If another cut
-# already took it, the tag push is rejected; if that cut tagged another
-# marketing version, the build-number job refuses the tag instead. <marketing>
-# must equal MARKETING_VERSION in ios/project.yml at the tagged commit.
+# already took it, the tag push is rejected. The build-number job also refuses
+# a tag whose <n> is not above every other build tag, such as a number that a
+# tag for another marketing version already holds. <marketing> must equal
+# MARKETING_VERSION in ios/project.yml at the tagged commit.
 #
 # Unlike ios-testflight-auto.yml, this path intentionally does NOT run the
 # e2e gates (e2e-mobile.yml, e2e-ios.yml) — it's the break-glass path for

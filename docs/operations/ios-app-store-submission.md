@@ -127,7 +127,7 @@ In App Store Connect, open the app and go to **Distribution** / **App Store** fo
 | # | Check | Owner | Evidence / action |
 |---|-------|-------|-------------------|
 | 6 | [ ] **Create or open** the App Store version (e.g. `1.0.0`). | Product / App Store | Target version exists in App Store Connect. |
-| 7 | [ ] **Attach the build:** select the TestFlight build intended for this version. | Product / App Store + Engineering | Build number matches `CURRENT_PROJECT_VERSION`. |
+| 7 | [ ] **Attach the build:** select the TestFlight build intended for this version. | Product / App Store + Engineering | Build number matches the N in its `ios-v<marketing>-build<N>` tag. |
 | 8 | [ ] **Screenshots:** all required iPhone sizes present; iPad sizes if required. | Product / App Store | No required-size warnings. |
 | 9 | [ ] **Metadata:** name, subtitle, description, keywords, support URL, marketing URL complete. Subtitle spells **meditate** ([#314](https://github.com/auerbachb/still-point/issues/314)). | Product / App Store | No missing required metadata fields. |
 | 10 | [ ] **Privacy Policy URL:** `https://still-point.me/privacy`. | Product / App Store | URL matches project docs. |

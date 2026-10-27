@@ -118,9 +118,11 @@ export function readMarketingVersion(projectYml) {
 
 /**
  * N from a manually pushed tag. The tag must follow the scheme, name the
- * marketing version the tagged commit builds, and carry an N that no other
- * build tag on origin holds. The counter spans marketing versions, so a tag for
- * another version still owns its number.
+ * marketing version the tagged commit builds, and carry an N above every other
+ * build tag on origin. The counter spans marketing versions and only moves up,
+ * so a number that a tag for another version holds is refused, and so is an
+ * unused lower one. Skipping ahead is allowed, for example past a number that
+ * an upload made outside these tags used.
  *
  * @param {string} tag
  * @param {string} marketing MARKETING_VERSION at the tagged commit
@@ -139,10 +141,17 @@ export function buildNumberFromTag(tag, marketing, remoteTagNames) {
     );
   }
   const names = [...remoteTagNames];
-  const holder = names.find((name) => name !== tag && parseBuildTag(name)?.buildNumber === parsed.buildNumber);
-  if (holder) {
+  /** @type {{ name: string, buildNumber: number } | null} */
+  let highest = null;
+  for (const name of names) {
+    const other = name === tag ? null : parseBuildTag(name);
+    if (other && (!highest || other.buildNumber > highest.buildNumber)) {
+      highest = { name, buildNumber: other.buildNumber };
+    }
+  }
+  if (highest && highest.buildNumber >= parsed.buildNumber) {
     throw new Error(
-      `Build number ${parsed.buildNumber} is already taken by ${holder}. ` +
+      `Tag ${tag} needs a build number above ${highest.name}, the highest build tag on origin. ` +
         `Delete ${tag} and push ${buildTagName(marketing, nextBuildNumber(names))} instead.`,
     );
   }
