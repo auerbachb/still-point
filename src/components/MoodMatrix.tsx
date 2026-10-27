@@ -3,8 +3,8 @@
 /**
  * #472: before/after mood matrix for the completion recap screen.
  *
- * Five mood rows (Calm, Focus, Energy, Anxiety, Overall) × two columns
- * (Before | After) × five tap boxes (1 low → 5 high).
+ * One row per `MOOD_KEYS` entry (Calm, Focus, Energy, Anxiety, Happiness,
+ * Overall) × two columns (Before | After) × five tap boxes (1 low → 5 high).
  *
  * Captured retrospectively: the user fills both columns at session end with
  * no pre-session friction. Data is persisted via the sessions PATCH endpoint
@@ -34,6 +34,16 @@ export {
   type MoodEntry,
   type MoodMatrixValue,
 } from "@/lib/moodMatrix";
+
+// #885: the column-header, scale-hint and mood-row grids share one label
+// column so they stay aligned. 68px leaves 66px of text after the right
+// padding; HAPPINESS measures 63–65px at the label style below. The 3px box gap
+// pays for the wider column, so the grid's minimum width is still 384px:
+// 68 + 2 × 6 gap + 2 × (5 × 28 + 4 × 3).
+const LABEL_COLUMN_PX = 68;
+const LABEL_PADDING_PX = 2;
+const BOX_GAP_PX = 3;
+const GRID_COLUMNS = `${LABEL_COLUMN_PX}px 1fr 1fr`;
 
 // ---------------------------------------------------------------------------
 // Internal sub-components
@@ -104,7 +114,7 @@ function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "60px 1fr 1fr",
+        gridTemplateColumns: GRID_COLUMNS,
         gap: "6px",
         alignItems: "center",
       }}
@@ -118,14 +128,15 @@ function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           textAlign: "right",
-          paddingRight: "8px",
+          paddingRight: `${LABEL_PADDING_PX}px`,
+          whiteSpace: "nowrap",
         }}
       >
         {label}
       </div>
 
       {/* Before boxes */}
-      <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: `${BOX_GAP_PX}px`, justifyContent: "center" }}>
         {([1, 2, 3, 4, 5] as const).map((level) => (
           <MoodBox
             key={level}
@@ -144,7 +155,7 @@ function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
       </div>
 
       {/* After boxes */}
-      <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: `${BOX_GAP_PX}px`, justifyContent: "center" }}>
         {([1, 2, 3, 4, 5] as const).map((level) => (
           <MoodBox
             key={level}
@@ -187,7 +198,7 @@ export function MoodMatrix({ value, onChange, disabled = false }: MoodMatrixProp
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "60px 1fr 1fr",
+          gridTemplateColumns: GRID_COLUMNS,
           gap: "6px",
           marginBottom: "8px",
         }}
@@ -223,7 +234,7 @@ export function MoodMatrix({ value, onChange, disabled = false }: MoodMatrixProp
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "60px 1fr 1fr",
+          gridTemplateColumns: GRID_COLUMNS,
           gap: "6px",
           marginBottom: "10px",
         }}

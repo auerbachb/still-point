@@ -1,12 +1,14 @@
 import Foundation
 
 /// #472 / #635: before/after mood matrix keys and helpers.
-/// Mirrors `src/lib/moodMatrix.ts` for web-iOS parity.
+/// Mirrors `src/lib/moodMatrix.ts` for web-iOS parity: case order is the grid's
+/// row order and matches web `MOOD_KEYS` (#885 put `happiness` above `overall`).
 public enum MoodKey: String, CaseIterable, Codable, Sendable {
     case calm
     case focus
     case energy
     case anxiety
+    case happiness
     case overall
 
     public var label: String {
@@ -15,6 +17,7 @@ public enum MoodKey: String, CaseIterable, Codable, Sendable {
         case .focus: return "Focus"
         case .energy: return "Energy"
         case .anxiety: return "Anxiety"
+        case .happiness: return "Happiness"
         case .overall: return "Overall"
         }
     }

@@ -5,6 +5,7 @@
  *   - isMoodMatrixTouched: detects whether any cell has been selected
  *   - buildMoodMatrixPayload: strips untouched rows before sending to the API
  *   - buildMoodMatrixPatch: clears or deletes rows the user emptied (#792)
+ *   - MOOD_KEYS / MOOD_LABELS: row order and labels, shared with iOS (#885)
  */
 import { describe, expect, test } from "vitest";
 import {
@@ -12,8 +13,16 @@ import {
   buildMoodMatrixPayload,
   buildMoodMatrixPatch,
   MOOD_KEYS,
+  MOOD_LABELS,
   type MoodMatrixValue,
 } from "@/lib/moodMatrix";
+
+describe("MOOD_KEYS (#885)", () => {
+  test("puts Happiness just above Overall, in the order iOS MoodKey uses", () => {
+    expect(MOOD_KEYS).toEqual(["calm", "focus", "energy", "anxiety", "happiness", "overall"]);
+    expect(MOOD_LABELS.happiness).toBe("Happiness");
+  });
+});
 
 describe("isMoodMatrixTouched", () => {
   test("returns false for an empty matrix", () => {
@@ -92,18 +101,14 @@ describe("buildMoodMatrixPayload", () => {
     expect(result).toHaveProperty("anxiety", { before: null, after: 1 });
   });
 
-  test("includes all five moods when fully populated", () => {
-    const value: MoodMatrixValue = {
-      calm:    { before: 2, after: 4 },
-      focus:   { before: 3, after: 5 },
-      energy:  { before: 1, after: 3 },
-      anxiety: { before: 4, after: 2 },
-      overall: { before: 3, after: 5 },
-    };
+  test("includes every mood when fully populated", () => {
+    const value: MoodMatrixValue = Object.fromEntries(
+      MOOD_KEYS.map((key, i) => [key, { before: (i % 5) + 1, after: ((i + 2) % 5) + 1 }]),
+    );
     const result = buildMoodMatrixPayload(value);
-    expect(Object.keys(result)).toHaveLength(5);
+    expect(Object.keys(result)).toHaveLength(MOOD_KEYS.length);
     for (const key of MOOD_KEYS) {
-      expect(result).toHaveProperty(key);
+      expect(result).toHaveProperty(key, value[key]);
     }
   });
 
@@ -145,6 +150,21 @@ describe("buildMoodMatrixPatch (#792)", () => {
     expect(buildMoodMatrixPatch(current, persisted)).toEqual({
       calm: { before: null, after: null },
       focus: { before: 3, after: 5 },
+    });
+  });
+
+  test("sends an all-null happiness row once the stored one is emptied (#885)", () => {
+    const current: MoodMatrixValue = {
+      happiness: { before: null, after: null },
+      overall: { before: 2, after: 4 },
+    };
+    const persisted = {
+      happiness: { before: 3, after: 5 },
+      overall: { before: 2, after: 4 },
+    };
+    expect(buildMoodMatrixPatch(current, persisted)).toEqual({
+      happiness: { before: null, after: null },
+      overall: { before: 2, after: 4 },
     });
   });
 

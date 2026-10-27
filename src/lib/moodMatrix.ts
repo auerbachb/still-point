@@ -4,7 +4,9 @@
  * and test them without a JSX transform.
  */
 
-export const MOOD_KEYS = ["calm", "focus", "energy", "anxiety", "overall"] as const;
+/** Row order of the grid, and the keys the sessions PATCH route accepts. #885:
+ *  `happiness` sits just above `overall`; iOS `MoodKey` lists the same order. */
+export const MOOD_KEYS = ["calm", "focus", "energy", "anxiety", "happiness", "overall"] as const;
 export type MoodKey = (typeof MOOD_KEYS)[number];
 
 export const MOOD_LABELS: Record<MoodKey, string> = {
@@ -12,6 +14,7 @@ export const MOOD_LABELS: Record<MoodKey, string> = {
   focus: "Focus",
   energy: "Energy",
   anxiety: "Anxiety",
+  happiness: "Happiness",
   overall: "Overall",
 };
 

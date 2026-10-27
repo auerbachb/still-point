@@ -9,6 +9,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { COMPLETION_AUTOSAVE_MS, COMPLETION_RETURN_LABEL } from "@/lib/completionAutosave";
+import { MOOD_KEYS, MOOD_LABELS } from "@/lib/moodMatrix";
 
 // React 19 requires this flag for `act` to drive effects outside a test renderer.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -78,8 +79,12 @@ async function flushWrites(): Promise<void> {
   });
 }
 
+function moodCell(label: string): HTMLButtonElement {
+  return container!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+}
+
 async function tapMoodCell(label: string): Promise<void> {
-  const cell = container!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  const cell = moodCell(label);
   await act(async () => {
     cell.click();
   });
@@ -305,6 +310,46 @@ describe("CompletionScreen mood clear (#792)", () => {
       calm: { before: 3, after: null },
       focus: { before: null, after: null },
     });
+    expect(onClearMoodMatrix).not.toHaveBeenCalled();
+  });
+});
+
+describe("CompletionScreen mood matrix Happiness row (#885)", () => {
+  test("renders one row per mood key, with Happiness just above Overall", async () => {
+    await render({ onSaveMoodMatrix: vi.fn(async () => {}) });
+
+    const rowLabels = [...container!.querySelectorAll('button[aria-label$=" before: 1"]')]
+      .map((cell) => cell.getAttribute("aria-label")!.replace(" before: 1", ""));
+    expect(rowLabels).toEqual(MOOD_KEYS.map((key) => MOOD_LABELS[key]));
+    expect(rowLabels.slice(-2)).toEqual(["Happiness", "Overall"]);
+
+    // The whole word, kept to one line (the row's grid div shares the text).
+    const happinessLabel = [...container!.querySelectorAll("div")]
+      .find((el) => el.childElementCount === 0 && el.textContent === "Happiness");
+    expect(happinessLabel?.style.whiteSpace).toBe("nowrap");
+  });
+
+  test("the column headers, scale hints and every row share one column template", async () => {
+    await render({ onSaveMoodMatrix: vi.fn(async () => {}) });
+
+    const grids = [...container!.querySelectorAll("div")].filter((el) => el.style.display === "grid");
+    expect(grids).toHaveLength(MOOD_KEYS.length + 2);
+    expect(new Set(grids.map((grid) => grid.style.gridTemplateColumns)).size).toBe(1);
+  });
+
+  test("Happiness before/after picks autosave like the other rows", async () => {
+    const onSaveMoodMatrix = vi.fn(async (_matrix: Record<string, unknown>) => {});
+    const onClearMoodMatrix = vi.fn(async () => {});
+    await render({ onSaveMoodMatrix, onClearMoodMatrix });
+
+    await tapMoodCell("Happiness before: 2");
+    await tapMoodCell("Happiness after: 4");
+    expect(moodCell("Happiness before: 2").getAttribute("aria-pressed")).toBe("true");
+    expect(moodCell("Happiness after: 4").getAttribute("aria-pressed")).toBe("true");
+
+    await settleAutosave();
+    expect(onSaveMoodMatrix).toHaveBeenCalledTimes(1);
+    expect(onSaveMoodMatrix).toHaveBeenCalledWith({ happiness: { before: 2, after: 4 } });
     expect(onClearMoodMatrix).not.toHaveBeenCalled();
   });
 });

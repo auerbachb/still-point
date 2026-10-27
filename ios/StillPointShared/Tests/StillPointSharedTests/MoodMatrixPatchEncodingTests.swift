@@ -112,6 +112,56 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         XCTAssertEqual(Array(patch.entries.keys), ["energy"])
     }
 
+    // MARK: - #885 Happiness row
+
+    func testMoodKeyOrderMatchesWebMoodKeys() {
+        // Row order on both platforms; web `MOOD_KEYS` in src/lib/moodMatrix.ts.
+        XCTAssertEqual(
+            MoodKey.allCases.map(\.rawValue),
+            ["calm", "focus", "energy", "anxiety", "happiness", "overall"]
+        )
+        XCTAssertEqual(MoodKey.happiness.label, "Happiness")
+    }
+
+    func testPatchEncodesAHappinessRow() throws {
+        let patch = MoodMatrixPatch(from: [.happiness: MoodMatrixEntry(before: 2, after: 4)])
+        let data = try JSONEncoder().encode(patch)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
+        let happiness = try XCTUnwrap(matrix["happiness"] as? [String: Int])
+
+        XCTAssertEqual(happiness["before"], 2)
+        XCTAssertEqual(happiness["after"], 4)
+        XCTAssertEqual(matrix.count, 1)
+    }
+
+    func testSanitizedStoredKeepsAHappinessRow() {
+        let stored: [String: MoodMatrixEntry] = [
+            "happiness": MoodMatrixEntry(before: 1, after: 5),
+            "unknown": MoodMatrixEntry(before: 4, after: 4),
+        ]
+        let sanitized = MoodMatrixLogic.sanitizedStored(stored)
+        XCTAssertTrue(MoodMatrixLogic.isKnownKey("happiness"))
+        XCTAssertEqual(sanitized[.happiness], MoodMatrixEntry(before: 1, after: 5))
+        XCTAssertEqual(sanitized.count, 1)
+    }
+
+    func testPersistedAwarePatchSendsAnAllNilRowForAnEmptiedHappinessRow() {
+        let patch = MoodMatrixPatch(
+            from: [
+                .happiness: MoodMatrixEntry(before: nil, after: nil),
+                .overall: MoodMatrixEntry(before: 2, after: 4),
+            ],
+            persisted: [
+                "happiness": MoodMatrixEntry(before: 3, after: 5),
+                "overall": MoodMatrixEntry(before: 2, after: 4),
+            ]
+        )
+        XCTAssertFalse(patch.clearsMatrix)
+        XCTAssertEqual(patch.entries["happiness"], MoodMatrixEntry())
+        XCTAssertEqual(patch.entries["overall"], MoodMatrixEntry(before: 2, after: 4))
+    }
+
     // MARK: - MoodMatrixLogic validation
 
     func testClampMoodValueAcceptsOneThroughFive() {
