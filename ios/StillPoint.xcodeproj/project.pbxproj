@@ -35,6 +35,7 @@
 		2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */; };
 		214C8E0D29060034400C22BA /* SettingsSessionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */; };
 		2387CAB41D16E36550FB047A /* 41.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 112EE9026F8169958E58EA43 /* 41.mp3 */; };
+		25FBDBD24F739006CC114774 /* HapticCuePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
 		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
 		2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */; };
@@ -331,6 +332,7 @@
 		AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		AD7F00E504C2F6E3886CC48E /* AppViewModel+DeepLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+DeepLinks.swift"; sourceTree = "<group>"; };
 		AEAEBFB5D2DCD9FFD7B6D5FD /* BuddyInviteTokenParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyInviteTokenParser.swift; sourceTree = "<group>"; };
+		B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticCuePlayer.swift; sourceTree = "<group>"; };
 		B273C4819BA7697AD256ABDA /* BuddySessionContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddySessionContainerView.swift; sourceTree = "<group>"; };
 		B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointMonitorExtension.swift; sourceTree = "<group>"; };
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
@@ -602,6 +604,7 @@
 				92F0B6135A30B315B9962460 /* AppBlockingManager.swift */,
 				BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */,
 				EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */,
+				B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */,
 				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
 				A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */,
 				7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */,
@@ -1012,6 +1015,7 @@
 				9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */,
 				4A807BC7D119912827067A44 /* GuidedExerciseOverlayView.swift in Sources */,
 				70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */,
+				25FBDBD24F739006CC114774 /* HapticCuePlayer.swift in Sources */,
 				74AE784447C3D50E1E6980E9 /* HistoryView.swift in Sources */,
 				50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */,
 				1BE60070F826B7B31DFAB315 /* HomeView.swift in Sources */,
