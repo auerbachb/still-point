@@ -3,7 +3,7 @@ import { api, type User } from "@/lib/api";
 import { clearCachedUser, clearCachedUserIfAuthoritative, loadCachedUser, saveCachedUser } from "@/lib/cachedUser";
 import { authErrorMessageFor, resolveAuthBootstrap, type MeFailure } from "@/lib/offlineAuth";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
-import { creditedPracticeDate, practiceDaySit } from "@/lib/practiceDaySits";
+import { creditedPracticeDate, mergeRememberedSits, practiceDaySit } from "@/lib/practiceDaySits";
 import { GRACE_CUTOFF_HOUR, type PracticeDaySit } from "@/lib/sessionCalendar";
 
 type UseAuthBootstrapOptions = {
@@ -144,7 +144,13 @@ export function useAuthBootstrap({
           try {
             const { sessions } = await api.getSessions();
             if (cancelled || generation !== sessionGeneration.current) return;
-            loadedSitsRef.current = sessions.map(practiceDaySit);
+            // #855: merged into the sits as they are now, as `refreshTodayTracks`
+            // does (#833). A re-check on a live screen can overlap a sit's end, and
+            // the sit `handleSessionComplete` remembers may be missing from this list.
+            loadedSitsRef.current = mergeRememberedSits(
+              sessions.map(practiceDaySit),
+              loadedSitsRef.current ?? [],
+            );
           } catch {
             // Leave the cache empty. `creditedPracticeDate` keeps yesterday
             // open before 6:00 so this miss cannot start recovery early.

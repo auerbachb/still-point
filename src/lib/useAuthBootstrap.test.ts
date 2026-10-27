@@ -2,8 +2,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { User } from "./api";
+import type { Session, User } from "./api";
 import { loadCachedUser, saveCachedUser } from "./cachedUser";
+import { rememberStandardSit } from "./practiceDaySits";
 import type { PracticeDaySit } from "./sessionCalendar";
 import { useAuthBootstrap } from "./useAuthBootstrap";
 
@@ -501,5 +502,45 @@ describe("useAuthBootstrap — practice day before 6:00 (#797)", () => {
     expect(fetchMock.mock.calls[0]![0]).toBe("/api/auth/me?date=2026-10-25");
     expect(auth.loadedSitsRef.current).toBeNull();
     expect(auth.current().user).toEqual(USER_A);
+  });
+
+  test("a sit remembered while the session read is in flight survives it (#855)", async () => {
+    vi.setSystemTime(new Date(2026, 9, 26, 5, 0, 0));
+    // An offline cold start: no session list, so yesterday stays open.
+    saveCachedUser(USER_A);
+    mocks.getSessions.mockRejectedValueOnce(new Error("offline"));
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const auth = await renderAuth({ isOnline: false });
+    await settle();
+    expect(auth.current()).toMatchObject({ user: USER_A, runningFromCache: true });
+    expect(auth.loadedSitsRef.current).toBeNull();
+
+    // The link comes back, and a sit ends while the re-check reads the sessions.
+    const read = deferred<{ sessions: Session[] }>();
+    mocks.getSessions.mockReturnValueOnce(read.promise);
+    const refined = { ...USER_A, currentDay: 6 };
+    fetchMock
+      .mockResolvedValueOnce(respond(200, { user: USER_A }))
+      .mockResolvedValueOnce(respond(200, { user: refined }));
+    await auth.setOnline(true);
+    await settle();
+    expect(mocks.getSessions).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    auth.loadedSitsRef.current = rememberStandardSit(auth.loadedSitsRef.current, "2026-10-25", "primary");
+
+    // The server answers without that sit: its save is still queued.
+    read.resolve({ sessions: [] });
+    await settle();
+
+    expect(auth.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-25", track: "primary" },
+    ]);
+    // The first ask assumes dual-track, so yesterday is still open. For this
+    // single-track user the remembered sit closes it, so the refined ask is today.
+    expect(fetchMock.mock.calls.slice(1).map(([url]) => url)).toEqual([
+      "/api/auth/me?date=2026-10-25",
+      "/api/auth/me?date=2026-10-26",
+    ]);
+    expect(auth.current()).toMatchObject({ user: refined, runningFromCache: false });
   });
 });
