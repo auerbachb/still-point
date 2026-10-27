@@ -93,26 +93,10 @@ extension AppViewModel {
             // advancing the barrier against the refresh that is still live.
             guard generation == authGeneration,
                   tracksDoneOrdering.shouldApply(ticket: ticket, from: .read) else { return }
-            primaryDoneToday = tracksDoneToday.primary
-            secondDoneToday = tracksDoneToday.second
-            if primaryDoneToday {
-                practiceDoneToday = true
-                // #679: the server confirming a primary standard sit today is the
-                // same fact the local flag records, so raise it here too. Like its
-                // siblings this only ever goes up — the failure path below clears
-                // the server badges, never the local flags.
-                primaryStandardDoneToday = true
-            }
-            if secondDoneToday {
-                secondPracticeDoneToday = true
-            }
-            if today != SessionCalendar.localIsoDate(now: now) {
-                let calendar = Calendar.current
-                let startToday = calendar.startOfDay(for: now)
-                if let evening = calendar.date(byAdding: .hour, value: -1, to: startToday) {
-                    doneTodayFlagsStamp = evening
-                }
-            }
+            // The Home badges, the #679 local flags (raised, never lowered) and, for
+            // an answer about yesterday, the stamp. See
+            // `PracticeDayState.applyTracksDoneAnswer(_:creditedDate:now:calendar:)`.
+            practiceDay.applyTracksDoneAnswer(tracksDoneToday, creditedDate: today, now: now)
         } catch {
             // #759: a cancelled request is not a failed one, and only a failure
             // justifies what follows. Cancellation here always means replacement or
@@ -170,8 +154,7 @@ extension AppViewModel {
             // was meant to protect. Outside a session the reset stands, and the
             // next successful refresh restores the truth either way.
             if !isInSession {
-                primaryDoneToday = false
-                secondDoneToday = false
+                practiceDay.applyFailedTracksDoneRead()
             }
         }
         // Both branches above return early on a generation change or a superseded

@@ -89,8 +89,8 @@ final class AppViewModel {
     /// `AppViewModel+PracticeDay.swift` runs the server reads around it.
     var practiceDay = PracticeDayState()
 
-    // The flags and their stamp, read and written by name across these files and
-    // by `HomeView`. Each is documented on `PracticeDayState`.
+    // The flags, read and written by name across these files and by `HomeView`.
+    // Each is documented on `PracticeDayState`, which also keeps their stamp.
 
     /// #240: per-track "completed a standard sit today", drives the Home badges.
     var primaryDoneToday: Bool {
@@ -115,11 +115,6 @@ final class AppViewModel {
     var primaryStandardDoneToday: Bool {
         get { practiceDay.primaryStandardDoneToday }
         set { practiceDay.primaryStandardDoneToday = newValue }
-    }
-    /// The local day the five flags above describe.
-    var doneTodayFlagsStamp: Date? {
-        get { practiceDay.doneTodayFlagsStamp }
-        set { practiceDay.doneTodayFlagsStamp = newValue }
     }
 
     /// Bumped on every identity transition — adopt, offline-adopt, sign-out,
