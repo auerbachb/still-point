@@ -232,3 +232,25 @@ export type FocusDurationFixture = {
     expected: number;
   }>;
 };
+
+/** #840: the focus timer's rules, shared with the iOS port (`FocusActivityLogic.swift`). */
+export type FocusActivityFixture = {
+  formatGoal: Array<{ seconds: number; expected: string }>;
+  countdownDisplay: Array<{ seconds: number; expected: string }>;
+  countdownShowsHours: Array<{ goalSeconds: number; expected: boolean }>;
+  remainingSeconds: Array<{ name: string; elapsedMs: number; goalSeconds: number; expected: number }>;
+  resolveEnd: Array<{
+    name: string;
+    elapsedMs: number;
+    goalSeconds: number;
+    reason: "expired" | "ended";
+    expected: { duration: number; actualTime: number; completed: boolean } | null;
+  }>;
+  focusActivityDayAfterCompletedSave: Array<{
+    name: string;
+    currentDay: number;
+    sessionDay: number;
+    expected: number;
+  }>;
+  categories: Array<{ id: string; label: string; description: string }>;
+};

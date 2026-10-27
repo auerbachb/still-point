@@ -69,6 +69,14 @@ struct RootView: View {
                 BreathCountingView(appVM: appVM)
                     .transition(.opacity)
 
+            case .focusPicker:
+                FocusCategoryPickerView(appVM: appVM)
+                    .transition(.opacity)
+
+            case .focusActivity(let category, let focusActivityDay):
+                FocusActivityView(appVM: appVM, category: category, focusActivityDay: focusActivityDay)
+                    .transition(.opacity)
+
             case .logReason(let date):
                 LogReasonView(appVM: appVM, targetDate: date)
                     .transition(.opacity)
@@ -133,6 +141,7 @@ struct RootView: View {
         }
         .task {
             reachability.ownerUserIdProvider = { appVM.currentUser?.id }
+            reachability.onSynced = { appVM.refreshUserAfterSync() }
             await appVM.checkAuth()
             await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
         }
@@ -223,6 +232,10 @@ struct RootView: View {
             return "completion"
         case .breathCounting:
             return "breathCounting"
+        case .focusPicker:
+            return "focusPicker"
+        case .focusActivity:
+            return "focusActivity"
         case .logReason:
             return "logReason"
         case .history:

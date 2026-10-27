@@ -19,6 +19,7 @@ implementations breaks CI on at least one platform.
 | `pathway.json` | `buildPathway` / `nodeStateForDay` (`src/lib/pathway.ts`) | `Pathway.build` / `Pathway.nodeState(forDay:currentDay:)` (`Pathway.swift`) — preview uses coming-soon state, not day count (#587) |
 | `combinedSit.json` | `combinedDurationForUser` / `isCombineOffered` (`src/lib/combinedSit.ts`) and `tracksCredited` (`src/lib/sessionCalendar.ts`) — today's two sits done as one (#769) | Not loaded yet: the iOS suite reads it in #896 (#769 increment 4/5) |
 | `focusDuration.json` | `FOCUS_DURATION_CONFIG` / `focusDurationForDay` / `shouldAdvanceFocusDay` (`src/lib/constants.ts`), `advanceFocusActivityDay` (`src/lib/duration.ts`) | `StillPoint.focusDurationConfig` / `focusDuration(forDay:)` / `shouldAdvanceFocusDay` / `advanceFocusActivityDay` (`Constants.swift`). The focus goal (#765): 1 min, +1 min per completed focus session, 2 h cap, no recovery ramp; only a completed focus session steps `focusActivityDay`, by one (#839). |
+| `focusActivity.json` | `formatFocusGoal` / `formatFocusCountdown` / `focusCountdownFontSize` / `focusRemainingSeconds` / `resolveFocusEnd` / `focusActivityDayAfterCompletedSave` (`src/lib/focusActivity.ts`), `FOCUS_ACTIVITIES` (`src/lib/focusActivityContent.ts`) | `FocusActivity.formatGoal` / `countdownDisplay` / `countdownShowsHours` / `remainingSeconds` / `resolveEnd` / `focusActivityDayAfterCompletedSave`, `FocusCategory.pickerDescription` (`FocusActivityLogic.swift`) and `FocusCategory.displayLabel` (`Constants.swift`). The focus timer (#840): its goal and countdown text, the wall-clock countdown, what an end saves, the goal step after a completed save, and the picker's cards. |
 
 ## How each suite loads them
 
@@ -61,6 +62,11 @@ identical golden values. To keep them in agreement:
   Only the focus ramp can carry such a case: iOS's meditation
   `duration(forDay:)` asserts on days below 1 in debug builds, so
   `durationForDay.json` keeps to days of 1 or more.
+- **focusActivity** — times are milliseconds after the session started
+  (`elapsedMs`); web adds them to a start timestamp, iOS to a start `Date`.
+  Seconds inputs are whole numbers, because web floors a fractional second and
+  iOS takes an `Int`; `focusActivityDayAfterCompletedSave` always has a counter,
+  because only web's takes a missing one.
 
 When adding a case, prefer inputs whose expected values are exact on both
 platforms; otherwise document the tolerance in the loading suite.

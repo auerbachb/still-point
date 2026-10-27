@@ -1,0 +1,135 @@
+{
+  "algorithm": "focusActivity",
+  "description": "Golden values for the focus timer's rules (#765): the goal and countdown text, the wall-clock countdown, what an end saves, the goal step after a completed save, and the picker's categories. Web src/lib/focusActivity.ts (formatFocusGoal, formatFocusCountdown, focusCountdownFontSize, focusRemainingSeconds, resolveFocusEnd, focusActivityDayAfterCompletedSave) + src/lib/focusActivityContent.ts (FOCUS_ACTIVITIES) and iOS StillPointShared FocusActivityLogic.swift (FocusActivity.formatGoal, countdownDisplay, countdownShowsHours, remainingSeconds, resolveEnd, focusActivityDayAfterCompletedSave, FocusCategory.pickerDescription) + Constants.swift (FocusCategory.displayLabel) duplicate this on purpose (#840). Times are milliseconds after the session started.",
+  "formatGoal": [
+    { "seconds": 0, "expected": "0 min" },
+    { "seconds": 60, "expected": "1 min" },
+    { "seconds": 120, "expected": "2 min" },
+    { "seconds": 1800, "expected": "30 min" },
+    { "seconds": 3540, "expected": "59 min" },
+    { "seconds": 3600, "expected": "1 hr" },
+    { "seconds": 3660, "expected": "1 hr 1 min" },
+    { "seconds": 5400, "expected": "1 hr 30 min" },
+    { "seconds": 7200, "expected": "2 hr" }
+  ],
+  "countdownDisplay": [
+    { "seconds": -5, "expected": "0:00" },
+    { "seconds": 0, "expected": "0:00" },
+    { "seconds": 1, "expected": "0:01" },
+    { "seconds": 59, "expected": "0:59" },
+    { "seconds": 60, "expected": "1:00" },
+    { "seconds": 1800, "expected": "30:00" },
+    { "seconds": 3599, "expected": "59:59" },
+    { "seconds": 3600, "expected": "1:00:00" },
+    { "seconds": 3661, "expected": "1:01:01" },
+    { "seconds": 7199, "expected": "1:59:59" },
+    { "seconds": 7200, "expected": "2:00:00" }
+  ],
+  "countdownShowsHours": [
+    { "goalSeconds": 60, "expected": false },
+    { "goalSeconds": 1800, "expected": false },
+    { "goalSeconds": 3540, "expected": false },
+    { "goalSeconds": 3600, "expected": true },
+    { "goalSeconds": 7200, "expected": true }
+  ],
+  "remainingSeconds": [
+    { "name": "starts at the goal", "elapsedMs": 0, "goalSeconds": 60, "expected": 60 },
+    { "name": "a part second shows the full goal", "elapsedMs": 900, "goalSeconds": 60, "expected": 60 },
+    { "name": "a whole second takes one off", "elapsedMs": 1000, "goalSeconds": 60, "expected": 59 },
+    { "name": "the last second", "elapsedMs": 59900, "goalSeconds": 60, "expected": 1 },
+    { "name": "zero exactly when the goal has elapsed", "elapsedMs": 60000, "goalSeconds": 60, "expected": 0 },
+    { "name": "stays at zero past the goal", "elapsedMs": 600000, "goalSeconds": 60, "expected": 0 },
+    { "name": "a clock that moved backwards shows the full goal", "elapsedMs": -30000, "goalSeconds": 60, "expected": 60 }
+  ],
+  "resolveEnd": [
+    {
+      "name": "a countdown that ran out is completed at the goal",
+      "elapsedMs": 60000,
+      "goalSeconds": 60,
+      "reason": "expired",
+      "expected": { "duration": 60, "actualTime": 60, "completed": true }
+    },
+    {
+      "name": "expiry noticed late still saves the goal, not the overrun",
+      "elapsedMs": 5000000,
+      "goalSeconds": 1800,
+      "reason": "expired",
+      "expected": { "duration": 1800, "actualTime": 1800, "completed": true }
+    },
+    {
+      "name": "End early saves the whole seconds spent, not completed",
+      "elapsedMs": 20400,
+      "goalSeconds": 120,
+      "reason": "ended",
+      "expected": { "duration": 120, "actualTime": 20, "completed": false }
+    },
+    {
+      "name": "End at once saves nothing",
+      "elapsedMs": 0,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": null
+    },
+    {
+      "name": "End before a whole second has passed saves nothing",
+      "elapsedMs": 900,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": null
+    },
+    {
+      "name": "End at one second is a real, ended-early session",
+      "elapsedMs": 1000,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": { "duration": 60, "actualTime": 1, "completed": false }
+    },
+    {
+      "name": "End one second short of the goal is still ended early",
+      "elapsedMs": 59990,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": { "duration": 60, "actualTime": 59, "completed": false }
+    },
+    {
+      "name": "End at the goal counts as reaching it",
+      "elapsedMs": 60000,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": { "duration": 60, "actualTime": 60, "completed": true }
+    },
+    {
+      "name": "End after the goal counts as reaching it, capped at the goal",
+      "elapsedMs": 95000,
+      "goalSeconds": 60,
+      "reason": "ended",
+      "expected": { "duration": 60, "actualTime": 60, "completed": true }
+    },
+    {
+      "name": "the two-hour cap ran out",
+      "elapsedMs": 7200000,
+      "goalSeconds": 7200,
+      "reason": "expired",
+      "expected": { "duration": 7200, "actualTime": 7200, "completed": true }
+    },
+    {
+      "name": "the two-hour cap ended at its midpoint",
+      "elapsedMs": 3600000,
+      "goalSeconds": 7200,
+      "reason": "ended",
+      "expected": { "duration": 7200, "actualTime": 3600, "completed": false }
+    }
+  ],
+  "focusActivityDayAfterCompletedSave": [
+    { "name": "steps the counter by one, the server's rule", "currentDay": 1, "sessionDay": 1, "expected": 2 },
+    { "name": "steps a later counter by one", "currentDay": 30, "sessionDay": 30, "expected": 31 },
+    { "name": "a re-read that already applied the step is not stepped again", "currentDay": 5, "sessionDay": 4, "expected": 5 },
+    { "name": "never moves the counter backwards", "currentDay": 9, "sessionDay": 4, "expected": 9 },
+    { "name": "keeps stepping past the goal cap", "currentDay": 120, "sessionDay": 120, "expected": 121 }
+  ],
+  "categories": [
+    { "id": "reading", "label": "Reading", "description": "One book or article, read without switching away." },
+    { "id": "writing", "label": "Writing", "description": "One piece of writing: a draft, a journal entry, a letter." },
+    { "id": "listening", "label": "Listening", "description": "Music with your eyes closed. Nothing to do but listen." }
+  ]
+}

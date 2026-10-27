@@ -101,6 +101,132 @@ extension AppViewModel {
         }
     }
 
+    // MARK: - #840 Focus activity
+
+    /// Home's "Focus activity" button: choose a category first.
+    func beginFocusActivity() {
+        currentView = .focusPicker
+    }
+
+    /// A picker card: the timer starts on the goal counter as it stands now.
+    ///
+    /// Only from the picker. A second card tapped while the picker fades out would
+    /// otherwise swap the category under a session that has already started.
+    func startFocusSession(category: FocusCategory) {
+        guard currentView == .focusPicker else { return }
+        currentView = .focusActivity(category: category, focusActivityDay: focusActivityDay)
+    }
+
+    /// The picker's Cancel. Retries an invite held back while it was up, as the
+    /// breath exits do. Only from the picker, for the same reason as above.
+    func cancelFocusActivity() {
+        guard currentView == .focusPicker else { return }
+        currentView = .home
+        scheduleBuddyInviteConsume()
+    }
+
+    /// Save a finished focus session and return to home (#840).
+    ///
+    /// Local-first through the offline write queue, like a breath sit (#557). A focus
+    /// session is not a meditation sit (#765): it marks no practice day, so the widget
+    /// and the streak never see it, and it leaves the app gate and the tracking unlock
+    /// alone. It is dated the plain local day (`FocusActivity.sessionRequest`).
+    ///
+    /// - Parameter end: what the session left behind (`FocusSessionRun.end`).
+    /// - Parameter category: what the picker chose.
+    /// - Parameter focusActivityDay: the goal counter the session ran on, from its route.
+    /// - Parameter generation: `authGeneration`, read by the End tap or the expiry tick
+    ///   itself, as for `completeBreathSession` (#854).
+    func completeFocusSession(
+        _ end: FocusSessionEnd,
+        category: FocusCategory,
+        focusActivityDay: Int,
+        startedAtGeneration generation: Int
+    ) async {
+        // #854: an identity transition between the end and this task made the screen
+        // another account's. Nothing is saved and its route is left alone.
+        guard generation == authGeneration else { return }
+        guard case .save(let result) = end else {
+            // Ended before a whole second had passed: nothing to save.
+            currentView = .home
+            scheduleBuddyInviteConsume()
+            return
+        }
+        // The session view reports its end once (`FocusSessionRun`). This holds the
+        // line for the whole save as well, as for breath, and belongs to the account
+        // that ended the session (#854).
+        guard focusSaveGate.acquire(for: generation) else { return }
+        defer { focusSaveGate.release(for: generation) }
+        guard let ownerUserId = currentUser?.id else { return }
+
+        let clientSessionId = UUID()
+        let request = FocusActivity.sessionRequest(
+            result: result,
+            category: category,
+            focusActivityDay: focusActivityDay,
+            endedAt: Date(),
+            clientSessionId: clientSessionId
+        )
+
+        // #854: what follows the save is for the account that ran the session: the
+        // goal step, the #703 flag, the trip home and the invite retry. A save that
+        // settles under another generation changes none of it, and is never undone.
+        await GenerationScopedWork.run(
+            startedAt: generation,
+            liveGeneration: { authGeneration }
+        ) { () async -> SessionSyncCoordinator.SaveResult? in
+            do {
+                return try await SessionSyncCoordinator.shared.saveCompletedSession(
+                    request: request,
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
+                    thoughts: []
+                )
+            } catch {
+                print("Failed to persist focus session locally: \(error)")
+                // The local write was refused, so the session is nowhere.
+                return nil
+            }
+        } apply: { saved in
+            if let saved, result.completed {
+                recordCompletedFocusSession(onDay: focusActivityDay)
+                // Web re-reads the account after a synced focus save, which also
+                // catches a session finished on another device since the last read.
+                // A queued one is re-read once the queue flush uploads it.
+                if !saved.isPendingSync {
+                    refreshUserAfterSync()
+                }
+            }
+            // #703: no completion screen, so the offline indicator says a failed save.
+            if let failed = SessionCompletionLogic.localSaveFailed(after: saved == nil ? .notStored : .stored) {
+                localSaveFailed = failed
+            }
+            currentView = .home
+            // Focus exits skip `returnHome()`, so an invite held back by the
+            // `isInSession` guard during the session is retried here.
+            scheduleBuddyInviteConsume()
+        }
+    }
+
+    /// Steps the focus goal on the account on screen once a completed focus session
+    /// is stored, synced or queued (#840): the server steps it by one for each one
+    /// (#835), so Home shows the next goal without waiting for a `me()`. Saved to the
+    /// cached identity too, so an offline launch shows it as well.
+    ///
+    /// A merge of one field, not an adoption: it moves neither `authGeneration` nor
+    /// `isOfflineMode`.
+    private func recordCompletedFocusSession(onDay sessionDay: Int) {
+        guard let user = currentUser else { return }
+        let next = FocusActivity.focusActivityDayAfterCompletedSave(
+            currentDay: user.focusActivityDay,
+            sessionDay: sessionDay
+        )
+        guard next != user.focusActivityDay else { return }
+        let updated = user.updating(focusActivityDay: next)
+        currentUser = updated
+        CachedIdentityStore.save(updated)
+    }
+
     func beginBuddySession() {
         buddyInviteError = nil
         currentView = .buddyHub

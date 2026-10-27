@@ -26,6 +26,11 @@ enum AppView: Equatable {
         ambientSoundSummary: AmbientSoundSummary?
     )
     case breathCounting
+    /// #840: choosing what a focus session is for.
+    case focusPicker
+    /// #840: a running focus session. Carries the goal counter it started on, so a
+    /// refresh landing mid-session cannot move the goal being counted down to.
+    case focusActivity(category: FocusCategory, focusActivityDay: Int)
     case logReason(date: String)
     case history
     case journal
@@ -38,11 +43,14 @@ enum AppView: Equatable {
              (.buddyHub, .buddyHub),
              (.buddyCalendar, .buddyCalendar),
              (.breathCounting, .breathCounting),
+             (.focusPicker, .focusPicker),
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
         case let (.session(lhsType, lhsTrack), .session(rhsType, rhsTrack)):
             return lhsType == rhsType && lhsTrack == rhsTrack
+        case let (.focusActivity(lhsCategory, lhsDay), .focusActivity(rhsCategory, rhsDay)):
+            return lhsCategory == rhsCategory && lhsDay == rhsDay
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
             return lhsSessionId == rhsSessionId
         case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):

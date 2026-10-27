@@ -141,6 +141,20 @@ struct HomeView: View {
                     .accessibilityIdentifier("home.breathCountingButton")
                     .accessibilityLabel("Start breath counting")
 
+                    // #840: today's focus goal, one for every category.
+                    Button {
+                        withAnimation {
+                            appVM.beginFocusActivity()
+                        }
+                    } label: {
+                        Text("Focus activity · \(FocusActivity.formatGoal(appVM.focusGoalSeconds))")
+                            .font(SPFont.mono(11, weight: .medium))
+                            .tracking(1.4)
+                            .spCapsuleButtonStyle(.neutral, size: .regular)
+                    }
+                    .accessibilityIdentifier("home.focusActivityButton")
+                    .accessibilityLabel("Start focus activity, \(FocusActivity.spokenDuration(appVM.focusGoalSeconds)) goal")
+
                     Button {
                         withAnimation {
                             appVM.beginBuddySession()
