@@ -1,5 +1,7 @@
 import { test, expect } from "../fixtures/auth.fixture";
+import { DEFAULT_TAB, pathForTab } from "../../src/lib/appTabs";
 import { OFFLINE_IDB_NAME, OFFLINE_IDB_STORE } from "../../src/lib/offlineSessionQueue/constants";
+import type { PendingSessionEntry } from "../../src/lib/offlineSessionQueue/types";
 import { tap, tapWithControlReveal } from "../utils/mobile-helpers";
 
 /**
@@ -48,8 +50,7 @@ function homeDayNumber(page: import("@playwright/test").Page) {
  *  not let an offline reload boot the app: the worker precaches the HTML shell,
  *  but caches the app's scripts only as they pass through it. A spec that
  *  reloads offline therefore also needs one online load under control and then
- *  waitForAppShellCached, as the reload spec does (the queue-sync spec does not
- *  yet; #864 tracks it).
+ *  waitForAppShellCached, as both specs below do.
  *  Polled with expect.poll: waitForFunction does not await an async predicate,
  *  so the pending promise it returned counted as "done" on the first check. */
 async function waitForServiceWorkerControl(page: import("@playwright/test").Page) {
@@ -78,10 +79,11 @@ async function waitForAppShellCached(page: import("@playwright/test").Page) {
     .toBe(true);
 }
 
-function readQueuedSessions(page: import("@playwright/test").Page, dbName: string, storeName: string) {
+/** Every row of the offline session queue, read straight from IndexedDB. */
+function readQueuedSessions(page: import("@playwright/test").Page) {
   return page.evaluate(
     ([name, store]) =>
-      new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
+      new Promise<PendingSessionEntry[]>((resolve, reject) => {
         const open = indexedDB.open(name);
         open.onerror = () => reject(open.error ?? new Error("open failed"));
         open.onsuccess = () => {
@@ -93,7 +95,7 @@ function readQueuedSessions(page: import("@playwright/test").Page, dbName: strin
           }
           const request = db.transaction(store, "readonly").objectStore(store).getAll();
           request.onsuccess = () => {
-            const rows = request.result as Array<Record<string, unknown>>;
+            const rows = request.result as PendingSessionEntry[];
             db.close();
             resolve(rows);
           };
@@ -103,27 +105,30 @@ function readQueuedSessions(page: import("@playwright/test").Page, dbName: strin
           };
         };
       }),
-    [dbName, storeName] as const,
+    [OFFLINE_IDB_NAME, OFFLINE_IDB_STORE] as const,
   );
 }
 
+/** Set on a document from the page, so a later check can tell it was never replaced. */
+type SameDocumentMarker = Window & { __sameDocument?: boolean };
+
 test.describe("offline-first web PWA", () => {
   // These two specs test the worker, so they opt back in; the config blocks it (#862).
-  // On WebKit the worker then hides their API calls from page.route; #919 and #864 track it.
+  // On WebKit the worker then hides their API calls from page.route, so both skip
+  // there; #919 tracks it.
   test.describe(() => {
     test.use({ serviceWorkers: "allow" });
+    test.skip(
+      ({ browserName }) => browserName === "webkit",
+      "WebKit hides a worker-controlled page's API calls from page.route, and an offline reload " +
+        "throws there (PR #880); tracked in #919",
+    );
 
     test("@critical reload with no connection lands on the app, not an auth error", async ({
       page,
-      browserName,
       ensureLoggedIn,
       mockApiState,
     }) => {
-      test.skip(
-        browserName === "webkit",
-        "WebKit hides a worker-controlled page's API calls from page.route, and an offline reload " +
-          "throws there (PR #880); tracked in #919",
-      );
       const network = await installApiOfflineSwitch(page);
       await ensureLoggedIn();
       await waitForServiceWorkerControl(page);
@@ -164,6 +169,11 @@ test.describe("offline-first web PWA", () => {
       const network = await installApiOfflineSwitch(page);
       await ensureLoggedIn();
       await waitForServiceWorkerControl(page);
+      // One online launch with the worker in control, as in the reload spec, so
+      // the worker holds the scripts the offline reload below boots from.
+      await page.reload();
+      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await waitForAppShellCached(page);
 
       await network.goOffline();
       await page.reload();
@@ -175,24 +185,55 @@ test.describe("offline-first web PWA", () => {
       await expect(page.getByRole("heading", { name: /Complete/i })).toBeVisible();
 
       // It went to the offline queue rather than being lost.
-      await expect
-        .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
-        .toBeGreaterThan(0);
+      await expect.poll(async () => (await readQueuedSessions(page)).length).toBe(1);
+      const [queued] = await readQueuedSessions(page);
+      expect(queued, "the sit waits in the queue, not uploaded").toMatchObject({
+        sessionSynced: false,
+        serverSessionId: null,
+      });
       expect(mockApiState.sessions.length, "nothing reached the server while offline").toBe(0);
 
+      // Offline, the router cannot fetch Home's server payload, so Next.js falls
+      // back to a full load of the page, which the worker serves from its cache.
+      // That load lands after the tap returns. Reconnecting while it was under
+      // way replaced the page in the middle of the checks below (#864), so wait
+      // for it here, still offline.
       await tap(page.getByRole("button", { name: "save and return to home" }));
+      await page.waitForURL(`**${pathForTab(DEFAULT_TAB)}`);
+      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByTestId("offline-indicator")).toBeVisible();
+      await page.evaluate(() => {
+        (window as SameDocumentMarker).__sameDocument = true;
+      });
 
-      // Back online: the queue drains, and the indicator clears on its own once
-      // the bootstrap re-runs successfully — no reload, no sign-in flash.
+      // Back online. setOffline(false) fires the browser's own `online` event,
+      // and the page's reconnect flush uploads the sit through the stand-in API.
+      // It is the only uploader here: headless Chromium has Background Sync
+      // disabled, so the worker's sync flush never runs, as on Safari, which has
+      // no Background Sync at all.
       await network.goOnline();
-      await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
+      // A synced sit keeps its queue row, because the completion screen's note
+      // edits look the sit up there and nothing on the web prunes it. Drained
+      // therefore means the row holds its server id and owes nothing more.
+      const queuedRow = async () =>
+        (await readQueuedSessions(page)).find((row) => row.clientSessionId === queued.clientSessionId);
       await expect
-        .poll(async () => (await readQueuedSessions(page, OFFLINE_IDB_NAME, OFFLINE_IDB_STORE)).length)
-        .toBe(0);
-      expect(mockApiState.sessions.length, "the queued sit reached the server").toBeGreaterThan(0);
+        .poll(queuedRow)
+        .toMatchObject({ sessionSynced: true, serverSessionId: expect.any(String), thoughts: [] });
+      expect(
+        mockApiState.sessions.map((session) => session.id),
+        "the queued sit reached the server, once",
+      ).toEqual([(await queuedRow())?.serverSessionId]);
+
+      // ...and the indicator clears on its own once the bootstrap re-runs
+      // successfully — no reload, no sign-in flash.
       await expect(page.getByTestId("offline-indicator")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      expect(
+        await page.evaluate(() => (window as SameDocumentMarker).__sameDocument),
+        "the page was not reloaded on reconnect",
+      ).toBe(true);
     });
   });
 
