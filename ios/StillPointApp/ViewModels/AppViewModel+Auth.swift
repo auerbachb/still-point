@@ -479,9 +479,20 @@ extension AppViewModel {
     func refreshUserAfterSync() {
         guard currentUser != nil, currentView != .auth else { return }
         let generation = authGeneration
-        enqueueSettingsRead { [weak self] () async -> Int? in
+        let read: Task<Int?, Never> = enqueueSettingsRead { [weak self] () async -> Int? in
             guard let self else { return nil }
             return await self.refreshUserFromServer(startedAtGeneration: generation)
+        }
+        // #916: a read naming a different account tore the previous one down — Home
+        // badges reset, widget backfill cancelled — and nothing else behind this
+        // caller repaints them or the widget, unlike `returnHome()` and the sign-in
+        // catch-up. A same-account or failed read returns the entry generation, so
+        // only an adoption gets past the guard. Outside the queue turn so the refresh
+        // does not hold the line.
+        Task { [weak self] in
+            guard let live = await read.value, live != generation,
+                  let self, live == self.authGeneration else { return }
+            await self.refreshTracksDoneToday()
         }
     }
 
