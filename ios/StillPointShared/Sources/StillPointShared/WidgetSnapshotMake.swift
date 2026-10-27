@@ -3,6 +3,8 @@ import Foundation
 // Building the widget snapshot, and re-deriving it for display.
 //
 // `makeSnapshot` turns in-memory app state into the snapshot the app saves.
+// `makeHistorySnapshot` is the build a `GET /api/sessions` refresh makes from
+// the fetched history, shared by the foreground and background refreshes (#663).
 // `normalizedForDisplay` runs on every widget read: it retires stale "done
 // today" flags, prunes history to the window, and re-derives the streak.
 // Concurrent writes are merged in `WidgetSnapshotWrite.swift` (#678).
@@ -197,6 +199,61 @@ extension WidgetDataStore {
             serverStreak: resolvedServerStreak,
             serverStreakDate: resolvedServerStreakDate,
             lastUpdated: now
+        )
+    }
+
+    /// The snapshot a `GET /api/sessions` refresh writes: both weekday rows, the
+    /// standard-only day set and the server streak, all rebuilt from the fetched
+    /// sessions.
+    ///
+    /// The foreground backfill and the background refresh both call this, so the
+    /// same fetch writes the same snapshot whichever one made it (#663).
+    /// `primaryDoneToday` is the one input that is not read from history. The
+    /// foreground passes its Home badge. The background refresh has no badge, so
+    /// it reads the same fact from the sessions (`primaryStandardSitCompleted`).
+    public static func makeHistorySnapshot(
+        user: UserDTO,
+        primaryDoneToday: Bool,
+        sessions: [SessionDTO],
+        serverStreak: Int,
+        now: Date = Date(),
+        previous: WidgetData? = nil
+    ) -> WidgetData {
+        // #684: one completed-date set per track, so each weekday row is
+        // backfilled from that track's own sits.
+        let completed = recentCompletedPracticeDates(from: sessions, now: now)
+        // Derive today's completion from the fetched sessions (consistent with
+        // `now`) rather than the in-memory flags, which could be stale past midnight.
+        let today = localDayString(now)
+        // #671: keep the server-computed streak (the same number the app and
+        // web history show) instead of discarding it — it's the only source
+        // that knows about days older than the widget's trailing-7 row. It is
+        // anchored onto a day, so it can only ever extend a run both rows
+        // already corroborate (#684 day-credit rule: either track keeps a day).
+        return makeSnapshot(
+            user: user,
+            primaryDoneToday: primaryDoneToday,
+            secondDoneToday: completed.second.contains(today),
+            practiceDoneToday: completed.primary.contains(today),
+            now: now,
+            // Deliberately no `flagsAsOf` here. The two flags above are derived
+            // from `sessions` against this same `now`, so they are fresh by
+            // construction — stamping the set would retire freshly-computed
+            // truth if the fetch happened to span midnight. This path also
+            // supplies the authoritative sets below, so none of the same-day
+            // folds `flagsAsOf` guards are reachable from here.
+            previous: previous,
+            completedPracticeDates: completed.primary,
+            secondCompletedPracticeDates: completed.second,
+            // #679: the days that actually produced `serverStreak` — completed
+            // standard sits on either track, the same policy web's
+            // `calculateSessionStats` applies. Persisted so a later day may
+            // extend that total only when the server would have counted it; the
+            // rows above also count quick and breath sits, so extending by them
+            // pushed the widget past the app and web.
+            completedStandardDates: recentCompletedStandardDates(from: sessions, now: now),
+            serverStreak: serverStreak,
+            serverStreakDate: serverStreakAnchorDate(from: sessions)
         )
     }
 

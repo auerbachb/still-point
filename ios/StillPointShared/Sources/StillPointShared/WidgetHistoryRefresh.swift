@@ -10,7 +10,9 @@ extension WidgetDataStore {
     /// is foregrounded, so this is minutes rather than once per day (#663).
     public static let widgetHistoryRefreshInterval: TimeInterval = 5 * 60
 
-    /// Whether `refreshWidgetWeekHistory` should call `GET /api/sessions`.
+    /// Whether a widget-history refresh (`WidgetHistoryRefresher.refresh`, run by
+    /// `refreshWidgetWeekHistory` and the background refresh) should call
+    /// `GET /api/sessions`.
     /// A new account or a new local day always fetches. The same account on
     /// the same day fetches again once `widgetHistoryRefreshInterval` has
     /// passed since the last success, and always retries when that success

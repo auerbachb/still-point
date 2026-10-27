@@ -224,16 +224,10 @@ final class AppViewModel {
     /// See ``SettingsWriteQueue``.
     let settingsWrites = SettingsWriteQueue()
 
-    /// In-flight widget history backfill, cancelled before a new one starts so a
-    /// slow earlier fetch can't overwrite a newer snapshot out of order.
-    var widgetHistoryTask: Task<Void, Never>?
-    /// Account and local day of the last widget-history attempt, plus when it
-    /// succeeded. A new day or another account always refetches. The same
-    /// account refetches after `widgetHistoryRefreshInterval` so a sit finished
-    /// on the web shows up the next time this app is foregrounded (#663).
-    var widgetHistoryRefreshUserId: String?
-    var widgetHistoryRefreshDay: String?
-    var widgetHistoryRefreshedAt: Date?
+    /// This scene's widget history backfill: its in-flight fetch, and the marker
+    /// that throttles the next one (#663). The background refresh runs the same
+    /// backfill with one of its own (`BackgroundRefreshScheduler`).
+    let widgetHistory = WidgetHistoryRefresher()
 
     var currentDay: Int {
         StillPoint.clampedCurrentDay(for: currentUser)
@@ -419,9 +413,7 @@ final class AppViewModel {
         // freshly rebuilt snapshot. Clearing the key also forces a re-backfill
         // rather than leaving the row blank. `didLogout` cancelled this already;
         // `applySignedOut` did not, which is the gap this closes.
-        widgetHistoryTask?.cancel()
-        widgetHistoryTask = nil
-        clearWidgetHistoryRefreshMarker()
+        widgetHistory.cancel()
     }
 
     func didLogout() {

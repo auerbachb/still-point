@@ -3,13 +3,14 @@ import Foundation
 // #678: newest-wins writes for the shared widget snapshot.
 //
 // `WidgetDataStore` has one writer that must suspend before it writes: the
-// `/api/sessions` backfill behind `AppViewModel.refreshWidgetWeekHistory()`. It
-// captures the world, awaits a network round-trip, and then saves what it
-// captured. Anything that writes a *fresher* snapshot during that await — a sit
-// finishing, or `refreshTracksDoneToday()` learning from the server that today
-// is already done — is silently undone when the backfill lands and overwrites
-// with its pre-await view, unchecking today's box and dropping the streak by one
-// until the next successful sync.
+// `/api/sessions` backfill in `WidgetHistoryRefresher`, which both
+// `AppViewModel.refreshWidgetWeekHistory()` and the background refresh run
+// (#663). It captures the world, awaits a network round-trip, and then saves
+// what it captured. Anything that writes a *fresher* snapshot during that
+// await — a sit finishing, or `refreshTracksDoneToday()` learning from the
+// server that today is already done — is silently undone when the backfill
+// lands and overwrites with its pre-await view, unchecking today's box and
+// dropping the streak by one until the next successful sync.
 //
 // The fix is a write generation stamped by the store on every save. A suspending
 // writer records the generation it saw *before* awaiting and hands it back; a

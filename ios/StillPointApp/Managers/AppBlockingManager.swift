@@ -301,7 +301,8 @@ final class AppBlockingManager {
     ///   trigger `refreshShielding`) the in-app state still re-locks promptly even
     ///   if the system schedule is delayed.
     /// - Background refresh: `BGAppRefreshTask` as a tertiary fallback when the
-    ///   extension does not run (#549).
+    ///   extension does not run (#549). The widget shares that one task (#663), so
+    ///   tearing down withdraws only app blocking's half of it.
     ///
     /// When there is no authorized selection both are torn down, so a stale schedule
     /// can never re-shield after the user removes apps or revokes authorization.
@@ -314,7 +315,7 @@ final class AppBlockingManager {
             ])
             midnightTimer?.invalidate()
             midnightTimer = nil
-            AppBlockingBackgroundScheduler.cancelRefresh()
+            BackgroundRefreshScheduler.scheduleShieldRefresh(at: nil)
             return
         }
         do {
@@ -334,8 +335,8 @@ final class AppBlockingManager {
             // Re-registering an already-active heartbeat schedule is benign.
         }
         scheduleForegroundMidnightBackup()
-        AppBlockingBackgroundScheduler.scheduleRefresh(
-            preferring: AppBlockingShared.preferredBackgroundRefreshDate()
+        BackgroundRefreshScheduler.scheduleShieldRefresh(
+            at: AppBlockingShared.preferredBackgroundRefreshDate()
         )
     }
 

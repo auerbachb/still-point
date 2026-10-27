@@ -168,6 +168,11 @@ struct RootView: View {
                 // Multi-window: only clear when no scene is foreground-active (issue #87).
                 SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()
             }
+            if phase == .background {
+                // #663: while the app stays closed, a background refresh is the only
+                // way a sit saved on the web reaches the widget.
+                BackgroundRefreshScheduler.reschedule()
+            }
         }
         .onOpenURL { url in
             // Let Google Sign-In claim its OAuth callback (reversed client-ID scheme)
