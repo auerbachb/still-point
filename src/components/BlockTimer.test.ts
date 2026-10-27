@@ -312,9 +312,9 @@ describe("BlockTimer local clock", () => {
     await view.rerender({ isActive: true });
     await advance(6_000);
 
-    // The pause reset elapsed to zero, but the clock had run before, so the
-    // restart seeds as a resume from 0 — second 0 is not ticked again.
-    expect(ticks()).toEqual(["0.05", ...seconds(1, 4), ...seconds(7, 10)]);
+    // #844: the restart is a fresh sit, so its second 0 ticks as the first
+    // run's did. It used to seed as a resume from 0 and skip that tick.
+    expect(ticks()).toEqual(["0.05", ...seconds(1, 4), "6.05", ...seconds(7, 10)]);
     expect(cues()).toEqual([
       "5.00 completion",
       "5.00 complete",
@@ -521,6 +521,26 @@ describe("BlockTimer sound recovery", () => {
     ]);
   });
 
+  // #844: a solo sit keeps the timer mounted while it saves, after the sit has
+  // ended. A retry failing in that window must not raise the banner either.
+  it("says nothing to the consumer when a retry fails after the sit has ended", async () => {
+    env.state.failures.set("completion", 2);
+    env.state.resume = () => Promise.resolve(false);
+    const view = await mount({ totalSeconds: 5, soundPrefs: prefs({ tick: false, completion: true }) });
+
+    await advanceSettling(6_000);
+    await view.rerender({ isActive: false });
+    await advanceSettling(1_000);
+
+    expect(log()).toEqual([
+      "5.00 completion blocked",
+      "5.00 resume",
+      "5.00 complete",
+      "6.00 cancelVoice",
+      "6.00 cancelVoice",
+    ]);
+  });
+
   it("says nothing to the consumer once unmounted, but still replays the sound", async () => {
     let release: (resumed: boolean) => void = () => {};
     env.state.failures.set("tick", 2);
@@ -672,7 +692,27 @@ describe("BlockTimer controlled elapsed", () => {
       await view.rerender({ controlledElapsed: s });
     }
 
-    expect(names(log())).toEqual(["voice:60", "voice:59", "voice:55", "voice:56", "voice:59"]);
+    // #844: the step back to 30 leaves the final minute, so "56" — possibly
+    // still playing — is cancelled before the countdown re-arms.
+    expect(names(log())).toEqual([
+      "voice:60",
+      "voice:59",
+      "voice:55",
+      "voice:56",
+      "cancelVoice",
+      "voice:59",
+    ]);
+  });
+
+  it("cancels a spoken number in flight when a controlled sit restarts", async () => {
+    const view = await mount({
+      totalSeconds: 100,
+      controlledElapsed: 95,
+      soundPrefs: prefs({ tick: false, voiceCountdown: true }),
+    });
+    await view.rerender({ controlledElapsed: 0 });
+
+    expect(names(log())).toEqual(["voice:5", "cancelVoice"]);
   });
 
   it("lets a buddy sync clock take precedence over controlled elapsed", async () => {

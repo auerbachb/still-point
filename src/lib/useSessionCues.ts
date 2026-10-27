@@ -99,6 +99,13 @@ export function useSessionCues({
   /// report is not a harmless no-op — it raises "Browser audio is paused" over
   /// a session that already ended.
   const mountedRef = useRef(true);
+  /// #844: the same guard for a sit that has ended while the timer stays
+  /// mounted — a solo sit keeps `BlockTimer` on screen while it saves. Nothing
+  /// is left to play by then, so "Enable local audio" has nothing to recover,
+  /// and that includes a completion bell whose own retry failed. Set by `end`,
+  /// cleared once a clock advances again. Not by `reset`: the pause that
+  /// follows a finished sit resets the cues, and the save is still running.
+  const sitEndedRef = useRef(false);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -140,7 +147,7 @@ export function useSessionCues({
           // The retry itself is deliberately not gated on the timer still being
           // active: a completion chime that failed is retried as the sit ends,
           // which is exactly when it is wanted. Only the banner is suppressed.
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || sitEndedRef.current) return;
           onSoundPlaybackBlockedRef.current?.();
         })
         .finally(() => {
@@ -194,12 +201,14 @@ export function useSessionCues({
         );
       },
       advance(elapsed, totalSeconds) {
+        sitEndedRef.current = false;
         const prefs = soundPrefsRef.current;
         const planned = planCountdownCues(cursorRef.current, elapsed, totalSeconds, prefs);
         cursorRef.current = planned.cursor;
         playCues(planned.cues, prefs);
       },
       advanceControlled(elapsed, totalSeconds) {
+        sitEndedRef.current = false;
         const prefs = soundPrefsRef.current;
         const followed = followControlledVoice(cursorRef.current, elapsed, totalSeconds);
         const planned = planCountdownCues(followed, elapsed, totalSeconds, prefs);
@@ -207,6 +216,7 @@ export function useSessionCues({
         playCues(planned.cues, prefs);
       },
       end() {
+        sitEndedRef.current = true;
         const prefs = soundPrefsRef.current;
         playCues(planSessionEndCues(prefs), prefs);
       },

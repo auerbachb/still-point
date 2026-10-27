@@ -76,9 +76,12 @@ export function useElapsedClock({
     if (isResume) {
       cues.seed(resumeElapsed, totalSeconds);
     } else {
-      // Fresh session — clear all accumulated state
+      // Fresh session — clear all accumulated state. That includes the start
+      // time: left set, a finished sit restarted from here would read as a
+      // resume from 0 and skip the tick at second 0 (#844).
       cues.reset();
       pausedElapsedRef.current = 0;
+      startTimeRef.current = null;
       setElapsed(0);
     }
 

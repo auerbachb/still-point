@@ -113,23 +113,25 @@ export function rewoundCueCursor(
 }
 
 /**
- * Applied to every parent-controlled update before it is planned. Above the
- * final minute the voice cursor resets quietly; inside it, the cursor never
- * drops below the current second, so a step back does not re-announce a second
- * already spoken. The current second is rounded as the plan announces it.
+ * Applied to every parent-controlled update before it is planned. Inside the
+ * final minute the cursor never drops below the current second, so a step back
+ * does not re-announce a second already spoken. The current second is rounded
+ * as the plan announces it.
+ *
+ * Above the final minute the cursor is left alone: {@link planCountdownCues}
+ * resets it there, and cancels a clip still playing on the way (#844). Resetting
+ * it here first, as this used to, made that cancel unreachable on the controlled
+ * path, so a spoken number played out after a step back or a restart.
  */
 export function followControlledVoice(
   cursor: CueCursor,
   elapsed: number,
   totalSeconds: number,
 ): CueCursor {
-  const remaining = totalSeconds - elapsed;
+  if (totalSeconds - elapsed > 60) return cursor;
   return {
     ...cursor,
-    lastVoiceSec:
-      remaining > 60
-        ? 61
-        : Math.max(cursor.lastVoiceSec, countdownSeconds(elapsed, totalSeconds)),
+    lastVoiceSec: Math.max(cursor.lastVoiceSec, countdownSeconds(elapsed, totalSeconds)),
   };
 }
 
@@ -154,16 +156,20 @@ export function planCountdownCues(
   const voiceActive = voiceMode && remaining > 0 && remaining <= 60;
   const currentSec = Math.floor(elapsed);
 
+  // Back above the final minute — a parent-controlled step back or restart
+  // (#844): the countdown re-arms, and a clip still playing stops. The reset
+  // holds outside voice mode too, so turning voice on later in the sit does not
+  // inherit a stale second.
+  if (remaining > 60 && next.lastVoiceSec <= 60) {
+    if (voiceMode) cues.push({ kind: "cancelVoice" });
+    next.lastVoiceSec = 61;
+  }
+
   // Voice mode stops the tick for the whole sit, where iOS stops it only while
   // `voiceActive`. Nobody hears the difference: exclusive cue mode (#807)
   // never has tick and voice on together.
   if (voiceMode) {
-    if (remaining > 60) {
-      if (next.lastVoiceSec <= 60) {
-        cues.push({ kind: "cancelVoice" });
-        next.lastVoiceSec = 61;
-      }
-    } else if (voiceActive) {
+    if (voiceActive) {
       // #922: the number the digits show — rounded up, as iOS
       // `VoiceCountdownLogic.announceSecond` rounds it, and 1–60 inside this
       // window. "60" holds the whole first second of the final minute, and
