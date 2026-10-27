@@ -113,7 +113,10 @@ public actor SessionSyncCoordinator {
                 return SaveResult(session: synced, isPendingSync: false)
             }
 
-            let entry = try queueStore.loadEntries().first { $0.clientSessionId == clientSessionId }
+            // #1092: the sit is already queued, and may already have its server
+            // row, so a queue read that throws here falls back to the request
+            // instead of failing a save that went through.
+            let entry = (try? queueStore.loadEntries())?.first { $0.clientSessionId == clientSessionId }
             let provisionalRequest = entry?.request ?? Self.requestWithClientId(request, clientSessionId: clientSessionId)
             return SaveResult(
                 session: Self.provisionalSessionDTO(from: provisionalRequest, clientSessionId: clientSessionId),
@@ -319,7 +322,14 @@ public actor SessionSyncCoordinator {
 
         guard let serverSessionId = entry.serverSessionId else { return nil }
 
-        entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
+        // #1092: the sit has its server row by now, so a queue read that throws
+        // here is a failed upload like any other, not a failed save. The sit
+        // stays queued as synced, and the next flush sends its thoughts.
+        do {
+            entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
+        } catch {
+            return nil
+        }
 
         if !entry.thoughts.isEmpty || entry.clearCompletionNote {
             guard let uploaded = await uploadThoughts(of: entry, serverSessionId: serverSessionId) else {
