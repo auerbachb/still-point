@@ -24,18 +24,22 @@ web-only, doc-only, and test-only merges from burning a TestFlight slot.
 
 ## Prerequisites
 
-The following GitHub Actions **secrets** are used by the iOS workflows (already configured for this repo; do not rename). Values never appear in logs or git.
+The following GitHub Actions **secrets** are used by the iOS workflows (already configured for this repo; do not rename). TestFlight cuts and App Store releases both need every one of them. Values never appear in logs or git.
 
 | Secret | Used for |
 |--------|----------|
 | `BUILD_CERTIFICATE_BASE64` | Distribution signing (`xcodebuild` / `gym`) |
 | `P12_PASSWORD` | `.p12` import password |
-| `BUILD_PROVISION_PROFILE_BASE64` | App Store provisioning profile |
+| `BUILD_PROVISION_PROFILE_BASE64` | App Store provisioning profile for the app |
+| `BUILD_PROVISION_PROFILE_EXTENSION_BASE64` | App Store provisioning profile for the `StillPointMonitor` extension |
+| `BUILD_PROVISION_PROFILE_WIDGET_BASE64` | App Store provisioning profile for the `StillPointWidget` extension |
 | `APPSTORE_API_KEY_ID` | App Store Connect API (JWT `kid`) |
 | `APPSTORE_API_ISSUER_ID` | App Store Connect API issuer |
 | `APPSTORE_API_PRIVATE_KEY` | API private key (full `.p8` contents as a secret; never commit the file) |
 
 The App Store release workflow maps these to Fastlane’s standard `APP_STORE_CONNECT_API_*` environment names at runtime (see `.github/workflows/ios-app-store-release.yml`).
+
+Both lanes also need the native Google Sign-In client IDs, `GID_CLIENT_ID` and `GID_REVERSED_CLIENT_ID`; `GID_SERVER_CLIENT_ID` is optional. They are listed under *CI credential injection* in [`docs/mobile-oauth-integration.md`](../docs/mobile-oauth-integration.md).
 
 ## First-time setup
 
@@ -156,7 +160,7 @@ When you are ready to push **metadata + binary** to App Store Connect for the ve
    git push origin ios-v1.0.3
    ```
 4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs, in order:
-   - the smoke tests;
+   - the smoke tests, and alongside them a check that every secret the release needs is set;
    - the tag and checklist gates;
    - a build-number claim, which pushes `ios-v<MARKETING_VERSION>-build<N>` on the tagged commit;
    - `npm run ios:app-store:dry-run -- --intended-tag <that tag>`;
@@ -168,6 +172,12 @@ tag. It gets a new number even when TestFlight already cut the tagged commit, so
 never repeats a TestFlight build. No `ios/project.yml` bump is needed. **Re-run failed jobs**
 keeps the claimed number. A run that fails after the claim leaves its tag behind, and the next
 cut takes the number after it.
+
+**Secrets ([#937](https://github.com/auerbachb/still-point/issues/937)):** before the claim, the
+**Check release secrets** job checks every secret in [Prerequisites](#prerequisites) except the
+optional `GID_SERVER_CLIENT_ID`. If one is missing or empty, the run fails there with an error that
+names it, and no build number is claimed. The check prints names only, never a value. Add the
+secret, then **Re-run failed jobs**.
 
 **First run not yet verified ([#927](https://github.com/auerbachb/still-point/issues/927)):**
 no run of this lane has reached `deliver` yet. #910 fixed the dry run's A3 check and the
