@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { CalendarSyncResult, User } from "@/lib/api";
 import { AuthScreen } from "@/components/AuthScreen";
@@ -37,13 +37,19 @@ import { useAuthBootstrap } from "@/lib/useAuthBootstrap";
 import { useDualTrackFork } from "@/lib/useDualTrackFork";
 import { useSessionSaveLifecycle, type CompletionData } from "@/lib/useSessionSaveLifecycle";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
+import {
+  buddyInviteJoinDecision,
+  overlayHoldsBuddyInvite,
+  pathKeepingBuddyInvite,
+  type AppOverlay,
+} from "@/lib/buddyInviteJoinRouting";
 
 // Transient flows that overlay the active tab without changing the URL.
 // "breath" hides nav/header and renders BreathCountView full-screen, matching
 // the iOS breath-counting mode (#376). "focus" does the same for the focus
 // activity timer (#836). "focusPicker" is the category choice that comes
 // before it (#837): a dialog over Home, which stays mounted beneath it.
-type Overlay = "session" | "breath" | "focusPicker" | "focus" | "complete";
+type Overlay = AppOverlay;
 
 /** A completion-note write for a sit that has a server row: a new note, or
  *  `clearCompletionNote` with no thoughts to delete it (#792). A pending sit
@@ -101,6 +107,14 @@ export default function StillPoint() {
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
   const buddyInviteInFlight = useRef(false);
+  // #990: the overlay as of the last commit, for the invite join to read after its
+  // await. Synced in a layout effect so it is current before any later await resumes.
+  const overlayRef = useRef<Overlay | null>(overlay);
+  useLayoutEffect(() => {
+    overlayRef.current = overlay;
+  }, [overlay]);
+  // #990: a sit or its completion screen holds a `?buddy=` invite until it ends.
+  const buddyInviteHeld = overlayHoldsBuddyInvite(overlay);
   // #666: monotonic session generation. Every async path that adopts a user
   // captures the generation it started in and drops its result if a sign-out —
   // or a *different* sign-in — happened in the meantime. A plain "cancelled"
@@ -239,6 +253,9 @@ export default function StillPoint() {
 
   useEffect(() => {
     if (!user || !authChecked || buddyInviteInFlight.current) return;
+    // #990: an invite that arrives during a sit waits for it to end. `?buddy=` stays
+    // in the URL, and this effect runs again when `buddyInviteHeld` clears.
+    if (buddyInviteHeld) return;
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("buddy")?.trim();
     if (!raw) return;
@@ -249,7 +266,15 @@ export default function StillPoint() {
     (async () => {
       try {
         const { sessionId, calendarSync } = await api.joinBuddySession(raw);
-        if (cancelled) return;
+        // #990: a sit may have started while the request was in flight. Routing
+        // would close it, so the answer is dropped and the invite stays in the URL;
+        // the join after the sit ends is a rejoin the server accepts.
+        const decision = buddyInviteJoinDecision({ cancelled, overlay: overlayRef.current });
+        if (decision === "stale") return;
+        if (decision === "deferForSession") {
+          buddyInviteInFlight.current = false;
+          return;
+        }
         setBuddyInviteError(null);
         setBuddyCalendarMessage(calendarSyncMessageFromResult(calendarSync));
         setBuddySessionId(sessionId);
@@ -274,7 +299,7 @@ export default function StillPoint() {
       cancelled = true;
       buddyInviteInFlight.current = false;
     };
-  }, [user, authChecked, rawTab, router]);
+  }, [user, authChecked, rawTab, router, buddyInviteHeld]);
 
   // Reset scroll to the top whenever the active view changes. Without this,
   // opening a session/overlay from a scrolled tab (e.g. the long Home page)
@@ -632,7 +657,9 @@ export default function StillPoint() {
           onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
           onReturn={() => {
             setOverlay(null);
-            router.push(pathForTab(DEFAULT_TAB));
+            // #990: an invite that waited for this sit rides along, so the join
+            // effect opens the buddy room once the completion screen closes.
+            router.push(pathKeepingBuddyInvite(pathForTab(DEFAULT_TAB), window.location.search));
             refreshUserFromServer();
           }}
           // #703: with nothing stored there is no queue entry to append a note to
