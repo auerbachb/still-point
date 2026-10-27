@@ -7,6 +7,8 @@ struct RootView: View {
     @State private var appVM = AppViewModel()
     @State private var reachability = NetworkReachabilityMonitor()
     @Environment(\.scenePhase) private var scenePhase
+    /// #887: UI-test mode only. Settings requests `UITestAPIStore` has received.
+    @State private var uiTestSettingsRequestCount = 0
 
     var body: some View {
         ZStack {
@@ -128,8 +130,22 @@ struct RootView: View {
                 )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
+
+                // #887: how many Settings requests reached `UITestAPIStore` since
+                // launch, so a UI test can check that a dropped save sent nothing.
+                AccessibilityMarkerView(
+                    identifier: "uiTest.settingsRequestCount",
+                    value: String(uiTestSettingsRequestCount)
+                )
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
             }
 
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UITestSettingsRequests.didRecord)) { note in
+            guard let count = note.userInfo?[UITestSettingsRequests.countKey] as? Int else { return }
+            // Each post carries the running total, so the largest one seen is the count.
+            uiTestSettingsRequestCount = max(uiTestSettingsRequestCount, count)
         }
         .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
         .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
@@ -181,6 +197,11 @@ struct RootView: View {
                 // #663: while the app stays closed, a background refresh is the only
                 // way a sit saved on the web reaches the widget.
                 BackgroundRefreshScheduler.reschedule()
+                // #887: arms the held `me()` read for the scene-activation check when
+                // the app comes back. No-op unless a UI test configured a hold.
+                if isUITestMode {
+                    Task { await APIClient.shared.uiTestSceneDidEnterBackground() }
+                }
             }
         }
         .onOpenURL { url in

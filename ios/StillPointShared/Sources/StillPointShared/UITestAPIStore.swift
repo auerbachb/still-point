@@ -1,5 +1,17 @@
 import Foundation
 
+/// #887: how the app learns that `UITestAPIStore` received a Settings request.
+///
+/// The store posts `didRecord` on the main actor each time `PATCH /api/settings`
+/// reaches it, with the number received since launch under `countKey`. `RootView`
+/// shows that number on a UI-test-only accessibility marker, so a UI test can check
+/// that a save was or was not sent. Posted only in UI-test mode, since the store
+/// exists only then.
+public enum UITestSettingsRequests {
+    public static let didRecord = Notification.Name("StillPoint.UITest.settingsRequestRecorded")
+    public static let countKey = "count"
+}
+
 /// UI-test infrastructure extracted out of `APIClient` (issue #416).
 ///
 /// When the app launches with `SP_UI_TEST_MODE` set, `APIClient` builds one of
@@ -17,6 +29,12 @@ actor UITestAPIStore {
     private var store: UITestStore
     private var notificationPreferences: NotificationPreferencesDTO
     private let defaultsKey: String
+    /// #887: set when the scene goes to the background with a hold configured, and
+    /// spent by the next `me()`, which is then held. See `armHeldMeRead()`.
+    private var isHeldMeReadArmed = false
+    /// #887: Settings requests received since launch. In memory only, so each launch
+    /// counts from zero.
+    private var settingsRequestCount = 0
 
     private static let maxFailureReasonLength = 1000
 
@@ -163,7 +181,36 @@ actor UITestAPIStore {
         return true
     }
 
-    func me(today: String? = nil) throws -> UserDTO? {
+    /// #887: arms the held `me()` read, when `SP_UI_TEST_HOLD_ME_SECONDS` is set.
+    ///
+    /// `APIClient.uiTestSceneDidEnterBackground()` calls this when the scene goes to
+    /// the background. The next `me()` is the scene-activation `checkAuth()` read
+    /// when the app comes back, and that one is held: it waits the configured time
+    /// before answering, holding the app's settings queue, so a Settings save made in
+    /// that window waits behind it. With `SP_UI_TEST_SECOND_ACCOUNT` set too, the
+    /// held read answers as the second account, so the app adopts a different
+    /// account while Settings stays on screen.
+    ///
+    /// Armed by the background rather than by a call count, because the launch makes
+    /// one or two `me()` reads depending on whether the scene-activation check fires,
+    /// and both of those must answer as the first account.
+    func armHeldMeRead() {
+        guard config.holdMeSeconds != nil else { return }
+        isHeldMeReadArmed = true
+    }
+
+    func me(today: String? = nil) async throws -> UserDTO? {
+        if isHeldMeReadArmed, let holdSeconds = config.holdMeSeconds {
+            isHeldMeReadArmed = false
+            // An actor suspension, so every other request still reaches the store
+            // while this one waits: a Settings save the app wrongly sent beside the
+            // read would be counted, not blocked.
+            try? await Task.sleep(nanoseconds: UInt64(holdSeconds * 1_000_000_000))
+            if config.secondAccount, store.isAuthenticated {
+                switchToSecondAccount()
+            }
+        }
+
         if config.forceLaunchOffline {
             throw APIError(status: 0, message: "No internet connection")
         }
@@ -481,6 +528,9 @@ actor UITestAPIStore {
         ambientSoundEnabled: Bool?,
         longSessionPeriod: SessionPeriod? = nil
     ) throws -> UserDTO {
+        // #887: counted before anything can reject it, since the question a UI test
+        // asks is whether the app sent the request at all.
+        recordSettingsRequest()
         try ensureAuthenticated()
 
         var nextUsername = store.user.username
@@ -688,7 +738,43 @@ actor UITestAPIStore {
         return created
     }
 
+    // MARK: - Second account (#887)
+
+    /// The second account, `SP_UI_TEST_SECOND_ACCOUNT`. Its id, username and Public
+    /// Board differ from the first account's, so the switch is visible on Settings and
+    /// moves an account field Settings copies onto its controls. Aphorisms stays off,
+    /// as on the first account: a UI test turns Aphorisms on before the switch, so the
+    /// value it expects afterwards differs from the one it chose.
+    static let secondAccountUser = UserDTO(
+        id: "ui-user-2",
+        email: "ios.second@stillpoint.test",
+        username: "ios_second",
+        isPublic: true,
+        currentDay: 1,
+        aphorismsEnabled: false
+    )
+
+    /// Signs the store in as the second account. Sessions, thoughts and failure
+    /// reasons stay as they are: the UI tests that use this only look at Settings.
+    private func switchToSecondAccount() {
+        store.user = Self.secondAccountUser
+        store.loginEmail = Self.secondAccountUser.email
+        persist()
+    }
+
     // MARK: - Helpers
+
+    private func recordSettingsRequest() {
+        settingsRequestCount += 1
+        let count = settingsRequestCount
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: UITestSettingsRequests.didRecord,
+                object: nil,
+                userInfo: [UITestSettingsRequests.countKey: count]
+            )
+        }
+    }
 
     private func ensureAuthenticated() throws {
         guard store.isAuthenticated else {
@@ -724,6 +810,12 @@ private struct UITestConfig: Sendable {
     let forceUsernameConflict: Bool
     /// Deterministic marketing/scenario data for Fastlane snapshot runs (Issue #325).
     let snapshotSeed: Bool
+    /// #887: how long the held `me()` read waits, in seconds
+    /// (`SP_UI_TEST_HOLD_ME_SECONDS`). `nil` when no read is held.
+    let holdMeSeconds: Double?
+    /// #887: the held `me()` read answers as the second account
+    /// (`SP_UI_TEST_SECOND_ACCOUNT`).
+    let secondAccount: Bool
 
     static func fromProcessInfo() -> UITestConfig? {
         let env = ProcessInfo.processInfo.environment
@@ -735,7 +827,9 @@ private struct UITestConfig: Sendable {
             forceTokenExpired: truthy(env["SP_UI_TEST_FORCE_TOKEN_EXPIRED"]),
             forceSessionsFailure: truthy(env["SP_UI_TEST_FORCE_SESSIONS_FAILURE"]),
             forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
-            snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"])
+            snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
+            holdMeSeconds: env["SP_UI_TEST_HOLD_ME_SECONDS"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil },
+            secondAccount: truthy(env["SP_UI_TEST_SECOND_ACCOUNT"])
         )
     }
 
