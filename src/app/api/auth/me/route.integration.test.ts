@@ -33,7 +33,11 @@ function meRequest(date?: string): NextRequest {
   return new NextRequest(url);
 }
 
-async function insertCompletedStandardSession(userId: string, sessionDate: string) {
+async function insertCompletedStandardSession(
+  userId: string,
+  sessionDate: string,
+  overrides: Partial<typeof sessions.$inferInsert> = {},
+) {
   await db.insert(sessions).values({
     userId,
     dayNumber: 1,
@@ -44,6 +48,7 @@ async function insertCompletedStandardSession(userId: string, sessionDate: strin
     clearPercent: 90,
     thoughtCount: 0,
     sessionDate,
+    ...overrides,
   });
 }
 
@@ -96,6 +101,22 @@ describe("GET /api/auth/me — miss-a-day recovery detection (#238)", () => {
     expect(row!.recoveryTargetDay).toBe(11);
     expect(row!.recoveryCurrentStep).toBe(1);
     expect(row!.recoveryTotalSteps).toBe(5);
+  });
+
+  test("a recent combined sit is the last primary sit, so an older gap starts no recovery (#890)", async () => {
+    const user = await makeUser({ currentDay: 11, dualTrackEnabled: true });
+    // On its own, this sit is a 10-day gap and would start recovery.
+    await insertCompletedStandardSession(user.id, "2026-06-01");
+    await insertCompletedStandardSession(user.id, "2026-06-10", { track: "primary", combined: true });
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+
+    const res = await GET(meRequest("2026-06-11"));
+    expect(res.status).toBe(200);
+    const { user: body } = await res.json();
+    expect(body.recoveryTargetDay).toBeNull();
+
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.recoveryTargetDay).toBeNull();
   });
 
   test("a large gap on day 1 (nothing lost) does not start recovery", async () => {

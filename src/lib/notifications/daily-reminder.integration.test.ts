@@ -4,6 +4,9 @@
  * missed-day decisions in `notification-scheduler.ts`. A focus session (reading,
  * writing, listening) is not meditation, so it must not count; quick, breath and
  * standard sits keep counting. Runs against a real in-process Postgres (PGlite).
+ *
+ * Issue #890 (combine today's sits 1/5, #769): `previousPracticeDayStillOpen`
+ * treats a completed combined sit as closing both of a two-a-day day's tracks.
  */
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { sessions, users } from "@/db/schema";
@@ -11,18 +14,18 @@ import { closeTestDb, getTestDb, type TestDb } from "@/lib/testing/pgliteTestDb"
 
 vi.mock("@/db", async () => ({ db: await getTestDb() }));
 
-import { userCompletedSessionOnDate } from "./daily-reminder";
+import { previousPracticeDayStillOpen, userCompletedSessionOnDate } from "./daily-reminder";
 
 const DAY = "2026-10-26";
 
 let db: TestDb;
 let seq = 0;
 
-async function makeUser(): Promise<string> {
+async function makeUser(overrides: Partial<typeof users.$inferInsert> = {}): Promise<string> {
   seq += 1;
   const [row] = await db
     .insert(users)
-    .values({ email: `remind835-${seq}@test.local`, username: `remind835_${seq}` })
+    .values({ email: `remind835-${seq}@test.local`, username: `remind835_${seq}`, ...overrides })
     .returning({ id: users.id });
   return row!.id;
 }
@@ -90,5 +93,35 @@ describe("userCompletedSessionOnDate ignores focus sessions (#835)", () => {
 
     expect(await userCompletedSessionOnDate(userId, DAY)).toBe(false);
     expect(await userCompletedSessionOnDate(userId, "2026-10-25")).toBe(true);
+  });
+});
+
+describe("previousPracticeDayStillOpen counts a combined sit for both tracks (#890)", () => {
+  test("a two-a-day day whose only sit is a completed combined one is closed", async () => {
+    const userId = await makeUser({ dualTrackEnabled: true });
+    await insertSession(userId, "standard", { track: "primary", combined: true });
+
+    expect(await previousPracticeDayStillOpen(userId, DAY)).toBe(false);
+  });
+
+  test("a two-a-day day with only a plain primary sit is still open", async () => {
+    const userId = await makeUser({ dualTrackEnabled: true });
+    await insertSession(userId, "standard", { track: "primary" });
+
+    expect(await previousPracticeDayStillOpen(userId, DAY)).toBe(true);
+  });
+
+  test("an ended-early combined sit leaves a two-a-day day open", async () => {
+    const userId = await makeUser({ dualTrackEnabled: true });
+    await insertSession(userId, "standard", { track: "primary", combined: true, completed: false });
+
+    expect(await previousPracticeDayStillOpen(userId, DAY)).toBe(true);
+  });
+
+  test("a combined sit closes a single-track day, as any primary sit does", async () => {
+    const userId = await makeUser({ dualTrackEnabled: false });
+    await insertSession(userId, "standard", { track: "primary", combined: true });
+
+    expect(await previousPracticeDayStillOpen(userId, DAY)).toBe(false);
   });
 });

@@ -87,6 +87,42 @@ describe("GET /api/track/done-today", () => {
     });
   });
 
+  test("a completed combined sit counts for both tracks (#890)", async () => {
+    const user = await makeUser();
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+    await insertSession(user.id, { track: "primary", combined: true });
+
+    const res = await GET(doneTodayRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      tracksDoneToday: { primary: true, second: true },
+    });
+  });
+
+  test("an ended-early combined sit counts for neither track (#890)", async () => {
+    const user = await makeUser();
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+    await insertSession(user.id, { track: "primary", combined: true, completed: false });
+
+    const res = await GET(doneTodayRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      tracksDoneToday: { primary: false, second: false },
+    });
+  });
+
+  test("a combined sit on another day does not count for this one (#890)", async () => {
+    const user = await makeUser();
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+    await insertSession(user.id, { track: "primary", combined: true, sessionDate: "2026-06-10" });
+
+    const res = await GET(doneTodayRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      tracksDoneToday: { primary: false, second: false },
+    });
+  });
+
   test("rejects invalid calendar dates", async () => {
     const user = await makeUser();
     getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
