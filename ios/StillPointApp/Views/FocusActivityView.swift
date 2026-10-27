@@ -96,11 +96,15 @@ struct FocusActivityView: View {
         // #854: read here, with the end. The task starts a turn later, when another
         // account may already be signed in.
         let generation = appVM.authGeneration
+        // Also read here: the save task can run after local midnight, and the
+        // session belongs to the day it ended on.
+        let endedAt = Date()
         Task {
             await appVM.completeFocusSession(
                 end,
                 category: category,
                 focusActivityDay: focusActivityDay,
+                endedAt: endedAt,
                 startedAtGeneration: generation
             )
         }

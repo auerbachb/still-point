@@ -135,12 +135,15 @@ extension AppViewModel {
     /// - Parameter end: what the session left behind (`FocusSessionRun.end`).
     /// - Parameter category: what the picker chose.
     /// - Parameter focusActivityDay: the goal counter the session ran on, from its route.
+    /// - Parameter endedAt: when the session ended, read with the end itself, so a save
+    ///   that settles after local midnight still dates the session to its own day.
     /// - Parameter generation: `authGeneration`, read by the End tap or the expiry tick
     ///   itself, as for `completeBreathSession` (#854).
     func completeFocusSession(
         _ end: FocusSessionEnd,
         category: FocusCategory,
         focusActivityDay: Int,
+        endedAt: Date,
         startedAtGeneration generation: Int
     ) async {
         // #854: an identity transition between the end and this task made the screen
@@ -164,7 +167,7 @@ extension AppViewModel {
             result: result,
             category: category,
             focusActivityDay: focusActivityDay,
-            endedAt: Date(),
+            endedAt: endedAt,
             clientSessionId: clientSessionId
         )
 

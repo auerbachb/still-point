@@ -43,6 +43,10 @@ final class NetworkReachabilityMonitor {
             }
         } catch {
             print("Failed to flush offline session queue on reconnect: \(error)")
+            // A flush that throws partway has still uploaded every entry before the
+            // failing one, and its count is lost with the throw. Re-read anyway: the
+            // read is idempotent and a failed one is dropped (`refreshUserAfterSync`).
+            onSynced?()
         }
     }
 }
