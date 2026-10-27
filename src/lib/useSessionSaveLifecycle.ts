@@ -41,6 +41,10 @@ export type CompletionData = {
 
 /** What `SessionView` hands back when a sit ends — completed or abandoned. */
 export type CompletedSitInput = {
+  /** #930: which sit this is. Unique to the sit, and the same on every terminal
+   *  call made for it (one per `SessionView` mount). Only the save gate reads
+   *  it; it is not part of the saved request. */
+  sitKey: string;
   dayNumber: number;
   sessionType: SessionType;
   track: Track;
@@ -111,6 +115,17 @@ export function useSessionSaveLifecycle({
   const breathSavingRef = useRef<number | null>(null);
   // The same gate for a focus save (#836).
   const focusSavingRef = useRef<number | null>(null);
+  // #930: the standard sits whose save, completed or abandoned, is running, by
+  // `sitKey`. A second terminal call for one of them (End Early twice, Abandon
+  // after End Early) is refused: it would mint a second client id, and the
+  // queue and `POST /api/sessions` keep two ids as two sits. The breath and
+  // focus gates are keyed to the generation; this one is keyed to the sit,
+  // because a standard sit's save can outlive its screen. Browser Back closes
+  // the sit while an upload may still be waiting (up to `UPLOAD_TIMEOUT_MS`
+  // each), and a sit begun after that must still save. No key is ever reused,
+  // so a save still running for the previous account cannot hold up the next
+  // account's either (#833).
+  const sitSavesRunningRef = useRef(new Set<string>());
 
   // #703: every path that writes a sit to the local queue reports here, so the
   // offline strip's promise tracks whether local storage is actually working.
@@ -245,56 +260,66 @@ export function useSessionSaveLifecycle({
   // `AppViewModel.localSaveFailed`), because iOS's "Continue without saving"
   // leaves the user looking at the same false reassurance this ticket is about.
   const handleSessionComplete = useCallback(async (data: CompletedSitInput) => {
-    const clientSessionId = crypto.randomUUID();
-    // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
-    // A retry that crosses 6:00 still keeps this credited day.
-    const sessionDate = creditedPracticeDate(
-      loadedSitsRef.current,
-      !!userRef.current?.dualTrackEnabled,
-    );
-    let outcome: SessionSaveOutcome | null = null;
+    // #930: one save per sit — see `sitSavesRunningRef`.
+    const sitSavesRunning = sitSavesRunningRef.current;
+    if (sitSavesRunning.has(data.sitKey)) return;
+    sitSavesRunning.add(data.sitKey);
+    try {
+      const clientSessionId = crypto.randomUUID();
+      // Read once, at the moment the sit ended — see `lastCompletedSitRef`.
+      // A retry that crosses 6:00 still keeps this credited day.
+      const sessionDate = creditedPracticeDate(
+        loadedSitsRef.current,
+        !!userRef.current?.dualTrackEnabled,
+      );
+      let outcome: SessionSaveOutcome | null = null;
 
-    // #666 guard: the save below is a suspension point, and sign-out during it
-    // must not let the previous account's sit reopen the completion screen over
-    // the signed-out UI.
-    const generation = sessionGeneration.current;
+      // #666 guard: the save below is a suspension point, and sign-out during it
+      // must not let the previous account's sit reopen the completion screen over
+      // the signed-out UI.
+      const generation = sessionGeneration.current;
 
-    if (user?.id) {
-      // Kept for the completion screen's retry, which must reuse this exact
-      // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
-      lastCompletedSitRef.current = { data, clientSessionId, sessionDate };
-      outcome = await saveCompletedSit(data, clientSessionId, user.id, sessionDate);
-    } else {
-      lastCompletedSitRef.current = null;
+      if (user?.id) {
+        // Kept for the completion screen's retry, which must reuse this exact
+        // `clientSessionId` — the #557 idempotency key is what makes a retry safe.
+        lastCompletedSitRef.current = { data, clientSessionId, sessionDate };
+        outcome = await saveCompletedSit(data, clientSessionId, user.id, sessionDate);
+      } else {
+        lastCompletedSitRef.current = null;
+      }
+
+      if (generation !== sessionGeneration.current) return;
+
+      rememberStoredSit(data, sessionDate, outcome);
+
+      setCompletionData({
+        sessionId: outcome?.sessionId ?? null,
+        clientSessionId,
+        isPendingSync: outcome?.status === "pending",
+        notStored: outcome?.status === "notStored",
+        dayNumber: data.dayNumber,
+        sessionType: data.sessionType,
+        track: data.track,
+        duration: data.duration,
+        bonusSeconds: data.bonusSeconds,
+        clearPercent: data.clearPercent,
+        thoughtCount: data.thoughtCount,
+        thoughts: data.thoughts,
+        // #769: after a combined sit, "tomorrow" is what the next two sits add up to.
+        nextDuration: data.combined && user
+          ? previewNextCombinedDuration({
+            completed: data.completed,
+            currentDay: user.currentDay,
+            secondTrackDay: user.secondTrackDay ?? 1,
+          })
+          : previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
+      });
+      setOverlay("complete");
+    } finally {
+      // Let go once the save is over, however it ended: the gate holds only
+      // saves still running.
+      sitSavesRunning.delete(data.sitKey);
     }
-
-    if (generation !== sessionGeneration.current) return;
-
-    rememberStoredSit(data, sessionDate, outcome);
-
-    setCompletionData({
-      sessionId: outcome?.sessionId ?? null,
-      clientSessionId,
-      isPendingSync: outcome?.status === "pending",
-      notStored: outcome?.status === "notStored",
-      dayNumber: data.dayNumber,
-      sessionType: data.sessionType,
-      track: data.track,
-      duration: data.duration,
-      bonusSeconds: data.bonusSeconds,
-      clearPercent: data.clearPercent,
-      thoughtCount: data.thoughtCount,
-      thoughts: data.thoughts,
-      // #769: after a combined sit, "tomorrow" is what the next two sits add up to.
-      nextDuration: data.combined && user
-        ? previewNextCombinedDuration({
-          completed: data.completed,
-          currentDay: user.currentDay,
-          secondTrackDay: user.secondTrackDay ?? 1,
-        })
-        : previewNextStandardDuration(data.sessionType, data.completed, data.track, user),
-    });
-    setOverlay("complete");
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveCompletedSit, rememberStoredSit, setOverlay]);
 
   // #703: retry the local save without leaving the completion screen — the web
@@ -338,44 +363,54 @@ export function useSessionSaveLifecycle({
   }, [sessionGeneration, user, saveCompletedSit, rememberStoredSit]);
 
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
-    // #833: the save below waits on the server flush, so a sign-out and a new
-    // sign-in can land before it settles. Closing the overlay then would end
-    // the next account's sit — the same guard as `handleSessionComplete`.
-    const generation = sessionGeneration.current;
-    if (user?.id) {
-      // #703: an abandoned sit is still a sit the queue was asked to keep. It
-      // gets no completion screen, so the offline strip is the only place a
-      // failed write can be said at all — and it goes through the same
-      // classifier as a completed sit, so a sync error thrown after a durable
-      // write does not withdraw a promise the queue is keeping.
-      await saveSitToQueue(
-        {
-          dayNumber: data.dayNumber,
-          sessionType: data.sessionType,
-          track: data.track,
-          // #769: stored as what happened. Not completed, it credits nothing.
-          ...combinedSitField(data.combined),
-          duration: data.duration,
-          bonusSeconds: data.bonusSeconds,
-          completed: false,
-          actualTime: data.actualTime,
-          clearPercent: data.clearPercent,
-          thoughtCount: data.thoughtCount,
-          mindStateLog: data.mindStateLog,
-          sessionDate: creditedPracticeDate(
-            loadedSitsRef.current,
-            !!userRef.current?.dualTrackEnabled,
-          ),
-        },
-        crypto.randomUUID(),
-        user.id,
-        data.thoughts,
-        "Failed to save abandoned session:",
-      );
-    }
+    // #930: one save per sit, shared with `handleSessionComplete`, so Abandon
+    // after End Early is refused too — see `sitSavesRunningRef`.
+    const sitSavesRunning = sitSavesRunningRef.current;
+    if (sitSavesRunning.has(data.sitKey)) return;
+    sitSavesRunning.add(data.sitKey);
+    try {
+      // #833: the save below waits on the server flush, so a sign-out and a new
+      // sign-in can land before it settles. Closing the overlay then would end
+      // the next account's sit — the same guard as `handleSessionComplete`.
+      const generation = sessionGeneration.current;
+      if (user?.id) {
+        // #703: an abandoned sit is still a sit the queue was asked to keep. It
+        // gets no completion screen, so the offline strip is the only place a
+        // failed write can be said at all — and it goes through the same
+        // classifier as a completed sit, so a sync error thrown after a durable
+        // write does not withdraw a promise the queue is keeping.
+        await saveSitToQueue(
+          {
+            dayNumber: data.dayNumber,
+            sessionType: data.sessionType,
+            track: data.track,
+            // #769: stored as what happened. Not completed, it credits nothing.
+            ...combinedSitField(data.combined),
+            duration: data.duration,
+            bonusSeconds: data.bonusSeconds,
+            completed: false,
+            actualTime: data.actualTime,
+            clearPercent: data.clearPercent,
+            thoughtCount: data.thoughtCount,
+            mindStateLog: data.mindStateLog,
+            sessionDate: creditedPracticeDate(
+              loadedSitsRef.current,
+              !!userRef.current?.dualTrackEnabled,
+            ),
+          },
+          crypto.randomUUID(),
+          user.id,
+          data.thoughts,
+          "Failed to save abandoned session:",
+        );
+      }
 
-    if (generation !== sessionGeneration.current) return;
-    setOverlay(null);
+      if (generation !== sessionGeneration.current) return;
+      setOverlay(null);
+    } finally {
+      // Let go once the save is over, as in `handleSessionComplete`.
+      sitSavesRunning.delete(data.sitKey);
+    }
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
 
   // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
