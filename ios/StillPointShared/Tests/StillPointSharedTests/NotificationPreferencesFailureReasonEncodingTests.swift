@@ -1,29 +1,30 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class NotificationPreferencesFailureReasonEncodingTests: XCTestCase {
-    func testPatchEncodesFailureReasonReminderEnabledWhenSet() throws {
+struct NotificationPreferencesFailureReasonEncodingTests {
+    @Test func testPatchEncodesFailureReasonReminderEnabledWhenSet() throws {
         let patch = NotificationPreferencesPatch(failureReasonReminderEnabled: true)
 
         let data = try JSONEncoder().encode(patch)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(jsonObject["failureReasonReminderEnabled"] as? Bool, true)
-        XCTAssertNil(jsonObject["pushEnabled"])
-        XCTAssertNil(jsonObject["dailyReminderTime"])
+        #expect((jsonObject["failureReasonReminderEnabled"] as? Bool) == true)
+        #expect(jsonObject["pushEnabled"] == nil)
+        #expect(jsonObject["dailyReminderTime"] == nil)
     }
 
-    func testPatchOmitsFailureReasonReminderEnabledWhenNil() throws {
+    @Test func testPatchOmitsFailureReasonReminderEnabledWhenNil() throws {
         let patch = NotificationPreferencesPatch(pushEnabled: true)
 
         let data = try JSONEncoder().encode(patch)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertNil(jsonObject["failureReasonReminderEnabled"])
-        XCTAssertEqual(jsonObject["pushEnabled"] as? Bool, true)
+        #expect(jsonObject["failureReasonReminderEnabled"] == nil)
+        #expect((jsonObject["pushEnabled"] as? Bool) == true)
     }
 
-    func testDTODecodesFailureReasonReminderEnabled() throws {
+    @Test func testDTODecodesFailureReasonReminderEnabled() throws {
         let json = """
         {
             "pushEnabled": true,
@@ -43,6 +44,6 @@ final class NotificationPreferencesFailureReasonEncodingTests: XCTestCase {
 
         let dto = try JSONDecoder().decode(NotificationPreferencesDTO.self, from: json)
 
-        XCTAssertTrue(dto.failureReasonReminderEnabled)
+        #expect(dto.failureReasonReminderEnabled)
     }
 }

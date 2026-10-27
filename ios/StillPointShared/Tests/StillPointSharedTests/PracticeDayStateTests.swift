@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// What the yesterday lookup returns once the test lets it settle.
@@ -123,7 +124,7 @@ private final class PracticeDayScreen {
 /// and, two-a-day, with a server sit on the other track that only the yesterday lookup
 /// reported, when the badge query fails.
 @MainActor
-final class PracticeDayStateTests: XCTestCase {
+struct PracticeDayStateTests {
     private let yesterday = "2026-10-26"
     private let today = "2026-10-27"
 
@@ -158,7 +159,7 @@ final class PracticeDayStateTests: XCTestCase {
     /// The order the issue names. The lookup leaves at 1:00, the sit that finishes
     /// yesterday ends at 1:30, and the lookup then lands with the "incomplete" it read
     /// before that sit reached the server.
-    func testAnIncompleteAnswerLandingAfterTheSitEndsDoesNotReopenYesterday() async {
+    @Test func testAnIncompleteAnswerLandingAfterTheSitEndsDoesNotReopenYesterday() async {
         let screen = makeScreen()
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: false, second: false))
         let leftAt = october(27, 1)
@@ -166,22 +167,22 @@ final class PracticeDayStateTests: XCTestCase {
         await read.untilStarted()
 
         // The sit itself is stored on yesterday, and finishes it.
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 10)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 10)) == yesterday)
         screen.finishSit(.standard, at: october(27, 1, 30))
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 30)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 30)) == today)
 
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 1, 40)), today,
+        #expect(
+            screen.creditedSessionDate(at: october(27, 1, 40)) == today,
             "an answer read before the sit ended reopened yesterday"
         )
     }
 
     /// A lookup that fails is no better. By the time it lands, the sit has rolled the
     /// flags onto today, so the failure fallback used to read "before 6:00, still open".
-    func testAFailedLookupLandingAfterTheSitEndsDoesNotReopenYesterday() async {
+    @Test func testAFailedLookupLandingAfterTheSitEndsDoesNotReopenYesterday() async {
         let screen = makeScreen()
         let read = HeldSave(settlingWith: YesterdayRead.failed)
         let leftAt = october(27, 1)
@@ -192,47 +193,44 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 1, 40)), today,
+        #expect(
+            screen.creditedSessionDate(at: october(27, 1, 40)) == today,
             "a lookup that failed after the sit ended reopened yesterday"
         )
     }
 
     /// The same answer, landing before the sit ends. It is still current when the sit
     /// ends, and the rollover used to prefer it to the flags.
-    func testAnIncompleteAnswerThatLandedBeforeTheSitDoesNotOutvoteIt() async {
+    @Test func testAnIncompleteAnswerThatLandedBeforeTheSitDoesNotOutvoteIt() async {
         let screen = makeScreen()
         await screen.resolvePreviousPracticeDay(now: october(27, 1), reading: { .answered(primary: false, second: false) })
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 10)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 10)) == yesterday)
 
         screen.finishSit(.standard, at: october(27, 1, 30))
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 1, 40)), today,
-            "an answer read before the sit ended outvoted it"
-        )
+        #expect(screen.creditedSessionDate(at: october(27, 1, 40)) == today, "an answer read before the sit ended outvoted it")
     }
 
     /// Once a sit has finished yesterday, the next refresh asks nothing more about it.
     /// The only news a lookup could bring is the server lagging that sit, or, offline as
     /// on the trip home after it, a failure whose fallback reads "before 6:00, still
     /// open" once the flags are on today.
-    func testARefreshAfterTheSitFinishesYesterdayDoesNotAskAgain() async {
+    @Test func testARefreshAfterTheSitFinishesYesterdayDoesNotAskAgain() async {
         let screen = makeScreen()
         screen.finishSit(.standard, at: october(27, 1, 30))
 
         await screen.resolvePreviousPracticeDay(now: october(27, 1, 35), reading: {
-            XCTFail("asked about yesterday again after a sit finished it")
+            Issue.record("asked about yesterday again after a sit finished it")
             return .failed
         })
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 40)) == today)
     }
 
     /// Two-a-day: the first sit does not finish yesterday, so the lookup's answer still
     /// applies and the day stays open. The second sit finishes it, and that answer,
     /// current by then, does not outvote it.
-    func testTwoADayClosesYesterdayWhenItsSecondSitEnds() async {
+    @Test func testTwoADayClosesYesterdayWhenItsSecondSitEnds() async {
         let screen = makeScreen()
         screen.dualTrack = true
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: false, second: false))
@@ -243,21 +241,18 @@ final class PracticeDayStateTests: XCTestCase {
         screen.finishSit(.standard, track: .primary, at: october(27, 1, 30))
         read.settle()
         await resolving.value
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 1, 35)), yesterday,
-            "the first of two sits finished yesterday"
-        )
+        #expect(screen.creditedSessionDate(at: october(27, 1, 35)) == yesterday, "the first of two sits finished yesterday")
 
         screen.finishSit(.standard, track: .second, at: october(27, 2))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 2, 5)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 2, 5)) == today)
     }
 
     // MARK: - Unchanged
 
     /// A quick sit is practice, but not one of yesterday's required sits. It finishes
     /// nothing, so the lookup's answer still applies.
-    func testAQuickSitDuringTheLookupLeavesYesterdayOpen() async {
+    @Test func testAQuickSitDuringTheLookupLeavesYesterdayOpen() async {
         let screen = makeScreen()
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: false, second: false))
         let leftAt = october(27, 1)
@@ -268,12 +263,12 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 40)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 40)) == yesterday)
     }
 
     /// At 6:00 the new calendar day begins whatever is known about yesterday, so a
     /// lookup that left before 6:00 and lands after it changes nothing.
-    func testALookupThatLeftBefore6AndLandsAfterItLeavesTheDayOnToday() async {
+    @Test func testALookupThatLeftBefore6AndLandsAfterItLeavesTheDayOnToday() async {
         let screen = makeScreen()
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: false, second: false))
         let leftAt = october(27, 5, 50)
@@ -284,16 +279,16 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 6, 10)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 6, 10)) == today)
     }
 
     /// A badge query about yesterday that left before 6:00 and lands after a sit at
     /// 6:00 or later rolled the flags onto today. Its answer must not move the stamp
     /// back to yesterday, or the next rollover clears today's sit.
-    func testABadgeAnswerAboutYesterdayLandingAfterATodaySitKeepsTheSit() {
+    @Test func testABadgeAnswerAboutYesterdayLandingAfterATodaySitKeepsTheSit() {
         let screen = makeScreen()
         let leftAt = october(27, 5, 59)
-        XCTAssertEqual(screen.creditedSessionDate(at: leftAt), yesterday)
+        #expect(screen.creditedSessionDate(at: leftAt) == yesterday)
 
         screen.finishSit(.standard, at: october(27, 6, 1))
         screen.landBadgeAnswer(
@@ -301,15 +296,15 @@ final class PracticeDayStateTests: XCTestCase {
             leftAt: leftAt, landedAt: october(27, 6, 2)
         )
 
-        XCTAssertEqual(stampDay(screen), today, "a late answer about yesterday rewound the stamp")
-        XCTAssertTrue(screen.state.primaryStandardDoneToday, "the next rollover cleared today's sit")
-        XCTAssertTrue(screen.state.practiceDoneToday)
-        XCTAssertFalse(screen.state.secondPracticeDoneToday, "yesterday's second-track sit was claimed for today")
+        #expect(stampDay(screen) == today, "a late answer about yesterday rewound the stamp")
+        #expect(screen.state.primaryStandardDoneToday, "the next rollover cleared today's sit")
+        #expect(screen.state.practiceDoneToday)
+        #expect(!screen.state.secondPracticeDoneToday, "yesterday's second-track sit was claimed for today")
     }
 
     /// A reset disowns a lookup still in flight. Its answer here would have finished
     /// yesterday, so a day still open afterwards shows that it was dropped.
-    func testAResetDuringTheLookupDropsItsAnswer() async {
+    @Test func testAResetDuringTheLookupDropsItsAnswer() async {
         let screen = makeScreen()
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: true, second: false))
         let leftAt = october(27, 1)
@@ -320,35 +315,35 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertFalse(screen.state.previousDayResolved)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 40)), yesterday)
+        #expect(!screen.state.previousDayResolved)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 40)) == yesterday)
     }
 
     /// Before 6:00, nothing known and nothing sat keeps yesterday open, and an answer
     /// that says it is finished closes it.
-    func testBefore6YesterdayStaysOpenUntilAnAnswerFinishesIt() async {
+    @Test func testBefore6YesterdayStaysOpenUntilAnAnswerFinishesIt() async {
         let screen = makeScreen()
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 1)) == yesterday)
 
         await screen.resolvePreviousPracticeDay(now: october(27, 1, 5), reading: { .answered(primary: true, second: false) })
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 10)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 10)) == today)
     }
 
     /// A failed lookup with nothing sat leaves yesterday open, and the next refresh
     /// asks again.
-    func testAFailedLookupWithNothingSatLeavesYesterdayOpen() async {
+    @Test func testAFailedLookupWithNothingSatLeavesYesterdayOpen() async {
         let screen = makeScreen()
 
         await screen.resolvePreviousPracticeDay(now: october(27, 1), reading: { .failed })
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 10)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 10)) == yesterday)
         var askedAgain = false
         await screen.resolvePreviousPracticeDay(now: october(27, 1, 20), reading: {
             askedAgain = true
             return .failed
         })
-        XCTAssertTrue(askedAgain)
+        #expect(askedAgain)
     }
 
     // MARK: - A launch before 6:00 (#969)
@@ -358,47 +353,47 @@ final class PracticeDayStateTests: XCTestCase {
     /// it, and the next sit is stored on today with no badge query answered in between.
     /// The launch rollover used to stamp the flags onto today, so nothing weighed them
     /// against yesterday until a badge query answered and moved the stamp back.
-    func testAfterALaunchBefore6ASitClosesYesterdayWhenBothReadsFail() async {
+    @Test func testAfterALaunchBefore6ASitClosesYesterdayWhenBothReadsFail() async {
         let screen = makeLaunchedScreen()
         await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .failed)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 5)), yesterday)
-        XCTAssertEqual(stampDay(screen), yesterday, "the launch stamped the flags onto a day no sit is credited to")
+        #expect(screen.creditedSessionDate(at: october(27, 3, 5)) == yesterday)
+        #expect(stampDay(screen) == yesterday, "the launch stamped the flags onto a day no sit is credited to")
 
         screen.finishSit(.standard, at: october(27, 3, 30))
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 3, 40)), today,
+        #expect(
+            screen.creditedSessionDate(at: october(27, 3, 40)) == today,
             "a sit that finished yesterday after a launch left it open"
         )
-        XCTAssertEqual(stampDay(screen), today)
+        #expect(stampDay(screen) == today)
     }
 
     /// The same with no refresh yet: the sit starts straight after the launch, so its
     /// own credited date runs the first rollover.
-    func testAfterALaunchBefore6ASitClosesYesterdayBeforeAnyRead() {
+    @Test func testAfterALaunchBefore6ASitClosesYesterdayBeforeAnyRead() {
         let screen = makeLaunchedScreen()
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3)) == yesterday)
 
         screen.finishSit(.standard, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     /// An answer that yesterday is unfinished, and a failed badge query. The sit still
     /// closes yesterday: the answer was read before the sit ended (#894).
-    func testAfterALaunchBefore6ASitClosesYesterdayAfterAnIncompleteAnswer() async {
+    @Test func testAfterALaunchBefore6ASitClosesYesterdayAfterAnIncompleteAnswer() async {
         let screen = makeLaunchedScreen()
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: false, second: false), badges: .failed)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 5)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 5)) == yesterday)
 
         screen.finishSit(.standard, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     /// A lookup that leaves at the launch and fails after the sit has ended changes
     /// nothing, and the next refresh asks nothing more about yesterday.
-    func testAfterALaunchBefore6ALookupThatFailsAfterTheSitDoesNotReopenYesterday() async {
+    @Test func testAfterALaunchBefore6ALookupThatFailsAfterTheSitDoesNotReopenYesterday() async {
         let screen = makeLaunchedScreen()
         let read = HeldSave(settlingWith: YesterdayRead.failed)
         let resolving = Task { await screen.resolvePreviousPracticeDay(now: october(27, 3), reading: read.perform) }
@@ -408,27 +403,27 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
         await screen.resolvePreviousPracticeDay(now: october(27, 3, 45), reading: {
-            XCTFail("asked about yesterday again after a sit finished it")
+            Issue.record("asked about yesterday again after a sit finished it")
             return .failed
         })
     }
 
     /// Unchanged: a quick or breath sit is practice, but not one of yesterday's required
     /// sits, so after a launch it leaves yesterday open, as it does at any other time.
-    func testAfterALaunchBefore6AQuickOrBreathSitLeavesYesterdayOpen() async {
+    @Test func testAfterALaunchBefore6AQuickOrBreathSitLeavesYesterdayOpen() async {
         for sessionType in [SessionType.quick, .breath] {
             let screen = makeLaunchedScreen()
             await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .failed)
 
             screen.finishSit(sessionType, at: october(27, 3, 30))
 
-            XCTAssertEqual(
-                screen.creditedSessionDate(at: october(27, 3, 40)), yesterday,
+            #expect(
+                screen.creditedSessionDate(at: october(27, 3, 40)) == yesterday,
                 "a \(sessionType) sit after a launch closed yesterday"
             )
-            XCTAssertTrue(screen.state.practiceDoneToday, "a \(sessionType) sit after a launch was not recorded")
+            #expect(screen.state.practiceDoneToday, "a \(sessionType) sit after a launch was not recorded")
         }
     }
 
@@ -436,55 +431,52 @@ final class PracticeDayStateTests: XCTestCase {
     /// credited to, so it retires at 6:00 instead of carrying into today. Stamped onto
     /// today, a quick sit at 3:30 stayed raised past 6:00, and the widget folded it
     /// into today's row.
-    func testAfterALaunchBefore6TheFlagsRetireAt6() async {
+    @Test func testAfterALaunchBefore6TheFlagsRetireAt6() async {
         let screen = makeLaunchedScreen()
         await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .failed)
         screen.finishSit(.quick, at: october(27, 3, 30))
-        XCTAssertTrue(screen.state.practiceDoneToday)
+        #expect(screen.state.practiceDoneToday)
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 6, 5)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 6, 5)) == today)
 
-        XCTAssertFalse(screen.state.practiceDoneToday, "yesterday's quick sit carried into today")
+        #expect(!screen.state.practiceDoneToday, "yesterday's quick sit carried into today")
     }
 
     /// Two-a-day after a launch: the first sit leaves yesterday open (unchanged), and
     /// the second closes it.
-    func testAfterALaunchBefore6TwoADayClosesYesterdayWithItsSecondSit() async {
+    @Test func testAfterALaunchBefore6TwoADayClosesYesterdayWithItsSecondSit() async {
         let screen = makeLaunchedScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .failed)
 
         screen.finishSit(.standard, track: .primary, at: october(27, 3, 30))
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 3, 35)), yesterday,
-            "the first of two sits finished yesterday"
-        )
+        #expect(screen.creditedSessionDate(at: october(27, 3, 35)) == yesterday, "the first of two sits finished yesterday")
 
         screen.finishSit(.standard, track: .second, at: october(27, 4))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 4, 5)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 4, 5)) == today)
     }
 
     /// Unchanged: at 6:00 or later a launch credits today and stamps the flags there.
-    func testALaunchAt6OrLaterStampsAndCreditsToday() async {
+    @Test func testALaunchAt6OrLaterStampsAndCreditsToday() async {
         let screen = makeLaunchedScreen()
         await screen.refresh(at: october(27, 6), yesterday: .failed, badges: .failed)
 
-        XCTAssertEqual(stampDay(screen), today)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 6, 5)), today)
+        #expect(stampDay(screen) == today)
+        #expect(screen.creditedSessionDate(at: october(27, 6, 5)) == today)
     }
 
     /// The same rollover after a stamp older than yesterday: the app comes back before
     /// 6:00 after two days away, and the lookup says yesterday is unfinished. The flags
     /// roll onto yesterday, not today, so a sit closes it.
-    func testAfterTwoDaysAwayASitBefore6ClosesTheYesterdayALookupKeptOpen() async {
+    @Test func testAfterTwoDaysAwayASitBefore6ClosesTheYesterdayALookupKeptOpen() async {
         let screen = PracticeDayScreen(calendar: newYork, lastUsed: october(25, 20))
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: false, second: false), badges: .failed)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 5)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 5)) == yesterday)
 
         screen.finishSit(.standard, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     // MARK: - Two-a-day and a failed badge query (#970)
@@ -494,16 +486,16 @@ final class PracticeDayStateTests: XCTestCase {
     /// fails. The second-track sit that finishes here still closes yesterday. The
     /// lookup's answer used to be kept only as "unfinished", which lost the primary
     /// sit, so the next sit was stored on yesterday again.
-    func testTwoADayClosesYesterdayWithTheServersSitAndALocalSitWhenTheBadgeQueryFails() async {
+    @Test func testTwoADayClosesYesterdayWithTheServersSitAndALocalSitWhenTheBadgeQueryFails() async {
         let screen = makeScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: true, second: false), badges: .failed)
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 5)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 5)) == yesterday)
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 3, 40)), today,
+        #expect(
+            screen.creditedSessionDate(at: october(27, 3, 40)) == today,
             "the server's sit on the other track was lost with the failed badge query"
         )
     }
@@ -511,33 +503,33 @@ final class PracticeDayStateTests: XCTestCase {
     /// The other way round: the second-track sit is on the server only, and the primary
     /// sit finishes here. The Home badge still fails closed: the kept answer counts for
     /// crediting only.
-    func testTwoADayClosesYesterdayWithTheServersSecondTrackSitAndALocalPrimarySit() async {
+    @Test func testTwoADayClosesYesterdayWithTheServersSecondTrackSitAndALocalPrimarySit() async {
         let screen = makeScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: false, second: true), badges: .failed)
-        XCTAssertFalse(screen.state.secondDoneToday, "the Home badge showed a sit the failed badge query did not report")
+        #expect(!screen.state.secondDoneToday, "the Home badge showed a sit the failed badge query did not report")
 
         screen.finishSit(.standard, track: .primary, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     /// The same after a launch before 6:00, which needs the launch stamp (#969) as well:
     /// the flags have to describe yesterday before a sit is weighed against it.
-    func testAfterALaunchTwoADayClosesYesterdayWithTheServersSitAndALocalSit() async {
+    @Test func testAfterALaunchTwoADayClosesYesterdayWithTheServersSitAndALocalSit() async {
         let screen = makeLaunchedScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: true, second: false), badges: .failed)
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     /// No badge query has answered yet: the second-track sit ends while the lookup is
     /// in flight, and the lookup then lands with the primary sit. Together they finish
     /// yesterday.
-    func testTwoADayClosesYesterdayWhenTheLookupLandsWithTheOtherTracksSitAfterALocalOne() async {
+    @Test func testTwoADayClosesYesterdayWhenTheLookupLandsWithTheOtherTracksSitAfterALocalOne() async {
         let screen = makeScreen()
         screen.dualTrack = true
         let read = HeldSave(settlingWith: YesterdayRead.answered(primary: true, second: false))
@@ -548,68 +540,68 @@ final class PracticeDayStateTests: XCTestCase {
         read.settle()
         await resolving.value
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 1, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 1, 40)) == today)
     }
 
     /// A badge query that answered is not lost to a later one that fails. Its primary
     /// sit is kept in a local flag (#679), and since #1021 the Home badges fall back to
     /// that flag rather than clearing.
-    func testTwoADayKeepsAnEarlierBadgeAnswerAcrossAFailedBadgeQuery() async {
+    @Test func testTwoADayKeepsAnEarlierBadgeAnswerAcrossAFailedBadgeQuery() async {
         let screen = makeScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .answered(primary: true, second: false))
-        XCTAssertTrue(screen.state.primaryDoneToday)
+        #expect(screen.state.primaryDoneToday)
 
         await screen.refresh(at: october(27, 3, 10), yesterday: .failed, badges: .failed)
-        XCTAssertTrue(screen.state.primaryDoneToday, "a failed badge query cleared a sit the session remembers")
-        XCTAssertFalse(screen.state.secondDoneToday, "a failed badge query invented a Track Two sit")
-        XCTAssertTrue(screen.state.primaryStandardDoneToday, "a failed badge query dropped the sit it had reported")
+        #expect(screen.state.primaryDoneToday, "a failed badge query cleared a sit the session remembers")
+        #expect(!screen.state.secondDoneToday, "a failed badge query invented a Track Two sit")
+        #expect(screen.state.primaryStandardDoneToday, "a failed badge query dropped the sit it had reported")
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == today)
     }
 
     /// Unchanged: a single-track user needs only the primary sit, so the server's sit on
     /// the second track, with one here on that track too, leaves yesterday open.
-    func testASingleTrackUserStillNeedsThePrimarySit() async {
+    @Test func testASingleTrackUserStillNeedsThePrimarySit() async {
         let screen = makeScreen()
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: false, second: true), badges: .failed)
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 35)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 35)) == yesterday)
 
         screen.finishSit(.standard, track: .primary, at: october(27, 4))
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 4, 5)), today)
+        #expect(screen.creditedSessionDate(at: october(27, 4, 5)) == today)
     }
 
     /// Unchanged: two-a-day with only one track sat, on the server and here, leaves
     /// yesterday open.
-    func testTwoADayWithOnlyOneTrackSatLeavesYesterdayOpen() async {
+    @Test func testTwoADayWithOnlyOneTrackSatLeavesYesterdayOpen() async {
         let screen = makeScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: true, second: false), badges: .failed)
 
         screen.finishSit(.standard, track: .primary, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == yesterday)
     }
 
     /// Unchanged: with no server read answered in this app run, nothing says the other
     /// track was sat, so one sit here leaves yesterday open. There is no answer to keep.
-    func testTwoADayWithNoServerAnswerLeavesYesterdayOpenAfterOneSit() async {
+    @Test func testTwoADayWithNoServerAnswerLeavesYesterdayOpenAfterOneSit() async {
         let screen = makeLaunchedScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .failed, badges: .failed)
 
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
 
-        XCTAssertEqual(screen.creditedSessionDate(at: october(27, 3, 40)), yesterday)
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == yesterday)
     }
 
     /// A reset drops the server's answer about yesterday with everything else: it
     /// belongs to the account that was signed in.
-    func testAResetDropsTheServersAnswerAboutYesterday() async {
+    @Test func testAResetDropsTheServersAnswerAboutYesterday() async {
         let screen = makeScreen()
         screen.dualTrack = true
         await screen.refresh(at: october(27, 3), yesterday: .answered(primary: true, second: false), badges: .failed)
@@ -617,56 +609,53 @@ final class PracticeDayStateTests: XCTestCase {
         screen.reset()
         screen.finishSit(.standard, track: .second, at: october(27, 3, 30))
 
-        XCTAssertEqual(
-            screen.creditedSessionDate(at: october(27, 3, 40)), yesterday,
-            "the answer about yesterday outlived a reset"
-        )
+        #expect(screen.creditedSessionDate(at: october(27, 3, 40)) == yesterday, "the answer about yesterday outlived a reset")
     }
 
     // MARK: - Home badges after a failed badge query (#1021, web parity with #961)
 
     /// The issue's case: a primary standard sit finished offline, so the badge query
     /// fails. Home shows it as done from the local flag instead of neither-done.
-    func testAFailedBadgeQueryShowsAPrimarySitFinishedOffline() async {
+    @Test func testAFailedBadgeQueryShowsAPrimarySitFinishedOffline() async {
         let screen = makeScreen()
         screen.finishSit(.standard, at: october(27, 9))
 
         await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
 
-        XCTAssertTrue(screen.state.primaryDoneToday, "a sit finished offline showed as not done on Home")
-        XCTAssertFalse(screen.state.secondDoneToday)
+        #expect(screen.state.primaryDoneToday, "a sit finished offline showed as not done on Home")
+        #expect(!screen.state.secondDoneToday)
     }
 
     /// Two-a-day: the fallback is per track, so a Track Two sit finished offline lights
     /// only the Track Two badge.
-    func testTwoADayFailedBadgeQueryShowsOnlyTheTrackSatOffline() async {
+    @Test func testTwoADayFailedBadgeQueryShowsOnlyTheTrackSatOffline() async {
         let screen = makeScreen()
         screen.dualTrack = true
         screen.finishSit(.standard, track: .second, at: october(27, 9))
 
         await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
 
-        XCTAssertFalse(screen.state.primaryDoneToday, "a Track Two sit lit the Track One badge")
-        XCTAssertTrue(screen.state.secondDoneToday, "a Track Two sit finished offline showed as not done on Home")
+        #expect(!screen.state.primaryDoneToday, "a Track Two sit lit the Track One badge")
+        #expect(screen.state.secondDoneToday, "a Track Two sit finished offline showed as not done on Home")
     }
 
     /// The badges mean a *standard* sit (#240). A quick or breath sit raises the
     /// widget's practice flag but not the standard one, so it does not light a badge.
-    func testAFailedBadgeQueryDoesNotCountAQuickOrBreathSitAsAStandardOne() async {
+    @Test func testAFailedBadgeQueryDoesNotCountAQuickOrBreathSitAsAStandardOne() async {
         for sessionType in [SessionType.quick, .breath] {
             let screen = makeScreen()
             screen.finishSit(sessionType, at: october(27, 9))
 
             await screen.refresh(at: october(27, 9, 5), yesterday: .failed, badges: .failed)
 
-            XCTAssertTrue(screen.state.practiceDoneToday)
-            XCTAssertFalse(screen.state.primaryDoneToday, "a \(sessionType) sit lit the standard-sit badge")
+            #expect(screen.state.practiceDoneToday)
+            #expect(!screen.state.primaryDoneToday, "a \(sessionType) sit lit the standard-sit badge")
         }
     }
 
     /// No stale badge past the day: a sit from yesterday afternoon, then a failed
     /// badge query the next morning after 6:00, shows neither track done.
-    func testAFailedBadgeQueryOnANewDayShowsNeitherTrackDone() async {
+    @Test func testAFailedBadgeQueryOnANewDayShowsNeitherTrackDone() async {
         let screen = makeScreen()
         screen.dualTrack = true
         screen.finishSit(.standard, at: october(26, 21))
@@ -674,21 +663,21 @@ final class PracticeDayStateTests: XCTestCase {
 
         await screen.refresh(at: october(27, 9), yesterday: .failed, badges: .failed)
 
-        XCTAssertFalse(screen.state.primaryDoneToday, "yesterday's Track One sit leaked onto today's badge")
-        XCTAssertFalse(screen.state.secondDoneToday, "yesterday's Track Two sit leaked onto today's badge")
+        #expect(!screen.state.primaryDoneToday, "yesterday's Track One sit leaked onto today's badge")
+        #expect(!screen.state.secondDoneToday, "yesterday's Track Two sit leaked onto today's badge")
     }
 
     /// The fallback rolls the flags over when it reads them, not only when the query
     /// left: a query that left before midnight and failed after it shows neither done.
-    func testAFailedBadgeQueryThatOutlivedTheDayShowsNeitherTrackDone() {
+    @Test func testAFailedBadgeQueryThatOutlivedTheDayShowsNeitherTrackDone() {
         var state = PracticeDayState()
         state.rollOverIfNeeded(now: october(26, 20), dualTrack: false, calendar: newYork)
         state.recordCompletion(sessionType: .standard, track: .primary, now: october(26, 21), dualTrack: false, calendar: newYork)
 
         state.applyFailedTracksDoneRead(now: october(27, 9), dualTrack: false, calendar: newYork)
 
-        XCTAssertFalse(state.primaryDoneToday, "a sit from the day before reached today's badge")
-        XCTAssertFalse(state.primaryStandardDoneToday)
+        #expect(!state.primaryDoneToday, "a sit from the day before reached today's badge")
+        #expect(!state.primaryStandardDoneToday)
     }
 
     // MARK: - Focus sessions (#839)
@@ -696,7 +685,7 @@ final class PracticeDayStateTests: XCTestCase {
     /// A focus session is not meditation practice (#765). On either track it raises
     /// none of the flags and leaves before the rollover, so the flags still describe
     /// the day they did before it.
-    func testAFocusSessionRaisesNoFlagAndRollsNothingOver() {
+    @Test func testAFocusSessionRaisesNoFlagAndRollsNothingOver() {
         let lastUsed = october(26, 20)
         for track in [Track.primary, .second] {
             var state = PracticeDayState()
@@ -704,10 +693,10 @@ final class PracticeDayStateTests: XCTestCase {
 
             state.recordCompletion(sessionType: .focus, track: track, now: october(27, 9), dualTrack: true, calendar: newYork)
 
-            XCTAssertFalse(state.practiceDoneToday, "a focus session on \(track) raised practiceDoneToday")
-            XCTAssertFalse(state.primaryStandardDoneToday, "a focus session on \(track) raised primaryStandardDoneToday")
-            XCTAssertFalse(state.secondPracticeDoneToday, "a focus session on \(track) raised secondPracticeDoneToday")
-            XCTAssertEqual(state.doneTodayFlagsStamp, lastUsed, "a focus session on \(track) rolled the flags over")
+            #expect(!state.practiceDoneToday, "a focus session on \(track) raised practiceDoneToday")
+            #expect(!state.primaryStandardDoneToday, "a focus session on \(track) raised primaryStandardDoneToday")
+            #expect(!state.secondPracticeDoneToday, "a focus session on \(track) raised secondPracticeDoneToday")
+            #expect(state.doneTodayFlagsStamp == lastUsed, "a focus session on \(track) rolled the flags over")
         }
     }
 
@@ -726,49 +715,49 @@ final class PracticeDayStateTests: XCTestCase {
         return state
     }
 
-    func testTheFlagsAreNotAnAnswerBeforeTheFirstBadgeQueryLands() {
+    @Test func testTheFlagsAreNotAnAnswerBeforeTheFirstBadgeQueryLands() {
         var state = PracticeDayState()
-        XCTAssertFalse(state.doneTodayFlagsKnown, "a fresh state read as answered")
+        #expect(!state.doneTodayFlagsKnown, "a fresh state read as answered")
         state.reset()
         state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
         _ = state.beginTracksDoneRead()
-        XCTAssertFalse(state.doneTodayFlagsKnown, "the flags read as answered while the first query was in flight")
+        #expect(!state.doneTodayFlagsKnown, "the flags read as answered while the first query was in flight")
     }
 
-    func testTheNewestAnswerMakesTheFlagsKnown() {
-        XCTAssertTrue(answeredNeitherDone().doneTodayFlagsKnown)
+    @Test func testTheNewestAnswerMakesTheFlagsKnown() {
+        #expect(answeredNeitherDone().doneTodayFlagsKnown)
     }
 
-    func testANewerQueryInFlightMakesTheFlagsUnknownAndAnOlderAnswerDoesNotRestoreThem() {
+    @Test func testANewerQueryInFlightMakesTheFlagsUnknownAndAnOlderAnswerDoesNotRestoreThem() {
         var state = PracticeDayState()
         state.reset()
         state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
         let older = state.beginTracksDoneRead()
         _ = state.beginTracksDoneRead()
-        XCTAssertFalse(state.doneTodayFlagsKnown)
+        #expect(!state.doneTodayFlagsKnown)
 
         state.applyTracksDoneAnswer(
             TracksDoneTodayDTO(primary: false, second: false),
             creditedDate: today, now: october(27, 9), read: older, calendar: newYork
         )
 
-        XCTAssertFalse(state.doneTodayFlagsKnown, "an older answer read as known while a newer query was in flight")
+        #expect(!state.doneTodayFlagsKnown, "an older answer read as known while a newer query was in flight")
     }
 
-    func testAFailedBadgeQueryLeavesTheFlagsUnknown() {
+    @Test func testAFailedBadgeQueryLeavesTheFlagsUnknown() {
         var state = answeredNeitherDone()
         _ = state.beginTracksDoneRead()
         state.applyFailedTracksDoneRead(now: october(27, 9, 5), dualTrack: true, calendar: newYork)
-        XCTAssertFalse(state.doneTodayFlagsKnown, "a failed query's local fallback read as an answer")
+        #expect(!state.doneTodayFlagsKnown, "a failed query's local fallback read as an answer")
     }
 
-    func testASignOutOrAccountSwitchMakesTheFlagsUnknown() {
+    @Test func testASignOutOrAccountSwitchMakesTheFlagsUnknown() {
         var state = answeredNeitherDone()
         state.reset()
-        XCTAssertFalse(state.doneTodayFlagsKnown, "the previous account's answer survived a reset")
+        #expect(!state.doneTodayFlagsKnown, "the previous account's answer survived a reset")
     }
 
-    func testAnAnswerThatLeftBeforeAResetDoesNotMakeTheFlagsKnown() {
+    @Test func testAnAnswerThatLeftBeforeAResetDoesNotMakeTheFlagsKnown() {
         var state = PracticeDayState()
         state.reset()
         state.rollOverIfNeeded(now: october(27, 9), dualTrack: true, calendar: newYork)
@@ -778,29 +767,31 @@ final class PracticeDayStateTests: XCTestCase {
             TracksDoneTodayDTO(primary: false, second: false),
             creditedDate: today, now: october(27, 9), read: read, calendar: newYork
         )
-        XCTAssertFalse(state.doneTodayFlagsKnown, "an answer from before the reset read as known")
+        #expect(!state.doneTodayFlagsKnown, "an answer from before the reset read as known")
     }
 
-    func testASitFinishedHereMakesTheFlagsUnknownUntilTheNextAnswer() {
+    @Test func testASitFinishedHereMakesTheFlagsUnknownUntilTheNextAnswer() {
         var state = answeredNeitherDone()
         state.recordCompletion(sessionType: .standard, track: .primary, now: october(27, 10), dualTrack: true, calendar: newYork)
-        XCTAssertFalse(state.doneTodayFlagsKnown, "an answer from before the sit read as current")
+        #expect(!state.doneTodayFlagsKnown, "an answer from before the sit read as current")
     }
 
-    func testANewDayMakesYesterdaysAnswerUnknown() {
+    @Test func testANewDayMakesYesterdaysAnswerUnknown() {
         var state = answeredNeitherDone()
         state.rollOverIfNeeded(now: october(28, 9), dualTrack: true, calendar: newYork)
-        XCTAssertFalse(state.doneTodayFlagsKnown, "yesterday's answer was read as today's")
+        #expect(!state.doneTodayFlagsKnown, "yesterday's answer was read as today's")
     }
 
     /// With the flags known, the offer behaves as before: the rule is `CombinedSit`'s.
-    func testAKnownNeitherDoneAnswerStillOffersTheCombinedSit() {
+    @Test func testAKnownNeitherDoneAnswerStillOffersTheCombinedSit() {
         let state = answeredNeitherDone()
-        XCTAssertTrue(state.doneTodayFlagsKnown && CombinedSit.isCombineOffered(
-            dualTrackEnabled: true,
-            primaryDoneToday: state.primaryDoneToday,
-            secondDoneToday: state.secondDoneToday,
-            recoveryActive: false
-        ))
+        #expect(
+            state.doneTodayFlagsKnown && CombinedSit.isCombineOffered(
+                dualTrackEnabled: true,
+                primaryDoneToday: state.primaryDoneToday,
+                secondDoneToday: state.secondDoneToday,
+                recoveryActive: false
+            )
+        )
     }
 }

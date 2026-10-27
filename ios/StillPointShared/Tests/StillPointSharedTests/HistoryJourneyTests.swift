@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class HistoryJourneyTests: XCTestCase {
+struct HistoryJourneyTests {
     private func makeSession(
         id: String,
         type: SessionType = .standard,
@@ -28,87 +29,92 @@ final class HistoryJourneyTests: XCTestCase {
 
     // MARK: - Session ordering / per-day indices
 
-    func testSequentialSessionLabelsSameDay() {
+    @Test func testSequentialSessionLabelsSameDay() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "a", date: "2026-04-28"),
             makeSession(id: "b", date: "2026-04-28"),
         ])
         guard case .session(_, let n1) = rows[0],
               case .session(_, let n2) = rows[1] else {
-            return XCTFail("expected two session rows")
+            Issue.record("expected two session rows")
+            return
         }
-        XCTAssertEqual(n1, 1)
-        XCTAssertEqual(n2, 2)
+        #expect(n1 == 1)
+        #expect(n2 == 2)
     }
 
-    func testSameDaySessionsOrderedByCreatedAt() {
+    @Test func testSameDaySessionsOrderedByCreatedAt() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "later-id", date: "2026-04-28", createdAt: "2026-04-28T12:00:00.000Z"),
             makeSession(id: "earlier-id", date: "2026-04-28", createdAt: "2026-04-28T10:00:00.000Z"),
         ])
         guard case .session(let first, let n1) = rows[0],
               case .session(let second, let n2) = rows[1] else {
-            return XCTFail("expected two session rows")
+            Issue.record("expected two session rows")
+            return
         }
-        XCTAssertEqual(first.id, "earlier-id")
-        XCTAssertEqual(second.id, "later-id")
-        XCTAssertEqual(n1, 1)
-        XCTAssertEqual(n2, 2)
+        #expect(first.id == "earlier-id")
+        #expect(second.id == "later-id")
+        #expect(n1 == 1)
+        #expect(n2 == 2)
     }
 
     // MARK: - Quick sessions in the journey (#379)
 
-    func testQuickOnlySessionsProduceRows() {
+    @Test func testQuickOnlySessionsProduceRows() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "q1", type: .quick, date: "2026-06-10"),
         ])
-        XCTAssertEqual(rows.count, 1)
+        #expect(rows.count == 1)
         guard case .session(let session, let n) = rows[0] else {
-            return XCTFail("expected a session row for a quick sit")
+            Issue.record("expected a session row for a quick sit")
+            return
         }
-        XCTAssertEqual(session.sessionType, .quick)
-        XCTAssertEqual(n, 1)
+        #expect(session.sessionType == .quick)
+        #expect(n == 1)
     }
 
-    func testQuickAndStandardMixUsesPerTypeIndices() {
+    @Test func testQuickAndStandardMixUsesPerTypeIndices() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "s1", date: "2026-06-10", createdAt: "2026-06-10T08:00:00.000Z"),
             makeSession(id: "q1", type: .quick, date: "2026-06-10", createdAt: "2026-06-10T09:00:00.000Z"),
             makeSession(id: "s2", date: "2026-06-10", createdAt: "2026-06-10T10:00:00.000Z"),
         ])
-        XCTAssertEqual(rows.count, 3)
+        #expect(rows.count == 3)
         guard case .session(let first, let n1) = rows[0],
               case .session(let second, let n2) = rows[1],
               case .session(let third, let n3) = rows[2] else {
-            return XCTFail("expected three session rows")
+            Issue.record("expected three session rows")
+            return
         }
         // Chronological interleaving preserved...
-        XCTAssertEqual(first.id, "s1")
-        XCTAssertEqual(second.id, "q1")
-        XCTAssertEqual(third.id, "s2")
+        #expect(first.id == "s1")
+        #expect(second.id == "q1")
+        #expect(third.id == "s2")
         // ...while standard numbering ignores the quick sit in between.
-        XCTAssertEqual(n1, 1)
-        XCTAssertEqual(n2, 1)
-        XCTAssertEqual(n3, 2)
+        #expect(n1 == 1)
+        #expect(n2 == 1)
+        #expect(n3 == 2)
     }
 
     // MARK: - Focus sessions in the journey (#839)
 
-    func testFocusOnlyDayProducesARow() {
+    @Test func testFocusOnlyDayProducesARow() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "f1", type: .focus, date: "2026-10-27"),
         ])
-        XCTAssertEqual(rows.count, 1)
+        #expect(rows.count == 1)
         guard case .session(let session, let n) = rows[0] else {
-            return XCTFail("expected a session row for a focus session")
+            Issue.record("expected a session row for a focus session")
+            return
         }
-        XCTAssertEqual(session.sessionType, .focus)
-        XCTAssertEqual(n, 1)
+        #expect(session.sessionType == .focus)
+        #expect(n == 1)
     }
 
     /// Focus sessions are numbered within their own type, so a focus session between
     /// two sits leaves the sits "Session 1" and "Session 2".
-    func testFocusAndStandardMixUsesPerTypeIndices() {
+    @Test func testFocusAndStandardMixUsesPerTypeIndices() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "s1", date: "2026-10-27", createdAt: "2026-10-27T08:00:00.000Z"),
             makeSession(id: "f1", type: .focus, date: "2026-10-27", createdAt: "2026-10-27T09:00:00.000Z"),
@@ -119,29 +125,30 @@ final class HistoryJourneyTests: XCTestCase {
             guard case .session(let session, let n) = row else { return nil }
             return (session.id, n)
         }
-        XCTAssertEqual(numbered.map(\.0), ["s1", "f1", "s2", "f2"])
-        XCTAssertEqual(numbered.map(\.1), [1, 1, 2, 2])
+        #expect(numbered.map(\.0) == ["s1", "f1", "s2", "f2"])
+        #expect(numbered.map(\.1) == [1, 1, 2, 2])
     }
 
     /// A focus day between two standard days fills the gap: the journey shows a row for
     /// it, not a missed day, as it does for a quick sit.
-    func testFocusDayIsNotAMissedDay() {
+    @Test func testFocusDayIsNotAMissedDay() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "s1", date: "2026-10-25"),
             makeSession(id: "f1", type: .focus, date: "2026-10-26"),
             makeSession(id: "s2", date: "2026-10-27"),
         ])
-        XCTAssertEqual(rows.count, 3)
+        #expect(rows.count == 3)
         for row in rows {
             guard case .session = row else {
-                return XCTFail("expected only session rows, got \(row)")
+                Issue.record("expected only session rows, got \(row)")
+                return
             }
         }
     }
 
     /// The bars scale to the longest sit. A two-hour focus session stays out of the
     /// scale (its bar is capped at full width), as on web (#836).
-    func testBarScaleLeavesOutFocusSessions() {
+    @Test func testBarScaleLeavesOutFocusSessions() {
         func session(_ id: String, type: SessionType, duration: Int, actualTime: Int?) -> SessionDTO {
             SessionDTO(
                 id: id,
@@ -164,197 +171,204 @@ final class HistoryJourneyTests: XCTestCase {
         ]
         let focus = session("f1", type: .focus, duration: 7200, actualTime: 7200)
 
-        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: sits), 320)
-        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: sits + [focus]), 320)
+        #expect(HistoryJourney.barScaleSeconds(for: sits) == 320)
+        #expect(HistoryJourney.barScaleSeconds(for: sits + [focus]) == 320)
         // Never under a minute, even with nothing but focus sessions.
-        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: [focus]), 60)
-        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: []), 60)
+        #expect(HistoryJourney.barScaleSeconds(for: [focus]) == 60)
+        #expect(HistoryJourney.barScaleSeconds(for: []) == 60)
     }
 
     // MARK: - Gap collapsing (#379)
 
-    func testShortGapEmitsPerDayMissedRows() {
+    @Test func testShortGapEmitsPerDayMissedRows() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "a", date: "2026-06-01"),
             makeSession(id: "b", date: "2026-06-04"),
         ])
-        XCTAssertEqual(rows.count, 4)
+        #expect(rows.count == 4)
         guard case .missed(let d1) = rows[1], case .missed(let d2) = rows[2] else {
-            return XCTFail("expected two per-day missed rows for a 2-day gap")
+            Issue.record("expected two per-day missed rows for a 2-day gap")
+            return
         }
-        XCTAssertEqual(d1, "2026-06-02")
-        XCTAssertEqual(d2, "2026-06-03")
+        #expect(d1 == "2026-06-02")
+        #expect(d2 == "2026-06-03")
     }
 
-    func testThreeMissedDaysCollapseToRange() {
+    @Test func testThreeMissedDaysCollapseToRange() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "a", date: "2026-06-01"),
             makeSession(id: "b", date: "2026-06-05"),
         ])
-        XCTAssertEqual(rows.count, 3)
+        #expect(rows.count == 3)
         guard case .missedRange(let start, let end, let count) = rows[1] else {
-            return XCTFail("expected a collapsed missed range at the 3-day threshold")
+            Issue.record("expected a collapsed missed range at the 3-day threshold")
+            return
         }
-        XCTAssertEqual(start, "2026-06-02")
-        XCTAssertEqual(end, "2026-06-04")
-        XCTAssertEqual(count, 3)
+        #expect(start == "2026-06-02")
+        #expect(end == "2026-06-04")
+        #expect(count == 3)
     }
 
-    func testThirtyDayGapCollapsesToSingleRange() {
+    @Test func testThirtyDayGapCollapsesToSingleRange() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "a", date: "2026-04-01"),
             makeSession(id: "b", date: "2026-05-01"),
         ])
-        XCTAssertEqual(rows.count, 3, "prior session must stay reachable: session, one range row, session")
+        #expect(rows.count == 3, "prior session must stay reachable: session, one range row, session")
         guard case .session(let first, _) = rows[0],
               case .missedRange(let start, let end, let count) = rows[1],
               case .session(let second, _) = rows[2] else {
-            return XCTFail("expected session, missedRange, session")
+            Issue.record("expected session, missedRange, session")
+            return
         }
-        XCTAssertEqual(first.id, "a")
-        XCTAssertEqual(second.id, "b")
-        XCTAssertEqual(start, "2026-04-02")
-        XCTAssertEqual(end, "2026-04-30")
-        XCTAssertEqual(count, 29)
+        #expect(first.id == "a")
+        #expect(second.id == "b")
+        #expect(start == "2026-04-02")
+        #expect(end == "2026-04-30")
+        #expect(count == 29)
     }
 
-    func testGapSpanningQuickAndStandardSessions() {
+    @Test func testGapSpanningQuickAndStandardSessions() {
         let rows = HistoryJourney.buildRows(fromSessions: [
             makeSession(id: "s1", date: "2026-04-01"),
             makeSession(id: "q1", type: .quick, date: "2026-05-06"),
         ])
-        XCTAssertEqual(rows.count, 3)
+        #expect(rows.count == 3)
         guard case .missedRange(_, _, let count) = rows[1],
               case .session(let last, _) = rows[2] else {
-            return XCTFail("expected missedRange then quick session")
+            Issue.record("expected missedRange then quick session")
+            return
         }
-        XCTAssertEqual(count, 34)
-        XCTAssertEqual(last.sessionType, .quick)
+        #expect(count == 34)
+        #expect(last.sessionType == .quick)
     }
 
     // MARK: - Gap adjacent to today (#379)
 
-    func testLongGapAdjacentToTodayCollapses() {
+    @Test func testLongGapAdjacentToTodayCollapses() {
         let rows = HistoryJourney.buildRows(
             fromSessions: [makeSession(id: "a", date: "2026-05-01")],
             todayIsoDate: "2026-06-11"
         )
-        XCTAssertEqual(rows.count, 2)
+        #expect(rows.count == 2)
         guard case .missedRange(let start, let end, let count) = rows[1] else {
-            return XCTFail("expected trailing missedRange before today")
+            Issue.record("expected trailing missedRange before today")
+            return
         }
-        XCTAssertEqual(start, "2026-05-02")
-        XCTAssertEqual(end, "2026-06-10", "today itself is never emitted as missed")
-        XCTAssertEqual(count, 40)
+        #expect(start == "2026-05-02")
+        #expect(end == "2026-06-10", "today itself is never emitted as missed")
+        #expect(count == 40)
     }
 
-    func testShortGapAdjacentToTodayEmitsPerDayRows() {
+    @Test func testShortGapAdjacentToTodayEmitsPerDayRows() {
         let rows = HistoryJourney.buildRows(
             fromSessions: [makeSession(id: "a", date: "2026-06-09")],
             todayIsoDate: "2026-06-11"
         )
-        XCTAssertEqual(rows.count, 2)
+        #expect(rows.count == 2)
         guard case .missed(let date) = rows[1] else {
-            return XCTFail("expected one trailing missed row")
+            Issue.record("expected one trailing missed row")
+            return
         }
-        XCTAssertEqual(date, "2026-06-10")
+        #expect(date == "2026-06-10")
     }
 
-    func testNoTrailingGapWhenSessionIsToday() {
+    @Test func testNoTrailingGapWhenSessionIsToday() {
         let rows = HistoryJourney.buildRows(
             fromSessions: [makeSession(id: "a", date: "2026-06-11")],
             todayIsoDate: "2026-06-11"
         )
-        XCTAssertEqual(rows.count, 1)
+        #expect(rows.count == 1)
         guard case .session = rows[0] else {
-            return XCTFail("expected only the session row")
+            Issue.record("expected only the session row")
+            return
         }
     }
 
-    func testNoTrailingGapWhenSessionWasYesterday() {
+    @Test func testNoTrailingGapWhenSessionWasYesterday() {
         let rows = HistoryJourney.buildRows(
             fromSessions: [makeSession(id: "a", date: "2026-06-10")],
             todayIsoDate: "2026-06-11"
         )
-        XCTAssertEqual(rows.count, 1)
+        #expect(rows.count == 1)
     }
 
-    func testEmptySessionsProduceNoRows() {
-        XCTAssertTrue(HistoryJourney.buildRows(fromSessions: [], todayIsoDate: "2026-06-11").isEmpty)
+    @Test func testEmptySessionsProduceNoRows() {
+        #expect(HistoryJourney.buildRows(fromSessions: [], todayIsoDate: "2026-06-11").isEmpty)
     }
 
     // MARK: - Stats (quick sits intentionally excluded — #379)
 
-    func testStreakCountsUniqueCalendarDays() {
+    @Test func testStreakCountsUniqueCalendarDays() {
         let stats = SessionStatistics.calculateStats(for: [
             makeSession(id: "1", date: "2026-04-28"),
             makeSession(id: "2", date: "2026-04-28"),
         ])
-        XCTAssertEqual(stats.streak, 1)
+        #expect(stats.streak == 1)
     }
 
-    func testStatsExcludeQuickSits() {
+    @Test func testStatsExcludeQuickSits() {
         let quickOnly = SessionStatistics.calculateStats(for: [
             makeSession(id: "q1", type: .quick, date: "2026-06-10", thoughtCount: 5),
         ])
-        XCTAssertEqual(quickOnly.streak, 0)
-        XCTAssertEqual(quickOnly.avgThoughtsPerSession, 0)
+        #expect(quickOnly.streak == 0)
+        #expect(quickOnly.avgThoughtsPerSession == 0)
 
         let mixed = SessionStatistics.calculateStats(for: [
             makeSession(id: "s1", date: "2026-06-10", thoughtCount: 10),
             makeSession(id: "q1", type: .quick, date: "2026-06-11", thoughtCount: 5),
         ])
-        XCTAssertEqual(mixed.streak, 1, "quick sit on a later day must not extend the streak")
-        XCTAssertEqual(mixed.avgThoughtsPerSession, 10, "average must count standard sessions only")
+        #expect(mixed.streak == 1, "quick sit on a later day must not extend the streak")
+        #expect(mixed.avgThoughtsPerSession == 10, "average must count standard sessions only")
     }
 
     /// #839: the streak counts standard sits only, so focus sessions neither start one
     /// nor extend one, as for quick sits.
-    func testStatsExcludeFocusSessions() {
+    @Test func testStatsExcludeFocusSessions() {
         let focusOnly = SessionStatistics.calculateStats(for: [
             makeSession(id: "f1", type: .focus, date: "2026-10-26"),
             makeSession(id: "f2", type: .focus, date: "2026-10-27"),
         ])
-        XCTAssertEqual(focusOnly.streak, 0)
-        XCTAssertEqual(focusOnly.avgClearPercent, 0)
+        #expect(focusOnly.streak == 0)
+        #expect(focusOnly.avgClearPercent == 0)
 
         let mixed = SessionStatistics.calculateStats(for: [
             makeSession(id: "s1", date: "2026-10-26", thoughtCount: 4),
             makeSession(id: "f1", type: .focus, date: "2026-10-27"),
         ])
-        XCTAssertEqual(mixed.streak, 1, "a focus session on a later day must not extend the streak")
-        XCTAssertEqual(mixed.avgThoughtsPerSession, 4, "average must count standard sessions only")
+        #expect(mixed.streak == 1, "a focus session on a later day must not extend the streak")
+        #expect(mixed.avgThoughtsPerSession == 4, "average must count standard sessions only")
     }
 
     // MARK: - Shared cross-platform fixtures (#421)
 
     // The same golden set is asserted by web buildHistoryJourneyRows; drift between
     // the two implementations breaks CI on at least one platform.
-    func testSharedHistoryJourneyFixtures() throws {
+    @Test func testSharedHistoryJourneyFixtures() throws {
         let fixture = try SharedFixtures.load("historyJourney.json", as: HistoryJourneyFixture.self)
-        XCTAssertEqual(HistoryJourney.collapseGapThresholdDays, fixture.collapseGapThresholdDays)
+        #expect(HistoryJourney.collapseGapThresholdDays == fixture.collapseGapThresholdDays)
 
         for testCase in fixture.cases {
             let rows = HistoryJourney.buildRows(
                 fromSessions: testCase.sessions.map { $0.toSessionDTO() },
                 todayIsoDate: testCase.todayIsoDate
             )
-            XCTAssertEqual(rows.count, testCase.expectedRows.count, "\(testCase.name): row count")
+            #expect(rows.count == testCase.expectedRows.count, "\(testCase.name): row count")
 
             for (row, expected) in zip(rows, testCase.expectedRows) {
                 switch row {
                 case .missed(let date):
-                    XCTAssertEqual(expected.kind, "missed", testCase.name)
-                    XCTAssertEqual(date, try XCTUnwrap(expected.date), testCase.name)
+                    #expect(expected.kind == "missed", Comment(rawValue: testCase.name))
+                    #expect(date == (try #require(expected.date)), Comment(rawValue: testCase.name))
                 case .missedRange(let startDate, let endDate, let dayCount):
-                    XCTAssertEqual(expected.kind, "missedRange", testCase.name)
-                    XCTAssertEqual(startDate, try XCTUnwrap(expected.startDate), testCase.name)
-                    XCTAssertEqual(endDate, try XCTUnwrap(expected.endDate), testCase.name)
-                    XCTAssertEqual(dayCount, try XCTUnwrap(expected.dayCount), testCase.name)
+                    #expect(expected.kind == "missedRange", Comment(rawValue: testCase.name))
+                    #expect(startDate == (try #require(expected.startDate)), Comment(rawValue: testCase.name))
+                    #expect(endDate == (try #require(expected.endDate)), Comment(rawValue: testCase.name))
+                    #expect(dayCount == (try #require(expected.dayCount)), Comment(rawValue: testCase.name))
                 case .session(let session, let sessionIndexInDay):
-                    XCTAssertEqual(expected.kind, "session", testCase.name)
-                    XCTAssertEqual(session.id, try XCTUnwrap(expected.id), testCase.name)
-                    XCTAssertEqual(sessionIndexInDay, try XCTUnwrap(expected.sessionIndexInDay), testCase.name)
+                    #expect(expected.kind == "session", Comment(rawValue: testCase.name))
+                    #expect(session.id == (try #require(expected.id)), Comment(rawValue: testCase.name))
+                    #expect(sessionIndexInDay == (try #require(expected.sessionIndexInDay)), Comment(rawValue: testCase.name))
                 }
             }
         }
@@ -362,22 +376,22 @@ final class HistoryJourneyTests: XCTestCase {
 
     // Web rounds averages to one decimal while iOS returns raw doubles, so the
     // shared fixtures keep them on clean values and assert with a small tolerance.
-    func testSharedSessionStatsFixtures() throws {
+    @Test func testSharedSessionStatsFixtures() throws {
         let fixture = try SharedFixtures.load("sessionStats.json", as: SessionStatsFixture.self)
 
         for testCase in fixture.cases {
             let stats = SessionStatistics.calculateStats(for: testCase.sessions.map { $0.toSessionDTO() })
-            XCTAssertEqual(stats.streak, testCase.expected.streak, "\(testCase.name): streak")
-            XCTAssertEqual(stats.avgClearPercent, testCase.expected.avgClearPercent, "\(testCase.name): avgClearPercent")
-            XCTAssertEqual(
-                stats.avgThoughtsPerSession, testCase.expected.avgThoughtsPerSession,
-                accuracy: 0.05, "\(testCase.name): avgThoughtsPerSession"
+            #expect(stats.streak == testCase.expected.streak, "\(testCase.name): streak")
+            #expect(stats.avgClearPercent == testCase.expected.avgClearPercent, "\(testCase.name): avgClearPercent")
+            #expect(
+                abs(stats.avgThoughtsPerSession - testCase.expected.avgThoughtsPerSession) <= 0.05,
+                "\(testCase.name): avgThoughtsPerSession"
             )
-            XCTAssertEqual(
-                stats.avgThoughtsPerMinute, testCase.expected.avgThoughtsPerMinute,
-                accuracy: 0.05, "\(testCase.name): avgThoughtsPerMinute"
+            #expect(
+                abs(stats.avgThoughtsPerMinute - testCase.expected.avgThoughtsPerMinute) <= 0.05,
+                "\(testCase.name): avgThoughtsPerMinute"
             )
-            XCTAssertEqual(stats.bonusMinutesTotal ?? 0, testCase.expected.bonusMinutesTotal, "\(testCase.name): bonusMinutesTotal")
+            #expect((stats.bonusMinutesTotal ?? 0) == testCase.expected.bonusMinutesTotal, "\(testCase.name): bonusMinutesTotal")
         }
     }
 
@@ -389,41 +403,37 @@ final class HistoryJourneyTests: XCTestCase {
         return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
 
-    func testGracePeriodCreditsTheUnfinishedDayUntil6am() {
+    @Test func testGracePeriodCreditsTheUnfinishedDayUntil6am() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let elevenFiftyNine = localDate(2026, 10, 7, 23, 59)
         let twelveThirty = localDate(2026, 10, 8, 0, 30)
         let sixAm = localDate(2026, 10, 8, 6, 0)
 
-        XCTAssertEqual(
-            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: elevenFiftyNine, calendar: calendar),
-            "2026-10-07",
+        #expect(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: elevenFiftyNine, calendar: calendar) == "2026-10-07",
             "11:59pm unfinished day credits today"
         )
-        XCTAssertEqual(
-            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: twelveThirty, calendar: calendar),
-            "2026-10-07",
+        #expect(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: twelveThirty, calendar: calendar) == "2026-10-07",
             "12:30am unfinished day credits yesterday"
         )
-        XCTAssertEqual(
-            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: twelveThirty, calendar: calendar),
-            "2026-10-08",
+        #expect(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: twelveThirty, calendar: calendar) == "2026-10-08",
             "12:30am finished day credits the new day"
         )
-        XCTAssertEqual(
-            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: sixAm, calendar: calendar),
-            "2026-10-08",
+        #expect(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: sixAm, calendar: calendar) == "2026-10-08",
             "6:00am credits the new day"
         )
     }
 
-    func testTwoADayStaysOpenUntilBothSitsAreDone() {
+    @Test func testTwoADayStaysOpenUntilBothSitsAreDone() {
         let primary = SessionCalendar.PracticeDaySit(completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary")
         let second = SessionCalendar.PracticeDaySit(completed: true, isStandard: true, sessionDate: "2026-10-07", track: "second")
-        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: true))
-        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [primary, second], isoDay: "2026-10-07", dualTrackEnabled: true))
-        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: false))
+        #expect(!SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(SessionCalendar.isDayComplete(sits: [primary, second], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: false))
     }
 }
 
@@ -431,37 +441,37 @@ final class HistoryJourneyTests: XCTestCase {
 
 extension HistoryJourneyTests {
     /// A combined sit counts for both tracks, so it alone finishes a two-a-day day.
-    func testCombinedSitCompletesATwoADayDay() {
+    @Test func testCombinedSitCompletesATwoADayDay() {
         let combined = SessionCalendar.PracticeDaySit(
             completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: true
         )
-        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: true))
-        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: false))
-        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-08", dualTrackEnabled: true))
+        #expect(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: false))
+        #expect(!SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-08", dualTrackEnabled: true))
 
         let noTrack = SessionCalendar.PracticeDaySit(
             completed: true, isStandard: true, sessionDate: "2026-10-07", track: nil, combined: true
         )
-        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [noTrack], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(SessionCalendar.isDayComplete(sits: [noTrack], isoDay: "2026-10-07", dualTrackEnabled: true))
     }
 
     /// One ended early credits nothing; `combined: nil` or false is an ordinary row.
-    func testUnfinishedOrNonCombinedRowDoesNotCompleteATwoADayDay() {
+    @Test func testUnfinishedOrNonCombinedRowDoesNotCompleteATwoADayDay() {
         let endedEarly = SessionCalendar.PracticeDaySit(
             completed: false, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: true
         )
-        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [endedEarly], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(!SessionCalendar.isDayComplete(sits: [endedEarly], isoDay: "2026-10-07", dualTrackEnabled: true))
         let plain = SessionCalendar.PracticeDaySit(
             completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: false
         )
-        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [plain], isoDay: "2026-10-07", dualTrackEnabled: true))
+        #expect(!SessionCalendar.isDayComplete(sits: [plain], isoDay: "2026-10-07", dualTrackEnabled: true))
     }
 
     /// The before-6:00 grace window closes after a combined sit on the previous day.
-    func testGraceWindowClosesAfterACombinedSit() throws {
+    @Test func testGraceWindowClosesAfterACombinedSit() throws {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
-        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 2, minute: 30)))
+        calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 2, minute: 30)))
 
         func row(combined: Bool?) -> SessionDTO {
             SessionDTO(
@@ -474,17 +484,13 @@ extension HistoryJourneyTests {
         let open = WidgetDataStore.practiceInstant(
             forHistory: [row(combined: nil)], dualTrackEnabled: true, now: now, calendar: calendar
         )
-        XCTAssertEqual(WidgetDataStore.localDayString(open, calendar: calendar), "2026-10-26")
+        #expect(WidgetDataStore.localDayString(open, calendar: calendar) == "2026-10-26")
 
-        XCTAssertEqual(
+        #expect(
             WidgetDataStore.practiceInstant(
                 forHistory: [row(combined: true)], dualTrackEnabled: true, now: now, calendar: calendar
-            ),
-            now
+            ) == now
         )
-        XCTAssertEqual(
-            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: now, calendar: calendar),
-            "2026-10-27"
-        )
+        #expect(SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: now, calendar: calendar) == "2026-10-27")
     }
 }

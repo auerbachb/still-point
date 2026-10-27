@@ -1,12 +1,13 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// #832: which URLs `handleNotificationDeepLink` claims, and which fall through to
 /// the next route in `handleIncomingURL`.
-final class NotificationDeepLinkRouteTests: XCTestCase {
-    private func route(_ string: String, file: StaticString = #filePath, line: UInt = #line) -> NotificationDeepLinkRoute? {
+struct NotificationDeepLinkRouteTests {
+    private func route(_ string: String, sourceLocation: SourceLocation = #_sourceLocation) -> NotificationDeepLinkRoute? {
         guard let url = URL(string: string) else {
-            XCTFail("Not a URL: \(string)", file: file, line: line)
+            Issue.record("Not a URL: \(string)", sourceLocation: sourceLocation)
             return nil
         }
         return NotificationDeepLinkRoute.route(for: url)
@@ -14,69 +15,69 @@ final class NotificationDeepLinkRouteTests: XCTestCase {
 
     // MARK: Recognized hosts
 
-    func testHomeRoutesHome() {
-        XCTAssertEqual(route("stillpoint://home"), .home)
+    @Test func testHomeRoutesHome() {
+        #expect(route("stillpoint://home") == .home)
     }
 
-    func testFriendsRoutesToFriends() {
-        XCTAssertEqual(route("stillpoint://friends"), .friends)
+    @Test func testFriendsRoutesToFriends() {
+        #expect(route("stillpoint://friends") == .friends)
     }
 
-    func testLogReasonWithADateRoutesToLogReason() {
-        XCTAssertEqual(route("stillpoint://log-reason?date=2024-05-01"), .logReason)
+    @Test func testLogReasonWithADateRoutesToLogReason() {
+        #expect(route("stillpoint://log-reason?date=2024-05-01") == .logReason)
     }
 
-    func testLogReasonWithoutADateRoutesToLogReason() {
-        XCTAssertEqual(route("stillpoint://log-reason"), .logReason)
+    @Test func testLogReasonWithoutADateRoutesToLogReason() {
+        #expect(route("stillpoint://log-reason") == .logReason)
     }
 
     // MARK: Case-insensitive matching
 
-    func testSchemeAndHostMatchIgnoringCase() {
-        XCTAssertEqual(route("STILLPOINT://Home"), .home)
-        XCTAssertEqual(route("StillPoint://FRIENDS"), .friends)
-        XCTAssertEqual(route("StillPoint://LOG-REASON"), .logReason)
+    @Test func testSchemeAndHostMatchIgnoringCase() {
+        #expect(route("STILLPOINT://Home") == .home)
+        #expect(route("StillPoint://FRIENDS") == .friends)
+        #expect(route("StillPoint://LOG-REASON") == .logReason)
     }
 
     // MARK: Not a notification link
 
-    func testAnotherSchemeIsNotANotificationLink() {
-        XCTAssertNil(route("https://stillpoint.app/home"))
-        XCTAssertNil(route("https://home"))
+    @Test func testAnotherSchemeIsNotANotificationLink() {
+        #expect(route("https://stillpoint.app/home") == nil)
+        #expect(route("https://home") == nil)
     }
 
-    func testAnUnknownHostIsNotANotificationLink() {
-        XCTAssertNil(route("stillpoint://settings"))
+    @Test func testAnUnknownHostIsNotANotificationLink() {
+        #expect(route("stillpoint://settings") == nil)
     }
 
-    func testAURLWithNoHostIsNotANotificationLink() {
-        XCTAssertNil(route("stillpoint:"))
-        XCTAssertNil(route("stillpoint:///home"))
+    @Test func testAURLWithNoHostIsNotANotificationLink() {
+        #expect(route("stillpoint:") == nil)
+        #expect(route("stillpoint:///home") == nil)
     }
 
-    func testAURLWithNoSchemeIsNotANotificationLink() {
-        XCTAssertNil(route("home"))
+    @Test func testAURLWithNoSchemeIsNotANotificationLink() {
+        #expect(route("home") == nil)
     }
 
-    func testSessionLinksFallThroughToTheirOwnRoute() {
-        XCTAssertNil(route("stillpoint://session"))
-        XCTAssertNil(route("stillpoint://session/quick"))
+    @Test func testSessionLinksFallThroughToTheirOwnRoute() {
+        #expect(route("stillpoint://session") == nil)
+        #expect(route("stillpoint://session/quick") == nil)
     }
 
-    func testBuddyLinksFallThroughToBuddyParsing() {
-        XCTAssertNil(route("stillpoint://buddy/abc"))
+    @Test func testBuddyLinksFallThroughToBuddyParsing() {
+        #expect(route("stillpoint://buddy/abc") == nil)
     }
 
     // MARK: Precedence
 
     /// The notification route claims the URL before buddy parsing, so a buddy query
     /// on a recognized host does not change the route.
-    func testAQueryOnARecognizedHostDoesNotChangeTheRoute() {
-        XCTAssertEqual(route("stillpoint://home?buddy=x"), .home)
-        XCTAssertEqual(route("stillpoint://friends?token=abc"), .friends)
+    @Test func testAQueryOnARecognizedHostDoesNotChangeTheRoute() {
+        #expect(route("stillpoint://home?buddy=x") == .home)
+        #expect(route("stillpoint://friends?token=abc") == .friends)
     }
 
-    func testAPathOnARecognizedHostDoesNotChangeTheRoute() {
-        XCTAssertEqual(route("stillpoint://home/anything"), .home)
+    @Test func testAPathOnARecognizedHostDoesNotChangeTheRoute() {
+        #expect(route("stillpoint://home/anything") == .home)
     }
 }

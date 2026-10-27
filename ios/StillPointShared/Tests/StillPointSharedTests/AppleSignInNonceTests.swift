@@ -1,26 +1,24 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class AppleSignInNonceTests: XCTestCase {
-    func testSha256HexMatchesKnownVector() {
-        XCTAssertEqual(
-            AppleSignInNonce.sha256Hex("hello"),
-            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        )
+struct AppleSignInNonceTests {
+    @Test func testSha256HexMatchesKnownVector() {
+        #expect(AppleSignInNonce.sha256Hex("hello") == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
     }
 
-    func testRandomNonceStringIsSufficientlyLongAndUnique() throws {
+    @Test func testRandomNonceStringIsSufficientlyLongAndUnique() throws {
         let first = try AppleSignInNonce.randomNonceString()
         let second = try AppleSignInNonce.randomNonceString()
 
-        XCTAssertGreaterThanOrEqual(first.count, 32)
-        XCTAssertGreaterThanOrEqual(second.count, 32)
-        XCTAssertNotEqual(first, second)
+        #expect(first.count >= 32)
+        #expect(second.count >= 32)
+        #expect(first != second)
     }
 }
 
-final class AppleNativeSignInRequestEncodingTests: XCTestCase {
-    func testEncodesRawNonce() throws {
+struct AppleNativeSignInRequestEncodingTests {
+    @Test func testEncodesRawNonce() throws {
         let request = AppleNativeSignInRequest(
             identityToken: "header.payload.signature",
             authorizationCode: "opaque-code",
@@ -29,10 +27,10 @@ final class AppleNativeSignInRequestEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["identityToken"] as? String, "header.payload.signature")
-        XCTAssertEqual(object["authorizationCode"] as? String, "opaque-code")
-        XCTAssertEqual(object["rawNonce"] as? String, "nonce-abc")
+        #expect((object["identityToken"] as? String) == "header.payload.signature")
+        #expect((object["authorizationCode"] as? String) == "opaque-code")
+        #expect((object["rawNonce"] as? String) == "nonce-abc")
     }
 }

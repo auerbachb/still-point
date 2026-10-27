@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Issue #703 — the offline strip must not keep promising that sits are saved
@@ -9,67 +10,58 @@ import XCTest
 ///
 /// Ported to `src/lib/offlineIndicatorCopy.test.ts` so both clients assert the
 /// same strings; keep the two files in step.
-final class OfflineIndicatorCopyTests: XCTestCase {
+struct OfflineIndicatorCopyTests {
     private let promise = "sits are saved and upload when you reconnect"
 
     // MARK: - #703: the disconnected copy is unchanged
 
-    func testUsualStripKeepsTheSharedCopyVerbatim() {
+    @Test func testUsualStripKeepsTheSharedCopyVerbatim() {
         let copy = OfflineIndicatorCopy.copy(for: .offlineSavedProgress)
 
-        XCTAssertEqual(copy.label, "OFFLINE · SAVED PROGRESS")
-        XCTAssertEqual(
-            copy.accessibilityLabel,
-            "Offline. Showing your saved progress; sits are saved and upload when you reconnect."
-        )
+        #expect(copy.label == "OFFLINE · SAVED PROGRESS")
+        #expect(copy.accessibilityLabel == "Offline. Showing your saved progress; sits are saved and upload when you reconnect.")
     }
 
-    func testNotStoredStripDropsThePromise() {
+    @Test func testNotStoredStripDropsThePromise() {
         let copy = OfflineIndicatorCopy.copy(for: .offlineSitNotStored)
 
-        XCTAssertEqual(copy.label, "OFFLINE · SIT NOT SAVED")
-        XCTAssertEqual(
-            copy.accessibilityLabel,
-            "Offline. A sit could not be saved on this device, so it will not upload when you reconnect."
-        )
-        XCTAssertFalse(copy.accessibilityLabel.contains(promise))
-        XCTAssertTrue(copy.accessibilityLabel.contains("could not be saved on this device"))
-        XCTAssertNotEqual(copy.label, OfflineIndicatorCopy.copy(for: .offlineSavedProgress).label)
+        #expect(copy.label == "OFFLINE · SIT NOT SAVED")
+        #expect(copy.accessibilityLabel == "Offline. A sit could not be saved on this device, so it will not upload when you reconnect.")
+        #expect(!copy.accessibilityLabel.contains(promise))
+        #expect(copy.accessibilityLabel.contains("could not be saved on this device"))
+        #expect(copy.label != OfflineIndicatorCopy.copy(for: .offlineSavedProgress).label)
     }
 
     // MARK: - #717: the online failure copy
 
-    func testOnlineStripReportsTheSameLossWithoutClaimingADisconnection() {
+    @Test func testOnlineStripReportsTheSameLossWithoutClaimingADisconnection() {
         let copy = OfflineIndicatorCopy.copy(for: .onlineSitNotStored)
 
-        XCTAssertEqual(copy.label, "SIT NOT SAVED")
-        XCTAssertEqual(
-            copy.accessibilityLabel,
-            "A sit could not be saved on this device, so it will not upload."
-        )
+        #expect(copy.label == "SIT NOT SAVED")
+        #expect(copy.accessibilityLabel == "A sit could not be saved on this device, so it will not upload.")
     }
 
-    func testNeitherStringTellsAConnectedUserTheyAreOffline() {
+    @Test func testNeitherStringTellsAConnectedUserTheyAreOffline() {
         let copy = OfflineIndicatorCopy.copy(for: .onlineSitNotStored)
 
-        XCTAssertFalse(copy.label.contains("OFFLINE"))
-        XCTAssertFalse(copy.accessibilityLabel.lowercased().contains("offline"))
+        #expect(!copy.label.contains("OFFLINE"))
+        #expect(!copy.accessibilityLabel.lowercased().contains("offline"))
         // There is nothing to reconnect to, so nothing is waiting to upload later.
-        XCTAssertFalse(copy.accessibilityLabel.contains("reconnect"))
+        #expect(!copy.accessibilityLabel.contains("reconnect"))
     }
 
-    func testAccessibilityLabelCarriesTheVisibleLabelsMeaning() {
+    @Test func testAccessibilityLabelCarriesTheVisibleLabelsMeaning() {
         // The glyph and label are ignored for accessibility, so this string is the
         // whole announcement — it has to say what the strip shows, in both states.
-        XCTAssertTrue(
+        #expect(
             OfflineIndicatorCopy.copy(for: .onlineSitNotStored)
                 .accessibilityLabel.contains("could not be saved on this device")
         )
-        XCTAssertTrue(
+        #expect(
             OfflineIndicatorCopy.copy(for: .offlineSitNotStored)
                 .accessibilityLabel.contains("could not be saved on this device")
         )
-        XCTAssertTrue(
+        #expect(
             OfflineIndicatorCopy.copy(for: .offlineSitNotStored)
                 .accessibilityLabel.contains("Offline.")
         )
@@ -77,26 +69,17 @@ final class OfflineIndicatorCopyTests: XCTestCase {
 
     // MARK: - #717: when the strip is raised at all
 
-    func testKnownWriteFailureSelectsTheNotStoredCopyForEitherConnectivity() {
-        XCTAssertEqual(
-            OfflineIndicatorCopy.state(offline: true, sitNotStored: true),
-            .offlineSitNotStored
-        )
-        XCTAssertEqual(
-            OfflineIndicatorCopy.state(offline: false, sitNotStored: true),
-            .onlineSitNotStored
-        )
+    @Test func testKnownWriteFailureSelectsTheNotStoredCopyForEitherConnectivity() {
+        #expect(OfflineIndicatorCopy.state(offline: true, sitNotStored: true) == .offlineSitNotStored)
+        #expect(OfflineIndicatorCopy.state(offline: false, sitNotStored: true) == .onlineSitNotStored)
     }
 
-    func testOfflineWithEverythingIntactKeepsTheOriginalStrip() {
-        XCTAssertEqual(
-            OfflineIndicatorCopy.state(offline: true, sitNotStored: false),
-            .offlineSavedProgress
-        )
+    @Test func testOfflineWithEverythingIntactKeepsTheOriginalStrip() {
+        #expect(OfflineIndicatorCopy.state(offline: true, sitNotStored: false) == .offlineSavedProgress)
     }
 
-    func testOnlineWithTheSitStoredIsTheOneCombinationWithNothingToSay() {
-        XCTAssertNil(OfflineIndicatorCopy.state(offline: false, sitNotStored: false))
+    @Test func testOnlineWithTheSitStoredIsTheOneCombinationWithNothingToSay() {
+        #expect(OfflineIndicatorCopy.state(offline: false, sitNotStored: false) == nil)
     }
 
     // MARK: - #744 / #717: render suppression
@@ -104,67 +87,75 @@ final class OfflineIndicatorCopyTests: XCTestCase {
     // Mirrored case-for-case from `src/lib/offlineIndicatorCopy.test.ts`
     // (`suppressedOfflineIndicatorState`). Keep the two files in step.
 
-    func testCompletionNotStoredAlertSuppressesTheStripEvenWhenTheFactsWouldRaiseIt() {
-        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
-            isImmersive: false,
-            completionOwnsNotStored: true,
-            offline: true,
-            sitNotStored: true
-        ))
-        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
-            isImmersive: false,
-            completionOwnsNotStored: true,
-            offline: false,
-            sitNotStored: true
-        ))
-        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
-            isImmersive: false,
-            completionOwnsNotStored: true,
-            offline: true,
-            sitNotStored: false
-        ))
+    @Test func testCompletionNotStoredAlertSuppressesTheStripEvenWhenTheFactsWouldRaiseIt() {
+        #expect(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: false,
+                completionOwnsNotStored: true,
+                offline: true,
+                sitNotStored: true
+            ) == nil
+        )
+        #expect(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: false,
+                completionOwnsNotStored: true,
+                offline: false,
+                sitNotStored: true
+            ) == nil
+        )
+        #expect(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: false,
+                completionOwnsNotStored: true,
+                offline: true,
+                sitNotStored: false
+            ) == nil
+        )
     }
 
-    func testImmersiveFlowsSuppressTheStrip() {
-        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
-            isImmersive: true,
-            completionOwnsNotStored: false,
-            offline: true,
-            sitNotStored: true
-        ))
+    @Test func testImmersiveFlowsSuppressTheStrip() {
+        #expect(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: true,
+                completionOwnsNotStored: false,
+                offline: true,
+                sitNotStored: true
+            ) == nil
+        )
     }
 
-    func testEitherGateSuppressesTheStripWhenBothAreSet() {
-        XCTAssertNil(OfflineIndicatorCopy.suppressedState(
-            isImmersive: true,
-            completionOwnsNotStored: true,
-            offline: false,
-            sitNotStored: true
-        ))
+    @Test func testEitherGateSuppressesTheStripWhenBothAreSet() {
+        #expect(
+            OfflineIndicatorCopy.suppressedState(
+                isImmersive: true,
+                completionOwnsNotStored: true,
+                offline: false,
+                sitNotStored: true
+            ) == nil
+        )
     }
 
-    func testSuccessfulRetryLiftsCompletionSuppressionAndTheStripReturnsWhenTheFactsWarrantIt() {
-        XCTAssertEqual(
+    @Test func testSuccessfulRetryLiftsCompletionSuppressionAndTheStripReturnsWhenTheFactsWarrantIt() {
+        #expect(
             OfflineIndicatorCopy.suppressedState(
                 isImmersive: false,
                 completionOwnsNotStored: false,
                 offline: true,
                 sitNotStored: false
-            ),
-            .offlineSavedProgress
+            ) == .offlineSavedProgress
         )
-        XCTAssertEqual(
+        #expect(
             OfflineIndicatorCopy.suppressedState(
                 isImmersive: false,
                 completionOwnsNotStored: false,
                 offline: true,
                 sitNotStored: false
-            ),
-            OfflineIndicatorCopy.state(offline: true, sitNotStored: false)
+            ) == OfflineIndicatorCopy.state(offline: true, sitNotStored: false)
         )
     }
 
-    func testWithNeitherGateSetTheHelperMatchesTheTruthTable() {
+    @Test func testWithNeitherGateSetTheHelperMatchesTheTruthTable() {
         let combinations: [(offline: Bool, sitNotStored: Bool)] = [
             (true, true),
             (false, true),
@@ -172,14 +163,13 @@ final class OfflineIndicatorCopyTests: XCTestCase {
             (false, false),
         ]
         for facts in combinations {
-            XCTAssertEqual(
+            #expect(
                 OfflineIndicatorCopy.suppressedState(
                     isImmersive: false,
                     completionOwnsNotStored: false,
                     offline: facts.offline,
                     sitNotStored: facts.sitNotStored
-                ),
-                OfflineIndicatorCopy.state(offline: facts.offline, sitNotStored: facts.sitNotStored)
+                ) == OfflineIndicatorCopy.state(offline: facts.offline, sitNotStored: facts.sitNotStored)
             )
         }
     }

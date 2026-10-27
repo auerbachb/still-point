@@ -1,18 +1,19 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class DeviceTokenRegistrationRequestEncodingTests: XCTestCase {
-    func testEncodesExpectedPayload() throws {
+struct DeviceTokenRegistrationRequestEncodingTests {
+    @Test func testEncodesExpectedPayload() throws {
         let request = DeviceTokenRegistrationRequest(
             token: String(repeating: "a", count: 64),
             apnsEnvironment: "development"
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: String])
 
-        XCTAssertEqual(object["token"], String(repeating: "a", count: 64))
-        XCTAssertEqual(object["platform"], "ios")
-        XCTAssertEqual(object["apnsEnvironment"], "development")
+        #expect(object["token"] == String(repeating: "a", count: 64))
+        #expect(object["platform"] == "ios")
+        #expect(object["apnsEnvironment"] == "development")
     }
 }

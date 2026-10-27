@@ -1,54 +1,53 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class LastAuthProviderTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
+@Suite(.serialized) final class LastAuthProviderTests {
+    init() {
         LastAuthProvider.resetPersisted()
     }
 
-    override func tearDown() {
+    deinit {
         LastAuthProvider.resetPersisted()
-        super.tearDown()
     }
 
-    func testLoadReturnsNilWhenNothingStored() {
-        XCTAssertNil(LastAuthProvider.load())
+    @Test func testLoadReturnsNilWhenNothingStored() {
+        #expect(LastAuthProvider.load() == nil)
     }
 
-    func testSaveAndLoadRoundTripForGoogle() {
+    @Test func testSaveAndLoadRoundTripForGoogle() {
         LastAuthProvider.save(.google)
-        XCTAssertEqual(LastAuthProvider.load(), .google)
+        #expect(LastAuthProvider.load() == .google)
     }
 
-    func testSaveAndLoadRoundTripForApple() {
+    @Test func testSaveAndLoadRoundTripForApple() {
         LastAuthProvider.save(.apple)
-        XCTAssertEqual(LastAuthProvider.load(), .apple)
+        #expect(LastAuthProvider.load() == .apple)
     }
 
-    func testSaveAndLoadRoundTripForEmail() {
+    @Test func testSaveAndLoadRoundTripForEmail() {
         LastAuthProvider.save(.email)
-        XCTAssertEqual(LastAuthProvider.load(), .email)
+        #expect(LastAuthProvider.load() == .email)
     }
 
-    func testSaveOverwritesPreviousProvider() {
+    @Test func testSaveOverwritesPreviousProvider() {
         LastAuthProvider.save(.google)
         LastAuthProvider.save(.email)
-        XCTAssertEqual(LastAuthProvider.load(), .email)
+        #expect(LastAuthProvider.load() == .email)
     }
 
-    func testLoadReturnsNilForUnknownStoredValue() {
+    @Test func testLoadReturnsNilForUnknownStoredValue() {
         UserDefaults.standard.set("github", forKey: LastAuthProvider.storageKey)
-        XCTAssertNil(LastAuthProvider.load())
+        #expect(LastAuthProvider.load() == nil)
     }
 
-    func testResetClearsStoredProvider() {
+    @Test func testResetClearsStoredProvider() {
         LastAuthProvider.save(.apple)
         LastAuthProvider.resetPersisted()
-        XCTAssertNil(LastAuthProvider.load())
+        #expect(LastAuthProvider.load() == nil)
     }
 
-    func testStorageKeyMatchesWebLocalStorageKey() {
-        XCTAssertEqual(LastAuthProvider.storageKey, "stillpoint_last_auth_provider")
+    @Test func testStorageKeyMatchesWebLocalStorageKey() {
+        #expect(LastAuthProvider.storageKey == "stillpoint_last_auth_provider")
     }
 }

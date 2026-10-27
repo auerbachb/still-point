@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// #898: the History row label, including a combined sit's "Combined".
-final class HistorySessionLabelTests: XCTestCase {
+struct HistorySessionLabelTests {
     private func label(
         _ type: SessionType,
         combined: Bool? = nil,
@@ -19,37 +20,34 @@ final class HistorySessionLabelTests: XCTestCase {
         )
     }
 
-    func testCombinedStandardSitReadsCombinedWithNoOrdinal() {
-        XCTAssertEqual(label(.standard, combined: true), "Combined")
+    @Test func testCombinedStandardSitReadsCombinedWithNoOrdinal() {
+        #expect(label(.standard, combined: true) == "Combined")
     }
 
-    func testOrdinaryStandardSitReadsSessionN() {
-        XCTAssertEqual(label(.standard), "Session 2")
-        XCTAssertEqual(label(.standard, combined: false, index: 1), "Session 1")
+    @Test func testOrdinaryStandardSitReadsSessionN() {
+        #expect(label(.standard) == "Session 2")
+        #expect(label(.standard, combined: false, index: 1) == "Session 1")
     }
 
-    func testQuickSitKeepsItsOrdinal() {
-        XCTAssertEqual(label(.quick), "Quick 2")
+    @Test func testQuickSitKeepsItsOrdinal() {
+        #expect(label(.quick) == "Quick 2")
         // Only a standard row can be combined; a stray flag changes nothing.
-        XCTAssertEqual(label(.quick, combined: true), "Quick 2")
+        #expect(label(.quick, combined: true) == "Quick 2")
     }
 
-    func testBreathSitShowsCountOrOrdinal() {
-        XCTAssertEqual(label(.breath, breathCount: 12), "Breath 12b")
-        XCTAssertEqual(label(.breath, breathCount: 0), "Breath 2")
-        XCTAssertEqual(label(.breath), "Breath 2")
-        XCTAssertEqual(label(.breath, combined: true), "Breath 2")
+    @Test func testBreathSitShowsCountOrOrdinal() {
+        #expect(label(.breath, breathCount: 12) == "Breath 12b")
+        #expect(label(.breath, breathCount: 0) == "Breath 2")
+        #expect(label(.breath) == "Breath 2")
+        #expect(label(.breath, combined: true) == "Breath 2")
     }
 
-    func testFocusSessionReadsItsCategory() {
-        XCTAssertEqual(label(.focus), "Focus")
-        XCTAssertEqual(
-            label(.focus, focusCategory: .reading),
-            "Focus \u{00B7} \(FocusCategory.reading.displayLabel)"
-        )
+    @Test func testFocusSessionReadsItsCategory() {
+        #expect(label(.focus) == "Focus")
+        #expect(label(.focus, focusCategory: .reading) == "Focus \u{00B7} \(FocusCategory.reading.displayLabel)")
     }
 
-    func testSessionDTOOverloadReadsTheRow() {
+    @Test func testSessionDTOOverloadReadsTheRow() {
         let row = SessionDTO(
             id: "s1",
             dayNumber: 5,
@@ -64,6 +62,6 @@ final class HistorySessionLabelTests: XCTestCase {
             buddySessionId: nil,
             combined: true
         )
-        XCTAssertEqual(HistorySessionLabel.label(for: row, indexInDay: 1), "Combined")
+        #expect(HistorySessionLabel.label(for: row, indexInDay: 1) == "Combined")
     }
 }

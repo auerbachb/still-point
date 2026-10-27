@@ -1,35 +1,34 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SessionIntroPrefsTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
+@Suite(.serialized) final class SessionIntroPrefsTests {
+    init() {
         SessionIntroPrefs.resetPersistedPrefs()
     }
 
-    override func tearDown() {
+    deinit {
         SessionIntroPrefs.resetPersistedPrefs()
-        super.tearDown()
     }
 
-    func testDefaultIsNotHidden() {
-        XCTAssertFalse(SessionIntroPrefs.isIntroOverlayHidden)
+    @Test func testDefaultIsNotHidden() {
+        #expect(!SessionIntroPrefs.isIntroOverlayHidden)
     }
 
-    func testSetHiddenPersists() {
+    @Test func testSetHiddenPersists() {
         SessionIntroPrefs.setIntroOverlayHidden(true)
-        XCTAssertTrue(SessionIntroPrefs.isIntroOverlayHidden)
+        #expect(SessionIntroPrefs.isIntroOverlayHidden)
     }
 
-    func testResetClearsHiddenFlag() {
+    @Test func testResetClearsHiddenFlag() {
         SessionIntroPrefs.setIntroOverlayHidden(true)
         SessionIntroPrefs.resetPersistedPrefs()
-        XCTAssertFalse(SessionIntroPrefs.isIntroOverlayHidden)
+        #expect(!SessionIntroPrefs.isIntroOverlayHidden)
     }
 
-    func testReEnableAfterHide() {
+    @Test func testReEnableAfterHide() {
         SessionIntroPrefs.setIntroOverlayHidden(true)
         SessionIntroPrefs.setIntroOverlayHidden(false)
-        XCTAssertFalse(SessionIntroPrefs.isIntroOverlayHidden)
+        #expect(!SessionIntroPrefs.isIntroOverlayHidden)
     }
 }

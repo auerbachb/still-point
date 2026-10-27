@@ -1,11 +1,12 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
+struct WidgetDataWeekMarksTests: WidgetDataTestSupport {
     // MARK: - #84 follow-up: weekday checkmark row
 
     /// Snapshots written before `completedDates` shipped must still decode.
-    func testDecodesLegacyBlobWithoutCompletedDates() throws {
+    @Test func testDecodesLegacyBlobWithoutCompletedDates() throws {
         let ref = Date(timeIntervalSince1970: 1_700_000_000)
         let legacy: [String: Any] = [
             "isLoggedIn": true,
@@ -20,17 +21,17 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
         ]
         let data = try JSONSerialization.data(withJSONObject: legacy)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
-        XCTAssertEqual(decoded.completedDates, [])
-        XCTAssertEqual(decoded.streak, 7)
-        XCTAssertTrue(decoded.primaryDoneToday)
-        XCTAssertTrue(decoded.practiceDoneToday, "legacy blobs fall back to primaryDoneToday")
+        #expect(decoded.completedDates == [])
+        #expect(decoded.streak == 7)
+        #expect(decoded.primaryDoneToday)
+        #expect(decoded.practiceDoneToday, "legacy blobs fall back to primaryDoneToday")
     }
 
     /// A pre-#671 snapshot has a real `streak` but no stored history to justify
     /// it. Recomputing would read 0 -- not a lapse, just missing evidence -- and
     /// zero every existing user's widget the moment they upgraded, before the
     /// app next foregrounded. Unknown history must not be read as empty history.
-    func testLegacySnapshotKeepsItsStreakUntilHistoryIsStored() throws {
+    @Test func testLegacySnapshotKeepsItsStreakUntilHistoryIsStored() throws {
         let ref = Date(timeIntervalSince1970: 1_700_000_000)
         let legacy: [String: Any] = [
             "isLoggedIn": true,
@@ -45,19 +46,19 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
         ]
         let data = try JSONSerialization.data(withJSONObject: legacy)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
-        XCTAssertEqual(decoded.completedDates, [], "precondition: legacy blob stores no history")
-        XCTAssertNil(decoded.serverStreak, "precondition: legacy blob stores no anchor")
+        #expect(decoded.completedDates == [], "precondition: legacy blob stores no history")
+        #expect(decoded.serverStreak == nil, "precondition: legacy blob stores no anchor")
 
         // `now` is far past lastUpdated, so the rollover branch also runs.
         let shown = WidgetDataStore.normalizedForDisplay(decoded, now: Date())
-        XCTAssertEqual(shown.streak, 42, "legacy streak must survive until real history is stored")
-        XCTAssertFalse(shown.practiceDoneToday, "stale done-today flags are still cleared")
+        #expect(shown.streak == 42, "legacy streak must survive until real history is stored")
+        #expect(!shown.practiceDoneToday, "stale done-today flags are still cleared")
     }
 
     /// The guard above must not become a way for a genuine lapse to persist: a
     /// snapshot written by *this* version always records `completedDates`, so an
     /// empty-but-present history alongside a server anchor still recomputes.
-    func testEmptyHistoryWithAnchorStillRecomputesToZero() {
+    @Test func testEmptyHistoryWithAnchorStillRecomputesToZero() {
         let now = Date()
         let data = WidgetData(
             isLoggedIn: true,
@@ -75,7 +76,7 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             lastUpdated: now
         )
         let shown = WidgetDataStore.normalizedForDisplay(data, now: now)
-        XCTAssertEqual(shown.streak, 0, "a lapsed run with no corroborating history reads zero")
+        #expect(shown.streak == 0, "a lapsed run with no corroborating history reads zero")
     }
 
     /// The legacy carry-forward must key off *provenance*, not emptiness. A
@@ -84,7 +85,7 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
     /// still recompute to 0, or #671 is back: a stale streak beside a blank row.
     /// This is the case the 640-case property sweep caught; pinned by name here
     /// so the distinction cannot regress silently.
-    func testEmptyHistoryWithoutAnchorRecomputesToZeroWhenHistoryWasRecorded() {
+    @Test func testEmptyHistoryWithoutAnchorRecomputesToZeroWhenHistoryWasRecorded() {
         let now = Date()
         let lapsed = WidgetData(
             isLoggedIn: true,
@@ -101,17 +102,17 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             serverStreakDate: nil,
             lastUpdated: now
         )
-        XCTAssertFalse(lapsed.historyIsUnknown, "precondition: this version records history")
+        #expect(!lapsed.historyIsUnknown, "precondition: this version records history")
 
         let shown = WidgetDataStore.normalizedForDisplay(lapsed, now: now)
-        XCTAssertEqual(shown.weekMarks(now: now).filter(\.done).count, 0, "precondition: the row is blank")
-        XCTAssertEqual(shown.streak, 0, "a blank row may never carry a streak")
+        #expect(shown.weekMarks(now: now).filter(\.done).count == 0, "precondition: the row is blank")
+        #expect(shown.streak == 0, "a blank row may never carry a streak")
     }
 
     /// The two shapes are indistinguishable by content, so assert directly that
     /// decoding is what separates them: keys absent means unknown, keys present
     /// (even empty) means recorded.
-    func testHistoryIsUnknownTracksKeyPresenceNotEmptiness() throws {
+    @Test func testHistoryIsUnknownTracksKeyPresenceNotEmptiness() throws {
         let ref = Date(timeIntervalSince1970: 1_700_000_000)
         var blob: [String: Any] = [
             "isLoggedIn": true,
@@ -129,7 +130,7 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             WidgetData.self,
             from: try JSONSerialization.data(withJSONObject: blob)
         )
-        XCTAssertTrue(legacy.historyIsUnknown, "no history keys at all means unknown history")
+        #expect(legacy.historyIsUnknown, "no history keys at all means unknown history")
 
         // Same empty history, but explicitly recorded by the writer.
         blob["completedDates"] = [String]()
@@ -137,19 +138,18 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             WidgetData.self,
             from: try JSONSerialization.data(withJSONObject: blob)
         )
-        XCTAssertFalse(recorded.historyIsUnknown, "an explicitly empty history is known, not unknown")
-        XCTAssertEqual(
-            WidgetDataStore.normalizedForDisplay(recorded, now: Date()).streak,
-            0,
+        #expect(!recorded.historyIsUnknown, "an explicitly empty history is known, not unknown")
+        #expect(
+            WidgetDataStore.normalizedForDisplay(recorded, now: Date()).streak == 0,
             "a recorded empty history is a lapse and must recompute to zero"
         )
 
         // Provenance is never written back: re-encoding clears it.
         let roundTripped = try JSONDecoder().decode(WidgetData.self, from: try JSONEncoder().encode(legacy))
-        XCTAssertFalse(roundTripped.historyIsUnknown, "saving a snapshot records its history")
+        #expect(!roundTripped.historyIsUnknown, "saving a snapshot records its history")
     }
 
-    func testRecentCompletedPracticeDatesFiltersTypeTrackAndWindow() {
+    @Test func testRecentCompletedPracticeDatesFiltersTypeTrackAndWindow() {
         let now = Date()
         let today = localDay(0, from: now)
         let twoDaysAgo = localDay(-2, from: now)
@@ -166,11 +166,11 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
         ]
 
         let result = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
-        XCTAssertEqual(result.primary, [today, twoDaysAgo])
-        XCTAssertEqual(result.second, [today], "the second-track standard sit lands on Track Two (#684)")
+        #expect(result.primary == [today, twoDaysAgo])
+        #expect(result.second == [today], "the second-track standard sit lands on Track Two (#684)")
     }
 
-    func testWeekMarksHasSevenDaysEndingToday() {
+    @Test func testWeekMarksHasSevenDaysEndingToday() {
         let now = Date()
         let today = localDay(0, from: now)
         let data = WidgetData(
@@ -187,14 +187,14 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             lastUpdated: now
         )
         let marks = data.weekMarks(now: now)
-        XCTAssertEqual(marks.count, 7)
-        XCTAssertEqual(marks.last?.iso, today)
-        XCTAssertEqual(marks.last?.isToday, true)
-        XCTAssertEqual(marks.last?.done, true)
-        XCTAssertEqual(marks.first?.isToday, false)
+        #expect(marks.count == 7)
+        #expect(marks.last?.iso == today)
+        #expect(marks.last?.isToday == true)
+        #expect(marks.last?.done == true)
+        #expect(marks.first?.isToday == false)
     }
 
-    func testWeekMarksChecksTodayViaPracticeFlagWithoutCompletedDate() {
+    @Test func testWeekMarksChecksTodayViaPracticeFlagWithoutCompletedDate() {
         let now = Date()
         let data = WidgetData(
             isLoggedIn: true,
@@ -209,10 +209,10 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             completedDates: [],
             lastUpdated: now
         )
-        XCTAssertEqual(data.weekMarks(now: now).last?.done, true)
+        #expect(data.weekMarks(now: now).last?.done == true)
     }
 
-    func testMakeSnapshotCarriesForwardHistoryWhenNoSessionsProvided() {
+    @Test func testMakeSnapshotCarriesForwardHistoryWhenNoSessionsProvided() {
         let now = Date()
         let twoDaysAgo = localDay(-2, from: now)
         let previous = WidgetData(
@@ -236,10 +236,10 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.completedDates, [twoDaysAgo])
+        #expect(snapshot.completedDates == [twoDaysAgo])
     }
 
-    func testMakeSnapshotFoldsTodayWhenPracticeDone() {
+    @Test func testMakeSnapshotFoldsTodayWhenPracticeDone() {
         let now = Date()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -249,10 +249,10 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: nil
         )
-        XCTAssertTrue(snapshot.completedDates.contains(localDay(0, from: now)))
+        #expect(snapshot.completedDates.contains(localDay(0, from: now)))
     }
 
-    func testMakeSnapshotUsesProvidedSessionsAsAuthoritative() {
+    @Test func testMakeSnapshotUsesProvidedSessionsAsAuthoritative() {
         let now = Date()
         let today = localDay(0, from: now)
         let threeDaysAgo = localDay(-3, from: now)
@@ -278,10 +278,10 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             previous: previous,
             completedPracticeDates: [today, threeDaysAgo]
         )
-        XCTAssertEqual(Set(snapshot.completedDates), [today, threeDaysAgo])
+        #expect(Set(snapshot.completedDates) == [today, threeDaysAgo])
     }
 
-    func testMakeSnapshotDropsHistoryOnAccountSwitch() {
+    @Test func testMakeSnapshotDropsHistoryOnAccountSwitch() {
         let now = Date()
         let previous = WidgetData(
             isLoggedIn: true,
@@ -304,10 +304,10 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.completedDates, [])
+        #expect(snapshot.completedDates == [])
     }
 
-    func testNormalizedForDisplayPrunesHistoryOutsideWindow() {
+    @Test func testNormalizedForDisplayPrunesHistoryOutsideWindow() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let inWindow = localDay(-2, from: now)
@@ -325,12 +325,12 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             lastUpdated: yesterday
         )
         let normalized = WidgetDataStore.normalizedForDisplay(data, now: now)
-        XCTAssertEqual(normalized.completedDates, [inWindow])
+        #expect(normalized.completedDates == [inWindow])
     }
 
     /// Authoritative (session-derived) path must not inject today from a possibly
     /// stale `practiceDoneToday` flag — it trusts the fetched completion set.
-    func testMakeSnapshotDoesNotFoldTodayWhenSessionsAuthoritative() {
+    @Test func testMakeSnapshotDoesNotFoldTodayWhenSessionsAuthoritative() {
         let now = Date()
         let today = localDay(0, from: now)
         let threeDaysAgo = localDay(-3, from: now)
@@ -343,12 +343,12 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             previous: nil,
             completedPracticeDates: [threeDaysAgo]
         )
-        XCTAssertFalse(snapshot.completedDates.contains(today))
-        XCTAssertEqual(snapshot.completedDates, [threeDaysAgo])
+        #expect(!snapshot.completedDates.contains(today))
+        #expect(snapshot.completedDates == [threeDaysAgo])
     }
 
     /// Quick-only practice must extend widget streak (#589).
-    func testMakeSnapshotIncrementsStreakForQuickOnlyDay() {
+    @Test func testMakeSnapshotIncrementsStreakForQuickOnlyDay() {
         let now = Date()
         let previous = WidgetData(
             isLoggedIn: true,
@@ -371,18 +371,18 @@ final class WidgetDataWeekMarksTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.streak, 3)
-        XCTAssertTrue(snapshot.completedDates.contains(localDay(0, from: now)))
+        #expect(snapshot.streak == 3)
+        #expect(snapshot.completedDates.contains(localDay(0, from: now)))
     }
 
     /// `localDayString` must emit Gregorian digits even when the supplied calendar
     /// is non-Gregorian, so keys match `sessionDate` (stamped Gregorian).
-    func testLocalDayStringForcesGregorianDigits() {
+    @Test func testLocalDayStringForcesGregorianDigits() {
         let date = Date(timeIntervalSince1970: 1_784_000_000) // ~2026
         var buddhist = Calendar(identifier: .buddhist)
         buddhist.timeZone = TimeZone(identifier: "UTC")!
         let iso = WidgetDataStore.localDayString(date, calendar: buddhist)
-        XCTAssertEqual(iso.count, 10)
-        XCTAssertTrue(iso.hasPrefix("20"), "expected Gregorian year, got \(iso)")
+        #expect(iso.count == 10)
+        #expect(iso.hasPrefix("20"), "expected Gregorian year, got \(iso)")
     }
 }

@@ -1,18 +1,19 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class FailureReasonEncodingTests: XCTestCase {
-    func testSubmitFailureReasonRequestEncodesFields() throws {
+struct FailureReasonEncodingTests {
+    @Test func testSubmitFailureReasonRequestEncodesFields() throws {
         let request = SubmitFailureReasonRequest(reasonDate: "2026-06-24", text: "Too tired")
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["reasonDate"] as? String, "2026-06-24")
-        XCTAssertEqual(object["text"] as? String, "Too tired")
+        #expect((object["reasonDate"] as? String) == "2026-06-24")
+        #expect((object["text"] as? String) == "Too tired")
     }
 
-    func testFailureReasonLookupDTODecodesMissingFailureReason() throws {
+    @Test func testFailureReasonLookupDTODecodesMissingFailureReason() throws {
         let json = """
         {
             "exists": false,
@@ -22,11 +23,11 @@ final class FailureReasonEncodingTests: XCTestCase {
 
         let dto = try JSONDecoder().decode(FailureReasonLookupDTO.self, from: json)
 
-        XCTAssertFalse(dto.exists)
-        XCTAssertNil(dto.failureReason)
+        #expect(!dto.exists)
+        #expect(dto.failureReason == nil)
     }
 
-    func testFailureReasonDTODecodesExistingFailureReason() throws {
+    @Test func testFailureReasonDTODecodesExistingFailureReason() throws {
         let json = """
         {
             "id": "reason-1",
@@ -39,8 +40,8 @@ final class FailureReasonEncodingTests: XCTestCase {
 
         let dto = try JSONDecoder().decode(FailureReasonDTO.self, from: json)
 
-        XCTAssertEqual(dto.id, "reason-1")
-        XCTAssertEqual(dto.reasonDate, "2026-06-24")
-        XCTAssertEqual(dto.text, "Travel day")
+        #expect(dto.id == "reason-1")
+        #expect(dto.reasonDate == "2026-06-24")
+        #expect(dto.text == "Travel day")
     }
 }

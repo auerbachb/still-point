@@ -1,11 +1,12 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
 /// #612: `SessionDTO` decodes defensively so a single drifted, additive, or unexpected
 /// value in the session-history payload never fails the whole Progress list. Identity
 /// fields stay strict; everything else is tolerated.
-final class SessionDTOTests: XCTestCase {
-    func testDecodesFullSession() throws {
+struct SessionDTOTests {
+    @Test func testDecodesFullSession() throws {
         let json = """
         {
           "id": "s1",
@@ -31,28 +32,28 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.id, "s1")
-        XCTAssertEqual(s.dayNumber, 12)
-        XCTAssertEqual(s.sessionType, .breath)
-        XCTAssertEqual(s.duration, 180)
-        XCTAssertEqual(s.bonusSeconds, 60)
-        XCTAssertTrue(s.completed)
-        XCTAssertEqual(s.actualTime, 200)
-        XCTAssertEqual(s.clearPercent, 82)
-        XCTAssertEqual(s.thoughtCount, 3)
-        XCTAssertEqual(s.mindStateLog?.count, 2)
-        XCTAssertEqual(s.attentionLog?.first?.state, "attentive")
-        XCTAssertEqual(s.sessionDate, "2026-06-11")
-        XCTAssertEqual(s.createdAt, "2026-06-11T08:00:00.000Z")
-        XCTAssertEqual(s.buddySessionId, "b1")
-        XCTAssertEqual(s.breathCount, 24)
-        XCTAssertEqual(s.track, .second)
-        XCTAssertEqual(s.ambientSoundSummary?.sampleCount, 120)
+        #expect(s.id == "s1")
+        #expect(s.dayNumber == 12)
+        #expect(s.sessionType == .breath)
+        #expect(s.duration == 180)
+        #expect(s.bonusSeconds == 60)
+        #expect(s.completed)
+        #expect(s.actualTime == 200)
+        #expect(s.clearPercent == 82)
+        #expect(s.thoughtCount == 3)
+        #expect(s.mindStateLog?.count == 2)
+        #expect(s.attentionLog?.first?.state == "attentive")
+        #expect(s.sessionDate == "2026-06-11")
+        #expect(s.createdAt == "2026-06-11T08:00:00.000Z")
+        #expect(s.buddySessionId == "b1")
+        #expect(s.breathCount == 24)
+        #expect(s.track == .second)
+        #expect(s.ambientSoundSummary?.sampleCount == 120)
     }
 
     /// Unknown/additive keys (e.g. server fields the iOS DTO never modelled, or ones the
     /// backend projection now drops) must be ignored, not rejected.
-    func testDecodesWhenUnknownAdditiveFieldsPresent() throws {
+    @Test func testDecodesWhenUnknownAdditiveFieldsPresent() throws {
         let json = """
         {
           "id": "s2",
@@ -71,14 +72,14 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.id, "s2")
-        XCTAssertEqual(s.clearPercent, 50)
+        #expect(s.id == "s2")
+        #expect(s.clearPercent == 50)
     }
 
     /// #766: iOS no longer models the retired session ratings (#521), but the server keeps
     /// returning the two legacy numbers, so a session that still carries them must decode,
     /// with its mood matrix intact beside them.
-    func testDecodesLegacyRatingKeysAlongsideMoodMatrix() throws {
+    @Test func testDecodesLegacyRatingKeysAlongsideMoodMatrix() throws {
         let json = """
         {
           "id": "s11",
@@ -101,20 +102,20 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.id, "s11")
-        XCTAssertEqual(s.dayNumber, 4)
-        XCTAssertEqual(s.clearPercent, 70)
+        #expect(s.id == "s11")
+        #expect(s.dayNumber == 4)
+        #expect(s.clearPercent == 70)
         // `moodMatrix` decodes with `try?`, so a silent nil would hide a failure.
-        let mood = try XCTUnwrap(s.moodMatrix)
-        XCTAssertEqual(mood.count, 3)
-        XCTAssertEqual(mood[MoodKey.focus.rawValue], MoodMatrixEntry(before: 2, after: 4))
-        XCTAssertEqual(mood[MoodKey.happiness.rawValue], MoodMatrixEntry(before: 3, after: 5))
-        XCTAssertEqual(mood[MoodKey.overall.rawValue], MoodMatrixEntry(before: nil, after: 4))
+        let mood = try #require(s.moodMatrix)
+        #expect(mood.count == 3)
+        #expect(mood[MoodKey.focus.rawValue] == MoodMatrixEntry(before: 2, after: 4))
+        #expect(mood[MoodKey.happiness.rawValue] == MoodMatrixEntry(before: 3, after: 5))
+        #expect(mood[MoodKey.overall.rawValue] == MoodMatrixEntry(before: nil, after: 4))
     }
 
     /// A response that predates the optional fields (bonusSeconds, actualTime, track,
     /// breathCount, ambient summary, logs) must still decode, defaulting them.
-    func testDefaultsOptionalFieldsWhenMissing() throws {
+    @Test func testDefaultsOptionalFieldsWhenMissing() throws {
         let json = """
         {
           "id": "s3",
@@ -128,21 +129,21 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.sessionType, .standard)   // absent → default
-        XCTAssertNil(s.track)
-        XCTAssertNil(s.bonusSeconds)
-        XCTAssertNil(s.actualTime)
-        XCTAssertNil(s.mindStateLog)
-        XCTAssertNil(s.attentionLog)
-        XCTAssertNil(s.createdAt)
-        XCTAssertNil(s.buddySessionId)
-        XCTAssertNil(s.breathCount)
-        XCTAssertNil(s.ambientSoundSummary)
+        #expect(s.sessionType == .standard)   // absent → default
+        #expect(s.track == nil)
+        #expect(s.bonusSeconds == nil)
+        #expect(s.actualTime == nil)
+        #expect(s.mindStateLog == nil)
+        #expect(s.attentionLog == nil)
+        #expect(s.createdAt == nil)
+        #expect(s.buddySessionId == nil)
+        #expect(s.breathCount == nil)
+        #expect(s.ambientSoundSummary == nil)
     }
 
     /// An unknown `sessionType` raw value (a session kind added server-side before an app
     /// update) must fall back to `.standard` rather than throwing and failing the list.
-    func testUnknownSessionTypeFallsBackToStandard() throws {
+    @Test func testUnknownSessionTypeFallsBackToStandard() throws {
         let json = """
         {
           "id": "s4", "dayNumber": 2, "sessionType": "loving-kindness", "duration": 60,
@@ -151,11 +152,11 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.sessionType, .standard)
+        #expect(s.sessionType == .standard)
     }
 
     /// An unknown `track` raw value must fall back to nil (callers treat nil as `.primary`).
-    func testUnknownTrackFallsBackToNil() throws {
+    @Test func testUnknownTrackFallsBackToNil() throws {
         let json = """
         {
           "id": "s5", "dayNumber": 2, "sessionType": "standard", "track": "tertiary",
@@ -165,12 +166,12 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(s.track)
+        #expect(s.track == nil)
     }
 
     /// Identity/structural fields stay strict — a genuinely malformed row (missing a
     /// required field) must still throw so it is not silently coerced to a bogus session.
-    func testMissingIdentityFieldThrows() {
+    @Test func testMissingIdentityFieldThrows() {
         let json = """
         {
           "id": "s6", "dayNumber": 2, "sessionType": "standard", "duration": 60,
@@ -178,12 +179,12 @@ final class SessionDTOTests: XCTestCase {
         }
         """.data(using: .utf8)!  // clearPercent omitted
 
-        XCTAssertThrowsError(try JSONDecoder().decode(SessionDTO.self, from: json)) { error in
-            XCTAssertTrue(error is DecodingError)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(SessionDTO.self, from: json)
         }
     }
 
-    func testRoundTripsThroughEncodeAndDecode() throws {
+    @Test func testRoundTripsThroughEncodeAndDecode() throws {
         let original = SessionDTO(
             id: "s7",
             dayNumber: 9,
@@ -209,18 +210,18 @@ final class SessionDTOTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(SessionDTO.self, from: data)
 
-        XCTAssertEqual(decoded.id, original.id)
-        XCTAssertEqual(decoded.sessionType, original.sessionType)
-        XCTAssertEqual(decoded.bonusSeconds, original.bonusSeconds)
-        XCTAssertEqual(decoded.actualTime, original.actualTime)
-        XCTAssertEqual(decoded.track, original.track)
-        XCTAssertEqual(decoded.mindStateLog, original.mindStateLog)
-        XCTAssertEqual(decoded.ambientSoundSummary, original.ambientSoundSummary)
+        #expect(decoded.id == original.id)
+        #expect(decoded.sessionType == original.sessionType)
+        #expect(decoded.bonusSeconds == original.bonusSeconds)
+        #expect(decoded.actualTime == original.actualTime)
+        #expect(decoded.track == original.track)
+        #expect(decoded.mindStateLog == original.mindStateLog)
+        #expect(decoded.ambientSoundSummary == original.ambientSoundSummary)
     }
 
     /// A malformed mind-state log (wrong element shape) must degrade to nil, not fail the
     /// whole session — otherwise one bad row nukes the entire history list (#612).
-    func testToleratesMalformedMindStateLog() throws {
+    @Test func testToleratesMalformedMindStateLog() throws {
         let json = """
         {
           "id": "s8", "dayNumber": 2, "sessionType": "standard", "duration": 60,
@@ -230,12 +231,12 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(s.mindStateLog)
-        XCTAssertEqual(s.clearPercent, 40)   // the rest of the row still decoded
+        #expect(s.mindStateLog == nil)
+        #expect(s.clearPercent == 40)   // the rest of the row still decoded
     }
 
     /// A malformed attention log (not even an array) must degrade to nil, not throw.
-    func testToleratesMalformedAttentionLog() throws {
+    @Test func testToleratesMalformedAttentionLog() throws {
         let json = """
         {
           "id": "s9", "dayNumber": 2, "sessionType": "standard", "duration": 60,
@@ -245,12 +246,12 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(s.attentionLog)
-        XCTAssertEqual(s.id, "s9")
+        #expect(s.attentionLog == nil)
+        #expect(s.id == "s9")
     }
 
     /// A malformed ambient summary (wrong field types / shape) must degrade to nil.
-    func testToleratesMalformedAmbientSummary() throws {
+    @Test func testToleratesMalformedAmbientSummary() throws {
         let json = """
         {
           "id": "s10", "dayNumber": 2, "sessionType": "standard", "duration": 60,
@@ -260,15 +261,15 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(s.ambientSoundSummary)
-        XCTAssertEqual(s.id, "s10")
+        #expect(s.ambientSoundSummary == nil)
+        #expect(s.id == "s10")
     }
 
     // MARK: - #839 focus sessions
 
     /// A focus session as `GET /api/sessions` returns it (#837): its own type,
     /// read as `.focus` rather than falling back to a standard sit.
-    func testDecodesFocusSessionWithCategory() throws {
+    @Test func testDecodesFocusSessionWithCategory() throws {
         let json = """
         {
           "id": "f1", "dayNumber": 4, "sessionType": "focus", "duration": 240, "completed": true,
@@ -279,13 +280,13 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.sessionType, .focus)
-        XCTAssertEqual(s.focusCategory, .reading)
-        XCTAssertEqual(s.duration, 240)
+        #expect(s.sessionType == .focus)
+        #expect(s.focusCategory == .reading)
+        #expect(s.duration == 240)
     }
 
     /// A focus session saved before #837 has no category: absent or null both decode as nil.
-    func testDecodesFocusSessionWithoutCategory() throws {
+    @Test func testDecodesFocusSessionWithoutCategory() throws {
         let absent = """
         {
           "id": "f2", "dayNumber": 1, "sessionType": "focus", "duration": 60, "completed": true,
@@ -301,14 +302,14 @@ final class SessionDTOTests: XCTestCase {
 
         for data in [absent, null] {
             let s = try JSONDecoder().decode(SessionDTO.self, from: data)
-            XCTAssertEqual(s.sessionType, .focus, s.id)
-            XCTAssertNil(s.focusCategory, s.id)
+            #expect(s.sessionType == .focus, Comment(rawValue: s.id))
+            #expect(s.focusCategory == nil, Comment(rawValue: s.id))
         }
     }
 
     /// A category this build does not know (a future one, or a drifted value) reads as
     /// no category, like an unknown `track`, and the row stays a focus session.
-    func testUnknownFocusCategoryDecodesAsNilAndKeepsTheFocusType() throws {
+    @Test func testUnknownFocusCategoryDecodesAsNilAndKeepsTheFocusType() throws {
         for category in ["\"music\"", "\"Reading\"", "\"\"", "3"] {
             let json = """
             {
@@ -318,13 +319,13 @@ final class SessionDTOTests: XCTestCase {
             """.data(using: .utf8)!
 
             let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-            XCTAssertEqual(s.sessionType, .focus, category)
-            XCTAssertNil(s.focusCategory, category)
+            #expect(s.sessionType == .focus, Comment(rawValue: category))
+            #expect(s.focusCategory == nil, Comment(rawValue: category))
         }
     }
 
     /// The server sends `focusCategory: null` on every other session type.
-    func testMeditationSessionCarriesNoCategory() throws {
+    @Test func testMeditationSessionCarriesNoCategory() throws {
         let json = """
         {
           "id": "s12", "dayNumber": 9, "sessionType": "standard", "duration": 140, "completed": true,
@@ -333,13 +334,13 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.sessionType, .standard)
-        XCTAssertNil(s.focusCategory)
+        #expect(s.sessionType == .standard)
+        #expect(s.focusCategory == nil)
     }
 
     /// #909 added `combined` to every session row. iOS does not model it until #896, so a
     /// payload carrying it, including a combined sit, must still decode as before.
-    func testDecodesPayloadCarryingTheCombinedFlag() throws {
+    @Test func testDecodesPayloadCarryingTheCombinedFlag() throws {
         let json = """
         {
           "id": "c1", "dayNumber": 60, "sessionType": "standard", "track": "primary", "combined": true,
@@ -349,15 +350,15 @@ final class SessionDTOTests: XCTestCase {
         """.data(using: .utf8)!
 
         let s = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(s.id, "c1")
-        XCTAssertEqual(s.sessionType, .standard)
-        XCTAssertEqual(s.track, .primary)
-        XCTAssertTrue(s.completed)
-        XCTAssertNil(s.focusCategory)
+        #expect(s.id == "c1")
+        #expect(s.sessionType == .standard)
+        #expect(s.track == .primary)
+        #expect(s.completed)
+        #expect(s.focusCategory == nil)
     }
 
     /// The UI-test store persists sessions by encoding them, so the category has to survive.
-    func testFocusCategoryRoundTripsThroughEncodeAndDecode() throws {
+    @Test func testFocusCategoryRoundTripsThroughEncodeAndDecode() throws {
         let original = SessionDTO(
             id: "f5",
             dayNumber: 3,
@@ -374,12 +375,12 @@ final class SessionDTOTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(original)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["focusCategory"] as? String, "listening")
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect((object["focusCategory"] as? String) == "listening")
 
         let decoded = try JSONDecoder().decode(SessionDTO.self, from: data)
-        XCTAssertEqual(decoded.sessionType, .focus)
-        XCTAssertEqual(decoded.focusCategory, .listening)
+        #expect(decoded.sessionType == .focus)
+        #expect(decoded.focusCategory == .listening)
     }
 }
 
@@ -394,33 +395,33 @@ extension SessionDTOTests {
         return try JSONDecoder().decode(SessionDTO.self, from: Data(json.utf8))
     }
 
-    func testDecodesCombinedTrue() throws {
-        XCTAssertEqual(try decodeCombined(#","combined":true"#).combined, true)
+    @Test func testDecodesCombinedTrue() throws {
+        #expect(try decodeCombined(#","combined":true"#).combined == true)
     }
 
-    func testDecodesCombinedFalse() throws {
-        XCTAssertEqual(try decodeCombined(#","combined":false"#).combined, false)
+    @Test func testDecodesCombinedFalse() throws {
+        #expect(try decodeCombined(#","combined":false"#).combined == false)
     }
 
-    func testMissingOrNullCombinedReadsAsNotCombined() throws {
-        XCTAssertNil(try decodeCombined("").combined)
-        XCTAssertNil(try decodeCombined(#","combined":null"#).combined)
+    @Test func testMissingOrNullCombinedReadsAsNotCombined() throws {
+        #expect(try decodeCombined("").combined == nil)
+        #expect(try decodeCombined(#","combined":null"#).combined == nil)
     }
 
     /// A wrong-typed value reads as not combined and never fails the history list.
-    func testWrongTypedCombinedReadsAsNotCombined() throws {
+    @Test func testWrongTypedCombinedReadsAsNotCombined() throws {
         let s = try decodeCombined(#","combined":"yes""#)
-        XCTAssertNil(s.combined)
-        XCTAssertEqual(s.id, "c1")
-        XCTAssertNil(try decodeCombined(#","combined":1"#).combined)
+        #expect(s.combined == nil)
+        #expect(s.id == "c1")
+        #expect(try decodeCombined(#","combined":1"#).combined == nil)
     }
 
-    func testInitializerDefaultsCombinedToNil() {
+    @Test func testInitializerDefaultsCombinedToNil() {
         let s = SessionDTO(
             id: "c2", dayNumber: 1, duration: 60, completed: true, actualTime: 60,
             clearPercent: 0, thoughtCount: 0, mindStateLog: nil, sessionDate: "2026-10-27",
             buddySessionId: nil
         )
-        XCTAssertNil(s.combined)
+        #expect(s.combined == nil)
     }
 }

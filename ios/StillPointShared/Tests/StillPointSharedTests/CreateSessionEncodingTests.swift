@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class CreateSessionEncodingTests: XCTestCase {
-    func testCreateSessionRequestIncludesAttentionLogWhenPresent() throws {
+struct CreateSessionEncodingTests {
+    @Test func testCreateSessionRequestIncludesAttentionLogWhenPresent() throws {
         let request = CreateSessionRequest(
             dayNumber: 3,
             duration: 180,
@@ -19,14 +20,14 @@ final class CreateSessionEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let attentionLog = try XCTUnwrap(object["attentionLog"] as? [[String: Any]])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let attentionLog = try #require(object["attentionLog"] as? [[String: Any]])
 
-        XCTAssertEqual(attentionLog.count, 2)
-        XCTAssertEqual(attentionLog[1]["state"] as? String, "away")
+        #expect(attentionLog.count == 2)
+        #expect((attentionLog[1]["state"] as? String) == "away")
     }
 
-    func testCreateSessionRequestIncludesQuickSessionType() throws {
+    @Test func testCreateSessionRequestIncludesQuickSessionType() throws {
         let request = CreateSessionRequest(
             dayNumber: 7,
             sessionType: .quick,
@@ -40,14 +41,14 @@ final class CreateSessionEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["sessionType"] as? String, "quick")
-        XCTAssertEqual(object["duration"] as? Int, 60)
-        XCTAssertEqual(object["dayNumber"] as? Int, 7)
+        #expect((object["sessionType"] as? String) == "quick")
+        #expect((object["duration"] as? Int) == 60)
+        #expect((object["dayNumber"] as? Int) == 7)
     }
 
-    func testCreateSessionRequestIncludesClientSessionIdWhenPresent() throws {
+    @Test func testCreateSessionRequestIncludesClientSessionIdWhenPresent() throws {
         let clientSessionId = UUID()
         let request = CreateSessionRequest(
             dayNumber: 1,
@@ -62,15 +63,15 @@ final class CreateSessionEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["clientSessionId"] as? String, clientSessionId.uuidString)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect((object["clientSessionId"] as? String) == clientSessionId.uuidString)
     }
 
     // MARK: - #839 focus category
 
     /// No category means no key at all: the server stores an absent category as none,
     /// and every request built before #839 still encodes exactly as it did.
-    func testCreateSessionRequestOmitsFocusCategoryWhenNil() throws {
+    @Test func testCreateSessionRequestOmitsFocusCategoryWhenNil() throws {
         let requests = [
             CreateSessionRequest(
                 dayNumber: 2,
@@ -97,12 +98,12 @@ final class CreateSessionEncodingTests: XCTestCase {
 
         for request in requests {
             let data = try JSONEncoder().encode(request)
-            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            XCTAssertFalse(object.keys.contains("focusCategory"), request.sessionType.rawValue)
+            let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(!object.keys.contains("focusCategory"), Comment(rawValue: request.sessionType.rawValue))
         }
     }
 
-    func testCreateSessionRequestIncludesFocusCategoryWhenSet() throws {
+    @Test func testCreateSessionRequestIncludesFocusCategoryWhenSet() throws {
         let request = CreateSessionRequest(
             dayNumber: 4,
             sessionType: .focus,
@@ -117,10 +118,10 @@ final class CreateSessionEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["sessionType"] as? String, "focus")
-        XCTAssertEqual(object["focusCategory"] as? String, "writing")
-        XCTAssertEqual(object["duration"] as? Int, 240)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect((object["sessionType"] as? String) == "focus")
+        #expect((object["focusCategory"] as? String) == "writing")
+        #expect((object["duration"] as? Int) == 240)
     }
 }
 
@@ -144,32 +145,29 @@ extension CreateSessionEncodingTests {
     }
 
     /// An ordinary sit has no `combined` key, so it encodes exactly as before #896.
-    func testCreateSessionRequestOmitsCombinedWhenFalse() throws {
-        XCTAssertFalse(combinedRequest(nil).combined)
+    @Test func testCreateSessionRequestOmitsCombinedWhenFalse() throws {
+        #expect(!combinedRequest(nil).combined)
         for request in [combinedRequest(nil), combinedRequest(false)] {
             let data = try JSONEncoder().encode(request)
-            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            XCTAssertNil(object["combined"])
+            let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(object["combined"] == nil)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        XCTAssertEqual(
-            try encoder.encode(combinedRequest(false)),
-            try encoder.encode(combinedRequest(nil))
-        )
+        #expect(try encoder.encode(combinedRequest(false)) == (try encoder.encode(combinedRequest(nil))))
     }
 
-    func testCreateSessionRequestIncludesCombinedWhenTrue() throws {
+    @Test func testCreateSessionRequestIncludesCombinedWhenTrue() throws {
         let data = try JSONEncoder().encode(combinedRequest(true))
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["combined"] as? Bool, true)
-        XCTAssertEqual(object["track"] as? String, "primary")
-        XCTAssertEqual(object["sessionType"] as? String, "standard")
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect((object["combined"] as? Bool) == true)
+        #expect((object["track"] as? String) == "primary")
+        #expect((object["sessionType"] as? String) == "standard")
     }
 
     /// The hand-written coding keeps every other key: optionals still drop out when
     /// nil and round-trip when set.
-    func testCreateSessionRequestRoundTripsEveryField() throws {
+    @Test func testCreateSessionRequestRoundTripsEveryField() throws {
         let clientSessionId = UUID()
         let request = CreateSessionRequest(
             dayNumber: 4, sessionType: .breath, duration: 240, bonusSeconds: 30, completed: true,
@@ -180,20 +178,20 @@ extension CreateSessionEncodingTests {
             clientSessionId: clientSessionId, combined: true
         )
         let decoded = try JSONDecoder().decode(CreateSessionRequest.self, from: JSONEncoder().encode(request))
-        XCTAssertEqual(decoded.dayNumber, 4)
-        XCTAssertEqual(decoded.sessionType, .breath)
-        XCTAssertEqual(decoded.bonusSeconds, 30)
-        XCTAssertEqual(decoded.actualTime, 270)
-        XCTAssertEqual(decoded.attentionLog?.first?.state, "away")
-        XCTAssertEqual(decoded.breathCount, 12)
-        XCTAssertEqual(decoded.track, .second)
-        XCTAssertEqual(decoded.clientSessionId, clientSessionId)
-        XCTAssertTrue(decoded.combined)
+        #expect(decoded.dayNumber == 4)
+        #expect(decoded.sessionType == .breath)
+        #expect(decoded.bonusSeconds == 30)
+        #expect(decoded.actualTime == 270)
+        #expect(decoded.attentionLog?.first?.state == "away")
+        #expect(decoded.breathCount == 12)
+        #expect(decoded.track == .second)
+        #expect(decoded.clientSessionId == clientSessionId)
+        #expect(decoded.combined)
 
         let plain = try JSONEncoder().encode(combinedRequest(nil))
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: plain) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: plain) as? [String: Any])
         for key in ["attentionLog", "breathCount", "focusCategory", "clientSessionId", "ambientSoundSummary"] {
-            XCTAssertNil(object[key], key)
+            #expect(object[key] == nil, Comment(rawValue: key))
         }
     }
 }

@@ -1,88 +1,74 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
 /// #663: the app's one background app-refresh request carries the earliest time
 /// either app blocking (#549) or the widget wants, and a run reports once.
-final class BackgroundRefreshScheduleTests: XCTestCase {
+struct BackgroundRefreshScheduleTests {
     private let now = Date(timeIntervalSince1970: 1_793_000_000)
 
     // MARK: - Widget's wanted time
 
-    func testASignedInWidgetAsksOneLeadTimeAhead() {
-        XCTAssertEqual(
-            BackgroundRefreshSchedule.widgetRefreshDate(signedIn: true, now: now),
-            now.addingTimeInterval(BackgroundRefreshSchedule.widgetRefreshLeadTime)
-        )
+    @Test func testASignedInWidgetAsksOneLeadTimeAhead() {
+        #expect(BackgroundRefreshSchedule.widgetRefreshDate(signedIn: true, now: now) == now.addingTimeInterval(BackgroundRefreshSchedule.widgetRefreshLeadTime))
     }
 
-    func testASignedOutWidgetAsksForNothing() {
-        XCTAssertNil(BackgroundRefreshSchedule.widgetRefreshDate(signedIn: false, now: now))
+    @Test func testASignedOutWidgetAsksForNothing() {
+        #expect(BackgroundRefreshSchedule.widgetRefreshDate(signedIn: false, now: now) == nil)
     }
 
     // MARK: - Combining the two jobs
 
-    func testTheEarlierShieldTimeWins() {
+    @Test func testTheEarlierShieldTimeWins() {
         let shield = now.addingTimeInterval(5 * 60)
         let widget = now.addingTimeInterval(15 * 60)
-        XCTAssertEqual(
-            BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: shield, widgetRefresh: widget),
-            shield
-        )
+        #expect(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: shield, widgetRefresh: widget) == shield)
     }
 
     /// Shields unlocked for today ask for the next local midnight. The widget
     /// must not have to wait that long to pick up a web sit.
-    func testTheEarlierWidgetTimeWins() {
+    @Test func testTheEarlierWidgetTimeWins() {
         let shieldAtMidnight = now.addingTimeInterval(9 * 60 * 60)
         let widget = now.addingTimeInterval(15 * 60)
-        XCTAssertEqual(
-            BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: shieldAtMidnight, widgetRefresh: widget),
-            widget
-        )
+        #expect(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: shieldAtMidnight, widgetRefresh: widget) == widget)
     }
 
-    func testEitherJobAloneKeepsItsOwnTime() {
+    @Test func testEitherJobAloneKeepsItsOwnTime() {
         let date = now.addingTimeInterval(15 * 60)
-        XCTAssertEqual(
-            BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: date, widgetRefresh: nil),
-            date
-        )
-        XCTAssertEqual(
-            BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: nil, widgetRefresh: date),
-            date
-        )
+        #expect(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: date, widgetRefresh: nil) == date)
+        #expect(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: nil, widgetRefresh: date) == date)
     }
 
     /// Nothing to guard and nobody signed in: the pending request is cancelled.
-    func testNeitherJobMeansNoRequest() {
-        XCTAssertNil(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: nil, widgetRefresh: nil))
+    @Test func testNeitherJobMeansNoRequest() {
+        #expect(BackgroundRefreshSchedule.earliestBeginDate(shieldRefresh: nil, widgetRefresh: nil) == nil)
     }
 
     // MARK: - Reporting a run once
 
-    func testARunStartsUnreported() {
-        XCTAssertNil(BackgroundTaskCompletion().reported)
+    @Test func testARunStartsUnreported() {
+        #expect(BackgroundTaskCompletion().reported == nil)
     }
 
-    func testTheFirstReportCompletesTheTask() {
+    @Test func testTheFirstReportCompletesTheTask() {
         var completion = BackgroundTaskCompletion()
-        XCTAssertTrue(completion.report(success: true))
-        XCTAssertEqual(completion.reported, true)
+        #expect(completion.report(success: true) == true)
+        #expect(completion.reported == true)
     }
 
     /// The system expired the run, then its cancelled work finished anyway.
-    func testWorkFinishingAfterExpiryIsIgnored() {
+    @Test func testWorkFinishingAfterExpiryIsIgnored() {
         var completion = BackgroundTaskCompletion()
-        XCTAssertTrue(completion.report(success: false))
-        XCTAssertFalse(completion.report(success: true))
-        XCTAssertEqual(completion.reported, false)
+        #expect(completion.report(success: false) == true)
+        #expect(completion.report(success: true) == false)
+        #expect(completion.reported == false)
     }
 
     /// The work finished first, then the expiration handler fired late.
-    func testExpiryAfterTheWorkFinishedIsIgnored() {
+    @Test func testExpiryAfterTheWorkFinishedIsIgnored() {
         var completion = BackgroundTaskCompletion()
-        XCTAssertTrue(completion.report(success: true))
-        XCTAssertFalse(completion.report(success: false))
-        XCTAssertEqual(completion.reported, true)
+        #expect(completion.report(success: true) == true)
+        #expect(completion.report(success: false) == false)
+        #expect(completion.reported == true)
     }
 }

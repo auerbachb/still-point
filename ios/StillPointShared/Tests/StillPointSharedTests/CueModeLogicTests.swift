@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class CueModeLogicTests: XCTestCase {
+struct CueModeLogicTests {
 
     private func prefs(
         tick: Bool,
@@ -22,21 +23,20 @@ final class CueModeLogicTests: XCTestCase {
     private func assertExclusive(
         _ result: AudioEngine.SoundPrefs,
         mode: CueMode,
-        file: StaticString = #filePath,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        XCTAssertEqual(result.tick, mode == .tick, file: file, line: line)
-        XCTAssertEqual(result.haptics, mode == .haptic, file: file, line: line)
-        XCTAssertEqual(result.voiceCountdown, mode == .voice, file: file, line: line)
+        #expect(result.tick == (mode == .tick), sourceLocation: sourceLocation)
+        #expect(result.haptics == (mode == .haptic), sourceLocation: sourceLocation)
+        #expect(result.voiceCountdown == (mode == .voice), sourceLocation: sourceLocation)
     }
 
-    func testExactlyOneOnKeepsThatMode() {
+    @Test func testExactlyOneOnKeepsThatMode() {
         assertExclusive(CueModeLogic.normalized(prefs(tick: true, haptics: false, voice: false)), mode: .tick)
         assertExclusive(CueModeLogic.normalized(prefs(tick: false, haptics: true, voice: false)), mode: .haptic)
         assertExclusive(CueModeLogic.normalized(prefs(tick: false, haptics: false, voice: true)), mode: .voice)
     }
 
-    func testMultipleOnPrefersTickThenHapticsThenVoice() {
+    @Test func testMultipleOnPrefersTickThenHapticsThenVoice() {
         assertExclusive(
             CueModeLogic.normalized(prefs(tick: true, haptics: true, voice: true)),
             mode: .tick
@@ -51,50 +51,50 @@ final class CueModeLogicTests: XCTestCase {
         )
     }
 
-    func testNoneOnBecomesTick() {
+    @Test func testNoneOnBecomesTick() {
         assertExclusive(
             CueModeLogic.normalized(prefs(tick: false, haptics: false, voice: false)),
             mode: .tick
         )
     }
 
-    func testNormalizeLeavesChimeAndCompletionAlone() {
+    @Test func testNormalizeLeavesChimeAndCompletionAlone() {
         let original = prefs(tick: true, haptics: true, voice: false, chime: false, completion: true)
         let result = CueModeLogic.normalized(original)
-        XCTAssertFalse(result.chime)
-        XCTAssertTrue(result.completion)
+        #expect(!result.chime)
+        #expect(result.completion)
         assertExclusive(result, mode: .tick)
     }
 
-    func testTransitionIntoVoiceWarmsAndPreloads() {
+    @Test func testTransitionIntoVoiceWarmsAndPreloads() {
         let effects = CueModeLogic.transitionEffects(
             from: prefs(tick: true, haptics: false, voice: false),
             to: prefs(tick: false, haptics: false, voice: true)
         )
-        XCTAssertTrue(effects.warmUp)
-        XCTAssertTrue(effects.preloadVoiceCountdown)
-        XCTAssertFalse(effects.cancelVoiceCountdown)
-        XCTAssertFalse(effects.resetVoiceDedup)
+        #expect(effects.warmUp)
+        #expect(effects.preloadVoiceCountdown)
+        #expect(!effects.cancelVoiceCountdown)
+        #expect(!effects.resetVoiceDedup)
     }
 
-    func testTransitionIntoHapticDoesNotWarmAudio() {
+    @Test func testTransitionIntoHapticDoesNotWarmAudio() {
         let effects = CueModeLogic.transitionEffects(
             from: prefs(tick: true, haptics: false, voice: false),
             to: prefs(tick: false, haptics: true, voice: false)
         )
-        XCTAssertFalse(effects.warmUp)
-        XCTAssertFalse(effects.preloadVoiceCountdown)
-        XCTAssertFalse(effects.cancelVoiceCountdown)
+        #expect(!effects.warmUp)
+        #expect(!effects.preloadVoiceCountdown)
+        #expect(!effects.cancelVoiceCountdown)
     }
 
-    func testLeavingVoiceCancelsAndResetsDedup() {
+    @Test func testLeavingVoiceCancelsAndResetsDedup() {
         let effects = CueModeLogic.transitionEffects(
             from: prefs(tick: false, haptics: false, voice: true),
             to: prefs(tick: true, haptics: false, voice: false)
         )
-        XCTAssertTrue(effects.warmUp)
-        XCTAssertTrue(effects.cancelVoiceCountdown)
-        XCTAssertTrue(effects.resetVoiceDedup)
-        XCTAssertFalse(effects.preloadVoiceCountdown)
+        #expect(effects.warmUp)
+        #expect(effects.cancelVoiceCountdown)
+        #expect(effects.resetVoiceDedup)
+        #expect(!effects.preloadVoiceCountdown)
     }
 }

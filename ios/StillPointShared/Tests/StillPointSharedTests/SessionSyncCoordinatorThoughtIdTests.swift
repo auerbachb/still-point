@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// A stand-in for the API behind `SessionSyncTransport.live`. Like the real
@@ -74,8 +75,17 @@ private actor FirstUpload {
 /// #971: iOS sends a `clientThoughtId` with each in-session thought, so a batch
 /// the server stored before its answer was lost is stored once when it is sent
 /// again. Mirrors web's `WebSessionSyncCoordinator thought ids (#948)` tests.
-final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
+final class SessionSyncCoordinatorThoughtIdTests {
     private let owner = "user-test-971"
+    /// Queue directories this test made; each test gets its own suite instance,
+    /// so `deinit` removes them when that test ends.
+    private var createdDirectories: [URL] = []
+
+    deinit {
+        for directory in createdDirectories {
+            _ = try? FileManager.default.removeItem(at: directory)
+        }
+    }
 
     private func makeRequest(_ clientSessionId: UUID) -> CreateSessionRequest {
         CreateSessionRequest(
@@ -112,13 +122,13 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        addTeardownBlock { _ = try? FileManager.default.removeItem(at: directory) }
+        createdDirectories.append(directory)
         return directory.appendingPathComponent(OfflineSessionQueue.fileName)
     }
 
     // MARK: - Minting
 
-    func testEachInSessionThoughtIsQueuedWithItsOwnIdBeforeTheFirstUploadAndTheEndNoteGetsNone() async throws {
+    @Test func testEachInSessionThoughtIsQueuedWithItsOwnIdBeforeTheFirstUploadAndTheEndNoteGetsNone() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let firstUpload = FirstUpload()
         let offline = SessionSyncTransport(
@@ -145,20 +155,20 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
         )
         try await coordinator.replaceEndNote(clientSessionId: clientSessionId, ownerUserId: owner, note: "offline note")
 
-        let thoughts = try XCTUnwrap(store.loadEntries().first).thoughts
-        XCTAssertEqual(thoughts.map(\.timeInSession), [12, 12, 30, -1])
-        XCTAssertEqual(thoughts.map(\.text), ["rain", "rain", "car door", "offline note"])
+        let thoughts = try #require(store.loadEntries().first).thoughts
+        #expect(thoughts.map(\.timeInSession) == [12, 12, 30, -1])
+        #expect(thoughts.map(\.text) == ["rain", "rain", "car door", "offline note"])
         let ids = thoughts.prefix(3).map(\.clientThoughtId)
         for id in ids {
-            let id = try XCTUnwrap(id)
-            XCTAssertTrue(isLowercasedUUID(id), id)
+            let id = try #require(id)
+            #expect(isLowercasedUUID(id), Comment(rawValue: id))
         }
         // The same words twice are two thoughts, so two ids.
-        XCTAssertEqual(Set(ids).count, 3)
-        XCTAssertNil(thoughts[3].clientThoughtId)
+        #expect(Set(ids).count == 3)
+        #expect(thoughts[3].clientThoughtId == nil)
         // Already saved when the first upload began, so every attempt sends them.
         let queuedAtFirstUpload = await firstUpload.queuedThoughts
-        XCTAssertEqual(queuedAtFirstUpload, Array(thoughts.prefix(3)))
+        #expect(queuedAtFirstUpload == Array(thoughts.prefix(3)))
 
         // Saving the sit again, as the completion screen's Retry does, keeps them.
         _ = try await coordinator.saveCompletedSession(
@@ -167,20 +177,20 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
             ownerUserId: owner,
             thoughts: captured
         )
-        XCTAssertEqual(try store.loadEntries().first?.thoughts, thoughts)
+        #expect(try store.loadEntries().first?.thoughts == thoughts)
 
         // Back online, the batch carries those ids, and the end note goes without one.
         let server = StubServer()
         try await SessionSyncCoordinator(queueStore: store, transport: server.transport)
             .flushPending(ownerUserId: owner)
         let sent = await server.sentThoughts
-        XCTAssertEqual(sent, [thoughts])
+        #expect(sent == [thoughts])
     }
 
     /// Nothing hands `saveCompletedSession` an id or an end note today, but either
     /// is queued as handed: an id is kept, and the note gets none, because the
     /// server replaces it rather than storing it once.
-    func testAThoughtHandedInWithAnIdKeepsItAndAnEndNoteQueuedWithTheSitGetsNone() async throws {
+    @Test func testAThoughtHandedInWithAnIdKeepsItAndAnEndNoteQueuedWithTheSitGetsNone() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let clientSessionId = UUID()
         let handed = [
@@ -195,12 +205,12 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
             thoughts: handed
         )
 
-        XCTAssertEqual(try store.loadEntries().first?.thoughts, handed)
+        #expect(try store.loadEntries().first?.thoughts == handed)
     }
 
     // MARK: - Replay
 
-    func testABatchStoredBeforeItsAnswerWasLostIsSentAgainWithTheSameIdsAndStoredOnce() async throws {
+    @Test func testABatchStoredBeforeItsAnswerWasLostIsSentAgainWithTheSameIdsAndStoredOnce() async throws {
         let server = StubServer(losingAnswers: 1)
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(queueStore: store, transport: server.transport)
@@ -217,26 +227,26 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
         )
 
         // The answer was lost, so the thoughts stay queued, though the server has them.
-        XCTAssertTrue(saved.isPendingSync)
-        let queued = try XCTUnwrap(store.loadEntries().first).thoughts
-        XCTAssertEqual(queued.count, 2)
+        #expect(saved.isPendingSync)
+        let queued = try #require(store.loadEntries().first).thoughts
+        #expect(queued.count == 2)
         let storedBeforeReplay = await server.stored
-        XCTAssertEqual(storedBeforeReplay, queued)
+        #expect(storedBeforeReplay == queued)
 
         let flushed = try await coordinator.flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(flushed, 1)
+        #expect(flushed == 1)
         let sent = await server.sentThoughts
-        XCTAssertEqual(sent, [queued, queued])
+        #expect(sent == [queued, queued])
         // The replay matched every id, so it stored nothing and was answered `[]`.
         let storedPerBatch = await server.storedPerBatch
-        XCTAssertEqual(storedPerBatch, [2, 0])
+        #expect(storedPerBatch == [2, 0])
         let stored = await server.stored
-        XCTAssertEqual(stored, queued)
+        #expect(stored == queued)
         // That empty answer still acknowledged them, so nothing is sent again.
-        XCTAssertEqual(try store.loadEntries().first?.thoughts, [])
+        #expect(try store.loadEntries().first?.thoughts == [])
         let pending = try await coordinator.pendingCount(ownerUserId: owner)
-        XCTAssertEqual(pending, 0)
+        #expect(pending == 0)
     }
 
     // MARK: - Entries queued before #971
@@ -244,7 +254,7 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
     /// A queue file written by a build from before #971 has no `clientThoughtId`
     /// keys. It must still load: a failed decode moves the whole queue aside as
     /// corrupt, losing every sit in it.
-    func testAnEntryQueuedBeforeIdsExistedStillFlushesSendingItsThoughtsAsQueued() async throws {
+    @Test func testAnEntryQueuedBeforeIdsExistedStillFlushesSendingItsThoughtsAsQueued() async throws {
         let fileURL = try temporaryQueueFileURL()
         let clientSessionId = UUID()
         let legacyQueue = """
@@ -259,34 +269,34 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
         try Data(legacyQueue.utf8).write(to: fileURL)
         let store = FileOfflineSessionQueueStore(fileURL: fileURL)
 
-        let legacyThoughts = try XCTUnwrap(store.loadEntries().first).thoughts
-        XCTAssertEqual(legacyThoughts, [
-            PendingSessionThought(timeInSession: 12, text: "rain"),
-            PendingSessionThought(timeInSession: -1, text: "a note"),
-        ])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+        let legacyThoughts = try #require(store.loadEntries().first).thoughts
+        #expect(
+            legacyThoughts == [
+                PendingSessionThought(timeInSession: 12, text: "rain"),
+                PendingSessionThought(timeInSession: -1, text: "a note"),
+            ]
+        )
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
 
         let server = StubServer()
         let flushed = try await SessionSyncCoordinator(queueStore: store, transport: server.transport)
             .flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(flushed, 1)
+        #expect(flushed == 1)
         // No ids are backfilled: the batch is the one sent before #971.
         let batches = await server.batches
-        XCTAssertEqual(batches.count, 1)
-        let body = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: JSONEncoder().encode(batches[0])) as? [String: Any]
-        )
-        let items = try XCTUnwrap(body["thoughts"] as? [[String: Any]])
-        XCTAssertEqual(items.map { Set($0.keys) }, [["timeInSession", "text"], ["timeInSession", "text"]])
-        let entry = try XCTUnwrap(store.loadEntries().first)
-        XCTAssertTrue(entry.sessionSynced)
-        XCTAssertEqual(entry.thoughts, [])
+        #expect(batches.count == 1)
+        let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(batches[0])) as? [String: Any])
+        let items = try #require(body["thoughts"] as? [[String: Any]])
+        #expect(items.map { Set($0.keys) } == [["timeInSession", "text"], ["timeInSession", "text"]])
+        let entry = try #require(store.loadEntries().first)
+        #expect(entry.sessionSynced)
+        #expect(entry.thoughts == [])
     }
 
     // MARK: - Acknowledgement
 
-    func testAThoughtIsAcknowledgedByItsOwnIdNotByATwinWithTheSameTimeAndText() async throws {
+    @Test func testAThoughtIsAcknowledgedByItsOwnIdNotByATwinWithTheSameTimeAndText() async throws {
         let clientSessionId = UUID()
         let sent = PendingSessionThought(timeInSession: 12, text: "rain", clientThoughtId: "97100000-0000-4000-8000-000000000001")
         let twin = PendingSessionThought(timeInSession: 12, text: "rain", clientThoughtId: "97100000-0000-4000-8000-000000000002")
@@ -304,12 +314,12 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
 
         try await SessionSyncCoordinator(queueStore: store, transport: transport).flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(try store.loadEntries().first?.thoughts, [twin])
+        #expect(try store.loadEntries().first?.thoughts == [twin])
     }
 
     /// #753: a note edited again while its upload is out is a new note. Neither
     /// has an id, so the two are told apart by their text, as before #971.
-    func testAnEndNoteReplacedWhileItsUploadIsOutStaysQueued() async throws {
+    @Test func testAnEndNoteReplacedWhileItsUploadIsOutStaysQueued() async throws {
         let clientSessionId = UUID()
         let store = InMemoryOfflineSessionQueueStore(entries: [
             syncedEntry(clientSessionId, thoughts: [PendingSessionThought(timeInSession: -1, text: "first draft")]),
@@ -326,16 +336,13 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
 
         try await SessionSyncCoordinator(queueStore: store, transport: transport).flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(
-            try store.loadEntries().first?.thoughts,
-            [PendingSessionThought(timeInSession: -1, text: "second draft")]
-        )
+        #expect(try store.loadEntries().first?.thoughts == [PendingSessionThought(timeInSession: -1, text: "second draft")])
     }
 
     // MARK: - Wire format
 
     /// The id must outlive a relaunch, or a retry after one would send a new id.
-    func testTheQueueFileKeepsAThoughtsIdAndLeavesTheKeyOutWithoutOne() throws {
+    @Test func testTheQueueFileKeepsAThoughtsIdAndLeavesTheKeyOutWithoutOne() throws {
         let fileURL = try temporaryQueueFileURL()
         let store = FileOfflineSessionQueueStore(fileURL: fileURL)
         let clientSessionId = UUID()
@@ -351,16 +358,14 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
             thoughts: thoughts
         )])
 
-        XCTAssertEqual(try store.loadEntries().first?.thoughts, thoughts)
-        let saved = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(contentsOf: fileURL)) as? [[String: Any]]
-        )
-        let savedThoughts = try XCTUnwrap(saved.first?["thoughts"] as? [[String: Any]])
-        XCTAssertEqual(savedThoughts.first?["clientThoughtId"] as? String, "97100000-0000-4000-8000-000000000001")
-        XCTAssertEqual(savedThoughts.map { Set($0.keys) }, [["timeInSession", "text", "clientThoughtId"], ["timeInSession", "text"]])
+        #expect(try store.loadEntries().first?.thoughts == thoughts)
+        let saved = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: fileURL)) as? [[String: Any]])
+        let savedThoughts = try #require(saved.first?["thoughts"] as? [[String: Any]])
+        #expect((savedThoughts.first?["clientThoughtId"] as? String) == "97100000-0000-4000-8000-000000000001")
+        #expect(savedThoughts.map { Set($0.keys) } == [["timeInSession", "text", "clientThoughtId"], ["timeInSession", "text"]])
     }
 
-    func testABatchItemSendsTheIdOnlyWhenItHasOne() throws {
+    @Test func testABatchItemSendsTheIdOnlyWhenItHasOne() throws {
         let batch = BatchThoughtsRequest(
             sessionId: "s1",
             dayNumber: 2,
@@ -370,11 +375,11 @@ final class SessionSyncCoordinatorThoughtIdTests: XCTestCase {
             ]
         )
 
-        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(batch)) as? [String: Any])
-        let items = try XCTUnwrap(body["thoughts"] as? [[String: Any]])
+        let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(batch)) as? [String: Any])
+        let items = try #require(body["thoughts"] as? [[String: Any]])
 
-        XCTAssertEqual(Set(body.keys), ["sessionId", "dayNumber", "thoughts"])
-        XCTAssertEqual(items.first?["clientThoughtId"] as? String, "97100000-0000-4000-8000-000000000001")
-        XCTAssertEqual(items.map { Set($0.keys) }, [["timeInSession", "text", "clientThoughtId"], ["timeInSession", "text"]])
+        #expect(Set(body.keys) == ["sessionId", "dayNumber", "thoughts"])
+        #expect((items.first?["clientThoughtId"] as? String) == "97100000-0000-4000-8000-000000000001")
+        #expect(items.map { Set($0.keys) } == [["timeInSession", "text", "clientThoughtId"], ["timeInSession", "text"]])
     }
 }

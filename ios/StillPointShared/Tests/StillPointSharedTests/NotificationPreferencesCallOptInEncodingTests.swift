@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class NotificationPreferencesCallOptInEncodingTests: XCTestCase {
-    func testPatchEncodesCallOptInFieldsWhenSet() throws {
+struct NotificationPreferencesCallOptInEncodingTests {
+    @Test func testPatchEncodesCallOptInFieldsWhenSet() throws {
         let patch = NotificationPreferencesPatch(
             callOptIn: true,
             callPhoneNumber: .some("+15551234567"),
@@ -11,15 +12,15 @@ final class NotificationPreferencesCallOptInEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(patch)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(jsonObject["callOptIn"] as? Bool, true)
-        XCTAssertEqual(jsonObject["callPhoneNumber"] as? String, "+15551234567")
-        XCTAssertEqual(jsonObject["callWindowStart"] as? String, "18:00")
-        XCTAssertEqual(jsonObject["callWindowStop"] as? String, "21:00")
+        #expect((jsonObject["callOptIn"] as? Bool) == true)
+        #expect((jsonObject["callPhoneNumber"] as? String) == "+15551234567")
+        #expect((jsonObject["callWindowStart"] as? String) == "18:00")
+        #expect((jsonObject["callWindowStop"] as? String) == "21:00")
     }
 
-    func testDTODecodesCallOptInFields() throws {
+    @Test func testDTODecodesCallOptInFields() throws {
         let json = """
         {
             "pushEnabled": true,
@@ -44,9 +45,9 @@ final class NotificationPreferencesCallOptInEncodingTests: XCTestCase {
 
         let dto = try JSONDecoder().decode(NotificationPreferencesDTO.self, from: json)
 
-        XCTAssertTrue(dto.callOptIn)
-        XCTAssertEqual(dto.callPhoneNumber, "+15551234567")
-        XCTAssertEqual(dto.callWindowStart, "18:00")
-        XCTAssertEqual(dto.callWindowStop, "21:00")
+        #expect(dto.callOptIn)
+        #expect(dto.callPhoneNumber == "+15551234567")
+        #expect(dto.callWindowStart == "18:00")
+        #expect(dto.callWindowStop == "21:00")
     }
 }

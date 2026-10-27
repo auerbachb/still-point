@@ -1,48 +1,47 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Issue #669 — the "just the timer" preference must survive into the next sit
 /// and stay easy to reverse.
-final class MinimalSessionViewPrefsTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
+@Suite(.serialized) final class MinimalSessionViewPrefsTests {
+    init() {
         MinimalSessionViewPrefs.resetPersistedPrefs()
     }
 
-    override func tearDown() {
+    deinit {
         MinimalSessionViewPrefs.resetPersistedPrefs()
-        super.tearDown()
     }
 
-    func testDefaultIsFullSessionScreen() {
-        XCTAssertFalse(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+    @Test func testDefaultIsFullSessionScreen() {
+        #expect(!MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 
-    func testEnablingPersists() {
+    @Test func testEnablingPersists() {
         MinimalSessionViewPrefs.setMinimalSessionViewEnabled(true)
-        XCTAssertTrue(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+        #expect(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 
-    func testChoiceIsEasyToReverse() {
+    @Test func testChoiceIsEasyToReverse() {
         MinimalSessionViewPrefs.setMinimalSessionViewEnabled(true)
         MinimalSessionViewPrefs.setMinimalSessionViewEnabled(false)
-        XCTAssertFalse(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+        #expect(!MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 
-    func testResetClearsThePreference() {
+    @Test func testResetClearsThePreference() {
         MinimalSessionViewPrefs.setMinimalSessionViewEnabled(true)
         MinimalSessionViewPrefs.resetPersistedPrefs()
-        XCTAssertFalse(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+        #expect(!MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 
     /// Web reserves this exact key name in `src/lib/minimalSessionViewPrefs.ts`
     /// (`IOS_MINIMAL_SESSION_VIEW_KEY`); both clients must keep it aligned.
-    func testStorageKeyMatchesWebParityConstant() {
-        XCTAssertEqual(MinimalSessionViewPrefs.minimalSessionViewKey, "sp_minimalSessionView")
+    @Test func testStorageKeyMatchesWebParityConstant() {
+        #expect(MinimalSessionViewPrefs.minimalSessionViewKey == "sp_minimalSessionView")
     }
 
-    func testReadsBackFromUserDefaultsWrittenOutsideTheHelper() {
+    @Test func testReadsBackFromUserDefaultsWrittenOutsideTheHelper() {
         UserDefaults.standard.set(true, forKey: MinimalSessionViewPrefs.minimalSessionViewKey)
-        XCTAssertTrue(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+        #expect(MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
     }
 }

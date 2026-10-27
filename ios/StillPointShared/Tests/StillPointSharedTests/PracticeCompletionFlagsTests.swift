@@ -1,48 +1,46 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// #832: every `(sessionType, track)` pair a finished sit can arrive with, and the
 /// exact set of flags it raises. Exact equality, so a test also fails when an extra
 /// flag is raised.
-final class PracticeCompletionFlagsTests: XCTestCase {
-    func testAQuickSitOnThePrimaryTrackRaisesPracticeOnly() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .quick, track: .primary), [.practice])
+struct PracticeCompletionFlagsTests {
+    @Test func testAQuickSitOnThePrimaryTrackRaisesPracticeOnly() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .quick, track: .primary) == [.practice])
     }
 
-    func testAQuickSitOnTheSecondTrackIsStillTrackOnePractice() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .quick, track: .second), [.practice])
+    @Test func testAQuickSitOnTheSecondTrackIsStillTrackOnePractice() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .quick, track: .second) == [.practice])
     }
 
-    func testABreathSitOnThePrimaryTrackRaisesPracticeOnly() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .breath, track: .primary), [.practice])
+    @Test func testABreathSitOnThePrimaryTrackRaisesPracticeOnly() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .breath, track: .primary) == [.practice])
     }
 
-    func testABreathSitOnTheSecondTrackIsStillTrackOnePractice() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .breath, track: .second), [.practice])
+    @Test func testABreathSitOnTheSecondTrackIsStillTrackOnePractice() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .breath, track: .second) == [.practice])
     }
 
-    func testAPrimaryStandardSitRaisesPracticeAndPrimaryStandard() {
-        XCTAssertEqual(
-            PracticeCompletionFlags.raised(sessionType: .standard, track: .primary),
-            [.practice, .primaryStandard]
-        )
+    @Test func testAPrimaryStandardSitRaisesPracticeAndPrimaryStandard() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .standard, track: .primary) == [.practice, .primaryStandard])
     }
 
-    func testASecondTrackStandardSitRaisesSecondPracticeOnly() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .standard, track: .second), [.secondPractice])
+    @Test func testASecondTrackStandardSitRaisesSecondPracticeOnly() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .standard, track: .second) == [.secondPractice])
     }
 
-    func testAFocusSessionOnThePrimaryTrackRaisesNothing() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .focus, track: .primary), [])
+    @Test func testAFocusSessionOnThePrimaryTrackRaisesNothing() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .focus, track: .primary) == [])
     }
 
-    func testAFocusSessionOnTheSecondTrackRaisesNothing() {
-        XCTAssertEqual(PracticeCompletionFlags.raised(sessionType: .focus, track: .second), [])
+    @Test func testAFocusSessionOnTheSecondTrackRaisesNothing() {
+        #expect(PracticeCompletionFlags.raised(sessionType: .focus, track: .second) == [])
     }
 
-    func testTheThreeFlagsAreDistinct() {
-        XCTAssertTrue(PracticeCompletionFlags.practice.isDisjoint(with: .secondPractice))
-        XCTAssertTrue(PracticeCompletionFlags.practice.isDisjoint(with: .primaryStandard))
-        XCTAssertTrue(PracticeCompletionFlags.secondPractice.isDisjoint(with: .primaryStandard))
+    @Test func testTheThreeFlagsAreDistinct() {
+        #expect(PracticeCompletionFlags.practice.isDisjoint(with: .secondPractice))
+        #expect(PracticeCompletionFlags.practice.isDisjoint(with: .primaryStandard))
+        #expect(PracticeCompletionFlags.secondPractice.isDisjoint(with: .primaryStandard))
     }
 }

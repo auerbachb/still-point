@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SessionLogicMinuteChimeTests: XCTestCase {
-    func testFourTwentySessionChimesAtThreeTwentyTwoTwentyOneTwentyOnly() {
+struct SessionLogicMinuteChimeTests {
+    @Test func testFourTwentySessionChimesAtThreeTwentyTwoTwentyOneTwentyOnly() {
         let totalSeconds = 260
         var lastCompletedBlockIndex = -1
         var chimes: [Int] = []
@@ -19,10 +20,10 @@ final class SessionLogicMinuteChimeTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(chimes, [3, 2, 1], "Expected chimes at 3:20, 2:20, 1:20 only")
+        #expect(chimes == [3, 2, 1], "Expected chimes at 3:20, 2:20, 1:20 only")
     }
 
-    func testExactFiveMinuteSessionChimesAtFourThreeTwoOne() {
+    @Test func testExactFiveMinuteSessionChimesAtFourThreeTwoOne() {
         let totalSeconds = 300
         var lastCompletedBlockIndex = -1
         var chimes: [Int] = []
@@ -39,10 +40,10 @@ final class SessionLogicMinuteChimeTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(chimes, [4, 3, 2, 1])
+        #expect(chimes == [4, 3, 2, 1])
     }
 
-    func testNoMinuteChimeWhenLessThanOneMinuteRemains() {
+    @Test func testNoMinuteChimeWhenLessThanOneMinuteRemains() {
         let totalSeconds = 260
         let update = SessionLogic.nextMinuteChimeUpdate(
             elapsed: 240.0,
@@ -50,31 +51,31 @@ final class SessionLogicMinuteChimeTests: XCTestCase {
             lastCompletedBlockIndex: 2
         )
 
-        XCTAssertEqual(update.updatedCompletedBlockIndex, 3)
-        XCTAssertNil(update.chimeCount)
+        #expect(update.updatedCompletedBlockIndex == 3)
+        #expect(update.chimeCount == nil)
     }
 
-    func testNoMinuteBlockChimesForSessionsAtOrBelowOneHundredTwentySeconds() {
+    @Test func testNoMinuteBlockChimesForSessionsAtOrBelowOneHundredTwentySeconds() {
         for duration in [120, 110, 60] {
             let update = SessionLogic.nextMinuteChimeUpdate(
                 elapsed: 60.0,
                 totalSeconds: duration,
                 lastCompletedBlockIndex: -1
             )
-            XCTAssertEqual(update.updatedCompletedBlockIndex, -1, "Duration \(duration) should not use minute blocks")
-            XCTAssertNil(update.chimeCount, "Duration \(duration) should not produce minute-block chimes")
+            #expect(update.updatedCompletedBlockIndex == -1, "Duration \(duration) should not use minute blocks")
+            #expect(update.chimeCount == nil, "Duration \(duration) should not produce minute-block chimes")
         }
     }
 
-    func testBlockProgressAdvancesEvenIfChimePlaybackIsMuted() {
+    @Test func testBlockProgressAdvancesEvenIfChimePlaybackIsMuted() {
         let totalSeconds = 260
         let mutedUpdate = SessionLogic.nextMinuteChimeUpdate(
             elapsed: 60.0,
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: -1
         )
-        XCTAssertEqual(mutedUpdate.updatedCompletedBlockIndex, 0)
-        XCTAssertEqual(mutedUpdate.chimeCount, 3)
+        #expect(mutedUpdate.updatedCompletedBlockIndex == 0)
+        #expect(mutedUpdate.chimeCount == 3)
 
         // Simulate unmuting after the boundary: no replay for already-completed block.
         let unmutedUpdate = SessionLogic.nextMinuteChimeUpdate(
@@ -82,28 +83,28 @@ final class SessionLogicMinuteChimeTests: XCTestCase {
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: mutedUpdate.updatedCompletedBlockIndex
         )
-        XCTAssertEqual(unmutedUpdate.updatedCompletedBlockIndex, 0)
-        XCTAssertNil(unmutedUpdate.chimeCount)
+        #expect(unmutedUpdate.updatedCompletedBlockIndex == 0)
+        #expect(unmutedUpdate.chimeCount == nil)
     }
 
-    func testPauseResumeSeedPreventsReplayingCompletedMinuteBlockChimes() {
+    @Test func testPauseResumeSeedPreventsReplayingCompletedMinuteBlockChimes() {
         let totalSeconds = 260
         let seededIndex = SessionLogic.completedMinuteBlockIndex(
             elapsed: 130.0,
             totalSeconds: totalSeconds
         )
-        XCTAssertEqual(seededIndex, 1)
+        #expect(seededIndex == 1)
 
         let afterResume = SessionLogic.nextMinuteChimeUpdate(
             elapsed: 131.0,
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: seededIndex
         )
-        XCTAssertEqual(afterResume.updatedCompletedBlockIndex, seededIndex)
-        XCTAssertNil(afterResume.chimeCount)
+        #expect(afterResume.updatedCompletedBlockIndex == seededIndex)
+        #expect(afterResume.chimeCount == nil)
     }
 
-    func testFreshSessionStartDoesNotInheritCompletedMinuteBlocks() {
+    @Test func testFreshSessionStartDoesNotInheritCompletedMinuteBlocks() {
         let totalSeconds = 260
 
         let freshUpdate = SessionLogic.nextMinuteChimeUpdate(
@@ -111,15 +112,15 @@ final class SessionLogicMinuteChimeTests: XCTestCase {
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: -1
         )
-        XCTAssertEqual(freshUpdate.updatedCompletedBlockIndex, -1)
-        XCTAssertNil(freshUpdate.chimeCount)
+        #expect(freshUpdate.updatedCompletedBlockIndex == -1)
+        #expect(freshUpdate.chimeCount == nil)
 
         let firstBoundary = SessionLogic.nextMinuteChimeUpdate(
             elapsed: 60.0,
             totalSeconds: totalSeconds,
             lastCompletedBlockIndex: freshUpdate.updatedCompletedBlockIndex
         )
-        XCTAssertEqual(firstBoundary.updatedCompletedBlockIndex, 0)
-        XCTAssertEqual(firstBoundary.chimeCount, 3)
+        #expect(firstBoundary.updatedCompletedBlockIndex == 0)
+        #expect(firstBoundary.chimeCount == 3)
     }
 }

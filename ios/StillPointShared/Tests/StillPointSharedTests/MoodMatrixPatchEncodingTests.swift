@@ -1,83 +1,84 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
 /// #635: `MoodMatrixPatch` encoding, `MoodMatrixLogic` validation, and `SessionDTO.moodMatrix` decoding.
-final class MoodMatrixPatchEncodingTests: XCTestCase {
+struct MoodMatrixPatchEncodingTests {
 
     // MARK: - MoodMatrixPatch encoding
 
-    func testPatchEncodesTouchedRowsOnly() throws {
+    @Test func testPatchEncodesTouchedRowsOnly() throws {
         let value: [MoodKey: MoodMatrixEntry] = [
             .calm: MoodMatrixEntry(before: 3, after: 4),
             .focus: MoodMatrixEntry(before: nil, after: nil),
         ]
         let patch = MoodMatrixPatch(from: value)
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
 
-        XCTAssertEqual((matrix["calm"] as? [String: Int])?["before"], 3)
-        XCTAssertEqual((matrix["calm"] as? [String: Int])?["after"], 4)
-        XCTAssertNil(matrix["focus"])
+        #expect((matrix["calm"] as? [String: Int])?["before"] == 3)
+        #expect((matrix["calm"] as? [String: Int])?["after"] == 4)
+        #expect(matrix["focus"] == nil)
     }
 
-    func testPatchOmitsEmptyPayload() throws {
+    @Test func testPatchOmitsEmptyPayload() throws {
         let patch = MoodMatrixPatch(from: [:])
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
-        XCTAssertTrue(matrix.isEmpty)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
+        #expect(matrix.isEmpty)
     }
 
-    func testPatchEncodesPartialCells() throws {
+    @Test func testPatchEncodesPartialCells() throws {
         let value: [MoodKey: MoodMatrixEntry] = [
             .energy: MoodMatrixEntry(before: 2, after: nil),
             .overall: MoodMatrixEntry(before: nil, after: 5),
         ]
         let patch = MoodMatrixPatch(from: value)
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
 
-        let energy = try XCTUnwrap(matrix["energy"] as? [String: Any])
-        XCTAssertEqual(energy["before"] as? Int, 2)
-        XCTAssertTrue(energy["after"] is NSNull)
-        let overall = try XCTUnwrap(matrix["overall"] as? [String: Any])
-        XCTAssertTrue(overall["before"] is NSNull)
-        XCTAssertEqual(overall["after"] as? Int, 5)
+        let energy = try #require(matrix["energy"] as? [String: Any])
+        #expect((energy["before"] as? Int) == 2)
+        #expect(energy["after"] is NSNull)
+        let overall = try #require(matrix["overall"] as? [String: Any])
+        #expect(overall["before"] is NSNull)
+        #expect((overall["after"] as? Int) == 5)
     }
 
-    func testPatchEncodesMinAndMaxBoundaries() throws {
+    @Test func testPatchEncodesMinAndMaxBoundaries() throws {
         let value: [MoodKey: MoodMatrixEntry] = [
             .anxiety: MoodMatrixEntry(before: 1, after: 5),
         ]
         let patch = MoodMatrixPatch(from: value)
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
-        let anxiety = try XCTUnwrap(matrix["anxiety"] as? [String: Int])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
+        let anxiety = try #require(matrix["anxiety"] as? [String: Int])
 
-        XCTAssertEqual(anxiety["before"], 1)
-        XCTAssertEqual(anxiety["after"], 5)
+        #expect(anxiety["before"] == 1)
+        #expect(anxiety["after"] == 5)
     }
 
     // MARK: - #792 clearing a saved mood
 
-    func testClearPatchEncodesANullMoodMatrix() throws {
+    @Test func testClearPatchEncodesANullMoodMatrix() throws {
         let data = try JSONEncoder().encode(MoodMatrixPatch.clear)
-        XCTAssertEqual(String(data: data, encoding: .utf8), #"{"moodMatrix":null}"#)
+        #expect(String(data: data, encoding: .utf8) == #"{"moodMatrix":null}"#)
     }
 
-    func testPersistedAwarePatchClearsOnceNothingIsSelected() {
+    @Test func testPersistedAwarePatchClearsOnceNothingIsSelected() {
         let patch = MoodMatrixPatch(
             from: [.calm: MoodMatrixEntry(before: nil, after: nil)],
             persisted: ["calm": MoodMatrixEntry(before: 2, after: 4)]
         )
-        XCTAssertTrue(patch.clearsMatrix)
-        XCTAssertTrue(patch.entries.isEmpty)
+        #expect(patch.clearsMatrix)
+        #expect(patch.entries.isEmpty)
     }
 
-    func testPersistedAwarePatchSendsAnAllNilRowForEachEmptiedStoredRow() throws {
+    @Test func testPersistedAwarePatchSendsAnAllNilRowForEachEmptiedStoredRow() throws {
         let patch = MoodMatrixPatch(
             from: [
                 .calm: MoodMatrixEntry(before: nil, after: nil),
@@ -88,19 +89,19 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
                 "focus": MoodMatrixEntry(before: 3, after: 4),
             ]
         )
-        XCTAssertFalse(patch.clearsMatrix)
+        #expect(!patch.clearsMatrix)
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
 
-        let calm = try XCTUnwrap(matrix["calm"] as? [String: Any])
-        XCTAssertTrue(calm["before"] is NSNull)
-        XCTAssertTrue(calm["after"] is NSNull)
-        XCTAssertEqual((matrix["focus"] as? [String: Int])?["before"], 3)
-        XCTAssertEqual((matrix["focus"] as? [String: Int])?["after"], 5)
+        let calm = try #require(matrix["calm"] as? [String: Any])
+        #expect(calm["before"] is NSNull)
+        #expect(calm["after"] is NSNull)
+        #expect((matrix["focus"] as? [String: Int])?["before"] == 3)
+        #expect((matrix["focus"] as? [String: Int])?["after"] == 5)
     }
 
-    func testPersistedAwarePatchLeavesOutRowsThatWereNeverStored() {
+    @Test func testPersistedAwarePatchLeavesOutRowsThatWereNeverStored() {
         let patch = MoodMatrixPatch(
             from: [
                 .energy: MoodMatrixEntry(before: 1, after: nil),
@@ -108,45 +109,42 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
             ],
             persisted: [:]
         )
-        XCTAssertFalse(patch.clearsMatrix)
-        XCTAssertEqual(Array(patch.entries.keys), ["energy"])
+        #expect(!patch.clearsMatrix)
+        #expect(Array(patch.entries.keys) == ["energy"])
     }
 
     // MARK: - #885 Happiness row
 
-    func testMoodKeyOrderMatchesWebMoodKeys() {
+    @Test func testMoodKeyOrderMatchesWebMoodKeys() {
         // Row order on both platforms; web `MOOD_KEYS` in src/lib/moodMatrix.ts.
-        XCTAssertEqual(
-            MoodKey.allCases.map(\.rawValue),
-            ["calm", "focus", "energy", "anxiety", "happiness", "overall"]
-        )
-        XCTAssertEqual(MoodKey.happiness.label, "Happiness")
+        #expect(MoodKey.allCases.map(\.rawValue) == ["calm", "focus", "energy", "anxiety", "happiness", "overall"])
+        #expect(MoodKey.happiness.label == "Happiness")
     }
 
-    func testPatchEncodesAHappinessRow() throws {
+    @Test func testPatchEncodesAHappinessRow() throws {
         let patch = MoodMatrixPatch(from: [.happiness: MoodMatrixEntry(before: 2, after: 4)])
         let data = try JSONEncoder().encode(patch)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
-        let happiness = try XCTUnwrap(matrix["happiness"] as? [String: Int])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try #require(json["moodMatrix"] as? [String: Any])
+        let happiness = try #require(matrix["happiness"] as? [String: Int])
 
-        XCTAssertEqual(happiness["before"], 2)
-        XCTAssertEqual(happiness["after"], 4)
-        XCTAssertEqual(matrix.count, 1)
+        #expect(happiness["before"] == 2)
+        #expect(happiness["after"] == 4)
+        #expect(matrix.count == 1)
     }
 
-    func testSanitizedStoredKeepsAHappinessRow() {
+    @Test func testSanitizedStoredKeepsAHappinessRow() {
         let stored: [String: MoodMatrixEntry] = [
             "happiness": MoodMatrixEntry(before: 1, after: 5),
             "unknown": MoodMatrixEntry(before: 4, after: 4),
         ]
         let sanitized = MoodMatrixLogic.sanitizedStored(stored)
-        XCTAssertTrue(MoodMatrixLogic.isKnownKey("happiness"))
-        XCTAssertEqual(sanitized[.happiness], MoodMatrixEntry(before: 1, after: 5))
-        XCTAssertEqual(sanitized.count, 1)
+        #expect(MoodMatrixLogic.isKnownKey("happiness"))
+        #expect(sanitized[.happiness] == MoodMatrixEntry(before: 1, after: 5))
+        #expect(sanitized.count == 1)
     }
 
-    func testPersistedAwarePatchSendsAnAllNilRowForAnEmptiedHappinessRow() {
+    @Test func testPersistedAwarePatchSendsAnAllNilRowForAnEmptiedHappinessRow() {
         let patch = MoodMatrixPatch(
             from: [
                 .happiness: MoodMatrixEntry(before: nil, after: nil),
@@ -157,63 +155,69 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
                 "overall": MoodMatrixEntry(before: 2, after: 4),
             ]
         )
-        XCTAssertFalse(patch.clearsMatrix)
-        XCTAssertEqual(patch.entries["happiness"], MoodMatrixEntry())
-        XCTAssertEqual(patch.entries["overall"], MoodMatrixEntry(before: 2, after: 4))
+        #expect(!patch.clearsMatrix)
+        #expect(patch.entries["happiness"] == MoodMatrixEntry())
+        #expect(patch.entries["overall"] == MoodMatrixEntry(before: 2, after: 4))
     }
 
     // MARK: - MoodMatrixLogic validation
 
-    func testClampMoodValueAcceptsOneThroughFive() {
-        XCTAssertEqual(MoodMatrixLogic.clampMoodValue(1), 1)
-        XCTAssertEqual(MoodMatrixLogic.clampMoodValue(5), 5)
-        XCTAssertEqual(MoodMatrixLogic.clampMoodValue(3), 3)
+    @Test func testClampMoodValueAcceptsOneThroughFive() {
+        #expect(MoodMatrixLogic.clampMoodValue(1) == 1)
+        #expect(MoodMatrixLogic.clampMoodValue(5) == 5)
+        #expect(MoodMatrixLogic.clampMoodValue(3) == 3)
     }
 
-    func testClampMoodValueRejectsOutOfRange() {
-        XCTAssertNil(MoodMatrixLogic.clampMoodValue(0))
-        XCTAssertNil(MoodMatrixLogic.clampMoodValue(6))
-        XCTAssertNil(MoodMatrixLogic.clampMoodValue(-1))
+    @Test func testClampMoodValueRejectsOutOfRange() {
+        #expect(MoodMatrixLogic.clampMoodValue(0) == nil)
+        #expect(MoodMatrixLogic.clampMoodValue(6) == nil)
+        #expect(MoodMatrixLogic.clampMoodValue(-1) == nil)
     }
 
-    func testBuildPayloadClampsOutOfRangeCells() {
+    @Test func testBuildPayloadClampsOutOfRangeCells() {
         let value: [MoodKey: MoodMatrixEntry] = [
             .calm: MoodMatrixEntry(before: 0, after: 6),
         ]
         let payload = MoodMatrixLogic.buildPayload(from: value)
-        XCTAssertEqual(payload["calm"]?.before, nil)
-        XCTAssertEqual(payload["calm"]?.after, nil)
-        XCTAssertTrue(payload.isEmpty)
+        #expect(payload["calm"]?.before == nil)
+        #expect(payload["calm"]?.after == nil)
+        #expect(payload.isEmpty)
     }
 
-    func testSanitizedStoredIgnoresUnknownKeys() {
+    @Test func testSanitizedStoredIgnoresUnknownKeys() {
         let stored: [String: MoodMatrixEntry] = [
             "calm": MoodMatrixEntry(before: 2, after: 3),
             "unknown": MoodMatrixEntry(before: 4, after: 4),
         ]
         let sanitized = MoodMatrixLogic.sanitizedStored(stored)
-        XCTAssertEqual(sanitized[.calm]?.before, 2)
-        XCTAssertEqual(sanitized[.calm]?.after, 3)
-        XCTAssertFalse(sanitized.keys.contains(where: { $0.rawValue == "unknown" }))
-        XCTAssertEqual(sanitized.count, 1)
+        #expect(sanitized[.calm]?.before == 2)
+        #expect(sanitized[.calm]?.after == 3)
+        #expect(!sanitized.keys.contains(where: { $0.rawValue == "unknown" }))
+        #expect(sanitized.count == 1)
     }
 
-    func testIsTouchedDetectsAnyNonNilCell() {
-        XCTAssertFalse(MoodMatrixLogic.isTouched([:]))
-        XCTAssertFalse(MoodMatrixLogic.isTouched([
-            .focus: MoodMatrixEntry(before: nil, after: nil),
-        ]))
-        XCTAssertTrue(MoodMatrixLogic.isTouched([
-            .focus: MoodMatrixEntry(before: 2, after: nil),
-        ]))
-        XCTAssertTrue(MoodMatrixLogic.isTouched([
-            .overall: MoodMatrixEntry(before: nil, after: 4),
-        ]))
+    @Test func testIsTouchedDetectsAnyNonNilCell() {
+        #expect(!MoodMatrixLogic.isTouched([:]))
+        #expect(
+            !MoodMatrixLogic.isTouched([
+                .focus: MoodMatrixEntry(before: nil, after: nil),
+            ])
+        )
+        #expect(
+            MoodMatrixLogic.isTouched([
+                .focus: MoodMatrixEntry(before: 2, after: nil),
+            ])
+        )
+        #expect(
+            MoodMatrixLogic.isTouched([
+                .overall: MoodMatrixEntry(before: nil, after: 4),
+            ])
+        )
     }
 
     // MARK: - SessionDTO moodMatrix decoding
 
-    func testSessionDTODecodesMoodMatrix() throws {
+    @Test func testSessionDTODecodesMoodMatrix() throws {
         let json = """
         {
           "id": "m1",
@@ -232,13 +236,13 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let session = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertEqual(session.moodMatrix?["calm"]?.before, 2)
-        XCTAssertEqual(session.moodMatrix?["calm"]?.after, 4)
-        XCTAssertEqual(session.moodMatrix?["focus"]?.before, 3)
-        XCTAssertNil(session.moodMatrix?["focus"]?.after)
+        #expect(session.moodMatrix?["calm"]?.before == 2)
+        #expect(session.moodMatrix?["calm"]?.after == 4)
+        #expect(session.moodMatrix?["focus"]?.before == 3)
+        #expect(session.moodMatrix?["focus"]?.after == nil)
     }
 
-    func testSessionDTODefaultsMoodMatrixToNilWhenAbsent() throws {
+    @Test func testSessionDTODefaultsMoodMatrixToNilWhenAbsent() throws {
         let json = """
         {
           "id": "m2",
@@ -253,10 +257,10 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let session = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(session.moodMatrix)
+        #expect(session.moodMatrix == nil)
     }
 
-    func testSessionDTOToleratesNullMoodMatrix() throws {
+    @Test func testSessionDTOToleratesNullMoodMatrix() throws {
         let json = """
         {
           "id": "m3",
@@ -272,6 +276,6 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         """.data(using: .utf8)!
 
         let session = try JSONDecoder().decode(SessionDTO.self, from: json)
-        XCTAssertNil(session.moodMatrix)
+        #expect(session.moodMatrix == nil)
     }
 }

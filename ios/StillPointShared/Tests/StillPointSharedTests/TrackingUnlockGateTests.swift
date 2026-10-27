@@ -1,47 +1,47 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class TrackingUnlockGateTests: XCTestCase {
+struct TrackingUnlockGateTests {
 
     // MARK: - Constant
 
-    func testMinDurationConstantIs300() {
-        XCTAssertEqual(TrackingUnlockGate.minDurationSeconds, 300,
-                       "Must match web's TRACKING_UNLOCK_MIN_DURATION_SECONDS")
+    @Test func testMinDurationConstantIs300() {
+        #expect(TrackingUnlockGate.minDurationSeconds == 300, "Must match web's TRACKING_UNLOCK_MIN_DURATION_SECONDS")
     }
 
     // MARK: - qualifies(completed:duration:)
 
-    func testQualifiesWhenCompletedAtExactThreshold() {
+    @Test func testQualifiesWhenCompletedAtExactThreshold() {
         // Boundary: exactly 300 s should qualify.
-        XCTAssertTrue(TrackingUnlockGate.qualifies(completed: true, duration: 300))
+        #expect(TrackingUnlockGate.qualifies(completed: true, duration: 300))
     }
 
-    func testQualifiesWhenCompletedAndAboveThreshold() {
-        XCTAssertTrue(TrackingUnlockGate.qualifies(completed: true, duration: 600))
-        XCTAssertTrue(TrackingUnlockGate.qualifies(completed: true, duration: 1800))
+    @Test func testQualifiesWhenCompletedAndAboveThreshold() {
+        #expect(TrackingUnlockGate.qualifies(completed: true, duration: 600))
+        #expect(TrackingUnlockGate.qualifies(completed: true, duration: 1800))
     }
 
-    func testDoesNotQualifyWhenCompletedButOneBelowThreshold() {
+    @Test func testDoesNotQualifyWhenCompletedButOneBelowThreshold() {
         // Boundary: 299 s must NOT qualify.
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: true, duration: 299))
+        #expect(!TrackingUnlockGate.qualifies(completed: true, duration: 299))
     }
 
-    func testDoesNotQualifyWhenCompletedButWellBelowThreshold() {
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: true, duration: 0))
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: true, duration: 60))
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: true, duration: 240))
+    @Test func testDoesNotQualifyWhenCompletedButWellBelowThreshold() {
+        #expect(!TrackingUnlockGate.qualifies(completed: true, duration: 0))
+        #expect(!TrackingUnlockGate.qualifies(completed: true, duration: 60))
+        #expect(!TrackingUnlockGate.qualifies(completed: true, duration: 240))
     }
 
-    func testDoesNotQualifyWhenNotCompleted() {
+    @Test func testDoesNotQualifyWhenNotCompleted() {
         // Not completed (ended early) — even a long sit must not unlock.
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 300))
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 600))
+        #expect(!TrackingUnlockGate.qualifies(completed: false, duration: 300))
+        #expect(!TrackingUnlockGate.qualifies(completed: false, duration: 600))
     }
 
-    func testDoesNotQualifyWhenNeitherCompletedNorLongEnough() {
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 0))
-        XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 100))
+    @Test func testDoesNotQualifyWhenNeitherCompletedNorLongEnough() {
+        #expect(!TrackingUnlockGate.qualifies(completed: false, duration: 0))
+        #expect(!TrackingUnlockGate.qualifies(completed: false, duration: 100))
     }
 
     // MARK: - historyQualifies(_:) (#839)
@@ -62,24 +62,28 @@ final class TrackingUnlockGateTests: XCTestCase {
         )
     }
 
-    func testHistoryQualifiesOnAQualifyingSit() {
-        XCTAssertTrue(TrackingUnlockGate.historyQualifies([session(.standard, duration: 120), session(.standard, duration: 300)]))
-        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.standard, duration: 299)]))
-        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.standard, completed: false, duration: 600)]))
-        XCTAssertFalse(TrackingUnlockGate.historyQualifies([]))
+    @Test func testHistoryQualifiesOnAQualifyingSit() {
+        #expect(TrackingUnlockGate.historyQualifies([session(.standard, duration: 120), session(.standard, duration: 300)]))
+        #expect(!TrackingUnlockGate.historyQualifies([session(.standard, duration: 299)]))
+        #expect(!TrackingUnlockGate.historyQualifies([session(.standard, completed: false, duration: 600)]))
+        #expect(!TrackingUnlockGate.historyQualifies([]))
     }
 
     /// A focus session is not a sit, so even a completed two-hour one unlocks nothing,
     /// as on web (`syncTrackingUnlockFromSessions`, #836).
-    func testHistoryQualifiesIgnoresFocusSessions() {
-        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.focus, duration: 7200)]))
-        XCTAssertFalse(TrackingUnlockGate.historyQualifies([
-            session(.focus, duration: 1800),
-            session(.standard, duration: 120),
-        ]))
-        XCTAssertTrue(TrackingUnlockGate.historyQualifies([
-            session(.focus, duration: 1800),
-            session(.standard, duration: 300),
-        ]))
+    @Test func testHistoryQualifiesIgnoresFocusSessions() {
+        #expect(!TrackingUnlockGate.historyQualifies([session(.focus, duration: 7200)]))
+        #expect(
+            !TrackingUnlockGate.historyQualifies([
+                session(.focus, duration: 1800),
+                session(.standard, duration: 120),
+            ])
+        )
+        #expect(
+            TrackingUnlockGate.historyQualifies([
+                session(.focus, duration: 1800),
+                session(.standard, duration: 300),
+            ])
+        )
     }
 }

@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SoundToggleLogicTests: XCTestCase {
+struct SoundToggleLogicTests {
 
     /// Convenience for the three non-voice sounds: the toggled key changes while
     /// `voiceCountdown` stays put.
@@ -29,35 +30,35 @@ final class SoundToggleLogicTests: XCTestCase {
 
     // MARK: - warmUp (#667)
 
-    func testOffToOnTransitionWarmsUp() {
-        XCTAssertTrue(effectsForNonVoiceToggle(wasEnabled: false).warmUp)
+    @Test func testOffToOnTransitionWarmsUp() {
+        #expect(effectsForNonVoiceToggle(wasEnabled: false).warmUp)
     }
 
-    func testOnToOffTransitionDoesNotWarmUp() {
-        XCTAssertFalse(effectsForNonVoiceToggle(wasEnabled: true).warmUp)
+    @Test func testOnToOffTransitionDoesNotWarmUp() {
+        #expect(!effectsForNonVoiceToggle(wasEnabled: true).warmUp)
     }
 
     /// All four toggles route through the single `toggleSound` path, so one
     /// decision function has to cover tick, chime, end, and voice alike.
-    func testEveryKeyWarmsUpOnEnableAndNotOnDisable() {
+    @Test func testEveryKeyWarmsUpOnEnableAndNotOnDisable() {
         // tick / chime / end: voiceCountdown is untouched by the toggle.
         for voiceState in [false, true] {
-            XCTAssertTrue(
+            #expect(
                 effectsForNonVoiceToggle(wasEnabled: false, voiceCountdown: voiceState).warmUp,
                 "off→on must warm up (voiceCountdown = \(voiceState))"
             )
-            XCTAssertFalse(
-                effectsForNonVoiceToggle(wasEnabled: true, voiceCountdown: voiceState).warmUp,
+            #expect(
+                !effectsForNonVoiceToggle(wasEnabled: true, voiceCountdown: voiceState).warmUp,
                 "on→off must not warm up (voiceCountdown = \(voiceState))"
             )
         }
 
         // voice: the toggled key and voiceCountdown move together.
-        XCTAssertTrue(effectsForVoiceToggle(wasEnabled: false).warmUp)
-        XCTAssertFalse(effectsForVoiceToggle(wasEnabled: true).warmUp)
+        #expect(effectsForVoiceToggle(wasEnabled: false).warmUp)
+        #expect(!effectsForVoiceToggle(wasEnabled: true).warmUp)
     }
 
-    func testNoTransitionDoesNotWarmUp() {
+    @Test func testNoTransitionDoesNotWarmUp() {
         // Defensive: identical before/after values are not an off→on transition.
         let unchanged = SoundToggleLogic.effects(
             toggledKeyWasEnabled: true,
@@ -65,41 +66,40 @@ final class SoundToggleLogicTests: XCTestCase {
             voiceCountdownWasEnabled: true,
             voiceCountdownIsEnabled: true
         )
-        XCTAssertFalse(unchanged.warmUp)
-        XCTAssertFalse(unchanged.preloadVoiceCountdown)
-        XCTAssertFalse(unchanged.cancelVoiceCountdown)
-        XCTAssertFalse(unchanged.resetVoiceDedup)
+        #expect(!unchanged.warmUp)
+        #expect(!unchanged.preloadVoiceCountdown)
+        #expect(!unchanged.cancelVoiceCountdown)
+        #expect(!unchanged.resetVoiceDedup)
     }
 
     // MARK: - Voice countdown (#554 behavior preserved)
 
-    func testVoiceOffToOnPreloadsAndDoesNotResetDedup() {
+    @Test func testVoiceOffToOnPreloadsAndDoesNotResetDedup() {
         let effects = effectsForVoiceToggle(wasEnabled: false)
-        XCTAssertTrue(effects.preloadVoiceCountdown)
-        XCTAssertFalse(effects.cancelVoiceCountdown)
-        XCTAssertFalse(effects.resetVoiceDedup)
+        #expect(effects.preloadVoiceCountdown)
+        #expect(!effects.cancelVoiceCountdown)
+        #expect(!effects.resetVoiceDedup)
     }
 
-    func testVoiceOnToOffCancelsAndResetsDedup() {
+    @Test func testVoiceOnToOffCancelsAndResetsDedup() {
         let effects = effectsForVoiceToggle(wasEnabled: true)
-        XCTAssertTrue(effects.cancelVoiceCountdown)
-        XCTAssertTrue(effects.resetVoiceDedup)
-        XCTAssertFalse(effects.preloadVoiceCountdown)
+        #expect(effects.cancelVoiceCountdown)
+        #expect(effects.resetVoiceDedup)
+        #expect(!effects.preloadVoiceCountdown)
     }
 
-    func testTogglingANonVoiceSoundLeavesVoiceEffectsUntouched() {
+    @Test func testTogglingANonVoiceSoundLeavesVoiceEffectsUntouched() {
         // Enabling tick while voice is already on must not re-preload or cancel it.
         let whileVoiceOn = effectsForNonVoiceToggle(wasEnabled: false, voiceCountdown: true)
-        XCTAssertTrue(whileVoiceOn.warmUp)
-        XCTAssertFalse(whileVoiceOn.preloadVoiceCountdown)
-        XCTAssertFalse(whileVoiceOn.cancelVoiceCountdown)
-        XCTAssertFalse(whileVoiceOn.resetVoiceDedup)
+        #expect(whileVoiceOn.warmUp)
+        #expect(!whileVoiceOn.preloadVoiceCountdown)
+        #expect(!whileVoiceOn.cancelVoiceCountdown)
+        #expect(!whileVoiceOn.resetVoiceDedup)
 
         // Disabling tick while voice is off must be a no-op beyond the pref write.
         let whileVoiceOff = effectsForNonVoiceToggle(wasEnabled: true, voiceCountdown: false)
-        XCTAssertEqual(
-            whileVoiceOff,
-            SoundToggleLogic.Effects(
+        #expect(
+            whileVoiceOff == SoundToggleLogic.Effects(
                 warmUp: false,
                 preloadVoiceCountdown: false,
                 cancelVoiceCountdown: false,
@@ -110,7 +110,7 @@ final class SoundToggleLogicTests: XCTestCase {
 
     // MARK: - Rapid toggling
 
-    func testRapidOffOnOffOnSequenceWarmsOnlyOnEnables() {
+    @Test func testRapidOffOnOffOnSequenceWarmsOnlyOnEnables() {
         // Simulates four fast taps on the same control starting from off.
         var enabled = false
         var warmUps = 0
@@ -120,7 +120,7 @@ final class SoundToggleLogicTests: XCTestCase {
             enabled.toggle()
         }
         // off→on, on→off, off→on, on→off ⇒ exactly two warm-ups.
-        XCTAssertEqual(warmUps, 2)
+        #expect(warmUps == 2)
     }
 
     // MARK: - #712 haptics is not an audio channel
@@ -129,7 +129,7 @@ final class SoundToggleLogicTests: XCTestCase {
     /// for someone who wants silence, and an AVAudioSession activation is not a
     /// harmless no-op on iOS — it can duck or interrupt whatever else the phone
     /// is playing. Enabling vibration should never touch their music.
-    func testEnablingHapticsDoesNotWarmTheAudioSession() {
+    @Test func testEnablingHapticsDoesNotWarmTheAudioSession() {
         let effects = SoundToggleLogic.effects(
             toggledKeyWasEnabled: false,
             toggledKeyIsEnabled: true,
@@ -138,15 +138,15 @@ final class SoundToggleLogicTests: XCTestCase {
             toggledKeyUsesAudio: false
         )
 
-        XCTAssertFalse(effects.warmUp, "haptics needs no audio session")
-        XCTAssertFalse(effects.preloadVoiceCountdown)
-        XCTAssertFalse(effects.cancelVoiceCountdown)
-        XCTAssertFalse(effects.resetVoiceDedup)
+        #expect(!effects.warmUp, "haptics needs no audio session")
+        #expect(!effects.preloadVoiceCountdown)
+        #expect(!effects.cancelVoiceCountdown)
+        #expect(!effects.resetVoiceDedup)
     }
 
     /// The guard above must be specific to the non-audio toggle — the same
     /// off→on transition on a real sound still has to warm up (#667).
-    func testTheAudioDefaultStillWarmsUpOnEnable() {
+    @Test func testTheAudioDefaultStillWarmsUpOnEnable() {
         let effects = SoundToggleLogic.effects(
             toggledKeyWasEnabled: false,
             toggledKeyIsEnabled: true,
@@ -154,10 +154,10 @@ final class SoundToggleLogicTests: XCTestCase {
             voiceCountdownIsEnabled: false
         )
 
-        XCTAssertTrue(effects.warmUp, "audio toggles keep the #667 warm-up")
+        #expect(effects.warmUp, "audio toggles keep the #667 warm-up")
     }
 
-    func testDisablingHapticsStaysAPurePreferenceWrite() {
+    @Test func testDisablingHapticsStaysAPurePreferenceWrite() {
         let effects = SoundToggleLogic.effects(
             toggledKeyWasEnabled: true,
             toggledKeyIsEnabled: false,
@@ -166,6 +166,6 @@ final class SoundToggleLogicTests: XCTestCase {
             toggledKeyUsesAudio: false
         )
 
-        XCTAssertFalse(effects.warmUp)
+        #expect(!effects.warmUp)
     }
 }

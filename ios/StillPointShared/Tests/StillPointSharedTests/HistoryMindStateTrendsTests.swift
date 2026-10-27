@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class HistoryMindStateTrendsTests: XCTestCase {
+struct HistoryMindStateTrendsTests {
     private func makeSession(
         date: String,
         duration: Int,
@@ -23,13 +24,13 @@ final class HistoryMindStateTrendsTests: XCTestCase {
         )
     }
 
-    func testComputeCompositionFromLogEmpty() {
+    @Test func testComputeCompositionFromLogEmpty() {
         let composition = MindStateSession.computeCompositionFromLog([], endTime: 300)
-        XCTAssertEqual(composition.clearSeconds, 300)
-        XCTAssertEqual(composition.totalSeconds, 300)
+        #expect(composition.clearSeconds == 300)
+        #expect(composition.totalSeconds == 300)
     }
 
-    func testComputeCompositionFromLogSplitsSegments() {
+    @Test func testComputeCompositionFromLogSplitsSegments() {
         let composition = MindStateSession.computeCompositionFromLog([
             MindStateEntry(time: 0, state: "clear"),
             MindStateEntry(time: 60, state: "thinking"),
@@ -39,14 +40,14 @@ final class HistoryMindStateTrendsTests: XCTestCase {
             MindStateEntry(time: 300, state: "clear"),
         ], endTime: 300)
 
-        XCTAssertEqual(composition.clearSeconds, 120)
-        XCTAssertEqual(composition.lightDistractionSeconds, 60)
-        XCTAssertEqual(composition.heavyDistractionSeconds, 60)
-        XCTAssertEqual(composition.hyperfocusSeconds, 60)
-        XCTAssertEqual(composition.totalSeconds, 300)
+        #expect(composition.clearSeconds == 120)
+        #expect(composition.lightDistractionSeconds == 60)
+        #expect(composition.heavyDistractionSeconds == 60)
+        #expect(composition.hyperfocusSeconds == 60)
+        #expect(composition.totalSeconds == 300)
     }
 
-    func testCalculateTrendStatsAggregatesTrailingWindow() {
+    @Test func testCalculateTrendStatsAggregatesTrailingWindow() {
         let stats = HistoryMindStateTrends.calculateTrendStats(
             sessions: [
                 makeSession(
@@ -63,16 +64,16 @@ final class HistoryMindStateTrendsTests: XCTestCase {
             todayIso: "2026-07-02"
         )
 
-        XCTAssertEqual(stats.trailing4Week.totalSitSeconds, 180)
-        XCTAssertEqual(stats.trailing4Week.lightDistractionPercent, 33.3, accuracy: 0.1)
-        XCTAssertEqual(stats.trailing4Week.hyperfocusPercent, 33.3, accuracy: 0.1)
-        XCTAssertEqual(stats.trailing4Week.heavyDistractionPercent, 0)
-        XCTAssertEqual(stats.dailyTrend.count, 28)
+        #expect(stats.trailing4Week.totalSitSeconds == 180)
+        #expect(abs(stats.trailing4Week.lightDistractionPercent - 33.3) <= 0.1)
+        #expect(abs(stats.trailing4Week.hyperfocusPercent - 33.3) <= 0.1)
+        #expect(stats.trailing4Week.heavyDistractionPercent == 0)
+        #expect(stats.dailyTrend.count == 28)
     }
 
     /// #839: a focus session logs no mind state, so its empty log would otherwise read as
     /// up to two hours of clear time and swamp the sit averages. Skipped, as on web (#836).
-    func testCalculateTrendStatsSkipsFocusSessions() {
+    @Test func testCalculateTrendStatsSkipsFocusSessions() {
         let sit = makeSession(
             date: "2026-07-01",
             duration: 120,
@@ -100,14 +101,14 @@ final class HistoryMindStateTrendsTests: XCTestCase {
 
         let stats = HistoryMindStateTrends.calculateTrendStats(sessions: [sit, focus], todayIso: "2026-07-02")
 
-        XCTAssertEqual(stats.trailing4Week.totalSitSeconds, 120)
-        XCTAssertEqual(stats.trailing4Week.clearPercent, 50)
-        XCTAssertEqual(stats.trailing4Week.lightDistractionPercent, 50)
-        XCTAssertEqual(stats.allTime.totalSitSeconds, 120)
-        XCTAssertEqual(stats.dailyTrend.first { $0.date == "2026-07-01" }?.totalSitSeconds, 120)
+        #expect(stats.trailing4Week.totalSitSeconds == 120)
+        #expect(stats.trailing4Week.clearPercent == 50)
+        #expect(stats.trailing4Week.lightDistractionPercent == 50)
+        #expect(stats.allTime.totalSitSeconds == 120)
+        #expect(stats.dailyTrend.first { $0.date == "2026-07-01" }?.totalSitSeconds == 120)
 
         let focusOnly = HistoryMindStateTrends.calculateTrendStats(sessions: [focus], todayIso: "2026-07-02")
-        XCTAssertEqual(focusOnly.allTime, .empty)
-        XCTAssertEqual(focusOnly.trailing4Week, .empty)
+        #expect(focusOnly.allTime == .empty)
+        #expect(focusOnly.trailing4Week == .empty)
     }
 }

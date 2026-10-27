@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// The account on screen, as far as a finished sit's save is concerned: which
@@ -37,7 +38,7 @@ private final class AccountScreen {
 /// still do. Without the generation check in `GenerationScopedWork.run`, every
 /// discard below would apply.
 @MainActor
-final class GenerationScopedWorkTests: XCTestCase {
+struct GenerationScopedWorkTests {
     /// Ends a sit the way both call sites do: the generation is captured before the
     /// save, and the screen's own generation is read once the save settles.
     private func endSit(
@@ -57,7 +58,7 @@ final class GenerationScopedWorkTests: XCTestCase {
 
     /// With no sign-out in the window, the sit goes on to its completion screen as
     /// before.
-    func testASaveThatSettlesForTheSameAccountApplies() async {
+    @Test func testASaveThatSettlesForTheSameAccountApplies() async {
         let screen = AccountScreen()
         let save = HeldSave(settlingWith: SessionCompletionLogic.SaveOutcome.stored)
         let ending = endSit("sit-a", on: screen, saving: save)
@@ -66,13 +67,13 @@ final class GenerationScopedWorkTests: XCTestCase {
         save.settle()
 
         let outcome = await ending.value
-        XCTAssertEqual(outcome, .applied)
-        XCTAssertEqual(screen.completionsOpened, ["sit-a"])
+        #expect(outcome == .applied)
+        #expect(screen.completionsOpened == ["sit-a"])
     }
 
     /// Problem 3: the previous account's sit must not open its completion screen,
     /// and credit itself, for whoever signed in while it was saving.
-    func testASaveThatSettlesAfterASignOutAndASignInOpensNothing() async {
+    @Test func testASaveThatSettlesAfterASignOutAndASignInOpensNothing() async {
         let screen = AccountScreen()
         let save = HeldSave(settlingWith: SessionCompletionLogic.SaveOutcome.stored)
         let ending = endSit("sit-a", on: screen, saving: save)
@@ -83,13 +84,13 @@ final class GenerationScopedWorkTests: XCTestCase {
         save.settle()
 
         let outcome = await ending.value
-        XCTAssertEqual(outcome, .discarded)
-        XCTAssertEqual(screen.completionsOpened, [])
+        #expect(outcome == .discarded)
+        #expect(screen.completionsOpened == [])
     }
 
     /// A sign-out alone is enough. The sign-in screen is up when the save settles, and
     /// the completion screen must not open over it.
-    func testASaveThatSettlesAfterASignOutAloneOpensNothing() async {
+    @Test func testASaveThatSettlesAfterASignOutAloneOpensNothing() async {
         let screen = AccountScreen()
         let save = HeldSave(settlingWith: SessionCompletionLogic.SaveOutcome.stored)
         let ending = endSit("sit-a", on: screen, saving: save)
@@ -99,13 +100,13 @@ final class GenerationScopedWorkTests: XCTestCase {
         save.settle()
 
         let outcome = await ending.value
-        XCTAssertEqual(outcome, .discarded)
-        XCTAssertEqual(screen.completionsOpened, [])
+        #expect(outcome == .discarded)
+        #expect(screen.completionsOpened == [])
     }
 
     /// A failed save is scoped like a successful one. The previous account's refused
     /// write must not raise the not-saved warning for the next account.
-    func testAFailedSaveThatSettlesAfterASignOutLeavesTheNextAccountsWarningDown() async {
+    @Test func testAFailedSaveThatSettlesAfterASignOutLeavesTheNextAccountsWarningDown() async {
         let screen = AccountScreen()
         let save = HeldSave(settlingWith: SessionCompletionLogic.SaveOutcome.notStored)
         let ending = endSit("sit-a", on: screen, saving: save)
@@ -116,14 +117,14 @@ final class GenerationScopedWorkTests: XCTestCase {
         save.settle()
 
         let outcome = await ending.value
-        XCTAssertEqual(outcome, .discarded)
-        XCTAssertFalse(screen.localSaveFailed)
+        #expect(outcome == .discarded)
+        #expect(!screen.localSaveFailed)
     }
 
     /// The other direction. The next account's own save failed while the previous
     /// account's was still in flight. The old success must not clear the warning
     /// that is now about the next account's sit.
-    func testASuccessfulSaveThatSettlesAfterASignOutLeavesTheNextAccountsWarningUp() async {
+    @Test func testASuccessfulSaveThatSettlesAfterASignOutLeavesTheNextAccountsWarningUp() async {
         let screen = AccountScreen()
         let earlier = HeldSave(settlingWith: SessionCompletionLogic.SaveOutcome.stored)
         let earlierEnding = endSit("sit-a", on: screen, saving: earlier)
@@ -135,22 +136,22 @@ final class GenerationScopedWorkTests: XCTestCase {
         let laterEnding = endSit("sit-b", on: screen, saving: later)
         later.settle()
         let laterOutcome = await laterEnding.value
-        XCTAssertEqual(laterOutcome, .applied)
-        XCTAssertTrue(screen.localSaveFailed)
+        #expect(laterOutcome == .applied)
+        #expect(screen.localSaveFailed)
 
         earlier.settle()
 
         let earlierOutcome = await earlierEnding.value
-        XCTAssertEqual(earlierOutcome, .discarded)
-        XCTAssertTrue(screen.localSaveFailed, "the previous account's save cleared the next account's warning")
-        XCTAssertEqual(screen.completionsOpened, [])
+        #expect(earlierOutcome == .discarded)
+        #expect(screen.localSaveFailed, "the previous account's save cleared the next account's warning")
+        #expect(screen.completionsOpened == [])
     }
 
     /// Only the screen is spared, never the sit. A real `SessionSyncCoordinator` save
     /// is held open in `flushEntry`, the suspension point #854 names, with the queue
     /// entry already written. The late result is discarded, and the entry still syncs
     /// under the account that sat.
-    func testADiscardedSaveStillKeepsAndSyncsTheSitUnderTheAccountThatSat() async throws {
+    @Test func testADiscardedSaveStillKeepsAndSyncsTheSitUnderTheAccountThatSat() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let upload = HeldSave(settlingWith: ())
         let transport = SessionSyncTransport(
@@ -198,18 +199,18 @@ final class GenerationScopedWorkTests: XCTestCase {
         }
         await upload.untilStarted()
         let queuedBeforeUpload = try store.loadEntries().map(\.clientSessionId)
-        XCTAssertEqual(queuedBeforeUpload, [clientSessionId])
+        #expect(queuedBeforeUpload == [clientSessionId])
 
         screen.signOut()
         screen.signIn()
         upload.settle()
 
         let outcome = await ending.value
-        XCTAssertEqual(outcome, .discarded)
-        XCTAssertEqual(screen.completionsOpened, [])
-        let entry = try XCTUnwrap(store.loadEntries().first)
-        XCTAssertEqual(entry.ownerUserId, "user-a")
-        XCTAssertTrue(entry.sessionSynced)
-        XCTAssertEqual(entry.serverSessionId, "server-sit-a")
+        #expect(outcome == .discarded)
+        #expect(screen.completionsOpened == [])
+        let entry = try #require(store.loadEntries().first)
+        #expect(entry.ownerUserId == "user-a")
+        #expect(entry.sessionSynced)
+        #expect(entry.serverSessionId == "server-sit-a")
     }
 }

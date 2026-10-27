@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class RecordBuddyPersonalSessionRequestEncodingTests: XCTestCase {
-    func testEncodesEmbeddedThoughtsUsingServerFieldNames() throws {
+struct RecordBuddyPersonalSessionRequestEncodingTests {
+    @Test func testEncodesEmbeddedThoughtsUsingServerFieldNames() throws {
         let request = RecordBuddyPersonalSessionRequest(
             clearPercent: 80,
             thoughtCount: 1,
@@ -21,21 +22,21 @@ final class RecordBuddyPersonalSessionRequestEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let thoughts = try XCTUnwrap(jsonObject["thoughts"] as? [[String: Any]])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let thoughts = try #require(jsonObject["thoughts"] as? [[String: Any]])
 
-        XCTAssertEqual(jsonObject["clearPercent"] as? Int, 80)
-        XCTAssertEqual(jsonObject["thoughtCount"] as? Int, 1)
-        XCTAssertEqual(jsonObject["actualTime"] as? Int, 60)
-        XCTAssertEqual(jsonObject["sessionDate"] as? String, "2026-04-25")
-        XCTAssertEqual(thoughts.first?["timeInSession"] as? Int, 42)
-        XCTAssertEqual(thoughts.first?["text"] as? String, "iOS buddy note")
+        #expect((jsonObject["clearPercent"] as? Int) == 80)
+        #expect((jsonObject["thoughtCount"] as? Int) == 1)
+        #expect((jsonObject["actualTime"] as? Int) == 60)
+        #expect((jsonObject["sessionDate"] as? String) == "2026-04-25")
+        #expect((thoughts.first?["timeInSession"] as? Int) == 42)
+        #expect((thoughts.first?["text"] as? String) == "iOS buddy note")
     }
 
     /// #971: `ThoughtInput` gained an optional `clientThoughtId` for the batch
     /// route. A buddy sit builds its thoughts without one, as
     /// `BuddySessionViewModel` does, so the request keeps exactly its old keys.
-    func testEncodesExactlyTheKeysItHadBeforeThoughtIds() throws {
+    @Test func testEncodesExactlyTheKeysItHadBeforeThoughtIds() throws {
         let request = RecordBuddyPersonalSessionRequest(
             clearPercent: 80,
             thoughtCount: 1,
@@ -46,13 +47,10 @@ final class RecordBuddyPersonalSessionRequestEncodingTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(request)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let thoughts = try XCTUnwrap(jsonObject["thoughts"] as? [[String: Any]])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let thoughts = try #require(jsonObject["thoughts"] as? [[String: Any]])
 
-        XCTAssertEqual(
-            Set(jsonObject.keys),
-            ["clearPercent", "thoughtCount", "mindStateLog", "actualTime", "sessionDate", "thoughts"]
-        )
-        XCTAssertEqual(thoughts.map { Set($0.keys) }, [["timeInSession", "text"]])
+        #expect(Set(jsonObject.keys) == ["clearPercent", "thoughtCount", "mindStateLog", "actualTime", "sessionDate", "thoughts"])
+        #expect(thoughts.map { Set($0.keys) } == [["timeInSession", "text"]])
     }
 }
