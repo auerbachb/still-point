@@ -11,6 +11,8 @@ It applies to Issue #194 and is inherited by child issues:
 
 Journey × platform coverage, P0/P1/P2 tiers, and justified exclusions (OAuth, breath counting): [`e2e-coverage-matrix.md`](./e2e-coverage-matrix.md).
 
+How the scripts enforce this policy (retry classifier signatures, sleep-check matching): [`e2e-policy-enforcement.md`](./e2e-policy-enforcement.md). Section numbers there match the sections here.
+
 ## 1) Retry policy and non-retriable failures
 
 Retries are lane-specific and intentionally low to avoid masking real regressions.
@@ -19,8 +21,8 @@ Retries are lane-specific and intentionally low to avoid masking real regression
 |---|---:|---|---|
 | `web-e2e-smoke` | 1 | Assertion mismatches (`expect(...)` failures), selector contract drift, schema/data contract violations | Browser boot issues, network timeouts, runner disconnects |
 | `web-e2e-critical` | 2 | Same as smoke (functional assertion failures are never auto-excused) | Same infra/transient failures as smoke |
-| `ios-e2e-smoke` | 1 | XCTest assertion failure (no concurrent simulator-side crash report) | Simulator boot flake, xcodebuild infra instability, simulator-side app crashes (`*StillPoint*.ips`) |
-| `ios-e2e-critical` | 1 | XCTest assertion failure (no concurrent simulator-side crash report) | Simulator/device provisioning infra errors, simulator-side app crashes (`*StillPoint*.ips`) |
+| `ios-e2e-smoke` | 1 | XCTest assertion failure that is not a timeout-shaped UI wait (no concurrent simulator-side crash report) | Simulator boot flake, xcodebuild infra instability, simulator-side app crashes (`*StillPoint*.ips`), timeout-shaped UI waits (e.g. `waitForExistence` "did not appear") |
+| `ios-e2e-critical` | 1 | XCTest assertion failure that is not a timeout-shaped UI wait (no concurrent simulator-side crash report) | Simulator/device provisioning infra errors, simulator-side app crashes (`*StillPoint*.ips`), timeout-shaped UI waits (e.g. `waitForExistence` "did not appear") |
 
 Rules:
 
@@ -28,28 +30,7 @@ Rules:
 2. If a failure reproduces consistently on rerun, classify it as product/test debt, not infra.
 3. CI should preserve first-failure artifacts even when retries eventually pass.
 
-**Enforcement (iOS lanes):** `scripts/e2e/run-ios-tests.sh` runs a 4-tier classifier on each failed attempt:
-
-1. **Crash check first** — if a `*StillPoint*` diagnostic report under `~/Library/Logs/DiagnosticReports/` was written after the attempt-start sentinel (`<lane>-attempt-N.start`), the failure is treated as infra and consumes a retry, **regardless of any concurrent assertion-shape line in the log**. This catches macos-26 simulator XPC faults that surface as timeout-shaped assertions like `XCTAssertTrue failed - Session screen did not appear after Begin tap` but are actually launchd/sim-level crashes.
-2. **Timeout-shaped UI wait second** — if no crash report is correlated, treat the failure as retriable when the log contains any of:
-    - `XCTAssertTrue failed - <msg>` where `<msg>` matches `did not appear / never appear(ed) / did not exist / does not exist / should be visible / should appear / should exist / not found / never became / did not become / did not show` (case-insensitive — typical `waitForExistence(timeout:)` shape).
-    - `Asynchronous wait failed: Exceeded timeout` (XCTestExpectation/`wait(for:)` predicate-value waits, e.g. `Expect predicate value == "visible" for object "session.secondaryChromeMarker"`).
-    - `Failed to set device orientation:` (simulator automation stalls in `setUpWithError()` before the app launches).
-    - `Timed out while acquiring background assertion` (XCTest could not take a background assertion on the app; surfaces as a method-level error frame; retried only when the log has no `XCTAssert* failed` line, so a real assertion failure elsewhere in the lane still fails fast — issue #955, run 40453121968).
-    - `Timed out while evaluating UI query` or `Timed out waiting for` (XCUITest query/wait timeouts that surface as method-level error frames without `XCTAssert*` lines — e.g. `testLaunchLoginCompleteSessionAndHistoryPersistence` smoke flake, issue #496).
-   These are UI timing flakes (mocked-API stalls, animation handoff delays, focus timing, simulator orientation confirmation, XCUITest query stalls) that don't always trigger an `.ips` but reproduce inconsistently across attempts.
-3. **Strict assertion check third** — for value assertions (`XCTAssertEqual`, `XCTAssertNotNil`, `XCTAssertGreaterThan`, etc.) and any `XCTAssertTrue` whose message does NOT match the timeout indicators above, the script exits without consuming the retry budget. Method-level frames like `error: -[<Module.>?<TestClass> <testMethod>]` are also non-retriable.
-4. **Default** — any other failure (infra/transient/unknown) consumes retries up to the table value.
-
-Note: detecting "same stack across attempts" (a stricter, repeated-crash signal) is intentionally out-of-scope — it would require diffing per-attempt diagnostic reports across runs (see [#324](https://github.com/auerbachb/still-point/issues/324)). Repeated identical simulator crashes will currently consume the full retry budget, then fail through the default branch; if cross-attempt stack-identity detection becomes important, file a follow-up.
-
-**Enforcement (web lanes):** `scripts/e2e/run-playwright-lane.mjs` runs Playwright with `--retries 0` and owns retries itself at the **whole-lane** level (not Playwright's per-test reporter), so a single non-retriable failure fails the lane fast instead of silently re-running. Each attempt tees its output to `artifacts/e2e/web/<lane>/attempt-<N>.log` and creates a start-of-attempt sentinel `artifacts/e2e/web/<lane>/attempt-<N>.start` (its mtime is fixed at attempt start — crash dumps are compared against it, never against the tee'd log whose mtime keeps advancing). After a failed attempt the runner consults `scripts/e2e/classify-web-failure.mjs`, which mirrors the iOS precedence:
-
-1. **Crash / browser-loss first** — if `$E2E_WEB_CRASH_DIR` (when set) holds a crash dump newer than the attempt-start sentinel, **or** the log shows a browser-process loss signature (`Target ... has been closed/crashed`, `Page crashed`, `Browser closed unexpectedly`, `browserType.launch:` failures, `Executable doesn't exist`), the failure is treated as infra and consumes a retry **regardless of any concurrent `expect(...)` line** — a crashed browser commonly surfaces as a failed assertion.
-2. **Non-retriable assertion / contract check second** — Playwright `expect(...)` failures (assertion mismatches **and** selector-contract drift both surface as `expect(locator).toBeVisible() failed`), visual/snapshot mismatches (`Screenshot comparison failed`, `toMatchSnapshot`/`toHaveScreenshot`), and schema/data-contract violations (`ZodError`, `…SchemaError`) exit the lane without consuming the retry budget.
-3. **Default** — any other failure (network timeouts such as `net::ERR_*`/`ECONNREFUSED`, dev-server boot stalls, runner disconnects, unknown crashes) is retriable up to the table value.
-
-Web intentionally diverges from iOS in one place: iOS treats timeout-shaped UI waits as auto-retriable, but web does **not**, because selector-contract drift is non-retriable here and presents as an `expect(...)` failure. Action/navigation `TimeoutError`s that are not `expect(...)` failures still fall through to the retriable default.
+**Enforcement:** each lane's runner classifies every failed attempt before spending a retry — `scripts/e2e/run-ios-tests.sh` for iOS, `scripts/e2e/run-playwright-lane.mjs` + `scripts/e2e/classify-web-failure.mjs` for web. Both check a crash first (a crash overrides any concurrent assertion line and is retriable), then known non-retriable assertion/contract shapes (fail the lane fast), then retry everything else up to the table value. The one deliberate difference: iOS retries timeout-shaped UI waits; web does not, because selector-contract drift surfaces as an `expect(...)` failure. Precedence and the exact signatures each tier matches: [`e2e-policy-enforcement.md` §1](./e2e-policy-enforcement.md#1-retry-classifiers-e2e-policymd-1).
 
 ## 2) Test data isolation policy
 
@@ -73,9 +54,11 @@ Never point seed or E2E users at production data.
 Naked sleeps are banned for test synchronization:
 
 - disallowed: `waitForTimeout(...)`, `sleep(...)`, `Thread.sleep`, `Task.sleep` in test code/workflows
-- allowed exception: bounded infra backoff in non-test provisioning steps (documented inline). The checker accepts it in two forms:
-  - a workflow shell retry written as `sleep $((attempt * N))`, alone on its line, in a file under `.github/workflows/` only. The same text in an `e2e/` spec or any other script still fails (Issue #935).
-  - named lines of a non-test provisioning script, listed in `ALLOWED_SLEEP_LINES_BY_PATH` (`scripts/e2e/check-no-naked-sleep.mjs`). Each entry names one repo-relative path and the exact line text it allows, and its comment says what the back-off retries. A pattern must match the whole line, so a sleep written any other way in that file still fails. Matching is by text, not by line number or count, so another line in that file with exactly an allowed text passes too. The only entry today is the `git ls-remote` / tag-push retry in `scripts/ci/ios-testflight-build-number.mjs` (Issue #920). Never add an entry for a file under `e2e/` or for any other test code.
+- allowed exception: bounded infra backoff in non-test provisioning steps (documented inline), in exactly two forms:
+  - a workflow shell retry written as `sleep $((attempt * N))`, alone on its line, in a file under `.github/workflows/` only (Issue #935).
+  - named lines of a non-test provisioning script, allow-listed by path and exact line text in `ALLOWED_SLEEP_LINES_BY_PATH` (`scripts/e2e/check-no-naked-sleep.mjs`), each with a comment saying what the back-off retries (Issue #920). Never add an entry for a file under `e2e/` or for any other test code.
+
+  How the checker matches these, and the current allow-list entries: [`e2e-policy-enforcement.md` §3](./e2e-policy-enforcement.md#3-naked-sleep-check-exemptions-e2e-policymd-3).
 
 Enforcement:
 
