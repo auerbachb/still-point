@@ -16,8 +16,8 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Capability | Mechanism | Workflow |
 |------------|-----------|----------|
 | Release-config UI smoke | `npm run e2e:ios:smoke` | TestFlight + App Store release |
-| Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | Both |
-| Machine-readable preflight | `npm run ios:app-store:dry-run` | Both |
+| Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | App Store release only (`ios-app-store-release.yml`); see [Release paths](../../ios/RELEASING.md#release-paths) |
+| Machine-readable preflight | `npm run ios:app-store:dry-run` | App Store release only (`ios-app-store-release.yml`); also run by hand before submission |
 | Archive + upload binary to App Store Connect / TestFlight | `xcodebuild -exportArchive` with API key | TestFlight (`ios-testflight.yml`) |
 | Every secret the release needs is set, before the build number is claimed | `scripts/ci/ios-app-store-release-secrets.mjs` names each missing secret, never a value (#937) | App Store release (`ios-app-store-release.yml`) |
 | Build number for the App Store binary | Claims the next `ios-v<marketing>-build<N>` tag (`scripts/ci/ios-testflight-build-number.mjs`), passed to `gym` as `CURRENT_PROJECT_VERSION` (#838) | App Store release (`ios-app-store-release.yml`) |
