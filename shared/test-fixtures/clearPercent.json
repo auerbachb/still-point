@@ -1,6 +1,6 @@
 {
   "algorithm": "calculateClearPercent",
-  "description": "Percentage of [0, endTime] spent in an aware state (`clear` or `hyperfocus`). Web computeClearPercentFromLog(log, endTime) and iOS SessionLogic.calculateClearPercent(mindStateLog:totalElapsed:) both treat time before the first entry as clear and credit each segment to the state that began it, then round to a whole percent. Cases avoid exact .5 boundaries so JS Math.round and Swift rounded() agree, and keep endTime > 0 with a non-empty log so both share the same empty/zero guard.",
+  "description": "Percentage of [0, endTime] spent in an aware state (`clear` or `hyperfocus`). Web computeClearPercentFromLog(log, endTime) and iOS SessionLogic.calculateClearPercent(mindStateLog:totalElapsed:) both treat time before the first entry as clear and credit each segment to the state that began it, then round to a whole percent. An empty log returns 100 on both. Cases keep endTime > 0 and avoid exact .5 boundaries; for these nonnegative values JS Math.round and Swift rounded() agree. A non-empty log with endTime 0 or a sub-second endTime is not covered, because the platforms' guards and denominators differ there.",
   "cases": [
     {
       "name": "empty log is fully clear",
