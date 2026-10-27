@@ -98,4 +98,81 @@ final class CredentialOwnerTests: XCTestCase {
         }
         XCTAssertEqual(owner.snapshot.generation, start + 1000)
     }
+
+    func testInvalidateReturnsTheSnapshotItProduced() {
+        let owner = CredentialOwner()
+        owner.publish(accountId: "A")
+        let invalidated = owner.invalidate()
+        XCTAssertEqual(invalidated, owner.snapshot)
+        XCTAssertNil(invalidated.accountId)
+    }
+
+    /// A sign-in the server rejected restores the outgoing account, but only if
+    /// nothing changed the owner while the request was in flight.
+    func testRestoringAfterAFailedSignInYieldsToANewerChange() {
+        let owner = CredentialOwner()
+        owner.publish(accountId: "A")
+        let invalidated = owner.invalidate()
+        XCTAssertTrue(owner.confirm(accountId: "A", ifStillCurrent: invalidated))
+        XCTAssertEqual(owner.snapshot.accountId, "A")
+
+        let secondAttempt = owner.invalidate()
+        owner.publish(accountId: "B")
+        XCTAssertFalse(owner.confirm(accountId: "A", ifStillCurrent: secondAttempt))
+        XCTAssertEqual(owner.snapshot.accountId, "B")
+    }
+
+    /// The suppression controller re-syncs from this callback, so it must run after
+    /// every successful confirmation and never after a refused one.
+    func testConfirmationObserverRunsOnlyWhenConfirmSucceeds() {
+        let owner = CredentialOwner()
+        let calls = ObserverCallCounter()
+        owner.setConfirmationObserver { calls.increment() }
+
+        let beforeMe = owner.snapshot
+        XCTAssertTrue(owner.confirm(accountId: "A", ifStillCurrent: beforeMe))
+        XCTAssertEqual(calls.value, 1)
+
+        // Re-confirming the same account still notifies.
+        XCTAssertTrue(owner.confirm(accountId: "A", ifStillCurrent: owner.snapshot))
+        XCTAssertEqual(calls.value, 2)
+
+        // A stale `/me` is refused and does not notify.
+        let stale = owner.snapshot
+        owner.invalidate()
+        XCTAssertFalse(owner.confirm(accountId: "A", ifStillCurrent: stale))
+        XCTAssertEqual(calls.value, 2)
+
+        // Publishing is not a confirmation.
+        owner.publish(accountId: "B")
+        XCTAssertEqual(calls.value, 2)
+    }
+
+    /// The observer runs outside the lock, so it may read the owner without deadlocking.
+    func testConfirmationObserverCanReadTheConfirmedOwner() {
+        let owner = CredentialOwner()
+        let seen = ObserverCallCounter()
+        owner.setConfirmationObserver {
+            if owner.snapshot.accountId == "A" { seen.increment() }
+        }
+        XCTAssertTrue(owner.confirm(accountId: "A", ifStillCurrent: owner.snapshot))
+        XCTAssertEqual(seen.value, 1)
+    }
+}
+
+private final class ObserverCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+    }
 }

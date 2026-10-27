@@ -343,7 +343,33 @@ enum SessionNotificationSuppressionController {
         }
         let reg = Registration(appViewModel: appVM)
         registrations[id] = reg
+        observeOwnerConfirmationIfNeeded()
         return reg
+    }
+
+    private static var observesOwnerConfirmation = false
+
+    /// #1058: re-sync once `/me` confirms who owns the credentials. A sit that
+    /// started while the owner was unknown (a cold start before `/me` answered) was
+    /// skipped and its heartbeat stopped, and no `/me` caller is guaranteed to run
+    /// another sync afterwards — preference hydration does, but only on some paths
+    /// and only when its own request succeeds. Installed on the first registration,
+    /// since there is nothing to re-sync before a scene registers.
+    private static func observeOwnerConfirmationIfNeeded() {
+        guard !observesOwnerConfirmation else { return }
+        observesOwnerConfirmation = true
+        CredentialOwner.shared.setConfirmationObserver {
+            Task { @MainActor in
+                credentialOwnerConfirmed()
+            }
+        }
+    }
+
+    /// Re-evaluates every hold against the newly confirmed credential owner.
+    /// Idempotent: a key already reported is not reported again.
+    private static func credentialOwnerConfirmed() {
+        pruneDeadRegistrations()
+        syncServerSessionState()
     }
 
     private static func pruneDeadRegistrations() {

@@ -84,8 +84,7 @@ public actor APIClient {
             return await uiTestAPIStore.signup(email: email, username: username, password: password)
         }
         let body: [String: String] = ["email": email, "username": username, "password": password]
-        let response: UserResponse = try await post("/api/auth/signup", body: body)
-        return try installCredentials(from: response)
+        return try await signIn { try await self.post("/api/auth/signup", body: body) }
     }
 
     public func login(email: String, password: String) async throws -> UserDTO {
@@ -94,8 +93,7 @@ public actor APIClient {
         }
         // Web app sends username too but only uses email+password for login
         let body: [String: String] = ["email": email, "username": "", "password": password]
-        let response: UserResponse = try await post("/api/auth/login", body: body)
-        return try installCredentials(from: response)
+        return try await signIn { try await self.post("/api/auth/login", body: body) }
     }
 
     /// Native Sign in with Apple → server verifies JWT and returns `user` + `token` (same as login with ios header).
@@ -103,8 +101,7 @@ public actor APIClient {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.signInWithApple()
         }
-        let response: UserResponse = try await post("/api/auth/apple-native", body: request)
-        return try installCredentials(from: response)
+        return try await signIn { try await self.post("/api/auth/apple-native", body: request) }
     }
 
     /// Native Sign in with Google → server verifies the Google ID token and returns `user` + `token` (same as login with ios header).
@@ -112,7 +109,33 @@ public actor APIClient {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.signInWithGoogle()
         }
-        let response: UserResponse = try await post("/api/auth/google-native", body: request)
+        return try await signIn { try await self.post("/api/auth/google-native", body: request) }
+    }
+
+    /// Sends a sign-in request and installs the credentials it returns (#1058).
+    ///
+    /// The owner is invalidated *before* the request leaves, not only once the
+    /// response is in: a successful response sets the shared session cookie as it
+    /// arrives, and for an account signed in by cookie alone that cookie is the
+    /// credential. Invalidating first means no session-hold report built while the
+    /// sign-in is in flight can be sent for the outgoing account under the incoming
+    /// account's cookie.
+    ///
+    /// A request the server rejected (4xx) set no cookie, so the outgoing account
+    /// still owns the credentials and is restored, unless the owner changed since.
+    /// Any other failure leaves the owner unknown until `/me` confirms it.
+    private func signIn(_ send: () async throws -> UserResponse) async throws -> UserDTO {
+        let outgoing = CredentialOwner.shared.snapshot
+        let invalidated = CredentialOwner.shared.invalidate()
+        let response: UserResponse
+        do {
+            response = try await send()
+        } catch let error as APIError where (400..<500).contains(error.status) {
+            if let outgoingAccountId = outgoing.accountId {
+                CredentialOwner.shared.confirm(accountId: outgoingAccountId, ifStillCurrent: invalidated)
+            }
+            throw error
+        }
         return try installCredentials(from: response)
     }
 

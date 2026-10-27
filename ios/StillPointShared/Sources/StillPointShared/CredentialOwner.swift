@@ -30,6 +30,7 @@ public final class CredentialOwner: @unchecked Sendable {
     private let lock = NSLock()
     private var accountId: String?
     private var generation = 0
+    private var confirmationObserver: (@Sendable () -> Void)?
 
     public init() {}
 
@@ -49,11 +50,16 @@ public final class CredentialOwner: @unchecked Sendable {
 
     /// Marks the owner unknown. Call before the credentials are replaced or cleared,
     /// so a reader never pairs the outgoing account with the incoming token.
-    public func invalidate() {
+    ///
+    /// - Returns: the snapshot the invalidation produced, read under the same lock,
+    ///   so a caller can later restore the owner only if nothing changed since.
+    @discardableResult
+    public func invalidate() -> Snapshot {
         lock.lock()
         defer { lock.unlock() }
         accountId = nil
         generation += 1
+        return Snapshot(accountId: nil, generation: generation)
     }
 
     /// Records `accountId` as the owner of credentials just installed.
@@ -72,14 +78,32 @@ public final class CredentialOwner: @unchecked Sendable {
     @discardableResult
     public func confirm(accountId newAccountId: String, ifStillCurrent snapshot: Snapshot) -> Bool {
         lock.lock()
-        defer { lock.unlock() }
-        guard snapshot.generation == generation else { return false }
+        guard snapshot.generation == generation else {
+            lock.unlock()
+            return false
+        }
         // Re-confirming the same account changes nothing, so it keeps the
         // generation: a routine `/me` must not look like an account change.
         if accountId != newAccountId {
             accountId = newAccountId
             generation += 1
         }
+        let observer = confirmationObserver
+        lock.unlock()
+        // Called outside the lock, so the observer may read `snapshot`.
+        observer?()
         return true
+    }
+
+    /// Sets the callback run after every successful ``confirm(accountId:ifStillCurrent:)``.
+    ///
+    /// A sit that started while the owner was unknown (a cold start before `/me`
+    /// answered) was skipped, and nothing else re-evaluates it once the owner
+    /// becomes known, so the suppression controller re-syncs its holds from here
+    /// rather than relying on some later state change to do it.
+    public func setConfirmationObserver(_ observer: (@Sendable () -> Void)?) {
+        lock.lock()
+        defer { lock.unlock() }
+        confirmationObserver = observer
     }
 }
