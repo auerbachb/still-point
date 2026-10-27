@@ -89,7 +89,7 @@ final class AppViewModel {
     /// The "done today" flags, the day they describe, and what is known about
     /// whether yesterday is finished (the 6:00 grace window). The rules are
     /// `PracticeDayState`'s, in StillPointShared so its tests can drive them (#894);
-    /// `AppViewModel+PracticeDay.swift` runs the server reads around it.
+    /// `AppViewModel+TracksDoneRefresh.swift` runs the server reads around it.
     var practiceDay = PracticeDayState()
 
     // The flags, read and written by name across these files and by `HomeView`.
