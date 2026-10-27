@@ -21,11 +21,11 @@ private final class InviteScreen {
     private(set) var signedIn: String?
     /// `AppViewModel.currentView`.
     private(set) var screen = Screen.home
-    /// `AppViewModel.pendingBuddyInviteToken`.
+    /// `DeepLinkCoordinator.pendingLinks.buddyInviteToken`.
     private(set) var pendingInvite: String?
     /// Every invite a consume sent to the server, in order.
     private(set) var joinsSent: [String] = []
-    /// `AppViewModel.buddyInviteConsumeGate`.
+    /// `DeepLinkCoordinator.buddyInviteConsumeGate`.
     private var gate = BuddyInviteConsumeGate()
     /// `AppViewModel.activeAuthCheckID`.
     private var newestCheckID = 0

@@ -1,6 +1,6 @@
 /// #989: the single-flight rule for buddy-invite consumes, with an owner per attempt.
 ///
-/// `AppViewModel.consumePendingBuddyInviteIfNeeded` holds the invite token pending for
+/// `DeepLinkCoordinator.consumePendingBuddyInviteIfNeeded` holds the invite token pending for
 /// the whole join request, so a second consume must not start while one is in flight or
 /// it would POST the same token twice (#756). That used to be one `Bool`, raised by the
 /// consume and lowered in its `defer`. Nothing else lowered it, so a join the previous
