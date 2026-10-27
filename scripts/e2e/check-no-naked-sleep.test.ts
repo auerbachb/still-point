@@ -103,6 +103,26 @@ describe("check-no-naked-sleep.mjs (#920)", { timeout: 30_000 }, () => {
   });
 
   test.each([
+    "e2e/retry.spec.ts",
+    "scripts/ci/retry.mjs",
+    // Mentions the workflows directory but is not under it.
+    "e2e/.github/workflows/retry.yml",
+  ])("flags the workflow shell back-off text in %s (#935)", (relativePath) => {
+    const root = fixtureRoot({ [relativePath]: [`  const cmd = "${SLEEP} $((attempt * 5))";`] });
+    const result = runChecker(root);
+    expect(result.status).toBe(1);
+    expect(result.violations).toEqual([`${relativePath}:1`]);
+  });
+
+  test("flags a second sleep on a workflow back-off line (#935)", () => {
+    const relativePath = ".github/workflows/retry.yml";
+    const root = fixtureRoot({ [relativePath]: [`              ${SLEEP} $((attempt * 10)); ${SLEEP} 5`] });
+    const result = runChecker(root);
+    expect(result.status).toBe(1);
+    expect(result.violations).toEqual([`${relativePath}:1`]);
+  });
+
+  test.each([
     ["a fixed delay", `    await ${SLEEP}(1000);`],
     ["a different delay", `    await ${SLEEP}(30000 * attempt);`],
     ["a second call after a back-off call", `    await ${SLEEP}(retryDelayMs * attempt); await ${SLEEP}(5000);`],

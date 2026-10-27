@@ -3,8 +3,14 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 const TARGET_DIRS = ["e2e", "scripts", ".github/workflows"];
-const ALLOWED_SLEEP_PATTERNS = [
-  /sleep\s+\$\(\(attempt \* \d+\)\)/, // bounded infra retry backoff in workflows
+
+// Bounded infra retry back-off in workflow shell steps
+// (docs/testing/e2e-policy.md §3), scoped to files under this directory only so
+// the same text in an e2e spec or any other script still fails (#935). The
+// pattern matches a whole trimmed line, so a second sleep on it still fails.
+const WORKFLOWS_DIR_PREFIX = ".github/workflows/";
+const ALLOWED_WORKFLOW_SLEEP_LINES = [
+  /^sleep \$\(\(attempt \* \d+\)\)$/, // a bounded retry loop's back-off step
 ];
 
 // Bounded infra retry back-off in non-test provisioning scripts
@@ -27,7 +33,10 @@ function shouldInspect(filePath) {
 }
 
 function isAllowed(line, relativePath) {
-  if (ALLOWED_SLEEP_PATTERNS.some((pattern) => pattern.test(line))) {
+  if (
+    relativePath.startsWith(WORKFLOWS_DIR_PREFIX) &&
+    ALLOWED_WORKFLOW_SLEEP_LINES.some((pattern) => pattern.test(line.trim()))
+  ) {
     return true;
   }
   const allowedLines = ALLOWED_SLEEP_LINES_BY_PATH.get(relativePath) ?? [];
