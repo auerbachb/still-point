@@ -88,6 +88,44 @@ describe("normalizeThoughtInputs", () => {
   });
 });
 
+describe("normalizeThoughtInputs clientThoughtId (#948)", () => {
+  const id = "9480a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b";
+
+  it("keeps a thought's id, lowercased", () => {
+    const result = normalizeThoughtInputs([
+      { timeInSession: 12, text: "one", clientThoughtId: id },
+      { timeInSession: 58, text: "two", clientThoughtId: id.toUpperCase() },
+    ]);
+
+    assert.deepEqual(result.thoughts, [
+      { timeInSession: 12, text: "one", clientThoughtId: id },
+      { timeInSession: 58, text: "two", clientThoughtId: id },
+    ]);
+    assert.equal(hasRejectedSubmittedThoughts(result), false);
+  });
+
+  it("reads an absent or null id as none, leaving the thought as it was before ids", () => {
+    const result = normalizeThoughtInputs([
+      { timeInSession: 12, text: "absent" },
+      { timeInSession: 58, text: "null", clientThoughtId: null },
+    ]);
+
+    assert.deepEqual(result.thoughts, [
+      { timeInSession: 12, text: "absent" },
+      { timeInSession: 58, text: "null" },
+    ]);
+    assert.equal(hasRejectedSubmittedThoughts(result), false);
+  });
+
+  it("flags an id that is not a UUID string instead of storing the thought without one", () => {
+    for (const raw of ["", "not-a-uuid", `${id}0`, id.replace(/-/g, ""), 948, {}, true]) {
+      const result = normalizeThoughtInputs([{ timeInSession: 12, text: "kept", clientThoughtId: raw }]);
+      assert.equal(result.invalidCount, 1, `id ${JSON.stringify(raw)}`);
+      assert.equal(hasRejectedSubmittedThoughts(result), true, `id ${JSON.stringify(raw)}`);
+    }
+  });
+});
+
 describe("parseClearCompletionNote (#792)", () => {
   it("reads an absent flag as false", () => {
     assert.deepEqual(parseClearCompletionNote(undefined), { ok: true, value: false });

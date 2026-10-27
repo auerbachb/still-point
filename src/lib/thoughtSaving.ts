@@ -1,6 +1,14 @@
+import { isUuid } from "@/lib/friends";
+
 type ThoughtInput = {
   timeInSession: number;
   text: string;
+  /** #948: the client's replay key for this thought, lowercased. Absent when
+   *  the client sent none. POST /api/thoughts/batch stores a thought with one
+   *  at most once. The buddy personal-session route ignores it: its thoughts
+   *  are written by the statement that creates the session row, which
+   *  `sessions_user_buddy_session_unique` already makes safe to replay. */
+  clientThoughtId?: string;
 };
 
 export type ThoughtNormalizationResult = {
@@ -25,11 +33,15 @@ export function normalizeThoughtInputs(raw: unknown): ThoughtNormalizationResult
 
     const timeInSession = (item as { timeInSession?: unknown }).timeInSession;
     const text = (item as { text?: unknown }).text;
+    const clientThoughtId = parseClientThoughtId(
+      (item as { clientThoughtId?: unknown }).clientThoughtId,
+    );
 
     if (
       typeof timeInSession !== "number" ||
       !Number.isFinite(timeInSession) ||
-      typeof text !== "string"
+      typeof text !== "string" ||
+      !clientThoughtId.ok
     ) {
       invalidCount += 1;
       continue;
@@ -41,10 +53,24 @@ export function normalizeThoughtInputs(raw: unknown): ThoughtNormalizationResult
       continue;
     }
 
-    thoughts.push({ timeInSession, text: trimmed });
+    thoughts.push({
+      timeInSession,
+      text: trimmed,
+      ...(clientThoughtId.value ? { clientThoughtId: clientThoughtId.value } : {}),
+    });
   }
 
   return { submittedCount: raw.length, invalidCount, thoughts };
+}
+
+/** #948: a thought's optional `clientThoughtId`. Absent or null reads as none,
+ *  which is every thought sent before #948; anything else must be a UUID. */
+function parseClientThoughtId(raw: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (raw === undefined || raw === null) return { ok: true, value: null };
+  if (typeof raw !== "string" || !isUuid(raw)) return { ok: false };
+  // Postgres compares uuids without regard to case, so the route's own
+  // duplicate check has to as well.
+  return { ok: true, value: raw.toLowerCase() };
 }
 
 export function hasRejectedSubmittedThoughts(result: ThoughtNormalizationResult): boolean {

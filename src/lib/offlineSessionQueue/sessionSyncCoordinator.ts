@@ -59,6 +59,29 @@ function awaitsSync(entry: PendingSessionEntry): boolean {
   return !entry.sessionSynced || entry.thoughts.length > 0 || entry.clearCompletionNote === true;
 }
 
+/** #948: an id for each in-session thought, given before the entry is first
+ *  saved, so every upload of it sends the same one. A batch the server stored
+ *  but whose response was lost (`UPLOAD_TIMEOUT_MS`, a dropped connection) is
+ *  then not stored twice when it is sent again. The end note gets none: the
+ *  server replaces it instead. */
+function withClientThoughtIds(thoughts: PendingSessionThought[]): PendingSessionThought[] {
+  return thoughts.map((thought) =>
+    thought.timeInSession === -1 || thought.clientThoughtId
+      ? thought
+      : { ...thought, clientThoughtId: crypto.randomUUID() },
+  );
+}
+
+/** #948: whether a thought the batch sent is this queued one. A thought with an
+ *  id is matched by it. One queued before ids existed, and the end note, are
+ *  matched by time and text, as before. */
+function isSameThought(sent: PendingSessionThought, queued: PendingSessionThought): boolean {
+  if (sent.clientThoughtId || queued.clientThoughtId) {
+    return sent.clientThoughtId === queued.clientThoughtId;
+  }
+  return sent.timeInSession === queued.timeInSession && sent.text === queued.text;
+}
+
 export class WebSessionSyncCoordinator {
   private readonly queueStore: OfflineSessionQueueStore;
   private readonly transport: SessionSyncTransport;
@@ -119,7 +142,7 @@ export class WebSessionSyncCoordinator {
           clientSessionId,
           ownerUserId,
           request: requestWithClientId(request, clientSessionId),
-          thoughts,
+          thoughts: withClientThoughtIds(thoughts),
           serverSessionId: null,
           sessionSynced: false,
           enqueuedAt: new Date().toISOString(),
@@ -306,10 +329,7 @@ export class WebSessionSyncCoordinator {
         // in flight (#753 autosave) stays queued for the next flush, and a clear
         // asked for after a request that carried none stays set (#792).
         const remaining = current.thoughts.filter(
-          (thought) =>
-            !sent.some(
-              (item) => item.timeInSession === thought.timeInSession && item.text === thought.text,
-            ),
+          (thought) => !sent.some((item) => isSameThought(item, thought)),
         );
         const clearDelivered = sentClear && current.clearCompletionNote === true;
         if (remaining.length === current.thoughts.length && !clearDelivered) return current;

@@ -207,6 +207,9 @@ async function flushOfflineQueueFromSw() {
             {
               sessionId: entry.serverSessionId,
               dayNumber: entry.request.dayNumber,
+              // #948: sent as queued. Each in-session thought keeps the
+              // `clientThoughtId` the page gave it, so a batch the server stored
+              // before its upload timed out is stored once when sent again.
               thoughts: entry.thoughts,
             },
             { readBody: false },

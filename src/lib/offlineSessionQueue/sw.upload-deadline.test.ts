@@ -222,3 +222,57 @@ describe("public/sw.js upload deadline (#907)", () => {
     expect(sw.matchAll).toHaveBeenCalledTimes(1);
   });
 });
+
+type SentThought = { timeInSession: number; text: string; clientThoughtId?: string };
+
+describe("public/sw.js thought ids (#948)", () => {
+  test("a batch the server stored before its upload timed out is sent again with the same ids, and each thought is stored once", async () => {
+    const thoughts = [
+      { timeInSession: 12, text: "rain", clientThoughtId: "94800000-0000-4000-8000-000000000051" },
+      { timeInSession: 30, text: "car door", clientThoughtId: "94800000-0000-4000-8000-000000000052" },
+    ];
+    const sit = { ...queuedSit("replayed", true), thoughts };
+    // Stores each thought once per id, as the route does, before it answers.
+    // The first answer never comes.
+    const stored: SentThought[] = [];
+    const sent: SentThought[][] = [];
+    const sw = loadServiceWorker(async (_url, init) => {
+      const batch = (JSON.parse(String(init.body)) as { thoughts: SentThought[] }).thoughts;
+      sent.push(batch);
+      for (const thought of batch) {
+        if (!stored.some((t) => t.clientThoughtId === thought.clientThoughtId)) stored.push(thought);
+      }
+      return sent.length === 1 ? rejectOnAbort(init.signal) : { ok: true, status: 200, json: async () => ({}) };
+    });
+    const saves = sw.useQueue([sit]);
+    const timedOut = sw.sync().then(() => "resolved", (error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
+
+    // Nothing changed, so nothing was saved: the thoughts are still queued.
+    expect(((await timedOut) as DOMException).name).toBe("AbortError");
+    expect(saves).toEqual([]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(sent).toEqual([thoughts, thoughts]);
+    expect(stored).toEqual(thoughts);
+    expect(saves).toEqual([[{ ...sit, thoughts: [] }]]);
+  });
+
+  test("an entry queued before ids existed still uploads its thoughts as queued, and clears them", async () => {
+    const bodies: unknown[] = [];
+    const sw = loadServiceWorker(async (_url, init) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    const saves = sw.useQueue([queuedSit("legacy", true)]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(bodies).toEqual([
+      { sessionId: "server-legacy", dayNumber: 3, thoughts: [{ timeInSession: 42, text: "a thought in legacy" }] },
+    ]);
+    expect(saves).toEqual([[{ ...queuedSit("legacy", true), thoughts: [] }]]);
+  });
+});

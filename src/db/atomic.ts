@@ -21,6 +21,8 @@ type ThoughtInsertRow = Pick<
   typeof thoughts.$inferInsert,
   "timeInSession" | "text"
 >;
+/** #948: a batch thought, with the client's replay key when it sent one. */
+type BatchThoughtInsertRow = ThoughtInsertRow & Pick<typeof thoughts.$inferInsert, "clientThoughtId">;
 
 type UsernameUpdateResult =
   | {
@@ -129,6 +131,24 @@ function mapThoughtRows(
   }));
 }
 
+/** #948: the replay key a batch row is stored under. The completion note never
+ *  gets one. It is replaced, not inserted twice, so it needs none, and an id
+ *  could skip its own replacement: the statement that inserts the new note also
+ *  deletes the stored one, and an id conflict with that row would drop the
+ *  insert while the delete still ran. */
+function storedClientThoughtId(row: BatchThoughtInsertRow): string | null {
+  return row.timeInSession === -1 ? null : row.clientThoughtId ?? null;
+}
+
+/** #948: a thought whose id is already stored is skipped rather than inserted
+ *  again, so only the rows stored without one are sure to come back. */
+function insertedThoughtCountFits(insertedCount: number, rows: BatchThoughtInsertRow[]): boolean {
+  const unidentified = rows.filter((row) => storedClientThoughtId(row) === null).length;
+  return insertedCount >= unidentified && insertedCount <= rows.length;
+}
+
+/** #948: a thought with a client thought id is inserted at most once. A replayed
+ *  one is skipped, and only the rows this call inserted come back. */
 export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
   userId: string;
   sessionId: string;
@@ -136,7 +156,7 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
   /** #792: delete the stored completion note even when no replacement is sent. */
   clearCompletionNote: boolean;
   completionNote: ThoughtInsertRow | null;
-  rowsToInsert: ThoughtInsertRow[];
+  rowsToInsert: BatchThoughtInsertRow[];
 }): Promise<Array<{
   id: string;
   sessionId: string;
@@ -171,11 +191,15 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
     dayNumber,
     timeInSession: row.timeInSession,
     text: row.text,
+    clientThoughtId: storedClientThoughtId(row),
   }));
 
+  // #948: the arbiter is the partial index `thoughts_user_client_thought_unique`,
+  // so a row without an id never conflicts. A concurrent request with the same
+  // id waits for this one to commit, then skips the row rather than failing.
   if (deleteStoredNote) {
     const valueRows = values.map(
-      (row) => sql`(${row.userId}::uuid, ${row.sessionId}::uuid, ${row.dayNumber}, ${row.timeInSession}, ${row.text})`,
+      (row) => sql`(${row.userId}::uuid, ${row.sessionId}::uuid, ${row.dayNumber}, ${row.timeInSession}, ${row.text}, ${row.clientThoughtId}::uuid)`,
     );
     const result = await db.execute(sql`
       with deleted as (
@@ -185,14 +209,15 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
           and time_in_session = -1
       ),
       inserted as (
-        insert into thoughts (user_id, session_id, day_number, time_in_session, text)
+        insert into thoughts (user_id, session_id, day_number, time_in_session, text, client_thought_id)
         values ${sql.join(valueRows, sql`, `)}
+        on conflict (user_id, client_thought_id) where client_thought_id is not null do nothing
         returning id, session_id, day_number, time_in_session, text
       )
       select id, session_id, day_number, time_in_session, text from inserted
     `);
     const mapped = mapThoughtRows(result.rows);
-    if (mapped.length !== rowsToInsert.length) {
+    if (!insertedThoughtCountFits(mapped.length, rowsToInsert)) {
       throw new Error("THOUGHT_INSERT_MISMATCH");
     }
     return mapped;
@@ -200,15 +225,11 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
 
   const inserted = await db
     .insert(thoughts)
-    .values(
-      rowsToInsert.map((row) => ({
-        userId,
-        sessionId,
-        dayNumber,
-        timeInSession: row.timeInSession,
-        text: row.text,
-      })),
-    )
+    .values(values)
+    .onConflictDoNothing({
+      target: [thoughts.userId, thoughts.clientThoughtId],
+      where: sql`${thoughts.clientThoughtId} is not null`,
+    })
     .returning({
       id: thoughts.id,
       sessionId: thoughts.sessionId,
@@ -217,7 +238,7 @@ export async function atomicReplaceCompletionNoteAndInsertThoughts(params: {
       text: thoughts.text,
     });
 
-  if (inserted.length !== rowsToInsert.length) {
+  if (!insertedThoughtCountFits(inserted.length, rowsToInsert)) {
     throw new Error("THOUGHT_INSERT_MISMATCH");
   }
   return inserted;

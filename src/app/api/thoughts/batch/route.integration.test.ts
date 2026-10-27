@@ -357,3 +357,203 @@ describe("POST /api/thoughts/batch — clearCompletionNote (#792)", () => {
     expect(await storedRows()).toHaveLength(2);
   });
 });
+
+/**
+ * Issue #948 — a batch the server stored, but whose response the client never
+ * got (the #907 upload deadline, a dropped connection), is sent again. Bodies
+ * match what the web offline queue sends from the page (`batchThoughts`) and the
+ * service worker: each in-session thought carries the `clientThoughtId` minted
+ * when the sit was queued, and the end note carries none.
+ */
+describe("POST /api/thoughts/batch — client thought ids (#948)", () => {
+  const firstId = "94800000-0000-4000-8000-000000000001";
+  const secondId = "94800000-0000-4000-8000-000000000002";
+  const thirdId = "94800000-0000-4000-8000-000000000003";
+  let otherSessionId: string;
+
+  beforeAll(async () => {
+    const [other] = await db
+      .insert(sessions)
+      .values({
+        userId: otherUserId,
+        dayNumber: 1,
+        sessionType: "standard",
+        duration: 60,
+        completed: true,
+        actualTime: 60,
+        clearPercent: 50,
+        mindStateLog: [],
+        sessionDate: "2026-10-27",
+      })
+      .returning({ id: sessions.id });
+    otherSessionId = other!.id;
+  });
+
+  beforeEach(async () => {
+    await db.delete(thoughts).where(eq(thoughts.sessionId, otherSessionId));
+  });
+
+  function post(thoughtItems: unknown[], extra: Record<string, unknown> = {}) {
+    return POST(
+      batchRequest(JSON.stringify({ sessionId, dayNumber: 3, thoughts: thoughtItems, ...extra })),
+    );
+  }
+
+  /** Every stored row of the session as [timeInSession, text, clientThoughtId]. */
+  async function storedRows(forSessionId = sessionId) {
+    const rows = await db.select().from(thoughts).where(eq(thoughts.sessionId, forSessionId));
+    return rows.map((r) => [r.timeInSession, r.text, r.clientThoughtId]).sort();
+  }
+
+  const batch = [
+    { timeInSession: 12, text: "phone buzzed", clientThoughtId: firstId },
+    { timeInSession: 47, text: "breathing settled", clientThoughtId: secondId },
+  ];
+
+  test("a batch sent twice with the same ids stores its thoughts once, and the second request still succeeds", async () => {
+    const first = await post(batch);
+    expect(first.status).toBe(200);
+    expect((await first.json()).thoughts).toHaveLength(2);
+
+    const replay = await post(batch);
+
+    expect(replay.status).toBe(200);
+    // Only what this request inserted, which is nothing.
+    expect((await replay.json()).thoughts).toEqual([]);
+    expect(await storedRows()).toEqual([
+      [12, "phone buzzed", firstId],
+      [47, "breathing settled", secondId],
+    ]);
+  });
+
+  test("an id sent again in other letter case is the same thought", async () => {
+    await post(batch);
+
+    const replay = await post(batch.map((t) => ({ ...t, clientThoughtId: t.clientThoughtId.toUpperCase() })));
+
+    expect(replay.status).toBe(200);
+    expect(await storedRows()).toHaveLength(2);
+  });
+
+  test("a partial replay stores only the thoughts the server does not have yet", async () => {
+    await post(batch.slice(0, 1));
+
+    const res = await post([...batch, { timeInSession: 90, text: "settled again", clientThoughtId: thirdId }]);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).thoughts.map((t: { text: string }) => t.text).sort()).toEqual([
+      "breathing settled",
+      "settled again",
+    ]);
+    expect(await storedRows()).toEqual([
+      [12, "phone buzzed", firstId],
+      [47, "breathing settled", secondId],
+      [90, "settled again", thirdId],
+    ]);
+  });
+
+  test("a replay that carries the end note replaces the note once and stores each thought once", async () => {
+    await post([...batch, { timeInSession: -1, text: "first draft" }]);
+
+    // The note was edited between the two attempts, as the queue allows.
+    const replay = await post([...batch, { timeInSession: -1, text: "edited note" }]);
+
+    expect(replay.status).toBe(200);
+    expect((await replay.json()).thoughts).toEqual([
+      expect.objectContaining({ timeInSession: -1, text: "edited note" }),
+    ]);
+    expect(await storedRows()).toEqual([
+      [-1, "edited note", null],
+      [12, "phone buzzed", firstId],
+      [47, "breathing settled", secondId],
+    ]);
+  });
+
+  test("a replay with clearCompletionNote still deletes the note and stores no thought twice", async () => {
+    await post([...batch, { timeInSession: -1, text: "saved note" }]);
+
+    const replay = await post(batch, { clearCompletionNote: true });
+
+    expect(replay.status).toBe(200);
+    expect(await storedRows()).toEqual([
+      [12, "phone buzzed", firstId],
+      [47, "breathing settled", secondId],
+    ]);
+  });
+
+  test("an end note's id is never stored, so the note is still replaced", async () => {
+    await post([{ timeInSession: -1, text: "first draft", clientThoughtId: thirdId }]);
+
+    const res = await post([{ timeInSession: -1, text: "edited note", clientThoughtId: thirdId }]);
+
+    expect(res.status).toBe(200);
+    expect(await storedRows()).toEqual([[-1, "edited note", null]]);
+  });
+
+  test("a batch without ids, as iOS and entries queued before #948 send, is stored as before — twice if sent twice", async () => {
+    const legacy = batch.map(({ timeInSession, text }) => ({ timeInSession, text }));
+
+    await post(legacy);
+    const again = await post(legacy);
+
+    expect(again.status).toBe(200);
+    expect((await again.json()).thoughts).toHaveLength(2);
+    expect(await storedRows()).toEqual([
+      [12, "phone buzzed", null],
+      [12, "phone buzzed", null],
+      [47, "breathing settled", null],
+      [47, "breathing settled", null],
+    ]);
+  });
+
+  test("a replayed batch that mixes both stores only its thoughts without an id again", async () => {
+    const mixed = [batch[0]!, { timeInSession: 47, text: "breathing settled" }];
+
+    await post(mixed);
+    const replay = await post(mixed);
+
+    expect((await replay.json()).thoughts).toEqual([
+      expect.objectContaining({ timeInSession: 47, text: "breathing settled" }),
+    ]);
+    expect(await storedRows()).toEqual([
+      [12, "phone buzzed", firstId],
+      [47, "breathing settled", null],
+      [47, "breathing settled", null],
+    ]);
+  });
+
+  test("another user's thought with the same id is stored too", async () => {
+    await post(batch);
+    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other227@test.local" });
+
+    const res = await POST(
+      batchRequest(JSON.stringify({ sessionId: otherSessionId, dayNumber: 1, thoughts: batch })),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).thoughts).toHaveLength(2);
+    expect(await storedRows(otherSessionId)).toEqual(await storedRows());
+  });
+
+  test.each([
+    ["not a UUID", "thought-1"],
+    ["a number", 948],
+  ])("an id that is %s fails with 400 and stores nothing", async (_label, clientThoughtId) => {
+    const res = await post([batch[0]!, { timeInSession: 47, text: "breathing settled", clientThoughtId }]);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid thoughts payload");
+    expect(await storedRows()).toEqual([]);
+  });
+
+  test("a batch that repeats an id fails with 400 and stores nothing", async () => {
+    const res = await post([
+      batch[0]!,
+      { timeInSession: 47, text: "breathing settled", clientThoughtId: firstId.toUpperCase() },
+    ]);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Invalid thoughts payload");
+    expect(await storedRows()).toEqual([]);
+  });
+});
