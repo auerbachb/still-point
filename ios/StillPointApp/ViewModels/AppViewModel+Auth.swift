@@ -86,9 +86,22 @@ extension AppViewModel {
         // — the reason the operation guards them on the check ID before adopting — and
         // that guard cannot cover a change that lands after the operation returns.
         guard isCurrentAuthCheck(checkID, adoptedAt: adopted) else { return }
-        resetTrackCompletionBadges()
-        currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
-        // #856: the reset has landed, and nothing later in this check replaces a buddy
+        // #852: this runs on every scene activation, so it is reached mid-sit whenever
+        // the app comes back to the foreground. Same rule as `enterOfflineMode`: while a
+        // session is running, the route and the badge reset that goes with it are left
+        // alone, unless the adoption switched accounts, since the sit on screen belongs
+        // to the previous one. See `ForegroundAuthRoutePolicy`. The badge refresh below
+        // still runs either way, so #699's reset-before-refresh order holds whenever the
+        // reset does.
+        if ForegroundAuthRoutePolicy.shouldResetRoute(
+            isInSession: isInSession,
+            identityChanged: adopted != generation
+        ) {
+            resetTrackCompletionBadges()
+            currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
+        }
+        // #856: the reset has landed (or was skipped for a running session, whose
+        // screen nothing here replaces), and nothing later in this check replaces a buddy
         // session, so a join that returns from here on may route. One still in flight
         // makes this check's own consume below return early, and routes when it lands.
         isAuthCheckRouteResetPending = false
@@ -151,7 +164,12 @@ extension AppViewModel {
         // Raised here rather than at the caller's entry, so the overlay means "this
         // check's `me()` is in flight" again and not "somebody's settings save is".
         // Cleared by the caller's `defer`, which is reached whichever way this returns.
-        isLoading = true
+        // #852: not raised mid-sit. The overlay is opaque and full-screen, and the sit
+        // on screen is already valid content, so it would only hide the timer for the
+        // length of `me()`. See `ForegroundAuthRoutePolicy`.
+        if ForegroundAuthRoutePolicy.shouldRaiseLoadingOverlay(isInSession: isInSession) {
+            isLoading = true
+        }
         // Taken here, immediately before the request, so it records when this read
         // left rather than when it was asked for (#697). Taken unconditionally even
         // though only the re-confirmation branch below spends it — a ticket that goes
