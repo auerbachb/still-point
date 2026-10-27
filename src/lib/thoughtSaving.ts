@@ -50,3 +50,12 @@ export function normalizeThoughtInputs(raw: unknown): ThoughtNormalizationResult
 export function hasRejectedSubmittedThoughts(result: ThoughtNormalizationResult): boolean {
   return result.submittedCount > 0 && result.invalidCount > 0;
 }
+
+/** #792: the optional `clearCompletionNote` flag on POST /api/thoughts/batch.
+ *  Absent reads as false. Anything else that is not a boolean is malformed —
+ *  a flag that deletes data must never be inferred from a loose value. */
+export function parseClearCompletionNote(raw: unknown): { ok: true; value: boolean } | { ok: false } {
+  if (raw === undefined) return { ok: true, value: false };
+  if (typeof raw !== "boolean") return { ok: false };
+  return { ok: true, value: raw };
+}

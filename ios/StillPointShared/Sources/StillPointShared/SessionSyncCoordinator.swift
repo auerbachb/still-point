@@ -42,8 +42,41 @@ public actor SessionSyncCoordinator {
         }
     }
 
+    /// #792: where a sit stands in the queue. The completion screen reads this
+    /// instead of guessing from the id it was handed: a pending sit's id is
+    /// provisional, and the UI-test backend reuses the client id as the server id.
+    public enum QueuedSessionState: Sendable, Equatable {
+        /// No entry — the sit never went through the queue (a buddy sit records
+        /// itself on the server) or its entry has since been removed.
+        case notQueued
+        /// Queued, with no server row yet.
+        case pending
+        /// Created on the server under this id.
+        case synced(serverSessionId: String)
+
+        /// The id that session-detail requests (ratings, mood) may use for a sit
+        /// whose completion screen was handed `sessionId`. Never the provisional
+        /// id of a pending sit, which the server has no row for.
+        public func detailSessionId(handedSessionId sessionId: String) -> String? {
+            switch self {
+            case .synced(let serverSessionId):
+                return serverSessionId
+            case .notQueued:
+                return sessionId.isEmpty ? nil : sessionId
+            case .pending:
+                return nil
+            }
+        }
+    }
+
     private let queueStore: OfflineSessionQueueStore
     private let transport: SessionSyncTransport
+    // #792: one queue mutation or flush at a time — the actor counterpart of web
+    // `withQueueMutation`. An actor re-enters at every `await`, so without this
+    // a note edit could land between a flush's upload and the queue update after
+    // it, and a clear could reach the server ahead of the note it deletes.
+    private var mutationInFlight = false
+    private var mutationWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(
         queueStore: OfflineSessionQueueStore? = nil,
@@ -62,7 +95,7 @@ public actor SessionSyncCoordinator {
     /// Number of sits still waiting for server sync for the signed-in user.
     public func pendingCount(ownerUserId: String) async throws -> Int {
         try queueStore.loadEntries()
-            .filter { $0.ownerUserId == ownerUserId && (!$0.sessionSynced || !$0.thoughts.isEmpty) }
+            .filter { $0.ownerUserId == ownerUserId && $0.awaitsSync }
             .count
     }
 
@@ -77,64 +110,53 @@ public actor SessionSyncCoordinator {
             throw SessionSyncError.missingOwnerUserId
         }
 
-        var entries = try queueStore.loadEntries()
-        if let existingIndex = entries.firstIndex(where: { $0.clientSessionId == clientSessionId }) {
-            let existing = entries[existingIndex]
-            guard existing.ownerUserId == ownerUserId else {
-                throw SessionSyncError.ownerMismatch
+        return try await serialized {
+            var entries = try queueStore.loadEntries()
+            if let existingIndex = entries.firstIndex(where: { $0.clientSessionId == clientSessionId }) {
+                let existing = entries[existingIndex]
+                guard existing.ownerUserId == ownerUserId else {
+                    throw SessionSyncError.ownerMismatch
+                }
+                if !existing.awaitsSync, let serverId = existing.serverSessionId {
+                    return SaveResult(
+                        session: Self.sessionDTO(from: existing.request, id: serverId),
+                        isPendingSync: false
+                    )
+                }
+            } else {
+                let requestWithId = Self.requestWithClientId(request, clientSessionId: clientSessionId)
+                entries.append(PendingSessionEntry(
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
+                    request: requestWithId,
+                    thoughts: thoughts
+                ))
+                try queueStore.saveEntries(entries)
             }
-            if existing.sessionSynced, existing.thoughts.isEmpty, let serverId = existing.serverSessionId {
-                return SaveResult(
-                    session: Self.sessionDTO(from: existing.request, id: serverId),
-                    isPendingSync: false
-                )
+
+            if let synced = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) {
+                return SaveResult(session: synced, isPendingSync: false)
             }
-        } else {
-            let requestWithId = Self.requestWithClientId(request, clientSessionId: clientSessionId)
-            entries.append(PendingSessionEntry(
-                clientSessionId: clientSessionId,
-                ownerUserId: ownerUserId,
-                request: requestWithId,
-                thoughts: thoughts
-            ))
-            try queueStore.saveEntries(entries)
-        }
 
-        if let synced = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) {
-            return SaveResult(session: synced, isPendingSync: false)
+            let entry = try queueStore.loadEntries().first { $0.clientSessionId == clientSessionId }
+            let provisionalRequest = entry?.request ?? Self.requestWithClientId(request, clientSessionId: clientSessionId)
+            return SaveResult(
+                session: Self.provisionalSessionDTO(from: provisionalRequest, clientSessionId: clientSessionId),
+                isPendingSync: true
+            )
         }
-
-        let entry = try queueStore.loadEntries().first { $0.clientSessionId == clientSessionId }
-        let provisionalRequest = entry?.request ?? Self.requestWithClientId(request, clientSessionId: clientSessionId)
-        return SaveResult(
-            session: Self.provisionalSessionDTO(from: provisionalRequest, clientSessionId: clientSessionId),
-            isPendingSync: true
-        )
     }
 
-    /// Append an end-of-sit note to a queued or already-synced local entry.
-    public func appendEndNote(clientSessionId: UUID, ownerUserId: String, note: String) async throws {
+    /// Set the end-of-sit note of a queued or already-synced local entry.
+    public func replaceEndNote(clientSessionId: UUID, ownerUserId: String, note: String) async throws {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard !ownerUserId.isEmpty else {
-            throw SessionSyncError.missingOwnerUserId
-        }
+        try await writeEndNote(clientSessionId: clientSessionId, ownerUserId: ownerUserId, note: trimmed)
+    }
 
-        var entries = try queueStore.loadEntries()
-        guard let index = entries.firstIndex(where: { $0.clientSessionId == clientSessionId }) else {
-            throw SessionSyncError.entryNotFound
-        }
-        guard entries[index].ownerUserId == ownerUserId else {
-            throw SessionSyncError.ownerMismatch
-        }
-
-        // #753: autosave can run again as the note is edited. Keep one end note
-        // and replace its text. A second -1 in the same batch is rejected.
-        var thoughts = entries[index].thoughts.filter { $0.timeInSession != -1 }
-        thoughts.append(PendingSessionThought(timeInSession: -1, text: trimmed))
-        entries[index].thoughts = thoughts
-        try queueStore.saveEntries(entries)
-        _ = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+    /// #792: remove the end-of-sit note of a queued or already-synced local entry.
+    public func clearEndNote(clientSessionId: UUID, ownerUserId: String) async throws {
+        try await writeEndNote(clientSessionId: clientSessionId, ownerUserId: ownerUserId, note: nil)
     }
 
     /// Flush pending entries for the signed-in user. Returns how many fully synced.
@@ -144,12 +166,29 @@ public actor SessionSyncCoordinator {
 
         let entries = try queueStore.loadEntries()
         var syncedCount = 0
-        for entry in entries where entry.ownerUserId == ownerUserId && (!entry.sessionSynced || !entry.thoughts.isEmpty) {
-            if try await flushEntry(clientSessionId: entry.clientSessionId, ownerUserId: ownerUserId) != nil {
+        for entry in entries where entry.ownerUserId == ownerUserId && entry.awaitsSync {
+            // #792: one entry at a time, taking turns with note edits.
+            let flushed = try await serialized {
+                try await flushEntry(clientSessionId: entry.clientSessionId, ownerUserId: ownerUserId)
+            }
+            if flushed != nil {
                 syncedCount += 1
             }
         }
         return syncedCount
+    }
+
+    /// #792: where this sit stands in the queue — see `QueuedSessionState`.
+    public func queuedSessionState(clientSessionId: UUID, ownerUserId: String) throws -> QueuedSessionState {
+        guard let entry = try queueStore.loadEntries().first(where: {
+            $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
+        }) else {
+            return .notQueued
+        }
+        if entry.sessionSynced, let serverSessionId = entry.serverSessionId {
+            return .synced(serverSessionId: serverSessionId)
+        }
+        return .pending
     }
 
     /// Resolve the best session id for API calls (server id when known).
@@ -166,7 +205,7 @@ public actor SessionSyncCoordinator {
 
         var entries = try queueStore.loadEntries()
         let before = entries.count
-        entries.removeAll { $0.ownerUserId == ownerUserId && $0.sessionSynced && $0.thoughts.isEmpty }
+        entries.removeAll { $0.ownerUserId == ownerUserId && !$0.awaitsSync }
         if entries.count != before {
             try queueStore.saveEntries(entries)
         }
@@ -211,6 +250,56 @@ public actor SessionSyncCoordinator {
 
     // MARK: - Private
 
+    /// Runs `operation` once every earlier serialized operation has finished.
+    private func serialized<T>(_ operation: () async throws -> T) async rethrows -> T {
+        if mutationInFlight {
+            await withCheckedContinuation { mutationWaiters.append($0) }
+        } else {
+            mutationInFlight = true
+        }
+        defer {
+            if mutationWaiters.isEmpty {
+                mutationInFlight = false
+            } else {
+                // The turn passes straight to the next waiter.
+                mutationWaiters.removeFirst().resume()
+            }
+        }
+        return try await operation()
+    }
+
+    /// `note` nil clears it. Either way the entry keeps at most one end note and
+    /// its in-session thoughts are never touched.
+    private func writeEndNote(clientSessionId: UUID, ownerUserId: String, note: String?) async throws {
+        guard !ownerUserId.isEmpty else {
+            throw SessionSyncError.missingOwnerUserId
+        }
+
+        try await serialized {
+            var entries = try queueStore.loadEntries()
+            guard let index = entries.firstIndex(where: { $0.clientSessionId == clientSessionId }) else {
+                throw SessionSyncError.entryNotFound
+            }
+            guard entries[index].ownerUserId == ownerUserId else {
+                throw SessionSyncError.ownerMismatch
+            }
+
+            // #753: autosave can run again as the note is edited. Keep one end note
+            // and replace its text. A second -1 in the same batch is rejected.
+            var thoughts = entries[index].thoughts.filter { $0.timeInSession != -1 }
+            if let note {
+                thoughts.append(PendingSessionThought(timeInSession: -1, text: note))
+            }
+            entries[index].thoughts = thoughts
+            // #792: a new note replaces the stored one server-side, so only a clear
+            // needs the flag — and only once the sit has a server row that could
+            // hold a note. Before that, dropping the queued note is the whole clear.
+            entries[index].clearCompletionNote = note == nil && entries[index].sessionSynced
+            try queueStore.saveEntries(entries)
+            _ = try await flushEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+        }
+    }
+
     @discardableResult
     private func flushEntry(clientSessionId: UUID, ownerUserId: String) async throws -> SessionDTO? {
         guard var entry = try queueStore.loadEntries().first(where: {
@@ -243,7 +332,8 @@ public actor SessionSyncCoordinator {
             $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
         }) ?? entry
 
-        if !entry.thoughts.isEmpty {
+        let sentClear = entry.clearCompletionNote
+        if !entry.thoughts.isEmpty || sentClear {
             let sent = entry.thoughts
             do {
                 let batch = BatchThoughtsRequest(
@@ -251,7 +341,8 @@ public actor SessionSyncCoordinator {
                     dayNumber: entry.request.dayNumber,
                     thoughts: sent.map {
                         BatchThoughtsRequest.ThoughtInput(timeInSession: $0.timeInSession, text: $0.text)
-                    }
+                    },
+                    clearCompletionNote: sentClear
                 )
                 _ = try await transport.batchThoughts(batch)
                 var entries = try queueStore.loadEntries()
@@ -261,8 +352,12 @@ public actor SessionSyncCoordinator {
                     return Self.sessionDTO(from: entry.request, id: serverSessionId)
                 }
                 // Only drop what this batch sent. A note replaced while the
-                // request was in flight (#753 autosave) stays queued.
+                // request was in flight (#753 autosave) stays queued, and a clear
+                // asked for after a request that carried none stays set (#792).
                 entries[index].thoughts.removeAll { sent.contains($0) }
+                if sentClear {
+                    entries[index].clearCompletionNote = false
+                }
                 try queueStore.saveEntries(entries)
                 entry = entries[index]
             } catch {

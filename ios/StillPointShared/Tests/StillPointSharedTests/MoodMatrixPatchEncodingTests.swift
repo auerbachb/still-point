@@ -61,6 +61,57 @@ final class MoodMatrixPatchEncodingTests: XCTestCase {
         XCTAssertEqual(anxiety["after"], 5)
     }
 
+    // MARK: - #792 clearing a saved mood
+
+    func testClearPatchEncodesANullMoodMatrix() throws {
+        let data = try JSONEncoder().encode(MoodMatrixPatch.clear)
+        XCTAssertEqual(String(data: data, encoding: .utf8), #"{"moodMatrix":null}"#)
+    }
+
+    func testPersistedAwarePatchClearsOnceNothingIsSelected() {
+        let patch = MoodMatrixPatch(
+            from: [.calm: MoodMatrixEntry(before: nil, after: nil)],
+            persisted: ["calm": MoodMatrixEntry(before: 2, after: 4)]
+        )
+        XCTAssertTrue(patch.clearsMatrix)
+        XCTAssertTrue(patch.entries.isEmpty)
+    }
+
+    func testPersistedAwarePatchSendsAnAllNilRowForEachEmptiedStoredRow() throws {
+        let patch = MoodMatrixPatch(
+            from: [
+                .calm: MoodMatrixEntry(before: nil, after: nil),
+                .focus: MoodMatrixEntry(before: 3, after: 5),
+            ],
+            persisted: [
+                "calm": MoodMatrixEntry(before: 2, after: 4),
+                "focus": MoodMatrixEntry(before: 3, after: 4),
+            ]
+        )
+        XCTAssertFalse(patch.clearsMatrix)
+        let data = try JSONEncoder().encode(patch)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let matrix = try XCTUnwrap(json["moodMatrix"] as? [String: Any])
+
+        let calm = try XCTUnwrap(matrix["calm"] as? [String: Any])
+        XCTAssertTrue(calm["before"] is NSNull)
+        XCTAssertTrue(calm["after"] is NSNull)
+        XCTAssertEqual((matrix["focus"] as? [String: Int])?["before"], 3)
+        XCTAssertEqual((matrix["focus"] as? [String: Int])?["after"], 5)
+    }
+
+    func testPersistedAwarePatchLeavesOutRowsThatWereNeverStored() {
+        let patch = MoodMatrixPatch(
+            from: [
+                .energy: MoodMatrixEntry(before: 1, after: nil),
+                .overall: MoodMatrixEntry(before: nil, after: nil),
+            ],
+            persisted: [:]
+        )
+        XCTAssertFalse(patch.clearsMatrix)
+        XCTAssertEqual(Array(patch.entries.keys), ["energy"])
+    }
+
     // MARK: - MoodMatrixLogic validation
 
     func testClampMoodValueAcceptsOneThroughFive() {

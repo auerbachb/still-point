@@ -398,6 +398,7 @@ actor UITestAPIStore {
     }
 
     /// #635: merge mood matrix rows (mirrors PATCH /api/sessions/by-session/{id} merge semantics).
+    /// #792: a clear patch empties the matrix, and an all-nil row deletes that row.
     func updateSessionMoodMatrix(sessionId: String, patch: MoodMatrixPatch) throws -> SessionDTO {
         try ensureAuthenticated()
 
@@ -406,8 +407,14 @@ actor UITestAPIStore {
         }
 
         let existing = store.sessions[idx]
-        let prior = existing.moodMatrix ?? [:]
-        let merged = prior.merging(patch.entries) { _, new in new }
+        var merged: [String: MoodMatrixEntry] = patch.clearsMatrix ? [:] : existing.moodMatrix ?? [:]
+        for (key, entry) in patch.entries {
+            if entry.before == nil && entry.after == nil {
+                merged.removeValue(forKey: key)
+            } else {
+                merged[key] = entry
+            }
+        }
         let updated = SessionDTO(
             id: existing.id,
             dayNumber: existing.dayNumber,
@@ -450,6 +457,12 @@ actor UITestAPIStore {
 
     func batchThoughts(_ data: BatchThoughtsRequest) throws -> [ThoughtDTO] {
         try ensureAuthenticated()
+
+        // Mirrors POST /api/thoughts/batch (#792): a new completion note or an
+        // explicit clear replaces the session's stored one.
+        if data.clearCompletionNote == true || data.thoughts.contains(where: { $0.timeInSession == -1 }) {
+            store.thoughts.removeAll { $0.sessionId == data.sessionId && $0.timeInSession == -1 }
+        }
 
         let createdThoughts = data.thoughts.map { input -> ThoughtDTO in
             let thought = ThoughtDTO(

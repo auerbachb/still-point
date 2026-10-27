@@ -187,7 +187,7 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(dto.sessionType, .quick)
     }
 
-    func testAppendEndNoteReplacesQueuedEndNote() async throws {
+    func testReplaceEndNoteReplacesQueuedEndNote() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -211,12 +211,12 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             ownerUserId: testOwnerUserId,
             thoughts: [PendingSessionThought(timeInSession: 12, text: "mid-sit")]
         )
-        try await coordinator.appendEndNote(
+        try await coordinator.replaceEndNote(
             clientSessionId: clientSessionId,
             ownerUserId: testOwnerUserId,
             note: "first draft"
         )
-        try await coordinator.appendEndNote(
+        try await coordinator.replaceEndNote(
             clientSessionId: clientSessionId,
             ownerUserId: testOwnerUserId,
             note: "revised note"

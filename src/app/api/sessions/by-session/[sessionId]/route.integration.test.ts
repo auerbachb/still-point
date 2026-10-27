@@ -269,9 +269,9 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
     expect(res.status).toBe(400);
   });
 
-  test("rejects a mood entry where both before and after are null with 400", async () => {
+  test("rejects a mood entry missing the after key with 400", async () => {
     const res = await PATCH(
-      patchRequest(sessionId, { moodMatrix: { calm: { before: null, after: null } } }),
+      patchRequest(sessionId, { moodMatrix: { calm: { before: 3 } } }),
       { params: Promise.resolve({ sessionId }) },
     );
 
@@ -313,5 +313,143 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
       calm: { before: 1, after: 2 },
       focus: { before: 4, after: 5 },
     });
+  });
+});
+
+/**
+ * Issue #792 — clearing a saved mood. `moodMatrix: null` is what both clients
+ * send once every cell is deselected; an all-null row is how they drop one row
+ * while keeping the rest.
+ */
+describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix clear (#792)", () => {
+  async function seedMood(matrix: Record<string, { before: number | null; after: number | null }>) {
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: matrix }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+    expect(res.status).toBe(200);
+  }
+
+  async function storedMood() {
+    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+    return row!.moodMatrix;
+  }
+
+  test("moodMatrix: null clears the stored matrix", async () => {
+    await seedMood({ calm: { before: 2, after: 4 }, focus: { before: 3, after: 5 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: null }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).session.moodMatrix).toBeNull();
+    expect(await storedMood()).toBeNull();
+  });
+
+  test("moodMatrix: null on a session with no mood succeeds and stores null", async () => {
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: null }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedMood()).toBeNull();
+  });
+
+  test("an all-null row deletes only that row", async () => {
+    await seedMood({ calm: { before: 2, after: 4 }, focus: { before: 3, after: 5 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: { calm: { before: null, after: null } } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).session.moodMatrix).toEqual({ focus: { before: 3, after: 5 } });
+    expect(await storedMood()).toEqual({ focus: { before: 3, after: 5 } });
+  });
+
+  test("an all-null row can ride along with an edited row", async () => {
+    await seedMood({ calm: { before: 2, after: 4 }, focus: { before: 3, after: 5 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, {
+        moodMatrix: { calm: { before: null, after: null }, focus: { before: 1, after: null } },
+      }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedMood()).toEqual({ focus: { before: 1, after: null } });
+  });
+
+  test("deleting the last row stores null rather than an empty object", async () => {
+    await seedMood({ calm: { before: 2, after: 4 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: { calm: { before: null, after: null } } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).session.moodMatrix).toBeNull();
+    expect(await storedMood()).toBeNull();
+  });
+
+  test("an all-null row for a row that was never stored is a no-op", async () => {
+    await seedMood({ focus: { before: 3, after: 5 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: { energy: { before: null, after: null } } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await storedMood()).toEqual({ focus: { before: 3, after: 5 } });
+  });
+
+  test("a mood clear leaves ratings untouched and can share the PATCH with them", async () => {
+    await PATCH(
+      patchRequest(sessionId, { focusRating: 6, moodMatrix: { calm: { before: 2, after: 4 } } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    const res = await PATCH(
+      patchRequest(sessionId, { happinessRating: 8, moodMatrix: null }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+    expect(row!.moodMatrix).toBeNull();
+    expect(row!.focusRating).toBe(6);
+    expect(row!.happinessRating).toBe(8);
+  });
+
+  test("an empty moodMatrix object still fails with 400 and clears nothing", async () => {
+    await seedMood({ calm: { before: 2, after: 4 } });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: {} }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect(await storedMood()).toEqual({ calm: { before: 2, after: 4 } });
+  });
+
+  test("a mood clear against another user's session returns 404 and clears nothing", async () => {
+    await seedMood({ calm: { before: 2, after: 4 } });
+    getCurrentUser.mockResolvedValue({ userId: otherUserId, email: "other109@test.local" });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: null }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(404);
+    expect(await storedMood()).toEqual({ calm: { before: 2, after: 4 } });
   });
 });

@@ -6,7 +6,11 @@ import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
 import { readJsonObject } from "@/lib/readJsonObject";
-import { hasRejectedSubmittedThoughts, normalizeThoughtInputs } from "@/lib/thoughtSaving";
+import {
+  hasRejectedSubmittedThoughts,
+  normalizeThoughtInputs,
+  parseClearCompletionNote,
+} from "@/lib/thoughtSaving";
 import { and, eq } from "drizzle-orm";
 
 export const POST = withApiHandler("Batch thoughts", async (request: NextRequest) => {
@@ -27,7 +31,18 @@ export const POST = withApiHandler("Batch thoughts", async (request: NextRequest
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  if (thoughtItems.length === 0) {
+  // #792: the only way to delete a stored completion note without sending a
+  // replacement. Blank note text is still rejected below, so an emptied field
+  // can never clear a note by accident.
+  const clear = parseClearCompletionNote(json.body.clearCompletionNote);
+  if (!clear.ok) {
+    return NextResponse.json({ error: "Invalid clearCompletionNote" }, { status: 400 });
+  }
+  const clearCompletionNote = clear.value;
+
+  // A clear-only request is still a write, so it takes the ownership and day
+  // checks below instead of this shortcut.
+  if (thoughtItems.length === 0 && !clearCompletionNote) {
     return NextResponse.json({ thoughts: [] });
   }
 
@@ -76,6 +91,7 @@ export const POST = withApiHandler("Batch thoughts", async (request: NextRequest
     userId: auth.user.userId,
     sessionId,
     dayNumber,
+    clearCompletionNote,
     completionNote,
     rowsToInsert,
   });

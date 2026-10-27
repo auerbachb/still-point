@@ -3,6 +3,7 @@ import { describe, it } from "vitest";
 import {
   hasRejectedSubmittedThoughts,
   normalizeThoughtInputs,
+  parseClearCompletionNote,
 } from "./thoughtSaving";
 
 describe("normalizeThoughtInputs", () => {
@@ -84,5 +85,22 @@ describe("normalizeThoughtInputs", () => {
     assert.equal(result.invalidCount, 1);
     assert.deepEqual(result.thoughts, []);
     assert.equal(hasRejectedSubmittedThoughts(result), true);
+  });
+});
+
+describe("parseClearCompletionNote (#792)", () => {
+  it("reads an absent flag as false", () => {
+    assert.deepEqual(parseClearCompletionNote(undefined), { ok: true, value: false });
+  });
+
+  it("accepts both booleans", () => {
+    assert.deepEqual(parseClearCompletionNote(true), { ok: true, value: true });
+    assert.deepEqual(parseClearCompletionNote(false), { ok: true, value: false });
+  });
+
+  it("rejects values that are not booleans instead of coercing them", () => {
+    for (const raw of [null, "true", 1, 0, {}, []]) {
+      assert.deepEqual(parseClearCompletionNote(raw), { ok: false }, `value ${JSON.stringify(raw)}`);
+    }
   });
 });

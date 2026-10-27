@@ -42,3 +42,21 @@ export function buildMoodMatrixPayload(
   }
   return out;
 }
+
+/** #792: the PATCH `moodMatrix` that turns the stored matrix (`persisted`) into
+ *  `current`. `null` means clear the whole matrix — nothing is left selected.
+ *  Otherwise it is the touched rows plus an all-null row for every stored row
+ *  the user has since emptied, which the server deletes. */
+export function buildMoodMatrixPatch(
+  current: MoodMatrixValue,
+  persisted: Record<string, MoodEntry>,
+): Record<string, MoodEntry> | null {
+  if (!isMoodMatrixTouched(current)) return null;
+  const out = buildMoodMatrixPayload(current);
+  for (const key of MOOD_KEYS) {
+    if (persisted[key] && !out[key]) {
+      out[key] = { before: null, after: null };
+    }
+  }
+  return out;
+}

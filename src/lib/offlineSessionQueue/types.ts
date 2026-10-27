@@ -34,6 +34,10 @@ export type PendingSessionEntry = {
   serverSessionId: string | null;
   sessionSynced: boolean;
   enqueuedAt: string;
+  /** #792: the stored completion note must be deleted on the next flush. Only
+   *  set once the sit has a server row; entries written before this field
+   *  existed omit it, which reads as false. */
+  clearCompletionNote?: boolean;
 };
 
 export type SavedSessionResult = {

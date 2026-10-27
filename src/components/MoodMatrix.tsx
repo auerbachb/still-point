@@ -29,6 +29,7 @@ export {
   MOOD_LABELS,
   isMoodMatrixTouched,
   buildMoodMatrixPayload,
+  buildMoodMatrixPatch,
   type MoodKey,
   type MoodEntry,
   type MoodMatrixValue,

@@ -32,13 +32,39 @@ import { clearSuppressDuringSessionPref } from "@/lib/sessionSuppressionPrefs";
 import { NO_RECOVERY, previewNextStandardDuration, recoveryFieldsOf } from "@/lib/userProgression";
 import { useAuthBootstrap } from "@/lib/useAuthBootstrap";
 import { useDualTrackFork } from "@/lib/useDualTrackFork";
-import { useSessionSaveLifecycle } from "@/lib/useSessionSaveLifecycle";
+import { useSessionSaveLifecycle, type CompletionData } from "@/lib/useSessionSaveLifecycle";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 
 // Transient flows that overlay the active tab without changing the URL.
 // "breath" hides nav/header and renders BreathCountView full-screen, matching
 // the iOS breath-counting mode (#376).
 type Overlay = "session" | "breath" | "complete";
+
+/** A completion-note write for a sit that has a server row: a new note, or
+ *  `clearCompletionNote` with no thoughts to delete it (#792). A pending sit
+ *  writes through the offline queue instead. */
+async function postCompletionNoteBatch(
+  data: Pick<CompletionData, "sessionId" | "clientSessionId" | "dayNumber">,
+  ownerUserId: string,
+  body: { thoughts: Array<{ timeInSession: number; text: string }>; clearCompletionNote?: true },
+): Promise<void> {
+  const failure = body.clearCompletionNote ? "Failed to clear note" : "Failed to save note";
+  const sessionId = data.sessionId
+    ?? (data.clientSessionId
+      ? await getWebSessionSyncCoordinator().resolvedServerSessionId(data.clientSessionId, ownerUserId)
+      : null);
+  if (!sessionId) {
+    throw new Error(failure);
+  }
+  const res = await fetch("/api/thoughts/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, dayNumber: data.dayNumber, ...body }),
+  });
+  if (!res.ok) {
+    throw new Error(failure);
+  }
+}
 
 function calendarSyncMessageFromResult(sync: CalendarSyncResult[] | undefined): string | null {
   const item = sync?.[0];
@@ -553,41 +579,41 @@ export default function StillPoint() {
           // #703: with nothing stored there is no queue entry to append a note to
           // and no session to post one against, so the field is not offered.
           onSaveNote={completionData.clientSessionId && user && !completionData.notStored ? async (text: string) => {
-            const coordinator = getWebSessionSyncCoordinator();
             if (completionData.isPendingSync) {
-              await coordinator.appendEndNote(
+              await getWebSessionSyncCoordinator().replaceEndNote(
                 completionData.clientSessionId!,
                 user.id,
                 text,
               );
               return;
             }
-            const sessionId = completionData.sessionId
-              ?? (await coordinator.resolvedServerSessionId(
+            await postCompletionNoteBatch(completionData, user.id, {
+              thoughts: [{ timeInSession: -1, text }],
+            });
+          } : undefined}
+          // #792: emptying a saved note deletes it. Same gate and same two paths
+          // as the save: the queue while the sit is pending, the server after.
+          onClearNote={completionData.clientSessionId && user && !completionData.notStored ? async () => {
+            if (completionData.isPendingSync) {
+              await getWebSessionSyncCoordinator().clearEndNote(
                 completionData.clientSessionId!,
                 user.id,
-              ));
-            if (!sessionId) {
-              throw new Error("Failed to save note");
+              );
+              return;
             }
-            const res = await fetch("/api/thoughts/batch", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sessionId,
-                dayNumber: completionData.dayNumber,
-                thoughts: [{ timeInSession: -1, text }],
-              }),
+            await postCompletionNoteBatch(completionData, user.id, {
+              thoughts: [],
+              clearCompletionNote: true,
             });
-            if (!res.ok) {
-              throw new Error("Failed to save note");
-            }
           } : undefined}
           onSaveRatings={completionData.sessionId && !completionData.isPendingSync ? async (ratings) => {
             await api.updateSessionRatings(completionData.sessionId!, ratings);
           } : undefined}
           onSaveMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async (matrix) => {
             await api.updateSessionRatings(completionData.sessionId!, { moodMatrix: matrix });
+          } : undefined}
+          onClearMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async () => {
+            await api.updateSessionRatings(completionData.sessionId!, { moodMatrix: null });
           } : undefined}
           compact={isMobile}
         />

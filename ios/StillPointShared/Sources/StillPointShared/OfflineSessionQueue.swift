@@ -22,6 +22,9 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
     public var serverSessionId: String?
     public var sessionSynced: Bool
     public let enqueuedAt: Date
+    /// #792: the stored completion note must be deleted on the next flush. Only
+    /// set once the sit has a server row that could hold a note.
+    public var clearCompletionNote: Bool
 
     public init(
         clientSessionId: UUID,
@@ -30,7 +33,8 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         thoughts: [PendingSessionThought],
         serverSessionId: String? = nil,
         sessionSynced: Bool = false,
-        enqueuedAt: Date = Date()
+        enqueuedAt: Date = Date(),
+        clearCompletionNote: Bool = false
     ) {
         self.clientSessionId = clientSessionId
         self.ownerUserId = ownerUserId
@@ -39,6 +43,13 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         self.serverSessionId = serverSessionId
         self.sessionSynced = sessionSynced
         self.enqueuedAt = enqueuedAt
+        self.clearCompletionNote = clearCompletionNote
+    }
+
+    /// The entry still owes the server something: its session row, queued
+    /// thoughts, or a completion-note clear (#792).
+    var awaitsSync: Bool {
+        !sessionSynced || !thoughts.isEmpty || clearCompletionNote
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -49,6 +60,7 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         case serverSessionId
         case sessionSynced
         case enqueuedAt
+        case clearCompletionNote
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,6 +78,8 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         // sign-out — and because the decoded value is only persisted when some other
         // operation happens to save the queue, it could survive indefinitely.
         enqueuedAt = try container.decodeIfPresent(Date.self, forKey: .enqueuedAt) ?? .distantPast
+        // A row persisted before #792 never asked for a clear.
+        clearCompletionNote = try container.decodeIfPresent(Bool.self, forKey: .clearCompletionNote) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -77,6 +91,7 @@ public struct PendingSessionEntry: Codable, Sendable, Identifiable {
         try container.encodeIfPresent(serverSessionId, forKey: .serverSessionId)
         try container.encode(sessionSynced, forKey: .sessionSynced)
         try container.encode(enqueuedAt, forKey: .enqueuedAt)
+        try container.encode(clearCompletionNote, forKey: .clearCompletionNote)
     }
 }
 

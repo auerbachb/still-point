@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { BLOCK_DURATION, type SessionType } from "@/lib/constants";
 import { RatingSlider } from "@/components/RatingSlider";
-import { MoodMatrix, type MoodMatrixValue, isMoodMatrixTouched, buildMoodMatrixPayload } from "@/components/MoodMatrix";
+import {
+  MoodMatrix,
+  type MoodEntry,
+  type MoodMatrixValue,
+  buildMoodMatrixPatch,
+  buildMoodMatrixPayload,
+} from "@/components/MoodMatrix";
 import {
   COMPLETION_AUTOSAVE_MS,
   COMPLETION_RETURN_LABEL,
@@ -24,13 +30,20 @@ type CompletionScreenProps = {
   nextDuration: number;
   onReturn: () => void;
   onSaveNote?: (text: string) => Promise<void>;
+  /** #792: delete the stored note once the field is emptied. Offered under the
+   *  same conditions as `onSaveNote`; without it an emptied field is not saved. */
+  onClearNote?: () => Promise<void>;
   /** #109: post-session self-report; omitted (no sliders rendered) when there is
    *  no persisted session to attach ratings to. Only touched slider values are
    *  included in the payload; untouched ones are omitted for partial-update. */
   onSaveRatings?: (ratings: { focusRating?: number; happinessRating?: number }) => Promise<void>;
   /** #472: before/after mood matrix; omitted when there is no persisted session.
-   *  Payload only includes rows the user actually tapped. */
-  onSaveMoodMatrix?: (matrix: Record<string, { before: number | null; after: number | null }>) => Promise<void>;
+   *  Payload holds the rows the user tapped, plus an all-null row for each
+   *  saved row since emptied (#792), which the server deletes. */
+  onSaveMoodMatrix?: (matrix: Record<string, MoodEntry>) => Promise<void>;
+  /** #792: delete the stored matrix once every cell is deselected. Offered
+   *  under the same conditions as `onSaveMoodMatrix`. */
+  onClearMoodMatrix?: () => Promise<void>;
   /** #703: the sit could not be stored on this device — not queued, not synced,
    *  nowhere. Replaces the silent "pending sync" completion this used to show. */
   notStored?: boolean;
@@ -55,8 +68,10 @@ export function CompletionScreen({
   nextDuration,
   onReturn,
   onSaveNote,
+  onClearNote,
   onSaveRatings,
   onSaveMoodMatrix,
+  onClearMoodMatrix,
   notStored = false,
   onRetrySave,
   compact = false,
@@ -82,17 +97,27 @@ export function CompletionScreen({
   const [retrySaveFailed, setRetrySaveFailed] = useState(false);
   const [returning, setReturning] = useState(false);
   const onSaveNoteRef = useRef(onSaveNote);
+  const onClearNoteRef = useRef(onClearNote);
   const onSaveRatingsRef = useRef(onSaveRatings);
   const onSaveMoodMatrixRef = useRef(onSaveMoodMatrix);
+  const onClearMoodMatrixRef = useRef(onClearMoodMatrix);
   onSaveNoteRef.current = onSaveNote;
+  onClearNoteRef.current = onClearNote;
   onSaveRatingsRef.current = onSaveRatings;
   onSaveMoodMatrixRef.current = onSaveMoodMatrix;
+  onClearMoodMatrixRef.current = onClearMoodMatrix;
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ratingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What the server holds, as far as this screen knows. `null` and `{}` mean
+  // nothing stored, so emptying a field that was saved is a clear (#792).
   const lastSavedNote = useRef<string | null>(null);
   const lastSavedRatings = useRef<string | null>(null);
-  const lastSavedMood = useRef<string | null>(null);
+  const lastSavedMood = useRef<Record<string, MoodEntry>>({});
+  // A write that failed may still have landed, so until the next one succeeds
+  // the stored value is a guess and every write is sent (#792).
+  const noteUnsure = useRef(false);
+  const moodUnsure = useRef(false);
   const inflight = useRef<Promise<void>>(Promise.resolve());
   const returningRef = useRef(false);
   const flushFailedRef = useRef(false);
@@ -106,17 +131,35 @@ export function CompletionScreen({
     return run;
   }
 
-  async function persistNote(trimmed: string): Promise<void> {
+  /** The request that stores `trimmed`; a `null` (emptied) note is a clear. */
+  function noteWrite(trimmed: string | null): (() => Promise<void>) | null {
+    if (trimmed === null) return onClearNoteRef.current ?? null;
     const save = onSaveNoteRef.current;
-    if (!save || trimmed === lastSavedNote.current) return;
+    return save ? () => save(trimmed) : null;
+  }
+
+  // #792: every write is judged against what is stored when it runs — inside
+  // `track`, after any write still in flight. Judging it when it is scheduled
+  // would skip a clear made while the save it undoes was still on the wire.
+  async function persistNote(trimmed: string | null): Promise<void> {
+    if (!noteUnsure.current && trimmed === lastSavedNote.current) {
+      // Back to what is stored, so an error from an edit since undone is stale.
+      setNoteSaved(trimmed !== null);
+      setSaveError(false);
+      return;
+    }
+    const write = noteWrite(trimmed);
+    if (!write) return;
     setSaving(true);
     try {
       setSaveError(false);
-      await save(trimmed);
+      await write();
       lastSavedNote.current = trimmed;
-      setNoteSaved(true);
+      noteUnsure.current = false;
+      setNoteSaved(trimmed !== null);
     } catch (err) {
-      console.error("Failed to save note:", err);
+      noteUnsure.current = true;
+      console.error(trimmed === null ? "Failed to clear note:" : "Failed to save note:", err);
       setSaveError(true);
       setNoteSaved(false);
       throw err;
@@ -148,20 +191,35 @@ export function CompletionScreen({
     }
   }
 
-  async function persistMood(matrix: MoodMatrixValue): Promise<void> {
+  /** The request that stores `patch`; a `null` patch (nothing selected) is a clear. */
+  function moodWrite(patch: Record<string, MoodEntry> | null): (() => Promise<void>) | null {
+    if (patch === null) return onClearMoodMatrixRef.current ?? null;
     const save = onSaveMoodMatrixRef.current;
-    if (!save || !isMoodMatrixTouched(matrix)) return;
-    const payload = buildMoodMatrixPayload(matrix);
-    const key = JSON.stringify(payload);
-    if (key === lastSavedMood.current) return;
+    return save ? () => save(patch) : null;
+  }
+
+  async function persistMood(matrix: MoodMatrixValue): Promise<void> {
+    const desired = buildMoodMatrixPayload(matrix);
+    if (!moodUnsure.current && JSON.stringify(desired) === JSON.stringify(lastSavedMood.current)) {
+      setMoodMatrixSaved(Object.keys(desired).length > 0);
+      setMoodMatrixSaveError(false);
+      return;
+    }
+    const patch = buildMoodMatrixPatch(matrix, lastSavedMood.current);
+    const write = moodWrite(patch);
+    if (!write) return;
     setSavingMoodMatrix(true);
     try {
       setMoodMatrixSaveError(false);
-      await save(payload);
-      lastSavedMood.current = key;
-      setMoodMatrixSaved(true);
+      await write();
+      lastSavedMood.current = desired;
+      moodUnsure.current = false;
+      setMoodMatrixSaved(patch !== null);
     } catch (err) {
-      console.error("Failed to save mood matrix:", err);
+      // Count the rows it carried as stored, so a later patch still empties them.
+      lastSavedMood.current = { ...lastSavedMood.current, ...desired };
+      moodUnsure.current = true;
+      console.error(patch === null ? "Failed to clear mood matrix:" : "Failed to save mood matrix:", err);
       setMoodMatrixSaveError(true);
       setMoodMatrixSaved(false);
       throw err;
@@ -172,7 +230,7 @@ export function CompletionScreen({
 
   useEffect(() => {
     const trimmed = noteTextToAutosave(note);
-    if (!onSaveNoteRef.current || !trimmed || trimmed === lastSavedNote.current) return;
+    if (!onSaveNoteRef.current && !onClearNoteRef.current) return;
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = setTimeout(() => {
       noteTimer.current = null;
@@ -205,9 +263,7 @@ export function CompletionScreen({
   }, [focusRating, happinessRating, focusTouched, happinessTouched]);
 
   useEffect(() => {
-    if (!onSaveMoodMatrixRef.current || !isMoodMatrixTouched(moodMatrix)) return;
-    const key = JSON.stringify(buildMoodMatrixPayload(moodMatrix));
-    if (key === lastSavedMood.current) return;
+    if (!onSaveMoodMatrixRef.current && !onClearMoodMatrixRef.current) return;
     if (moodTimer.current) clearTimeout(moodTimer.current);
     const matrix = moodMatrix;
     moodTimer.current = setTimeout(() => {
@@ -249,11 +305,12 @@ export function CompletionScreen({
       happinessTouched,
     });
     // Every field is attempted even when an earlier one fails; otherwise the
-    // next tap would leave without ever trying the later saves.
+    // next tap would leave without ever trying the later saves. An emptied
+    // note or matrix that was saved flushes as a clear (#792).
     const results = await Promise.allSettled([
-      trimmed ? track(() => persistNote(trimmed)) : Promise.resolve(),
+      track(() => persistNote(trimmed)),
       ratings ? track(() => persistRatings(ratings)) : Promise.resolve(),
-      isMoodMatrixTouched(moodMatrix) ? track(() => persistMood(moodMatrix)) : Promise.resolve(),
+      track(() => persistMood(moodMatrix)),
     ]);
     await inflight.current;
     returningRef.current = false;
@@ -553,7 +610,7 @@ export function CompletionScreen({
             onChange={(next) => {
               setMoodMatrix(next);
               const key = JSON.stringify(buildMoodMatrixPayload(next));
-              if (key !== lastSavedMood.current) setMoodMatrixSaved(false);
+              if (key !== JSON.stringify(lastSavedMood.current)) setMoodMatrixSaved(false);
             }}
             disabled={returning}
           />
