@@ -51,15 +51,10 @@ extension AppViewModel {
         // Rolls the flags over first, then raises this sit's own; see
         // `PracticeDayState.recordCompletion` for why the order matters.
         let now = Date()
-        if combined {
-            // A combined sit is a standard sit on the primary track; it also
-            // checks Track Two's row as a second-track standard sit would.
-            practiceDay.recordCompletion(sessionType: .standard, track: .primary, now: now, dualTrack: dualTrackEnabled)
-            practiceDay.recordCompletion(sessionType: .standard, track: .second, now: now, dualTrack: dualTrackEnabled)
-        } else {
+        for credit in Self.completionCredits(sessionType: sessionType, track: track, combined: combined) {
             practiceDay.recordCompletion(
-                sessionType: sessionType,
-                track: track,
+                sessionType: credit.sessionType,
+                track: credit.track,
                 now: now,
                 dualTrack: dualTrackEnabled
             )
@@ -82,5 +77,19 @@ extension AppViewModel {
         // backfill merge instead of overwrite (#678).
         widgetSync.cancelHistoryRefresh()
         syncWidgetData()
+    }
+
+    /// The `(sessionType, track)` completions a finished sit records, in order.
+    ///
+    /// A combined sit (#898) is a standard sit on the primary track; it also
+    /// checks Track Two's row as a second-track standard sit would. Any other sit
+    /// records just itself.
+    private static func completionCredits(
+        sessionType: SessionType,
+        track: Track,
+        combined: Bool
+    ) -> [(sessionType: SessionType, track: Track)] {
+        guard combined else { return [(sessionType, track)] }
+        return [(.standard, .primary), (.standard, .second)]
     }
 }
