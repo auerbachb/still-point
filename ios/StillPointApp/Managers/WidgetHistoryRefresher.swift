@@ -50,6 +50,10 @@ final class WidgetHistoryRefresher {
     ///   - primaryDoneToday: Track One's "standard sit done today" for the
     ///     snapshot, read after the fetch. It is given the fetched sessions and
     ///     the moment the snapshot describes.
+    ///   - snapshotInstant: The moment the snapshot describes, given the fetched
+    ///     sessions, the account, and the time the fetch landed. The foreground
+    ///     keeps that time. The background refresh moves it into a practice day
+    ///     the 6:00 grace window still holds open (#767).
     ///   - didFetch: Runs after a successful fetch, with the sessions it returned.
     /// - Returns: The started fetch, which yields whether its snapshot reached the
     ///   store. `nil` means nothing started: nobody is signed in, the last attempt
@@ -58,6 +62,11 @@ final class WidgetHistoryRefresher {
     func refresh(
         currentUser: @escaping @MainActor () -> UserDTO?,
         primaryDoneToday: @escaping @MainActor (_ sessions: [SessionDTO], _ now: Date) -> Bool,
+        snapshotInstant: @escaping @MainActor (
+            _ sessions: [SessionDTO],
+            _ user: UserDTO,
+            _ landedAt: Date
+        ) -> Date = { _, _, landedAt in landedAt },
         didFetch: @escaping @MainActor (_ sessions: [SessionDTO]) -> Void = { _ in }
     ) -> Task<Bool, Never>? {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
@@ -110,7 +119,7 @@ final class WidgetHistoryRefresher {
             // Drop if superseded, or the account changed during the await.
             guard !Task.isCancelled,
                   let current = currentUser(), current.id == user.id else { return false }
-            let now = Date()
+            let now = snapshotInstant(result.sessions, current, Date())
             let snapshot = WidgetDataStore.makeHistorySnapshot(
                 user: current,
                 primaryDoneToday: primaryDoneToday(result.sessions, now),

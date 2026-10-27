@@ -47,9 +47,11 @@ extension AppViewModel {
             // once-per-account-per-day throttle below would suppress the fetch for
             // the rest of the day, leaving the row blank on a sign-out/sign-in.
             widgetHistory.clearMarker()
-            // #663: and withdraw the widget's background refresh. A run refreshes
+            // #663: and withdraw the widget's background refresh, both the fetch
+            // a run may have in flight and the pending request. A run refreshes
             // as the identity cached on this device, which the sign-out has just
             // cleared.
+            BackgroundRefreshScheduler.cancelWidgetRefresh()
             BackgroundRefreshScheduler.reschedule()
         }
         WidgetTimelineReloader.reloadHabitWidget()

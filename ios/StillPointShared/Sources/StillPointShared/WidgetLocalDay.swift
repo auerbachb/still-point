@@ -30,6 +30,46 @@ extension WidgetDataStore {
         return calendar.isDate(lastUpdated, inSameDayAs: yesterday)
     }
 
+    /// The moment a snapshot built from fetched `sessions` describes. Before
+    /// 6:00, while the previous calendar day's required sits are unfinished in
+    /// that history, the previous day is still the open practice day, so this is
+    /// an instant inside it: the one the foreground's `creditedPracticeInstant()`
+    /// gives `syncWidgetData()`. A snapshot stamped there keeps the widget's
+    /// grace display (`graceKeepsPreviousPracticeDay`), and its "done today"
+    /// flags read that day. Otherwise it is `now`.
+    ///
+    /// The background refresh (#663) uses this. It has none of the foreground's
+    /// practice-day state, so it reads whether the previous day is finished from
+    /// the history it just fetched, with the predicate `/api/track/done-today`
+    /// applies (`SessionCalendar.isDayComplete`).
+    public static func practiceInstant(
+        forHistory sessions: [SessionDTO],
+        dualTrackEnabled: Bool,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        let previousDay = SessionCalendar.localIsoDate(now: now, offsetDays: -1, calendar: calendar)
+        let previousDayComplete = SessionCalendar.isDayComplete(
+            sits: sessions.map { session in
+                SessionCalendar.PracticeDaySit(
+                    completed: session.completed,
+                    isStandard: session.sessionType == .standard,
+                    sessionDate: session.sessionDate,
+                    track: session.track?.rawValue
+                )
+            },
+            isoDay: previousDay,
+            dualTrackEnabled: dualTrackEnabled
+        )
+        let credited = SessionCalendar.effectiveLocalIsoDate(
+            previousDayComplete: previousDayComplete,
+            now: now,
+            calendar: calendar
+        )
+        guard credited != SessionCalendar.localIsoDate(now: now, calendar: calendar) else { return now }
+        return calendar.date(byAdding: .hour, value: -1, to: calendar.startOfDay(for: now)) ?? now
+    }
+
     /// Local-day `yyyy-MM-dd` for `date`, matching exactly how the app stamps
     /// `sessionDate` (`SessionViewModel.saveSession`): POSIX locale + an explicit
     /// **Gregorian** calendar, in the caller's timezone. Forcing Gregorian (rather

@@ -57,6 +57,17 @@ enum BackgroundRefreshScheduler {
         #endif
     }
 
+    /// Drop the background refresh's in-flight fetch on sign-out, as each scene
+    /// drops its own (`AppViewModel.cancelIdentityScopedTasks()`). The fetch was
+    /// made for the session that just ended, so it must not land in the snapshot
+    /// the next sign-in rebuilds, even when that sign-in is the same account.
+    @MainActor
+    static func cancelWidgetRefresh() {
+        #if !targetEnvironment(simulator)
+        widgetRefresher.cancel()
+        #endif
+    }
+
     #if !targetEnvironment(simulator)
     /// Submit one request for the earlier of the two times, or cancel the
     /// pending one when neither job wants a run.
@@ -127,6 +138,12 @@ enum BackgroundRefreshScheduler {
     /// come from the identity the app last confirmed (`CachedIdentityStore`,
     /// #665). The rows and the streak come from the fresh history.
     ///
+    /// Before 6:00 it builds the snapshot as of the practice day the grace window
+    /// still holds open (#767), as the foreground's `syncWidgetData()` does. So a
+    /// run at 3:00 after a day with no sit leaves the widget showing that day as
+    /// today, with the streak still alive until 6:00, and "primary done today"
+    /// reads that day as well.
+    ///
     /// It passes no `didFetch`. The tracking-controls unlock backfill (#526)
     /// belongs to a scene, and the next foreground refresh runs it.
     @MainActor
@@ -137,6 +154,13 @@ enum BackgroundRefreshScheduler {
                 WidgetDataStore.primaryStandardSitCompleted(
                     on: WidgetDataStore.localDayString(now),
                     in: sessions
+                )
+            },
+            snapshotInstant: { sessions, user, landedAt in
+                WidgetDataStore.practiceInstant(
+                    forHistory: sessions,
+                    dualTrackEnabled: user.dualTrackEnabled,
+                    now: landedAt
                 )
             }
         ) else {

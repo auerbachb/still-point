@@ -225,4 +225,100 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
         ))
         XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(on: day, in: []))
     }
+
+    // MARK: - practiceInstant (the 6:00 grace window, #767)
+
+    /// A fixed zone, so the hour checks do not depend on where the tests run.
+    private var newYork: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }
+
+    private func october(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        newYork.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+
+    private func practiceDay(_ sessions: [SessionDTO], dualTrack: Bool = false, at now: Date) -> String {
+        let instant = WidgetDataStore.practiceInstant(
+            forHistory: sessions,
+            dualTrackEnabled: dualTrack,
+            now: now,
+            calendar: newYork
+        )
+        return WidgetDataStore.localDayString(instant, calendar: newYork)
+    }
+
+    /// A background run at 2:30 after a day with no sit builds the snapshot as
+    /// of that day, so the widget keeps showing it as today until 6:00.
+    func testBefore6AnUnfinishedPreviousDayIsStillThePracticeDay() {
+        let now = october(27, 2, 30)
+        let sessions = [session(date: "2026-10-25")]
+        let instant = WidgetDataStore.practiceInstant(
+            forHistory: sessions,
+            dualTrackEnabled: false,
+            now: now,
+            calendar: newYork
+        )
+
+        XCTAssertEqual(WidgetDataStore.localDayString(instant, calendar: newYork), "2026-10-26")
+        XCTAssertTrue(WidgetDataStore.graceKeepsPreviousPracticeDay(
+            lastUpdated: instant,
+            now: now,
+            requiredSitsComplete: false,
+            calendar: newYork
+        ))
+    }
+
+    func testBefore6AFinishedPreviousDayRollsToTheCalendarDay() {
+        let now = october(27, 2, 30)
+        let sessions = [session(date: "2026-10-26")]
+        XCTAssertEqual(
+            WidgetDataStore.practiceInstant(forHistory: sessions, dualTrackEnabled: false, now: now, calendar: newYork),
+            now
+        )
+    }
+
+    /// Only a completed standard sit finishes a day, as `/api/track/done-today`
+    /// counts it.
+    func testAQuickOrUnfinishedSitLeavesThePreviousDayOpen() {
+        let now = october(27, 2, 30)
+        let sessions = [
+            session(date: "2026-10-26", type: .quick),
+            session(date: "2026-10-26", completed: false),
+        ]
+        XCTAssertEqual(practiceDay(sessions, at: now), "2026-10-26")
+    }
+
+    func testTwoADayNeedsBothSitsToFinishThePreviousDay() {
+        let now = october(27, 2, 30)
+        let primaryOnly = [session(date: "2026-10-26")]
+        XCTAssertEqual(practiceDay(primaryOnly, dualTrack: true, at: now), "2026-10-26")
+
+        let both = primaryOnly + [session(date: "2026-10-26", track: .second)]
+        XCTAssertEqual(practiceDay(both, dualTrack: true, at: now), "2026-10-27")
+    }
+
+    func testAt6TheCalendarDayStartsEitherWay() {
+        let now = october(27, 6, 0)
+        XCTAssertEqual(
+            WidgetDataStore.practiceInstant(forHistory: [], dualTrackEnabled: false, now: now, calendar: newYork),
+            now
+        )
+    }
+
+    /// The CodeAnt case on PR #908: on a two-a-day schedule at 2:30, the primary
+    /// sit credited to the still-open previous day reads as done today, as the
+    /// foreground's Home badge reports it.
+    func testThePrimarySitOfAnOpenPracticeDayReadsAsDoneToday() {
+        let now = october(27, 2, 30)
+        let sessions = [session(date: "2026-10-26")]
+        let day = practiceDay(sessions, dualTrack: true, at: now)
+
+        XCTAssertTrue(WidgetDataStore.primaryStandardSitCompleted(on: day, in: sessions))
+        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(
+            on: WidgetDataStore.localDayString(now, calendar: newYork),
+            in: sessions
+        ))
+    }
 }
