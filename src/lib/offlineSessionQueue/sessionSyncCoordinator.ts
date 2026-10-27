@@ -6,11 +6,14 @@ import {
   awaitsSync,
   findOwnedEntry,
   findOwnedEntryIndex,
+  isParked,
+  keepsEntryQueued,
   newPendingEntry,
+  parkedBy,
   pendingResult,
   provisionalSessionId,
+  rejectsTheSit,
   requestWithClientId,
-  rethrowIfPermanent,
   syncedResult,
   thoughtsNotSent,
 } from "./queueEntryLogic";
@@ -18,6 +21,7 @@ import { holdRowOpen, rowsHeldOpen, withQueueMutation } from "./queueLock";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import {
   alwaysFailingSessionSyncTransport,
+  isPermanentFailure,
   liveSessionSyncTransport,
   type SessionSyncTransport,
 } from "./transport";
@@ -40,10 +44,12 @@ export class WebSessionSyncCoordinator {
     this.transport = transport;
   }
 
+  /** Sits a flush will still upload. #978: a parked sit stays queued but is not
+   *  counted, since no flush sends it again. */
   async pendingCount(ownerUserId: string): Promise<number> {
     const entries = await this.queueStore.loadEntries();
     return entries.filter(
-      (entry) => entry.ownerUserId === ownerUserId && awaitsSync(entry),
+      (entry) => entry.ownerUserId === ownerUserId && awaitsSync(entry) && !isParked(entry),
     ).length;
   }
 
@@ -91,8 +97,9 @@ export class WebSessionSyncCoordinator {
     return this.writeEndNote(clientSessionId, ownerUserId, null);
   }
 
-  /** Rejects with the first permanent upload failure, once every other sit
-   *  has had its turn. */
+  /** Rejects with the first failure other than a permanent answer, once every
+   *  other sit has had its turn. #978: a sit the server turns down for good is
+   *  parked (or, after a 401 or 403, left queued) and does not fail the flush. */
   async flushPending(ownerUserId: string): Promise<number> {
     const { syncedCount, failure } = await this.flushEachPending(ownerUserId);
     if (failure) throw failure.error;
@@ -151,11 +158,13 @@ export class WebSessionSyncCoordinator {
     isCurrent: () => boolean = () => true,
   ): Promise<number> {
     if (!ownerUserId) return 0;
-    const { syncedCount, failure } = await this.flushEachPending(ownerUserId);
-    if (failure) {
-      // A permanent upload failure leaves its row queued and does not stop the
-      // prune: it only drops rows that owe nothing, so the failed one stays.
-      console.error("Failed to flush the offline session queue:", failure.error);
+    const { syncedCount, failure, refusal } = await this.flushEachPending(ownerUserId);
+    const reported = failure ?? refusal;
+    if (reported) {
+      // A permanent upload failure leaves its row queued (#978: parked) and does
+      // not stop the prune: it only drops rows that owe nothing, so the failed
+      // one stays.
+      console.error("Failed to flush the offline session queue:", reported.error);
     }
     if (!isCurrent()) return syncedCount;
     await this.pruneCompletedEntries(ownerUserId);
@@ -197,15 +206,19 @@ export class WebSessionSyncCoordinator {
   }
 
   /** #947: one sit the server refuses does not keep the sits after it from
-   *  uploading. The first refusal is handed back for the caller to report. */
-  private async flushEachPending(
-    ownerUserId: string,
-  ): Promise<{ syncedCount: number; failure: { error: unknown } | null }> {
-    if (!ownerUserId) return { syncedCount: 0, failure: null };
+   *  uploading. The first refusal (#978: a permanent answer) and the first other
+   *  failure are handed back for the caller to report. */
+  private async flushEachPending(ownerUserId: string): Promise<{
+    syncedCount: number;
+    failure: { error: unknown } | null;
+    refusal: { error: unknown } | null;
+  }> {
+    if (!ownerUserId) return { syncedCount: 0, failure: null, refusal: null };
 
     const entries = await this.queueStore.loadEntries();
     let syncedCount = 0;
     let failure: { error: unknown } | null = null;
+    let refusal: { error: unknown } | null = null;
     for (const entry of entries) {
       if (entry.ownerUserId !== ownerUserId) continue;
       if (!awaitsSync(entry)) continue;
@@ -217,10 +230,26 @@ export class WebSessionSyncCoordinator {
         const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
         if (flushed) syncedCount += 1;
       } catch (error) {
-        failure ??= { error };
+        // #978: a permanent answer stops only this sit. `flushEntry` has parked
+        // it, or left it queued after a 401 or 403, so the sits behind it still
+        // upload and the flush still resolves with the sits that synced.
+        if (isPermanentFailure(error)) {
+          refusal ??= { error };
+          // Its session row can have gone up before its thoughts were turned
+          // down. The row moves the server's progression all the same, so the
+          // sit counts and `onSynced` still runs.
+          if (!entry.sessionSynced && (await this.resolvedServerSessionId(entry.clientSessionId, ownerUserId))) {
+            syncedCount += 1;
+          }
+        } else {
+          // #947: any other failure, such as a queue that cannot be read or a
+          // park that cannot be saved, is handed back once every sit has had
+          // its turn.
+          failure ??= { error };
+        }
       }
     }
-    return { syncedCount, failure };
+    return { syncedCount, failure, refusal };
   }
 
   /** `note` null clears it. Either way the queue keeps at most one end note
@@ -259,7 +288,8 @@ export class WebSessionSyncCoordinator {
     ownerUserId: string,
   ): Promise<PendingSessionEntry | null> {
     let entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId);
-    if (!entry) return null;
+    // #978: sent again, a parked sit would only get the same answer.
+    if (!entry || isParked(entry)) return null;
 
     if (!entry.sessionSynced) {
       const created = await this.uploadSessionRow(entry);
@@ -291,8 +321,7 @@ export class WebSessionSyncCoordinator {
       await this.queueStore.saveEntries(entries);
       return entries[index]!;
     } catch (error) {
-      rethrowIfPermanent(error);
-      return null;
+      return this.uploadFailed(error, entry);
     }
   }
 
@@ -326,9 +355,33 @@ export class WebSessionSyncCoordinator {
       await this.queueStore.saveEntries(entries);
       return current;
     } catch (error) {
-      rethrowIfPermanent(error);
-      return null;
+      return this.uploadFailed(error, entry);
     }
+  }
+
+  /**
+   * How an upload ends after it fails. A network failure or a retryable answer
+   * leaves the entry queued for the next flush. So does a queue read or write
+   * that fails just after an upload went through: the next flush sends it
+   * again, as after a lost response (#557, #948). A permanent answer is
+   * rethrown to the caller. #978: unless it is a 401 or 403, the entry is
+   * parked first.
+   */
+  private async uploadFailed(error: unknown, entry: PendingSessionEntry): Promise<null> {
+    if (keepsEntryQueued(error)) return null;
+    if (rejectsTheSit(error)) await this.park(entry.clientSessionId, entry.ownerUserId, error);
+    throw error;
+  }
+
+  /** #978: keeps the sit, with the answer that turned it down, where no flush
+   *  sends it again. Runs in the caller's queue turn, like the rest of
+   *  `flushEntry`. */
+  private async park(clientSessionId: string, ownerUserId: string, error: unknown): Promise<void> {
+    const entries = await this.queueStore.loadEntries();
+    const entry = findOwnedEntry(entries, clientSessionId, ownerUserId);
+    if (!entry) return;
+    entry.parked = parkedBy(error);
+    await this.queueStore.saveEntries(entries);
   }
 }
 

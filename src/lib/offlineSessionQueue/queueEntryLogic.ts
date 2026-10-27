@@ -2,9 +2,11 @@
  * Pure helpers over queued entries: no store, no transport, no locks. The
  * coordinator owns every read, write and upload; these only shape the data.
  */
-import { isNetworkFailure } from "./transport";
+import { PARKED_MESSAGE_MAX_LENGTH } from "./constants";
+import { failureStatus, isNetworkFailure, isPermanentFailure } from "./transport";
 import type {
   CreateSessionPayload,
+  ParkedSession,
   PendingSessionEntry,
   PendingSessionThought,
   SavedSessionResult,
@@ -124,9 +126,35 @@ export function pendingResult(clientSessionId: string): SavedSessionResult {
   };
 }
 
-/** An upload failure that keeps the entry queued (a network failure, or any
- *  error not marked permanent) is swallowed; a permanent one is rethrown. */
-export function rethrowIfPermanent(error: unknown): void {
-  if (isNetworkFailure(error)) return;
-  if (error && typeof error === "object" && "permanent" in error) throw error;
+/** An upload failure that keeps the entry queued: a network failure, or any
+ *  error not marked permanent. A permanent one is the same answer every time. */
+export function keepsEntryQueued(error: unknown): boolean {
+  return isNetworkFailure(error) || !isPermanentFailure(error);
+}
+
+/** #978: the server turned this sit down for good, so no flush sends it again. */
+export function isParked(entry: PendingSessionEntry): boolean {
+  return Boolean(entry.parked);
+}
+
+/**
+ * #978: whether a permanent answer is about the sit itself. A 401 means the
+ * sign-in lapsed, and neither route answers 403, so one comes from in front of
+ * them. A later flush can get past both, so those entries stay queued. Any
+ * other permanent answer (a validation 400, the 404 for a session that is gone,
+ * …) would be the same every time.
+ */
+export function rejectsTheSit(error: unknown): boolean {
+  const status = failureStatus(error);
+  return status !== 401 && status !== 403;
+}
+
+/** #978: what a parked entry keeps of the answer that parked it. */
+export function parkedBy(error: unknown): ParkedSession {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    at: new Date().toISOString(),
+    status: failureStatus(error),
+    message: message.slice(0, PARKED_MESSAGE_MAX_LENGTH),
+  };
 }

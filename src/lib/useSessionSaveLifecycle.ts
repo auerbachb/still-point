@@ -166,11 +166,24 @@ export function useSessionSaveLifecycle({
     } catch (error) {
       console.error(failureMessage, error);
       outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
+      // #978: the session row can have gone up before its thoughts were turned
+      // down for good. The row moves the server's progression, yet the sit is
+      // now parked, so no later flush reports it and no `onSynced` refresh
+      // follows. Re-read the user here instead.
+      if (outcome.status === "pending" && (error as { permanent?: unknown } | null)?.permanent === true) {
+        try {
+          if (await getWebSessionSyncCoordinator().resolvedServerSessionId(clientSessionId, ownerUserId)) {
+            refreshUserFromServer();
+          }
+        } catch (lookupError) {
+          console.error(failureMessage, lookupError);
+        }
+      }
     }
 
     noteQueueWriteOutcome(isSessionStored(outcome), generation);
     return outcome;
-  }, [sessionGeneration, noteQueueWriteOutcome]);
+  }, [sessionGeneration, noteQueueWriteOutcome, refreshUserFromServer]);
 
   // #703: the one save path for a finished sit, so the completion screen and its
   // retry button can never disagree about what happened to it. A refused local

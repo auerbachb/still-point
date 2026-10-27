@@ -45,9 +45,16 @@ export function initWebPwaOffline(
 
   const coordinator = getWebSessionSyncCoordinator();
 
-  const flushForCurrentUser = () => {
+  // #978: `syncedElsewhere` is true when the service worker already sent a
+  // sit's session row. This flush then skips that sit, so it counts nothing for
+  // it, but the server's progression has moved all the same. That refresh runs
+  // now, not once this flush settles: an upload of another sit can hold the
+  // flush for up to `UPLOAD_TIMEOUT_MS`. The flush refreshes again only when it
+  // synced a sit of its own, which moves progression a second time.
+  const flushForCurrentUser = (syncedElsewhere = false) => {
     const ownerUserId = ownerUserIdProvider();
     if (!ownerUserId) return;
+    if (syncedElsewhere) onSynced?.();
     void coordinator
       .flushPending(ownerUserId)
       .then((syncedCount) => {
@@ -68,7 +75,7 @@ export function initWebPwaOffline(
 
   const onMessage = (event: MessageEvent) => {
     if (event.data?.type === "flush-offline-session-queue") {
-      flushForCurrentUser();
+      flushForCurrentUser(event.data.sessionSynced === true);
     }
   };
   navigator.serviceWorker?.addEventListener("message", onMessage);

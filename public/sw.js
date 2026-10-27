@@ -9,6 +9,8 @@ const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
 const OFFLINE_QUEUE_LOCK_NAME = "stillpoint-session-queue";
 /** #907: one upload's deadline; constants.ts explains its size. */
 const UPLOAD_TIMEOUT_MS = 60 * 1000;
+/** #978: how much of the answer that parks a sit is kept; see constants.ts. */
+const PARKED_MESSAGE_MAX_LENGTH = 200;
 const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
 const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
@@ -171,13 +173,16 @@ function saveOfflineEntries(db, entries) {
     };
     tx.oncomplete = () => resolve(undefined);
     tx.onerror = () => reject(tx.error ?? new Error("IndexedDB write failed"));
+    // A quota-driven or explicit abort fires `abort`, not `error`. Without this
+    // the save never settles and the sync event stays pending.
+    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB write aborted"));
   });
 }
 
 /*
  * #907: each upload is aborted after UPLOAD_TIMEOUT_MS. The flush below holds
  * the queue lock across its uploads, so one that never settled would keep every
- * tab's queue writes waiting until the sync event ran out. A rejection ends the
+ * tab's queue writes waiting until the sync event ran out. The abort ends the
  * flush, and what it had not sent stays queued for the next one.
  *
  * `readBody: false` resolves on the status alone, as the page's `batchThoughts`
@@ -198,7 +203,7 @@ async function postJson(url, body, { readBody = true } = {}) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(text || `Request failed (${res.status})`);
+      throw uploadFailure(res.status, text || `Request failed (${res.status})`);
     }
     if (!readBody) {
       void res.body?.cancel().catch(() => {});
@@ -209,6 +214,31 @@ async function postJson(url, body, { readBody = true } = {}) {
   } finally {
     clearTimeout(deadline);
   }
+}
+
+/*
+ * #978: classified as the page's uploads are (`uploadFailure` in
+ * src/lib/offlineSessionQueue/transport.ts). A 5xx, 408 or 429 is worth
+ * retrying; any other status is the same answer every time.
+ */
+function uploadFailure(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  if (status >= 500 || status === 408 || status === 429) {
+    error.retryable = true;
+  } else {
+    error.permanent = true;
+  }
+  return error;
+}
+
+/*
+ * #978: whether a permanent answer is about the sit itself, as `rejectsTheSit`
+ * in src/lib/offlineSessionQueue/sessionSyncCoordinator.ts decides. A 401 or
+ * 403 is not: the sit stays queued for a later flush.
+ */
+function rejectsTheSit(error) {
+  return error.status !== 401 && error.status !== 403;
 }
 
 async function readOfflineOwnerUserId() {
@@ -223,7 +253,13 @@ async function readOfflineOwnerUserId() {
   }
 }
 
-async function flushOfflineQueueFromSw() {
+/*
+ * #978: `progress.sessionSynced` is set once a sit's session row goes up, even
+ * when its thoughts are then turned down and the sit is parked. The tabs then
+ * skip the sit, so they are told through the flush message to refresh the
+ * server's progression (`onSynced`).
+ */
+async function flushOfflineQueueFromSw(progress = {}) {
   const ownerUserId = await readOfflineOwnerUserId();
   if (!ownerUserId) {
     await notifyClientsToFlush();
@@ -233,9 +269,13 @@ async function flushOfflineQueueFromSw() {
   try {
     const entries = await loadOfflineEntries(db);
     let changed = false;
+    // #978: the first 401 or 403. Its sit is still queued for a later flush.
+    let retryLater = null;
     try {
       for (const entry of entries) {
         if (entry.ownerUserId !== ownerUserId) continue;
+        // #978: sent again, a parked sit would only get the same answer.
+        if (entry.parked) continue;
         const hasThoughts = entry.thoughts?.length > 0;
         // #980: a cleared end note is queued as this flag, as the page's
         // `flushEntry` sends it, so an entry with only the flag still owes a batch.
@@ -243,35 +283,56 @@ async function flushOfflineQueueFromSw() {
         if (entry.sessionSynced && !hasThoughts && !sendClear) {
           continue;
         }
-        if (!entry.sessionSynced) {
-          const data = await postJson("/api/sessions", entry.request);
-          entry.serverSessionId = data.session?.id ?? null;
-          entry.sessionSynced = true;
-          changed = true;
-        }
-        if (entry.serverSessionId && (hasThoughts || sendClear)) {
-          await postJson(
-            "/api/thoughts/batch",
-            {
-              sessionId: entry.serverSessionId,
-              dayNumber: entry.request.dayNumber,
-              // #948: sent as queued. Each in-session thought keeps the
-              // `clientThoughtId` the page gave it, so a batch the server stored
-              // before its upload timed out is stored once when sent again.
-              thoughts: entry.thoughts ?? [],
-              // #980: replaying a clear deletes the one stored note row again,
-              // so a clear whose answer was lost is safe to send twice.
-              ...(sendClear ? { clearCompletionNote: true } : {}),
-            },
-            { readBody: false },
-          );
-          // Reached only on a 2xx: a failed or timed-out upload rejects above
-          // and leaves the thoughts and the flag queued for the next flush.
-          entry.thoughts = [];
-          if (sendClear) entry.clearCompletionNote = false;
-          changed = true;
+        try {
+          if (!entry.sessionSynced) {
+            const data = await postJson("/api/sessions", entry.request);
+            entry.serverSessionId = data.session?.id ?? null;
+            entry.sessionSynced = true;
+            changed = true;
+            progress.sessionSynced = true;
+          }
+          if (entry.serverSessionId && (hasThoughts || sendClear)) {
+            await postJson(
+              "/api/thoughts/batch",
+              {
+                sessionId: entry.serverSessionId,
+                dayNumber: entry.request.dayNumber,
+                // #948: sent as queued. Each in-session thought keeps the
+                // `clientThoughtId` the page gave it, so a batch the server stored
+                // before its upload timed out is stored once when sent again.
+                thoughts: entry.thoughts ?? [],
+                // #980: replaying a clear deletes the one stored note row again,
+                // so a clear whose answer was lost is safe to send twice.
+                ...(sendClear ? { clearCompletionNote: true } : {}),
+              },
+              { readBody: false },
+            );
+            // Reached only on a 2xx: a failed or timed-out upload rejects above
+            // and leaves the thoughts and the flag queued for the next flush.
+            entry.thoughts = [];
+            if (sendClear) entry.clearCompletionNote = false;
+            changed = true;
+          }
+        } catch (error) {
+          // #978: a permanent answer stops only this sit, so the sits behind it
+          // still upload. A timeout, a network failure or a retryable answer
+          // still ends the flush (#907).
+          if (!error?.permanent) throw error;
+          if (rejectsTheSit(error)) {
+            entry.parked = {
+              at: new Date().toISOString(),
+              status: error.status,
+              message: error.message.slice(0, PARKED_MESSAGE_MAX_LENGTH),
+            };
+            changed = true;
+          } else if (!retryLater) {
+            retryLater = error;
+          }
         }
       }
+      // #978: a sit that a 401 or 403 left queued fails the sync, as a timeout
+      // does, so the browser retries it later even with no tab open.
+      if (retryLater) throw retryLater;
     } finally {
       // #907: saved when an upload fails or times out too, so the batches sent
       // before it are not sent again; the server would store their thoughts twice.
@@ -297,10 +358,10 @@ function withOfflineQueueLock(fn) {
   return locks.request(OFFLINE_QUEUE_LOCK_NAME, () => fn());
 }
 
-async function notifyClientsToFlush() {
+async function notifyClientsToFlush(progress = {}) {
   const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
   for (const client of windowClients) {
-    client.postMessage({ type: "flush-offline-session-queue" });
+    client.postMessage({ type: "flush-offline-session-queue", sessionSynced: progress.sessionSynced === true });
   }
 }
 
@@ -528,16 +589,18 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("sync", (event) => {
   if (event.tag !== OFFLINE_SYNC_TAG) return;
+  // #978: what the flush sent, told to the tabs whether or not it then failed.
+  const progress = {};
   event.waitUntil(
     // #907: a failed flush, such as an upload that timed out, still fails the
     // event once the tabs are told. The browser then retries the sync later, so
     // a queued sit is retried even when no tab is open to flush it. Telling the
     // tabs is best-effort: it never fails a sync that sent everything, and never
     // replaces the flush's own error.
-    withOfflineQueueLock(() => flushOfflineQueueFromSw()).then(
-      () => notifyClientsToFlush().catch(() => {}),
+    withOfflineQueueLock(() => flushOfflineQueueFromSw(progress)).then(
+      () => notifyClientsToFlush(progress).catch(() => {}),
       async (error) => {
-        await notifyClientsToFlush().catch(() => {});
+        await notifyClientsToFlush(progress).catch(() => {});
         throw error;
       },
     ),

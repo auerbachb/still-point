@@ -1,6 +1,7 @@
 /**
  * Issue #907 — the service worker's uploads are aborted after the same
- * deadline as the page's.
+ * deadline as the page's. Issue #978 — a permanent answer stops only its own
+ * sit, as on the page.
  *
  * `public/sw.js` is a plain script with no exports, so this runs the real file
  * in a `node:vm` context that holds only the globals its top level touches, then
@@ -10,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { OFFLINE_SYNC_TAG, UPLOAD_TIMEOUT_MS } from "./constants";
+import { OFFLINE_SYNC_TAG, PARKED_MESSAGE_MAX_LENGTH, UPLOAD_TIMEOUT_MS } from "./constants";
 
 const serviceWorkerSource = readFileSync(new URL("../../../public/sw.js", import.meta.url), "utf8");
 
@@ -44,8 +45,15 @@ function loadServiceWorker(fetch: (url: string, init: RequestInit) => Promise<un
   const listeners = new Map<string, (event: unknown) => void>();
   /** The `type` of each message the worker posts to the tabs. */
   const tabMessages: unknown[] = [];
+  /** Each whole message the worker posts to the tabs. */
+  const tabMessageBodies: unknown[] = [];
   const matchAll = vi.fn(async () => [
-    { postMessage: (message: { type?: unknown }) => tabMessages.push(message.type) },
+    {
+      postMessage: (message: { type?: unknown }) => {
+        tabMessages.push(message.type);
+        tabMessageBodies.push({ ...message });
+      },
+    },
   ]);
   const context = vm.createContext({
     self: { addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener) },
@@ -65,7 +73,9 @@ function loadServiceWorker(fetch: (url: string, init: RequestInit) => Promise<un
     // Adopted into this realm's Promise, so the matchers see a native one.
     postJson: (url: string, body: unknown, options?: PostOptions) => Promise.resolve(postJson(url, body, options)),
     uploadTimeoutMs: vm.runInContext("UPLOAD_TIMEOUT_MS", context) as unknown,
+    parkedMessageMaxLength: vm.runInContext("PARKED_MESSAGE_MAX_LENGTH", context) as unknown,
     tabMessages,
+    tabMessageBodies,
     /** The `clients.matchAll` the worker calls to message the tabs. */
     matchAll,
     /** Makes `sits` the worker's queue, signed in as their owner. Returns a copy of each save. */
@@ -342,7 +352,6 @@ describe("public/sw.js end-note clear (#980)", () => {
     const outcome = sw.sync().then(() => "resolved", (error: unknown) => error);
 
     await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
-
     expect(((await outcome) as DOMException).name).toBe("AbortError");
     expect(saves).toEqual([]);
   });
@@ -354,6 +363,155 @@ describe("public/sw.js end-note clear (#980)", () => {
     await expect(sw.sync()).resolves.toBeUndefined();
 
     expect(requests).toEqual([]);
+    expect(saves).toEqual([]);
+  });
+});
+
+type RefusedUpload = { status: number; text: string };
+
+/**
+ * A `fetch` for `loadServiceWorker` that answers an upload `refuse` names with
+ * that status, and every other one with success: a created session is named
+ * after its sit. `uploads` lists each upload in order, as `<url> <id>`.
+ */
+function stubApi(refuse: (url: string, id: string) => RefusedUpload | undefined) {
+  const uploads: string[] = [];
+  const fetch = async (url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body)) as { clientSessionId?: string; sessionId?: string };
+    const id = String(url === "/api/sessions" ? body.clientSessionId : body.sessionId);
+    uploads.push(`${url} ${id}`);
+    const refused = refuse(url, id);
+    if (refused) return { ok: false, status: refused.status, text: async () => refused.text };
+    return { ok: true, status: 200, json: async () => ({ session: { id: `server-${id}` } }) };
+  };
+  return { uploads, fetch };
+}
+
+/** A queued sit as the worker leaves it once both of its uploads went through. */
+function sentSit(clientSessionId: string) {
+  return { ...queuedSit(clientSessionId, true), thoughts: [] };
+}
+
+describe("public/sw.js permanent answers (#978)", () => {
+  test("keeps as much of a parked sit's answer as the page", () => {
+    expect(loadServiceWorker(async () => ({})).parkedMessageMaxLength).toBe(PARKED_MESSAGE_MAX_LENGTH);
+  });
+
+  test("a sit the server refuses with a permanent 4xx is parked, and the sits behind it still upload", async () => {
+    const api = stubApi((url, id) =>
+      url === "/api/sessions" && id === "refused" ? { status: 400, text: '{"error":"Invalid track"}' } : undefined,
+    );
+    const sw = loadServiceWorker(api.fetch);
+    const saves = sw.useQueue([queuedSit("ahead", false), queuedSit("refused", false), queuedSit("behind", false)]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(api.uploads).toEqual([
+      "/api/sessions ahead",
+      "/api/thoughts/batch server-ahead",
+      "/api/sessions refused",
+      "/api/sessions behind",
+      "/api/thoughts/batch server-behind",
+    ]);
+    // Kept as it was queued, with the answer that turned it down.
+    expect(saves).toEqual([[
+      sentSit("ahead"),
+      { ...queuedSit("refused", false), parked: { at: expect.any(String), status: 400, message: '{"error":"Invalid track"}' } },
+      sentSit("behind"),
+    ]]);
+    expect(sw.tabMessages).toEqual(["flush-offline-session-queue"]);
+  });
+
+  test("a sit whose session row went up before its thoughts were turned down tells the tabs a session synced", async () => {
+    const api = stubApi((url) => (url === "/api/thoughts/batch" ? { status: 400, text: '{"error":"Invalid thoughts"}' } : undefined));
+    const sw = loadServiceWorker(api.fetch);
+    const saves = sw.useQueue([queuedSit("thoughts-refused", false)]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(api.uploads).toEqual(["/api/sessions thoughts-refused", "/api/thoughts/batch server-thoughts-refused"]);
+    expect(saves).toEqual([[
+      {
+        ...queuedSit("thoughts-refused", true),
+        parked: { at: expect.any(String), status: 400, message: '{"error":"Invalid thoughts"}' },
+      },
+    ]]);
+    // The tabs skip the parked sit, so only this tells them to refresh progression.
+    expect(sw.tabMessageBodies).toEqual([{ type: "flush-offline-session-queue", sessionSynced: true }]);
+  });
+
+  test("a sync that sent no session row tells the tabs none synced", async () => {
+    const api = stubApi(() => ({ status: 400, text: '{"error":"Invalid track"}' }));
+    const sw = loadServiceWorker(api.fetch);
+    sw.useQueue([queuedSit("refused", false)]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(sw.tabMessageBodies).toEqual([{ type: "flush-offline-session-queue", sessionSynced: false }]);
+  });
+
+  test("a parked sit keeps the start of its answer, and no later sync sends it", async () => {
+    // A thoughts batch for a session that is gone, answered with a proxy's page.
+    const page = `<html><body>${"Session not found. ".repeat(40)}</body></html>`;
+    const api = stubApi(() => ({ status: 404, text: page }));
+    const sw = loadServiceWorker(api.fetch);
+    const saves = sw.useQueue([queuedSit("gone", true)]);
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(api.uploads).toEqual(["/api/thoughts/batch server-gone"]);
+    expect(saves).toEqual([[
+      { ...queuedSit("gone", true), parked: { at: expect.any(String), status: 404, message: page.slice(0, PARKED_MESSAGE_MAX_LENGTH) } },
+    ]]);
+  });
+
+  test.each([401, 403])("a %i leaves its sit queued and fails the sync, so the browser sends it later", async (status) => {
+    let signedOut = true;
+    const api = stubApi((url, id) =>
+      signedOut && url === "/api/sessions" && id === "signed-out" ? { status, text: '{"error":"Unauthorized"}' } : undefined,
+    );
+    const sw = loadServiceWorker(api.fetch);
+    const saves = sw.useQueue([queuedSit("signed-out", false), queuedSit("behind", false)]);
+
+    const refused = await sw.sync().then(() => "resolved", (error: unknown) => error);
+
+    // The sit behind it still uploads; the refused one is saved as it was.
+    expect(refused).toHaveProperty("status", status);
+    expect(saves).toEqual([[queuedSit("signed-out", false), sentSit("behind")]]);
+    expect(sw.tabMessages).toEqual(["flush-offline-session-queue"]);
+    // A failed sync still reports the session row the sit behind it sent.
+    expect(sw.tabMessageBodies).toEqual([{ type: "flush-offline-session-queue", sessionSynced: true }]);
+
+    signedOut = false;
+    await expect(sw.sync()).resolves.toBeUndefined();
+
+    expect(api.uploads).toEqual([
+      "/api/sessions signed-out",
+      "/api/sessions behind",
+      "/api/thoughts/batch server-behind",
+      "/api/sessions signed-out",
+      "/api/thoughts/batch server-signed-out",
+    ]);
+    expect(saves.at(-1)).toEqual([sentSit("signed-out"), sentSit("behind")]);
+  });
+
+  test.each([
+    ["a timeout", (signal: Signal) => rejectOnAbort(signal)],
+    ["a network failure", async () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["a 503", async () => ({ ok: false, status: 503, text: async () => "" })],
+  ])("%s still ends the flush, so the sit behind it is not tried (#907)", async (_name, respond) => {
+    const uploads: string[] = [];
+    const sw = loadServiceWorker((url, init) => {
+      uploads.push(`${url} ${(JSON.parse(String(init.body)) as { clientSessionId: string }).clientSessionId}`);
+      return respond(init.signal);
+    });
+    const saves = sw.useQueue([queuedSit("fails", false), queuedSit("behind", false)]);
+    const outcome = sw.sync().then(() => "resolved", (error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
+    expect(await outcome).not.toBe("resolved");
+    expect(uploads).toEqual(["/api/sessions fails"]);
     expect(saves).toEqual([]);
   });
 });

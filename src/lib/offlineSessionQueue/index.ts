@@ -19,6 +19,7 @@ export {
 export { initWebPwaOffline, registerServiceWorker } from "./pwaBootstrap";
 export type {
   CreateSessionPayload,
+  ParkedSession,
   PendingSessionEntry,
   PendingSessionThought,
   SavedSessionResult,

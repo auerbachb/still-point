@@ -6,7 +6,13 @@
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { UPLOAD_TIMEOUT_MS } from "./constants";
-import { isNetworkFailure, liveSessionSyncTransport, type SessionSyncTransport } from "./transport";
+import {
+  failureStatus,
+  isNetworkFailure,
+  isPermanentFailure,
+  liveSessionSyncTransport,
+  type SessionSyncTransport,
+} from "./transport";
 import type { CreateSessionPayload } from "./types";
 
 const payload: CreateSessionPayload = {
@@ -117,5 +123,49 @@ describe("liveSessionSyncTransport upload deadline (#907)", () => {
     stubFetch(async () => ({ ok: true, status: 201, json: async () => ({ session }) }));
 
     await expect(liveSessionSyncTransport().createSession(payload)).resolves.toEqual(session);
+  });
+});
+
+describe("liveSessionSyncTransport failure status (#978)", () => {
+  test.each(uploads)("%s refused throws with the status and the answer's text", async (_name, upload) => {
+    stubFetch(async () => ({ ok: false, status: 404, text: async () => '{"error":"Session not found"}' }));
+
+    const error = await upload(liveSessionSyncTransport()).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: '{"error":"Session not found"}', status: 404, permanent: true });
+    expect(failureStatus(error)).toBe(404);
+  });
+
+  test.each([
+    [400, true],
+    [401, true],
+    [403, true],
+    [409, true],
+    [413, true],
+    [422, true],
+    [408, false],
+    [429, false],
+    [500, false],
+    [503, false],
+  ])("a %i is permanent: %s", async (status, permanent) => {
+    stubFetch(async () => ({ ok: false, status, text: async () => "" }));
+
+    const error = await liveSessionSyncTransport().createSession(payload).catch((caught: unknown) => caught);
+
+    expect(isPermanentFailure(error)).toBe(permanent);
+    expect(isNetworkFailure(error)).toBe(!permanent);
+    expect(failureStatus(error)).toBe(status);
+  });
+
+  test("a failure that was never answered has no status", async () => {
+    stubFetch(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    const error = await liveSessionSyncTransport().createSession(payload).catch((caught: unknown) => caught);
+
+    expect(isNetworkFailure(error)).toBe(true);
+    expect(isPermanentFailure(error)).toBe(false);
+    expect(failureStatus(error)).toBeNull();
   });
 });
