@@ -1,33 +1,5 @@
 import Foundation
 
-/// Network hooks for offline session sync — injectable for unit tests (#557).
-public struct SessionSyncTransport: Sendable {
-    public var createSession: @Sendable (CreateSessionRequest) async throws -> SessionDTO
-    public var batchThoughts: @Sendable (BatchThoughtsRequest) async throws -> [ThoughtDTO]
-
-    public init(
-        createSession: @escaping @Sendable (CreateSessionRequest) async throws -> SessionDTO,
-        batchThoughts: @escaping @Sendable (BatchThoughtsRequest) async throws -> [ThoughtDTO]
-    ) {
-        self.createSession = createSession
-        self.batchThoughts = batchThoughts
-    }
-
-    public static func live(client: APIClient = .shared) -> SessionSyncTransport {
-        SessionSyncTransport(
-            createSession: { try await client.createSession($0) },
-            batchThoughts: { try await client.batchThoughts($0) }
-        )
-    }
-
-    public static var alwaysFailing: SessionSyncTransport {
-        SessionSyncTransport(
-            createSession: { _ in throw URLError(.notConnectedToInternet) },
-            batchThoughts: { _ in throw URLError(.notConnectedToInternet) }
-        )
-    }
-}
-
 /// Persists completed sits locally first, then syncs to the server on reconnect (#557).
 public actor SessionSyncCoordinator {
     public static let shared = SessionSyncCoordinator()
@@ -185,9 +157,7 @@ public actor SessionSyncCoordinator {
 
     /// #792: where this sit stands in the queue — see `QueuedSessionState`.
     public func queuedSessionState(clientSessionId: UUID, ownerUserId: String) throws -> QueuedSessionState {
-        guard let entry = try queueStore.loadEntries().first(where: {
-            $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-        }) else {
+        guard let entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) else {
             return .notQueued
         }
         if entry.sessionSynced, let serverSessionId = entry.serverSessionId {
@@ -198,10 +168,7 @@ public actor SessionSyncCoordinator {
 
     /// Resolve the best session id for API calls (server id when known).
     public func resolvedServerSessionId(for clientSessionId: UUID, ownerUserId: String) async throws -> String? {
-        let entry = try queueStore.loadEntries().first {
-            $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-        }
-        return entry?.serverSessionId
+        try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId)?.serverSessionId
     }
 
     /// Drop fully-synced entries once the completion flow finishes. #983: a
@@ -209,12 +176,7 @@ public actor SessionSyncCoordinator {
     public func pruneCompletedEntries(ownerUserId: String) async throws {
         guard !ownerUserId.isEmpty else { return }
 
-        var entries = try queueStore.loadEntries()
-        let before = entries.count
-        entries.removeAll { $0.ownerUserId == ownerUserId && !$0.awaitsSync && $0.parked == nil }
-        if entries.count != before {
-            try queueStore.saveEntries(entries)
-        }
+        try removeEntries { $0.ownerUserId == ownerUserId && !$0.awaitsSync && $0.parked == nil }
     }
 
     /// Remove the signed-out account's queued entries (logout / account switch).
@@ -246,15 +208,10 @@ public actor SessionSyncCoordinator {
     public func clearQueue(ownerUserId: String, enqueuedBefore boundary: Date) async throws {
         guard !ownerUserId.isEmpty else { return }
 
-        var entries = try queueStore.loadEntries()
-        let before = entries.count
-        entries.removeAll { $0.ownerUserId == ownerUserId && $0.enqueuedAt < boundary }
-        if entries.count != before {
-            try queueStore.saveEntries(entries)
-        }
+        try removeEntries { $0.ownerUserId == ownerUserId && $0.enqueuedAt < boundary }
     }
 
-    // MARK: - Private
+    // MARK: - Serialization
 
     /// Runs `operation` once every earlier serialized operation has finished.
     private func serialized<T>(_ operation: () async throws -> T) async rethrows -> T {
@@ -273,6 +230,37 @@ public actor SessionSyncCoordinator {
         }
         return try await operation()
     }
+
+    // MARK: - Queue access
+
+    /// Index of the entry queued under `clientSessionId` for `ownerUserId`.
+    private static func entryIndex(
+        in entries: [PendingSessionEntry],
+        clientSessionId: UUID,
+        ownerUserId: String
+    ) -> Int? {
+        entries.firstIndex { $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId }
+    }
+
+    /// The entry queued under `clientSessionId` for `ownerUserId`, freshly read.
+    private func loadEntry(clientSessionId: UUID, ownerUserId: String) throws -> PendingSessionEntry? {
+        let entries = try queueStore.loadEntries()
+        return Self.entryIndex(in: entries, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+            .map { entries[$0] }
+    }
+
+    /// Removes every entry matching `shouldRemove`, writing the queue only when
+    /// something was removed.
+    private func removeEntries(where shouldRemove: (PendingSessionEntry) -> Bool) throws {
+        var entries = try queueStore.loadEntries()
+        let before = entries.count
+        entries.removeAll(where: shouldRemove)
+        if entries.count != before {
+            try queueStore.saveEntries(entries)
+        }
+    }
+
+    // MARK: - End note
 
     /// `note` nil clears it. Either way the entry keeps at most one end note and
     /// its in-session thoughts are never touched.
@@ -296,10 +284,10 @@ public actor SessionSyncCoordinator {
             }
 
             // #753: autosave can run again as the note is edited. Keep one end note
-            // and replace its text. A second -1 in the same batch is rejected.
-            var thoughts = entries[index].thoughts.filter { $0.timeInSession != -1 }
+            // and replace its text. A second end note in the same batch is rejected.
+            var thoughts = entries[index].thoughts.filter { $0.timeInSession != Self.endNoteTimeInSession }
             if let note {
-                thoughts.append(PendingSessionThought(timeInSession: -1, text: note))
+                thoughts.append(PendingSessionThought(timeInSession: Self.endNoteTimeInSession, text: note))
             }
             entries[index].thoughts = thoughts
             // #792: a new note replaces the stored one server-side, so only a clear
@@ -311,101 +299,101 @@ public actor SessionSyncCoordinator {
         }
     }
 
+    // MARK: - Flush
+
+    /// Uploads one queued sit: creates its server row if it has none, then sends
+    /// its queued thoughts and any pending note clear. Returns the synced session,
+    /// or nil when the sit is missing, parked, or an upload failed.
     @discardableResult
     private func flushEntry(clientSessionId: UUID, ownerUserId: String) async throws -> SessionDTO? {
-        guard var entry = try queueStore.loadEntries().first(where: {
-            $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-        }), entry.parked == nil else {
+        guard var entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId),
+              entry.parked == nil else {
             // #983: sent again, a parked sit would only get the same answer.
             return nil
         }
 
         if !entry.sessionSynced {
-            do {
-                let session = try await transport.createSession(entry.request)
-                var entries = try queueStore.loadEntries()
-                guard let index = entries.firstIndex(where: {
-                    $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-                }) else {
-                    return nil
-                }
-                entries[index].serverSessionId = session.id
-                entries[index].sessionSynced = true
-                try queueStore.saveEntries(entries)
-                entry = entries[index]
-            } catch {
-                parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
-                return nil
-            }
+            guard let created = await createServerSession(for: entry) else { return nil }
+            entry = created
         }
 
         guard let serverSessionId = entry.serverSessionId else { return nil }
 
-        entry = try queueStore.loadEntries().first(where: {
-            $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-        }) ?? entry
+        entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
 
-        let sentClear = entry.clearCompletionNote
-        if !entry.thoughts.isEmpty || sentClear {
-            let sent = entry.thoughts
-            do {
-                let batch = BatchThoughtsRequest(
-                    sessionId: serverSessionId,
-                    dayNumber: entry.request.dayNumber,
-                    thoughts: sent.map {
-                        BatchThoughtsRequest.ThoughtInput(
-                            timeInSession: $0.timeInSession,
-                            text: $0.text,
-                            clientThoughtId: $0.clientThoughtId
-                        )
-                    },
-                    clearCompletionNote: sentClear
-                )
-                _ = try await transport.batchThoughts(batch)
-                var entries = try queueStore.loadEntries()
-                guard let index = entries.firstIndex(where: {
-                    $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-                }) else {
-                    return Self.sessionDTO(from: entry.request, id: serverSessionId)
-                }
-                // Only drop what this batch sent. A note replaced while the
-                // request was in flight (#753 autosave) stays queued, and a clear
-                // asked for after a request that carried none stays set (#792).
-                // #971: the answer is not read. A replay the server had already
-                // stored answers `[]`, and still acknowledges what it sent.
-                entries[index].thoughts.removeAll { queued in
-                    sent.contains { Self.isSameThought($0, queued) }
-                }
-                if sentClear {
-                    entries[index].clearCompletionNote = false
-                }
-                try queueStore.saveEntries(entries)
-                entry = entries[index]
-            } catch {
-                parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+        if !entry.thoughts.isEmpty || entry.clearCompletionNote {
+            guard let uploaded = await uploadThoughts(of: entry, serverSessionId: serverSessionId) else {
                 return nil
             }
+            entry = uploaded
         }
 
         return Self.sessionDTO(from: entry.request, id: serverSessionId)
     }
 
-    /// #983: whether an upload failure is the server turning this sit down for
-    /// good, as web decides since #978 (`uploadFailure` and `rejectsTheSit`). A
-    /// 5xx, a 408 or a 429 is worth retrying. A 401 means the sign-in lapsed and a
-    /// 403 comes from in front of the routes; a later flush can get past both.
-    /// Any other 4xx (a validation 400, the 404 for a session that is gone, …)
-    /// would be the same every time. A network failure, or an `APIError` with
-    /// status 0, never parks.
-    static func rejectsTheSit(_ error: Error) -> Bool {
-        guard let apiError = error as? APIError else { return false }
-        switch apiError.status {
-        case 401, 403, 408, 429:
-            return false
-        case 400..<500:
-            return true
-        default:
-            return false
+    /// Creates the sit's server row and records its id on the queued entry.
+    /// Returns the updated entry, or nil when the entry has since left the queue
+    /// or the upload failed (parking the sit if the server turned it down). A
+    /// queue read or write that throws here is treated as a failed upload.
+    private func createServerSession(for entry: PendingSessionEntry) async -> PendingSessionEntry? {
+        let clientSessionId = entry.clientSessionId
+        let ownerUserId = entry.ownerUserId
+        do {
+            let session = try await transport.createSession(entry.request)
+            var entries = try queueStore.loadEntries()
+            guard let index = Self.entryIndex(
+                in: entries, clientSessionId: clientSessionId, ownerUserId: ownerUserId
+            ) else {
+                return nil
+            }
+            entries[index].serverSessionId = session.id
+            entries[index].sessionSynced = true
+            try queueStore.saveEntries(entries)
+            return entries[index]
+        } catch {
+            parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+            return nil
+        }
+    }
+
+    /// Sends the entry's queued thoughts (and its pending note clear) and drops
+    /// what was sent from the queue. Returns the entry to build the session from
+    /// — the updated one, or `entry` itself if it has since left the queue — or
+    /// nil when the upload failed (parking the sit if the server turned it down).
+    /// A queue read or write that throws here is treated as a failed upload.
+    private func uploadThoughts(
+        of entry: PendingSessionEntry,
+        serverSessionId: String
+    ) async -> PendingSessionEntry? {
+        let clientSessionId = entry.clientSessionId
+        let ownerUserId = entry.ownerUserId
+        let sent = entry.thoughts
+        let sentClear = entry.clearCompletionNote
+        do {
+            let batch = Self.thoughtsBatch(for: entry, serverSessionId: serverSessionId, clearCompletionNote: sentClear)
+            _ = try await transport.batchThoughts(batch)
+            var entries = try queueStore.loadEntries()
+            guard let index = Self.entryIndex(
+                in: entries, clientSessionId: clientSessionId, ownerUserId: ownerUserId
+            ) else {
+                return entry
+            }
+            // Only drop what this batch sent. A note replaced while the
+            // request was in flight (#753 autosave) stays queued, and a clear
+            // asked for after a request that carried none stays set (#792).
+            // #971: the answer is not read. A replay the server had already
+            // stored answers `[]`, and still acknowledges what it sent.
+            entries[index].thoughts.removeAll { queued in
+                sent.contains { Self.isSameThought($0, queued) }
+            }
+            if sentClear {
+                entries[index].clearCompletionNote = false
+            }
+            try queueStore.saveEntries(entries)
+            return entries[index]
+        } catch {
+            parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+            return nil
         }
     }
 
@@ -416,96 +404,12 @@ public actor SessionSyncCoordinator {
     private func parkIfRejected(by error: Error, clientSessionId: UUID, ownerUserId: String) {
         guard Self.rejectsTheSit(error), let apiError = error as? APIError else { return }
         guard var entries = try? queueStore.loadEntries(),
-              let index = entries.firstIndex(where: {
-                  $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-              }) else {
+              let index = Self.entryIndex(in: entries, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
+        else {
             return
         }
         entries[index].parked = PendingSessionParked(status: apiError.status, message: apiError.message)
         try? queueStore.saveEntries(entries)
-    }
-
-    /// #971: an id for each in-session thought, given before the entry is first
-    /// saved, so every upload of it sends the same one. A batch the server stored
-    /// but whose response was lost (a dropped connection, the app suspended
-    /// mid-request) is then not stored twice when it is sent again (#948). The
-    /// end note gets none: the server replaces it instead. Lowercased, like web's
-    /// `crypto.randomUUID()`.
-    private static func withClientThoughtIds(_ thoughts: [PendingSessionThought]) -> [PendingSessionThought] {
-        thoughts.map { thought in
-            guard thought.timeInSession != -1, thought.clientThoughtId == nil else { return thought }
-            return PendingSessionThought(
-                timeInSession: thought.timeInSession,
-                text: thought.text,
-                clientThoughtId: UUID().uuidString.lowercased()
-            )
-        }
-    }
-
-    /// #971: whether a thought the batch sent is this queued one. A thought with
-    /// an id is matched by it. One queued before ids existed, and the end note,
-    /// are matched by time and text, as before.
-    private static func isSameThought(_ sent: PendingSessionThought, _ queued: PendingSessionThought) -> Bool {
-        if sent.clientThoughtId != nil || queued.clientThoughtId != nil {
-            return sent.clientThoughtId == queued.clientThoughtId
-        }
-        return sent.timeInSession == queued.timeInSession && sent.text == queued.text
-    }
-
-    private static func requestWithClientId(
-        _ request: CreateSessionRequest,
-        clientSessionId: UUID
-    ) -> CreateSessionRequest {
-        CreateSessionRequest(
-            dayNumber: request.dayNumber,
-            sessionType: request.sessionType,
-            duration: request.duration,
-            bonusSeconds: request.bonusSeconds,
-            completed: request.completed,
-            actualTime: request.actualTime,
-            clearPercent: request.clearPercent,
-            thoughtCount: request.thoughtCount,
-            mindStateLog: request.mindStateLog,
-            attentionLog: request.attentionLog,
-            sessionDate: request.sessionDate,
-            breathCount: request.breathCount,
-            focusCategory: request.focusCategory,
-            track: request.track,
-            clientSessionId: clientSessionId,
-            ambientSoundSummary: request.ambientSoundSummary,
-            combined: request.combined
-        )
-    }
-
-    static func provisionalSessionDTO(
-        from request: CreateSessionRequest,
-        clientSessionId: UUID
-    ) -> SessionDTO {
-        sessionDTO(from: request, id: clientSessionId.uuidString)
-    }
-
-    static func sessionDTO(from request: CreateSessionRequest, id: String) -> SessionDTO {
-        SessionDTO(
-            id: id,
-            dayNumber: request.dayNumber,
-            sessionType: request.sessionType,
-            duration: request.duration,
-            bonusSeconds: request.bonusSeconds == 0 ? nil : request.bonusSeconds,
-            completed: request.completed,
-            actualTime: request.actualTime,
-            clearPercent: request.clearPercent,
-            thoughtCount: request.thoughtCount,
-            mindStateLog: request.mindStateLog,
-            attentionLog: request.attentionLog,
-            sessionDate: request.sessionDate,
-            createdAt: nil,
-            buddySessionId: nil,
-            breathCount: request.breathCount,
-            focusCategory: request.focusCategory,
-            track: request.track,
-            ambientSoundSummary: request.ambientSoundSummary,
-            combined: request.combined
-        )
     }
 }
 
