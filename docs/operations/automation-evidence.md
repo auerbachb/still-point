@@ -8,7 +8,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 |------|--------|------|
 | Create App Store Connect API key (`.p8`), **never commit the key** | Account Holder / Admin | One-time setup; this repo already stores `APPSTORE_API_*` in GitHub Actions secrets (rotate in ASC + GitHub if the key is revoked). |
 | Confirm `gh secret list` shows required names (values are never visible) | Release owner | Cannot be automated inside CI without elevated token scope. |
-| Distribution certificate + provisioning profile secrets | Engineering | `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `BUILD_PROVISION_PROFILE_BASE64`. |
+| Distribution certificate + provisioning profile secrets | Engineering | `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `BUILD_PROVISION_PROFILE_BASE64`, `BUILD_PROVISION_PROFILE_EXTENSION_BASE64`, `BUILD_PROVISION_PROFILE_WIDGET_BASE64`. |
 | Apple Agreements, Tax, Banking | Account Holder / Admin | Not reliably exposed via public API; uploads can fail until clear. |
 
 ## Automated in CI (after secrets exist)
@@ -19,6 +19,7 @@ This log complements the machine-readable output from `npm run ios:app-store:dry
 | Release-readiness checklist gate | `grep` on `PARITY_CHECKLIST.md` / `QA_CHECKLIST.md` | Both |
 | Machine-readable preflight | `npm run ios:app-store:dry-run` | Both |
 | Archive + upload binary to App Store Connect / TestFlight | `xcodebuild -exportArchive` with API key | TestFlight (`ios-testflight.yml`) |
+| Every secret the release needs is set, before the build number is claimed | `scripts/ci/ios-app-store-release-secrets.mjs` names each missing secret, never a value (#937) | App Store release (`ios-app-store-release.yml`) |
 | Build number for the App Store binary | Claims the next `ios-v<marketing>-build<N>` tag (`scripts/ci/ios-testflight-build-number.mjs`), passed to `gym` as `CURRENT_PROJECT_VERSION` (#838) | App Store release (`ios-app-store-release.yml`) |
 | Preflight + archive + metadata + binary via Fastlane | `bundle exec fastlane release` (`gym`, `deliver`) | App Store release (`ios-app-store-release.yml`); `submit_for_review` is false unless `SUBMIT_FOR_REVIEW=1` |
 

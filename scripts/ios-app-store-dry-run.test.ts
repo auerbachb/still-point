@@ -210,9 +210,10 @@ describe("extractRunbookPhases (#910)", () => {
 });
 
 // The real script, run the way `npm run ios:app-store:dry-run` runs it, against a
-// throwaway origin (through GIT_DIR) so the intended build is known. Its other
-// checks read this checkout as usual; the test only reads the intended build back.
-describe("ios-app-store-dry-run.mjs intended build (#838)", { timeout: 30_000 }, () => {
+// throwaway origin (through GIT_DIR) so the intended build is known, and a stubbed
+// gh. Its other checks read this checkout as usual; the tests read back only the
+// intended build and B2.
+describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeout: 30_000 }, () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -274,7 +275,7 @@ describe("ios-app-store-dry-run.mjs intended build (#838)", { timeout: 30_000 },
       };
     };
 
-    return { git, dryRun };
+    return { git, dryRun, bin };
   }
 
   type Check = { id: string; status: string; evidence?: Record<string, unknown> };
@@ -325,5 +326,51 @@ describe("ios-app-store-dry-run.mjs intended build (#838)", { timeout: 30_000 },
     expect(summary.intendedTag).toBe("ios-v1.0.3-build10");
     expect(summary.intendedBuild.source).toBe("local");
     expect((summary.checks as Check[]).find((check) => check.id === "INTENDED_BUILD")?.status).toBe("warning");
+  });
+
+  /** The secrets B2 requires (#937), kept apart from the script's own list. */
+  const B2_SECRETS = [
+    "BUILD_CERTIFICATE_BASE64",
+    "P12_PASSWORD",
+    "BUILD_PROVISION_PROFILE_BASE64",
+    "BUILD_PROVISION_PROFILE_EXTENSION_BASE64",
+    "BUILD_PROVISION_PROFILE_WIDGET_BASE64",
+    "APPSTORE_API_KEY_ID",
+    "APPSTORE_API_ISSUER_ID",
+    "APPSTORE_API_PRIVATE_KEY",
+  ];
+  const EXTENSION_PROFILES = ["BUILD_PROVISION_PROFILE_EXTENSION_BASE64", "BUILD_PROVISION_PROFILE_WIDGET_BASE64"];
+
+  /** What gh reports, the names it lists (null: it fails), B2's status, and the names B2 finds missing. */
+  type B2Case = [label: string, listed: string[] | null, status: string, missingGithubSecrets?: string[]];
+
+  test.each<B2Case>([
+    ["cannot list the repository's secrets", null, "warning"],
+    ["lists every required name", B2_SECRETS, "pass"],
+    [
+      "lists all but the extension profiles",
+      B2_SECRETS.filter((name) => !EXTENSION_PROFILES.includes(name)),
+      "warning",
+      EXTENSION_PROFILES,
+    ],
+  ])("B2 checks all eight secrets when gh %s", (_label, listed, status, missingGithubSecrets) => {
+    const { dryRun, bin } = setup();
+    if (listed) {
+      const names = JSON.stringify(listed.map((name) => ({ name })));
+      fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\necho '${names}'\n`);
+    }
+
+    const { summary } = dryRun();
+
+    expect(summary.workflows.requiredSecrets).toEqual(B2_SECRETS);
+    const b2 = (summary.checks as Check[]).find((check) => check.id === "B2");
+    expect(b2).toMatchObject({
+      status,
+      evidence: { requiredWorkflowSecrets: B2_SECRETS, ...(missingGithubSecrets ? { missingGithubSecrets } : {}) },
+    });
+    // The workflows reference every name, so a name GitHub lacks is a warning, never a failure.
+    expect(b2?.evidence).not.toHaveProperty("missingWorkflowRefs");
+    const item = (summary.issue242Checklist as ChecklistItem[]).find((entry) => entry.id === "B2");
+    expect(item?.evidence).toMatchObject({ requiredWorkflowSecrets: B2_SECRETS });
   });
 });
