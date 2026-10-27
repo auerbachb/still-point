@@ -13,6 +13,41 @@ const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
 const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
 /*
+ * Offline in-app moves (#967). A `router.push` does not load a document: the
+ * App Router fetches the destination's route data (an RSC payload, sent with an
+ * `RSC: 1` header and a `?_rsc=` search param). Offline that fetch failed, and
+ * Next.js fell back to a full page load, which restarted the app and dropped
+ * everything held in memory.
+ *
+ * The worker now keeps one route-data payload per app route and answers a
+ * failed fetch with it, so the move stays in the same document. The worker
+ * fetches the payloads itself with only the `RSC: 1` header, which makes the
+ * server render the whole tree from the root rather than a diff against one
+ * page's router state, so a payload is valid whichever route the page moves
+ * from. They are refreshed whenever an app document loads online.
+ *
+ * They are stored under an internal origin, so the document fallback's
+ * `caches.match(request)` can never answer a page load with route data.
+ *
+ * Keep RSC_WARM_PATHS in sync with ALL_TABS in src/lib/appTabs.ts.
+ */
+const RSC_CACHE = "stillpoint-rsc-v1";
+const RSC_KEY_ORIGIN = "https://still-point.internal/__rsc__";
+const RSC_WARM_PATHS = [
+  "/app",
+  "/app/progress",
+  "/app/history",
+  "/app/journal",
+  "/app/board",
+  "/app/friends",
+  "/app/settings",
+  "/app/buddy",
+];
+/** A refresh of every payload runs at most this often. */
+const RSC_WARM_INTERVAL_MS = 60 * 1000;
+const RSC_CONTENT_TYPE = "text/x-component";
+
+/*
  * Suppress-during-session (#431). The app page relays the desired suppression
  * state over a BroadcastChannel; while suppression is active we skip
  * showNotification so reminders do not interrupt a sit. The flag is also
@@ -268,6 +303,89 @@ function isStaticAssetRequest(request) {
     || url.pathname === "/manifest.webmanifest";
 }
 
+/** Route-data fetches the App Router makes for a client-side move or a prefetch. */
+function isRscRequest(request, url) {
+  return request.headers.get("RSC") === "1" || url.searchParams.has("_rsc");
+}
+
+/** Prefetches only fill the router's own cache, and Next.js drops a failed one
+ *  quietly, so the worker leaves them to the network. */
+function isRscPrefetchRequest(request) {
+  return request.headers.has("Next-Router-Prefetch") || request.headers.has("Next-Router-Segment-Prefetch");
+}
+
+/** The cache key for a route's payload: its path and search, without `_rsc`. */
+function rscCacheKey(pathname, searchParams) {
+  const key = new URL(RSC_KEY_ORIGIN + pathname);
+  for (const [name, value] of searchParams ?? []) {
+    if (name !== "_rsc") key.searchParams.append(name, value);
+  }
+  return key.href;
+}
+
+/** A stored payload for `url`: the exact route first, then the same path with
+ *  no search (`/app/progress?buddy=…` renders the same page as `/app/progress`).
+ *  Rebuilt as a fresh Response, so the page reads the URL it asked for. */
+async function matchRscPayload(url) {
+  const cache = await caches.open(RSC_CACHE);
+  const cached = (await cache.match(rscCacheKey(url.pathname, url.searchParams), { ignoreVary: true }))
+    ?? (await cache.match(rscCacheKey(url.pathname), { ignoreVary: true }));
+  if (!cached) return undefined;
+  return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: cached.headers });
+}
+
+function isStorableRscResponse(response) {
+  return response.ok
+    && !response.redirected
+    && (response.headers.get("Content-Type") ?? "").startsWith(RSC_CONTENT_TYPE);
+}
+
+/** Fetches and stores one route's whole-tree payload. Best-effort. */
+async function warmRscPath(cache, path) {
+  try {
+    // A bare `_rsc` is the cache-busting value Next.js expects with no router
+    // headers, so a server that validates it answers rather than redirecting.
+    const response = await fetch(`${path}?_rsc`, {
+      headers: { RSC: "1" },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!isStorableRscResponse(response)) return;
+    const headers = new Headers(response.headers);
+    // Matched with ignoreVary anyway, and `Vary: *` would make the put throw.
+    headers.delete("Vary");
+    const body = await response.arrayBuffer();
+    await cache.put(
+      rscCacheKey(path),
+      new Response(body, { status: response.status, statusText: response.statusText, headers }),
+    );
+  } catch {
+    // Offline or a failed render: the payload already stored stays.
+  }
+}
+
+let rscWarmInFlight = null;
+let rscWarmedAt = 0;
+
+/** Refreshes every app route's payload, at most once per RSC_WARM_INTERVAL_MS. */
+function warmRscCache() {
+  if (rscWarmInFlight) return rscWarmInFlight;
+  if (rscWarmedAt && Date.now() - rscWarmedAt < RSC_WARM_INTERVAL_MS) return Promise.resolve();
+  rscWarmInFlight = caches
+    .open(RSC_CACHE)
+    .then((cache) => Promise.all(RSC_WARM_PATHS.map((path) => warmRscPath(cache, path))))
+    .catch(() => {})
+    .then(() => {
+      rscWarmedAt = Date.now();
+      rscWarmInFlight = null;
+    });
+  return rscWarmInFlight;
+}
+
+function isAppDocumentPath(pathname) {
+  return pathname === "/app" || pathname.startsWith("/app/");
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_URLS)).then(() => self.skipWaiting()),
@@ -279,7 +397,9 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key.startsWith("stillpoint-app-shell-") && key !== APP_SHELL_CACHE)
+          .filter((key) =>
+            (key.startsWith("stillpoint-app-shell-") && key !== APP_SHELL_CACHE)
+            || (key.startsWith("stillpoint-rsc-") && key !== RSC_CACHE))
           .map((key) => caches.delete(key)),
       ),
     ).then(() => self.clients.claim()),
@@ -301,6 +421,16 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) {
             const copy = response.clone();
             void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
+            // #967: the app is reachable, so refresh its route data for the
+            // in-app moves this document may make offline later.
+            // Best-effort: a refresh that cannot run must not fail the page load.
+            if (isAppDocumentPath(url.pathname)) {
+              try {
+                event.waitUntil(warmRscCache());
+              } catch {
+                void warmRscCache();
+              }
+            }
           }
           return response;
         })
@@ -311,6 +441,22 @@ self.addEventListener("fetch", (event) => {
           if (shell) return shell;
           return caches.match("/app");
         }),
+    );
+    return;
+  }
+
+  // #967: an in-app move's route data. The network answers while it can; a
+  // failed fetch gets the stored payload, so the move stays in this document.
+  // With nothing stored the fetch still fails, and Next.js loads the page as a
+  // document, which the branch above serves from the cache.
+  if (isRscRequest(request, url)) {
+    if (isRscPrefetchRequest(request)) return;
+    event.respondWith(
+      fetch(request).catch(async (error) => {
+        const cached = await matchRscPayload(url).catch(() => undefined);
+        if (cached) return cached;
+        throw error;
+      }),
     );
     return;
   }
