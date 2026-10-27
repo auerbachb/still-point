@@ -48,6 +48,20 @@ public struct PracticeDayState: Sendable {
     /// The widget's fold has its own guard: `syncWidgetData()` passes
     /// `makeSnapshot` the credited practice instant as `flagsAsOf` (#797).
     public var doneTodayFlagsStamp: Date?
+    /// #1071 (web parity with `tracksDoneTodayKnown`, #895): whether
+    /// `primaryDoneToday` / `secondDoneToday` are the server's answer for the practice
+    /// day they describe. False at a launch and after ``reset()``, from the moment a
+    /// badge query leaves (``beginTracksDoneRead()``) until the newest one is applied,
+    /// after a failed one (the badges then hold only the local flags, which cannot see
+    /// a sit on another device), after a sit finishes here (the server answer predates
+    /// it), and once the flags roll onto a new day. The badges read the flags either
+    /// way; this is for anything offered only while a sit is due, such as the combine
+    /// action, which must not act on "neither done" that is not an answer.
+    public private(set) var doneTodayFlagsKnown = false
+    /// Numbers the badge queries ``beginTracksDoneRead()`` opens, so only the newest
+    /// one's answer makes the flags known; an older one landing while a newer query is
+    /// in flight leaves them unknown, as web does.
+    public private(set) var tracksDoneRead = 0
     /// Whether every required sit for the previous calendar day is done.
     /// False before 6:00 keeps that day open. Defaults to finished so a daytime
     /// launch does not invent a grace window; a pre-6:00 launch resolves it.
@@ -86,6 +100,17 @@ public struct PracticeDayState: Sendable {
         previousDayRequest += 1
         previousDayTracks = nil
         doneTodayFlagsStamp = nil
+        doneTodayFlagsKnown = false
+        tracksDoneRead += 1
+    }
+
+    /// A credited-day badge query is leaving (#1071). Until the answer it returns is
+    /// applied, the flags are not an answer. Returns the read number to pass back to
+    /// ``applyTracksDoneAnswer(_:creditedDate:now:read:calendar:)``.
+    public mutating func beginTracksDoneRead() -> Int {
+        tracksDoneRead += 1
+        doneTodayFlagsKnown = false
+        return tracksDoneRead
     }
 
     /// Single-track: the primary standard sit. Two-a-day: both standard sits.
@@ -213,10 +238,15 @@ public struct PracticeDayState: Sendable {
     /// `creditedDate`, the day ``creditedSessionDate(now:dualTrack:calendar:)`` gave
     /// at `now`, when the query left. `refreshTracksDoneToday()` applies it only while
     /// it is the signed-in account's and the newest word on that day.
+    ///
+    /// `read` is the number ``beginTracksDoneRead()`` gave the query. The answer makes
+    /// the flags known (#1071) only when it is the newest query's; `nil` (no ordering)
+    /// always does.
     public mutating func applyTracksDoneAnswer(
         _ tracks: TracksDoneTodayDTO,
         creditedDate: String,
         now: Date,
+        read: Int? = nil,
         calendar: Calendar = .current
     ) {
         // The flags have rolled past `creditedDate` while the query was out, e.g. it
@@ -240,6 +270,9 @@ public struct PracticeDayState: Sendable {
         }
         if secondDoneToday {
             secondPracticeDoneToday = true
+        }
+        if read == nil || read == tracksDoneRead {
+            doneTodayFlagsKnown = true
         }
         // An answer about yesterday is a statement about yesterday, and so are the
         // flags it just raised.
@@ -268,6 +301,8 @@ public struct PracticeDayState: Sendable {
         rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
         primaryDoneToday = primaryStandardDoneToday
         secondDoneToday = secondPracticeDoneToday
+        // #1071: local flags only, so a sit on another device may be missing.
+        doneTodayFlagsKnown = false
     }
 
     /// Retire the "done today" flags when the local day has advanced past the one
@@ -347,6 +382,8 @@ public struct PracticeDayState: Sendable {
         practiceDoneToday = false
         secondPracticeDoneToday = false
         primaryStandardDoneToday = false
+        // #1071: the answer was about the day just retired; the new one has none yet.
+        doneTodayFlagsKnown = false
         // The calendar day, unless a current answer keeps yesterday open after a
         // stamp older than yesterday. Then, as at a launch, yesterday (#969).
         doneTodayFlagsStamp = creditedDayStamp(now: now, calendar: calendar)
@@ -375,6 +412,9 @@ public struct PracticeDayState: Sendable {
         // `syncWidgetData()`. Doing it afterwards would clear the very sit that
         // just finished.
         rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
+        // #1071: the last answer predates this sit, which the badges do not show
+        // until the next one lands.
+        doneTodayFlagsKnown = false
         if raised.contains(.practice) {
             practiceDoneToday = true
         }

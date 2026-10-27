@@ -294,9 +294,12 @@ final class AppViewModel {
 
     /// Whether Home offers today's two sits as one (#769): a dual-track account
     /// with neither track done today and no recovery ramp running. Reads the same
-    /// server-derived flags the track cards' badges do.
+    /// server-derived flags the track cards' badges do, and only once they are the
+    /// newest refresh's answer for the practice day (#1071, web's
+    /// `tracksDoneTodayKnown`): before it, while a newer one is in flight, after a
+    /// failed one or after a sign-out, "neither done" may miss a sit on another device.
     var combineOffered: Bool {
-        CombinedSit.isCombineOffered(
+        practiceDay.doneTodayFlagsKnown && CombinedSit.isCombineOffered(
             dualTrackEnabled: dualTrackEnabled,
             primaryDoneToday: primaryDoneToday,
             secondDoneToday: secondDoneToday,

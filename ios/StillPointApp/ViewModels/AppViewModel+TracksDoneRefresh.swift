@@ -22,6 +22,9 @@ extension AppViewModel {
         // arrive. The generation above cannot stand in — the refreshes racing here
         // all describe the same account, which is exactly the case it ignores.
         let ticket = tracksDoneOrdering.nextTicket()
+        // #1071: from here until the newest refresh's answer lands, the badge flags
+        // are not an answer, so the combine offer waits (web's `tracksDoneTodayKnown`).
+        let read = practiceDay.beginTracksDoneRead()
         let now = Date()
         // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
         // otherwise assume the day is finished and credit the new calendar date.
@@ -43,7 +46,7 @@ extension AppViewModel {
             // The Home badges, the #679 local flags (raised, never lowered) and, for
             // an answer about yesterday, the stamp. See
             // `PracticeDayState.applyTracksDoneAnswer(_:creditedDate:now:calendar:)`.
-            practiceDay.applyTracksDoneAnswer(tracksDoneToday, creditedDate: today, now: now)
+            practiceDay.applyTracksDoneAnswer(tracksDoneToday, creditedDate: today, now: now, read: read)
         } catch {
             guard applyFailedTracksDoneRefresh(error, generation: generation, ticket: ticket) else { return }
         }
