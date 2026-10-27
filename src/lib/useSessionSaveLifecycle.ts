@@ -126,6 +126,25 @@ export function useSessionSaveLifecycle({
   // so a save still running for the previous account cannot hold up the next
   // account's either (#833).
   const sitSavesRunningRef = useRef(new Set<string>());
+  // #988: the sits in `sitSavesRunningRef` whose screen has closed while their
+  // save runs — browser Back, a tab change, anything that unmounts the
+  // `SessionView`. Such a save still stores and remembers its sit, but once it
+  // settles it changes no screen: by then the person may have begun another
+  // sit, and opening this one's completion screen, or closing the overlay,
+  // would replace that sit's screen before it reports. The generation check
+  // (#666, #833) cannot see this, because the account has not changed. Held
+  // only while the save runs, so it never grows.
+  const sitScreensClosedRef = useRef(new Set<string>());
+
+  // #988: `SessionView` calls this when its screen goes away. Only a sit whose
+  // save is still running is noted; a screen closed by its own save settling
+  // (the completion screen opening, or Abandon closing the overlay) has
+  // already been let go, so nothing is kept for it.
+  const handleSitScreenClosed = useCallback((sitKey: string) => {
+    if (sitSavesRunningRef.current.has(sitKey)) {
+      sitScreensClosedRef.current.add(sitKey);
+    }
+  }, []);
 
   // #703: every path that writes a sit to the local queue reports here, so the
   // offline strip's promise tracks whether local storage is actually working.
@@ -292,6 +311,10 @@ export function useSessionSaveLifecycle({
 
       rememberStoredSit(data, sessionDate, outcome);
 
+      // #988: saved and remembered as above, but the screen is no longer this
+      // sit's — see `sitScreensClosedRef`.
+      if (sitScreensClosedRef.current.has(data.sitKey)) return;
+
       setCompletionData({
         sessionId: outcome?.sessionId ?? null,
         clientSessionId,
@@ -319,6 +342,7 @@ export function useSessionSaveLifecycle({
       // Let go once the save is over, however it ended: the gate holds only
       // saves still running.
       sitSavesRunning.delete(data.sitKey);
+      sitScreensClosedRef.current.delete(data.sitKey);
     }
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveCompletedSit, rememberStoredSit, setOverlay]);
 
@@ -406,10 +430,14 @@ export function useSessionSaveLifecycle({
       }
 
       if (generation !== sessionGeneration.current) return;
+      // #988: the sit's screen already closed, and whatever is open now
+      // belongs to someone else — see `sitScreensClosedRef`.
+      if (sitScreensClosedRef.current.has(data.sitKey)) return;
       setOverlay(null);
     } finally {
       // Let go once the save is over, as in `handleSessionComplete`.
       sitSavesRunning.delete(data.sitKey);
+      sitScreensClosedRef.current.delete(data.sitKey);
     }
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
 
@@ -555,6 +583,7 @@ export function useSessionSaveLifecycle({
     handleSessionComplete,
     handleRetryCompletionSave,
     handleSessionAbandon,
+    handleSitScreenClosed,
     handleBreathEnd,
     handleFocusEnd,
   };
