@@ -192,7 +192,11 @@ async function flushOfflineQueueFromSw() {
     try {
       for (const entry of entries) {
         if (entry.ownerUserId !== ownerUserId) continue;
-        if (entry.sessionSynced && (!entry.thoughts || entry.thoughts.length === 0)) {
+        const hasThoughts = entry.thoughts?.length > 0;
+        // #980: a cleared end note is queued as this flag, as the page's
+        // `flushEntry` sends it, so an entry with only the flag still owes a batch.
+        const sendClear = entry.clearCompletionNote === true;
+        if (entry.sessionSynced && !hasThoughts && !sendClear) {
           continue;
         }
         if (!entry.sessionSynced) {
@@ -201,7 +205,7 @@ async function flushOfflineQueueFromSw() {
           entry.sessionSynced = true;
           changed = true;
         }
-        if (entry.serverSessionId && entry.thoughts?.length > 0) {
+        if (entry.serverSessionId && (hasThoughts || sendClear)) {
           await postJson(
             "/api/thoughts/batch",
             {
@@ -210,11 +214,17 @@ async function flushOfflineQueueFromSw() {
               // #948: sent as queued. Each in-session thought keeps the
               // `clientThoughtId` the page gave it, so a batch the server stored
               // before its upload timed out is stored once when sent again.
-              thoughts: entry.thoughts,
+              thoughts: entry.thoughts ?? [],
+              // #980: replaying a clear deletes the one stored note row again,
+              // so a clear whose answer was lost is safe to send twice.
+              ...(sendClear ? { clearCompletionNote: true } : {}),
             },
             { readBody: false },
           );
+          // Reached only on a 2xx: a failed or timed-out upload rejects above
+          // and leaves the thoughts and the flag queued for the next flush.
           entry.thoughts = [];
+          if (sendClear) entry.clearCompletionNote = false;
           changed = true;
         }
       }
