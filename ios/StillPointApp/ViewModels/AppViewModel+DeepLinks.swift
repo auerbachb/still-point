@@ -100,6 +100,8 @@ extension AppViewModel {
         guard currentUser != nil, let token = pendingBuddyInviteToken else { return }
         // A kept invite must not pull the user out of a sit or a buddy session they
         // started after it failed. It stays queued for return-home or leave-session.
+        // The join checks again once the server answers, for a sit started while the
+        // request was in flight (#856).
         guard !isInSession else { return }
         // The token stays pending for the whole request. Overlapping consumes
         // (a cold start and a scene activation, return-home and leave-session)
@@ -134,7 +136,7 @@ extension AppViewModel {
         case .joined, .authoritativeRejection:
             // Confirmed join, or the server rejected this invite. Either way it is spent.
             pendingBuddyInviteToken = nil
-        case .transientFailure, .stale:
+        case .transientFailure, .stale, .deferred:
             break
         }
     }
@@ -146,6 +148,11 @@ extension AppViewModel {
         /// Cancelled, or the session that started the join is gone. Do not spend
         /// the token and do not surface an error for it.
         case stale
+        /// #856: the server accepted the join, but routing now would replace a sit
+        /// started during the request, or be undone by a newer auth check's route
+        /// reset. Not spent: a later consume joins again, which the server takes as
+        /// a rejoin, and routes then.
+        case deferred
     }
 
     /// - Parameter generation: `authGeneration` at the point the join was decided.
@@ -158,11 +165,24 @@ extension AppViewModel {
             // network call here. The pre-task guards only decided whether to
             // *start* the join; a sign-out or account switch landing while it was
             // in flight must not route the replacement account into this session
-            // (#665).
-            guard generation == authGeneration else { return .stale }
-            buddyInviteError = nil
-            currentView = .buddySession(sessionId: sessionId)
-            return .joined
+            // (#665). Nor may it replace a sit started meanwhile, or route just
+            // before a newer `checkAuth()` resets the route to the initial view,
+            // which would spend the invite on a screen the user never keeps (#856).
+            switch BuddyInviteJoinRouting.decision(
+                startedAtGeneration: generation,
+                liveGeneration: authGeneration,
+                isInSession: isInSession,
+                routeResetPending: isAuthCheckRouteResetPending
+            ) {
+            case .stale:
+                return .stale
+            case .deferForSession, .deferForRouteReset:
+                return .deferred
+            case .route:
+                buddyInviteError = nil
+                currentView = .buddySession(sessionId: sessionId)
+                return .joined
+            }
         } catch is CancellationError {
             // Cancellation is cooperative and does not by itself stop the code
             // after this await. A sign-out's `cancelIdentityScopedTasks` must not

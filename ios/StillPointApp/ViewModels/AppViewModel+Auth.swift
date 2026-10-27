@@ -35,7 +35,14 @@ extension AppViewModel {
         // `defer` below is what pairs with it, so the overlay covers the follow-up work
         // at the end of this function exactly as it did before the read was queued.
         defer {
-            if checkID == activeAuthCheckID { isLoading = false }
+            if checkID == activeAuthCheckID {
+                isLoading = false
+                // #856: the newest check can end without its route reset — the offline
+                // fallback, a sign-out, an account change — and a late invite join must
+                // not wait on a reset that is no longer coming. After a reset it is
+                // already down.
+                isAuthCheckRouteResetPending = false
+            }
             // Diagnostic for issue #266 / #276. Gated on UI-test mode so we
             // don't leak PII in production logs. Switched to os_log
             // (Logger.notice) because `print()` from the app process is not
@@ -46,6 +53,12 @@ extension AppViewModel {
                 Self.diagLog.notice("[E2E-DIAG] checkAuth.done currentView=\(self.viewSlug(self.currentView), privacy: .public) currentUser=\(self.currentUser?.email ?? "nil", privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)")
             }
         }
+        // Unlike the overlay, raised here (#856): the route reset below is owed from the
+        // moment this check exists, however long the queue wait. A buddy-invite join that
+        // routed before it would have its screen replaced with the invite already spent,
+        // so one that returns while this is up leaves the invite pending for the consume
+        // after the reset.
+        isAuthCheckRouteResetPending = true
 
         // Enqueued rather than run outright: this read adopts a whole `UserDTO`, so a
         // settings save whose PATCH left first would otherwise supersede it and put
@@ -75,6 +88,10 @@ extension AppViewModel {
         guard isCurrentAuthCheck(checkID, adoptedAt: adopted) else { return }
         resetTrackCompletionBadges()
         currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
+        // #856: the reset has landed, and nothing later in this check replaces a buddy
+        // session, so a join that returns from here on may route. One still in flight
+        // makes this check's own consume below return early, and routes when it lands.
+        isAuthCheckRouteResetPending = false
         authStatusMessage = nil
         lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
