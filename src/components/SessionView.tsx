@@ -18,6 +18,7 @@ import {
   useTrackingControlsUnlocked,
 } from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
+import { canTogglePause } from "@/lib/sessionPauseToggle";
 import { saveMinimalSessionViewPref } from "@/lib/minimalSessionViewPrefs";
 import { useMinimalSessionViewPref } from "@/lib/useMinimalSessionView";
 import {
@@ -531,7 +532,14 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
     setLiveElapsed(elapsed);
   }, []);
 
+  // #884: a sit that has ended stays on screen while its save settles, and
+  // neither Pause nor Resume applies to it, as on iOS (#848).
+  const pauseToggleEnabled = canTogglePause({ sessionFinished });
+
   const togglePause = () => {
+    // First, before anything changes: a Resume here would set `isActive` again
+    // and start the clock and cues back up.
+    if (!pauseToggleEnabled) return;
     if (isActive) {
       resetHoldTracking();
       finalizeActiveHold(elapsedRef.current);
@@ -1014,6 +1022,7 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
             <button
               type="button"
               onClick={togglePause}
+              disabled={!pauseToggleEnabled}
               style={{
                 background: "none",
                 border: "1px solid var(--border-2)",
@@ -1025,7 +1034,8 @@ export function SessionView({ currentDay, recovery = NO_RECOVERY, sessionType = 
                 padding: "14px 24px",
                 minHeight: "44px",
                 borderRadius: "20px",
-                cursor: "pointer",
+                cursor: pauseToggleEnabled ? "pointer" : "default",
+                opacity: pauseToggleEnabled ? 1 : 0.4,
               }}
             >
               {isActive ? "pause" : "resume"}
