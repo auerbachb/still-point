@@ -730,6 +730,41 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(firstCell.waitForExistence(timeout: 10), "Mood ratings missing on a synced sit")
     }
 
+    /// #964: every Mood Shift cell is a 44 × 44 tap target and none is cut off
+    /// at the sides of the window, whichever layout `ViewThatFits` picked; a cell
+    /// still takes a tap and a second tap.
+    @MainActor
+    func testMoodShiftCellsAreFortyFourPointTargetsInsideTheWindow() throws {
+        let app = finishSitToCompletion(forceCreateSessionFailure: false)
+        let cells = moodRatingCells(in: app)
+        XCTAssertTrue(cells.firstMatch.waitForExistence(timeout: 10), "Mood ratings missing on a synced sit")
+        let enabled = NSPredicate(format: "isEnabled == true")
+        expectation(for: enabled, evaluatedWith: cells.firstMatch)
+        waitForExpectations(timeout: 10)
+
+        let window = app.windows.firstMatch.frame
+        let all = cells.allElementsBoundByIndex
+        // Six moods, both sides, five levels.
+        XCTAssertEqual(all.count, 6 * 2 * 5, "Every Mood Shift cell")
+        for cell in all {
+            let frame = cell.frame
+            XCTAssertGreaterThanOrEqual(frame.width, 44, "\(cell.identifier) width")
+            XCTAssertGreaterThanOrEqual(frame.height, 44, "\(cell.identifier) height")
+            XCTAssertGreaterThanOrEqual(frame.minX, window.minX, "\(cell.identifier) cut off on the left")
+            XCTAssertLessThanOrEqual(frame.maxX, window.maxX, "\(cell.identifier) cut off on the right")
+        }
+
+        let cell = app.buttons["completion.moodMatrix.calm.after.3"]
+        for _ in 0..<4 where !cell.isHittable {
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(cell.isHittable, "Calm after 3 could not be scrolled on screen")
+        cell.tap()
+        XCTAssertTrue(app.staticTexts["completion.moodMatrixSavedIndicator"].waitForExistence(timeout: 10))
+        cell.tap()
+        XCTAssertTrue(cell.isHittable)
+    }
+
     /// Swipes the screen up until `element` sits above the on-screen keyboard. A
     /// no-op without a keyboard. `isElementInVisibleFrame` counts the area under the
     /// keyboard as visible, so a tap there lands on the keyboard instead.

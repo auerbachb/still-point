@@ -114,7 +114,7 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Safe area / bottom nav overlap | P1 | ✅ | ✅ | `e2e/layout/safe-area.spec.ts`; recap return button at any recap height (#960) in `issue-960-recap-return-clearance.spec.ts`; `testPrimaryControlsVisibleAboveHomeIndicator` |
 | Horizontal overflow / tap targets | P1 | ✅ | ⚠️ | `e2e/layout/overflow.spec.ts`, `login.spec.ts` |
 | Mobile web 320–375px layout (#473) | P1 | ✅ | ➖ | `e2e/layout/issue-473-mobile-web-layout.spec.ts` |
-| Recap Mood shift grid at 320–375px (#911) | P1 | ✅ | ⚠️ | `e2e/layout/issue-911-mood-shift-narrow.spec.ts`; iOS widths only, in `MoodMatrixGeometryTests` (no XCUITest) |
+| Recap Mood shift grid at 320–375px (#911), 44px tap targets (#964) | P1 | ✅ | ✅ | `e2e/layout/issue-911-mood-shift-narrow.spec.ts` (44px minimum box at 320, 375, 601, 620 and 768px); iOS widths in `MoodMatrixGeometryTests`, rendered cells in `testMoodShiftCellsAreFortyFourPointTargetsInsideTheWindow` |
 | VoiceOver timer + primary button | P1 | ❌ | ✅ | `testVoiceOverLabelsForTimerAndPrimaryButton` |
 | Cold-start auth latency bound | P1 | ❌ | ✅ | iOS smoke (`coldStartAuthCheckMs` ≤ 8000 ms) |
 

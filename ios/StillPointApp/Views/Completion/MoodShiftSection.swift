@@ -24,16 +24,20 @@ struct MoodShiftSection: View {
     /// and one spacing so their columns line up. #911: the headers, hints and
     /// cell groups also share one scale width, so they line up in the stacked
     /// layout too. The widths come from `MoodMatrixGeometry`, whose tests pin
-    /// which iPhones get which layout.
+    /// which iPhones get which layout. #964: cells are 44 × 44, and a stacked
+    /// phase label sits on the line above its scale.
     private enum Layout {
         static let labelWidth = CGFloat(MoodMatrixGeometry.labelWidth)
         static let rowSpacing = CGFloat(MoodMatrixGeometry.columnSpacing)
         static let boxSpacing = CGFloat(MoodMatrixGeometry.cellSpacing)
         static let cellSize = CGFloat(MoodMatrixGeometry.cellSize)
         static let scaleWidth = CGFloat(MoodMatrixGeometry.scaleWidth)
-        static let phaseLabelWidth = CGFloat(MoodMatrixGeometry.phaseLabelWidth)
-        /// Between a stacked mood's label, its BEFORE row and its AFTER row.
-        static let stackedRowSpacing: CGFloat = 4
+        /// Between a stacked mood's label, its BEFORE block and its AFTER block.
+        static let stackedRowSpacing: CGFloat = 6
+        /// Between a stacked phase label and the scale under it.
+        static let phaseLabelSpacing: CGFloat = 4
+        /// The selected marker inside a cell, in proportion to the cell (10 / 28).
+        static let markerSize = (cellSize * 10 / 28).rounded()
     }
 
     var body: some View {
@@ -43,9 +47,9 @@ struct MoodShiftSection: View {
                 .foregroundStyle(Color(SPColor.fg4))
                 .tracking(2)
 
-            // #911: a wide row needs 388pt, more than the 327pt column of a
-            // 375pt iPhone. Where it does not fit, each mood stacks BEFORE above
-            // AFTER instead. Only one layout is shown, so the cell identifiers
+            // #911 / #964: a wide row needs 548pt, more than the column of any
+            // iPhone. Where it does not fit, each mood stacks BEFORE above
+            // AFTER instead (232pt). Only one layout is shown, so the cell identifiers
             // stay unique.
             ViewThatFits(in: .horizontal) {
                 wideGrid
@@ -82,15 +86,11 @@ struct MoodShiftSection: View {
     }
 
     /// #911: one low/high hint row, then each mood's label on a line of its
-    /// own, followed by a BEFORE row and an AFTER row. Centered in the
-    /// section, as on web.
+    /// own, followed by BEFORE over its scale and AFTER over its scale (#964).
+    /// Centered in the section, as on web.
     private var stackedGrid: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            HStack(spacing: Layout.rowSpacing) {
-                Text("")
-                    .frame(width: Layout.phaseLabelWidth)
-                scaleHint
-            }
+            scaleHint
 
             ForEach(MoodKey.allCases, id: \.self) { key in
                 stackedBlock(for: key)
@@ -173,9 +173,9 @@ struct MoodShiftSection: View {
             moodLabel(key)
 
             ForEach([MoodMatrixColumn.before, .after], id: \.self) { column in
-                HStack(spacing: Layout.rowSpacing) {
+                VStack(alignment: .leading, spacing: Layout.phaseLabelSpacing) {
                     sideLabel(column)
-                        .frame(width: Layout.phaseLabelWidth, alignment: .trailing)
+                        .frame(width: Layout.scaleWidth, alignment: .leading)
 
                     tapRow(
                         moodKey: key,
@@ -206,10 +206,12 @@ struct MoodShiftSection: View {
                             if selected == level {
                                 RoundedRectangle(cornerRadius: 2)
                                     .fill(SPColor.green.opacity(0.35 + Double(level) * 0.12))
-                                    .frame(width: 10, height: 10)
+                                    .frame(width: Layout.markerSize, height: Layout.markerSize)
                             }
                         }
                         .frame(width: Layout.cellSize, height: Layout.cellSize)
+                        // #964: the whole 44 × 44 frame takes the tap, corners included.
+                        .contentShape(Rectangle())
                 }
                 .disabled(cellsDisabled)
                 .accessibilityIdentifier(accessibilityId(moodKey: moodKey, column: column, level: level))
