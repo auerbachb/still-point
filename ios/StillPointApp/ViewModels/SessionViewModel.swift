@@ -141,6 +141,10 @@ final class SessionViewModel {
     }
 
     func start() {
+        // #848: a sit that has ended never restarts its clock or its cues.
+        // Returning before `isPaused` changes also keeps the session screen
+        // from resuming the trackers its completion handler stopped.
+        guard SessionTickLogic.canStart(isComplete: isComplete, isAbandoned: isAbandoned) else { return }
         let isResume = SessionTickLogic.isResume(
             pausedElapsed: timerEngine.pausedElapsed,
             totalSeconds: totalSeconds,
