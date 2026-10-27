@@ -16,6 +16,8 @@
 		<string>StillPoint App Store</string>
 		<key>com.brettonauerbach.stillpoint.monitor</key>
 		<string>StillPoint Monitor App Store</string>
+		<key>com.brettonauerbach.stillpoint.widget</key>
+		<string>StillPoint Widget App Store</string>
 	</dict>
 	<key>uploadSymbols</key>
 	<true/>

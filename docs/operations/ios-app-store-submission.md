@@ -24,7 +24,7 @@ Pick a path by intent. All TestFlight uploads share the reusable build workflow 
 |------|---------|----------|----------|
 | **Auto TestFlight** (default) | Any merge to `main` that changes iOS app code | [`.github/workflows/ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) → `ios-testflight-build.yml` | Always. Merged iOS app code reaches TestFlight, and the build number moves by itself. |
 | **Manual TestFlight tag** (break-glass) | Push `ios-v<marketing>-build<n>` (e.g. `ios-v1.0.3-build41`) | [`.github/workflows/ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) → `ios-testflight-build.yml` | You need a specific commit/build by hand, or e2e infra blocked the auto path. |
-| **App Store release** | Push strict semver `ios-vMAJOR.MINOR.PATCH` (no `-build`; must match `MARKETING_VERSION`) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Shipping metadata + binary via Fastlane after TestFlight validation. The run claims its own `ios-v<marketing>-build<N>` tag, so the binary gets a new build number (#838); it can't finish a run until #910 lands. |
+| **App Store release** | Push strict semver `ios-vMAJOR.MINOR.PATCH` (no `-build`; must match `MARKETING_VERSION`) | [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml) | Shipping metadata + binary via Fastlane after TestFlight validation. The run claims its own `ios-v<marketing>-build<N>` tag, so the binary gets a new build number (#838). No run has reached `deliver` yet; #927 tracks the first one. |
 
 ### Auto TestFlight (default)
 
