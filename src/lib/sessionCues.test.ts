@@ -235,7 +235,8 @@ describe("planCountdownCues — minute chime", () => {
   });
 
   // #853: in voice mode the chime keeps its own switch and gives way only to
-  // the countdown. iOS pins the same rule in `SessionTickLogicTests.swift`.
+  // the countdown. iOS pins the same rule in
+  // `SessionTickLogicVoiceCountdownTests.swift`.
   it("still strikes in voice mode at a minute outside the final minute", () => {
     const planned = planCountdownCues(seededCueCursor(59.95, 300, VOICE), 60, 300, VOICE);
     expect(sounds(planned.cues)).toEqual([{ kind: "chime" }]);
