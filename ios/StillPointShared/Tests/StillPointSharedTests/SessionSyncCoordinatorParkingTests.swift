@@ -39,7 +39,7 @@ private actor RejectingUploads {
 
 /// #983: a sit the server turns down for good is parked, as web does since #978.
 /// Named for the behaviour under test: `SessionSyncCoordinatorTests` already
-/// exists in `OfflineSessionQueueTests.swift`.
+/// exists in `SessionSyncCoordinatorTests.swift`.
 struct SessionSyncCoordinatorParkingTests {
     private let owner = "user-test-983"
 

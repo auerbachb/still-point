@@ -10,7 +10,7 @@ import Testing
 /// can be stuck waiting on an in-flight `flushPending` the whole time. These cover
 /// that ordering for both the next-account and same-account cases.
 /// Named for the method under test: `SessionSyncCoordinatorTests` already exists in
-/// `OfflineSessionQueueTests.swift` and a second declaration breaks the test target.
+/// `SessionSyncCoordinatorTests.swift` and a second declaration breaks the test target.
 struct SessionSyncCoordinatorClearQueueTests {
     private func makeEntry(owner: String, enqueuedAt: Date = Date()) -> PendingSessionEntry {
         let clientSessionId = UUID()
