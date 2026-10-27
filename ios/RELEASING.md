@@ -103,8 +103,8 @@ App Store release path.
    git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1
    ```
    The tags, and the workflow's check, miss builds uploaded some other way (Xcode Organizer,
-   the Fastlane lanes). If App Store Connect → **TestFlight** lists a higher build number,
-   start above that one.
+   or the Fastlane lanes run locally). If App Store Connect → **TestFlight** lists a higher
+   build number, start above that one.
 2. Tag the commit and push the tag, using the **TestFlight** tag pattern
    (`ios-v{MARKETING_VERSION}-build{number}`). The marketing version must match
    `ios/project.yml` at that commit:
@@ -133,6 +133,17 @@ App Store release path.
    `APPSTORE_APP_ID` plus the App Store Connect API key environment variables
    and rerun with `-- --require-live`.
 
+   The dry run checks one **intended build** (#838). By default that's the highest
+   `ios-v*-build*` tag on origin: the latest TestFlight cut. If you validated a different
+   build, name it with its tag:
+   ```bash
+   npm run ios:app-store:dry-run -- --intended-tag ios-v1.0.3-build41 --require-live
+   ```
+   `--intended-tag` takes only a build tag (`ios-v<marketing>-build<N>`). If no build tag
+   can be found, the dry run falls back to `CURRENT_PROJECT_VERSION` in `ios/project.yml` and
+   warns, because that value no longer names a real build. A tag shows that a build was cut,
+   not that App Store Connect processed it, so use `--require-live` before you submit.
+
 ## App Store release (tag → Fastlane)
 
 When you are ready to push **metadata + binary** to App Store Connect for the version in `ios/project.yml` (typically after TestFlight validation):
@@ -144,13 +155,23 @@ When you are ready to push **metadata + binary** to App Store Connect for the ve
    git tag ios-v1.0.3
    git push origin ios-v1.0.3
    ```
-4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs: smoke tests, checklist gate, `npm run ios:app-store:dry-run`, then `bundle exec fastlane release` (preflight → `gym` → `deliver`).
+4. [iOS App Store release (Fastlane)](../.github/workflows/ios-app-store-release.yml) runs, in order:
+   - the smoke tests;
+   - the tag and checklist gates;
+   - a build-number claim, which pushes `ios-v<MARKETING_VERSION>-build<N>` on the tagged commit;
+   - `npm run ios:app-store:dry-run -- --intended-tag <that tag>`;
+   - `bundle exec fastlane release` (`gym` with `CURRENT_PROJECT_VERSION=N` → `deliver`).
 
-**Build number caveat ([#838](https://github.com/auerbachb/still-point/issues/838)):** `gym`
-builds with `CURRENT_PROJECT_VERSION` from `ios/project.yml`. TestFlight cuts no longer advance
-that value; their numbers live in the `ios-v*-build*` tags. A PR that bumps it is itself an
-iOS change, so it cuts a TestFlight build with the next number. Until #838 gives this lane its
-own number, submit the TestFlight build you validated instead (see
+**Build number ([#838](https://github.com/auerbachb/still-point/issues/838)):** the App Store
+build takes its number the same way a TestFlight cut does: `N` is 1 + the highest `ios-v*-build*`
+tag. It gets a new number even when TestFlight already cut the tagged commit, so the upload
+never repeats a TestFlight build. No `ios/project.yml` bump is needed. **Re-run failed jobs**
+keeps the claimed number. A run that fails after the claim leaves its tag behind, and the next
+cut takes the number after it.
+
+**Not runnable end to end yet ([#910](https://github.com/auerbachb/still-point/issues/910)):**
+the dry run's A3 check and the extension signing still stop this lane before it uploads. Until
+#910 lands, submit the TestFlight build you validated instead (see
 [Submitting to the App Store](#submitting-to-the-app-store)).
 
 **Submit for review:** CI leaves `SUBMIT_FOR_REVIEW` unset, so `deliver` uses `submit_for_review: false` (upload only; harness / #242 default). Issue **#296** can enable programmatic submission by setting `SUBMIT_FOR_REVIEW=1` in the workflow when a release owner approves.
@@ -170,6 +191,13 @@ bundle exec fastlane metadata_only
 bundle exec fastlane release     # preflight + gym + deliver
 ```
 
+`build` (and the `beta` and `release` lanes, which call it) passes `IOS_BUILD_NUMBER` to `gym` as
+`CURRENT_PROJECT_VERSION`, for example `IOS_BUILD_NUMBER=42 bundle exec fastlane build`. A value
+that isn't a positive integer fails the lane. Without it, `gym` uses `project.yml`'s default, a
+number TestFlight already used, so App Store Connect rejects an upload from `beta` or `release`
+as a repeat. A local upload is not recorded in the `ios-v*-build*` tags, so pick a number above
+every tag and above anything App Store Connect lists.
+
 Lanes are defined in [`fastlane/Fastfile`](./fastlane/Fastfile). App identifier and team are in [`fastlane/Appfile`](./fastlane/Appfile). Default `deliver` options are in [`fastlane/Deliverfile`](./fastlane/Deliverfile). **Localized copy** for `en-US` is under [`fastlane/metadata/en-US/`](./fastlane/metadata/en-US/) (canonical for `deliver`).
 
 ## App Store submission handoff
@@ -179,12 +207,12 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 ## Version numbering
 
 - `MARKETING_VERSION` - user-facing version (e.g., `1.0.0`, `1.0.3`). Human-bumped only.
-- Build number (`CFBundleVersion`) - one counter for all marketing versions, kept in the `ios-v<marketing>-build<N>` tags. Every TestFlight cut pushes one tag, and the next cut takes the highest `N` + 1. Both TestFlight paths pass `N` to `xcodebuild` as `CURRENT_PROJECT_VERSION`, so the app and both extensions always match the tag.
-- `CURRENT_PROJECT_VERSION` in `ios/project.yml` is only the default for local builds (and for the App Store lane until [#838](https://github.com/auerbachb/still-point/issues/838)). It does not follow TestFlight builds, so don't bump it to ship one.
+- Build number (`CFBundleVersion`) - one counter for all marketing versions, kept in the `ios-v<marketing>-build<N>` tags. Every TestFlight cut and every App Store release run pushes one tag, and the next one takes the highest `N` + 1. Both TestFlight paths pass `N` to `xcodebuild`, and the App Store lane passes it to `gym`, as `CURRENT_PROJECT_VERSION`, so the app and both extensions always match the tag.
+- `CURRENT_PROJECT_VERSION` in `ios/project.yml` is only the default for local builds. It does not follow the tags, so don't bump it to ship a TestFlight or App Store build.
 - **Auto TestFlight:** a merge to `main` that changes iOS app code triggers [`.github/workflows/ios-testflight-auto.yml`](../.github/workflows/ios-testflight-auto.yml). The workflow claims the next `ios-v<marketing>-build<n>` tag and calls [`.github/workflows/ios-testflight-build.yml`](../.github/workflows/ios-testflight-build.yml).
 - **Manual TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build41`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
 - **App Store automation:** push a strict semver tag `ios-vMAJOR.MINOR.PATCH` that **equals** `MARKETING_VERSION` to trigger [`.github/workflows/ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml).
-- The uploaded marketing version comes from `ios/project.yml`; the TestFlight build number comes from the tag. The manual path rejects a tag whose marketing version differs from `ios/project.yml` or whose build number is not above every other `ios-v*-build*` tag, and the App Store workflow enforces tag ↔ `MARKETING_VERSION`.
+- The uploaded marketing version comes from `ios/project.yml`; the build number comes from the build tag. The manual path rejects a tag whose marketing version differs from `ios/project.yml` or whose build number is not above every other `ios-v*-build*` tag, and the App Store workflow enforces tag ↔ `MARKETING_VERSION` before it claims a number.
 - A build number can reach App Store Connect only once. Shipping the same commit again is a new cut with a new tag, while **Re-run failed jobs** on a cut whose build or upload failed keeps its number.
 
 ## Regenerate candidate App Store screenshots (Issue #325)
@@ -244,7 +272,7 @@ Canonical **deliverable** App Store Connect strings for English (U.S.) live in [
 Before "Add for Review," verify the following in App Store Connect:
 
 - [ ] Version record created for current `MARKETING_VERSION`.
-- [ ] Build selected is the TestFlight build you validated; its build number is the N in its `ios-v<marketing>-build<N>` tag.
+- [ ] Build selected is the TestFlight build you validated, or the one the App Store release lane uploaded; its build number is the N in its `ios-v<marketing>-build<N>` tag.
 - [ ] Description reflects latest shipping behavior.
 - [ ] **Privacy Policy URL** is `https://still-point.me/privacy`.
 - [ ] Support URL is configured and reachable.
@@ -330,7 +358,7 @@ Include this walkthrough in App Review notes for Guideline 5.1.1(v):
 
 **Upload fails with authentication error:** regenerate App Store Connect API key and update GitHub secrets.
 
-**Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. A retry after a failed upload keeps its number; shipping a commit again needs a new cut. TestFlight cuts take their numbers from the `ios-v*-build*` tags, so a build uploaded some other way (Xcode Organizer, the Fastlane lanes) can collide with a later cut. To move the counter past such a build, cut a manual tag above its number.
+**Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. A retry after a failed upload keeps its number; shipping a commit again needs a new cut. TestFlight cuts and App Store release runs take their numbers from the `ios-v*-build*` tags, so a build uploaded some other way (Xcode Organizer, or the Fastlane lanes run locally) can collide with a later cut. To move the counter past such a build, cut a manual tag above its number.
 
 **A merge didn't cut a build:** check that it changed iOS app code (see [Automatic: merge iOS app code](#automatic-merge-ios-app-code-default)), then look for a red e2e gate in the **Auto TestFlight on merge** runs. A merge that lands while a cut is queued is built by that later cut. To cut `main` now, run the workflow manually from the Actions tab.
 

@@ -27,6 +27,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # scripts/ci/ios-fastfile-xcargs.test.ts loads ios/fastlane/Fastfile under Ruby
+      # (#838). Same Ruby as the App Store release lane; no gems are needed.
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1.315.0
+        with:
+          ruby-version: "3.3"
+
       - name: Run unit tests
         run: npm run test:unit
 

@@ -7,8 +7,10 @@ import {
   buildTagName,
   claimBuildTag,
   gitRunner,
+  highestBuildTag,
   nextBuildNumber,
   parseBuildTag,
+  parseCommand,
   parseLsRemoteTags,
   readMarketingVersion,
 } from "./ios-testflight-build-number.mjs";
@@ -62,6 +64,56 @@ describe("parseLsRemoteTags (#707)", () => {
       ["ios-v1.0.3-build30", "aaa111"],
       ["ios-v1.0.3", "ccc333"],
     ]);
+  });
+});
+
+describe("highestBuildTag (#838)", () => {
+  test("picks the highest N numerically, across marketing versions", () => {
+    expect(highestBuildTag(["ios-v1.0.3-build9", "ios-v1.0.4-build10", "ios-v1.0.3-build8"])).toEqual({
+      name: "ios-v1.0.4-build10",
+      marketing: "1.0.4",
+      buildNumber: 10,
+    });
+  });
+
+  test("ignores App Store, malformed, and unrelated tags", () => {
+    expect(highestBuildTag(["ios-v1.0.3", "ios-v1.0.3-build031", "v9.9.9-build999", "ios-v1.0.3-build31"])?.name).toBe(
+      "ios-v1.0.3-build31",
+    );
+  });
+
+  test("returns null when no tag follows the scheme", () => {
+    expect(highestBuildTag(["ios-v1.0.3", "release-500"])).toBeNull();
+    expect(highestBuildTag([])).toBeNull();
+  });
+});
+
+describe("parseCommand (#707, #838)", () => {
+  test("reads claim and from-tag", () => {
+    expect(parseCommand(["claim", "abc123"])).toEqual({ command: "claim", arg: "abc123" });
+    expect(parseCommand(["from-tag", "ios-v1.0.3-build41"])).toEqual({ command: "from-tag", arg: "ios-v1.0.3-build41" });
+  });
+
+  test("reads claim's --cut", () => {
+    expect(parseCommand(["claim", "abc123", "--cut", "App Store release ios-v1.0.3"])).toEqual({
+      command: "claim",
+      arg: "abc123",
+      cut: "App Store release ios-v1.0.3",
+    });
+  });
+
+  test.each([
+    [[]],
+    [["claim"]],
+    [["claim", "--cut", "x"]],
+    [["claim", "abc123", "--cut"]],
+    [["claim", "abc123", "--cut", " "]],
+    [["claim", "abc123", "--cut", "x", "extra"]],
+    [["claim", "abc123", "--force"]],
+    [["from-tag", "ios-v1.0.3-build41", "--cut", "x"]],
+    [["bump", "abc123"]],
+  ])("refuses %j", (argv) => {
+    expect(parseCommand(argv)).toBeNull();
   });
 });
 
@@ -250,6 +302,36 @@ describe("claimBuildTag (#707)", { timeout: 30_000 }, () => {
     expect(result).toEqual({ tag: "ios-v1.0.3-build32", buildNumber: 32, attempts: 1 });
     expect(peeledOnOrigin("ios-v1.0.3-build32")).toBe(sha);
     expect(git(["cat-file", "-t", "refs/tags/ios-v1.0.3-build32"]).stdout.trim()).toBe("tag");
+  });
+
+  test("names the cut in the tag message, auto cut by default", async () => {
+    const { git, commit } = setup();
+    const message = (tag: string) => git(["tag", "-l", "--format=%(contents:subject)", tag]).stdout.trim();
+
+    const auto = await claimBuildTag({ sha: commit("ios merge"), marketing: "1.0.3", git, ...quiet });
+    const appStore = await claimBuildTag({
+      sha: commit("release"),
+      marketing: "1.0.3",
+      cut: "App Store release ios-v1.0.3",
+      git,
+      ...quiet,
+    });
+
+    expect(message(auto.tag)).toBe("TestFlight build 32 (auto cut)");
+    expect(message(appStore.tag)).toBe("TestFlight build 33 (App Store release ios-v1.0.3)");
+  });
+
+  test("a commit that already carries a build tag still gets a fresh number (#838)", async () => {
+    const { git, commit, peeledOnOrigin } = setup();
+    const sha = commit("ios merge");
+    // The auto cut tags the merge commit; an App Store tag on the same commit claims again.
+    await claimBuildTag({ sha, marketing: "1.0.3", git, ...quiet });
+
+    const appStore = await claimBuildTag({ sha, marketing: "1.0.3", cut: "App Store release ios-v1.0.3", git, ...quiet });
+
+    expect(appStore).toEqual({ tag: "ios-v1.0.3-build33", buildNumber: 33, attempts: 1 });
+    expect(peeledOnOrigin("ios-v1.0.3-build32")).toBe(sha);
+    expect(peeledOnOrigin("ios-v1.0.3-build33")).toBe(sha);
   });
 
   test("consecutive cuts take consecutive numbers", async () => {

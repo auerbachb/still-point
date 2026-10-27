@@ -5,6 +5,8 @@ import fs from "node:fs";
 import https from "node:https";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { gitRunner, highestBuildTag, parseBuildTag, parseLsRemoteTags } from "./ci/ios-testflight-build-number.mjs";
 
 const root = process.cwd();
 const DEFAULT_OUTPUT_DIR = "artifacts/ios-app-store-dry-run";
@@ -28,7 +30,7 @@ const appStoreApiMinimumRole =
 
 const issueChecklist = [
   ["A1", "Read README Release operations and confirm both canonical iOS runbooks are referenced."],
-  ["A2", "Read ios/RELEASING.md and confirm MARKETING_VERSION, CURRENT_PROJECT_VERSION, and ios-v* tag plan."],
+  ["A2", "Read ios/RELEASING.md and confirm MARKETING_VERSION, the intended build's ios-v<marketing>-build<N> tag, and ios-v* tag plan."],
   ["A3", "Read docs/operations/ios-app-store-submission.md and map every Phase A-F item to automation, AI-assisted verification, or human decision."],
   ["A4", "Read .github/workflows/ios-testflight.yml and ios-app-store-release.yml and confirm tag triggers (TestFlight vs App Store release)."],
   ["A5", "Confirm ios/PARITY_CHECKLIST.md and ios/QA_CHECKLIST.md satisfy workflow-required checked items before tagging."],
@@ -127,6 +129,131 @@ function extractProjectVersion(projectYml) {
   };
 }
 
+/**
+ * ios-v*-build* tags to pick the default intended build from: origin's, where
+ * every cut pushes its tag, or this clone's when origin can't be listed.
+ *
+ * @param {import("./ci/ios-testflight-build-number.mjs").Git} git
+ * @param {(message: string) => void} [logMessage]
+ * @returns {{ names: string[], source: "origin" | "local" } | null} null when neither can be listed
+ */
+export function listBuildTags(git, logMessage = log) {
+  /** @param {{ status: number | null, stderr: string }} result */
+  const failure = (result) => `exit ${result.status}${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`;
+  try {
+    const remote = git(["ls-remote", "--tags", "--refs", "origin"], { allowFailure: true });
+    if (remote.status === 0) return { names: [...parseLsRemoteTags(remote.stdout).keys()], source: "origin" };
+    logMessage(`Listing tags on origin failed (${failure(remote)}); using this clone's tags.`);
+    const local = git(["tag", "--list", "ios-v*-build*"], { allowFailure: true });
+    if (local.status === 0) {
+      return { names: local.stdout.split("\n").map((name) => name.trim()).filter(Boolean), source: "local" };
+    }
+    logMessage(`Listing this clone's tags failed (${failure(local)}).`);
+  } catch (error) {
+    logMessage(`Listing tags failed: ${error instanceof Error ? error.message : error}`);
+  }
+  return null;
+}
+
+/**
+ * The one build this dry run is about (#838). A2, the App Store Connect lookup,
+ * the checklist evidence, and the report all use it. TestFlight build numbers
+ * live in the ios-v<marketing>-build<N> tags (#707), so CURRENT_PROJECT_VERSION
+ * in ios/project.yml no longer names a real build and is only the last resort.
+ *
+ * - `--intended-tag` must be a build tag, and it names the build outright.
+ * - Otherwise the highest build tag wins: the latest TestFlight cut.
+ * - With no build tag at all, ios/project.yml fills in, with a warning.
+ *
+ * @param {object} options
+ * @param {string} [options.intendedTag] the --intended-tag value
+ * @param {{ names: string[], source: string } | null} options.buildTags from listBuildTags; not read when intendedTag is set
+ * @param {{ marketingVersion?: string, buildNumber?: string }} options.projectYml MARKETING_VERSION and CURRENT_PROJECT_VERSION
+ * @returns {{ marketingVersion?: string, buildNumber?: string, intendedTag: string, source: string, problem?: string, warning?: string }}
+ *   `problem` fails A2; `warning` is reported but does not fail the run
+ */
+export function resolveIntendedBuild({ intendedTag, buildTags, projectYml }) {
+  if (intendedTag !== undefined) {
+    const parsed = parseBuildTag(intendedTag);
+    if (!parsed) {
+      return {
+        intendedTag,
+        source: "intended-tag",
+        problem: `--intended-tag ${intendedTag} is not a build tag. Pass ios-v<marketing>-build<N>, for example ios-v1.0.3-build32.`,
+      };
+    }
+    return withWarnings(
+      { marketingVersion: parsed.marketing, buildNumber: String(parsed.buildNumber), intendedTag, source: "intended-tag" },
+      projectYml,
+    );
+  }
+
+  const highest = buildTags && highestBuildTag(buildTags.names);
+  if (highest) {
+    return withWarnings(
+      {
+        marketingVersion: highest.marketing,
+        buildNumber: String(highest.buildNumber),
+        intendedTag: highest.name,
+        source: buildTags.source,
+      },
+      projectYml,
+    );
+  }
+
+  return {
+    marketingVersion: projectYml.marketingVersion,
+    buildNumber: projectYml.buildNumber,
+    intendedTag: `ios-v${projectYml.marketingVersion}-build${projectYml.buildNumber}`,
+    source: "project.yml",
+    warning:
+      `${
+        !buildTags
+          ? "Tags could not be listed"
+          : `No ios-v<marketing>-build<N> tags were found ${buildTags.source === "origin" ? "on origin" : "in this clone"}`
+      }, so the intended build falls back to CURRENT_PROJECT_VERSION in ios/project.yml, which TestFlight cuts ` +
+      "no longer advance. Pass --intended-tag ios-v<marketing>-build<N> to name the build.",
+  };
+}
+
+/** @param {string} source resolveIntendedBuild's `source` */
+function describeIntendedBuildSource(source) {
+  return (
+    {
+      "intended-tag": "--intended-tag",
+      origin: "the highest build tag on origin",
+      local: "the highest build tag in this clone (origin could not be listed)",
+      "project.yml": "ios/project.yml (no build tag found)",
+    }[source] ?? source
+  );
+}
+
+/**
+ * Adds a warning when the build came from this clone's tags, which can be
+ * behind origin, or is for another marketing version than ios/project.yml's.
+ *
+ * @template {{ marketingVersion: string, intendedTag: string, source: string }} T
+ * @param {T} intended
+ * @param {{ marketingVersion?: string }} projectYml
+ * @returns {T & { warning?: string }}
+ */
+function withWarnings(intended, projectYml) {
+  const warnings = [];
+  if (intended.source === "local") {
+    warnings.push(
+      "Origin's tags could not be listed, so the intended build comes from this clone's tags, which can be " +
+        "behind origin. Run git fetch --tags, or pass --intended-tag.",
+    );
+  }
+  if (projectYml.marketingVersion && projectYml.marketingVersion !== intended.marketingVersion) {
+    warnings.push(
+      `The intended build ${intended.intendedTag} is for marketing version ${intended.marketingVersion}, ` +
+        `but ios/project.yml has MARKETING_VERSION ${projectYml.marketingVersion}.`,
+    );
+  }
+  return warnings.length > 0 ? { ...intended, warning: warnings.join(" ") } : intended;
+}
+
 function requiredChecked(fileContent, requiredText) {
   const escaped = requiredText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^- \\[[xX]\\] ${escaped}$`, "m").test(fileContent);
@@ -220,6 +347,9 @@ function ascGet(pathname, jwt) {
 }
 
 async function queryAsc(project) {
+  if (!project.marketingVersion || !project.buildNumber) {
+    return { live: false, reason: "There is no intended build to look up; see A2." };
+  }
   const appId = process.env.APPSTORE_APP_ID;
   const jwt = makeJwt();
   if (!jwt || !appId) {
@@ -325,7 +455,7 @@ Generated: ${report.generatedAt}
 ## Intended submission
 
 - Version/build: ${report.project.marketingVersion} (${report.project.buildNumber})
-- Intended tag: ${report.intendedTag}
+- Intended tag: ${report.intendedTag} (from ${describeIntendedBuildSource(report.intendedBuild.source)})
 - Bundle ID: ${report.project.bundleId}
 - Release owner: ${report.releaseOwner}
 - Submission URL: ${report.submissionUrl}
@@ -377,17 +507,45 @@ async function main() {
   const releaseWorkflow = read(".github/workflows/ios-app-store-release.yml");
   const parity = read("ios/PARITY_CHECKLIST.md");
   const qa = read("ios/QA_CHECKLIST.md");
-  const projectYml = read("ios/project.yml");
-  const project = extractProjectVersion(projectYml);
-  const intendedTag = args.intendedTag ?? `ios-v${project.marketingVersion}-build${project.buildNumber}`;
+  const projectYml = extractProjectVersion(read("ios/project.yml"));
+  if (args.intendedTag === undefined) log("Listing ios-v*-build* tags for the intended build.");
+  const intended = resolveIntendedBuild({
+    intendedTag: args.intendedTag,
+    buildTags:
+      args.intendedTag === undefined ? listBuildTags(gitRunner(root, { ...process.env, GIT_TERMINAL_PROMPT: "0" })) : null,
+    projectYml,
+  });
+  const intendedTag = intended.intendedTag;
+  // From here on, "project" is the intended build: the version and build number
+  // come from its tag, everything else from ios/project.yml.
+  const project = { ...projectYml, marketingVersion: intended.marketingVersion, buildNumber: intended.buildNumber };
+  if (!intended.problem) {
+    log(
+      `Intended build: ${project.marketingVersion ?? "?"} (${project.buildNumber ?? "?"}), tag ${intendedTag}, ` +
+        `from ${describeIntendedBuildSource(intended.source)}.`,
+    );
+  }
+  if (intended.warning) {
+    log(`Warning: ${intended.warning}`);
+    warn("INTENDED_BUILD", intended.warning, { intendedTag, source: intended.source, projectYml });
+  }
 
   readme.includes("ios/RELEASING.md") && readme.includes("docs/operations/ios-app-store-submission.md")
     ? pass("A1", "README Release operations references both canonical iOS runbooks.")
     : fail("A1", "README Release operations is missing one or both canonical iOS runbook links.");
 
-  project.marketingVersion && project.buildNumber && /^ios-v/.test(intendedTag)
-    ? pass("A2", "iOS version/build and tag plan found.", { marketingVersion: project.marketingVersion, buildNumber: project.buildNumber, intendedTag })
-    : fail("A2", "Could not determine version/build/tag plan.", { project, intendedTag });
+  if (intended.problem) {
+    fail("A2", intended.problem, { intendedTag });
+  } else if (project.marketingVersion && project.buildNumber) {
+    pass("A2", "iOS version/build and tag plan found.", {
+      marketingVersion: project.marketingVersion,
+      buildNumber: project.buildNumber,
+      intendedTag,
+      source: intended.source,
+    });
+  } else {
+    fail("A2", "Could not determine version/build/tag plan.", { project, intendedTag });
+  }
 
   const phaseMatches = [...submissionRunbook.matchAll(/^## Phase ([A-F]) - /gm)].map((match) => match[1]);
   phaseMatches.join("") === "ABCDEF"
@@ -521,7 +679,7 @@ async function main() {
   const fallbackPaths = [
     { when: "ASC credentials or APPSTORE_APP_ID are unavailable", action: "Use App Store Connect website to verify TestFlight build status, version page, attached build, metadata, screenshots, review notes, and demo credentials; paste evidence into the generated report." },
     { when: "API field is unsupported or returns a blocker", action: "Record the exact API error, open App Store Connect -> app -> Distribution/App Store -> target version, fix only that field, then rerun this dry run." },
-    { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, bump CURRENT_PROJECT_VERSION, upload a replacement ios-v* build, attach it, and resubmit.` },
+    { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, cut a replacement build (merging the fix cuts one; its ios-v<marketing>-build<N> tag carries the new number), attach it, and resubmit.` },
     { when: "Submission is approved", action: `Record final build and outcome in ${trackingIssue}, choose held/manual/automatic/phased release, and close tracking only when complete.` },
   ];
 
@@ -531,6 +689,10 @@ async function main() {
     dryRunMode: true,
     project,
     intendedTag,
+    intendedBuild: {
+      source: intended.source,
+      projectYml: { marketingVersion: projectYml.marketingVersion, currentProjectVersion: projectYml.buildNumber },
+    },
     releaseOwner: args.releaseOwner ?? "UNSET_RELEASE_OWNER",
     submissionUrl: args.submissionUrl ?? "UNSET_SUBMISSION_URL",
     workflows: {
@@ -598,7 +760,18 @@ async function main() {
   log(`Dry run evidence written to ${outputDir}`);
 }
 
-main().catch((error) => {
+/** True when node runs this file, false when a test imports it. Symlinked paths compare equal. */
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+/** Writes a minimal report when the dry run itself crashes, so the evidence step still has files. */
+function reportFatalError(error) {
   console.error(error);
   try {
     const fallbackDir = path.resolve(root, DEFAULT_OUTPUT_DIR);
@@ -618,4 +791,8 @@ main().catch((error) => {
     console.error("Failed to write fatal report:", writeError);
   }
   process.exitCode = 1;
-});
+}
+
+if (invokedDirectly()) {
+  main().catch(reportFatalError);
+}

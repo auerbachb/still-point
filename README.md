@@ -261,7 +261,7 @@ Before the next live App Store submission, run the AI-assisted dry run and save 
 npm run ios:app-store:dry-run
 ```
 
-The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks both iOS workflows' required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
+The dry run reads the canonical runbooks, validates the current iOS version/build/tag plan, checks both iOS workflows' required checklist and secret references, maps every issue #242 checklist item, and writes `artifacts/ios-app-store-dry-run/summary.json`, `summary.md`, and `automation.log`. It checks the build named by the highest `ios-v*-build*` tag on origin; pass `-- --intended-tag ios-v<marketing>-build<N>` to check a different one. Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to include live App Store Connect read checks; add `-- --require-live` when a release owner wants missing live ASC access to fail the dry run.
 
 ### Neon (database)
 
