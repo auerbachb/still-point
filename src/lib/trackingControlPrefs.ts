@@ -144,10 +144,11 @@ export function markTrackingUnlockIfQualifying(session: {
 
 /** Backfill unlock from stored session history (e.g. existing practitioners). */
 export function syncTrackingUnlockFromSessions(
-  sessions: Array<{ duration: number; completed: boolean }>,
+  sessions: Array<{ duration: number; completed: boolean; sessionType?: string }>,
 ): void {
   if (loadTrackingControlPrefs().trackingControlsUnlocked) return;
-  if (sessions.some(sessionQualifiesForTrackingUnlock)) {
+  // #836: a focus session is not a sit, so a long one never unlocks the sit controls.
+  if (sessions.some(s => s.sessionType !== "focus" && sessionQualifiesForTrackingUnlock(s))) {
     markTrackingControlsUnlocked();
   }
 }

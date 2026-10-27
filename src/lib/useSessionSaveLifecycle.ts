@@ -1,14 +1,15 @@
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
 import type { SessionType, Track } from "@/lib/constants";
+import { focusActivityDayAfterCompletedSave, type FocusSessionResult } from "@/lib/focusActivity";
 import {
   getWebSessionSyncCoordinator,
   type CreateSessionPayload,
   type PendingSessionThought,
 } from "@/lib/offlineSessionQueue";
 import { creditedPracticeDate, rememberStandardSit } from "@/lib/practiceDaySits";
-import type { PracticeDaySit } from "@/lib/sessionCalendar";
+import { getLocalIsoDate, type PracticeDaySit } from "@/lib/sessionCalendar";
 import { isSessionStored, resolveSessionSaveOutcome, type SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
 import { previewNextStandardDuration } from "@/lib/userProgression";
 
@@ -61,6 +62,8 @@ type UseSessionSaveLifecycleOptions = {
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;
   user: User | null;
   userRef: RefObject<User | null>;
+  /** #836: a stored, completed focus session steps the in-memory focus goal. */
+  setUser: Dispatch<SetStateAction<User | null>>;
   refreshUserFromServer: () => void;
   refreshTodayTracks: () => Promise<void>;
   /** The page's overlay setter: opens the completion screen, or closes the sit. */
@@ -69,14 +72,15 @@ type UseSessionSaveLifecycleOptions = {
 
 /**
  * #703 — every way a finished sit is written to the local queue (completed,
- * retried, abandoned, breath), what the completion screen shows for it, and
- * whether a local write has failed on this device.
+ * retried, abandoned, breath, focus), what the completion screen shows for it,
+ * and whether a local write has failed on this device.
  */
 export function useSessionSaveLifecycle({
   sessionGeneration,
   loadedSitsRef,
   user,
   userRef,
+  setUser,
   refreshUserFromServer,
   refreshTodayTracks,
   setOverlay,
@@ -100,6 +104,8 @@ export function useSessionSaveLifecycle({
   // generation rather than a boolean so the previous account's save can neither
   // swallow the next account's End nor release its gate (#833).
   const breathSavingRef = useRef<number | null>(null);
+  // The same gate for a focus save (#836).
+  const focusSavingRef = useRef<number | null>(null);
 
   // #703: every path that writes a sit to the local queue reports here, so the
   // offline strip's promise tracks whether local storage is actually working.
@@ -390,6 +396,64 @@ export function useSessionSaveLifecycle({
     }
   }, [sessionGeneration, loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
 
+  // #836: log a focus session (#765 increment 2/5). `null` is an End pressed
+  // before a whole second passed, which saves nothing. A focus session never
+  // moves meditation progression, and like a breath sit it has no completion
+  // screen: End, or reaching the goal, returns straight to the Progress tab.
+  const handleFocusEnd = useCallback(async (result: FocusSessionResult | null) => {
+    if (!result) {
+      setOverlay(null);
+      return;
+    }
+    // #833: the same generation-scoped gate and close as `handleBreathEnd`.
+    const generation = sessionGeneration.current;
+    if (focusSavingRef.current === generation) return;
+    focusSavingRef.current = generation;
+    try {
+      if (user?.id) {
+        // A missing counter (a server that predates #835) is day 1.
+        const focusActivityDay = user.focusActivityDay ?? 1;
+        const outcome = await saveSitToQueue(
+          {
+            dayNumber: focusActivityDay,
+            sessionType: "focus",
+            duration: result.duration,
+            bonusSeconds: 0,
+            completed: result.completed,
+            actualTime: result.actualTime,
+            clearPercent: 0,
+            thoughtCount: 0,
+            mindStateLog: [],
+            // The plain calendar date, not `creditedPracticeDate`: that one
+            // credits the daily meditation sit, and would stamp a focus session
+            // saved before 6:00 onto yesterday while yesterday is still open.
+            sessionDate: getLocalIsoDate(),
+          },
+          crypto.randomUUID(),
+          user.id,
+          [],
+          "Failed to save focus session:",
+        );
+        // The server steps the goal once per completed session (#835). Mirror
+        // it in memory, so Home shows the next goal without a reload, once the
+        // session is safely stored: synced, or queued to sync later.
+        if (
+          result.completed
+          && isSessionStored(outcome)
+          && generation === sessionGeneration.current
+        ) {
+          setUser((prev) => (prev
+            ? { ...prev, focusActivityDay: focusActivityDayAfterCompletedSave(prev.focusActivityDay, focusActivityDay) }
+            : prev));
+        }
+      }
+    } finally {
+      // Released only while it is still this save's, as in `handleBreathEnd`.
+      if (focusSavingRef.current === generation) focusSavingRef.current = null;
+      if (generation === sessionGeneration.current) setOverlay(null);
+    }
+  }, [sessionGeneration, user, setUser, saveSitToQueue, setOverlay]);
+
   /** Account teardown: the not-stored warning was about the previous account's sit. */
   const clearLocalWriteFailed = useCallback(() => {
     setLocalWriteFailed(false);
@@ -404,5 +468,6 @@ export function useSessionSaveLifecycle({
     handleRetryCompletionSave,
     handleSessionAbandon,
     handleBreathEnd,
+    handleFocusEnd,
   };
 }

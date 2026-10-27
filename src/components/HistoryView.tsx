@@ -254,8 +254,11 @@ export function HistoryView({
     [journeyRows],
   );
 
+  // #836: focus sessions run up to two hours, so they stay out of the bar scale
+  // (and their bars are capped at full width below); otherwise one long focus
+  // session would shrink every meditation bar to a sliver.
   const maxDuration = Math.max(
-    ...history.filter(h => !h.missed).map(h => h.actualTime),
+    ...history.filter(h => !h.missed && h.sessionType !== "focus").map(h => h.actualTime),
     sessionDurationForUser("standard", currentDay, recovery),
     60,
   );
@@ -657,8 +660,15 @@ export function HistoryView({
               const dateLabelShort = formatShortDateLabel(entry.date);
               const isQuick = entry.sessionType === "quick";
               const isBreath = entry.sessionType === "breath";
+              const isFocus = entry.sessionType === "focus";
               const sessionOrdinal = entry.sessionIndexInDay ?? 1;
-              const sessionLabel = isQuick ? "Quick" : isBreath ? "Breath" : `Session ${sessionOrdinal}`;
+              const sessionLabel = isQuick
+                ? "Quick"
+                : isBreath
+                  ? "Breath"
+                  : isFocus
+                    ? "Focus"
+                    : `Session ${sessionOrdinal}`;
 
               const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;
               const isExpanded = expandedEntryId === entryId;
@@ -728,7 +738,7 @@ export function HistoryView({
                     }}>
                       <div style={{
                         height: "100%",
-                        width: `${(entry.actualTime / maxDuration) * 100}%`,
+                        width: `${Math.min(100, (entry.actualTime / maxDuration) * 100)}%`,
                         borderRadius: "3px", overflow: "hidden", display: "flex",
                         opacity: isQuick ? 0.55 : 1,
                       }}>

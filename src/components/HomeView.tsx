@@ -1,7 +1,14 @@
 "use client";
 
 import { BLOCK_DURATION, MAX_DURATION, QUICK_DURATION } from "@/lib/constants";
-import { activeRecovery, sessionDurationForUser, type ActiveRecovery, type RecoveryFields } from "@/lib/duration";
+import {
+  activeRecovery,
+  focusSessionDuration,
+  sessionDurationForUser,
+  type ActiveRecovery,
+  type RecoveryFields,
+} from "@/lib/duration";
+import { formatFocusGoal } from "@/lib/focusActivity";
 import { Pathway } from "@/components/Pathway";
 import { DualTrackFork } from "@/components/DualTrackFork";
 import { aphorismForDay } from "@/lib/aphorisms";
@@ -28,6 +35,10 @@ type HomeViewProps = {
   onDismissFork?: () => void;
   onQuickBegin: () => void;
   onBreath?: () => void;
+  /** #836: the focus goal counter; the button shows `focusSessionDuration` of it. */
+  focusActivityDay?: number;
+  /** #836: open the focus activity timer. The button only renders when set. */
+  onFocusActivity?: () => void;
   onBuddy?: () => void;
 };
 
@@ -171,6 +182,8 @@ export function HomeView({
   onDismissFork,
   onQuickBegin,
   onBreath,
+  focusActivityDay = 1,
+  onFocusActivity,
   onBuddy,
 }: HomeViewProps) {
   const todayDuration = sessionDurationForUser("standard", currentDay, recovery);
@@ -372,6 +385,27 @@ export function HomeView({
           }}
         >
           Breath counting
+        </button>
+      )}
+
+      {onFocusActivity && (
+        <button
+          type="button"
+          onClick={onFocusActivity}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg-2)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            padding: "12px 24px",
+            borderRadius: "40px",
+            cursor: "pointer",
+          }}
+        >
+          Focus activity &middot; {formatFocusGoal(focusSessionDuration(focusActivityDay))}
         </button>
       )}
 

@@ -45,7 +45,8 @@ export type User = {
   dualTrackEnabled?: boolean;
   secondTrackDay?: number;
   /** #765: the focus goal counter; the goal is `focusDurationForDay(focusActivityDay)`.
-   *  Optional so responses from a server that predates it still type-check. */
+   *  Optional so responses from a server that predates it still type-check;
+   *  missing reads as 1, the first goal. */
   focusActivityDay?: number;
   /** #708: whether the long (primary) session is the morning or evening sit.
    *  The short track is the opposite. Optional so older servers still type-check. */
@@ -58,7 +59,7 @@ export type Session = {
   duration: number;
   /** Seconds added via +1/+5 extensions beyond planned duration (#90). */
   bonusSeconds?: number;
-  /** #765: the server stores and returns `focus` sessions; no web screen creates one yet. */
+  /** #765: a `focus` session is a focus activity timer run (#836), not a sit. */
   sessionType: "standard" | "quick" | "breath" | "focus";
   /** #240: which daily track this sit advanced ("primary" | "second"). */
   track?: "primary" | "second";
@@ -235,7 +236,8 @@ export const api = {
     dayNumber: number;
     duration: number;
     bonusSeconds?: number;
-    sessionType?: "standard" | "quick" | "breath";
+    /** #836: for `focus`, `dayNumber` carries the user's `focusActivityDay`. */
+    sessionType?: "standard" | "quick" | "breath" | "focus";
     /** #240: which daily track this sit advanced. Defaults to "primary" server-side. */
     track?: "primary" | "second";
     completed: boolean;

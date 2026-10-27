@@ -140,4 +140,40 @@ describe("calculateMindStateTrendStats", () => {
     expect(stats.trailing4Week.totalSitSeconds).toBe(300);
     expect(stats.trailing4Week.clearPercent).toBe(100);
   });
+
+  test("leaves focus sessions out: their empty log is not two hours of aware time (#836)", () => {
+    const sit = {
+      sessionDate: "2026-07-02",
+      sessionType: "standard",
+      duration: 120,
+      actualTime: 120,
+      mindStateLog: [{ time: 0, state: "thinking" }],
+    };
+    const withoutFocus = calculateMindStateTrendStats([sit], today);
+    const withFocus = calculateMindStateTrendStats(
+      [
+        sit,
+        { sessionDate: "2026-07-02", sessionType: "focus", duration: 7200, actualTime: 7200, mindStateLog: [] },
+      ],
+      today,
+    );
+
+    expect(withFocus).toEqual(withoutFocus);
+    // Counted, the focus session would make this 7,320 s and about 1.6 %.
+    expect(withFocus.trailing4Week.totalSitSeconds).toBe(120);
+    expect(withFocus.trailing4Week.lightDistractionPercent).toBe(100);
+  });
+
+  test("still counts breath, quick and untyped sessions", () => {
+    const stats = calculateMindStateTrendStats(
+      [
+        { sessionDate: "2026-07-02", sessionType: "breath", duration: 30, actualTime: 30, mindStateLog: [] },
+        { sessionDate: "2026-07-02", sessionType: "quick", duration: 60, actualTime: 60, mindStateLog: [] },
+        { sessionDate: "2026-07-02", duration: 90, actualTime: 90, mindStateLog: [] },
+      ],
+      today,
+    );
+
+    expect(stats.trailing4Week.totalSitSeconds).toBe(180);
+  });
 });

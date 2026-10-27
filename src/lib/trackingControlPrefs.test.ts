@@ -136,6 +136,21 @@ describe("syncTrackingUnlockFromSessions", () => {
     expect(store.get(HIDE_STORAGE_KEY)).toBe("true");
     expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
   });
+
+  it("a long completed focus session is not a sit and unlocks nothing (#836)", () => {
+    const store = stubBrowserStorage();
+    syncTrackingUnlockFromSessions([
+      { duration: 7200, completed: true, sessionType: "focus" },
+      { duration: 60, completed: true, sessionType: "standard" },
+    ]);
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBeUndefined();
+
+    syncTrackingUnlockFromSessions([
+      { duration: 7200, completed: true, sessionType: "focus" },
+      { duration: 300, completed: true, sessionType: "standard" },
+    ]);
+    expect(store.get(UNLOCK_STORAGE_KEY)).toBe("true");
+  });
 });
 
 describe("saveHideDistractionHyperfocusControls", () => {
