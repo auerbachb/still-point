@@ -28,7 +28,14 @@ extension AppViewModel {
         let now = Date()
         // Resolve yesterday before rolling flags. A nil stamp before 6:00 would
         // otherwise assume the day is finished and credit the new calendar date.
-        await resolvePreviousPracticeDay(now: now)
+        //
+        // #1106: and only go on while the lookup settled for this session. It is a
+        // suspension point like the badge query below, and everything after it —
+        // both rollovers, the stored-snapshot one included, and the badge query —
+        // writes state that belongs to whoever is signed in once it settles. A
+        // lookup that was called off ends the refresh too: its replacement makes
+        // the same calls.
+        guard await resolvePreviousPracticeDay(now: now, generation: generation) else { return }
         // Two rollovers, because they cover different evidence. The stamp-based
         // one below knows what *this process* claimed and when; the snapshot-based
         // one after it also catches a relaunch that inherited a stored snapshot from
@@ -66,15 +73,27 @@ extension AppViewModel {
     }
 
     /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
-    private func resolvePreviousPracticeDay(now: Date) async {
-        guard let ticket = practiceDay.beginPreviousDayRead(now: now) else { return }
+    ///
+    /// - Parameter generation: `authGeneration`, captured by the refresh before its
+    ///   first `await`.
+    /// - Returns: whether the refresh may go on. See
+    ///   `PreviousDayLookup.Outcome.refreshMayContinue`.
+    private func resolvePreviousPracticeDay(now: Date, generation: Int) async -> Bool {
         let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
-        do {
-            let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
-            practiceDay.applyPreviousDayAnswer(tracks, ticket: ticket, now: now, dualTrack: dualTrackEnabled)
-        } catch {
-            practiceDay.applyFailedPreviousDayRead(ticket: ticket, now: now, dualTrack: dualTrackEnabled)
-        }
+        let outcome = await PreviousDayLookup.run(
+            startedAt: generation,
+            liveGeneration: { authGeneration },
+            begin: { practiceDay.beginPreviousDayRead(now: now) },
+            fetch: { try await APIClient.shared.getTracksDoneToday(date: yesterday) },
+            isCancellation: { RequestCancellation.isCancellation($0, taskIsCancelled: Task.isCancelled) },
+            applyAnswer: { tracks, ticket in
+                practiceDay.applyPreviousDayAnswer(tracks, ticket: ticket, now: now, dualTrack: dualTrackEnabled)
+            },
+            applyFailure: { ticket in
+                practiceDay.applyFailedPreviousDayRead(ticket: ticket, now: now, dualTrack: dualTrackEnabled)
+            }
+        )
+        return outcome.refreshMayContinue
     }
 
     /// The snapshot-based rollover in `refreshTracksDoneToday()`: clears the flags when
