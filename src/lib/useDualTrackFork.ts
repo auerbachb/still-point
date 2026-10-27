@@ -32,6 +32,11 @@ export function useDualTrackFork({
     primary: false,
     second: false,
   });
+  // #895: whether `tracksDoneToday` can be read as an answer. Before a refresh
+  // lands, while one is in flight and after one fails, both flags read false,
+  // which is right for the badges but would read as "both sits due" to anything
+  // offered only then.
+  const [tracksDoneTodayKnown, setTracksDoneTodayKnown] = useState(false);
   const [forkDismissed, setForkDismissed] = useState(false);
 
   // #240: derive per-track "completed a standard sit today" from the session list,
@@ -39,6 +44,9 @@ export function useDualTrackFork({
   // as the primary track.
   const refreshTodayTracks = useCallback(async () => {
     const generation = sessionGeneration.current;
+    // #895: a refresh runs because the flags may be about to change (a sit was
+    // saved, the second track switched on), so until it answers they are not known.
+    setTracksDoneTodayKnown(false);
     try {
       const { sessions } = await api.getSessions();
       if (generation !== sessionGeneration.current) return;
@@ -51,6 +59,7 @@ export function useDualTrackFork({
       const done = tracksDoneOn(sits, today);
       syncTrackingUnlockFromSessions(sessions);
       setTracksDoneToday(done);
+      setTracksDoneTodayKnown(true);
     } catch {
       // #833: a failure from an ended session is dropped, as its response
       // would be. Failing closed here would clear the badges of whoever has
@@ -59,6 +68,7 @@ export function useDualTrackFork({
       // Fail closed so a failed refresh can't leave a stale "done today"
       // badge on screen.
       setTracksDoneToday({ primary: false, second: false });
+      setTracksDoneTodayKnown(false);
     }
   }, [sessionGeneration, loadedSitsRef, userRef]);
 
@@ -90,11 +100,13 @@ export function useDualTrackFork({
   /** Account teardown: the badges and the dismissed fork belonged to the previous account. */
   const resetForAccount = useCallback(() => {
     setTracksDoneToday({ primary: false, second: false });
+    setTracksDoneTodayKnown(false);
     setForkDismissed(false);
   }, []);
 
   return {
     tracksDoneToday,
+    tracksDoneTodayKnown,
     forkDismissed,
     setForkDismissed,
     refreshTodayTracks,

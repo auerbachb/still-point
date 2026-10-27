@@ -139,6 +139,7 @@ export default function StillPoint() {
 
   const {
     tracksDoneToday,
+    tracksDoneTodayKnown,
     forkDismissed,
     setForkDismissed,
     refreshTodayTracks,
@@ -687,8 +688,11 @@ export default function StillPoint() {
           dualTrackEligible={isDualTrackEligible(user.currentDay) && !forkDismissed}
           primaryDoneToday={tracksDoneToday.primary}
           secondDoneToday={tracksDoneToday.second}
-          // #895: from the same done-today flags as the badges above.
-          combineOffered={isCombineOffered({
+          // #895: from the same done-today flags as the badges above, once a
+          // refresh has answered. Before that, while one is in flight and after a
+          // failed one, they read "neither done", and a combined sit could then
+          // move a track that was already done today a second time.
+          combineOffered={tracksDoneTodayKnown && isCombineOffered({
             dualTrackEnabled: user.dualTrackEnabled ?? false,
             primaryDoneToday: tracksDoneToday.primary,
             secondDoneToday: tracksDoneToday.second,
