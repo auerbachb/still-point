@@ -1,0 +1,41 @@
+name: Clean up Apple signing state
+description: >-
+  Deletes the temporary keychain, the decoded certificate and profiles, and the
+  UUID-named profiles ios-signing-install installed. Call it with
+  `if: always()` so a failed build still cleans up. Shared by the TestFlight and
+  App Store release lanes (#1113).
+
+inputs:
+  remove-private-keys:
+    description: >-
+      "true" also removes ~/.private_keys. The TestFlight lane writes its App
+      Store Connect API key there; the App Store lane never does (its Fastfile
+      passes the key to Fastlane as key_content).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Clean up keychain and provisioning profiles
+      shell: bash
+      env:
+        REMOVE_PRIVATE_KEYS: ${{ inputs.remove-private-keys }}
+      run: |
+        security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+        rm -f "$RUNNER_TEMP/build_certificate.p12" 2>/dev/null || true
+        rm -f "$RUNNER_TEMP/build_pp.mobileprovision" 2>/dev/null || true
+        rm -f "$RUNNER_TEMP/build_pp_ext.mobileprovision" 2>/dev/null || true
+        rm -f "$RUNNER_TEMP/build_pp_widget.mobileprovision" 2>/dev/null || true
+        if [[ -n "${PP_UUID:-}" ]]; then
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/"${PP_UUID}".mobileprovision 2>/dev/null || true
+        fi
+        if [[ -n "${EXT_PP_UUID:-}" ]]; then
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/"${EXT_PP_UUID}".mobileprovision 2>/dev/null || true
+        fi
+        if [[ -n "${WIDGET_PP_UUID:-}" ]]; then
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/"${WIDGET_PP_UUID}".mobileprovision 2>/dev/null || true
+        fi
+        if [[ "$REMOVE_PRIVATE_KEYS" == "true" ]]; then
+          rm -rf ~/.private_keys 2>/dev/null || true
+        fi
