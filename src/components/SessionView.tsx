@@ -159,6 +159,10 @@ type SessionViewProps = {
     mindStateLog: Array<{ time: number; state: string }>;
     thoughts: Array<{ timeInSession: number; text: string }>;
   }) => void;
+  /** #988: this sit's screen went away (browser Back, a tab change, its own
+   *  save closing it). Called once, on unmount, with the sit's `sitKey`, so a
+   *  save still running for it knows not to change the screen when it settles. */
+  onScreenClosed?: (sitKey: string) => void;
 };
 
 const mono: CSSProperties = {
@@ -174,6 +178,7 @@ export function SessionView({
   secondTrackDay = 1,
   onComplete,
   onAbandon,
+  onScreenClosed,
 }: SessionViewProps) {
   const isMobile = useIsMobile();
   // #769: a combined sit is one sit as long as both tracks' sits together.
@@ -191,6 +196,17 @@ export function SessionView({
   // #930: which sit this is. Sent on every way out of it, so the save hook can
   // refuse a second save of the same sit.
   const sitKeyRef = useRef(crypto.randomUUID());
+  // #988: report the screen closing on unmount only. Read through a ref so a
+  // new callback from the parent never runs the cleanup — and reports the sit
+  // closed — while its screen is still open.
+  const onScreenClosedRef = useRef(onScreenClosed);
+  onScreenClosedRef.current = onScreenClosed;
+  useEffect(() => {
+    const sitKey = sitKeyRef.current;
+    return () => {
+      onScreenClosedRef.current?.(sitKey);
+    };
+  }, []);
   const [isActive, setIsActive] = useState(true);
   const [mindState, setMindState] = useState<MindState>("clear");
   const mindStateRef = useRef<MindState>(mindState);

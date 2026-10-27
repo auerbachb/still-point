@@ -155,6 +155,7 @@ export default function StillPoint() {
     handleSessionComplete,
     handleRetryCompletionSave,
     handleSessionAbandon,
+    handleSitScreenClosed,
     handleBreathEnd,
     handleFocusEnd,
   } = useSessionSaveLifecycle({
@@ -586,6 +587,7 @@ export default function StillPoint() {
           secondTrackDay={user.secondTrackDay ?? 1}
           onComplete={handleSessionComplete}
           onAbandon={handleSessionAbandon}
+          onScreenClosed={handleSitScreenClosed}
         />
       )}
 
