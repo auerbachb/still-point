@@ -1,9 +1,23 @@
-import { OFFLINE_OPEN_ROW_LOCK_PREFIX, OFFLINE_QUEUE_LOCK_NAME, OFFLINE_SYNC_TAG } from "./constants";
+import { requestBackgroundSync } from "./backgroundSync";
 import { defaultOfflineSessionQueueStore } from "./idbStore";
+import { LocalSessionWriteError, SessionSyncError } from "./errors";
+import {
+  applyEndNote,
+  awaitsSync,
+  findOwnedEntry,
+  findOwnedEntryIndex,
+  newPendingEntry,
+  pendingResult,
+  provisionalSessionId,
+  requestWithClientId,
+  rethrowIfPermanent,
+  syncedResult,
+  thoughtsNotSent,
+} from "./queueEntryLogic";
+import { holdRowOpen, rowsHeldOpen, withQueueMutation } from "./queueLock";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import {
   alwaysFailingSessionSyncTransport,
-  isNetworkFailure,
   liveSessionSyncTransport,
   type SessionSyncTransport,
 } from "./transport";
@@ -13,74 +27,6 @@ import type {
   PendingSessionThought,
   SavedSessionResult,
 } from "./types";
-
-export class SessionSyncError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SessionSyncError";
-  }
-}
-
-/**
- * #703: the local queue write failed, so the sit is NOT on this device.
- *
- * Distinct from both siblings on purpose. `SessionSyncError` is a validation
- * guard, and a *network* failure is not an error at all here — the entry is
- * already durable, so it resolves normally with `isPendingSync: true`. This one
- * is the case where IndexedDB itself was unusable (private browsing, exhausted
- * quota, an evicted or corrupted object store) for either the read or the write,
- * which means nothing was stored and nothing will upload later.
- *
- * It carries the whole weight of the notStored verdict: `resolveSessionSaveOutcome`
- * treats an *untagged* rejection as `pending`, because the only other way out of
- * `saveCompletedSession` is a sync error raised after the entry is durable.
- */
-export class LocalSessionWriteError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "LocalSessionWriteError";
-  }
-}
-
-function requestWithClientId(
-  request: Omit<CreateSessionPayload, "clientSessionId">,
-  clientSessionId: string,
-): CreateSessionPayload {
-  return { ...request, clientSessionId };
-}
-
-function provisionalSessionId(clientSessionId: string): string {
-  return clientSessionId;
-}
-
-/** The entry still owes the server something: its session row, queued
- *  thoughts, or a completion-note clear (#792). */
-function awaitsSync(entry: PendingSessionEntry): boolean {
-  return !entry.sessionSynced || entry.thoughts.length > 0 || entry.clearCompletionNote === true;
-}
-
-/** #948: an id for each in-session thought, given before the entry is first
- *  saved, so every upload of it sends the same one. A batch the server stored
- *  but whose response was lost (`UPLOAD_TIMEOUT_MS`, a dropped connection) is
- *  then not stored twice when it is sent again. The end note gets none: the
- *  server replaces it instead. */
-function withClientThoughtIds(thoughts: PendingSessionThought[]): PendingSessionThought[] {
-  return thoughts.map((thought) =>
-    thought.timeInSession === -1 || thought.clientThoughtId
-      ? thought
-      : { ...thought, clientThoughtId: crypto.randomUUID() },
-  );
-}
-
-/** #948: whether a thought the batch sent is this queued one. A thought with an
- *  id is matched by it. One queued before ids existed, and the end note, are
- *  matched by time and text, as before. */
-function isSameThought(sent: PendingSessionThought, queued: PendingSessionThought): boolean {
-  if (sent.clientThoughtId || queued.clientThoughtId) {
-    return sent.clientThoughtId === queued.clientThoughtId;
-  }
-  return sent.timeInSession === queued.timeInSession && sent.text === queued.text;
-}
 
 export class WebSessionSyncCoordinator {
   private readonly queueStore: OfflineSessionQueueStore;
@@ -112,65 +58,24 @@ export class WebSessionSyncCoordinator {
     }
 
     return withQueueMutation(async () => {
-      // #703: a store that cannot even be read is a store nothing was written
-      // to. Tagged like the write below so the caller classifies it as
-      // notStored — an untagged throw from here would be read as a *post-write*
-      // sync failure and reported as safely queued, which is the exact false
-      // reassurance this ticket is about.
-      let entries: PendingSessionEntry[];
-      try {
-        entries = await this.queueStore.loadEntries();
-      } catch (error) {
-        throw new LocalSessionWriteError("queueReadFailed", { cause: error });
-      }
-      const existingIndex = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
+      const entries = await this.loadEntriesForWrite();
+      const existing = entries.find((entry) => entry.clientSessionId === clientSessionId);
 
-      if (existingIndex >= 0) {
-        const existing = entries[existingIndex]!;
+      if (existing) {
         if (existing.ownerUserId !== ownerUserId) {
           throw new SessionSyncError("ownerMismatch");
         }
         if (!awaitsSync(existing) && existing.serverSessionId) {
-          return {
-            sessionId: existing.serverSessionId,
-            isPendingSync: false,
-            serverSessionId: existing.serverSessionId,
-          };
+          return syncedResult(existing.serverSessionId);
         }
       } else {
-        entries.push({
-          clientSessionId,
-          ownerUserId,
-          request: requestWithClientId(request, clientSessionId),
-          thoughts: withClientThoughtIds(thoughts),
-          serverSessionId: null,
-          sessionSynced: false,
-          enqueuedAt: new Date().toISOString(),
-        });
-        try {
-          await this.queueStore.saveEntries(entries);
-        } catch (error) {
-          // #703: the sit never reached the device. Tagged so the caller can tell
-          // this apart from a queued-but-unsent sit and say so to the user.
-          throw new LocalSessionWriteError("queueWriteFailed", { cause: error });
-        }
+        entries.push(newPendingEntry(request, clientSessionId, ownerUserId, thoughts));
+        await this.saveEntriesForWrite(entries);
         await requestBackgroundSync();
       }
 
       const synced = await this.flushEntry(clientSessionId, ownerUserId);
-      if (synced) {
-        return {
-          sessionId: synced.serverSessionId!,
-          isPendingSync: false,
-          serverSessionId: synced.serverSessionId,
-        };
-      }
-
-      return {
-        sessionId: provisionalSessionId(clientSessionId),
-        isPendingSync: true,
-        serverSessionId: null,
-      };
+      return synced ? syncedResult(synced.serverSessionId!) : pendingResult(clientSessionId);
     });
   }
 
@@ -194,33 +99,6 @@ export class WebSessionSyncCoordinator {
     return syncedCount;
   }
 
-  /** #947: one sit the server refuses does not keep the sits after it from
-   *  uploading. The first refusal is handed back for the caller to report. */
-  private async flushEachPending(
-    ownerUserId: string,
-  ): Promise<{ syncedCount: number; failure: { error: unknown } | null }> {
-    if (!ownerUserId) return { syncedCount: 0, failure: null };
-
-    const entries = await this.queueStore.loadEntries();
-    let syncedCount = 0;
-    let failure: { error: unknown } | null = null;
-    for (const entry of entries) {
-      if (entry.ownerUserId !== ownerUserId) continue;
-      if (!awaitsSync(entry)) continue;
-      // #792: in the same turn as note edits — in every tab (#834) — so an edit
-      // can never land between this upload and the queue update that follows
-      // it, and a clear can never reach the server ahead of the note it is
-      // meant to delete. One sit per turn: `flushEntry` re-reads the queue.
-      try {
-        const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
-        if (flushed) syncedCount += 1;
-      } catch (error) {
-        failure ??= { error };
-      }
-    }
-    return { syncedCount, failure };
-  }
-
   /**
    * #947: marks a sit's row as still in use by an open completion screen, whose
    * note edits find a pending sit by its row. While held, in this tab or any
@@ -228,34 +106,11 @@ export class WebSessionSyncCoordinator {
    * the screen's writes have settled; calling it again does nothing.
    */
   holdRowOpen(clientSessionId: string): () => void {
-    openRowsInTab.set(clientSessionId, (openRowsInTab.get(clientSessionId) ?? 0) + 1);
-    let released = false;
-    let releaseLock: (() => void) | null = null;
-    const locks = queueLockManager();
-    if (locks) {
-      void locks
-        .request(`${OFFLINE_OPEN_ROW_LOCK_PREFIX}${clientSessionId}`, { mode: "shared" }, () =>
-          new Promise<void>((resolve) => {
-            if (released) resolve();
-            else releaseLock = resolve;
-          }),
-        )
-        .catch(() => {});
-    }
-    return () => {
-      if (released) return;
-      released = true;
-      const count = (openRowsInTab.get(clientSessionId) ?? 1) - 1;
-      if (count > 0) openRowsInTab.set(clientSessionId, count);
-      else openRowsInTab.delete(clientSessionId);
-      releaseLock?.();
-    };
+    return holdRowOpen(clientSessionId);
   }
 
   async resolvedServerSessionId(clientSessionId: string, ownerUserId: string): Promise<string | null> {
-    const entry = (await this.queueStore.loadEntries()).find(
-      (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
-    );
+    const entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId);
     return entry?.serverSessionId ?? null;
   }
 
@@ -318,6 +173,56 @@ export class WebSessionSyncCoordinator {
     ]);
   }
 
+  /** #703: a store that cannot even be read is a store nothing was written
+   *  to. Tagged like the write below so the caller classifies it as
+   *  notStored — an untagged throw from here would be read as a *post-write*
+   *  sync failure and reported as safely queued, which is the exact false
+   *  reassurance this ticket is about. */
+  private async loadEntriesForWrite(): Promise<PendingSessionEntry[]> {
+    try {
+      return await this.queueStore.loadEntries();
+    } catch (error) {
+      throw new LocalSessionWriteError("queueReadFailed", { cause: error });
+    }
+  }
+
+  /** #703: the sit never reached the device. Tagged so the caller can tell
+   *  this apart from a queued-but-unsent sit and say so to the user. */
+  private async saveEntriesForWrite(entries: PendingSessionEntry[]): Promise<void> {
+    try {
+      await this.queueStore.saveEntries(entries);
+    } catch (error) {
+      throw new LocalSessionWriteError("queueWriteFailed", { cause: error });
+    }
+  }
+
+  /** #947: one sit the server refuses does not keep the sits after it from
+   *  uploading. The first refusal is handed back for the caller to report. */
+  private async flushEachPending(
+    ownerUserId: string,
+  ): Promise<{ syncedCount: number; failure: { error: unknown } | null }> {
+    if (!ownerUserId) return { syncedCount: 0, failure: null };
+
+    const entries = await this.queueStore.loadEntries();
+    let syncedCount = 0;
+    let failure: { error: unknown } | null = null;
+    for (const entry of entries) {
+      if (entry.ownerUserId !== ownerUserId) continue;
+      if (!awaitsSync(entry)) continue;
+      // #792: in the same turn as note edits — in every tab (#834) — so an edit
+      // can never land between this upload and the queue update that follows
+      // it, and a clear can never reach the server ahead of the note it is
+      // meant to delete. One sit per turn: `flushEntry` re-reads the queue.
+      try {
+        const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
+        if (flushed) syncedCount += 1;
+      } catch (error) {
+        failure ??= { error };
+      }
+    }
+    return { syncedCount, failure };
+  }
+
   /** `note` null clears it. Either way the queue keeps at most one end note
    *  and never touches the sit's in-session thoughts. */
   private async writeEndNote(
@@ -331,173 +236,103 @@ export class WebSessionSyncCoordinator {
 
     return withQueueMutation(async () => {
       const entries = await this.queueStore.loadEntries();
-      const index = entries.findIndex((entry) => entry.clientSessionId === clientSessionId);
-      if (index < 0) {
+      const entry = entries.find((item) => item.clientSessionId === clientSessionId);
+      if (!entry) {
         throw new SessionSyncError("entryNotFound");
       }
-      const entry = entries[index]!;
       if (entry.ownerUserId !== ownerUserId) {
         throw new SessionSyncError("ownerMismatch");
       }
 
-      // #753: autosave can run again as the note is edited. Keep one end note
-      // and replace its text. A second -1 in the same batch is rejected.
-      const kept = entry.thoughts.filter((thought) => thought.timeInSession !== -1);
-      if (note !== null) kept.push({ timeInSession: -1, text: note });
-      entry.thoughts = kept;
-      // #792: a new note replaces the stored one server-side, so only a clear
-      // needs the flag — and only once the sit has a server row that could hold
-      // a note. Before that, dropping the queued note is the whole clear.
-      entry.clearCompletionNote = note === null && entry.sessionSynced;
+      applyEndNote(entry, note);
       await this.queueStore.saveEntries(entries);
       await requestBackgroundSync();
       await this.flushEntry(clientSessionId, ownerUserId);
     });
   }
 
+  /** Uploads whatever the sit still owes: its session row, then its queued
+   *  thoughts and any note clear. Resolves to the entry once its row exists on
+   *  the server, or null while it stays queued. */
   private async flushEntry(
     clientSessionId: string,
     ownerUserId: string,
   ): Promise<PendingSessionEntry | null> {
-    let entry = (await this.queueStore.loadEntries()).find(
-      (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
-    );
+    let entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId);
     if (!entry) return null;
 
     if (!entry.sessionSynced) {
-      try {
-        const session = await this.transport.createSession(entry.request);
-        const entries = await this.queueStore.loadEntries();
-        const index = entries.findIndex(
-          (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
-        );
-        if (index < 0) return null;
-        entries[index]!.serverSessionId = session.id;
-        entries[index]!.sessionSynced = true;
-        await this.queueStore.saveEntries(entries);
-        entry = entries[index]!;
-      } catch (error) {
-        if (isNetworkFailure(error)) return null;
-        if (error && typeof error === "object" && "permanent" in error) throw error;
-        return null;
-      }
+      const created = await this.uploadSessionRow(entry);
+      if (!created) return null;
+      entry = created;
     }
 
     const serverSessionId = entry.serverSessionId;
     if (!serverSessionId) return null;
 
-    entry = (await this.queueStore.loadEntries()).find(
-      (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
-    ) ?? entry;
+    entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId) ?? entry;
 
-    const sentClear = entry.clearCompletionNote === true;
-    if (entry.thoughts.length > 0 || sentClear) {
-      const sent = entry.thoughts;
-      try {
-        await this.transport.batchThoughts({
-          sessionId: serverSessionId,
-          dayNumber: entry.request.dayNumber,
-          thoughts: sent,
-          ...(sentClear ? { clearCompletionNote: true as const } : {}),
-        });
-        const entries = await this.queueStore.loadEntries();
-        const index = entries.findIndex(
-          (item) => item.clientSessionId === clientSessionId && item.ownerUserId === ownerUserId,
-        );
-        if (index < 0) return entry;
-        const current = entries[index]!;
-        // Only drop what this batch sent. A note replaced while the request was
-        // in flight (#753 autosave) stays queued for the next flush, and a clear
-        // asked for after a request that carried none stays set (#792).
-        const remaining = current.thoughts.filter(
-          (thought) => !sent.some((item) => isSameThought(item, thought)),
-        );
-        const clearDelivered = sentClear && current.clearCompletionNote === true;
-        if (remaining.length === current.thoughts.length && !clearDelivered) return current;
-        current.thoughts = remaining;
-        if (clearDelivered) current.clearCompletionNote = false;
-        await this.queueStore.saveEntries(entries);
-        entry = current;
-      } catch (error) {
-        if (isNetworkFailure(error)) return null;
-        if (error && typeof error === "object" && "permanent" in error) throw error;
-        return null;
-      }
+    if (entry.thoughts.length > 0 || entry.clearCompletionNote === true) {
+      return this.uploadThoughts(entry, serverSessionId);
     }
-
     return entry;
+  }
+
+  /** Creates the sit's server row and records its id. Null while the sit stays
+   *  queued, or when its entry is gone by the time the row exists. */
+  private async uploadSessionRow(entry: PendingSessionEntry): Promise<PendingSessionEntry | null> {
+    try {
+      const session = await this.transport.createSession(entry.request);
+      const entries = await this.queueStore.loadEntries();
+      const index = findOwnedEntryIndex(entries, entry.clientSessionId, entry.ownerUserId);
+      if (index < 0) return null;
+      entries[index]!.serverSessionId = session.id;
+      entries[index]!.sessionSynced = true;
+      await this.queueStore.saveEntries(entries);
+      return entries[index]!;
+    } catch (error) {
+      rethrowIfPermanent(error);
+      return null;
+    }
+  }
+
+  /** Sends the sit's queued thoughts (and a note clear, if asked for), then
+   *  drops from the queue only what that batch delivered. */
+  private async uploadThoughts(
+    entry: PendingSessionEntry,
+    serverSessionId: string,
+  ): Promise<PendingSessionEntry | null> {
+    const sentClear = entry.clearCompletionNote === true;
+    const sent = entry.thoughts;
+    try {
+      await this.transport.batchThoughts({
+        sessionId: serverSessionId,
+        dayNumber: entry.request.dayNumber,
+        thoughts: sent,
+        ...(sentClear ? { clearCompletionNote: true as const } : {}),
+      });
+      const entries = await this.queueStore.loadEntries();
+      const index = findOwnedEntryIndex(entries, entry.clientSessionId, entry.ownerUserId);
+      if (index < 0) return entry;
+      const current = entries[index]!;
+      // Only drop what this batch sent. A note replaced while the request was
+      // in flight (#753 autosave) stays queued for the next flush, and a clear
+      // asked for after a request that carried none stays set (#792).
+      const remaining = thoughtsNotSent(current.thoughts, sent);
+      const clearDelivered = sentClear && current.clearCompletionNote === true;
+      if (remaining.length === current.thoughts.length && !clearDelivered) return current;
+      current.thoughts = remaining;
+      if (clearDelivered) current.clearCompletionNote = false;
+      await this.queueStore.saveEntries(entries);
+      return current;
+    } catch (error) {
+      rethrowIfPermanent(error);
+      return null;
+    }
   }
 }
 
 let sharedCoordinator: WebSessionSyncCoordinator | null = null;
-let queueMutation: Promise<unknown> = Promise.resolve();
-/** #947: this tab's open completion screens, by sit, with a count per sit.
- *  Covers the tab itself where Web Locks is missing. */
-const openRowsInTab = new Map<string, number>();
-
-/** #947: the sits whose rows an open completion screen still needs: this tab's,
- *  plus every lock any tab holds or has asked for. Null when the other tabs'
- *  locks could not be read, so nothing is known safe to drop. */
-async function rowsHeldOpen(): Promise<Set<string> | null> {
-  const open = new Set(openRowsInTab.keys());
-  const locks = queueLockManager();
-  if (!locks || typeof locks.query !== "function") return open;
-  try {
-    const snapshot = await locks.query();
-    for (const lock of [...(snapshot.held ?? []), ...(snapshot.pending ?? [])]) {
-      if (lock.name?.startsWith(OFFLINE_OPEN_ROW_LOCK_PREFIX)) {
-        open.add(lock.name.slice(OFFLINE_OPEN_ROW_LOCK_PREFIX.length));
-      }
-    }
-  } catch {
-    return null;
-  }
-  return open;
-}
-
-/**
- * Runs queue writes one at a time, in call order.
- *
- * #834: the queue lives in IndexedDB, which every tab and the service worker
- * share, so where the browser has Web Locks the turn is an exclusive lock they
- * all take. The in-memory chain orders only this tab's writes; it is the
- * fallback where Web Locks is missing (outside a secure context, in older
- * browsers, in tests).
- */
-async function withQueueMutation<T>(fn: () => Promise<T>): Promise<T> {
-  const locks = queueLockManager();
-  if (!locks) return withTabQueueMutation(fn);
-  let granted = false;
-  try {
-    return await locks.request(OFFLINE_QUEUE_LOCK_NAME, () => {
-      granted = true;
-      return fn();
-    });
-  } catch (error) {
-    // A lock that was never granted ran nothing, so the write can still take
-    // this tab's turn. Rejecting instead would hand `saveCompletedSession` an
-    // untagged error, which reads as a queued sit with nothing stored (#703).
-    if (granted) throw error;
-    return withTabQueueMutation(fn);
-  }
-}
-
-function withTabQueueMutation<T>(fn: () => Promise<T>): Promise<T> {
-  const result = queueMutation.then(fn);
-  queueMutation = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
-}
-
-/** Read on every call. The DOM types declare `navigator.locks` always
- *  present, but it is missing outside a secure context. */
-function queueLockManager(): LockManager | null {
-  if (typeof navigator === "undefined") return null;
-  const locks = navigator.locks as LockManager | undefined;
-  return typeof locks?.request === "function" ? locks : null;
-}
 
 export function getWebSessionSyncCoordinator(): WebSessionSyncCoordinator {
   if (!sharedCoordinator) {
@@ -506,28 +341,11 @@ export function getWebSessionSyncCoordinator(): WebSessionSyncCoordinator {
   return sharedCoordinator;
 }
 
-export async function requestBackgroundSync(): Promise<void> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
-    return;
-  }
-  try {
-    const registration = await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
-    ]);
-    if (!registration || !("sync" in registration)) {
-      return;
-    }
-    await (registration as ServiceWorkerRegistration & {
-      sync: { register: (tag: string) => Promise<void> };
-    }).sync.register(OFFLINE_SYNC_TAG);
-  } catch {
-    // Background Sync is best-effort; foreground online flush covers unsupported browsers.
-  }
-}
-
 export {
+  LocalSessionWriteError,
+  SessionSyncError,
   alwaysFailingSessionSyncTransport,
   provisionalSessionId,
+  requestBackgroundSync,
   requestWithClientId,
 };
