@@ -213,9 +213,10 @@ test.describe("offline-first web PWA", () => {
       // no Background Sync at all.
       await network.goOnline();
 
-      // A synced sit keeps its queue row, because the completion screen's note
-      // edits look the sit up there and nothing on the web prunes it. Drained
-      // therefore means the row holds its server id and owes nothing more.
+      // Synced rows are pruned only on return home (#947), after that return's
+      // flush, and this return ran offline, when the sit still owed its upload.
+      // The reconnect flush prunes nothing, so the row stays: drained means it
+      // holds its server id and owes nothing more.
       const queuedRow = async () =>
         (await readQueuedSessions(page)).find((row) => row.clientSessionId === queued.clientSessionId);
       await expect

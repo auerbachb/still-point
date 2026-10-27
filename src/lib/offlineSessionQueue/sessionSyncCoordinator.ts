@@ -1,4 +1,4 @@
-import { OFFLINE_QUEUE_LOCK_NAME, OFFLINE_SYNC_TAG } from "./constants";
+import { OFFLINE_OPEN_ROW_LOCK_PREFIX, OFFLINE_QUEUE_LOCK_NAME, OFFLINE_SYNC_TAG } from "./constants";
 import { defaultOfflineSessionQueueStore } from "./idbStore";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import {
@@ -186,11 +186,24 @@ export class WebSessionSyncCoordinator {
     return this.writeEndNote(clientSessionId, ownerUserId, null);
   }
 
+  /** Rejects with the first permanent upload failure, once every other sit
+   *  has had its turn. */
   async flushPending(ownerUserId: string): Promise<number> {
-    if (!ownerUserId) return 0;
+    const { syncedCount, failure } = await this.flushEachPending(ownerUserId);
+    if (failure) throw failure.error;
+    return syncedCount;
+  }
+
+  /** #947: one sit the server refuses does not keep the sits after it from
+   *  uploading. The first refusal is handed back for the caller to report. */
+  private async flushEachPending(
+    ownerUserId: string,
+  ): Promise<{ syncedCount: number; failure: { error: unknown } | null }> {
+    if (!ownerUserId) return { syncedCount: 0, failure: null };
 
     const entries = await this.queueStore.loadEntries();
     let syncedCount = 0;
+    let failure: { error: unknown } | null = null;
     for (const entry of entries) {
       if (entry.ownerUserId !== ownerUserId) continue;
       if (!awaitsSync(entry)) continue;
@@ -198,10 +211,45 @@ export class WebSessionSyncCoordinator {
       // can never land between this upload and the queue update that follows
       // it, and a clear can never reach the server ahead of the note it is
       // meant to delete. One sit per turn: `flushEntry` re-reads the queue.
-      const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
-      if (flushed) syncedCount += 1;
+      try {
+        const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
+        if (flushed) syncedCount += 1;
+      } catch (error) {
+        failure ??= { error };
+      }
     }
-    return syncedCount;
+    return { syncedCount, failure };
+  }
+
+  /**
+   * #947: marks a sit's row as still in use by an open completion screen, whose
+   * note edits find a pending sit by its row. While held, in this tab or any
+   * other, the return-home prune keeps the row. Call the returned function once
+   * the screen's writes have settled; calling it again does nothing.
+   */
+  holdRowOpen(clientSessionId: string): () => void {
+    openRowsInTab.set(clientSessionId, (openRowsInTab.get(clientSessionId) ?? 0) + 1);
+    let released = false;
+    let releaseLock: (() => void) | null = null;
+    const locks = queueLockManager();
+    if (locks) {
+      void locks
+        .request(`${OFFLINE_OPEN_ROW_LOCK_PREFIX}${clientSessionId}`, { mode: "shared" }, () =>
+          new Promise<void>((resolve) => {
+            if (released) resolve();
+            else releaseLock = resolve;
+          }),
+        )
+        .catch(() => {});
+    }
+    return () => {
+      if (released) return;
+      released = true;
+      const count = (openRowsInTab.get(clientSessionId) ?? 1) - 1;
+      if (count > 0) openRowsInTab.set(clientSessionId, count);
+      else openRowsInTab.delete(clientSessionId);
+      releaseLock?.();
+    };
   }
 
   async resolvedServerSessionId(clientSessionId: string, ownerUserId: string): Promise<string | null> {
@@ -216,14 +264,47 @@ export class WebSessionSyncCoordinator {
     // #792: in turn with note edits and flushes. Saved from a stale read, the
     // filtered list would drop an entry whose clear was flagged in between.
     return withQueueMutation(async () => {
+      // #947: read in the same turn, so a screen that holds its row by now is seen.
+      const open = await rowsHeldOpen();
+      if (!open) return;
       const entries = await this.queueStore.loadEntries();
       const next = entries.filter(
-        (entry) => !(entry.ownerUserId === ownerUserId && !awaitsSync(entry)),
+        (entry) =>
+          !(entry.ownerUserId === ownerUserId && !awaitsSync(entry) && !open.has(entry.clientSessionId)),
       );
       if (next.length !== entries.length) {
         await this.queueStore.saveEntries(next);
       }
     });
+  }
+
+  /**
+   * #947: the return-home sync, as iOS's `returnHome()` runs it. Uploads what
+   * this account still owes, then drops its rows that owe nothing more — a
+   * synced sit otherwise stays queued until sign-out. Resolves to the number of
+   * sits the flush uploaded.
+   *
+   * A completion screen's note edits find a pending sit by its row, and
+   * `writeEndNote` throws `entryNotFound` without one, so a row held with
+   * `holdRowOpen` — by this tab or another — is kept. `isCurrent` is read
+   * between the flush and the prune; false means the account signed out (or
+   * another signed in) in the meantime, so nothing is pruned for a session that
+   * has ended.
+   */
+  async flushAndPruneCompleted(
+    ownerUserId: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<number> {
+    if (!ownerUserId) return 0;
+    const { syncedCount, failure } = await this.flushEachPending(ownerUserId);
+    if (failure) {
+      // A permanent upload failure leaves its row queued and does not stop the
+      // prune: it only drops rows that owe nothing, so the failed one stays.
+      console.error("Failed to flush the offline session queue:", failure.error);
+    }
+    if (!isCurrent()) return syncedCount;
+    await this.pruneCompletedEntries(ownerUserId);
+    return syncedCount;
   }
 
   async clearQueue(): Promise<void> {
@@ -350,6 +431,29 @@ export class WebSessionSyncCoordinator {
 
 let sharedCoordinator: WebSessionSyncCoordinator | null = null;
 let queueMutation: Promise<unknown> = Promise.resolve();
+/** #947: this tab's open completion screens, by sit, with a count per sit.
+ *  Covers the tab itself where Web Locks is missing. */
+const openRowsInTab = new Map<string, number>();
+
+/** #947: the sits whose rows an open completion screen still needs: this tab's,
+ *  plus every lock any tab holds or has asked for. Null when the other tabs'
+ *  locks could not be read, so nothing is known safe to drop. */
+async function rowsHeldOpen(): Promise<Set<string> | null> {
+  const open = new Set(openRowsInTab.keys());
+  const locks = queueLockManager();
+  if (!locks || typeof locks.query !== "function") return open;
+  try {
+    const snapshot = await locks.query();
+    for (const lock of [...(snapshot.held ?? []), ...(snapshot.pending ?? [])]) {
+      if (lock.name?.startsWith(OFFLINE_OPEN_ROW_LOCK_PREFIX)) {
+        open.add(lock.name.slice(OFFLINE_OPEN_ROW_LOCK_PREFIX.length));
+      }
+    }
+  } catch {
+    return null;
+  }
+  return open;
+}
 
 /**
  * Runs queue writes one at a time, in call order.

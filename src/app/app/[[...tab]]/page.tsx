@@ -183,6 +183,25 @@ export default function StillPoint() {
     setOverlay,
   });
 
+  // #947: while a pending sit's completion screen is open, its note writes go
+  // through the queue row, so the return-home prune — in this tab or another —
+  // must keep that row. Returning home takes the hold and lets it go once the
+  // screen's writes settle; any other way out (sign-out, a new sit) lets it go
+  // on close.
+  const completionRowHold = useRef<(() => void) | null>(null);
+  const heldClientSessionId =
+    overlay === "complete" && completionData?.isPendingSync ? completionData.clientSessionId : null;
+  useEffect(() => {
+    if (!heldClientSessionId) return;
+    const release = getWebSessionSyncCoordinator().holdRowOpen(heldClientSessionId);
+    completionRowHold.current = release;
+    return () => {
+      if (completionRowHold.current !== release) return;
+      completionRowHold.current = null;
+      release();
+    };
+  }, [heldClientSessionId]);
+
   const clearAccountScopedLocalState = () => {
     resetDualTrackFork();
     // #703: the not-stored warning is about one account's sit. Left set, the
@@ -664,12 +683,35 @@ export default function StillPoint() {
           // #703: only offered while the sit is nowhere; it reuses the original
           // client id, so a retry can never produce a second sit.
           onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
-          onReturn={() => {
+          onReturn={(writesSettled) => {
+            const releaseRow = completionRowHold.current;
+            completionRowHold.current = null;
             setOverlay(null);
             // #990: an invite that waited for this sit rides along, so the join
             // effect opens the buddy room once the completion screen closes.
             router.push(pathKeepingBuddyInvite(pathForTab(DEFAULT_TAB), window.location.search));
             refreshUserFromServer();
+            // #947: as iOS's returnHome() does, upload what is owed and drop the
+            // rows of sits that owe nothing more. Only now, with the screen closed
+            // and its note writes settled: they find a pending sit by its row.
+            // Skipped if the account changed meanwhile. A row some completion
+            // screen still holds, in any tab, stays for a later return home.
+            const ownerUserId = user.id;
+            const generation = sessionGeneration.current;
+            void writesSettled
+              .then(() => {
+                releaseRow?.();
+                return getWebSessionSyncCoordinator().flushAndPruneCompleted(
+                  ownerUserId,
+                  () => sessionGeneration.current === generation,
+                );
+              })
+              .then((syncedCount) => {
+                if (syncedCount > 0 && sessionGeneration.current === generation) refreshUserFromServer();
+              })
+              .catch((error) => {
+                console.error("Failed to prune the offline session queue:", error);
+              });
           }}
           // #703: with nothing stored there is no queue entry to append a note to
           // and no session to post one against, so the field is not offered.
