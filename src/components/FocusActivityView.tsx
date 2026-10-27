@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadSoundPrefs, unlockAudioContext } from "@/lib/audio";
+import type { FocusCategory } from "@/lib/constants";
 import {
   focusCountdownFontSize,
   focusRemainingSeconds,
@@ -11,6 +12,7 @@ import {
   type FocusEndReason,
   type FocusSessionResult,
 } from "@/lib/focusActivity";
+import { focusActivityById } from "@/lib/focusActivityContent";
 import { useSessionCues } from "@/lib/useSessionCues";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
@@ -18,6 +20,9 @@ import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 type FocusActivityViewProps = {
   /** The goal in seconds. Read once, when the view opens. */
   goalSeconds: number;
+  /** #837: what the picker chose, named under the countdown in place of
+   *  "focus". Display only: the parent saves it. */
+  category?: FocusCategory | null;
   /** Called exactly once: `completed: true` when the countdown reaches zero,
    *  `completed: false` when End is pressed before it does. `null` when End
    *  comes before a whole second has passed, so there is nothing to save. The
@@ -43,11 +48,12 @@ export function unlockFocusCompletionAudio(): void {
  * or listening. Only a countdown that runs out is announced, through the
  * person's own completion-sound and haptic settings.
  */
-export function FocusActivityView({ goalSeconds, onEnd }: FocusActivityViewProps) {
+export function FocusActivityView({ goalSeconds, category = null, onEnd }: FocusActivityViewProps) {
   // Pinned when the view opens: a user refresh mid-session (a sync landing,
   // say) must not move the goal the person is already counting down to.
   const [goal] = useState(goalSeconds);
-  // The Home tap is the start gesture, so the session starts on mount.
+  // The tap that opened it (a picker card, #837) is the start gesture, so the
+  // session starts on mount.
   const startMsRef = useRef(Date.now());
   const [remaining, setRemaining] = useState(goal);
   const [running, setRunning] = useState(true);
@@ -150,7 +156,7 @@ export function FocusActivityView({ goalSeconds, onEnd }: FocusActivityViewProps
           color: "var(--fg-3)",
         }}
       >
-        focus &middot; {formatFocusGoal(goal)}
+        {category ? focusActivityById(category).label : "focus"} &middot; {formatFocusGoal(goal)}
       </div>
 
       {/* End — explicit, pinned near the bottom, as in `BreathCountView`. */}

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
-import type { SessionType, Track } from "@/lib/constants";
+import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 import { focusActivityDayAfterCompletedSave, type FocusSessionResult } from "@/lib/focusActivity";
 import {
   getWebSessionSyncCoordinator,
@@ -400,7 +400,11 @@ export function useSessionSaveLifecycle({
   // before a whole second passed, which saves nothing. A focus session never
   // moves meditation progression, and like a breath sit it has no completion
   // screen: End, or reaching the goal, returns straight to the Progress tab.
-  const handleFocusEnd = useCallback(async (result: FocusSessionResult | null) => {
+  // #837: `focusCategory` is what the picker chose, saved as a label only.
+  const handleFocusEnd = useCallback(async (
+    result: FocusSessionResult | null,
+    focusCategory: FocusCategory | null = null,
+  ) => {
     if (!result) {
       setOverlay(null);
       return;
@@ -417,6 +421,9 @@ export function useSessionSaveLifecycle({
           {
             dayNumber: focusActivityDay,
             sessionType: "focus",
+            // The goal steps below the same whatever the category: there is
+            // one shared focus goal.
+            focusCategory,
             duration: result.duration,
             bonusSeconds: 0,
             completed: result.completed,

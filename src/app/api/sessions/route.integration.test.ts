@@ -25,7 +25,8 @@ let userId: string;
 const EXPECTED_SESSION_KEYS = [
   "id", "dayNumber", "sessionType", "duration", "bonusSeconds", "completed",
   "actualTime", "clearPercent", "thoughtCount", "mindStateLog", "attentionLog",
-  "sessionDate", "createdAt", "buddySessionId", "breathCount", "track", "combined", "ambientSoundSummary",
+  "sessionDate", "createdAt", "buddySessionId", "breathCount", "focusCategory", "track", "combined",
+  "ambientSoundSummary",
 ].sort();
 
 /** Columns that must never reach the client from the history list. */

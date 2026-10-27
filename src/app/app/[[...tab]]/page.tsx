@@ -8,6 +8,7 @@ import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
 import { BreathCountView } from "@/components/BreathCountView";
 import { FocusActivityView, unlockFocusCompletionAudio } from "@/components/FocusActivityView";
+import { FocusCategoryPicker } from "@/components/FocusCategoryPicker";
 import { CompletionScreen } from "@/components/CompletionScreen";
 import { HistoryView } from "@/components/HistoryView";
 import { ThoughtJournal } from "@/components/ThoughtJournal";
@@ -23,7 +24,7 @@ import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 import { api, ApiError } from "@/lib/api";
 import { DEFAULT_TAB, isTab, pathForTab, type Tab } from "@/lib/appTabs";
-import type { SessionType, Track } from "@/lib/constants";
+import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 import { focusSessionDuration, isDualTrackEligible } from "@/lib/duration";
 import type { PracticeDaySit } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout } from "@/lib/trackingControlPrefs";
@@ -39,8 +40,9 @@ import { PwaBootstrap } from "@/components/PwaBootstrap";
 // Transient flows that overlay the active tab without changing the URL.
 // "breath" hides nav/header and renders BreathCountView full-screen, matching
 // the iOS breath-counting mode (#376). "focus" does the same for the focus
-// activity timer (#836).
-type Overlay = "session" | "breath" | "focus" | "complete";
+// activity timer (#836). "focusPicker" is the category choice that comes
+// before it (#837): a dialog over Home, which stays mounted beneath it.
+type Overlay = "session" | "breath" | "focusPicker" | "focus" | "complete";
 
 /** A completion-note write for a sit that has a server row: a new note, or
  *  `clearCompletionNote` with no thoughts to delete it (#792). A pending sit
@@ -86,6 +88,11 @@ export default function StillPoint() {
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   // #240: which track the in-progress standard sit belongs to.
   const [activeTrack, setActiveTrack] = useState<Track>("primary");
+  // #837: what the running focus session is for, set by the picker before the
+  // timer opens. The only way into the timer is through the picker.
+  const [activeFocusCategory, setActiveFocusCategory] = useState<FocusCategory | null>(null);
+  // #837: Home's "Focus activity" button, which Cancel in the picker refocuses.
+  const focusActivityButtonRef = useRef<HTMLButtonElement>(null);
   const [buddySessionId, setBuddySessionId] = useState<string | null>(null);
   const [buddyInviteError, setBuddyInviteError] = useState<string | null>(null);
   const [buddyCalendarMessage, setBuddyCalendarMessage] = useState<string | null>(null);
@@ -266,8 +273,10 @@ export default function StillPoint() {
   // the top of the session view (#473 P2).
   // Only scroll when an overlay OPENS (becomes non-null); closing an overlay
   // should restore the underlying tab's scroll position, not reset it.
+  // #837: the focus picker is a fixed layer over Home, which keeps its place
+  // beneath it, so Cancel lands the person exactly where they were.
   useEffect(() => {
-    if (typeof window !== "undefined" && overlay !== null) {
+    if (typeof window !== "undefined" && overlay !== null && overlay !== "focusPicker") {
       window.scrollTo(0, 0);
     }
   }, [overlay]);
@@ -566,10 +575,26 @@ export default function StillPoint() {
         <BreathCountView onEnd={handleBreathEnd} />
       )}
 
+      {overlay === "focusPicker" && (
+        <FocusCategoryPicker
+          goalSeconds={focusSessionDuration(user.focusActivityDay ?? 1)}
+          onChoose={(category) => {
+            // The card tap is now the start gesture, so the completion sound
+            // is unlocked inside it (#836).
+            unlockFocusCompletionAudio();
+            setActiveFocusCategory(category);
+            setOverlay("focus");
+          }}
+          onCancel={() => setOverlay(null)}
+          returnFocusRef={focusActivityButtonRef}
+        />
+      )}
+
       {overlay === "focus" && (
         <FocusActivityView
           goalSeconds={focusSessionDuration(user.focusActivityDay ?? 1)}
-          onEnd={handleFocusEnd}
+          category={activeFocusCategory}
+          onEnd={(result) => handleFocusEnd(result, activeFocusCategory)}
         />
       )}
 
@@ -635,8 +660,10 @@ export default function StillPoint() {
         />
       )}
 
-      {/* Tab content (rendered when no transient overlay is active). */}
-      {!overlay && tab === "progress" && (
+      {/* Tab content (rendered when no transient overlay is active). Home also
+          stays mounted under the focus picker (#837), so Cancel returns to it
+          as it was: same scroll, focus back on the button that opened it. */}
+      {(!overlay || overlay === "focusPicker") && tab === "progress" && (
         <HomeView
           currentDay={user.currentDay}
           aphorismsEnabled={user.aphorismsEnabled}
@@ -653,10 +680,8 @@ export default function StillPoint() {
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
           focusActivityDay={user.focusActivityDay ?? 1}
-          onFocusActivity={() => {
-            unlockFocusCompletionAudio();
-            setOverlay("focus");
-          }}
+          onFocusActivity={() => setOverlay("focusPicker")}
+          focusActivityButtonRef={focusActivityButtonRef}
           onBuddy={() => {
             setBuddySessionId(null);
             setBuddyCalendarMessage(null);

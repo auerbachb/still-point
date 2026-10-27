@@ -1,4 +1,4 @@
-import type { SessionType, Track } from "@/lib/constants";
+import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 
 /** Thought captured during or after a sit, queued for offline sync (#558). */
 export type PendingSessionThought = {
@@ -23,6 +23,9 @@ export type CreateSessionPayload = {
   attentionLog?: Array<{ time: number; state: string }> | null;
   sessionDate: string;
   breathCount?: number;
+  /** #837: the category a focus session was for, kept so a queued one uploads
+   *  with it. Absent (an entry queued before #837) or null saves no category. */
+  focusCategory?: FocusCategory | null;
   clientSessionId: string;
 };
 
