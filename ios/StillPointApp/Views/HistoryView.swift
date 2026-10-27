@@ -694,11 +694,17 @@ struct HistoryView: View {
                     Text(sessionLabel(session: session, index: sessionIndexInDay))
                         .font(SPFont.mono(11, weight: .medium))
                         .foregroundStyle(sessionLabelColor(session: session))
+                        // #839: "Focus · Listening" is wider than the column and
+                        // wraps; keep its second line right-aligned too.
+                        .multilineTextAlignment(.trailing)
                         .frame(width: 72, alignment: .trailing)
 
                     GeometryReader { geo in
+                        // #839: capped at full width. Focus sessions stay out of
+                        // `maxDuration` (`HistoryJourney.barScaleSeconds`), so a long
+                        // one can run past it.
                         let barFraction = vm.maxDuration > 0
-                            ? CGFloat(session.actualTime ?? session.duration) / CGFloat(vm.maxDuration)
+                            ? min(1, CGFloat(session.actualTime ?? session.duration) / CGFloat(vm.maxDuration))
                             : 0
                         let barWidth = geo.size.width * barFraction
                         let clearWidth = barWidth * CGFloat(session.clearPercent) / 100.0
@@ -803,6 +809,10 @@ struct HistoryView: View {
             return "Breath \(index)"
         case .standard:
             return "Session \(index)"
+        case .focus:
+            // #839: "Focus · Reading", or "Focus" with no category, as on web. No
+            // per-day number.
+            return FocusCategory.sessionLabel(for: session.focusCategory)
         }
     }
 
@@ -813,6 +823,10 @@ struct HistoryView: View {
         case .breath:
             return SPColor.greenText
         case .standard:
+            return Color(SPColor.fg3)
+        case .focus:
+            // #839: web shows focus rows in `--fg-3`, like a standard sit; the
+            // label text is what sets them apart.
             return Color(SPColor.fg3)
         }
     }
@@ -900,8 +914,10 @@ struct HistoryView: View {
                 .frame(width: 72, alignment: .trailing)
 
             GeometryReader { geo in
+                // #839: capped at full width, like the session bars. `maxDuration`
+                // is drawn from past sessions only, so today's goal can be longer.
                 let barFraction = vm.maxDuration > 0
-                    ? CGFloat(todayDuration) / CGFloat(vm.maxDuration)
+                    ? min(1, CGFloat(todayDuration) / CGFloat(vm.maxDuration))
                     : 0
                 let barWidth = geo.size.width * barFraction
 

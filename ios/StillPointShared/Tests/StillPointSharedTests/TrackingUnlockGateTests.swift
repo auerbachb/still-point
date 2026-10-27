@@ -43,4 +43,43 @@ final class TrackingUnlockGateTests: XCTestCase {
         XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 0))
         XCTAssertFalse(TrackingUnlockGate.qualifies(completed: false, duration: 100))
     }
+
+    // MARK: - historyQualifies(_:) (#839)
+
+    private func session(_ type: SessionType, completed: Bool = true, duration: Int) -> SessionDTO {
+        SessionDTO(
+            id: UUID().uuidString,
+            dayNumber: 1,
+            sessionType: type,
+            duration: duration,
+            completed: completed,
+            actualTime: duration,
+            clearPercent: 0,
+            thoughtCount: 0,
+            mindStateLog: nil,
+            sessionDate: "2026-10-27",
+            buddySessionId: nil
+        )
+    }
+
+    func testHistoryQualifiesOnAQualifyingSit() {
+        XCTAssertTrue(TrackingUnlockGate.historyQualifies([session(.standard, duration: 120), session(.standard, duration: 300)]))
+        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.standard, duration: 299)]))
+        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.standard, completed: false, duration: 600)]))
+        XCTAssertFalse(TrackingUnlockGate.historyQualifies([]))
+    }
+
+    /// A focus session is not a sit, so even a completed two-hour one unlocks nothing,
+    /// as on web (`syncTrackingUnlockFromSessions`, #836).
+    func testHistoryQualifiesIgnoresFocusSessions() {
+        XCTAssertFalse(TrackingUnlockGate.historyQualifies([session(.focus, duration: 7200)]))
+        XCTAssertFalse(TrackingUnlockGate.historyQualifies([
+            session(.focus, duration: 1800),
+            session(.standard, duration: 120),
+        ]))
+        XCTAssertTrue(TrackingUnlockGate.historyQualifies([
+            session(.focus, duration: 1800),
+            session(.standard, duration: 300),
+        ]))
+    }
 }

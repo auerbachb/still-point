@@ -30,6 +30,11 @@ public struct UserDTO: Codable, Sendable {
     /// #563: opt-in ambient sound level capture during solo sits. Decoded
     /// permissively so older server responses (pre-#563) default to off.
     public let ambientSoundEnabled: Bool
+    /// #765: the focus goal counter; the goal is
+    /// `StillPoint.focusDuration(forDay: focusActivityDay)`. Unrelated to the
+    /// meditation `currentDay`. Missing on older servers (and in identities cached
+    /// before #839) decodes as 1.
+    public let focusActivityDay: Int
 
     public init(
         id: String,
@@ -45,7 +50,8 @@ public struct UserDTO: Codable, Sendable {
         recoveryTargetDay: Int? = nil,
         recoveryCurrentStep: Int? = nil,
         recoveryTotalSteps: Int? = nil,
-        ambientSoundEnabled: Bool? = nil
+        ambientSoundEnabled: Bool? = nil,
+        focusActivityDay: Int = 1
     ) {
         self.id = id
         self.email = email
@@ -61,6 +67,7 @@ public struct UserDTO: Codable, Sendable {
         self.recoveryCurrentStep = recoveryCurrentStep
         self.recoveryTotalSteps = recoveryTotalSteps
         self.ambientSoundEnabled = ambientSoundEnabled ?? false
+        self.focusActivityDay = focusActivityDay
     }
 
     public init(from decoder: Decoder) throws {
@@ -84,6 +91,7 @@ public struct UserDTO: Codable, Sendable {
         recoveryCurrentStep = try c.decodeIfPresent(Int.self, forKey: .recoveryCurrentStep)
         recoveryTotalSteps = try c.decodeIfPresent(Int.self, forKey: .recoveryTotalSteps)
         ambientSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .ambientSoundEnabled) ?? false
+        focusActivityDay = try c.decodeIfPresent(Int.self, forKey: .focusActivityDay) ?? 1
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -91,6 +99,7 @@ public struct UserDTO: Codable, Sendable {
         case dualTrackEnabled, secondTrackDay, longSessionPeriod
         case recoveryTargetDay, recoveryCurrentStep, recoveryTotalSteps
         case ambientSoundEnabled
+        case focusActivityDay
     }
 }
 
@@ -108,7 +117,8 @@ extension UserDTO {
         dualTrackEnabled: Bool? = nil,
         secondTrackDay: Int? = nil,
         longSessionPeriod: SessionPeriod? = nil,
-        ambientSoundEnabled: Bool? = nil
+        ambientSoundEnabled: Bool? = nil,
+        focusActivityDay: Int? = nil
     ) -> UserDTO {
         UserDTO(
             id: id,
@@ -124,7 +134,8 @@ extension UserDTO {
             recoveryTargetDay: recoveryTargetDay,
             recoveryCurrentStep: recoveryCurrentStep,
             recoveryTotalSteps: recoveryTotalSteps,
-            ambientSoundEnabled: ambientSoundEnabled ?? self.ambientSoundEnabled
+            ambientSoundEnabled: ambientSoundEnabled ?? self.ambientSoundEnabled,
+            focusActivityDay: focusActivityDay ?? self.focusActivityDay
         )
     }
 
@@ -143,7 +154,8 @@ extension UserDTO {
             recoveryTargetDay: state.recoveryTargetDay,
             recoveryCurrentStep: state.recoveryCurrentStep,
             recoveryTotalSteps: state.recoveryTotalSteps,
-            ambientSoundEnabled: ambientSoundEnabled
+            ambientSoundEnabled: ambientSoundEnabled,
+            focusActivityDay: focusActivityDay
         )
     }
 
@@ -162,7 +174,8 @@ extension UserDTO {
             recoveryTargetDay: targetDay,
             recoveryCurrentStep: currentStep,
             recoveryTotalSteps: totalSteps,
-            ambientSoundEnabled: ambientSoundEnabled
+            ambientSoundEnabled: ambientSoundEnabled,
+            focusActivityDay: focusActivityDay
         )
     }
 }
@@ -187,6 +200,9 @@ public struct SessionDTO: Codable, Sendable {
     public let buddySessionId: String?
     /// Number of full breaths counted during a breath session (nil for non-breath sessions).
     public let breathCount: Int?
+    /// #837: what a focus session was for; nil for every other type, for a focus
+    /// session saved without one, and for a category this build does not know.
+    public let focusCategory: FocusCategory?
     /// #240: which daily track this sit advanced. Decoded permissively (nil from a
     /// server that predates #240); nil is treated as `.primary` by callers.
     public let track: Track?
@@ -211,6 +227,7 @@ public struct SessionDTO: Codable, Sendable {
         createdAt: String? = nil,
         buddySessionId: String?,
         breathCount: Int? = nil,
+        focusCategory: FocusCategory? = nil,
         track: Track? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil,
         moodMatrix: [String: MoodMatrixEntry]? = nil
@@ -230,6 +247,7 @@ public struct SessionDTO: Codable, Sendable {
         self.createdAt = createdAt
         self.buddySessionId = buddySessionId
         self.breathCount = breathCount
+        self.focusCategory = focusCategory
         self.track = track
         self.ambientSoundSummary = ambientSoundSummary
         self.moodMatrix = moodMatrix
@@ -258,6 +276,7 @@ public struct SessionDTO: Codable, Sendable {
         // fields above can fail a row. Absent/null keys default the same way throughout.
         sessionType = (try? c.decode(SessionType.self, forKey: .sessionType)) ?? .standard
         track = try? c.decode(Track.self, forKey: .track)
+        focusCategory = try? c.decode(FocusCategory.self, forKey: .focusCategory)
         bonusSeconds = try c.decodeIfPresent(Int.self, forKey: .bonusSeconds)
         actualTime = try c.decodeIfPresent(Int.self, forKey: .actualTime)
         mindStateLog = try? c.decode([MindStateEntry].self, forKey: .mindStateLog)
@@ -272,7 +291,7 @@ public struct SessionDTO: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
         case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
-        case createdAt, buddySessionId, breathCount, track, ambientSoundSummary
+        case createdAt, buddySessionId, breathCount, focusCategory, track, ambientSoundSummary
         case moodMatrix
     }
 }
@@ -435,6 +454,10 @@ public struct CreateSessionRequest: Codable, Sendable {
     public let sessionDate: String
     /// Number of full breaths counted. Only sent for `.breath` sessions; nil otherwise.
     public let breathCount: Int?
+    /// #837: what a focus session was for. Left out of the JSON when nil (the
+    /// server stores that as no category, and ignores the field for every other
+    /// session type). Queue entries written before this field decode it as nil.
+    public let focusCategory: FocusCategory?
     /// #240: which daily track this sit advances. Defaults to `.primary`.
     public let track: Track
     /// #557: client-generated UUID for offline idempotent create; omitted for web.
@@ -455,6 +478,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         attentionLog: [AttentionEntry]? = nil,
         sessionDate: String,
         breathCount: Int? = nil,
+        focusCategory: FocusCategory? = nil,
         track: Track = .primary,
         clientSessionId: UUID? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil
@@ -471,6 +495,7 @@ public struct CreateSessionRequest: Codable, Sendable {
         self.attentionLog = attentionLog
         self.sessionDate = sessionDate
         self.breathCount = breathCount
+        self.focusCategory = focusCategory
         self.track = track
         self.clientSessionId = clientSessionId
         self.ambientSoundSummary = ambientSoundSummary

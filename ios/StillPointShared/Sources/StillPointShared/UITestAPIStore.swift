@@ -312,6 +312,8 @@ actor UITestAPIStore {
             sessionDate: data.sessionDate,
             createdAt: nil,
             buddySessionId: nil,
+            // #839: as `POST /api/sessions` does, a category is kept only on a focus session.
+            focusCategory: data.sessionType == .focus ? data.focusCategory : nil,
             track: data.track
         )
         store.nextSessionOrdinal += 1
@@ -336,6 +338,16 @@ actor UITestAPIStore {
                 )
                 store.user = store.user.updatingProgression(next)
             }
+        }
+
+        // #839: the server's `focus_activity_day` step: only a completed focus
+        // session moves the focus goal, by one. The block above never runs for one.
+        if StillPoint.shouldAdvanceFocusDay(sessionType: data.sessionType, completed: data.completed) {
+            store.user = store.user.updating(focusActivityDay: StillPoint.advanceFocusActivityDay(
+                sessionType: data.sessionType,
+                completed: data.completed,
+                focusActivityDay: store.user.focusActivityDay
+            ))
         }
 
         persist()
@@ -396,6 +408,7 @@ actor UITestAPIStore {
             createdAt: existing.createdAt,
             buddySessionId: existing.buddySessionId,
             breathCount: existing.breathCount,
+            focusCategory: existing.focusCategory,
             track: existing.track,
             ambientSoundSummary: existing.ambientSoundSummary,
             moodMatrix: merged.isEmpty ? nil : merged

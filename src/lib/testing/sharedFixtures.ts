@@ -215,3 +215,20 @@ export type CombinedSitFixture = {
     expected: { primary: boolean; second: boolean };
   }>;
 };
+
+export type FocusDurationFixture = {
+  config: { base: number; increment: number; cap: number };
+  focusDuration: Array<{ day: number; expected: number }>;
+  shouldAdvanceFocusDay: Array<{
+    sessionType: "standard" | "quick" | "breath" | "focus";
+    completed: boolean;
+    expected: boolean;
+  }>;
+  advanceFocusActivityDay: Array<{
+    name: string;
+    sessionType: "standard" | "quick" | "breath" | "focus";
+    completed: boolean;
+    focusActivityDay: number;
+    expected: number;
+  }>;
+};

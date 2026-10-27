@@ -88,6 +88,11 @@ extension AppViewModel {
     /// rather than waiting for the other session (#684).
     /// Shared touchpoint with #590 completion-handler work — rebase carefully.
     func markPracticeDoneToday(sessionType: SessionType, track: Track) {
+        // #839: a focus session is not meditation practice (#765). It checks no
+        // widget row and raises none of the flags, so it leaves before
+        // `recordCompletion` (and its rollover) and the widget refresh, as
+        // `sessionCountsForWidgetPractice` does.
+        if sessionType == .focus { return }
         // Rolls the flags over first, then raises this sit's own; see
         // `PracticeDayState.recordCompletion` for why the order matters.
         practiceDay.recordCompletion(

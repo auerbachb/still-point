@@ -264,4 +264,24 @@ final class PracticeDayStateTests: XCTestCase {
         })
         XCTAssertTrue(askedAgain)
     }
+
+    // MARK: - Focus sessions (#839)
+
+    /// A focus session is not meditation practice (#765). On either track it raises
+    /// none of the flags and leaves before the rollover, so the flags still describe
+    /// the day they did before it.
+    func testAFocusSessionRaisesNoFlagAndRollsNothingOver() {
+        let lastUsed = october(26, 20)
+        for track in [Track.primary, .second] {
+            var state = PracticeDayState()
+            state.rollOverIfNeeded(now: lastUsed, dualTrack: true, calendar: newYork)
+
+            state.recordCompletion(sessionType: .focus, track: track, now: october(27, 9), dualTrack: true, calendar: newYork)
+
+            XCTAssertFalse(state.practiceDoneToday, "a focus session on \(track) raised practiceDoneToday")
+            XCTAssertFalse(state.primaryStandardDoneToday, "a focus session on \(track) raised primaryStandardDoneToday")
+            XCTAssertFalse(state.secondPracticeDoneToday, "a focus session on \(track) raised secondPracticeDoneToday")
+            XCTAssertEqual(state.doneTodayFlagsStamp, lastUsed, "a focus session on \(track) rolled the flags over")
+        }
+    }
 }

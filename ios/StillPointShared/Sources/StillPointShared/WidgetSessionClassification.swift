@@ -14,7 +14,8 @@ extension WidgetDataStore {
     ///
     /// Track One counts primary standard sits plus quick and breath sits (#589);
     /// Track Two counts second-track standard sits (#684). A session with no
-    /// `track` predates the dual-track fork and is treated as primary.
+    /// `track` predates the dual-track fork and is treated as primary. A focus
+    /// session (#765) counts toward neither row.
     public static func sessionCountsForWidgetPractice(_ session: SessionDTO, track: Track) -> Bool {
         guard session.completed else { return false }
         switch track {
@@ -24,6 +25,12 @@ extension WidgetDataStore {
                 return true
             case .standard:
                 return (session.track ?? .primary) == .primary
+            case .focus:
+                // #839: focus is its own activity, not meditation practice, as on
+                // the server (#835). This is the one case to change if focus days
+                // should check the widget row; Track Two below takes standard sits
+                // only either way.
+                return false
             }
         case .second:
             guard session.sessionType == .standard else { return false }

@@ -41,7 +41,8 @@ final class HistoryViewModel {
     /// All sits (standard + quick), ordered for the Journey list with collapsed missed-day gaps.
     var journeyRows: [HistoryJourneyListRow] = []
 
-    /// Longest actualTime across sessions in the journey (floor 60).
+    /// Longest actualTime across non-focus sessions in the journey (floor 60);
+    /// see `HistoryJourney.barScaleSeconds(for:)`.
     var maxDuration: Int = 60
 
     /// Stable local calendar day for the current load cycle (refreshed in `load()`).
@@ -171,8 +172,7 @@ final class HistoryViewModel {
             todayIsoDate: todayIso ?? todayIsoDate
         )
 
-        let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
-        maxDuration = max(sessionTimes.max() ?? 60, 60)
+        maxDuration = HistoryJourney.barScaleSeconds(for: sessions)
     }
 
     private func rebuildCalendarAggregates(todayIso: String) {

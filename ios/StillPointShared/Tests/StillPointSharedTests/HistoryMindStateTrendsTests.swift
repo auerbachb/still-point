@@ -69,4 +69,45 @@ final class HistoryMindStateTrendsTests: XCTestCase {
         XCTAssertEqual(stats.trailing4Week.heavyDistractionPercent, 0)
         XCTAssertEqual(stats.dailyTrend.count, 28)
     }
+
+    /// #839: a focus session logs no mind state, so its empty log would otherwise read as
+    /// up to two hours of clear time and swamp the sit averages. Skipped, as on web (#836).
+    func testCalculateTrendStatsSkipsFocusSessions() {
+        let sit = makeSession(
+            date: "2026-07-01",
+            duration: 120,
+            log: [
+                MindStateEntry(time: 0, state: "clear"),
+                MindStateEntry(time: 60, state: "thinking"),
+                MindStateEntry(time: 120, state: "clear"),
+            ]
+        )
+        let focus = SessionDTO(
+            id: "focus-1",
+            dayNumber: 3,
+            sessionType: .focus,
+            duration: 7200,
+            completed: true,
+            actualTime: 7200,
+            clearPercent: 0,
+            thoughtCount: 0,
+            mindStateLog: [],
+            sessionDate: "2026-07-01",
+            createdAt: nil,
+            buddySessionId: nil,
+            focusCategory: .reading
+        )
+
+        let stats = HistoryMindStateTrends.calculateTrendStats(sessions: [sit, focus], todayIso: "2026-07-02")
+
+        XCTAssertEqual(stats.trailing4Week.totalSitSeconds, 120)
+        XCTAssertEqual(stats.trailing4Week.clearPercent, 50)
+        XCTAssertEqual(stats.trailing4Week.lightDistractionPercent, 50)
+        XCTAssertEqual(stats.allTime.totalSitSeconds, 120)
+        XCTAssertEqual(stats.dailyTrend.first { $0.date == "2026-07-01" }?.totalSitSeconds, 120)
+
+        let focusOnly = HistoryMindStateTrends.calculateTrendStats(sessions: [focus], todayIso: "2026-07-02")
+        XCTAssertEqual(focusOnly.allTime, .empty)
+        XCTAssertEqual(focusOnly.trailing4Week, .empty)
+    }
 }

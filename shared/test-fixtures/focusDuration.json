@@ -1,0 +1,81 @@
+{
+  "algorithm": "focusDuration",
+  "description": "Golden values for the focus goal (#765): one minute on focusActivityDay 1, +1 minute per completed focus session, capped at two hours, with no recovery ramp. Web src/lib/constants.ts (FOCUS_DURATION_CONFIG, focusDurationForDay, shouldAdvanceFocusDay) + src/lib/duration.ts (advanceFocusActivityDay) and iOS StillPointShared Constants.swift (StillPoint.focusDurationConfig, focusDuration(forDay:), shouldAdvanceFocusDay, advanceFocusActivityDay) duplicate this on purpose (#839).",
+  "config": {
+    "base": 60,
+    "increment": 60,
+    "cap": 7200
+  },
+  "focusDuration": [
+    { "day": 0, "expected": 60 },
+    { "day": 1, "expected": 60 },
+    { "day": 2, "expected": 120 },
+    { "day": 30, "expected": 1800 },
+    { "day": 61, "expected": 3660 },
+    { "day": 119, "expected": 7140 },
+    { "day": 120, "expected": 7200 },
+    { "day": 121, "expected": 7200 },
+    { "day": 1000, "expected": 7200 }
+  ],
+  "shouldAdvanceFocusDay": [
+    { "sessionType": "standard", "completed": true, "expected": false },
+    { "sessionType": "standard", "completed": false, "expected": false },
+    { "sessionType": "quick", "completed": true, "expected": false },
+    { "sessionType": "quick", "completed": false, "expected": false },
+    { "sessionType": "breath", "completed": true, "expected": false },
+    { "sessionType": "breath", "completed": false, "expected": false },
+    { "sessionType": "focus", "completed": true, "expected": true },
+    { "sessionType": "focus", "completed": false, "expected": false }
+  ],
+  "advanceFocusActivityDay": [
+    {
+      "name": "a completed focus session steps the goal counter by one",
+      "sessionType": "focus",
+      "completed": true,
+      "focusActivityDay": 1,
+      "expected": 2
+    },
+    {
+      "name": "the step onto the first capped day",
+      "sessionType": "focus",
+      "completed": true,
+      "focusActivityDay": 119,
+      "expected": 120
+    },
+    {
+      "name": "the counter keeps counting past the cap",
+      "sessionType": "focus",
+      "completed": true,
+      "focusActivityDay": 500,
+      "expected": 501
+    },
+    {
+      "name": "an ended-early focus session leaves it alone",
+      "sessionType": "focus",
+      "completed": false,
+      "focusActivityDay": 4,
+      "expected": 4
+    },
+    {
+      "name": "a completed standard sit leaves it alone",
+      "sessionType": "standard",
+      "completed": true,
+      "focusActivityDay": 4,
+      "expected": 4
+    },
+    {
+      "name": "a completed quick sit leaves it alone",
+      "sessionType": "quick",
+      "completed": true,
+      "focusActivityDay": 4,
+      "expected": 4
+    },
+    {
+      "name": "a completed breath sit leaves it alone",
+      "sessionType": "breath",
+      "completed": true,
+      "focusActivityDay": 4,
+      "expected": 4
+    }
+  ]
+}

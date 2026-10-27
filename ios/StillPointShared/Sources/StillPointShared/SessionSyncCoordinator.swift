@@ -386,6 +386,7 @@ public actor SessionSyncCoordinator {
             attentionLog: request.attentionLog,
             sessionDate: request.sessionDate,
             breathCount: request.breathCount,
+            focusCategory: request.focusCategory,
             track: request.track,
             clientSessionId: clientSessionId,
             ambientSoundSummary: request.ambientSoundSummary
@@ -416,6 +417,7 @@ public actor SessionSyncCoordinator {
             createdAt: nil,
             buddySessionId: nil,
             breathCount: request.breathCount,
+            focusCategory: request.focusCategory,
             track: request.track,
             ambientSoundSummary: request.ambientSoundSummary
         )

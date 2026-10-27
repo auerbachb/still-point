@@ -274,6 +274,34 @@ struct DurationForDayFixture: Decodable {
     let recoveryStepDuration: [RecoveryStepDurationCase]?
 }
 
+struct FocusDurationFixture: Decodable {
+    struct Config: Decodable {
+        let base: Int
+        let increment: Int
+        let cap: Int
+    }
+    struct DurationCase: Decodable {
+        let day: Int
+        let expected: Int
+    }
+    struct ShouldAdvanceCase: Decodable {
+        let sessionType: String
+        let completed: Bool
+        let expected: Bool
+    }
+    struct AdvanceCase: Decodable {
+        let name: String
+        let sessionType: String
+        let completed: Bool
+        let focusActivityDay: Int
+        let expected: Int
+    }
+    let config: Config
+    let focusDuration: [DurationCase]
+    let shouldAdvanceFocusDay: [ShouldAdvanceCase]
+    let advanceFocusActivityDay: [AdvanceCase]
+}
+
 // MARK: - Fixture -> SessionDTO helpers
 
 extension HistoryJourneyFixture.Session {
