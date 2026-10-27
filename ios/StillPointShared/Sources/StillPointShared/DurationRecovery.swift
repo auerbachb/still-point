@@ -207,6 +207,20 @@ public enum DurationRecovery {
         return ProgressionState(currentDay: state.currentDay + 1, recovery: .none)
     }
 
+    /// #896: the next-length preview after a combined sit (#769): what the next two
+    /// sits add up to (`CombinedSit.previewNextCombinedDuration`), from the pre-save
+    /// counters. A combined sit is never offered during recovery, so recovery is
+    /// ignored, as in `CombinedSit.combinedDuration`. No user previews the base
+    /// length on both tracks, as `previewNextStandardDuration` does for one.
+    public static func previewNextCombinedDuration(completed: Bool, user: UserDTO?) -> Int {
+        guard let user else { return StillPoint.baseDuration * 2 }
+        return CombinedSit.previewNextCombinedDuration(
+            completed: completed,
+            currentDay: user.currentDay,
+            secondTrackDay: user.secondTrackDay
+        )
+    }
+
     /// Planned duration of the *next* standard sit, previewed client-side from the
     /// pre-save user state using the same progression the server applies (#238).
     public static func previewNextStandardDuration(

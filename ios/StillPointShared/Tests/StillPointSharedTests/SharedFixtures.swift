@@ -391,3 +391,34 @@ extension SessionStatsFixture.Session {
         )
     }
 }
+
+/// `shared/test-fixtures/combinedSit.json` (#769 / #896).
+struct CombinedSitFixture: Decodable {
+    struct DurationCase: Decodable {
+        let name: String
+        let currentDay: Int
+        let secondTrackDay: Int
+        let expected: Int
+    }
+    struct OfferCase: Decodable {
+        let name: String
+        let dualTrackEnabled: Bool
+        let primaryDoneToday: Bool
+        let secondDoneToday: Bool
+        let recoveryActive: Bool
+        let expected: Bool
+    }
+    struct CreditedCase: Decodable {
+        struct Expected: Decodable {
+            let primary: Bool
+            let second: Bool
+        }
+        let name: String
+        let track: String?
+        let combined: Bool?
+        let expected: Expected
+    }
+    let combinedDuration: [DurationCase]
+    let isCombineOffered: [OfferCase]
+    let tracksCredited: [CreditedCase]
+}

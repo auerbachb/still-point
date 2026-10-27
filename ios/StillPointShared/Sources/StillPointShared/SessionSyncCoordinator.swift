@@ -472,7 +472,8 @@ public actor SessionSyncCoordinator {
             focusCategory: request.focusCategory,
             track: request.track,
             clientSessionId: clientSessionId,
-            ambientSoundSummary: request.ambientSoundSummary
+            ambientSoundSummary: request.ambientSoundSummary,
+            combined: request.combined
         )
     }
 
@@ -502,7 +503,8 @@ public actor SessionSyncCoordinator {
             breathCount: request.breathCount,
             focusCategory: request.focusCategory,
             track: request.track,
-            ambientSoundSummary: request.ambientSoundSummary
+            ambientSoundSummary: request.ambientSoundSummary,
+            combined: request.combined
         )
     }
 }

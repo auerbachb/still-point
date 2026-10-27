@@ -130,6 +130,27 @@ actor UITestAPIStore {
         return UITestAPIStore(config: config, store: resolvedStore, defaultsKey: defaultsKey)
     }
 
+    /// #896: a signed-in store holding `user` and no sessions, with every forced
+    /// failure off, for the package's unit tests of the fake server's rules. It
+    /// persists under `defaultsKey`, so a test passes its own key and removes it.
+    static func makeForUnitTests(user: UserDTO, defaultsKey: String) -> UITestAPIStore {
+        let config = UITestConfig(
+            seedAuthenticated: true,
+            resetStore: false,
+            forceLaunchOffline: false,
+            forceTokenExpired: false,
+            forceSessionsFailure: false,
+            forceCreateSessionFailure: false,
+            forceUsernameConflict: false,
+            snapshotSeed: false,
+            holdMeSeconds: nil,
+            secondAccount: false
+        )
+        var store = UITestStore.makeDefault(seedAuthenticated: true)
+        store.user = user
+        return UITestAPIStore(config: config, store: store, defaultsKey: defaultsKey)
+    }
+
     // MARK: - Auth
 
     func signup(email: String, username: String, password: String) -> UserDTO {
@@ -355,11 +376,11 @@ actor UITestAPIStore {
         for session in store.sessions where session.completed
             && session.sessionType == .standard
             && session.sessionDate == date {
-            if session.track == .second {
-                second = true
-            } else {
-                primary = true
-            }
+            // #896: as `/api/track/done-today` does (#890), a combined sit is one
+            // primary row that counts for both tracks.
+            let credited = CombinedSit.tracksCredited(session)
+            if credited.primary { primary = true }
+            if credited.second { second = true }
         }
         return TracksDoneTodayDTO(primary: primary, second: second)
     }
@@ -398,7 +419,8 @@ actor UITestAPIStore {
             buddySessionId: nil,
             // #839: as `POST /api/sessions` does, a category is kept only on a focus session.
             focusCategory: data.sessionType == .focus ? data.focusCategory : nil,
-            track: data.track
+            track: data.track,
+            combined: data.combined
         )
         store.nextSessionOrdinal += 1
         store.sessions.append(session)
@@ -421,6 +443,16 @@ actor UITestAPIStore {
                     )
                 )
                 store.user = store.user.updatingProgression(next)
+                // #896: as the server's `progressionUpdateSql` does (#890), a completed
+                // combined sit also moves Track Two on a day (only when opted in). One
+                // ended early never reaches this block, so it moves neither.
+                if data.combined && store.user.dualTrackEnabled {
+                    store.user = store.user.updating(secondTrackDay: StillPoint.advanceSecondTrackDay(
+                        sessionType: data.sessionType,
+                        completed: data.completed,
+                        secondTrackDay: store.user.secondTrackDay
+                    ))
+                }
             }
         }
 
@@ -495,7 +527,8 @@ actor UITestAPIStore {
             focusCategory: existing.focusCategory,
             track: existing.track,
             ambientSoundSummary: existing.ambientSoundSummary,
-            moodMatrix: merged.isEmpty ? nil : merged
+            moodMatrix: merged.isEmpty ? nil : merged,
+            combined: existing.combined
         )
         store.sessions[idx] = updated
         persist()

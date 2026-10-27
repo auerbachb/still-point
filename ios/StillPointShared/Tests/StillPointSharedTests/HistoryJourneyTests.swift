@@ -426,3 +426,65 @@ final class HistoryJourneyTests: XCTestCase {
         XCTAssertTrue(SessionCalendar.isDayComplete(sits: [primary], isoDay: "2026-10-07", dualTrackEnabled: false))
     }
 }
+
+// MARK: - #896 combined sit
+
+extension HistoryJourneyTests {
+    /// A combined sit counts for both tracks, so it alone finishes a two-a-day day.
+    func testCombinedSitCompletesATwoADayDay() {
+        let combined = SessionCalendar.PracticeDaySit(
+            completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: true
+        )
+        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: true))
+        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-07", dualTrackEnabled: false))
+        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [combined], isoDay: "2026-10-08", dualTrackEnabled: true))
+
+        let noTrack = SessionCalendar.PracticeDaySit(
+            completed: true, isStandard: true, sessionDate: "2026-10-07", track: nil, combined: true
+        )
+        XCTAssertTrue(SessionCalendar.isDayComplete(sits: [noTrack], isoDay: "2026-10-07", dualTrackEnabled: true))
+    }
+
+    /// One ended early credits nothing; `combined: nil` or false is an ordinary row.
+    func testUnfinishedOrNonCombinedRowDoesNotCompleteATwoADayDay() {
+        let endedEarly = SessionCalendar.PracticeDaySit(
+            completed: false, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: true
+        )
+        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [endedEarly], isoDay: "2026-10-07", dualTrackEnabled: true))
+        let plain = SessionCalendar.PracticeDaySit(
+            completed: true, isStandard: true, sessionDate: "2026-10-07", track: "primary", combined: false
+        )
+        XCTAssertFalse(SessionCalendar.isDayComplete(sits: [plain], isoDay: "2026-10-07", dualTrackEnabled: true))
+    }
+
+    /// The before-6:00 grace window closes after a combined sit on the previous day.
+    func testGraceWindowClosesAfterACombinedSit() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 2, minute: 30)))
+
+        func row(combined: Bool?) -> SessionDTO {
+            SessionDTO(
+                id: "g", dayNumber: 30, duration: 1200, completed: true, actualTime: 1200,
+                clearPercent: 0, thoughtCount: 0, mindStateLog: nil, sessionDate: "2026-10-26",
+                buddySessionId: nil, track: .primary, combined: combined
+            )
+        }
+
+        let open = WidgetDataStore.practiceInstant(
+            forHistory: [row(combined: nil)], dualTrackEnabled: true, now: now, calendar: calendar
+        )
+        XCTAssertEqual(WidgetDataStore.localDayString(open, calendar: calendar), "2026-10-26")
+
+        XCTAssertEqual(
+            WidgetDataStore.practiceInstant(
+                forHistory: [row(combined: true)], dualTrackEnabled: true, now: now, calendar: calendar
+            ),
+            now
+        )
+        XCTAssertEqual(
+            SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: now, calendar: calendar),
+            "2026-10-27"
+        )
+    }
+}

@@ -758,3 +758,62 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         XCTAssertEqual(data.weekMarks(now: now).first(where: { $0.iso == oneDayAgo })?.done, true)
     }
 }
+
+// MARK: - #896 combined sit
+
+extension WidgetDataDualTrackTests {
+    private func combinedSession(date: String, completed: Bool = true) -> SessionDTO {
+        SessionDTO(
+            id: "\(date)-combined-\(completed)", dayNumber: 30, duration: 1200, completed: completed,
+            actualTime: 1200, clearPercent: 0, thoughtCount: 0, mindStateLog: nil, sessionDate: date,
+            buddySessionId: nil, track: .primary, combined: true
+        )
+    }
+
+    /// A completed standard combined sit marks both tracks' rows (whichever of AM
+    /// and PM each row is drawn as, via `longSessionPeriod`).
+    func testCompletedCombinedSitMarksBothRows() {
+        let now = Date()
+        let today = localDay(0, from: now)
+        let sit = combinedSession(date: today)
+
+        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
+        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
+        let dates = WidgetDataStore.recentCompletedPracticeDates(from: [sit], now: now)
+        XCTAssertEqual(dates.primary, [today])
+        XCTAssertEqual(dates.second, [today])
+
+        for period in [SessionPeriod.am, .pm] {
+            let data = WidgetData(
+                isLoggedIn: true, userId: "u1", currentDay: 30, secondTrackDay: 4,
+                dualTrackEnabled: true, longSessionPeriod: period,
+                primaryDoneToday: true, secondDoneToday: true, practiceDoneToday: true,
+                streak: 1, completedDates: Array(dates.primary), secondCompletedDates: Array(dates.second),
+                lastUpdated: now
+            )
+            XCTAssertEqual(data.weekMarks(for: .primary, now: now).first(where: { $0.iso == today })?.done, true)
+            XCTAssertEqual(data.weekMarks(for: .second, now: now).first(where: { $0.iso == today })?.done, true)
+        }
+    }
+
+    func testEndedEarlyCombinedSitMarksNeitherRow() {
+        let now = Date()
+        let sit = combinedSession(date: localDay(0, from: now), completed: false)
+        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
+        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
+        let dates = WidgetDataStore.recentCompletedPracticeDates(from: [sit], now: now)
+        XCTAssertTrue(dates.primary.isEmpty)
+        XCTAssertTrue(dates.second.isEmpty)
+    }
+
+    /// The server-streak policy is unchanged: a combined sit is one standard sit.
+    func testCombinedSitIsOneStandardSitForTheServerStreak() {
+        let now = Date()
+        let today = localDay(0, from: now)
+        let sit = combinedSession(date: today)
+        XCTAssertTrue(WidgetDataStore.sessionCountsForServerStreak(sit))
+        XCTAssertEqual(WidgetDataStore.recentCompletedStandardDates(from: [sit], now: now), [today])
+        XCTAssertEqual(WidgetDataStore.serverStreakAnchorDate(from: [sit]), today)
+        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(combinedSession(date: today, completed: false)))
+    }
+}

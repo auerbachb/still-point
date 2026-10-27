@@ -483,3 +483,106 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(uploaded.first?.focusCategory, .writing)
     }
 }
+
+// MARK: - #896 combined sit
+
+private func combinedRequest(clientSessionId: UUID? = nil) -> CreateSessionRequest {
+    CreateSessionRequest(
+        dayNumber: 30,
+        duration: 1200,
+        completed: true,
+        actualTime: 1200,
+        clearPercent: 85,
+        thoughtCount: 0,
+        mindStateLog: [],
+        sessionDate: "2026-10-27",
+        clientSessionId: clientSessionId,
+        combined: true
+    )
+}
+
+extension OfflineSessionQueueTests {
+    func testFileStoreRoundTripsAQueuedCombinedRequest() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = FileOfflineSessionQueueStore(fileURL: directory.appendingPathComponent(OfflineSessionQueue.fileName))
+        let clientSessionId = UUID()
+        try store.saveEntries([PendingSessionEntry(
+            clientSessionId: clientSessionId,
+            ownerUserId: "user-test-896",
+            request: combinedRequest(clientSessionId: clientSessionId),
+            thoughts: []
+        )])
+        let loaded = try store.loadEntries()
+
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded[0].request.combined, true)
+        XCTAssertEqual(loaded[0].request.track, .primary)
+    }
+
+    /// A sit queued by a build from before #896 has no `combined` key. It must still
+    /// load (a failed decode moves the whole queue aside as corrupt), as not combined.
+    func testFileStoreLoadsAnEntryQueuedBeforeCombinedExisted() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let fileURL = directory.appendingPathComponent(OfflineSessionQueue.fileName)
+        let clientSessionId = UUID()
+        let legacyQueue = """
+        [{"clearCompletionNote":false,"clientSessionId":"\(clientSessionId.uuidString)",\
+        "enqueuedAt":"2026-10-26T08:00:00Z","ownerUserId":"user-test-896",\
+        "request":{"actualTime":600,"bonusSeconds":0,"clearPercent":80,\
+        "clientSessionId":"\(clientSessionId.uuidString)","completed":true,"dayNumber":30,\
+        "duration":600,"mindStateLog":[],"sessionDate":"2026-10-26","sessionType":"standard",\
+        "thoughtCount":0,"track":"primary"},"sessionSynced":false,"thoughts":[]}]
+        """
+        try Data(legacyQueue.utf8).write(to: fileURL)
+
+        let loaded = try FileOfflineSessionQueueStore(fileURL: fileURL).loadEntries()
+
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.clientSessionId, clientSessionId)
+        XCTAssertEqual(loaded.first?.request.combined, false)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+    }
+
+    /// The coordinator rebuilds the request (`requestWithClientId`) before it queues
+    /// and uploads it, and rebuilds a session from it (`sessionDTO(from:id:)`). Either
+    /// copy dropping `combined` would lose it without an error.
+    func testPendingCombinedSitKeepsTheFlagInTheQueueUploadAndReturnedSession() async throws {
+        let store = InMemoryOfflineSessionQueueStore()
+        let recorder = CreateRequestRecorder()
+        let coordinator = SessionSyncCoordinator(
+            queueStore: store,
+            transport: SessionSyncTransport(
+                createSession: { request in
+                    await recorder.record(request)
+                    throw URLError(.notConnectedToInternet)
+                },
+                batchThoughts: { _ in [] }
+            )
+        )
+        let clientSessionId = UUID()
+
+        let result = try await coordinator.saveCompletedSession(
+            request: combinedRequest(),
+            clientSessionId: clientSessionId,
+            ownerUserId: "user-test-896",
+            thoughts: []
+        )
+
+        XCTAssertTrue(result.isPendingSync)
+        XCTAssertEqual(result.session.combined, true)
+        let queued = try store.loadEntries()
+        XCTAssertEqual(queued.first?.request.combined, true)
+        XCTAssertEqual(queued.first?.request.clientSessionId, clientSessionId)
+        let uploaded = await recorder.requests
+        XCTAssertEqual(uploaded.count, 1)
+        XCTAssertEqual(uploaded.first?.combined, true)
+    }
+}
