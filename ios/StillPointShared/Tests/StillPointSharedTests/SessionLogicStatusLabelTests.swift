@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SessionLogicStatusLabelTests: XCTestCase {
-    func testMinuteZoneLabelUsesFullSessionMinuteCount() {
+struct SessionLogicStatusLabelTests {
+    @Test func testMinuteZoneLabelUsesFullSessionMinuteCount() {
         let totalSeconds = 260
         let blocks = SessionLogic.buildBlocks(totalSeconds: totalSeconds)
 
@@ -12,10 +13,10 @@ final class SessionLogicStatusLabelTests: XCTestCase {
             blocks: blocks
         )
 
-        XCTAssertEqual(label, "minute 2 of 5")
+        #expect(label == "minute 2 of 5")
     }
 
-    func testFinalMinutePartialBlockKeepsCurrentMinuteLabel() {
+    @Test func testFinalMinutePartialBlockKeepsCurrentMinuteLabel() {
         let totalSeconds = 260
         let blocks = SessionLogic.buildBlocks(totalSeconds: totalSeconds)
 
@@ -25,10 +26,10 @@ final class SessionLogicStatusLabelTests: XCTestCase {
             blocks: blocks
         )
 
-        XCTAssertEqual(label, "minute 4 of 5")
+        #expect(label == "minute 4 of 5")
     }
 
-    func testFinalTenSecondBlocksRolloverAtMinuteBoundary() {
+    @Test func testFinalTenSecondBlocksRolloverAtMinuteBoundary() {
         let totalSeconds = 420
         let blocks = SessionLogic.buildBlocks(totalSeconds: totalSeconds)
 
@@ -38,10 +39,10 @@ final class SessionLogicStatusLabelTests: XCTestCase {
             blocks: blocks
         )
 
-        XCTAssertEqual(label, "minute 7 of 7")
+        #expect(label == "minute 7 of 7")
     }
 
-    func testShortSessionsStillShowSessionCompleteAtEnd() {
+    @Test func testShortSessionsStillShowSessionCompleteAtEnd() {
         let totalSeconds = 120
         let blocks = SessionLogic.buildBlocks(totalSeconds: totalSeconds)
 
@@ -51,6 +52,6 @@ final class SessionLogicStatusLabelTests: XCTestCase {
             blocks: blocks
         )
 
-        XCTAssertEqual(label, "session complete")
+        #expect(label == "session complete")
     }
 }

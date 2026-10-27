@@ -1,14 +1,15 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class DurationRecoveryTests: XCTestCase {
-    func testRecoveryConstantsMatchSharedFixture() throws {
+struct DurationRecoveryTests {
+    @Test func testRecoveryConstantsMatchSharedFixture() throws {
         let fixture = try SharedFixtures.load("durationForDay.json", as: DurationForDayFixture.self)
-        XCTAssertEqual(fixture.constants.recoveryMaxSteps, DurationRecovery.recoveryMaxSteps)
-        XCTAssertEqual(fixture.constants.missedDayGapThreshold, DurationRecovery.missedDayGapThreshold)
+        #expect(fixture.constants.recoveryMaxSteps == DurationRecovery.recoveryMaxSteps)
+        #expect(fixture.constants.missedDayGapThreshold == DurationRecovery.missedDayGapThreshold)
     }
 
-    func testAdvanceProgressionSharedFixture() throws {
+    @Test func testAdvanceProgressionSharedFixture() throws {
         let fixture = try SharedFixtures.load("durationForDay.json", as: DurationForDayFixture.self)
         for testCase in fixture.advanceProgression ?? [] {
             let sessionType = SessionType(rawValue: testCase.sessionType)!
@@ -25,11 +26,11 @@ final class DurationRecoveryTests: XCTestCase {
                 completed: testCase.completed,
                 state: state
             )
-            XCTAssertEqual(actual, expected, testCase.name)
+            #expect(actual == expected, Comment(rawValue: testCase.name))
         }
     }
 
-    func testDetectMissedDayGapSharedFixture() throws {
+    @Test func testDetectMissedDayGapSharedFixture() throws {
         let fixture = try SharedFixtures.load("durationForDay.json", as: DurationForDayFixture.self)
         for testCase in fixture.detectMissedDayGap ?? [] {
             let actual = DurationRecovery.detectMissedDayGap(
@@ -39,16 +40,16 @@ final class DurationRecoveryTests: XCTestCase {
                 recovery: recoveryFields(from: testCase.recovery)
             )
             if let expected = testCase.expected {
-                XCTAssertEqual(actual?.recoveryTargetDay, expected.recoveryTargetDay, testCase.name)
-                XCTAssertEqual(actual?.recoveryCurrentStep, expected.recoveryCurrentStep, testCase.name)
-                XCTAssertEqual(actual?.recoveryTotalSteps, expected.recoveryTotalSteps, testCase.name)
+                #expect(actual?.recoveryTargetDay == expected.recoveryTargetDay, Comment(rawValue: testCase.name))
+                #expect(actual?.recoveryCurrentStep == expected.recoveryCurrentStep, Comment(rawValue: testCase.name))
+                #expect(actual?.recoveryTotalSteps == expected.recoveryTotalSteps, Comment(rawValue: testCase.name))
             } else {
-                XCTAssertNil(actual, testCase.name)
+                #expect(actual == nil, Comment(rawValue: testCase.name))
             }
         }
     }
 
-    func testRecoveryStepDurationSharedFixture() throws {
+    @Test func testRecoveryStepDurationSharedFixture() throws {
         let fixture = try SharedFixtures.load("durationForDay.json", as: DurationForDayFixture.self)
         for testCase in fixture.recoveryStepDuration ?? [] {
             let actual = DurationRecovery.recoveryStepDuration(
@@ -56,11 +57,11 @@ final class DurationRecoveryTests: XCTestCase {
                 totalSteps: testCase.totalSteps,
                 step: testCase.step
             )
-            XCTAssertEqual(actual, testCase.expected, testCase.name)
+            #expect(actual == testCase.expected, Comment(rawValue: testCase.name))
         }
     }
 
-    func testRepeatedMissRecoveryCyclesAdvancePastDay45() {
+    @Test func testRepeatedMissRecoveryCyclesAdvancePastDay45() {
         var state = DurationRecovery.ProgressionState(currentDay: 45)
 
         func completeRecoveryCycle() {
@@ -90,12 +91,14 @@ final class DurationRecoveryTests: XCTestCase {
         }
 
         completeRecoveryCycle()
-        XCTAssertEqual(state.currentDay, 46)
-        XCTAssertNil(DurationRecovery.activeRecovery(DurationRecovery.RecoveryFields(
-            recoveryTargetDay: state.recoveryTargetDay,
-            recoveryCurrentStep: state.recoveryCurrentStep,
-            recoveryTotalSteps: state.recoveryTotalSteps
-        )))
+        #expect(state.currentDay == 46)
+        #expect(
+            DurationRecovery.activeRecovery(DurationRecovery.RecoveryFields(
+                recoveryTargetDay: state.recoveryTargetDay,
+                recoveryCurrentStep: state.recoveryCurrentStep,
+                recoveryTotalSteps: state.recoveryTotalSteps
+            )) == nil
+        )
 
         let gapRecovery = DurationRecovery.detectMissedDayGap(
             lastCompletedSessionDate: "2026-06-01",
@@ -103,8 +106,8 @@ final class DurationRecoveryTests: XCTestCase {
             currentDay: state.currentDay,
             recovery: .none
         )
-        XCTAssertEqual(gapRecovery?.recoveryTargetDay, 46)
-        XCTAssertEqual(gapRecovery?.recoveryCurrentStep, 1)
+        #expect(gapRecovery?.recoveryTargetDay == 46)
+        #expect(gapRecovery?.recoveryCurrentStep == 1)
 
         state = DurationRecovery.ProgressionState(
             currentDay: state.currentDay,
@@ -115,78 +118,66 @@ final class DurationRecoveryTests: XCTestCase {
             )
         )
         completeRecoveryCycle()
-        XCTAssertEqual(state.currentDay, 47)
-        XCTAssertEqual(StillPoint.duration(forDay: state.currentDay), 520)
+        #expect(state.currentDay == 47)
+        #expect(StillPoint.duration(forDay: state.currentDay) == 520)
     }
 
-    func testSessionDurationForUserUsesRecoveryRamp() {
+    @Test func testSessionDurationForUserUsesRecoveryRamp() {
         let recovery = DurationRecovery.RecoveryFields(
             recoveryTargetDay: 45,
             recoveryCurrentStep: 3,
             recoveryTotalSteps: 5
         )
         // #661: the raw ramp value is 236s; it is snapped to the nearest 10-second block.
-        XCTAssertEqual(
-            DurationRecovery.sessionDurationForUser(sessionType: .standard, currentDay: 45, recovery: recovery),
-            240
-        )
-        XCTAssertEqual(
-            DurationRecovery.sessionDurationForUser(sessionType: .quick, currentDay: 45, recovery: recovery),
-            StillPoint.quickDuration
-        )
+        #expect(DurationRecovery.sessionDurationForUser(sessionType: .standard, currentDay: 45, recovery: recovery) == 240)
+        #expect(DurationRecovery.sessionDurationForUser(sessionType: .quick, currentDay: 45, recovery: recovery) == StillPoint.quickDuration)
     }
 
     // MARK: - Recovery badge copy (#664)
 
     /// Pins the badge string to the web's, character for character — the middle
     /// dot is U+00B7, written `&middot;` in `src/components/HomeView.tsx`.
-    func testRecoveryProgressTextMatchesWebCopy() {
+    @Test func testRecoveryProgressTextMatchesWebCopy() {
         let recovery = DurationRecovery.ActiveRecovery(
             recoveryTargetDay: 45,
             recoveryCurrentStep: 3,
             recoveryTotalSteps: 5
         )
-        XCTAssertEqual(
-            DurationRecovery.recoveryProgressText(recovery),
-            "recovery 3/5 \u{00B7} ramping back to day 45"
-        )
+        #expect(DurationRecovery.recoveryProgressText(recovery) == "recovery 3/5 \u{00B7} ramping back to day 45")
     }
 
     // MARK: - 10-second block rounding (#661)
 
-    func testRoundToNearestBlockLeavesAlignedValuesUnchanged() {
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(60), 60)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(600), 600)
-        XCTAssertEqual(
-            DurationRecovery.roundToNearestBlock(Double(StillPoint.blockDuration)),
-            StillPoint.blockDuration
-        )
+    @Test func testRoundToNearestBlockLeavesAlignedValuesUnchanged() {
+        #expect(DurationRecovery.roundToNearestBlock(60) == 60)
+        #expect(DurationRecovery.roundToNearestBlock(600) == 600)
+        #expect(DurationRecovery.roundToNearestBlock(Double(StillPoint.blockDuration)) == StillPoint.blockDuration)
     }
 
-    func testRoundToNearestBlockRoundsBothDirections() {
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(148), 150)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(324), 320)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(236), 240)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(412), 410)
+    @Test func testRoundToNearestBlockRoundsBothDirections() {
+        #expect(DurationRecovery.roundToNearestBlock(148) == 150)
+        #expect(DurationRecovery.roundToNearestBlock(324) == 320)
+        #expect(DurationRecovery.roundToNearestBlock(236) == 240)
+        #expect(DurationRecovery.roundToNearestBlock(412) == 410)
     }
 
     /// Ties must round up so iOS matches the web's `Math.round` (half-up on positives).
-    func testRoundToNearestBlockRoundsMidpointsUp() {
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(75), 80)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(65), 70)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(155), 160)
+    @Test func testRoundToNearestBlockRoundsMidpointsUp() {
+        #expect(DurationRecovery.roundToNearestBlock(75) == 80)
+        #expect(DurationRecovery.roundToNearestBlock(65) == 70)
+        #expect(DurationRecovery.roundToNearestBlock(155) == 160)
     }
 
-    func testRoundToNearestBlockNeverReturnsZero() {
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(0), StillPoint.blockDuration)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(1), StillPoint.blockDuration)
-        XCTAssertEqual(DurationRecovery.roundToNearestBlock(4.99), StillPoint.blockDuration)
+    @Test func testRoundToNearestBlockNeverReturnsZero() {
+        #expect(DurationRecovery.roundToNearestBlock(0) == StillPoint.blockDuration)
+        #expect(DurationRecovery.roundToNearestBlock(1) == StillPoint.blockDuration)
+        #expect(DurationRecovery.roundToNearestBlock(4.99) == StillPoint.blockDuration)
     }
 
     /// Exhaustive over every day that can enter recovery: day 1 has nothing to recover
     /// and forkDay (55) onward all share the 10-minute cap, so 2...60 covers every
     /// distinct ramp shape including the capped tail. Mirrors the web suite's range.
-    func testEveryRecoveryStepFillsWholeBlocks() {
+    @Test func testEveryRecoveryStepFillsWholeBlocks() {
         for targetDay in 2...60 {
             let totalSteps = DurationRecovery.recoveryTotalStepsFor(targetDay: targetDay)
             guard totalSteps > 0 else { continue }
@@ -197,23 +188,23 @@ final class DurationRecoveryTests: XCTestCase {
                     totalSteps: totalSteps,
                     step: step
                 )
-                XCTAssertEqual(
-                    duration % StillPoint.blockDuration, 0,
+                #expect(
+                    duration % StillPoint.blockDuration == 0,
                     "day \(targetDay) step \(step) (\(duration)s) is not a whole block"
                 )
-                XCTAssertGreaterThanOrEqual(duration, StillPoint.blockDuration)
-                XCTAssertGreaterThanOrEqual(duration, previous, "ramp went backwards at day \(targetDay)")
+                #expect(duration >= StillPoint.blockDuration)
+                #expect(duration >= previous, "ramp went backwards at day \(targetDay)")
                 previous = duration
             }
-            XCTAssertLessThan(previous, StillPoint.duration(forDay: targetDay))
+            #expect(previous < StillPoint.duration(forDay: targetDay))
         }
     }
 
-    func testDay45RampLandsOnBlockBoundaries() {
+    @Test func testDay45RampLandsOnBlockBoundaries() {
         let durations = (1...5).map {
             DurationRecovery.recoveryStepDuration(targetDay: 45, totalSteps: 5, step: $0)
         }
-        XCTAssertEqual(durations, [60, 150, 240, 320, 410])
+        #expect(durations == [60, 150, 240, 320, 410])
     }
 
     private func recoveryFields(from state: DurationForDayFixture.ProgressionState) -> DurationRecovery.RecoveryFields {
@@ -236,33 +227,26 @@ final class DurationRecoveryTests: XCTestCase {
 // MARK: - #896 combined sit
 
 extension DurationRecoveryTests {
-    func testPreviewNextCombinedDuration() {
+    @Test func testPreviewNextCombinedDuration() {
         let user = UserDTO(
             id: "u", email: "e@example.com", username: "u", isPublic: false,
             currentDay: 45, dualTrackEnabled: true, secondTrackDay: 10
         )
-        XCTAssertEqual(
-            DurationRecovery.previewNextCombinedDuration(completed: true, user: user),
-            StillPoint.duration(forDay: 46) + StillPoint.duration(forDay: 11)
-        )
-        XCTAssertEqual(DurationRecovery.previewNextCombinedDuration(completed: false, user: user), 650)
-        XCTAssertEqual(
-            DurationRecovery.previewNextCombinedDuration(completed: true, user: nil),
-            StillPoint.baseDuration * 2
-        )
+        #expect(DurationRecovery.previewNextCombinedDuration(completed: true, user: user) == StillPoint.duration(forDay: 46) + StillPoint.duration(forDay: 11))
+        #expect(DurationRecovery.previewNextCombinedDuration(completed: false, user: user) == 650)
+        #expect(DurationRecovery.previewNextCombinedDuration(completed: true, user: nil) == StillPoint.baseDuration * 2)
     }
 
     /// The one-track preview is left alone.
-    func testStandardPreviewIgnoresCombined() {
+    @Test func testStandardPreviewIgnoresCombined() {
         let user = UserDTO(
             id: "u", email: "e@example.com", username: "u", isPublic: false,
             currentDay: 45, dualTrackEnabled: true, secondTrackDay: 10
         )
-        XCTAssertEqual(
+        #expect(
             DurationRecovery.previewNextStandardDuration(
                 sessionType: .standard, completed: true, track: .primary, user: user
-            ),
-            StillPoint.duration(forDay: 46)
+            ) == StillPoint.duration(forDay: 46)
         )
     }
 }

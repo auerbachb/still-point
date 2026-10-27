@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Records which sits a transport was asked to create, and answers some of them
@@ -39,7 +40,7 @@ private actor RejectingUploads {
 /// #983: a sit the server turns down for good is parked, as web does since #978.
 /// Named for the behaviour under test: `SessionSyncCoordinatorTests` already
 /// exists in `OfflineSessionQueueTests.swift`.
-final class SessionSyncCoordinatorParkingTests: XCTestCase {
+struct SessionSyncCoordinatorParkingTests {
     private let owner = "user-test-983"
 
     private func queuedSit(
@@ -83,7 +84,7 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
         try store.loadEntries().first { $0.clientSessionId == id }
     }
 
-    func testASitAnswered400IsParkedAndTheSitsAroundItStillSync() async throws {
+    @Test func testASitAnswered400IsParkedAndTheSitsAroundItStillSync() async throws {
         let ahead = queuedSit()
         let rejected = queuedSit()
         let behind = queuedSit()
@@ -96,32 +97,32 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
 
         let flushed = try await coordinator.flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(flushed, 2)
+        #expect(flushed == 2)
         let created = await uploads.created
-        XCTAssertEqual(created, [ahead.clientSessionId, rejected.clientSessionId, behind.clientSessionId])
-        XCTAssertEqual(try entry(ahead.clientSessionId, in: store)?.sessionSynced, true)
-        XCTAssertEqual(try entry(behind.clientSessionId, in: store)?.sessionSynced, true)
-        let parked = try XCTUnwrap(try entry(rejected.clientSessionId, in: store))
-        XCTAssertFalse(parked.sessionSynced)
-        XCTAssertEqual(parked.parked?.status, 400)
-        XCTAssertEqual(parked.parked?.message, "Invalid track")
+        #expect(created == [ahead.clientSessionId, rejected.clientSessionId, behind.clientSessionId])
+        #expect(try entry(ahead.clientSessionId, in: store)?.sessionSynced == true)
+        #expect(try entry(behind.clientSessionId, in: store)?.sessionSynced == true)
+        let parked = try #require(try entry(rejected.clientSessionId, in: store))
+        #expect(!parked.sessionSynced)
+        #expect(parked.parked?.status == 400)
+        #expect(parked.parked?.message == "Invalid track")
         let pending = try await coordinator.pendingCount(ownerUserId: owner)
-        XCTAssertEqual(pending, 0)
+        #expect(pending == 0)
 
         // A second flush does not send the parked sit again.
         await uploads.reset()
         let flushedAgain = try await coordinator.flushPending(ownerUserId: owner)
-        XCTAssertEqual(flushedAgain, 0)
+        #expect(flushedAgain == 0)
         let createdAgain = await uploads.created
-        XCTAssertEqual(createdAgain, [])
+        #expect(createdAgain == [])
 
         // Pruning keeps the parked sit as its record.
         try await coordinator.pruneCompletedEntries(ownerUserId: owner)
         let remaining = try store.loadEntries().map(\.clientSessionId)
-        XCTAssertEqual(remaining, [rejected.clientSessionId])
+        #expect(remaining == [rejected.clientSessionId])
     }
 
-    func testAThoughtsBatchAnswered404ParksItsSit() async throws {
+    @Test func testAThoughtsBatchAnswered404ParksItsSit() async throws {
         let rejected = queuedSit(
             sessionSynced: true,
             thoughts: [PendingSessionThought(timeInSession: 10, text: "a thought", clientThoughtId: "t-1")]
@@ -138,13 +139,13 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
         _ = try await coordinator.flushPending(ownerUserId: owner)
 
         let batched = await uploads.batchedSessionIds
-        XCTAssertEqual(batched, [])
-        let parked = try XCTUnwrap(try entry(rejected.clientSessionId, in: store))
-        XCTAssertEqual(parked.parked?.status, 404)
-        XCTAssertEqual(parked.thoughts.count, 1)
+        #expect(batched == [])
+        let parked = try #require(try entry(rejected.clientSessionId, in: store))
+        #expect(parked.parked?.status == 404)
+        #expect(parked.thoughts.count == 1)
     }
 
-    func testA401LeavesTheSitQueuedAndALaterFlushSendsIt() async throws {
+    @Test func testA401LeavesTheSitQueuedAndALaterFlushSendsIt() async throws {
         let sit = queuedSit()
         let uploads = RejectingUploads()
         await uploads.answerCreate(for: sit.clientSessionId, with: APIError(status: 401, message: "Unauthorized"))
@@ -152,21 +153,21 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
 
         let flushed = try await coordinator.flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(flushed, 0)
-        let queued = try XCTUnwrap(try entry(sit.clientSessionId, in: store))
-        XCTAssertNil(queued.parked)
-        XCTAssertFalse(queued.sessionSynced)
+        #expect(flushed == 0)
+        let queued = try #require(try entry(sit.clientSessionId, in: store))
+        #expect(queued.parked == nil)
+        #expect(!queued.sessionSynced)
         let pending = try await coordinator.pendingCount(ownerUserId: owner)
-        XCTAssertEqual(pending, 1)
+        #expect(pending == 1)
 
         await uploads.answerCreate(for: sit.clientSessionId, with: nil)
         let flushedLater = try await coordinator.flushPending(ownerUserId: owner)
 
-        XCTAssertEqual(flushedLater, 1)
-        XCTAssertEqual(try entry(sit.clientSessionId, in: store)?.sessionSynced, true)
+        #expect(flushedLater == 1)
+        #expect(try entry(sit.clientSessionId, in: store)?.sessionSynced == true)
     }
 
-    func testRetryableAndUnparkableAnswersLeaveTheSitQueued() async throws {
+    @Test func testRetryableAndUnparkableAnswersLeaveTheSitQueued() async throws {
         for status in [0, 403, 408, 429, 500, 503] {
             let sit = queuedSit()
             let uploads = RejectingUploads()
@@ -175,18 +176,18 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
 
             _ = try await coordinator.flushPending(ownerUserId: owner)
 
-            XCTAssertNil(try entry(sit.clientSessionId, in: store)?.parked, "status \(status)")
+            #expect(try entry(sit.clientSessionId, in: store)?.parked == nil, "status \(status)")
             let pending = try await coordinator.pendingCount(ownerUserId: owner)
-            XCTAssertEqual(pending, 1, "status \(status)")
+            #expect(pending == 1, "status \(status)")
         }
     }
 
-    func testANetworkFailureNeverParks() {
-        XCTAssertFalse(SessionSyncCoordinator.rejectsTheSit(URLError(.notConnectedToInternet)))
-        XCTAssertTrue(SessionSyncCoordinator.rejectsTheSit(APIError(status: 422, message: "x")))
+    @Test func testANetworkFailureNeverParks() {
+        #expect(!SessionSyncCoordinator.rejectsTheSit(URLError(.notConnectedToInternet)))
+        #expect(SessionSyncCoordinator.rejectsTheSit(APIError(status: 422, message: "x")))
     }
 
-    func testANoteOnAParkedSitIsRefusedNotReportedSaved() async throws {
+    @Test func testANoteOnAParkedSitIsRefusedNotReportedSaved() async throws {
         let rejected = queuedSit(
             sessionSynced: true,
             thoughts: [PendingSessionThought(timeInSession: 10, text: "a thought", clientThoughtId: "t-1")]
@@ -198,7 +199,7 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
         )
         let (coordinator, store) = makeCoordinator([rejected], uploads: uploads)
         _ = try await coordinator.flushPending(ownerUserId: owner)
-        XCTAssertNotNil(try entry(rejected.clientSessionId, in: store)?.parked)
+        #expect(try entry(rejected.clientSessionId, in: store)?.parked != nil)
 
         do {
             try await coordinator.replaceEndNote(
@@ -206,24 +207,24 @@ final class SessionSyncCoordinatorParkingTests: XCTestCase {
                 ownerUserId: owner,
                 note: "never sent"
             )
-            XCTFail("a note on a parked sit must not be reported saved")
+            Issue.record("a note on a parked sit must not be reported saved")
         } catch SessionSyncError.entryParked {
             // expected
         }
         do {
             try await coordinator.clearEndNote(clientSessionId: rejected.clientSessionId, ownerUserId: owner)
-            XCTFail("clearing the note of a parked sit must not be reported saved")
+            Issue.record("clearing the note of a parked sit must not be reported saved")
         } catch SessionSyncError.entryParked {
             // expected
         }
 
-        let kept = try XCTUnwrap(try entry(rejected.clientSessionId, in: store))
-        XCTAssertFalse(kept.thoughts.contains { $0.timeInSession == -1 })
-        XCTAssertFalse(kept.clearCompletionNote)
+        let kept = try #require(try entry(rejected.clientSessionId, in: store))
+        #expect(!(kept.thoughts.contains { $0.timeInSession == -1 }))
+        #expect(!kept.clearCompletionNote)
     }
 
-    func testTheParkedMessageIsCut() {
+    @Test func testTheParkedMessageIsCut() {
         let parked = PendingSessionParked(status: 400, message: String(repeating: "x", count: 500))
-        XCTAssertEqual(parked.message.count, PendingSessionParked.messageMaxLength)
+        #expect(parked.message.count == PendingSessionParked.messageMaxLength)
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-import XCTest
+import Testing
 @testable import StillPointShared
 
 /// Loads the cross-platform golden fixtures in `shared/test-fixtures/` (#421).

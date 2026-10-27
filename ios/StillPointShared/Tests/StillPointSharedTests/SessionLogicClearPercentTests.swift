@@ -1,11 +1,12 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SessionLogicClearPercentTests: XCTestCase {
+struct SessionLogicClearPercentTests {
     // Cross-platform parity: the same clear-percent golden set is asserted by web
     // computeClearPercentFromLog (#421). Cases avoid .5 boundaries so JS Math.round
     // and Swift rounded() agree.
-    func testSharedClearPercentFixtures() throws {
+    @Test func testSharedClearPercentFixtures() throws {
         let fixture = try SharedFixtures.load("clearPercent.json", as: ClearPercentFixture.self)
 
         for testCase in fixture.cases {
@@ -14,7 +15,7 @@ final class SessionLogicClearPercentTests: XCTestCase {
                 mindStateLog: log,
                 totalElapsed: testCase.endTime
             )
-            XCTAssertEqual(actual, testCase.expected, testCase.name)
+            #expect(actual == testCase.expected, Comment(rawValue: testCase.name))
         }
     }
 }

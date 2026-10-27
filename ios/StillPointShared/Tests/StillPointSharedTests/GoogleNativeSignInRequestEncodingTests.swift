@@ -1,28 +1,29 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class GoogleNativeSignInRequestEncodingTests: XCTestCase {
-    func testEncodesIDTokenAndServerAuthCode() throws {
+struct GoogleNativeSignInRequestEncodingTests {
+    @Test func testEncodesIDTokenAndServerAuthCode() throws {
         let request = GoogleNativeSignInRequest(
             idToken: "header.payload.signature",
             serverAuthCode: "opaque-code"
         )
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["idToken"] as? String, "header.payload.signature")
-        XCTAssertEqual(object["serverAuthCode"] as? String, "opaque-code")
+        #expect((object["idToken"] as? String) == "header.payload.signature")
+        #expect((object["serverAuthCode"] as? String) == "opaque-code")
     }
 
-    func testOmitsServerAuthCodeWhenNil() throws {
+    @Test func testOmitsServerAuthCodeWhenNil() throws {
         let request = GoogleNativeSignInRequest(idToken: "tok")
 
         let data = try JSONEncoder().encode(request)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["idToken"] as? String, "tok")
-        XCTAssertNil(object["serverAuthCode"])
-        XCTAssertFalse(object.keys.contains("serverAuthCode"))
+        #expect((object["idToken"] as? String) == "tok")
+        #expect(object["serverAuthCode"] == nil)
+        #expect(!object.keys.contains("serverAuthCode"))
     }
 }

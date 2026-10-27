@@ -1,10 +1,11 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class OfflineSessionQueueTests: XCTestCase {
+struct OfflineSessionQueueTests {
     private let testOwnerUserId = "user-test-557"
 
-    func testFileStoreRoundTrip() throws {
+    @Test func testFileStoreRoundTrip() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -34,14 +35,14 @@ final class OfflineSessionQueueTests: XCTestCase {
         try store.saveEntries([entry])
         let loaded = try store.loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertEqual(loaded[0].clientSessionId, clientSessionId)
-        XCTAssertEqual(loaded[0].ownerUserId, testOwnerUserId)
-        XCTAssertEqual(loaded[0].thoughts.first?.text, "hello")
-        XCTAssertEqual(loaded[0].request.clientSessionId, clientSessionId)
+        #expect(loaded.count == 1)
+        #expect(loaded[0].clientSessionId == clientSessionId)
+        #expect(loaded[0].ownerUserId == testOwnerUserId)
+        #expect(loaded[0].thoughts.first?.text == "hello")
+        #expect(loaded[0].request.clientSessionId == clientSessionId)
     }
 
-    func testFileStoreRecoversFromCorruptQueueFile() throws {
+    @Test func testFileStoreRecoversFromCorruptQueueFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -51,18 +52,18 @@ final class OfflineSessionQueueTests: XCTestCase {
         try Data("{not-json".utf8).write(to: fileURL)
         let store = FileOfflineSessionQueueStore(fileURL: fileURL)
 
-        XCTAssertTrue(try store.loadEntries().isEmpty)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+        #expect(try store.loadEntries().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
     }
 
-    func testInMemoryStoreStartsEmpty() throws {
+    @Test func testInMemoryStoreStartsEmpty() throws {
         let store = InMemoryOfflineSessionQueueStore()
-        XCTAssertTrue(try store.loadEntries().isEmpty)
+        #expect(try store.loadEntries().isEmpty)
     }
 
     // MARK: - #839 focus category
 
-    func testFileStoreRoundTripsAQueuedFocusRequestWithItsCategory() throws {
+    @Test func testFileStoreRoundTripsAQueuedFocusRequestWithItsCategory() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -92,15 +93,15 @@ final class OfflineSessionQueueTests: XCTestCase {
         )])
         let loaded = try store.loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertEqual(loaded[0].request.sessionType, .focus)
-        XCTAssertEqual(loaded[0].request.focusCategory, .reading)
-        XCTAssertEqual(loaded[0].request.clientSessionId, clientSessionId)
+        #expect(loaded.count == 1)
+        #expect(loaded[0].request.sessionType == .focus)
+        #expect(loaded[0].request.focusCategory == .reading)
+        #expect(loaded[0].request.clientSessionId == clientSessionId)
     }
 
     /// A sit queued by a build from before #839 has no `focusCategory` key. It must still
     /// load: a failed decode moves the whole queue aside as corrupt, losing every sit in it.
-    func testFileStoreLoadsAnEntryQueuedBeforeFocusCategoryExisted() throws {
+    @Test func testFileStoreLoadsAnEntryQueuedBeforeFocusCategoryExisted() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -120,16 +121,16 @@ final class OfflineSessionQueueTests: XCTestCase {
 
         let loaded = try FileOfflineSessionQueueStore(fileURL: fileURL).loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertEqual(loaded.first?.clientSessionId, clientSessionId)
-        XCTAssertEqual(loaded.first?.request.sessionType, .standard)
-        XCTAssertNil(loaded.first?.request.focusCategory)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.clientSessionId == clientSessionId)
+        #expect(loaded.first?.request.sessionType == .standard)
+        #expect(loaded.first?.request.focusCategory == nil)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
     }
 
     /// #983: a sit queued by a build from before parking has no `parked` key. It
     /// decodes as never turned down, and a flush sends it as before.
-    func testFileStoreLoadsAndFlushesAnEntryQueuedBeforeParkingExisted() async throws {
+    @Test func testFileStoreLoadsAndFlushesAnEntryQueuedBeforeParkingExisted() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -150,9 +151,9 @@ final class OfflineSessionQueueTests: XCTestCase {
 
         let loaded = try store.loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertNil(loaded.first?.parked)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.parked == nil)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
 
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -162,16 +163,16 @@ final class OfflineSessionQueueTests: XCTestCase {
             )
         )
         let pending = try await coordinator.pendingCount(ownerUserId: testOwnerUserId)
-        XCTAssertEqual(pending, 1)
+        #expect(pending == 1)
         let flushed = try await coordinator.flushPending(ownerUserId: testOwnerUserId)
-        XCTAssertEqual(flushed, 1)
+        #expect(flushed == 1)
         let flushedEntry = try store.loadEntries().first
-        XCTAssertEqual(flushedEntry?.serverSessionId, "server-legacy")
-        XCTAssertNil(flushedEntry?.parked)
+        #expect(flushedEntry?.serverSessionId == "server-legacy")
+        #expect(flushedEntry?.parked == nil)
     }
 
     /// #983: a parked entry keeps its answer through the file store.
-    func testFileStoreRoundTripsAParkedEntry() throws {
+    @Test func testFileStoreRoundTripsAParkedEntry() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -204,7 +205,7 @@ final class OfflineSessionQueueTests: XCTestCase {
             parked: parked
         )])
 
-        XCTAssertEqual(try store.loadEntries().first?.parked, parked)
+        #expect(try store.loadEntries().first?.parked == parked)
     }
 }
 
@@ -217,10 +218,10 @@ private actor CreateRequestRecorder {
     }
 }
 
-final class SessionSyncCoordinatorTests: XCTestCase {
+struct SessionSyncCoordinatorTests {
     private let testOwnerUserId = "user-test-557"
 
-    func testSaveCompletedSessionEnqueuesWhenSyncUnavailable() async throws {
+    @Test func testSaveCompletedSessionEnqueuesWhenSyncUnavailable() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -246,15 +247,15 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             thoughts: []
         )
 
-        XCTAssertTrue(result.isPendingSync)
-        XCTAssertEqual(result.session.id, clientSessionId.uuidString)
+        #expect(result.isPendingSync)
+        #expect(result.session.id == clientSessionId.uuidString)
         let entries = try store.loadEntries()
-        XCTAssertEqual(entries.count, 1)
-        XCTAssertEqual(entries[0].ownerUserId, testOwnerUserId)
-        XCTAssertFalse(entries[0].sessionSynced)
+        #expect(entries.count == 1)
+        #expect(entries[0].ownerUserId == testOwnerUserId)
+        #expect(!entries[0].sessionSynced)
     }
 
-    func testDuplicateClientSessionIdDoesNotDuplicateQueueEntries() async throws {
+    @Test func testDuplicateClientSessionIdDoesNotDuplicateQueueEntries() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -286,10 +287,10 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             thoughts: []
         )
 
-        XCTAssertEqual(try store.loadEntries().count, 1)
+        #expect(try store.loadEntries().count == 1)
     }
 
-    func testFlushPendingSkipsEntriesOwnedByAnotherUser() async throws {
+    @Test func testFlushPendingSkipsEntriesOwnedByAnotherUser() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -316,11 +317,11 @@ final class SessionSyncCoordinatorTests: XCTestCase {
         )
 
         let flushed = try await coordinator.flushPending(ownerUserId: "user-b")
-        XCTAssertEqual(flushed, 0)
-        XCTAssertEqual(try store.loadEntries().count, 1)
+        #expect(flushed == 0)
+        #expect(try store.loadEntries().count == 1)
     }
 
-    func testProvisionalSessionDTOUsesClientId() {
+    @Test func testProvisionalSessionDTOUsesClientId() {
         let clientSessionId = UUID()
         let request = CreateSessionRequest(
             dayNumber: 3,
@@ -339,11 +340,11 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             from: request,
             clientSessionId: clientSessionId
         )
-        XCTAssertEqual(dto.id, clientSessionId.uuidString)
-        XCTAssertEqual(dto.sessionType, .quick)
+        #expect(dto.id == clientSessionId.uuidString)
+        #expect(dto.sessionType == .quick)
     }
 
-    func testReplaceEndNoteReplacesQueuedEndNote() async throws {
+    @Test func testReplaceEndNoteReplacesQueuedEndNote() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let coordinator = SessionSyncCoordinator(
             queueStore: store,
@@ -380,11 +381,13 @@ final class SessionSyncCoordinatorTests: XCTestCase {
 
         let thoughts = try store.loadEntries()[0].thoughts
         // #971: the in-session thought was given an id when the sit was queued.
-        let midSitId = try XCTUnwrap(thoughts.first?.clientThoughtId)
-        XCTAssertEqual(thoughts, [
-            PendingSessionThought(timeInSession: 12, text: "mid-sit", clientThoughtId: midSitId),
-            PendingSessionThought(timeInSession: -1, text: "revised note"),
-        ])
+        let midSitId = try #require(thoughts.first?.clientThoughtId)
+        #expect(
+            thoughts == [
+                PendingSessionThought(timeInSession: 12, text: "mid-sit", clientThoughtId: midSitId),
+                PendingSessionThought(timeInSession: -1, text: "revised note"),
+            ]
+        )
     }
 
     // MARK: - #839 focus category
@@ -407,7 +410,7 @@ final class SessionSyncCoordinatorTests: XCTestCase {
     /// The coordinator rebuilds the request (`requestWithClientId`) before it queues and
     /// uploads it, and rebuilds a session from it (`sessionDTO(from:id:)`) for the caller.
     /// Either copy dropping the category would lose it without an error.
-    func testPendingFocusSessionKeepsItsCategoryInTheQueueUploadAndReturnedSession() async throws {
+    @Test func testPendingFocusSessionKeepsItsCategoryInTheQueueUploadAndReturnedSession() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let recorder = CreateRequestRecorder()
         let coordinator = SessionSyncCoordinator(
@@ -429,20 +432,20 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             thoughts: []
         )
 
-        XCTAssertTrue(result.isPendingSync)
-        XCTAssertEqual(result.session.id, clientSessionId.uuidString)
-        XCTAssertEqual(result.session.sessionType, .focus)
-        XCTAssertEqual(result.session.focusCategory, .writing)
+        #expect(result.isPendingSync)
+        #expect(result.session.id == clientSessionId.uuidString)
+        #expect(result.session.sessionType == .focus)
+        #expect(result.session.focusCategory == .writing)
         let queued = try store.loadEntries()
-        XCTAssertEqual(queued.count, 1)
-        XCTAssertEqual(queued.first?.request.clientSessionId, clientSessionId)
-        XCTAssertEqual(queued.first?.request.focusCategory, .writing)
+        #expect(queued.count == 1)
+        #expect(queued.first?.request.clientSessionId == clientSessionId)
+        #expect(queued.first?.request.focusCategory == .writing)
         let uploaded = await recorder.requests
-        XCTAssertEqual(uploaded.count, 1)
-        XCTAssertEqual(uploaded.first?.focusCategory, .writing)
+        #expect(uploaded.count == 1)
+        #expect(uploaded.first?.focusCategory == .writing)
     }
 
-    func testSyncedFocusSessionKeepsItsCategory() async throws {
+    @Test func testSyncedFocusSessionKeepsItsCategory() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let recorder = CreateRequestRecorder()
         let coordinator = SessionSyncCoordinator(
@@ -476,11 +479,11 @@ final class SessionSyncCoordinatorTests: XCTestCase {
             thoughts: []
         )
 
-        XCTAssertFalse(result.isPendingSync)
-        XCTAssertEqual(result.session.id, "server-839")
-        XCTAssertEqual(result.session.focusCategory, .writing)
+        #expect(!result.isPendingSync)
+        #expect(result.session.id == "server-839")
+        #expect(result.session.focusCategory == .writing)
         let uploaded = await recorder.requests
-        XCTAssertEqual(uploaded.first?.focusCategory, .writing)
+        #expect(uploaded.first?.focusCategory == .writing)
     }
 }
 
@@ -502,7 +505,7 @@ private func combinedRequest(clientSessionId: UUID? = nil) -> CreateSessionReque
 }
 
 extension OfflineSessionQueueTests {
-    func testFileStoreRoundTripsAQueuedCombinedRequest() throws {
+    @Test func testFileStoreRoundTripsAQueuedCombinedRequest() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -518,14 +521,14 @@ extension OfflineSessionQueueTests {
         )])
         let loaded = try store.loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertEqual(loaded[0].request.combined, true)
-        XCTAssertEqual(loaded[0].request.track, .primary)
+        #expect(loaded.count == 1)
+        #expect(loaded[0].request.combined == true)
+        #expect(loaded[0].request.track == .primary)
     }
 
     /// A sit queued by a build from before #896 has no `combined` key. It must still
     /// load (a failed decode moves the whole queue aside as corrupt), as not combined.
-    func testFileStoreLoadsAnEntryQueuedBeforeCombinedExisted() throws {
+    @Test func testFileStoreLoadsAnEntryQueuedBeforeCombinedExisted() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -545,16 +548,16 @@ extension OfflineSessionQueueTests {
 
         let loaded = try FileOfflineSessionQueueStore(fileURL: fileURL).loadEntries()
 
-        XCTAssertEqual(loaded.count, 1)
-        XCTAssertEqual(loaded.first?.clientSessionId, clientSessionId)
-        XCTAssertEqual(loaded.first?.request.combined, false)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.clientSessionId == clientSessionId)
+        #expect(loaded.first?.request.combined == false)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path + ".corrupt"))
     }
 
     /// The coordinator rebuilds the request (`requestWithClientId`) before it queues
     /// and uploads it, and rebuilds a session from it (`sessionDTO(from:id:)`). Either
     /// copy dropping `combined` would lose it without an error.
-    func testPendingCombinedSitKeepsTheFlagInTheQueueUploadAndReturnedSession() async throws {
+    @Test func testPendingCombinedSitKeepsTheFlagInTheQueueUploadAndReturnedSession() async throws {
         let store = InMemoryOfflineSessionQueueStore()
         let recorder = CreateRequestRecorder()
         let coordinator = SessionSyncCoordinator(
@@ -576,13 +579,13 @@ extension OfflineSessionQueueTests {
             thoughts: []
         )
 
-        XCTAssertTrue(result.isPendingSync)
-        XCTAssertEqual(result.session.combined, true)
+        #expect(result.isPendingSync)
+        #expect(result.session.combined == true)
         let queued = try store.loadEntries()
-        XCTAssertEqual(queued.first?.request.combined, true)
-        XCTAssertEqual(queued.first?.request.clientSessionId, clientSessionId)
+        #expect(queued.first?.request.combined == true)
+        #expect(queued.first?.request.clientSessionId == clientSessionId)
         let uploaded = await recorder.requests
-        XCTAssertEqual(uploaded.count, 1)
-        XCTAssertEqual(uploaded.first?.combined, true)
+        #expect(uploaded.count == 1)
+        #expect(uploaded.first?.combined == true)
     }
 }

@@ -1,22 +1,23 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class HapticPlaybackTests: XCTestCase {
+struct HapticPlaybackTests {
 
-    func testCoreHapticsIsPreferredWhenTheHardwareSupportsIt() {
-        XCTAssertTrue(HapticPlayback.prefersCoreHaptics(hardwareSupportsCoreHaptics: true))
+    @Test func testCoreHapticsIsPreferredWhenTheHardwareSupportsIt() {
+        #expect(HapticPlayback.prefersCoreHaptics(hardwareSupportsCoreHaptics: true))
     }
 
-    func testSystemFeedbackIsTheFallbackWithoutCoreHaptics() {
-        XCTAssertFalse(HapticPlayback.prefersCoreHaptics(hardwareSupportsCoreHaptics: false))
+    @Test func testSystemFeedbackIsTheFallbackWithoutCoreHaptics() {
+        #expect(!HapticPlayback.prefersCoreHaptics(hardwareSupportsCoreHaptics: false))
     }
 
-    func testMinuteMarkerIsOneTapAndTheEndIsTwoStrongerTaps() {
+    @Test func testMinuteMarkerIsOneTapAndTheEndIsTwoStrongerTaps() {
         let minute = HapticPlayback.transients(for: .gentle)
         let end = HapticPlayback.transients(for: .pronounced)
-        XCTAssertEqual(minute.count, 1)
-        XCTAssertEqual(end.count, 2)
-        XCTAssertGreaterThan(end[0].intensity, minute[0].intensity)
-        XCTAssertNotEqual(minute, end)
+        #expect(minute.count == 1)
+        #expect(end.count == 2)
+        #expect(end[0].intensity > minute[0].intensity)
+        #expect(minute != end)
     }
 }

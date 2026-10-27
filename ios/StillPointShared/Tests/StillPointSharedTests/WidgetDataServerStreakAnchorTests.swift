@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport {
+struct WidgetDataServerStreakAnchorTests: WidgetDataTestSupport {
     // MARK: - #679: only the days that produced the server total may extend it
 
     /// The snapshot the authoritative backfill writes for `sessions`, derived
@@ -47,7 +48,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// total is allowed to extend it — but the two quick days contributed nothing
     /// to that total, so they may add nothing. Before the fix this read
     /// `10 + 2 = 12` against the app and web's 10.
-    func testQuickOnlyDaysAfterTheAnchorDoNotExtendTheServerTotal() {
+    @Test func testQuickOnlyDaysAfterTheAnchorDoNotExtendTheServerTotal() {
         let now = Date()
         let sessions = standardRun([-6, -5, -4, -3, -2], from: now) + [
             session(date: localDay(-1, from: now), type: .quick),
@@ -55,59 +56,55 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
         ]
         let snapshot = backfilled(sessions: sessions, serverStreak: 10, now: now)
 
-        XCTAssertEqual(
-            snapshot.serverStreakDate,
-            localDay(-2, from: now),
-            "precondition: anchored on the most recent standard sit"
-        )
-        XCTAssertEqual(snapshot.weekRowStreak(now: now), 7, "precondition: the row reaches the window edge")
-        XCTAssertEqual(snapshot.streak, 10, "the widget must show the number the app and web show")
-        XCTAssertNotEqual(snapshot.streak, 12, "practice days may not extend a standard-only total")
+        #expect(snapshot.serverStreakDate == localDay(-2, from: now), "precondition: anchored on the most recent standard sit")
+        #expect(snapshot.weekRowStreak(now: now) == 7, "precondition: the row reaches the window edge")
+        #expect(snapshot.streak == 10, "the widget must show the number the app and web show")
+        #expect(snapshot.streak != 12, "practice days may not extend a standard-only total")
     }
 
     /// #839: a focus session is not a sit the server counts, and unlike a quick sit
     /// it checks no row either, so one today leaves the streak where yesterday's
     /// standard sit put it.
-    func testFocusSessionTodayDoesNotExtendTheStreak() {
+    @Test func testFocusSessionTodayDoesNotExtendTheStreak() {
         let now = Date()
         let sessions = standardRun([-6, -5, -4, -3, -2, -1], from: now)
             + [session(date: localDay(0, from: now), type: .focus)]
         let snapshot = backfilled(sessions: sessions, serverStreak: 10, now: now)
 
-        XCTAssertEqual(snapshot.serverStreakDate, localDay(-1, from: now), "a focus session never anchors the total")
-        XCTAssertFalse(snapshot.completedDates.contains(localDay(0, from: now)), "nor checks today's row")
-        XCTAssertEqual(snapshot.streak, 10)
+        #expect(snapshot.serverStreakDate == localDay(-1, from: now), "a focus session never anchors the total")
+        #expect(!snapshot.completedDates.contains(localDay(0, from: now)), "nor checks today's row")
+        #expect(snapshot.streak == 10)
     }
 
     /// #839: the server-streak population, asserted directly for focus sessions.
-    func testFocusSessionsNeitherAnchorNorExtendTheServerStreak() {
+    @Test func testFocusSessionsNeitherAnchorNorExtendTheServerStreak() {
         let now = Date()
         let standard = session(date: localDay(-2, from: now), type: .standard, track: .primary)
         let focusYesterday = session(date: localDay(-1, from: now), type: .focus, track: .primary)
         let focusToday = session(date: localDay(0, from: now), type: .focus, track: nil)
 
-        XCTAssertTrue(WidgetDataStore.sessionCountsForServerStreak(standard))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(focusYesterday))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(focusToday))
+        #expect(WidgetDataStore.sessionCountsForServerStreak(standard))
+        #expect(!WidgetDataStore.sessionCountsForServerStreak(focusYesterday))
+        #expect(!WidgetDataStore.sessionCountsForServerStreak(focusToday))
 
         let sessions = [standard, focusYesterday, focusToday]
-        XCTAssertEqual(WidgetDataStore.recentCompletedStandardDates(from: sessions, now: now), [localDay(-2, from: now)])
-        XCTAssertEqual(WidgetDataStore.serverStreakAnchorDate(from: sessions), localDay(-2, from: now))
-        XCTAssertNil(WidgetDataStore.serverStreakAnchorDate(from: [focusYesterday, focusToday]))
-        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(on: localDay(0, from: now), in: sessions))
+        #expect(WidgetDataStore.recentCompletedStandardDates(from: sessions, now: now) == [localDay(-2, from: now)])
+        #expect(WidgetDataStore.serverStreakAnchorDate(from: sessions) == localDay(-2, from: now))
+        #expect(WidgetDataStore.serverStreakAnchorDate(from: [focusYesterday, focusToday]) == nil)
+        #expect(!WidgetDataStore.primaryStandardSitCompleted(on: localDay(0, from: now), in: sessions))
     }
 
     /// The common single-day version of the same bug: standard yesterday, quick
     /// today. Previously 11 against the app's 10.
-    func testQuickSitTodayDoesNotPushThePastTheAppStreak() {
+    @Test func testQuickSitTodayDoesNotPushThePastTheAppStreak() {
         let now = Date()
         let sessions = standardRun([-6, -5, -4, -3, -2, -1], from: now)
             + [session(date: localDay(0, from: now), type: .quick)]
         let snapshot = backfilled(sessions: sessions, serverStreak: 10, now: now)
 
-        XCTAssertEqual(snapshot.weekRowStreak(now: now), 7, "precondition: the row reaches the window edge")
-        XCTAssertEqual(snapshot.streak, 10)
-        XCTAssertNotEqual(snapshot.streak, 11, "a quick sit is not a standard sit")
+        #expect(snapshot.weekRowStreak(now: now) == 7, "precondition: the row reaches the window edge")
+        #expect(snapshot.streak == 10)
+        #expect(snapshot.streak != 11, "a quick sit is not a standard sit")
     }
 
     /// The benefit the anchor exists for must survive: a standard sit *today*
@@ -118,14 +115,14 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// This shape is the *refreshed* one — the server badge has caught up. The
     /// moment right after the sit, when it has not, is
     /// `testStandardSitTodayExtendsBeforeTheServerBadgeCatchesUp`.
-    func testStandardSitTodayStillExtendsAStreakOlderThanTheRow() {
+    @Test func testStandardSitTodayStillExtendsAStreakOlderThanTheRow() {
         let now = Date()
         let previous = backfilled(
             sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
             serverStreak: 30,
             now: now
         )
-        XCTAssertEqual(previous.streak, 30, "precondition: the carried total is older than the row")
+        #expect(previous.streak == 30, "precondition: the carried total is older than the row")
 
         let afterStandardSit = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -135,7 +132,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(afterStandardSit.streak, 31, "a standard sit today extends the carried server total")
+        #expect(afterStandardSit.streak == 31, "a standard sit today extends the carried server total")
 
         // Control: the same sit shape, but a quick one. The row still checks
         // today (it is practice), yet the standard-only total may not move.
@@ -147,8 +144,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertTrue(afterQuickSit.isTodayMarkedDone(now: now), "the row still checks today")
-        XCTAssertEqual(afterQuickSit.streak, 30, "but a quick sit adds nothing to a standard-only total")
+        #expect(afterQuickSit.isTodayMarkedDone(now: now), "the row still checks today")
+        #expect(afterQuickSit.streak == 30, "but a quick sit adds nothing to a standard-only total")
     }
 
     /// The real completion path, which the test above cannot reach because it sets
@@ -162,7 +159,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// finished their sit. `primaryStandardDoneToday` is the local, standard-only
     /// Track One signal that closes that gap, exactly as `secondPracticeDoneToday`
     /// already does for Track Two (#684).
-    func testStandardSitTodayExtendsBeforeTheServerBadgeCatchesUp() {
+    @Test func testStandardSitTodayExtendsBeforeTheServerBadgeCatchesUp() {
         let now = Date()
         let previous = backfilled(
             sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
@@ -181,12 +178,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(
-            justFinished.streak,
-            31,
-            "the flame must move on the sit, not on the round-trip that confirms it"
-        )
-        XCTAssertTrue(justFinished.standardDates.contains(localDay(0, from: now)))
+        #expect(justFinished.streak == 31, "the flame must move on the sit, not on the round-trip that confirms it")
+        #expect(justFinished.standardDates.contains(localDay(0, from: now)))
 
         // The discriminator is still the session *type*, not merely locality: a
         // quick sit raises `practiceDoneToday` through the same call and must not
@@ -200,14 +193,14 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(afterQuickSit.streak, 30, "a quick sit is still not a standard sit")
-        XCTAssertFalse(afterQuickSit.standardDates.contains(localDay(0, from: now)))
+        #expect(afterQuickSit.streak == 30, "a quick sit is still not a standard sit")
+        #expect(!afterQuickSit.standardDates.contains(localDay(0, from: now)))
     }
 
     /// The second-track half of the same moment: `syncWidgetData()` already passes
     /// the local `secondPracticeDoneToday` as `secondDoneToday` (#684), so a
     /// just-finished second-track standard sit extends without a round-trip too.
-    func testSecondTrackStandardSitTodayExtendsWithoutTheServerBadge() {
+    @Test func testSecondTrackStandardSitTodayExtendsWithoutTheServerBadge() {
         let now = Date()
         let previous = backfilled(
             sessions: standardRun([-6, -5, -4, -3, -2, -1], from: now),
@@ -223,8 +216,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(justFinished.streak, 31)
-        XCTAssertTrue(justFinished.standardDates.contains(localDay(0, from: now)))
+        #expect(justFinished.streak == 31)
+        #expect(justFinished.standardDates.contains(localDay(0, from: now)))
     }
 
     /// The midnight case for the signal the two tests above introduce.
@@ -241,7 +234,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// `flagsAsOf` is the day the flags describe; when it is not today's, they are
     /// retired before any of them is read. The two calls differ in that argument
     /// alone, so the assertion isolates staleness and nothing else.
-    func testStaleDoneTodayFlagsDoNotExtendTheStandardTotalAfterMidnight() {
+    @Test func testStaleDoneTodayFlagsDoNotExtendTheStandardTotalAfterMidnight() {
         let now = Date()
         let yesterday = now.addingTimeInterval(-36 * 3600)
         let previous = backfilled(
@@ -261,8 +254,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             flagsAsOf: now,
             previous: previous
         )
-        XCTAssertEqual(fresh.streak, 31, "precondition: a same-day flag still extends")
-        XCTAssertTrue(fresh.standardDates.contains(localDay(0, from: now)))
+        #expect(fresh.streak == 31, "precondition: a same-day flag still extends")
+        #expect(fresh.standardDates.contains(localDay(0, from: now)))
 
         let stale = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -274,15 +267,11 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             flagsAsOf: yesterday,
             previous: previous
         )
-        XCTAssertFalse(
-            stale.standardDates.contains(localDay(0, from: now)),
+        #expect(
+            !stale.standardDates.contains(localDay(0, from: now)),
             "yesterday's standard flag must not enter today's standard-only set"
         )
-        XCTAssertEqual(
-            stale.streak,
-            30,
-            "the server total may not gain a day that carried no standard sit"
-        )
+        #expect(stale.streak == 30, "the server total may not gain a day that carried no standard sit")
     }
 
     /// The same retirement applied to the other two terms of the standard-set
@@ -291,7 +280,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// path and go stale across midnight identically — so fixing only the local
     /// flag would have left the very same inflation reachable through either of
     /// them.
-    func testStaleServerBadgesDoNotExtendTheStandardTotalAfterMidnight() {
+    @Test func testStaleServerBadgesDoNotExtendTheStandardTotalAfterMidnight() {
         let now = Date()
         let yesterday = now.addingTimeInterval(-36 * 3600)
         let previous = backfilled(
@@ -314,18 +303,18 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
                 flagsAsOf: yesterday,
                 previous: previous
             )
-            XCTAssertFalse(
-                stale.standardDates.contains(localDay(0, from: now)),
+            #expect(
+                !stale.standardDates.contains(localDay(0, from: now)),
                 "a stale \(label) must not fold today into the standard-only set"
             )
-            XCTAssertEqual(stale.streak, 30, "a stale \(label) must not extend the server total")
+            #expect(stale.streak == 30, "a stale \(label) must not extend the server total")
         }
     }
 
     /// Retiring the flags must also un-check the weekday rows they drive: a stale
     /// flag marking today is the milder sibling of the same wrong, and leaving it
     /// would show a check on a day the user has not sat.
-    func testStaleFlagsDoNotCheckTodaysRow() {
+    @Test func testStaleFlagsDoNotCheckTodaysRow() {
         let now = Date()
         let stale = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -336,15 +325,15 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             flagsAsOf: now.addingTimeInterval(-36 * 3600)
         )
-        XCTAssertFalse(stale.completedDates.contains(localDay(0, from: now)))
-        XCTAssertFalse(stale.secondCompletedDates.contains(localDay(0, from: now)))
-        XCTAssertFalse(stale.isTodayMarkedDone(now: now), "a new day starts unchecked")
+        #expect(!stale.completedDates.contains(localDay(0, from: now)))
+        #expect(!stale.secondCompletedDates.contains(localDay(0, from: now)))
+        #expect(!stale.isTodayMarkedDone(now: now), "a new day starts unchecked")
     }
 
     /// `flagsAsOf` is opt-in: every caller that computes its flags fresh at the
     /// call site (and every existing test) omits it and keeps the original
     /// trust-the-flags behaviour.
-    func testOmittingFlagsAsOfKeepsTrustingTheFlags() {
+    @Test func testOmittingFlagsAsOfKeepsTrustingTheFlags() {
         let now = Date()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -354,8 +343,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             primaryStandardDoneToday: true,
             now: now
         )
-        XCTAssertTrue(snapshot.standardDates.contains(localDay(0, from: now)))
-        XCTAssertTrue(snapshot.isTodayMarkedDone(now: now))
+        #expect(snapshot.standardDates.contains(localDay(0, from: now)))
+        #expect(snapshot.isTodayMarkedDone(now: now))
     }
 
     /// Re-scope, track axis: on a dual-track account the latest standard sit can
@@ -363,7 +352,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// legitimately lands there — the server counts it, being track-agnostic —
     /// but the primary-only quick day after it still contributed nothing, so the
     /// total may not be attached to that run. Previously 11.
-    func testSecondTrackAnchorIsNotExtendedByAPrimaryOnlyRun() {
+    @Test func testSecondTrackAnchorIsNotExtendedByAPrimaryOnlyRun() {
         let now = Date()
         let sessions = standardRun([-6, -5, -4, -3, -2], from: now) + [
             session(date: localDay(-1, from: now), type: .standard, track: .second),
@@ -371,21 +360,20 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
         ]
         let snapshot = backfilled(sessions: sessions, serverStreak: 10, now: now)
 
-        XCTAssertEqual(
-            snapshot.serverStreakDate,
-            localDay(-1, from: now),
+        #expect(
+            snapshot.serverStreakDate == localDay(-1, from: now),
             "the server is track-agnostic, so the second-track sit anchors"
         )
-        XCTAssertTrue(
+        #expect(
             snapshot.standardDates.contains(localDay(-1, from: now)),
             "and for the same reason it belongs to the standard-only set"
         )
-        XCTAssertFalse(
-            snapshot.completedDates.contains(localDay(-1, from: now)),
+        #expect(
+            !snapshot.completedDates.contains(localDay(-1, from: now)),
             "precondition: Track One's row does not mark a second-track sit (#684)"
         )
-        XCTAssertEqual(snapshot.streak, 10)
-        XCTAssertNotEqual(snapshot.streak, 11, "a primary-only quick day may not extend it")
+        #expect(snapshot.streak == 10)
+        #expect(snapshot.streak != 11, "a primary-only quick day may not extend it")
     }
 
     /// Re-scope, track axis (second half): a day carrying *both* a primary and a
@@ -393,7 +381,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// day with a quick-only day in between, the run the server counted ends at
     /// the double day — so it extends by exactly one, never two, and never past
     /// the quick-only day that broke it.
-    func testDayWithBothTracksStandardSitsCountsOnce() {
+    @Test func testDayWithBothTracksStandardSitsCountsOnce() {
         let now = Date()
         let sessions = standardRun([-6, -5, -4, -3], from: now) + [
             session(date: localDay(-2, from: now), type: .standard, track: .primary),
@@ -409,20 +397,19 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now
         )
 
-        XCTAssertEqual(
-            Set(snapshot.standardDates).count,
-            snapshot.standardDates.count,
+        #expect(
+            Set(snapshot.standardDates).count == snapshot.standardDates.count,
             "the standard set is keyed by day, so two sits on one day appear once"
         )
-        XCTAssertEqual(snapshot.streak, 11)
-        XCTAssertNotEqual(snapshot.streak, 12, "two standard sits on one day are still one day")
-        XCTAssertNotEqual(snapshot.streak, 13, "a quick-only day ends the run the server counted")
+        #expect(snapshot.streak == 11)
+        #expect(snapshot.streak != 12, "two standard sits on one day are still one day")
+        #expect(snapshot.streak != 13, "a quick-only day ends the run the server counted")
     }
 
     /// The policy the whole fix rests on, asserted directly: standard sits only,
     /// on either track, completed, inside the window — and deliberately not the
     /// same population the rows draw.
-    func testRecentCompletedStandardDatesIsStandardOnlyAndTrackAgnostic() {
+    @Test func testRecentCompletedStandardDatesIsStandardOnlyAndTrackAgnostic() {
         let now = Date()
         let sessions = [
             session(date: localDay(0, from: now), type: .standard, track: .primary),
@@ -435,24 +422,21 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
         ]
 
         let standard = WidgetDataStore.recentCompletedStandardDates(from: sessions, now: now)
-        XCTAssertEqual(
-            standard,
-            [localDay(0, from: now), localDay(-2, from: now), localDay(-3, from: now)]
-        )
+        #expect(standard == [localDay(0, from: now), localDay(-2, from: now), localDay(-3, from: now)])
 
         // The rows are a different population on both axes, which is exactly why
         // the standard set has to be stored rather than derived from them.
         let rows = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
-        XCTAssertTrue(rows.primary.contains(localDay(-1, from: now)), "the row counts the quick sit")
-        XCTAssertFalse(standard.contains(localDay(-1, from: now)), "the server does not")
-        XCTAssertFalse(rows.primary.contains(localDay(-2, from: now)), "Track One's row skips the second-track sit")
-        XCTAssertTrue(standard.contains(localDay(-2, from: now)), "the server counts it")
+        #expect(rows.primary.contains(localDay(-1, from: now)), "the row counts the quick sit")
+        #expect(!standard.contains(localDay(-1, from: now)), "the server does not")
+        #expect(!rows.primary.contains(localDay(-2, from: now)), "Track One's row skips the second-track sit")
+        #expect(standard.contains(localDay(-2, from: now)), "the server counts it")
     }
 
     /// A snapshot written before this field shipped must decode, and must not be
     /// read as "every row day was a standard sit" — the days it stored carry no
     /// type, so none of them may extend the server total.
-    func testDecodesLegacyBlobWithoutStandardDates() throws {
+    @Test func testDecodesLegacyBlobWithoutStandardDates() throws {
         let now = Date()
         let legacy: [String: Any] = [
             "isLoggedIn": true,
@@ -473,18 +457,18 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
         let data = try JSONSerialization.data(withJSONObject: legacy)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
 
-        XCTAssertEqual(decoded.standardDates, [], "the field is absent, not empty-by-accident")
-        XCTAssertFalse(decoded.historyIsUnknown, "this writer did record history")
+        #expect(decoded.standardDates == [], "the field is absent, not empty-by-accident")
+        #expect(!decoded.historyIsUnknown, "this writer did record history")
 
         let shown = WidgetDataStore.normalizedForDisplay(decoded, now: now)
-        XCTAssertEqual(shown.weekRowStreak(now: now), 7, "precondition: the row reaches the window edge")
-        XCTAssertEqual(shown.streak, 10, "an unknown session type may not extend the server total")
+        #expect(shown.weekRowStreak(now: now) == 7, "precondition: the row reaches the window edge")
+        #expect(shown.streak == 10, "an unknown session type may not extend the server total")
     }
 
     /// The fast, network-free path has no sessions to classify, so it folds today
     /// in from the per-track "standard sit done today" flags — never from
     /// `practiceDoneToday`, which a quick or breath sit also raises.
-    func testFastPathFoldsTodayIntoStandardDatesOnlyForAStandardSit() {
+    @Test func testFastPathFoldsTodayIntoStandardDatesOnlyForAStandardSit() {
         let now = Date()
         let today = WidgetDataStore.localDayString(now)
         func snapshot(
@@ -504,18 +488,18 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             )
         }
 
-        XCTAssertFalse(
-            snapshot(primary: false, second: false, practice: true).standardDates.contains(today),
+        #expect(
+            !snapshot(primary: false, second: false, practice: true).standardDates.contains(today),
             "a quick or breath sit raises the practice flag but is not a standard sit"
         )
-        XCTAssertTrue(snapshot(primary: true, second: false, practice: true).standardDates.contains(today))
-        XCTAssertTrue(
+        #expect(snapshot(primary: true, second: false, practice: true).standardDates.contains(today))
+        #expect(
             snapshot(primary: false, second: true, practice: false).standardDates.contains(today),
             "the server is track-agnostic, so a second-track standard sit counts"
         )
         // The local Track One signal folds on its own, before the Home badge that
         // confirms it — the moment `markPracticeDoneToday` writes the snapshot.
-        XCTAssertTrue(
+        #expect(
             snapshot(primary: false, second: false, practice: true, primaryStandard: true)
                 .standardDates.contains(today),
             "a just-finished primary standard sit counts before getTracksDoneToday returns"
@@ -524,14 +508,14 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
 
     /// The standard set is history in the same sense as the rows: carried forward
     /// when no fetch supplies one, and dropped outright on an account switch.
-    func testMakeSnapshotCarriesForwardAndAccountScopesStandardDates() {
+    @Test func testMakeSnapshotCarriesForwardAndAccountScopesStandardDates() {
         let now = Date()
         let previous = backfilled(
             sessions: standardRun([-2, -1], from: now),
             serverStreak: 5,
             now: now
         )
-        XCTAssertEqual(previous.standardDates, [localDay(-2, from: now), localDay(-1, from: now)])
+        #expect(previous.standardDates == [localDay(-2, from: now), localDay(-1, from: now)])
 
         let carried = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -541,7 +525,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(carried.standardDates, previous.standardDates)
+        #expect(carried.standardDates == previous.standardDates)
 
         let switched = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "someone-else"),
@@ -551,10 +535,10 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             now: now,
             previous: previous
         )
-        XCTAssertEqual(switched.standardDates, [], "another account's standard sits never carry over")
+        #expect(switched.standardDates == [], "another account's standard sits never carry over")
     }
 
-    func testNormalizedForDisplayPrunesStandardDatesOutsideTheWindow() {
+    @Test func testNormalizedForDisplayPrunesStandardDatesOutsideTheWindow() {
         let now = Date()
         let stale = Date(timeIntervalSinceNow: -60 * 60 * 24 * 3)
         let data = WidgetData(
@@ -573,7 +557,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
             lastUpdated: stale
         )
         let shown = WidgetDataStore.normalizedForDisplay(data, now: now)
-        XCTAssertEqual(shown.standardDates, [localDay(-1, from: now)])
+        #expect(shown.standardDates == [localDay(-1, from: now)])
     }
 
     /// #679 property sweep, the canonical acceptance criterion as an inequality:
@@ -584,7 +568,7 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
     /// every standard day after the anchor rather than only the consecutive ones —
     /// so it bounds the result without restating the walk. Any leak of a
     /// practice-only day into the extension term breaks it.
-    func testServerTotalIsOnlyExtendedByDaysThatProducedIt() {
+    @Test func testServerTotalIsOnlyExtendedByDaysThatProducedIt() {
         let now = Date()
         let days = (0..<7).map { localDay(-$0, from: now) } // newest -> oldest
         let anchors: [(Int, Int?)] = [(20, nil), (20, 0), (20, 1), (20, 3), (3, 5)]
@@ -615,12 +599,8 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
                     max(rowRun, serverStreak + standardOffsets.filter { $0 < offset }.count)
                 } ?? rowRun
 
-                XCTAssertLessThanOrEqual(
-                    shown,
-                    ceiling,
-                    "a day the server never counted extended the total (\(context))"
-                )
-                XCTAssertGreaterThanOrEqual(shown, rowRun, "streak below the row (\(context))")
+                #expect(shown <= ceiling, "a day the server never counted extended the total (\(context))")
+                #expect(shown >= rowRun, "streak below the row (\(context))")
             }
         }
     }

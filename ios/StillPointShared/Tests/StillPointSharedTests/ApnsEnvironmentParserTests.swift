@@ -1,31 +1,26 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class ApnsEnvironmentParserTests: XCTestCase {
-    func testParsesDevelopmentEnvironment() {
-        XCTAssertEqual(
-            ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "development")),
-            "development"
-        )
+struct ApnsEnvironmentParserTests {
+    @Test func testParsesDevelopmentEnvironment() {
+        #expect(ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "development")) == "development")
     }
 
-    func testParsesProductionEnvironment() {
-        XCTAssertEqual(
-            ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "production")),
-            "production"
-        )
+    @Test func testParsesProductionEnvironment() {
+        #expect(ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "production")) == "production")
     }
 
-    func testRejectsMalformedProfile() {
-        XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: "not a provisioning profile"))
+    @Test func testRejectsMalformedProfile() {
+        #expect(ApnsEnvironmentParser.parse(fromProfileString: "not a provisioning profile") == nil)
     }
 
-    func testRejectsClosingPlistBeforeOpeningPlist() {
-        XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: "</plist> before <plist version=\"1.0\">"))
+    @Test func testRejectsClosingPlistBeforeOpeningPlist() {
+        #expect(ApnsEnvironmentParser.parse(fromProfileString: "</plist> before <plist version=\"1.0\">") == nil)
     }
 
-    func testRejectsUnexpectedEnvironment() {
-        XCTAssertNil(ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "staging")))
+    @Test func testRejectsUnexpectedEnvironment() {
+        #expect(ApnsEnvironmentParser.parse(fromProfileString: profile(environment: "staging")) == nil)
     }
 
     private func profile(environment: String) -> String {

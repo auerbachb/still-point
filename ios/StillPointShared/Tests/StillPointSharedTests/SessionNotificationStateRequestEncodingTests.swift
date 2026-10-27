@@ -1,24 +1,25 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class SessionNotificationStateRequestEncodingTests: XCTestCase {
-    func testEncodesSessionKeyWhenSet() throws {
+struct SessionNotificationStateRequestEncodingTests {
+    @Test func testEncodesSessionKeyWhenSet() throws {
         let request = SessionNotificationStateRequest(active: true, sessionKey: "sit-a")
 
         let data = try JSONEncoder().encode(request)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(jsonObject["active"] as? Bool, true)
-        XCTAssertEqual(jsonObject["sessionKey"] as? String, "sit-a")
+        #expect((jsonObject["active"] as? Bool) == true)
+        #expect((jsonObject["sessionKey"] as? String) == "sit-a")
     }
 
-    func testOmitsSessionKeyWhenNil() throws {
+    @Test func testOmitsSessionKeyWhenNil() throws {
         let request = SessionNotificationStateRequest(active: false)
 
         let data = try JSONEncoder().encode(request)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(jsonObject["active"] as? Bool, false)
-        XCTAssertNil(jsonObject["sessionKey"])
+        #expect((jsonObject["active"] as? Bool) == false)
+        #expect(jsonObject["sessionKey"] == nil)
     }
 }

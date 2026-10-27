@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class WidgetDataSnapshotBasicsTests: XCTestCase {
-    func testCodableRoundTrip() throws {
+struct WidgetDataSnapshotBasicsTests {
+    @Test func testCodableRoundTrip() throws {
         let original = WidgetData(
             isLoggedIn: true,
             userId: "abc",
@@ -18,20 +19,20 @@ final class WidgetDataSnapshotBasicsTests: XCTestCase {
 
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
-    func testMakeSnapshotLoggedOut() {
+    @Test func testMakeSnapshotLoggedOut() {
         let snapshot = WidgetDataStore.makeSnapshot(
             user: nil,
             primaryDoneToday: false,
             secondDoneToday: false,
             practiceDoneToday: false
         )
-        XCTAssertEqual(snapshot, .loggedOut)
+        #expect(snapshot == .loggedOut)
     }
 
-    func testMakeSnapshotUsesClampedDay() {
+    @Test func testMakeSnapshotUsesClampedDay() {
         let user = UserDTO(
             id: "u1",
             email: "a@b.com",
@@ -46,6 +47,6 @@ final class WidgetDataSnapshotBasicsTests: XCTestCase {
             practiceDoneToday: false,
             previous: nil
         )
-        XCTAssertEqual(snapshot.currentDay, 1)
+        #expect(snapshot.currentDay == 1)
     }
 }

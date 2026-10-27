@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class HistoryMonthGridTests: XCTestCase {
+struct HistoryMonthGridTests {
     private func makeSession(
         date: String,
         duration: Int,
@@ -26,12 +27,12 @@ final class HistoryMonthGridTests: XCTestCase {
         )
     }
 
-    func testFormatSessionDurationLabel() {
-        XCTAssertEqual(HistoryMonthGrid.formatSessionDurationLabel(45), "45s")
-        XCTAssertEqual(HistoryMonthGrid.formatSessionDurationLabel(480), "8m")
+    @Test func testFormatSessionDurationLabel() {
+        #expect(HistoryMonthGrid.formatSessionDurationLabel(45) == "45s")
+        #expect(HistoryMonthGrid.formatSessionDurationLabel(480) == "8m")
     }
 
-    func testBuildCurrentMonthGridMarksMeditatedAndFutureDays() {
+    @Test func testBuildCurrentMonthGridMarksMeditatedAndFutureDays() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [
                 makeSession(date: "2026-07-01", duration: 480),
@@ -40,7 +41,7 @@ final class HistoryMonthGridTests: XCTestCase {
             todayIso: "2026-07-02"
         )
 
-        XCTAssertEqual(grid.yearMonth, "2026-07")
+        #expect(grid.yearMonth == "2026-07")
         let dayCells = grid.cells.compactMap { cell -> MonthGridDay? in
             if case .day(let day) = cell { return day }
             return nil
@@ -49,13 +50,13 @@ final class HistoryMonthGridTests: XCTestCase {
         let jul2 = dayCells.first { $0.isoDate == "2026-07-02" }!
         let jul3 = dayCells.first { $0.isoDate == "2026-07-03" }!
 
-        XCTAssertEqual(jul1.state, .meditated)
-        XCTAssertEqual(jul1.durationLabels, ["8m"])
-        XCTAssertEqual(jul2.state, .meditated)
-        XCTAssertEqual(jul3.state, .future)
+        #expect(jul1.state == .meditated)
+        #expect(jul1.durationLabels == ["8m"])
+        #expect(jul2.state == .meditated)
+        #expect(jul3.state == .future)
     }
 
-    func testBuildCurrentMonthGridShowsTodayWithoutSession() {
+    @Test func testBuildCurrentMonthGridShowsTodayWithoutSession() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [makeSession(date: "2026-07-01", duration: 60)],
             todayIso: "2026-07-02"
@@ -64,12 +65,12 @@ final class HistoryMonthGridTests: XCTestCase {
             if case .day(let day) = cell { return day }
             return nil
         }.first { $0.isoDate == "2026-07-02" }!
-        XCTAssertEqual(today.state, .today)
+        #expect(today.state == .today)
     }
 
     /// #839: a focus session marks its day as any session does, quick and breath
     /// included, with its own time label.
-    func testFocusSessionMarksItsDayMeditated() {
+    @Test func testFocusSessionMarksItsDayMeditated() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [makeSession(date: "2026-10-20", duration: 1800, sessionType: .focus)],
             todayIso: "2026-10-27"
@@ -81,12 +82,12 @@ final class HistoryMonthGridTests: XCTestCase {
         let focusDay = dayCells.first { $0.isoDate == "2026-10-20" }!
         let emptyDay = dayCells.first { $0.isoDate == "2026-10-21" }!
 
-        XCTAssertEqual(focusDay.state, .meditated)
-        XCTAssertEqual(focusDay.durationLabels, ["30m"])
-        XCTAssertEqual(emptyDay.state, .missed)
+        #expect(focusDay.state == .meditated)
+        #expect(focusDay.durationLabels == ["30m"])
+        #expect(emptyDay.state == .missed)
     }
 
-    func testMultipleSessionsOnOneDay() {
+    @Test func testMultipleSessionsOnOneDay() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [
                 makeSession(date: "2026-07-01", duration: 480, createdAt: "2026-07-01T10:00:00Z"),
@@ -98,10 +99,10 @@ final class HistoryMonthGridTests: XCTestCase {
             if case .day(let day) = cell { return day }
             return nil
         }.first { $0.isoDate == "2026-07-01" }!
-        XCTAssertEqual(jul1.durationLabels, ["8m", "1m"])
+        #expect(jul1.durationLabels == ["8m", "1m"])
     }
 
-    func testBuildPriorMonthSummaries() {
+    @Test func testBuildPriorMonthSummaries() {
         let summaries = HistoryMonthGrid.buildPriorMonthSummaries(
             sessions: [
                 makeSession(date: "2026-05-10", duration: 600),
@@ -112,36 +113,36 @@ final class HistoryMonthGridTests: XCTestCase {
             todayIso: "2026-07-02"
         )
 
-        XCTAssertEqual(summaries.map(\.yearMonth), ["2026-05", "2026-06"])
-        XCTAssertEqual(summaries[0].daysActive, 2)
-        XCTAssertEqual(summaries[0].daysInMonth, 31)
-        XCTAssertEqual(summaries[0].totalTimeSeconds, 900)
-        XCTAssertEqual(summaries[1].daysActive, 1)
-        XCTAssertEqual(summaries[1].daysInMonth, 30)
-        XCTAssertEqual(summaries[1].totalTimeSeconds, 120)
+        #expect(summaries.map(\.yearMonth) == ["2026-05", "2026-06"])
+        #expect(summaries[0].daysActive == 2)
+        #expect(summaries[0].daysInMonth == 31)
+        #expect(summaries[0].totalTimeSeconds == 900)
+        #expect(summaries[1].daysActive == 1)
+        #expect(summaries[1].daysInMonth == 30)
+        #expect(summaries[1].totalTimeSeconds == 120)
     }
 
-    func testBuildPriorMonthSummariesEmptyForCurrentMonthOnly() {
+    @Test func testBuildPriorMonthSummariesEmptyForCurrentMonthOnly() {
         let summaries = HistoryMonthGrid.buildPriorMonthSummaries(
             sessions: [makeSession(date: "2026-07-01", duration: 60)],
             todayIso: "2026-07-02"
         )
-        XCTAssertTrue(summaries.isEmpty)
+        #expect(summaries.isEmpty)
     }
 
-    func testFormatTotalTime() {
-        XCTAssertEqual(HistoryMonthGrid.formatTotalTime(8100), "2h 15m")
-        XCTAssertEqual(HistoryMonthGrid.formatTotalTime(3600), "1h")
-        XCTAssertEqual(HistoryMonthGrid.formatTotalTime(90), "2m")
+    @Test func testFormatTotalTime() {
+        #expect(HistoryMonthGrid.formatTotalTime(8100) == "2h 15m")
+        #expect(HistoryMonthGrid.formatTotalTime(3600) == "1h")
+        #expect(HistoryMonthGrid.formatTotalTime(90) == "2m")
     }
 
-    func testBuildTrailing12MonthSummaries() {
+    @Test func testBuildTrailing12MonthSummaries() {
         let summaries = HistoryMonthlyAggregation.buildTrailing12MonthSummaries(
             sessions: [makeSession(date: "2026-06-15", duration: 120)],
             todayIso: "2026-07-02"
         )
-        XCTAssertEqual(summaries.count, 12)
-        XCTAssertEqual(summaries.last?.yearMonth, "2026-07")
-        XCTAssertEqual(summaries.first?.yearMonth, "2025-08")
+        #expect(summaries.count == 12)
+        #expect(summaries.last?.yearMonth == "2026-07")
+        #expect(summaries.first?.yearMonth == "2025-08")
     }
 }

@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Records what the queue actually did. Main-actor isolated, so it is `Sendable`
@@ -28,10 +29,10 @@ private func simulateRoundTrip(yields: Int) async {
 }
 
 @MainActor
-final class SettingsWriteQueueTests: XCTestCase {
+struct SettingsWriteQueueTests {
     /// The point of the whole exercise: the server sees the mutations in the order
     /// the user made them, even when an earlier one is much slower than a later one.
-    func testRunsOperationsInEnqueueOrderEvenWhenTheFirstIsSlowest() async {
+    @Test func testRunsOperationsInEnqueueOrderEvenWhenTheFirstIsSlowest() async {
         let queue = SettingsWriteQueue()
         let recorder = QueueRecorder()
 
@@ -51,13 +52,13 @@ final class SettingsWriteQueueTests: XCTestCase {
         }
 
         await last.value
-        XCTAssertEqual(recorder.finished, [1, 2, 3])
+        #expect(recorder.finished == [1, 2, 3])
     }
 
     /// No two settings writes are ever in flight together, which is what makes each
     /// response a complete picture of the account and removes the need to hold the
     /// value a response confirmed.
-    func testOperationsNeverOverlap() async {
+    @Test func testOperationsNeverOverlap() async {
         let queue = SettingsWriteQueue()
         let recorder = QueueRecorder()
 
@@ -71,13 +72,13 @@ final class SettingsWriteQueueTests: XCTestCase {
         }
 
         await last?.value
-        XCTAssertEqual(recorder.peakConcurrency, 1)
-        XCTAssertEqual(recorder.finished, [1, 2, 3, 4, 5])
+        #expect(recorder.peakConcurrency == 1)
+        #expect(recorder.finished == [1, 2, 3, 4, 5])
     }
 
     /// A write that bails out early — a denied camera permission, a failed request —
     /// must not strand the writes queued behind it.
-    func testAnOperationThatBailsOutDoesNotStallTheQueue() async {
+    @Test func testAnOperationThatBailsOutDoesNotStallTheQueue() async {
         let queue = SettingsWriteQueue()
         let recorder = QueueRecorder()
 
@@ -93,12 +94,12 @@ final class SettingsWriteQueueTests: XCTestCase {
         }
 
         await last.value
-        XCTAssertEqual(recorder.finished, [1, 2])
+        #expect(recorder.finished == [1, 2])
     }
 
     /// Work enqueued after the queue has drained starts on its own rather than
     /// waiting on a predecessor that already finished.
-    func testEnqueuingAfterTheQueueDrainsStillRuns() async {
+    @Test func testEnqueuingAfterTheQueueDrainsStillRuns() async {
         let queue = SettingsWriteQueue()
         let recorder = QueueRecorder()
 
@@ -113,14 +114,14 @@ final class SettingsWriteQueueTests: XCTestCase {
             recorder.end(2)
         }.value
 
-        XCTAssertEqual(recorder.finished, [1, 2])
-        XCTAssertEqual(recorder.peakConcurrency, 1)
+        #expect(recorder.finished == [1, 2])
+        #expect(recorder.peakConcurrency == 1)
     }
 
     /// An operation's result reaches the caller through the returned task. This is
     /// what lets a queued `me()` **read** report what it adopted, so the caller can
     /// keep the control flow it had before it took a place in line (#697).
-    func testAnOperationsResultReachesTheCallerThroughItsTask() async {
+    @Test func testAnOperationsResultReachesTheCallerThroughItsTask() async {
         let queue = SettingsWriteQueue()
 
         let answer = await queue.enqueue { () -> Int? in
@@ -128,13 +129,13 @@ final class SettingsWriteQueueTests: XCTestCase {
             return 7
         }.value
 
-        XCTAssertEqual(answer, 7)
+        #expect(answer == 7)
     }
 
     /// A value-returning operation still holds the line: one that returns a result
     /// must not let the operation behind it start early, or a read could be answered
     /// out of order with the write it was queued against.
-    func testAValueReturningOperationStillOrdersTheOnesBehindIt() async {
+    @Test func testAValueReturningOperationStillOrdersTheOnesBehindIt() async {
         let queue = SettingsWriteQueue()
         let recorder = QueueRecorder()
 
@@ -151,8 +152,8 @@ final class SettingsWriteQueueTests: XCTestCase {
 
         let firstValue = await first.value
         await second.value
-        XCTAssertEqual(firstValue, 1)
-        XCTAssertEqual(recorder.finished, [1, 2])
-        XCTAssertEqual(recorder.peakConcurrency, 1)
+        #expect(firstValue == 1)
+        #expect(recorder.finished == [1, 2])
+        #expect(recorder.peakConcurrency == 1)
     }
 }

@@ -1,45 +1,46 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class AphorismsTests: XCTestCase {
-    func testAllEntriesHaveNonEmptyTextAndAuthor() {
-        XCTAssertFalse(Aphorisms.all.isEmpty)
+struct AphorismsTests {
+    @Test func testAllEntriesHaveNonEmptyTextAndAuthor() {
+        #expect(!Aphorisms.all.isEmpty)
         for aphorism in Aphorisms.all {
-            XCTAssertFalse(aphorism.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            XCTAssertFalse(aphorism.author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            #expect(!aphorism.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            #expect(!aphorism.author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
-    func testForDayIsDeterministic() {
-        XCTAssertEqual(Aphorisms.forDay(3), Aphorisms.forDay(3))
+    @Test func testForDayIsDeterministic() {
+        #expect(Aphorisms.forDay(3) == Aphorisms.forDay(3))
     }
 
-    func testForDayRotatesThroughTheList() {
+    @Test func testForDayRotatesThroughTheList() {
         let first = Aphorisms.forDay(1)
         let wrapped = Aphorisms.forDay(1 + Aphorisms.all.count)
-        XCTAssertEqual(wrapped, first)
+        #expect(wrapped == first)
     }
 
-    func testForDayClampsNonPositiveInputToDayOne() {
-        XCTAssertEqual(Aphorisms.forDay(0), Aphorisms.forDay(1))
-        XCTAssertEqual(Aphorisms.forDay(-5), Aphorisms.forDay(1))
+    @Test func testForDayClampsNonPositiveInputToDayOne() {
+        #expect(Aphorisms.forDay(0) == Aphorisms.forDay(1))
+        #expect(Aphorisms.forDay(-5) == Aphorisms.forDay(1))
     }
 
-    func testForDayAlwaysReturnsAValueFromTheContentList() {
+    @Test func testForDayAlwaysReturnsAValueFromTheContentList() {
         for day in 1...(Aphorisms.all.count * 2) {
-            XCTAssertTrue(Aphorisms.all.contains(Aphorisms.forDay(day)))
+            #expect(Aphorisms.all.contains(Aphorisms.forDay(day)))
         }
     }
 
     // MARK: - Shared cross-platform fixtures (#421)
 
     // The same day->index golden set is asserted by web aphorismForDay.
-    func testSharedAphorismsFixtures() throws {
+    @Test func testSharedAphorismsFixtures() throws {
         let fixture = try SharedFixtures.load("aphorisms.json", as: AphorismsFixture.self)
-        XCTAssertEqual(Aphorisms.all.count, fixture.expectedCount)
+        #expect(Aphorisms.all.count == fixture.expectedCount)
 
         for testCase in fixture.cases {
-            XCTAssertEqual(Aphorisms.forDay(testCase.day), Aphorisms.all[testCase.expectedIndex], "day \(testCase.day)")
+            #expect(Aphorisms.forDay(testCase.day) == Aphorisms.all[testCase.expectedIndex], "day \(testCase.day)")
         }
     }
 }

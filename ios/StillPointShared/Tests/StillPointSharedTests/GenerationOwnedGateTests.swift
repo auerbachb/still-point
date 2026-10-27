@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// The order `AppViewModel.completeBreathSession` works in, cut down to the gate, the
@@ -48,105 +49,105 @@ private final class BreathScreen {
 /// the old save lowers it again when it settles, freeing a gate the next account's
 /// save has taken by then. The gate now belongs to a generation.
 @MainActor
-final class GenerationOwnedGateTests: XCTestCase {
+struct GenerationOwnedGateTests {
     /// What the gate is for: a second End from the same account while its save runs
     /// must not write a duplicate row.
-    func testASecondEndFromTheSameGenerationIsRefusedWhileItsSaveRuns() {
+    @Test func testASecondEndFromTheSameGenerationIsRefusedWhileItsSaveRuns() {
         var gate = GenerationOwnedGate()
-        XCTAssertTrue(gate.acquire(for: 1))
+        #expect(gate.acquire(for: 1) == true)
 
-        XCTAssertFalse(gate.acquire(for: 1))
-        XCTAssertTrue(gate.isHeld(by: 1))
+        #expect(gate.acquire(for: 1) == false)
+        #expect(gate.isHeld(by: 1))
     }
 
     /// The previous account's save is still running when the next account taps End.
     /// A `Bool` reads as busy here and swallows that End.
-    func testAHoldFromAnEarlierGenerationDoesNotBlockTheLiveOne() {
+    @Test func testAHoldFromAnEarlierGenerationDoesNotBlockTheLiveOne() {
         var gate = GenerationOwnedGate()
-        XCTAssertTrue(gate.acquire(for: 1))
+        #expect(gate.acquire(for: 1) == true)
 
-        XCTAssertFalse(gate.isHeld(by: 3))
-        XCTAssertTrue(gate.acquire(for: 3))
-        XCTAssertTrue(gate.isHeld(by: 3))
+        #expect(!gate.isHeld(by: 3))
+        #expect(gate.acquire(for: 3) == true)
+        #expect(gate.isHeld(by: 3))
     }
 
     /// When the previous account's save settles, its release must leave the next
     /// account's hold in place. Freeing it would let a second End from that account
     /// start a duplicate.
-    func testAReleaseFromAnEarlierGenerationLeavesTheLiveHoldInPlace() {
+    @Test func testAReleaseFromAnEarlierGenerationLeavesTheLiveHoldInPlace() {
         var gate = GenerationOwnedGate()
-        XCTAssertTrue(gate.acquire(for: 1))
-        XCTAssertTrue(gate.acquire(for: 3))
+        #expect(gate.acquire(for: 1) == true)
+        #expect(gate.acquire(for: 3) == true)
 
         gate.release(for: 1)
 
-        XCTAssertTrue(gate.isHeld(by: 3))
-        XCTAssertFalse(gate.acquire(for: 3))
+        #expect(gate.isHeld(by: 3))
+        #expect(gate.acquire(for: 3) == false)
     }
 
     /// The next account's save can also settle first. The previous account's release,
     /// arriving last, finds nothing of its own and leaves the gate free.
-    func testAReleaseFromAnEarlierGenerationAfterTheLiveOneFinishedLeavesTheGateFree() {
+    @Test func testAReleaseFromAnEarlierGenerationAfterTheLiveOneFinishedLeavesTheGateFree() {
         var gate = GenerationOwnedGate()
-        XCTAssertTrue(gate.acquire(for: 1))
-        XCTAssertTrue(gate.acquire(for: 3))
+        #expect(gate.acquire(for: 1) == true)
+        #expect(gate.acquire(for: 3) == true)
         gate.release(for: 3)
 
         gate.release(for: 1)
 
-        XCTAssertFalse(gate.isHeld(by: 3))
-        XCTAssertTrue(gate.acquire(for: 3))
+        #expect(!gate.isHeld(by: 3))
+        #expect(gate.acquire(for: 3) == true)
     }
 
-    func testTheOwnersReleaseFreesTheGate() {
+    @Test func testTheOwnersReleaseFreesTheGate() {
         var gate = GenerationOwnedGate()
-        XCTAssertTrue(gate.acquire(for: 1))
+        #expect(gate.acquire(for: 1) == true)
 
         gate.release(for: 1)
 
-        XCTAssertFalse(gate.isHeld(by: 1))
-        XCTAssertTrue(gate.acquire(for: 1))
+        #expect(!gate.isHeld(by: 1))
+        #expect(gate.acquire(for: 1) == true)
     }
 
     /// Problems 1 and 2 together, with the previous account's breath save held open
     /// across a sign-out and a sign-in.
-    func testAnEarlierAccountsPendingSaveNeitherSwallowsNorReleasesTheNextAccountsEnd() async {
+    @Test func testAnEarlierAccountsPendingSaveNeitherSwallowsNorReleasesTheNextAccountsEnd() async {
         let screen = BreathScreen()
         var decisions = screen.gateDecisions.makeAsyncIterator()
 
         let earlierSave = HeldSave(settlingWith: ())
         let earlierEnd = Task { await screen.end(saving: earlierSave.perform) }
         let earlierPassed = await decisions.next()
-        XCTAssertEqual(earlierPassed, true)
+        #expect(earlierPassed == true)
 
         screen.signOutAndSignIn()
 
         let laterSave = HeldSave(settlingWith: ())
         let laterEnd = Task { await screen.end(saving: laterSave.perform) }
         let laterPassed = await decisions.next()
-        XCTAssertEqual(laterPassed, true, "the previous account's pending save swallowed this End")
+        #expect(laterPassed == true, "the previous account's pending save swallowed this End")
 
         // The previous account's save settles first. It neither sends the next
         // account home nor frees the gate that account's save now holds.
         earlierSave.settle()
         let earlierOutcome = await earlierEnd.value
-        XCTAssertEqual(earlierOutcome, .discarded)
-        XCTAssertEqual(screen.wentHome, [])
-        XCTAssertTrue(screen.saveGate.isHeld(by: 3), "the previous account's save freed the next account's gate")
+        #expect(earlierOutcome == .discarded)
+        #expect(screen.wentHome == [])
+        #expect(screen.saveGate.isHeld(by: 3), "the previous account's save freed the next account's gate")
 
         // So a second End from the next account is still refused while its save runs.
         let duplicateEnd = Task {
-            await screen.end(saving: { XCTFail("a second End started a duplicate save") })
+            await screen.end(saving: { Issue.record("a second End started a duplicate save") })
         }
         let duplicatePassed = await decisions.next()
-        XCTAssertEqual(duplicatePassed, false)
+        #expect(duplicatePassed == false)
         let duplicateOutcome = await duplicateEnd.value
-        XCTAssertNil(duplicateOutcome)
+        #expect(duplicateOutcome == nil)
 
         laterSave.settle()
         let laterOutcome = await laterEnd.value
-        XCTAssertEqual(laterOutcome, .applied)
-        XCTAssertEqual(screen.wentHome, [3])
-        XCTAssertFalse(screen.saveGate.isHeld(by: 3))
+        #expect(laterOutcome == .applied)
+        #expect(screen.wentHome == [3])
+        #expect(!screen.saveGate.isHeld(by: 3))
     }
 }

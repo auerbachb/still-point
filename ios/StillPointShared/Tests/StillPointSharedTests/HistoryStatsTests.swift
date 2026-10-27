@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class HistoryStatsTests: XCTestCase {
+struct HistoryStatsTests {
     private func makeSession(date: String, duration: Int, actualTime: Int? = nil) -> SessionDTO {
         SessionDTO(
             id: UUID().uuidString,
@@ -19,7 +20,7 @@ final class HistoryStatsTests: XCTestCase {
         )
     }
 
-    func testCalculatePeriodStats() {
+    @Test func testCalculatePeriodStats() {
         let stats = HistoryStats.calculatePeriodStats(
             sessions: [
                 makeSession(date: "2026-06-20", duration: 120),
@@ -28,16 +29,16 @@ final class HistoryStatsTests: XCTestCase {
             todayIso: "2026-07-02"
         )
 
-        XCTAssertEqual(stats.trailing4WeekDays, 2)
-        XCTAssertEqual(stats.trailing4WeekTotalTime, 210)
-        XCTAssertEqual(stats.trailing4WeekDayPercent, 7.1, accuracy: 0.05)
-        XCTAssertEqual(stats.trailing4WeekTimePercent, 0.01, accuracy: 0.01)
-        XCTAssertEqual(stats.totalTimeAllTime, 210)
+        #expect(stats.trailing4WeekDays == 2)
+        #expect(stats.trailing4WeekTotalTime == 210)
+        #expect(abs(stats.trailing4WeekDayPercent - 7.1) <= 0.05)
+        #expect(abs(stats.trailing4WeekTimePercent - 0.01) <= 0.01)
+        #expect(stats.totalTimeAllTime == 210)
     }
 
-    func testCalculatePeriodStatsEmptySessions() {
+    @Test func testCalculatePeriodStatsEmptySessions() {
         let stats = HistoryStats.calculatePeriodStats(sessions: [], todayIso: "2026-07-02")
-        XCTAssertEqual(stats.trailing4WeekDays, 0)
-        XCTAssertEqual(stats.totalTimeAllTime, 0)
+        #expect(stats.trailing4WeekDays == 0)
+        #expect(stats.totalTimeAllTime == 0)
     }
 }

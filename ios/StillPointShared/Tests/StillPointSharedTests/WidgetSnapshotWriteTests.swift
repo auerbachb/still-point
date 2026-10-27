@@ -1,11 +1,12 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
 /// #678: a `/api/sessions` backfill that lands *after* a local completion must
 /// not overwrite it. These drive the interleaving through the same calls the app
 /// makes — `makeSnapshot` for each writer, then `resolveWrite` for the save —
 /// so they fail if the ordering regresses, not just if the merge helper does.
-final class WidgetSnapshotWriteTests: XCTestCase {
+struct WidgetSnapshotWriteTests {
     private func makeUser(id: String = "user-1", currentDay: Int = 12) -> UserDTO {
         UserDTO(
             id: id,
@@ -28,7 +29,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
     /// `testLegacyBlobWithoutWriteGenerationDecodesAsZero` pins.
     private func withoutWriteGeneration(_ snapshot: WidgetData) throws -> WidgetData {
         let encoded = try JSONEncoder().encode(snapshot)
-        var object = try XCTUnwrap(
+        var object = try #require(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any],
             "a WidgetData always encodes as a JSON object"
         )
@@ -60,9 +61,9 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        XCTAssertEqual(outcome, .stored)
-        var seeded = try XCTUnwrap(stamped)
-        XCTAssertEqual(seeded.writeGeneration, 1)
+        #expect(outcome == .stored)
+        var seeded = try #require(stamped)
+        #expect(seeded.writeGeneration == 1)
         seeded.lastUpdated = now
         return seeded
     }
@@ -72,7 +73,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
     /// The exact sequence from the issue: backfill reads the generation, the user
     /// finishes a sit and a fresher snapshot is written, then the pre-sit response
     /// lands. Today must stay checked and the streak must not drop.
-    func testStaleBackfillArrivingAfterLocalCompletionKeepsTodayComplete() throws {
+    @Test func testStaleBackfillArrivingAfterLocalCompletionKeepsTodayComplete() throws {
         let now = Date()
         let user = makeUser()
         let today = WidgetDataStore.localDayString(now)
@@ -97,10 +98,10 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: stored,
             now: now
         )
-        XCTAssertEqual(sitOutcome, .stored)
-        let newer = try XCTUnwrap(savedAfterSit)
-        XCTAssertTrue(newer.isTodayMarkedDone(now: now))
-        XCTAssertEqual(newer.streak, 4)
+        #expect(sitOutcome == .stored)
+        let newer = try #require(savedAfterSit)
+        #expect(newer.isTodayMarkedDone(now: now))
+        #expect(newer.streak == 4)
 
         // 3. `getSessions()` returns a response captured before the sit — today is
         //    absent from it, and it carries one day the newer snapshot never saw.
@@ -123,8 +124,8 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             serverStreakDate: localDay(-1, from: now)
         )
         // Left alone this is the regression: today unchecked, streak down one.
-        XCTAssertFalse(late.isTodayMarkedDone(now: now))
-        XCTAssertEqual(late.streak, 3)
+        #expect(!late.isTodayMarkedDone(now: now))
+        #expect(late.streak == 3)
 
         // 4. The generation moved under it, so the save merges instead.
         let (resolved, outcome) = WidgetDataStore.resolveWrite(
@@ -133,20 +134,20 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: newer,
             now: now
         )
-        XCTAssertEqual(outcome, .merged)
-        let merged = try XCTUnwrap(resolved)
-        XCTAssertTrue(merged.completedDates.contains(today))
-        XCTAssertTrue(merged.isTodayMarkedDone(now: now))
-        XCTAssertTrue(merged.practiceDoneToday)
-        XCTAssertEqual(merged.streak, 4, "the streak must not regress behind the newer snapshot")
-        XCTAssertEqual(merged.weekMarks(now: now).last?.done, true)
+        #expect(outcome == .merged)
+        let merged = try #require(resolved)
+        #expect(merged.completedDates.contains(today))
+        #expect(merged.isTodayMarkedDone(now: now))
+        #expect(merged.practiceDoneToday)
+        #expect(merged.streak == 4, "the streak must not regress behind the newer snapshot")
+        #expect(merged.weekMarks(now: now).last?.done == true)
         // The backfill's own contribution is kept, not discarded with the clobber.
-        XCTAssertTrue(merged.completedDates.contains(localDay(-5, from: now)))
-        XCTAssertTrue(merged.writeGeneration > newer.writeGeneration)
+        #expect(merged.completedDates.contains(localDay(-5, from: now)))
+        #expect(merged.writeGeneration > newer.writeGeneration)
     }
 
     /// AC: the widget streak never regresses because a backfill finished late.
-    func testMergeNeverLowersTheStoredStreak() {
+    @Test func testMergeNeverLowersTheStoredStreak() {
         let now = Date()
         let user = makeUser()
         let newer = WidgetDataStore.makeSnapshot(
@@ -172,13 +173,13 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             completedPracticeDates: [localDay(-1, from: now)],
             secondCompletedPracticeDates: []
         )
-        XCTAssertLessThan(late.streak, newer.streak)
+        #expect(late.streak < newer.streak)
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertGreaterThanOrEqual(merged.streak, newer.streak)
+        #expect(merged.streak >= newer.streak)
     }
 
     /// Track Two completions are merged on their own row, not folded into Track One.
-    func testMergeKeepsEachTracksOwnHistory() {
+    @Test func testMergeKeepsEachTracksOwnHistory() {
         let now = Date()
         let user = makeUser()
         let newer = WidgetDataStore.makeSnapshot(
@@ -200,10 +201,10 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             secondCompletedPracticeDates: [localDay(-2, from: now)]
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertTrue(merged.completedDates.contains(localDay(-1, from: now)))
-        XCTAssertTrue(merged.secondCompletedDates.contains(localDay(-2, from: now)))
-        XCTAssertTrue(merged.secondCompletedDates.contains(WidgetDataStore.localDayString(now)))
-        XCTAssertFalse(merged.completedDates.contains(localDay(-2, from: now)))
+        #expect(merged.completedDates.contains(localDay(-1, from: now)))
+        #expect(merged.secondCompletedDates.contains(localDay(-2, from: now)))
+        #expect(merged.secondCompletedDates.contains(WidgetDataStore.localDayString(now)))
+        #expect(!merged.completedDates.contains(localDay(-2, from: now)))
     }
 
     // MARK: - Midnight rollover
@@ -211,7 +212,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
     /// The reason the in-memory flag was rejected as the fix: a snapshot written
     /// before local midnight must not check *today* just because its flag is set.
     /// Every input the merge reads is day-stamped, so it does not.
-    func testMergeDoesNotCarryYesterdaysDoneFlagIntoToday() {
+    @Test func testMergeDoesNotCarryYesterdaysDoneFlagIntoToday() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let user = makeUser()
@@ -226,7 +227,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             previous: nil
         )
         staleNewer.lastUpdated = yesterday
-        XCTAssertTrue(staleNewer.practiceDoneToday)
+        #expect(staleNewer.practiceDoneToday)
 
         // The backfill resolves after midnight; its response has no sit today.
         let late = WidgetDataStore.makeSnapshot(
@@ -241,17 +242,17 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         )
 
         let merged = WidgetDataStore.merged(late: late, onto: staleNewer, now: now)
-        XCTAssertFalse(merged.practiceDoneToday, "yesterday's flag must not check today")
-        XCTAssertFalse(merged.primaryDoneToday)
-        XCTAssertFalse(merged.secondDoneToday)
-        XCTAssertFalse(merged.isTodayMarkedDone(now: now))
-        XCTAssertEqual(merged.weekMarks(now: now).last?.done, false)
+        #expect(!merged.practiceDoneToday, "yesterday's flag must not check today")
+        #expect(!merged.primaryDoneToday)
+        #expect(!merged.secondDoneToday)
+        #expect(!merged.isTodayMarkedDone(now: now))
+        #expect(merged.weekMarks(now: now).last?.done == false)
         // Yesterday is day-stamped, so it survives the rollover on the row.
-        XCTAssertTrue(merged.completedDayUnion.contains(localDay(-1, from: now)))
+        #expect(merged.completedDayUnion.contains(localDay(-1, from: now)))
     }
 
     /// The pre-existing rollover cleanup is untouched by the new write path.
-    func testNormalizedForDisplayStillClearsStaleDoneToday() {
+    @Test func testNormalizedForDisplayStillClearsStaleDoneToday() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         var stale = WidgetDataStore.makeSnapshot(
@@ -264,15 +265,15 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         )
         stale.lastUpdated = yesterday
         let normalized = WidgetDataStore.normalizedForDisplay(stale, now: now)
-        XCTAssertFalse(normalized.practiceDoneToday)
-        XCTAssertFalse(normalized.primaryDoneToday)
-        XCTAssertFalse(normalized.secondDoneToday)
+        #expect(!normalized.practiceDoneToday)
+        #expect(!normalized.primaryDoneToday)
+        #expect(!normalized.secondDoneToday)
     }
 
     // MARK: - Generation bookkeeping
 
     /// No competing write: the snapshot is stored exactly as supplied.
-    func testUncontestedWriteStoresSnapshotUnchanged() throws {
+    @Test func testUncontestedWriteStoresSnapshotUnchanged() throws {
         let now = Date()
         let user = makeUser()
         let stored = try storedBeforeSit(now: now, user: user)
@@ -290,20 +291,17 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: stored,
             now: now
         )
-        XCTAssertEqual(outcome, .stored)
-        let saved = try XCTUnwrap(resolved)
+        #expect(outcome == .stored)
+        let saved = try #require(resolved)
         // The store owns the stamp and advances it by exactly one...
-        XCTAssertEqual(saved.writeGeneration, stored.writeGeneration + 1)
+        #expect(saved.writeGeneration == stored.writeGeneration + 1)
         // ...and rewrites nothing else: drop the store-owned field from both
         // sides and the snapshots are identical.
-        XCTAssertEqual(
-            try withoutWriteGeneration(saved),
-            try withoutWriteGeneration(incoming)
-        )
+        #expect(try withoutWriteGeneration(saved) == (try withoutWriteGeneration(incoming)))
     }
 
     /// A first write with nothing stored is uncontested, not a conflict.
-    func testFirstWriteWithNothingStoredIsUncontested() {
+    @Test func testFirstWriteWithNothingStoredIsUncontested() {
         let now = Date()
         let incoming = WidgetDataStore.makeSnapshot(
             user: makeUser(),
@@ -319,13 +317,13 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        XCTAssertEqual(outcome, .stored)
-        XCTAssertEqual(resolved?.writeGeneration, 1)
+        #expect(outcome == .stored)
+        #expect(resolved?.writeGeneration == 1)
     }
 
     /// Signing out clears the container; a fetch that outlived the session must
     /// not repopulate it.
-    func testSnapshotClearedDuringFlightIsNotResurrected() {
+    @Test func testSnapshotClearedDuringFlightIsNotResurrected() {
         let now = Date()
         let late = WidgetDataStore.makeSnapshot(
             user: makeUser(),
@@ -341,12 +339,12 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        XCTAssertEqual(outcome, .superseded)
-        XCTAssertNil(resolved)
+        #expect(outcome == .superseded)
+        #expect(resolved == nil)
     }
 
     /// Another account's history may never cross over in a merge.
-    func testMergeAcrossAccountsKeepsTheStoredSnapshot() {
+    @Test func testMergeAcrossAccountsKeepsTheStoredSnapshot() {
         let now = Date()
         let newer = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "user-1"),
@@ -367,11 +365,11 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             secondCompletedPracticeDates: []
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertEqual(merged, newer)
+        #expect(merged == newer)
     }
 
     /// A signed-out snapshot on either side is never merged into.
-    func testMergeIgnoresSignedOutSnapshots() {
+    @Test func testMergeIgnoresSignedOutSnapshots() {
         let now = Date()
         let newer = WidgetDataStore.makeSnapshot(
             user: makeUser(),
@@ -381,12 +379,12 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             now: now,
             previous: nil
         )
-        XCTAssertEqual(WidgetDataStore.merged(late: .loggedOut, onto: newer, now: now), newer)
-        XCTAssertEqual(WidgetDataStore.merged(late: newer, onto: .loggedOut, now: now), .loggedOut)
+        #expect(WidgetDataStore.merged(late: .loggedOut, onto: newer, now: now) == newer)
+        #expect(WidgetDataStore.merged(late: newer, onto: .loggedOut, now: now) == .loggedOut)
     }
 
     /// The fresher server anchor wins; a stale one cannot drag the total down.
-    func testMergePrefersTheLaterServerAnchor() {
+    @Test func testMergePrefersTheLaterServerAnchor() {
         let now = Date()
         let user = makeUser()
         let allSevenDays = Set(WidgetDataStore.localDayStrings(lastN: 7, endingAt: now))
@@ -415,12 +413,12 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             serverStreakDate: localDay(-4, from: now)
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertEqual(merged.serverStreak, 20)
-        XCTAssertEqual(merged.serverStreakDate, localDay(-1, from: now))
+        #expect(merged.serverStreak == 20)
+        #expect(merged.serverStreakDate == localDay(-1, from: now))
     }
 
     /// With no anchor of its own, the newer snapshot adopts the backfill's.
-    func testMergeAdoptsTheBackfillAnchorWhenTheNewerSnapshotHasNone() {
+    @Test func testMergeAdoptsTheBackfillAnchorWhenTheNewerSnapshotHasNone() {
         let now = Date()
         let user = makeUser()
         let allSevenDays = Set(WidgetDataStore.localDayStrings(lastN: 7, endingAt: now))
@@ -432,7 +430,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             now: now,
             previous: nil
         )
-        XCTAssertNil(newer.serverStreak)
+        #expect(newer.serverStreak == nil)
         let late = WidgetDataStore.makeSnapshot(
             user: user,
             primaryDoneToday: false,
@@ -446,13 +444,13 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             serverStreakDate: localDay(-1, from: now)
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertEqual(merged.serverStreak, 40)
+        #expect(merged.serverStreak == 40)
         // 40 counted through yesterday, and the merged row shows today complete —
         // but nothing here says today's sit was a *standard* one, and 40 is a
         // standard-only total. Extending it by an unclassified practice day is
         // exactly the cross-surface inflation #679 removes, so the anchor is
         // adopted at its own value. (Before #679 this asserted 41.)
-        XCTAssertEqual(merged.streak, 40)
+        #expect(merged.streak == 40)
 
         // With today recorded as a standard sit, the extension is legitimate and
         // the anchor does reach 41.
@@ -465,11 +463,11 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             previous: nil
         )
         let extended = WidgetDataStore.merged(late: late, onto: afterStandardSit, now: now)
-        XCTAssertEqual(extended.streak, 41)
+        #expect(extended.streak == 41)
     }
 
     /// Merging keeps the blob bounded to the renderable window.
-    func testMergeClipsHistoryToTheWindow() {
+    @Test func testMergeClipsHistoryToTheWindow() {
         let now = Date()
         let user = makeUser()
         var newer = WidgetDataStore.makeSnapshot(
@@ -492,8 +490,8 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             secondCompletedPracticeDates: []
         )
         let merged = WidgetDataStore.merged(late: late, onto: newer, now: now)
-        XCTAssertFalse(merged.completedDates.contains(localDay(-40, from: now)))
-        XCTAssertTrue(merged.completedDates.contains(localDay(-1, from: now)))
+        #expect(!merged.completedDates.contains(localDay(-40, from: now)))
+        #expect(merged.completedDates.contains(localDay(-1, from: now)))
     }
 
     // MARK: - #679: the standard-only set merges like history, not like a flag
@@ -522,9 +520,9 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        XCTAssertEqual(outcome, .stored)
-        var seeded = try XCTUnwrap(stamped)
-        XCTAssertEqual(seeded.streak, 30, "precondition: the carried total is older than the row")
+        #expect(outcome == .stored)
+        var seeded = try #require(stamped)
+        #expect(seeded.streak == 30, "precondition: the carried total is older than the row")
         seeded.lastUpdated = now
         return seeded
     }
@@ -533,7 +531,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
     /// today's standard sit lands after it. Its authoritative standard set does
     /// not know about today, so a "newest wins" merge would drop the very day
     /// that extended the streak. The union keeps it, and the streak holds at 31.
-    func testMergeKeepsTodaysStandardSitWhenALateBackfillLands() throws {
+    @Test func testMergeKeepsTodaysStandardSitWhenALateBackfillLands() throws {
         let now = Date()
         let user = makeUser()
         let today = WidgetDataStore.localDayString(now)
@@ -555,10 +553,10 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: stored,
             now: now
         )
-        XCTAssertEqual(sitOutcome, .stored)
-        let newer = try XCTUnwrap(savedAfterSit)
-        XCTAssertTrue(newer.standardDates.contains(today))
-        XCTAssertEqual(newer.streak, 31)
+        #expect(sitOutcome == .stored)
+        let newer = try #require(savedAfterSit)
+        #expect(newer.standardDates.contains(today))
+        #expect(newer.streak == 31)
 
         // The pre-sit response arrives: six standard days, today absent, plus one
         // older day this device never recorded.
@@ -576,7 +574,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             serverStreak: 30,
             serverStreakDate: localDay(-1, from: now)
         )
-        XCTAssertFalse(late.standardDates.contains(today), "precondition: the fetch predates the sit")
+        #expect(!late.standardDates.contains(today), "precondition: the fetch predates the sit")
 
         let (resolved, outcome) = WidgetDataStore.resolveWrite(
             incoming: late,
@@ -584,20 +582,17 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: newer,
             now: now
         )
-        XCTAssertEqual(outcome, .merged)
-        let merged = try XCTUnwrap(resolved)
-        XCTAssertTrue(merged.standardDates.contains(today), "the sit's own day survives the late backfill")
-        XCTAssertTrue(
-            merged.standardDates.contains(localDay(-6, from: now)),
-            "and the backfill's own days are kept, not discarded"
-        )
-        XCTAssertEqual(merged.streak, 31, "the standard-only extension survives the merge")
+        #expect(outcome == .merged)
+        let merged = try #require(resolved)
+        #expect(merged.standardDates.contains(today), "the sit's own day survives the late backfill")
+        #expect(merged.standardDates.contains(localDay(-6, from: now)), "and the backfill's own days are kept, not discarded")
+        #expect(merged.streak == 31, "the standard-only extension survives the merge")
     }
 
     /// The same interleaving with a *quick* sit today. The row still checks
     /// today, so the merged snapshot must not regress the rows — but nothing in
     /// the merge may let that day extend a standard-only server total (#679).
-    func testMergedStreakIsNotExtendedByAQuickSitToday() throws {
+    @Test func testMergedStreakIsNotExtendedByAQuickSitToday() throws {
         let now = Date()
         let user = makeUser()
         let today = WidgetDataStore.localDayString(now)
@@ -618,9 +613,9 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: stored,
             now: now
         )
-        let newer = try XCTUnwrap(savedAfterSit)
-        XCTAssertTrue(newer.completedDates.contains(today), "the row checks today")
-        XCTAssertFalse(newer.standardDates.contains(today), "but a quick sit is not a standard sit")
+        let newer = try #require(savedAfterSit)
+        #expect(newer.completedDates.contains(today), "the row checks today")
+        #expect(!newer.standardDates.contains(today), "but a quick sit is not a standard sit")
 
         let fetched = Set((1...6).map { localDay(-$0, from: now) })
         let late = WidgetDataStore.makeSnapshot(
@@ -642,17 +637,17 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: newer,
             now: now
         )
-        XCTAssertEqual(outcome, .merged)
-        let merged = try XCTUnwrap(resolved)
-        XCTAssertTrue(merged.completedDates.contains(today), "the merge is still additive on the rows")
-        XCTAssertFalse(merged.standardDates.contains(today))
-        XCTAssertEqual(merged.streak, 30, "the quick day fills the row but not the server total")
+        #expect(outcome == .merged)
+        let merged = try #require(resolved)
+        #expect(merged.completedDates.contains(today), "the merge is still additive on the rows")
+        #expect(!merged.standardDates.contains(today))
+        #expect(merged.streak == 30, "the quick day fills the row but not the server total")
     }
 
     // MARK: - Persistence
 
     /// A blob written before write generations existed reads as generation 0.
-    func testLegacyBlobWithoutWriteGenerationDecodesAsZero() throws {
+    @Test func testLegacyBlobWithoutWriteGenerationDecodesAsZero() throws {
         let ref = Date(timeIntervalSince1970: 1_700_000_000)
         let legacy: [String: Any] = [
             "isLoggedIn": true,
@@ -668,11 +663,11 @@ final class WidgetSnapshotWriteTests: XCTestCase {
         ]
         let data = try JSONSerialization.data(withJSONObject: legacy)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
-        XCTAssertEqual(decoded.writeGeneration, 0)
+        #expect(decoded.writeGeneration == 0)
     }
 
     /// The generation survives a round trip, so a restart cannot reset it.
-    func testWriteGenerationRoundTrips() throws {
+    @Test func testWriteGenerationRoundTrips() throws {
         let now = Date()
         let (stamped, _) = WidgetDataStore.resolveWrite(
             incoming: WidgetDataStore.makeSnapshot(
@@ -687,7 +682,7 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        XCTAssertNil(stamped, "a moved generation with nothing stored means a sign-out wipe")
+        #expect(stamped == nil, "a moved generation with nothing stored means a sign-out wipe")
 
         let (first, _) = WidgetDataStore.resolveWrite(
             incoming: WidgetDataStore.makeSnapshot(
@@ -702,9 +697,9 @@ final class WidgetSnapshotWriteTests: XCTestCase {
             stored: nil,
             now: now
         )
-        let encoded = try JSONEncoder().encode(try XCTUnwrap(first))
+        let encoded = try JSONEncoder().encode(try #require(first))
         let decoded = try JSONDecoder().decode(WidgetData.self, from: encoded)
-        XCTAssertEqual(decoded.writeGeneration, 1)
-        XCTAssertEqual(decoded, first)
+        #expect(decoded.writeGeneration == 1)
+        #expect(decoded == first)
     }
 }

@@ -1,26 +1,27 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class AttentionSummaryTests: XCTestCase {
-    func testEmptyLogAssumesInitialAttentiveState() {
+struct AttentionSummaryTests {
+    @Test func testEmptyLogAssumesInitialAttentiveState() {
         let summary = AttentionTrackingLogic.calculateAttentionSummary(
             log: [],
             totalElapsed: 120
         )
-        XCTAssertEqual(summary.attentivePercent, 100)
-        XCTAssertEqual(summary.awayPercent, 0)
+        #expect(summary.attentivePercent == 100)
+        #expect(summary.awayPercent == 0)
     }
 
-    func testSingleAwaySegment() {
+    @Test func testSingleAwaySegment() {
         let summary = AttentionTrackingLogic.calculateAttentionSummary(
             log: [AttentionEntry(time: 30, state: "away")],
             totalElapsed: 60
         )
-        XCTAssertEqual(summary.attentivePercent, 50)
-        XCTAssertEqual(summary.awayPercent, 50)
+        #expect(summary.attentivePercent == 50)
+        #expect(summary.awayPercent == 50)
     }
 
-    func testMultipleSegments() {
+    @Test func testMultipleSegments() {
         let summary = AttentionTrackingLogic.calculateAttentionSummary(
             log: [
                 AttentionEntry(time: 10, state: "away"),
@@ -28,16 +29,16 @@ final class AttentionSummaryTests: XCTestCase {
             ],
             totalElapsed: 60
         )
-        XCTAssertEqual(summary.attentivePercent, 50)
-        XCTAssertEqual(summary.awayPercent, 50)
+        #expect(summary.attentivePercent == 50)
+        #expect(summary.awayPercent == 50)
     }
 
-    func testZeroElapsedReturnsFullAttentive() {
+    @Test func testZeroElapsedReturnsFullAttentive() {
         let summary = AttentionTrackingLogic.calculateAttentionSummary(
             log: [AttentionEntry(time: 0, state: "away")],
             totalElapsed: 0
         )
-        XCTAssertEqual(summary.attentivePercent, 100)
-        XCTAssertEqual(summary.awayPercent, 0)
+        #expect(summary.attentivePercent == 100)
+        #expect(summary.awayPercent == 0)
     }
 }

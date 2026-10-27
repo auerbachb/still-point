@@ -1,30 +1,31 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class NotificationPreferencesSuppressionEncodingTests: XCTestCase {
-    func testPatchEncodesSuppressDuringSessionWhenSet() throws {
+struct NotificationPreferencesSuppressionEncodingTests {
+    @Test func testPatchEncodesSuppressDuringSessionWhenSet() throws {
         let patch = NotificationPreferencesPatch(suppressDuringSession: true)
 
         let data = try JSONEncoder().encode(patch)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(jsonObject["suppressDuringSession"] as? Bool, true)
+        #expect((jsonObject["suppressDuringSession"] as? Bool) == true)
         // Other fields must stay absent so PATCH only touches the toggled field.
-        XCTAssertNil(jsonObject["pushEnabled"])
-        XCTAssertNil(jsonObject["dailyReminderTime"])
+        #expect(jsonObject["pushEnabled"] == nil)
+        #expect(jsonObject["dailyReminderTime"] == nil)
     }
 
-    func testPatchOmitsSuppressDuringSessionWhenNil() throws {
+    @Test func testPatchOmitsSuppressDuringSessionWhenNil() throws {
         let patch = NotificationPreferencesPatch(pushEnabled: true)
 
         let data = try JSONEncoder().encode(patch)
-        let jsonObject = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let jsonObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertNil(jsonObject["suppressDuringSession"])
-        XCTAssertEqual(jsonObject["pushEnabled"] as? Bool, true)
+        #expect(jsonObject["suppressDuringSession"] == nil)
+        #expect((jsonObject["pushEnabled"] as? Bool) == true)
     }
 
-    func testDTODecodesSuppressDuringSession() throws {
+    @Test func testDTODecodesSuppressDuringSession() throws {
         let json = """
         {
             "pushEnabled": true,
@@ -43,6 +44,6 @@ final class NotificationPreferencesSuppressionEncodingTests: XCTestCase {
 
         let dto = try JSONDecoder().decode(NotificationPreferencesDTO.self, from: json)
 
-        XCTAssertTrue(dto.suppressDuringSession)
+        #expect(dto.suppressDuringSession)
     }
 }

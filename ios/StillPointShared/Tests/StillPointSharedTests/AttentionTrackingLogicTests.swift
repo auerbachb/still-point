@@ -1,47 +1,39 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class AttentionTrackingLogicTests: XCTestCase {
-    func testClassifyGazeAttentiveWhenLookingAtDevice() {
+struct AttentionTrackingLogicTests {
+    @Test func testClassifyGazeAttentiveWhenLookingAtDevice() {
         // Positive Z = toward device (Apple-documented ARFaceAnchor convention).
-        XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.02, lookAtY: -0.03, lookAtZ: 0.25),
-            "attentive"
-        )
+        #expect(AttentionTrackingLogic.classifyGaze(lookAtX: 0.02, lookAtY: -0.03, lookAtZ: 0.25) == "attentive")
     }
 
-    func testClassifyGazeAwayWhenLookingOffScreen() {
+    @Test func testClassifyGazeAwayWhenLookingOffScreen() {
         // Toward device but X is too far off-center.
-        XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.4, lookAtY: 0.0, lookAtZ: 0.25),
-            "away"
-        )
+        #expect(AttentionTrackingLogic.classifyGaze(lookAtX: 0.4, lookAtY: 0.0, lookAtZ: 0.25) == "away")
         // Negative Z = gaze directed away from the device entirely.
-        XCTAssertEqual(
-            AttentionTrackingLogic.classifyGaze(lookAtX: 0.0, lookAtY: 0.0, lookAtZ: -0.25),
-            "away"
-        )
+        #expect(AttentionTrackingLogic.classifyGaze(lookAtX: 0.0, lookAtY: 0.0, lookAtZ: -0.25) == "away")
     }
 
-    func testSustainedThresholdFiltersBriefNoise() {
+    @Test func testSustainedThresholdFiltersBriefNoise() {
         var state = AttentionTrackingLogic.SustainedState()
 
         state = AttentionTrackingLogic.applyRawSample("away", elapsed: 1.0, now: 0.0, state: state)
-        XCTAssertEqual(state.loggedState, "attentive")
-        XCTAssertEqual(state.pendingState, "away")
+        #expect(state.loggedState == "attentive")
+        #expect(state.pendingState == "away")
 
         state = AttentionTrackingLogic.applyRawSample("away", elapsed: 1.2, now: 0.3, state: state)
-        XCTAssertEqual(state.loggedState, "attentive")
-        XCTAssertEqual(state.log.count, 0)
+        #expect(state.loggedState == "attentive")
+        #expect(state.log.count == 0)
 
         state = AttentionTrackingLogic.applyRawSample("away", elapsed: 1.6, now: 0.55, state: state)
-        XCTAssertEqual(state.loggedState, "away")
-        XCTAssertEqual(state.log.count, 1)
-        XCTAssertEqual(state.log.last?.time, 1.6)
-        XCTAssertEqual(state.log.last?.state, "away")
+        #expect(state.loggedState == "away")
+        #expect(state.log.count == 1)
+        #expect(state.log.last?.time == 1.6)
+        #expect(state.log.last?.state == "away")
     }
 
-    func testSustainedThresholdIsHalfSecond() {
-        XCTAssertEqual(AttentionTrackingLogic.sustainedThreshold, 0.5, accuracy: 0.001)
+    @Test func testSustainedThresholdIsHalfSecond() {
+        #expect(abs(AttentionTrackingLogic.sustainedThreshold - 0.5) <= 0.001)
     }
 }

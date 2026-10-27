@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
-final class AppBlockGateTests: XCTestCase {
+struct AppBlockGateTests {
     // Pin the comparison calendar to the same zone the test dates are built in,
     // so `isDate(_:inSameDayAs:)` does not flip day boundaries when CI runs in UTC.
     private let calendar: Calendar = {
@@ -17,33 +18,33 @@ final class AppBlockGateTests: XCTestCase {
         return Calendar(identifier: .gregorian).date(from: c)!
     }
 
-    func testNilUnlockIsExpired() {
-        XCTAssertTrue(AppBlockGate.isUnlockExpired(unlockedFor: nil, now: date(2026, 6, 15)))
+    @Test func testNilUnlockIsExpired() {
+        #expect(AppBlockGate.isUnlockExpired(unlockedFor: nil, now: date(2026, 6, 15)))
     }
 
-    func testSameDayUnlockIsNotExpired() {
+    @Test func testSameDayUnlockIsNotExpired() {
         let morning = date(2026, 6, 15, 6, 30)
         let evening = date(2026, 6, 15, 23, 0)
-        XCTAssertFalse(AppBlockGate.isUnlockExpired(unlockedFor: morning, now: evening, calendar: calendar))
+        #expect(!AppBlockGate.isUnlockExpired(unlockedFor: morning, now: evening, calendar: calendar))
     }
 
-    func testYesterdayUnlockIsExpired() {
+    @Test func testYesterdayUnlockIsExpired() {
         let yesterday = date(2026, 6, 14, 23, 30)
         let today = date(2026, 6, 15, 0, 5)
-        XCTAssertTrue(AppBlockGate.isUnlockExpired(unlockedFor: yesterday, now: today, calendar: calendar))
+        #expect(AppBlockGate.isUnlockExpired(unlockedFor: yesterday, now: today, calendar: calendar))
     }
 
-    func testFutureDayUnlockIsExpired() {
+    @Test func testFutureDayUnlockIsExpired() {
         // A clock that moved backward should also re-lock (not "today").
         let tomorrow = date(2026, 6, 16, 1, 0)
         let today = date(2026, 6, 15, 12, 0)
-        XCTAssertTrue(AppBlockGate.isUnlockExpired(unlockedFor: tomorrow, now: today, calendar: calendar))
+        #expect(AppBlockGate.isUnlockExpired(unlockedFor: tomorrow, now: today, calendar: calendar))
     }
 
-    func testJustAfterMidnightExpiresPreviousDayUnlock() {
+    @Test func testJustAfterMidnightExpiresPreviousDayUnlock() {
         // Core #423 boundary: unlock at 11:59pm, "now" one minute later (new day).
         let lastMinute = date(2026, 6, 15, 23, 59)
         let justAfterMidnight = date(2026, 6, 16, 0, 0)
-        XCTAssertTrue(AppBlockGate.isUnlockExpired(unlockedFor: lastMinute, now: justAfterMidnight, calendar: calendar))
+        #expect(AppBlockGate.isUnlockExpired(unlockedFor: lastMinute, now: justAfterMidnight, calendar: calendar))
     }
 }

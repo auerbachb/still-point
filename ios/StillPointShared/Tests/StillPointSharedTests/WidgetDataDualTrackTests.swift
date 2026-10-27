@@ -1,7 +1,8 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
-final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
+struct WidgetDataDualTrackTests: WidgetDataTestSupport {
     // MARK: - #671 AC2 × #684: streak and the rendered rows cannot disagree
 
     /// Property check over generated completion sets, ported to the two-a-day row
@@ -15,7 +16,7 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
     /// asserts both halves: that the rendered rows really do partition the kept
     /// days between them, and that the number beside them never exceeds what
     /// they show unless the run leaves the window.
-    func testStreakNeverContradictsTheRenderedRow() {
+    @Test func testStreakNeverContradictsTheRenderedRow() {
         let now = Date()
         let serverCases: [(Int?, String?)] = [
             (nil, nil),
@@ -65,16 +66,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             let rowOne = Set(rendered.weekMarks(for: .primary, now: now).filter(\.done).map(\.iso))
             let rowTwo = Set(rendered.weekMarks(for: .second, now: now).filter(\.done).map(\.iso))
             let unionRow = Set(rendered.weekMarks(now: now).filter(\.done).map(\.iso))
-            XCTAssertEqual(unionRow, rowOne.union(rowTwo), "union row is not what the rows show (mask=\(mask))")
-            XCTAssertEqual(unionRow, keptDays, "the rendered rows lost a kept day (mask=\(mask))")
-            XCTAssertTrue(
-                rowOne.isSubset(of: Set(primaryDates)),
-                "Track One marked a day it did not sit (mask=\(mask))"
-            )
-            XCTAssertTrue(
-                rowTwo.isSubset(of: Set(secondDates)),
-                "Track Two marked a day it did not sit (mask=\(mask))"
-            )
+            #expect(unionRow == rowOne.union(rowTwo), "union row is not what the rows show (mask=\(mask))")
+            #expect(unionRow == keptDays, "the rendered rows lost a kept day (mask=\(mask))")
+            #expect(rowOne.isSubset(of: Set(primaryDates)), "Track One marked a day it did not sit (mask=\(mask))")
+            #expect(rowTwo.isSubset(of: Set(secondDates)), "Track Two marked a day it did not sit (mask=\(mask))")
 
             for (serverStreak, serverStreakDate) in serverCases {
                 let shown = snapshot(serverStreak: serverStreak, serverStreakDate: serverStreakDate)
@@ -82,21 +77,21 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
                 let rowRun = shown.weekRowStreak(now: now)
                 // Rows with no run mean no streak — nothing may inflate it.
                 if rowRun == 0 {
-                    XCTAssertEqual(shown.streak, 0, "streak must be 0 when the rows show none (\(context))")
+                    #expect(shown.streak == 0, "streak must be 0 when the rows show none (\(context))")
                     continue
                 }
                 // The streak may never undercount days the rows visibly show.
-                XCTAssertGreaterThanOrEqual(shown.streak, rowRun, "streak below the rows (\(context))")
+                #expect(shown.streak >= rowRun, "streak below the rows (\(context))")
                 // When the rows can see where the run began, the streak must match
                 // exactly — only a run that leaves the window may exceed it.
                 if !shown.weekRowStreakReachesWindowEdge(now: now) {
-                    XCTAssertEqual(shown.streak, rowRun, "streak exceeds a visibly broken row (\(context))")
+                    #expect(shown.streak == rowRun, "streak exceeds a visibly broken row (\(context))")
                 }
             }
         }
     }
 
-    func testWeekRowStreakReadsTheRenderedMarks() {
+    @Test func testWeekRowStreakReadsTheRenderedMarks() {
         let now = Date()
         let data = WidgetData(
             isLoggedIn: true,
@@ -111,11 +106,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             completedDates: [localDay(-1, from: now), localDay(-2, from: now), localDay(-4, from: now)],
             lastUpdated: now
         )
-        XCTAssertEqual(data.weekRowStreak(now: now), 2)
-        XCTAssertFalse(data.weekRowStreakReachesWindowEdge(now: now))
+        #expect(data.weekRowStreak(now: now) == 2)
+        #expect(!data.weekRowStreakReachesWindowEdge(now: now))
     }
 
-    func testWeekMarksPopulateWeekdayName() {
+    @Test func testWeekMarksPopulateWeekdayName() {
         let now = Date()
         let data = WidgetData(
             isLoggedIn: true,
@@ -130,7 +125,7 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             completedDates: [],
             lastUpdated: now
         )
-        XCTAssertFalse(data.weekMarks(now: now).last?.weekdayName.isEmpty ?? true)
+        #expect(!(data.weekMarks(now: now).last?.weekdayName.isEmpty ?? true))
     }
 
     // MARK: - #684: one row per sit on a two-a-day schedule
@@ -160,20 +155,20 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         )
     }
 
-    func testCodableRoundTripPreservesBothTrackHistories() throws {
+    @Test func testCodableRoundTripPreservesBothTrackHistories() throws {
         let original = dualTrackData(
             now: Date(timeIntervalSince1970: 1_700_000_000),
             completedDates: ["2026-08-20"],
             secondCompletedDates: ["2026-08-21"]
         )
         let decoded = try JSONDecoder().decode(WidgetData.self, from: JSONEncoder().encode(original))
-        XCTAssertEqual(decoded, original)
-        XCTAssertEqual(decoded.secondCompletedDates, ["2026-08-21"])
+        #expect(decoded == original)
+        #expect(decoded.secondCompletedDates == ["2026-08-21"])
     }
 
     /// Snapshots written before the two-a-day rows shipped keep their history on
     /// Track One and start Track Two empty — no back-fill, no crash.
-    func testDecodesPreDualTrackBlobIntoTrackOneOnly() throws {
+    @Test func testDecodesPreDualTrackBlobIntoTrackOneOnly() throws {
         let ref = Date(timeIntervalSince1970: 1_700_000_000)
         let legacy: [String: Any] = [
             "isLoggedIn": true,
@@ -190,12 +185,12 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         ]
         let data = try JSONSerialization.data(withJSONObject: legacy)
         let decoded = try JSONDecoder().decode(WidgetData.self, from: data)
-        XCTAssertEqual(decoded.completedDates, ["2026-08-19", "2026-08-20"])
-        XCTAssertEqual(decoded.secondCompletedDates, [])
-        XCTAssertEqual(decoded.streak, 7)
+        #expect(decoded.completedDates == ["2026-08-19", "2026-08-20"])
+        #expect(decoded.secondCompletedDates == [])
+        #expect(decoded.streak == 7)
     }
 
-    func testSessionCountsForWidgetPracticeIsTrackAware() {
+    @Test func testSessionCountsForWidgetPracticeIsTrackAware() {
         let day = "2026-08-20"
         let primaryStandard = session(date: day, type: .standard, track: .primary)
         let secondStandard = session(date: day, type: .standard, track: .second)
@@ -203,36 +198,36 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         let untracked = session(date: day, type: .standard, track: nil)
         let incompleteSecond = session(date: day, type: .standard, completed: false, track: .second)
 
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard, track: .primary))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard, track: .second))
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(secondStandard, track: .second))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(secondStandard, track: .primary))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard, track: .primary))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard, track: .second))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(secondStandard, track: .second))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(secondStandard, track: .primary))
         // Quick and breath sits are Track One practice whatever track they carry.
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(quickOnSecond, track: .primary))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(quickOnSecond, track: .second))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(quickOnSecond, track: .primary))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(quickOnSecond, track: .second))
         // A session predating the dual-track fork is treated as primary.
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(untracked, track: .primary))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(untracked, track: .second))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(incompleteSecond, track: .second))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(untracked, track: .primary))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(untracked, track: .second))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(incompleteSecond, track: .second))
         // The no-track overload keeps its pre-#684 Track One meaning.
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(secondStandard))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(primaryStandard))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(secondStandard))
     }
 
     /// #839: a focus session is not meditation practice, so a completed one checks
     /// neither row, whatever track it carries.
-    func testCompletedFocusSessionCountsForNeitherWidgetRow() {
+    @Test func testCompletedFocusSessionCountsForNeitherWidgetRow() {
         let tracks: [Track?] = [.primary, .second, nil]
         for track in tracks {
             let focus = session(date: "2026-10-27", type: .focus, track: track)
             let label = track?.rawValue ?? "nil"
-            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .primary), label)
-            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .second), label)
-            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus), label)
+            #expect(!WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .primary), Comment(rawValue: label))
+            #expect(!WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .second), Comment(rawValue: label))
+            #expect(!WidgetDataStore.sessionCountsForWidgetPractice(focus), Comment(rawValue: label))
         }
     }
 
-    func testRecentCompletedPracticeDatesLeavesOutFocusSessions() {
+    @Test func testRecentCompletedPracticeDatesLeavesOutFocusSessions() {
         let now = Date()
         let today = localDay(0, from: now)
         let oneDayAgo = localDay(-1, from: now)
@@ -244,11 +239,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         ]
 
         let result = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
-        XCTAssertEqual(result.primary, [oneDayAgo])
-        XCTAssertTrue(result.second.isEmpty)
+        #expect(result.primary == [oneDayAgo])
+        #expect(result.second.isEmpty)
     }
 
-    func testRecentCompletedPracticeDatesSplitsTracksOverSameWindow() {
+    @Test func testRecentCompletedPracticeDatesSplitsTracksOverSameWindow() {
         let now = Date()
         let today = localDay(0, from: now)
         let oneDayAgo = localDay(-1, from: now)
@@ -263,14 +258,14 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         ]
 
         let result = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
-        XCTAssertEqual(result.primary, [today, oneDayAgo])
-        XCTAssertEqual(result.second, [today, oneDayAgo])
-        XCTAssertFalse(result.second.contains(tenDaysAgo))
+        #expect(result.primary == [today, oneDayAgo])
+        #expect(result.second == [today, oneDayAgo])
+        #expect(!result.second.contains(tenDaysAgo))
     }
 
     /// Completing one of the two sits checks that row for today — and only that
     /// row — without waiting for the other session.
-    func testMakeSnapshotFoldsTodayIntoTheCompletedTrackOnly() {
+    @Test func testMakeSnapshotFoldsTodayIntoTheCompletedTrackOnly() {
         let now = Date()
         let today = localDay(0, from: now)
         let secondOnly = WidgetDataStore.makeSnapshot(
@@ -281,8 +276,8 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: nil
         )
-        XCTAssertEqual(secondOnly.secondCompletedDates, [today])
-        XCTAssertEqual(secondOnly.completedDates, [])
+        #expect(secondOnly.secondCompletedDates == [today])
+        #expect(secondOnly.completedDates == [])
 
         let bothTracks = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -292,11 +287,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: nil
         )
-        XCTAssertEqual(bothTracks.completedDates, [today])
-        XCTAssertEqual(bothTracks.secondCompletedDates, [today])
+        #expect(bothTracks.completedDates == [today])
+        #expect(bothTracks.secondCompletedDates == [today])
     }
 
-    func testMakeSnapshotCarriesForwardBothTrackHistories() {
+    @Test func testMakeSnapshotCarriesForwardBothTrackHistories() {
         let now = Date()
         let twoDaysAgo = localDay(-2, from: now)
         let threeDaysAgo = localDay(-3, from: now)
@@ -313,11 +308,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.completedDates, [twoDaysAgo])
-        XCTAssertEqual(snapshot.secondCompletedDates, [threeDaysAgo])
+        #expect(snapshot.completedDates == [twoDaysAgo])
+        #expect(snapshot.secondCompletedDates == [threeDaysAgo])
     }
 
-    func testMakeSnapshotReplacesSecondTrackHistoryAuthoritatively() {
+    @Test func testMakeSnapshotReplacesSecondTrackHistoryAuthoritatively() {
         let now = Date()
         let threeDaysAgo = localDay(-3, from: now)
         let previous = dualTrackData(now: now, secondCompletedDates: ["1999-01-01"])
@@ -330,10 +325,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             previous: previous,
             secondCompletedPracticeDates: [threeDaysAgo, "1998-05-05"]
         )
-        XCTAssertEqual(snapshot.secondCompletedDates, [threeDaysAgo])
+        #expect(snapshot.secondCompletedDates == [threeDaysAgo])
     }
 
-    func testMakeSnapshotDropsBothTrackHistoriesOnAccountSwitch() {
+    @Test func testMakeSnapshotDropsBothTrackHistoriesOnAccountSwitch() {
         let now = Date()
         var previous = dualTrackData(
             now: now,
@@ -349,11 +344,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.completedDates, [])
-        XCTAssertEqual(snapshot.secondCompletedDates, [])
+        #expect(snapshot.completedDates == [])
+        #expect(snapshot.secondCompletedDates == [])
     }
 
-    func testNormalizedForDisplayPrunesBothTrackHistories() {
+    @Test func testNormalizedForDisplayPrunesBothTrackHistories() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let inWindow = localDay(-2, from: now)
@@ -367,9 +362,9 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         data.lastUpdated = yesterday
 
         let normalized = WidgetDataStore.normalizedForDisplay(data, now: now)
-        XCTAssertEqual(normalized.completedDates, [inWindow])
-        XCTAssertEqual(normalized.secondCompletedDates, [inWindow])
-        XCTAssertFalse(normalized.secondDoneToday)
+        #expect(normalized.completedDates == [inWindow])
+        #expect(normalized.secondCompletedDates == [inWindow])
+        #expect(!normalized.secondDoneToday)
     }
 
     // MARK: - #684 day-credit rule: at least one session keeps the day
@@ -380,7 +375,7 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
     /// from. A carried number with no history behind it is exactly what this PR
     /// stops the widget displaying, so the fixture supplies the evidence the row
     /// would be drawing.
-    func testStreakKeptWhenOnlySecondSessionCompleted() {
+    @Test func testStreakKeptWhenOnlySecondSessionCompleted() {
         let now = Date()
         let previous = dualTrackData(
             now: now,
@@ -395,14 +390,14 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.streak, 5)
-        XCTAssertTrue(snapshot.secondCompletedDates.contains(localDay(0, from: now)))
-        XCTAssertFalse(snapshot.completedDates.contains(localDay(0, from: now)))
+        #expect(snapshot.streak == 5)
+        #expect(snapshot.secondCompletedDates.contains(localDay(0, from: now)))
+        #expect(!snapshot.completedDates.contains(localDay(0, from: now)))
     }
 
     /// Continuity walks the union of both tracks: no day here has zero sits, so
     /// alternating between the two sessions still builds one streak.
-    func testStreakWalksUnionOfBothTracks() {
+    @Test func testStreakWalksUnionOfBothTracks() {
         let now = Date()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -414,11 +409,11 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             completedPracticeDates: [localDay(-3, from: now), localDay(-1, from: now)],
             secondCompletedPracticeDates: [localDay(-2, from: now), localDay(0, from: now)]
         )
-        XCTAssertEqual(snapshot.streak, 4)
+        #expect(snapshot.streak == 4)
     }
 
     /// A day with zero sits still breaks continuity.
-    func testStreakBreaksOnDayWithNoSitOnEitherTrack() {
+    @Test func testStreakBreaksOnDayWithNoSitOnEitherTrack() {
         let now = Date()
         let snapshot = WidgetDataStore.makeSnapshot(
             user: makeUser(id: "u1"),
@@ -431,12 +426,12 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             completedPracticeDates: [localDay(-3, from: now)],
             secondCompletedPracticeDates: [localDay(-2, from: now)]
         )
-        XCTAssertEqual(snapshot.streak, 0)
+        #expect(snapshot.streak == 0)
     }
 
     /// Regression: the old carry-forward preserved a streak no matter how long
     /// the app had been closed. Two or more sit-free days must reset it.
-    func testStreakResetsAfterMultiDayGap() {
+    @Test func testStreakResetsAfterMultiDayGap() {
         let now = Date()
         let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: now)!
         var previous = dualTrackData(
@@ -456,12 +451,12 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.streak, 0)
+        #expect(snapshot.streak == 0)
     }
 
     /// The 7-day window is a lower bound, not a cap: a longer streak carried in
     /// the previous snapshot survives an unbroken week of history.
-    func testStreakLongerThanWindowSurvives() {
+    @Test func testStreakLongerThanWindowSurvives() {
         let now = Date()
         let previous = dualTrackData(
             now: now,
@@ -478,12 +473,12 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.streak, 30)
+        #expect(snapshot.streak == 30)
     }
 
     /// …and it keeps counting: a sit today on a week the rows show unbroken
     /// advances the carried total rather than collapsing to the window length.
-    func testCarriedStreakLongerThanWindowIncrementsAcrossADay() {
+    @Test func testCarriedStreakLongerThanWindowIncrementsAcrossADay() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         var previous = dualTrackData(
@@ -503,13 +498,13 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: previous
         )
-        XCTAssertEqual(snapshot.streak, 31)
+        #expect(snapshot.streak == 31)
     }
 
     /// #671 × #684: the carried total is a *candidate*, never an override. When
     /// the rows show where the run actually broke, the number beside them is the
     /// run they draw — no matter what the previous snapshot claimed.
-    func testCarriedStreakIsIgnoredWhenTheRowsShowABreak() {
+    @Test func testCarriedStreakIsIgnoredWhenTheRowsShowABreak() {
         let now = Date()
         let previous = dualTrackData(
             now: now,
@@ -528,15 +523,15 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             previous: previous
         )
         // Today and yesterday are kept; -2 and -3 are blank, and the rows say so.
-        XCTAssertEqual(snapshot.streak, 2)
-        XCTAssertEqual(snapshot.weekRowStreak(now: now), 2)
+        #expect(snapshot.streak == 2)
+        #expect(snapshot.weekRowStreak(now: now) == 2)
     }
 
-    func testIsDayKeptTodayHonorsEitherTrack() {
+    @Test func testIsDayKeptTodayHonorsEitherTrack() {
         let now = Date()
-        XCTAssertTrue(dualTrackData(now: now, secondDoneToday: true).isDayKeptToday(at: now))
-        XCTAssertTrue(dualTrackData(now: now, practiceDoneToday: true).isDayKeptToday(at: now))
-        XCTAssertFalse(dualTrackData(now: now).isDayKeptToday(at: now))
+        #expect(dualTrackData(now: now, secondDoneToday: true).isDayKeptToday(at: now))
+        #expect(dualTrackData(now: now, practiceDoneToday: true).isDayKeptToday(at: now))
+        #expect(!dualTrackData(now: now).isDayKeptToday(at: now))
     }
 
     // MARK: - #684 carry-forward, bounded by the #671 row invariant
@@ -546,7 +541,7 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
     /// corroborate an unbroken run back to the oldest column. With no history at
     /// all the rows are blank, and a blank row may never carry a streak.
 
-    func testResolvedStreakIncrementsWhenPracticeDoneFlips() {
+    @Test func testResolvedStreakIncrementsWhenPracticeDoneFlips() {
         let now = Date()
         let previous = WidgetData(
             isLoggedIn: true,
@@ -569,10 +564,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             completedDays: Set((0...6).map { localDay(-$0, from: now) })
         )
-        XCTAssertEqual(streak, 31)
+        #expect(streak == 31)
     }
 
-    func testResolvedStreakResetsOnAccountSwitch() {
+    @Test func testResolvedStreakResetsOnAccountSwitch() {
         let now = Date()
         let previous = WidgetData(
             isLoggedIn: true,
@@ -596,10 +591,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             previous: previous,
             now: now
         )
-        XCTAssertEqual(streak, 0)
+        #expect(streak == 0)
     }
 
-    func testResolvedStreakResetsOnNewLocalDayWithoutCompletion() {
+    @Test func testResolvedStreakResetsOnNewLocalDayWithoutCompletion() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let previous = WidgetData(
@@ -622,10 +617,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             previous: previous,
             now: now
         )
-        XCTAssertEqual(streak, 0)
+        #expect(streak == 0)
     }
 
-    func testResolvedStreakPreservesOnNewDayAfterYesterdayComplete() {
+    @Test func testResolvedStreakPreservesOnNewDayAfterYesterdayComplete() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let history = (1...7).map { localDay(-$0, from: now) }
@@ -652,10 +647,10 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             completedDays: Set(history)
         )
-        XCTAssertEqual(streak, 20)
+        #expect(streak == 20)
     }
 
-    func testResolvedStreakIncrementsOnNewDayWhenAlreadyDone() {
+    @Test func testResolvedStreakIncrementsOnNewDayWhenAlreadyDone() {
         let now = Date()
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let previous = WidgetData(
@@ -679,12 +674,12 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             completedDays: Set((0...6).map { localDay(-$0, from: now) })
         )
-        XCTAssertEqual(streak, 21)
+        #expect(streak == 21)
     }
 
     // MARK: - #684 per-track weekday rows
 
-    func testWeekMarksPerTrackReflectOnlyTheirOwnCompletions() {
+    @Test func testWeekMarksPerTrackReflectOnlyTheirOwnCompletions() {
         let now = Date()
         let oneDayAgo = localDay(-1, from: now)
         let twoDaysAgo = localDay(-2, from: now)
@@ -696,29 +691,29 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
 
         let trackOne = data.weekMarks(for: .primary, now: now)
         let trackTwo = data.weekMarks(for: .second, now: now)
-        XCTAssertEqual(trackOne.count, 7)
-        XCTAssertEqual(trackTwo.count, 7)
-        XCTAssertEqual(trackOne.first(where: { $0.iso == oneDayAgo })?.done, true)
-        XCTAssertEqual(trackOne.first(where: { $0.iso == twoDaysAgo })?.done, false)
-        XCTAssertEqual(trackTwo.first(where: { $0.iso == twoDaysAgo })?.done, true)
-        XCTAssertEqual(trackTwo.first(where: { $0.iso == oneDayAgo })?.done, false)
+        #expect(trackOne.count == 7)
+        #expect(trackTwo.count == 7)
+        #expect(trackOne.first(where: { $0.iso == oneDayAgo })?.done == true)
+        #expect(trackOne.first(where: { $0.iso == twoDaysAgo })?.done == false)
+        #expect(trackTwo.first(where: { $0.iso == twoDaysAgo })?.done == true)
+        #expect(trackTwo.first(where: { $0.iso == oneDayAgo })?.done == false)
 
         // The single-row layout keeps showing a day kept by either track.
         let union = data.weekMarks(now: now)
-        XCTAssertEqual(union.first(where: { $0.iso == oneDayAgo })?.done, true)
-        XCTAssertEqual(union.first(where: { $0.iso == twoDaysAgo })?.done, true)
+        #expect(union.first(where: { $0.iso == oneDayAgo })?.done == true)
+        #expect(union.first(where: { $0.iso == twoDaysAgo })?.done == true)
     }
 
-    func testWeekMarksPerTrackUseTheirOwnDoneTodayFallback() {
+    @Test func testWeekMarksPerTrackUseTheirOwnDoneTodayFallback() {
         let now = Date()
         let data = dualTrackData(now: now, secondDoneToday: true)
-        XCTAssertEqual(data.weekMarks(for: .primary, now: now).last?.done, false)
-        XCTAssertEqual(data.weekMarks(for: .second, now: now).last?.done, true)
-        XCTAssertEqual(data.weekMarks(now: now).last?.done, true)
+        #expect(data.weekMarks(for: .primary, now: now).last?.done == false)
+        #expect(data.weekMarks(for: .second, now: now).last?.done == true)
+        #expect(data.weekMarks(now: now).last?.done == true)
     }
 
     /// Days practised before the switch to two-a-day render on Track One only.
-    func testPreSwitchHistoryRendersOnTrackOneOnly() {
+    @Test func testPreSwitchHistoryRendersOnTrackOneOnly() {
         let now = Date()
         let preSwitch = [localDay(-5, from: now), localDay(-4, from: now)]
         let data = dualTrackData(
@@ -728,16 +723,16 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         )
         let trackTwo = data.weekMarks(for: .second, now: now)
         for iso in preSwitch {
-            XCTAssertEqual(trackTwo.first(where: { $0.iso == iso })?.done, false)
+            #expect(trackTwo.first(where: { $0.iso == iso })?.done == false)
         }
         let trackOne = data.weekMarks(for: .primary, now: now)
         for iso in preSwitch {
-            XCTAssertEqual(trackOne.first(where: { $0.iso == iso })?.done, true)
+            #expect(trackOne.first(where: { $0.iso == iso })?.done == true)
         }
     }
 
     /// A single-session setup has no Track Two history, so its row is unchanged.
-    func testSingleTrackSetupRendersOneUnchangedRow() {
+    @Test func testSingleTrackSetupRendersOneUnchangedRow() {
         let now = Date()
         let oneDayAgo = localDay(-1, from: now)
         let data = WidgetData(
@@ -753,9 +748,9 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
             completedDates: [oneDayAgo],
             lastUpdated: now
         )
-        XCTAssertEqual(data.secondCompletedDates, [])
-        XCTAssertEqual(data.weekMarks(now: now), data.weekMarks(for: .primary, now: now))
-        XCTAssertEqual(data.weekMarks(now: now).first(where: { $0.iso == oneDayAgo })?.done, true)
+        #expect(data.secondCompletedDates == [])
+        #expect(data.weekMarks(now: now) == data.weekMarks(for: .primary, now: now))
+        #expect(data.weekMarks(now: now).first(where: { $0.iso == oneDayAgo })?.done == true)
     }
 }
 
@@ -772,16 +767,16 @@ extension WidgetDataDualTrackTests {
 
     /// A completed standard combined sit marks both tracks' rows (whichever of AM
     /// and PM each row is drawn as, via `longSessionPeriod`).
-    func testCompletedCombinedSitMarksBothRows() {
+    @Test func testCompletedCombinedSitMarksBothRows() {
         let now = Date()
         let today = localDay(0, from: now)
         let sit = combinedSession(date: today)
 
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
-        XCTAssertTrue(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
+        #expect(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
         let dates = WidgetDataStore.recentCompletedPracticeDates(from: [sit], now: now)
-        XCTAssertEqual(dates.primary, [today])
-        XCTAssertEqual(dates.second, [today])
+        #expect(dates.primary == [today])
+        #expect(dates.second == [today])
 
         for period in [SessionPeriod.am, .pm] {
             let data = WidgetData(
@@ -791,29 +786,29 @@ extension WidgetDataDualTrackTests {
                 streak: 1, completedDates: Array(dates.primary), secondCompletedDates: Array(dates.second),
                 lastUpdated: now
             )
-            XCTAssertEqual(data.weekMarks(for: .primary, now: now).first(where: { $0.iso == today })?.done, true)
-            XCTAssertEqual(data.weekMarks(for: .second, now: now).first(where: { $0.iso == today })?.done, true)
+            #expect(data.weekMarks(for: .primary, now: now).first(where: { $0.iso == today })?.done == true)
+            #expect(data.weekMarks(for: .second, now: now).first(where: { $0.iso == today })?.done == true)
         }
     }
 
-    func testEndedEarlyCombinedSitMarksNeitherRow() {
+    @Test func testEndedEarlyCombinedSitMarksNeitherRow() {
         let now = Date()
         let sit = combinedSession(date: localDay(0, from: now), completed: false)
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
-        XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .primary))
+        #expect(!WidgetDataStore.sessionCountsForWidgetPractice(sit, track: .second))
         let dates = WidgetDataStore.recentCompletedPracticeDates(from: [sit], now: now)
-        XCTAssertTrue(dates.primary.isEmpty)
-        XCTAssertTrue(dates.second.isEmpty)
+        #expect(dates.primary.isEmpty)
+        #expect(dates.second.isEmpty)
     }
 
     /// The server-streak policy is unchanged: a combined sit is one standard sit.
-    func testCombinedSitIsOneStandardSitForTheServerStreak() {
+    @Test func testCombinedSitIsOneStandardSitForTheServerStreak() {
         let now = Date()
         let today = localDay(0, from: now)
         let sit = combinedSession(date: today)
-        XCTAssertTrue(WidgetDataStore.sessionCountsForServerStreak(sit))
-        XCTAssertEqual(WidgetDataStore.recentCompletedStandardDates(from: [sit], now: now), [today])
-        XCTAssertEqual(WidgetDataStore.serverStreakAnchorDate(from: [sit]), today)
-        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(combinedSession(date: today, completed: false)))
+        #expect(WidgetDataStore.sessionCountsForServerStreak(sit))
+        #expect(WidgetDataStore.recentCompletedStandardDates(from: [sit], now: now) == [today])
+        #expect(WidgetDataStore.serverStreakAnchorDate(from: [sit]) == today)
+        #expect(!WidgetDataStore.sessionCountsForServerStreak(combinedSession(date: today, completed: false)))
     }
 }

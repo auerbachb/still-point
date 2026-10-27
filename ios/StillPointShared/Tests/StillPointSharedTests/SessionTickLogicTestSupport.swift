@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Helpers shared by the `SessionTickLogic*Tests` suites, split by concern out

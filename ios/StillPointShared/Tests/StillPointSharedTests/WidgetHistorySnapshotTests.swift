@@ -1,16 +1,17 @@
-import XCTest
+import Foundation
+import Testing
 import StillPointShared
 
 /// #663: the snapshot a `GET /api/sessions` refresh writes, shared by the
 /// foreground backfill and the background refresh, and the history read that
 /// stands in for the Home badge when the background refresh has none.
-final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
+struct WidgetHistorySnapshotTests: WidgetDataTestSupport {
     // MARK: - makeHistorySnapshot
 
     /// The build moved out of `AppViewModel.refreshWidgetWeekHistory()` verbatim.
     /// Pins it to the `makeSnapshot` call that refresh used to make inline, so the
     /// foreground backfill writes exactly what it wrote before the move.
-    func testMatchesTheBuildTheForegroundBackfillMadeInline() {
+    @Test func testMatchesTheBuildTheForegroundBackfillMadeInline() {
         let now = Date()
         let user = makeUser(id: "u1")
         let previous = WidgetData(
@@ -61,14 +62,14 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             previous: previous
         )
 
-        XCTAssertEqual(shared, inline)
+        #expect(shared == inline)
     }
 
     /// The `previous` it is given reaches `makeSnapshot`. The rows show an
     /// unbroken week and no server anchor falls inside it, so only the stored
     /// snapshot's carried streak can extend the count past the window. Dropping
     /// `previous` would leave the seven days the rows show.
-    func testForwardsThePreviousSnapshotItIsGiven() {
+    @Test func testForwardsThePreviousSnapshotItIsGiven() {
         let now = Date()
         let user = makeUser(id: "u1")
         let sessions = (0...6).map { offset in
@@ -105,13 +106,13 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             previous: .loggedOut
         )
 
-        XCTAssertEqual(withoutPrevious.streak, 7)
-        XCTAssertGreaterThan(withPrevious.streak, 7)
+        #expect(withoutPrevious.streak == 7)
+        #expect(withPrevious.streak > 7)
     }
 
     /// The #663 report: a sit done on the web reaches the widget once its
     /// history is refetched, whichever refresh fetched it.
-    func testAWebSitTodayChecksTodayAndExtendsTheStreak() {
+    @Test func testAWebSitTodayChecksTodayAndExtendsTheStreak() {
         let now = Date()
         let user = makeUser(id: "u1")
         // What the phone last wrote: yesterday and the day before, today still open.
@@ -126,8 +127,8 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             now: now,
             previous: .loggedOut
         )
-        XCTAssertFalse(previous.completedDates.contains(localDay(0, from: now)))
-        XCTAssertEqual(previous.streak, 2)
+        #expect(!previous.completedDates.contains(localDay(0, from: now)))
+        #expect(previous.streak == 2)
 
         // Then a standard sit is saved from the web, and the server counts it.
         let sessions = [
@@ -145,17 +146,17 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             previous: previous
         )
 
-        XCTAssertTrue(snapshot.completedDates.contains(today))
-        XCTAssertTrue(snapshot.practiceDoneToday)
-        XCTAssertTrue(snapshot.primaryDoneToday)
-        XCTAssertTrue(snapshot.isDayKeptToday(at: now))
-        XCTAssertEqual(snapshot.streak, 3)
-        XCTAssertEqual(snapshot.serverStreakDate, today)
+        #expect(snapshot.completedDates.contains(today))
+        #expect(snapshot.practiceDoneToday)
+        #expect(snapshot.primaryDoneToday)
+        #expect(snapshot.isDayKeptToday(at: now))
+        #expect(snapshot.streak == 3)
+        #expect(snapshot.serverStreakDate == today)
     }
 
     /// An uncontested history refresh replaces the rows outright: a day the
     /// stored snapshot carried but the server no longer has is dropped.
-    func testFetchedHistoryReplacesTheCarriedRows() {
+    @Test func testFetchedHistoryReplacesTheCarriedRows() {
         let now = Date()
         let previous = WidgetData(
             isLoggedIn: true,
@@ -180,50 +181,56 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             previous: previous
         )
 
-        XCTAssertEqual(snapshot.completedDates, [localDay(-1, from: now)])
+        #expect(snapshot.completedDates == [localDay(-1, from: now)])
         // A breath sit draws on the row but is not one the server streak counts.
-        XCTAssertEqual(snapshot.standardDates, [])
-        XCTAssertFalse(snapshot.practiceDoneToday)
+        #expect(snapshot.standardDates == [])
+        #expect(!snapshot.practiceDoneToday)
     }
 
     // MARK: - primaryStandardSitCompleted
 
-    func testACompletedPrimaryStandardSitOnTheDayCounts() {
+    @Test func testACompletedPrimaryStandardSitOnTheDayCounts() {
         let day = "2026-10-26"
-        XCTAssertTrue(WidgetDataStore.primaryStandardSitCompleted(
-            on: day,
-            in: [session(date: day)]
-        ))
+        #expect(
+            WidgetDataStore.primaryStandardSitCompleted(
+                on: day,
+                in: [session(date: day)]
+            )
+        )
     }
 
-    func testASitWithNoTrackPredatesTheForkAndCountsAsPrimary() {
+    @Test func testASitWithNoTrackPredatesTheForkAndCountsAsPrimary() {
         let day = "2026-10-26"
-        XCTAssertTrue(WidgetDataStore.primaryStandardSitCompleted(
-            on: day,
-            in: [session(date: day, track: nil)]
-        ))
+        #expect(
+            WidgetDataStore.primaryStandardSitCompleted(
+                on: day,
+                in: [session(date: day, track: nil)]
+            )
+        )
     }
 
-    func testOnlyAPrimaryStandardSitCounts() {
+    @Test func testOnlyAPrimaryStandardSitCounts() {
         let day = "2026-10-26"
         let notPrimaryStandard = [
             session(date: day, track: .second),
             session(date: day, type: .quick),
             session(date: day, type: .breath),
         ]
-        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(on: day, in: notPrimaryStandard))
+        #expect(!WidgetDataStore.primaryStandardSitCompleted(on: day, in: notPrimaryStandard))
     }
 
-    func testAnUnfinishedSitOrAnotherDayDoesNotCount() {
+    @Test func testAnUnfinishedSitOrAnotherDayDoesNotCount() {
         let day = "2026-10-26"
-        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(
-            on: day,
-            in: [
-                session(date: day, completed: false),
-                session(date: "2026-10-25"),
-            ]
-        ))
-        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(on: day, in: []))
+        #expect(
+            !WidgetDataStore.primaryStandardSitCompleted(
+                on: day,
+                in: [
+                    session(date: day, completed: false),
+                    session(date: "2026-10-25"),
+                ]
+            )
+        )
+        #expect(!WidgetDataStore.primaryStandardSitCompleted(on: day, in: []))
     }
 
     // MARK: - practiceInstant (the 6:00 grace window, #767)
@@ -251,7 +258,7 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
 
     /// A background run at 2:30 after a day with no sit builds the snapshot as
     /// of that day, so the widget keeps showing it as today until 6:00.
-    func testBefore6AnUnfinishedPreviousDayIsStillThePracticeDay() {
+    @Test func testBefore6AnUnfinishedPreviousDayIsStillThePracticeDay() {
         let now = october(27, 2, 30)
         let sessions = [session(date: "2026-10-25")]
         let instant = WidgetDataStore.practiceInstant(
@@ -261,65 +268,63 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             calendar: newYork
         )
 
-        XCTAssertEqual(WidgetDataStore.localDayString(instant, calendar: newYork), "2026-10-26")
-        XCTAssertTrue(WidgetDataStore.graceKeepsPreviousPracticeDay(
-            lastUpdated: instant,
-            now: now,
-            requiredSitsComplete: false,
-            calendar: newYork
-        ))
+        #expect(WidgetDataStore.localDayString(instant, calendar: newYork) == "2026-10-26")
+        #expect(
+            WidgetDataStore.graceKeepsPreviousPracticeDay(
+                lastUpdated: instant,
+                now: now,
+                requiredSitsComplete: false,
+                calendar: newYork
+            )
+        )
     }
 
-    func testBefore6AFinishedPreviousDayRollsToTheCalendarDay() {
+    @Test func testBefore6AFinishedPreviousDayRollsToTheCalendarDay() {
         let now = october(27, 2, 30)
         let sessions = [session(date: "2026-10-26")]
-        XCTAssertEqual(
-            WidgetDataStore.practiceInstant(forHistory: sessions, dualTrackEnabled: false, now: now, calendar: newYork),
-            now
-        )
+        #expect(WidgetDataStore.practiceInstant(forHistory: sessions, dualTrackEnabled: false, now: now, calendar: newYork) == now)
     }
 
     /// Only a completed standard sit finishes a day, as `/api/track/done-today`
     /// counts it.
-    func testAQuickOrUnfinishedSitLeavesThePreviousDayOpen() {
+    @Test func testAQuickOrUnfinishedSitLeavesThePreviousDayOpen() {
         let now = october(27, 2, 30)
         let sessions = [
             session(date: "2026-10-26", type: .quick),
             session(date: "2026-10-26", completed: false),
         ]
-        XCTAssertEqual(practiceDay(sessions, at: now), "2026-10-26")
+        #expect(practiceDay(sessions, at: now) == "2026-10-26")
     }
 
-    func testTwoADayNeedsBothSitsToFinishThePreviousDay() {
+    @Test func testTwoADayNeedsBothSitsToFinishThePreviousDay() {
         let now = october(27, 2, 30)
         let primaryOnly = [session(date: "2026-10-26")]
-        XCTAssertEqual(practiceDay(primaryOnly, dualTrack: true, at: now), "2026-10-26")
+        #expect(practiceDay(primaryOnly, dualTrack: true, at: now) == "2026-10-26")
 
         let both = primaryOnly + [session(date: "2026-10-26", track: .second)]
-        XCTAssertEqual(practiceDay(both, dualTrack: true, at: now), "2026-10-27")
+        #expect(practiceDay(both, dualTrack: true, at: now) == "2026-10-27")
     }
 
-    func testAt6TheCalendarDayStartsEitherWay() {
+    @Test func testAt6TheCalendarDayStartsEitherWay() {
         let now = october(27, 6, 0)
-        XCTAssertEqual(
-            WidgetDataStore.practiceInstant(forHistory: [], dualTrackEnabled: false, now: now, calendar: newYork),
-            now
-        )
+        #expect(WidgetDataStore.practiceInstant(forHistory: [], dualTrackEnabled: false, now: now, calendar: newYork) == now)
     }
 
     /// The CodeAnt case on PR #908: on a two-a-day schedule at 2:30, the primary
     /// sit credited to the still-open previous day reads as done today, as the
     /// foreground's Home badge reports it.
-    func testThePrimarySitOfAnOpenPracticeDayReadsAsDoneToday() {
+    @Test func testThePrimarySitOfAnOpenPracticeDayReadsAsDoneToday() {
         let now = october(27, 2, 30)
         let sessions = [session(date: "2026-10-26")]
         let day = practiceDay(sessions, dualTrack: true, at: now)
 
-        XCTAssertTrue(WidgetDataStore.primaryStandardSitCompleted(on: day, in: sessions))
-        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(
-            on: WidgetDataStore.localDayString(now, calendar: newYork),
-            in: sessions
-        ))
+        #expect(WidgetDataStore.primaryStandardSitCompleted(on: day, in: sessions))
+        #expect(
+            !WidgetDataStore.primaryStandardSitCompleted(
+                on: WidgetDataStore.localDayString(now, calendar: newYork),
+                in: sessions
+            )
+        )
     }
 
     // MARK: - practiceInstant(previousDayComplete:) — the foreground's instant (#918)
@@ -333,29 +338,31 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
 
     /// From midnight to 5:59, after a day whose sits are unfinished, the
     /// foreground stamps that day, so the widget keeps it as today until 6:00.
-    func testBefore6TheForegroundStampsTheUnfinishedPreviousDay() {
+    @Test func testBefore6TheForegroundStampsTheUnfinishedPreviousDay() {
         for now in [october(27, 0, 0), october(27, 2, 30), october(27, 5, 59)] {
             let instant = foregroundInstant(previousDayComplete: false, at: now)
 
-            XCTAssertEqual(instant, october(26, 23))
-            XCTAssertTrue(WidgetDataStore.graceKeepsPreviousPracticeDay(
-                lastUpdated: instant,
-                now: now,
-                requiredSitsComplete: false,
-                calendar: newYork
-            ))
+            #expect(instant == october(26, 23))
+            #expect(
+                WidgetDataStore.graceKeepsPreviousPracticeDay(
+                    lastUpdated: instant,
+                    now: now,
+                    requiredSitsComplete: false,
+                    calendar: newYork
+                )
+            )
         }
     }
 
-    func testBefore6AFinishedPreviousDayLeavesTheForegroundOnTheClock() {
+    @Test func testBefore6AFinishedPreviousDayLeavesTheForegroundOnTheClock() {
         let now = october(27, 2, 30)
-        XCTAssertEqual(foregroundInstant(previousDayComplete: true, at: now), now)
+        #expect(foregroundInstant(previousDayComplete: true, at: now) == now)
     }
 
-    func testFrom6TheForegroundStampsTheClockEitherWay() {
+    @Test func testFrom6TheForegroundStampsTheClockEitherWay() {
         for now in [october(27, 6, 0), october(27, 13, 0), october(27, 23, 59)] {
-            XCTAssertEqual(foregroundInstant(previousDayComplete: false, at: now), now)
-            XCTAssertEqual(foregroundInstant(previousDayComplete: true, at: now), now)
+            #expect(foregroundInstant(previousDayComplete: false, at: now) == now)
+            #expect(foregroundInstant(previousDayComplete: true, at: now) == now)
         }
     }
 
@@ -386,29 +393,29 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
     /// day on the widget as today, still pending, with the streak standing. The
     /// clock time the foreground stamped before rolled the widget onto the
     /// calendar day early: the open day read as missed and the streak as 0.
-    func testTheForegroundHistorySnapshotKeepsTheOpenDayAndItsStreak() {
+    @Test func testTheForegroundHistorySnapshotKeepsTheOpenDayAndItsStreak() {
         let now = july(15, 2, 30)
         let snapshot = graceHistorySnapshot(
             stampedAt: WidgetDataStore.practiceInstant(previousDayComplete: false, now: now)
         )
 
-        XCTAssertEqual(WidgetDataStore.localDayString(snapshot.lastUpdated), "2026-07-14")
+        #expect(WidgetDataStore.localDayString(snapshot.lastUpdated) == "2026-07-14")
         let shown = WidgetDataStore.normalizedForDisplay(snapshot, now: now)
-        XCTAssertEqual(shown.streak, 2)
+        #expect(shown.streak == 2)
         let today = shown.weekMarks(now: now).last
-        XCTAssertEqual(today?.iso, "2026-07-14")
-        XCTAssertEqual(today?.done, false)
+        #expect(today?.iso == "2026-07-14")
+        #expect(today?.done == false)
 
         let clockStamped = WidgetDataStore.normalizedForDisplay(graceHistorySnapshot(stampedAt: now), now: now)
-        XCTAssertEqual(clockStamped.streak, 0)
+        #expect(clockStamped.streak == 0)
         let missed = clockStamped.weekMarks(now: now).dropLast().last
-        XCTAssertEqual(missed?.iso, "2026-07-14")
-        XCTAssertEqual(missed?.done, false)
+        #expect(missed?.iso == "2026-07-14")
+        #expect(missed?.done == false)
     }
 
     /// The refresher hands `save` the same instant, so a history snapshot that
     /// lands after another write merges onto it and still keeps the open day.
-    func testAMergedForegroundHistorySnapshotKeepsTheOpenDay() throws {
+    @Test func testAMergedForegroundHistorySnapshotKeepsTheOpenDay() throws {
         let now = july(15, 2, 30)
         let instant = WidgetDataStore.practiceInstant(previousDayComplete: false, now: now)
         // What `syncWidgetData()` stored while the fetch was in flight.
@@ -426,7 +433,7 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             stored: nil,
             now: instant
         )
-        let stored = try XCTUnwrap(seeded)
+        let stored = try #require(seeded)
 
         let (resolved, outcome) = WidgetDataStore.resolveWrite(
             incoming: graceHistorySnapshot(stampedAt: instant),
@@ -435,9 +442,9 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             now: instant
         )
 
-        XCTAssertEqual(outcome, .merged)
-        let merged = try XCTUnwrap(resolved)
-        XCTAssertEqual(WidgetDataStore.localDayString(merged.lastUpdated), "2026-07-14")
-        XCTAssertEqual(WidgetDataStore.normalizedForDisplay(merged, now: now).streak, 2)
+        #expect(outcome == .merged)
+        let merged = try #require(resolved)
+        #expect(WidgetDataStore.localDayString(merged.lastUpdated) == "2026-07-14")
+        #expect(WidgetDataStore.normalizedForDisplay(merged, now: now).streak == 2)
     }
 }

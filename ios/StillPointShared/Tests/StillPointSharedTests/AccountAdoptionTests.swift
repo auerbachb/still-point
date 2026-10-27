@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import StillPointShared
 
 /// Issue #916 — a window that adopts a different account tears down the previous
@@ -9,7 +10,7 @@ import XCTest
 /// `AppViewModel` has no unit-test target, so these drive the sequencer it adopts
 /// through with a recorder standing in for its `currentUser` and `authGeneration`.
 @MainActor
-final class AccountAdoptionTests: XCTestCase {
+struct AccountAdoptionTests {
     /// Stands in for the view model: the account on screen, the identity generation,
     /// and the order the effects ran in, with what the teardown saw when it ran.
     @MainActor
@@ -51,28 +52,28 @@ final class AccountAdoptionTests: XCTestCase {
 
     // MARK: - Classification
 
-    func testClassifiesNoAccountAsFirstUser() {
-        XCTAssertEqual(AccountAdoption.classify(current: String?.none, incoming: "a"), .firstUser)
+    @Test func testClassifiesNoAccountAsFirstUser() {
+        #expect(AccountAdoption.classify(current: String?.none, incoming: "a") == .firstUser)
     }
 
-    func testClassifiesTheSameIDAsSameAccount() {
-        XCTAssertEqual(AccountAdoption.classify(current: "a", incoming: "a"), .sameAccount)
+    @Test func testClassifiesTheSameIDAsSameAccount() {
+        #expect(AccountAdoption.classify(current: "a", incoming: "a") == .sameAccount)
     }
 
-    func testClassifiesAnotherIDAsDifferentAccount() {
-        XCTAssertEqual(AccountAdoption.classify(current: "a", incoming: "b"), .differentAccount)
+    @Test func testClassifiesAnotherIDAsDifferentAccount() {
+        #expect(AccountAdoption.classify(current: "a", incoming: "b") == .differentAccount)
     }
 
-    func testOnlyADifferentAccountRequiresTeardown() {
-        XCTAssertTrue(AccountAdoption.differentAccount.requiresTeardown)
-        XCTAssertFalse(AccountAdoption.sameAccount.requiresTeardown)
-        XCTAssertFalse(AccountAdoption.firstUser.requiresTeardown)
+    @Test func testOnlyADifferentAccountRequiresTeardown() {
+        #expect(AccountAdoption.differentAccount.requiresTeardown)
+        #expect(!AccountAdoption.sameAccount.requiresTeardown)
+        #expect(!AccountAdoption.firstUser.requiresTeardown)
     }
 
-    func testOnlyTheSameAccountLeavesTheGenerationAlone() {
-        XCTAssertTrue(AccountAdoption.differentAccount.advancesGeneration)
-        XCTAssertTrue(AccountAdoption.firstUser.advancesGeneration)
-        XCTAssertFalse(AccountAdoption.sameAccount.advancesGeneration)
+    @Test func testOnlyTheSameAccountLeavesTheGenerationAlone() {
+        #expect(AccountAdoption.differentAccount.advancesGeneration)
+        #expect(AccountAdoption.firstUser.advancesGeneration)
+        #expect(!AccountAdoption.sameAccount.advancesGeneration)
     }
 
     // MARK: - Effects
@@ -80,69 +81,69 @@ final class AccountAdoptionTests: XCTestCase {
     /// The #916 case: window 1 shows account A, another window signs in as B, and
     /// window 1's next check hands it B. A's state is torn down, after the generation
     /// moved so nothing it cancels can be written back, and before B is installed.
-    func testADifferentAccountTearsDownThePreviousOneBeforeInstalling() {
+    @Test func testADifferentAccountTearsDownThePreviousOneBeforeInstalling() {
         let window = Recorder(currentUser: "a")
         window.generation = 4
 
         let adoption = window.adopt("b")
 
-        XCTAssertEqual(adoption, .differentAccount)
-        XCTAssertEqual(window.log, ["advance", "teardown", "install"])
-        XCTAssertEqual(window.teardownSaw.count, 1)
-        XCTAssertEqual(window.teardownSaw.first?.user, "a", "the teardown runs with the previous account installed")
-        XCTAssertEqual(window.teardownSaw.first?.generation, 5, "the teardown runs after the generation moved")
-        XCTAssertEqual(window.currentUser, "b")
-        XCTAssertEqual(window.generation, 5)
+        #expect(adoption == .differentAccount)
+        #expect(window.log == ["advance", "teardown", "install"])
+        #expect(window.teardownSaw.count == 1)
+        #expect(window.teardownSaw.first?.user == "a", "the teardown runs with the previous account installed")
+        #expect(window.teardownSaw.first?.generation == 5, "the teardown runs after the generation moved")
+        #expect(window.currentUser == "b")
+        #expect(window.generation == 5)
     }
 
     /// A reconnect refresh or a settings round-trip re-confirms the account on screen.
     /// That is not a transition: an open sit and everything else stay as they are.
-    func testTheSameAccountOnlyInstalls() {
+    @Test func testTheSameAccountOnlyInstalls() {
         let window = Recorder(currentUser: "a")
         window.generation = 4
 
         let adoption = window.adopt("a")
 
-        XCTAssertEqual(adoption, .sameAccount)
-        XCTAssertEqual(window.log, ["install"])
-        XCTAssertTrue(window.teardownSaw.isEmpty)
-        XCTAssertEqual(window.generation, 4)
+        #expect(adoption == .sameAccount)
+        #expect(window.log == ["install"])
+        #expect(window.teardownSaw.isEmpty)
+        #expect(window.generation == 4)
     }
 
     /// A cold start adopts the first account after none. There is nothing to tear down.
-    func testTheFirstAccountAdvancesAndInstallsWithoutTeardown() {
+    @Test func testTheFirstAccountAdvancesAndInstallsWithoutTeardown() {
         let window = Recorder()
 
         let adoption = window.adopt("a")
 
-        XCTAssertEqual(adoption, .firstUser)
-        XCTAssertEqual(window.log, ["advance", "install"])
-        XCTAssertTrue(window.teardownSaw.isEmpty)
-        XCTAssertEqual(window.currentUser, "a")
+        #expect(adoption == .firstUser)
+        #expect(window.log == ["advance", "install"])
+        #expect(window.teardownSaw.isEmpty)
+        #expect(window.currentUser == "a")
     }
 
     /// Signing out tears the account down on its own path, so signing back in as the
     /// same account is a first adoption and tears nothing down a second time.
-    func testSigningBackInAfterASignOutIsAFirstAdoption() {
+    @Test func testSigningBackInAfterASignOutIsAFirstAdoption() {
         let window = Recorder(currentUser: "a")
 
         window.signOut()
         let adoption = window.adopt("a")
 
-        XCTAssertEqual(adoption, .firstUser)
-        XCTAssertTrue(window.teardownSaw.isEmpty)
+        #expect(adoption == .firstUser)
+        #expect(window.teardownSaw.isEmpty)
     }
 
     /// Once B is installed, re-confirming B is the same account again: the previous
     /// account is torn down exactly once.
-    func testTheReplacedAccountIsTornDownOnce() {
+    @Test func testTheReplacedAccountIsTornDownOnce() {
         let window = Recorder(currentUser: "a")
 
         window.adopt("b")
         window.adopt("b")
 
-        XCTAssertEqual(window.log, ["advance", "teardown", "install", "install"])
-        XCTAssertEqual(window.teardownSaw.count, 1)
-        XCTAssertEqual(window.teardownSaw.first?.user, "a")
+        #expect(window.log == ["advance", "teardown", "install", "install"])
+        #expect(window.teardownSaw.count == 1)
+        #expect(window.teardownSaw.first?.user == "a")
     }
 }
