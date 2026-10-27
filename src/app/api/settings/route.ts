@@ -35,6 +35,7 @@ const RETURN_FIELDS = {
   ambientSoundEnabled: users.ambientSoundEnabled,
   dualTrackEnabled: users.dualTrackEnabled,
   secondTrackDay: users.secondTrackDay,
+  focusActivityDay: users.focusActivityDay,
   longSessionPeriod: users.longSessionPeriod,
   recoveryTargetDay: users.recoveryTargetDay,
   recoveryCurrentStep: users.recoveryCurrentStep,

@@ -109,6 +109,35 @@ describe("POST /api/auth/login", () => {
     expect(setAuthCookie).not.toHaveBeenCalled();
   });
 
+  test("returns focusActivityDay with the rest of the user on success (#835)", async () => {
+    selectLimit.mockResolvedValue([{
+      id: "u1",
+      email: "user@example.com",
+      username: "user",
+      passwordHash: "hash",
+      isPublic: false,
+      currentDay: 12,
+      dualTrackEnabled: false,
+      secondTrackDay: 1,
+      focusActivityDay: 4,
+      longSessionPeriod: "am",
+    }]);
+    verifyPassword.mockResolvedValue(true);
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      new Request("http://test.local/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: "user@example.com", password: "password123" }),
+      }) as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    const { user } = await response.json();
+    expect(user).toMatchObject({ id: "u1", secondTrackDay: 1, focusActivityDay: 4 });
+    expect(user).not.toHaveProperty("passwordHash");
+  });
+
   test("returns 400 for malformed JSON", async () => {
     const { POST } = await import("./route");
 

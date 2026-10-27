@@ -11,8 +11,34 @@ export const MAX_DURATION = 600;
 /** #240: the day a standard sit first reaches the 10-minute cap (60 + 54·10 = 600).
  *  Derived so it stays correct if the base/increment/cap ever change. */
 export const FORK_DAY = (MAX_DURATION - BASE_DURATION) / INCREMENT + 1;
-const SESSION_TYPES = ["standard", "quick", "breath"] as const;
+/** #765: `focus` is a timed single-focus activity (reading, writing, listening),
+ *  not a meditation sit. It has its own goal (`FOCUS_DURATION_CONFIG`) and never
+ *  counts toward meditation progression, streaks or reminders. */
+const SESSION_TYPES = ["standard", "quick", "breath", "focus"] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
+
+/** A daily ramp: `base` seconds on day 1, `increment` more each later day, held at `cap`. */
+export type DurationRampConfig = {
+  readonly base: number;
+  readonly increment: number;
+  readonly cap: number;
+};
+
+/** The meditation ramp (#240): one minute, +10s a day, capped at ten minutes. */
+export const MEDITATION_DURATION_CONFIG: DurationRampConfig = {
+  base: BASE_DURATION,
+  increment: INCREMENT,
+  cap: MAX_DURATION,
+};
+
+/** #765: the focus goal, and the single place to tune it. One minute to start,
+ *  +1 minute per completed focus session, capped at two hours. There is no
+ *  recovery ramp: a missed day changes nothing. */
+export const FOCUS_DURATION_CONFIG: DurationRampConfig = {
+  base: 60,
+  increment: 60,
+  cap: 7200,
+};
 
 /** #240: which daily progression a standard sit belongs to. `primary` is the
  *  original (now 10-minute-capped) track; `second` is the opt-in track that
@@ -64,18 +90,36 @@ export function parseCompleted(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+/** Seconds on `day` of a ramp. Days below 1 behave as day 1. */
+export function rampDurationForDay(day: number, config: DurationRampConfig): number {
+  return Math.min(config.cap, config.base + (Math.max(day, 1) - 1) * config.increment);
+}
+
 export function durationForDay(dayNumber: number): number {
   // #240: cap at ten minutes. Both tracks share this function, so each one holds
   // at 10 minutes once it reaches FORK_DAY instead of growing without bound.
-  return Math.min(MAX_DURATION, BASE_DURATION + (Math.max(dayNumber, 1) - 1) * INCREMENT);
+  return rampDurationForDay(dayNumber, MEDITATION_DURATION_CONFIG);
 }
 
+/** #765: the focus goal (seconds) on a given `focusActivityDay`. */
+export function focusDurationForDay(day: number): number {
+  return rampDurationForDay(day, FOCUS_DURATION_CONFIG);
+}
+
+/** For `focus`, `dayNumber` is the user's `focusActivityDay`, not the meditation day. */
 export function durationForSession(sessionType: SessionType, dayNumber: number): number {
-  return sessionType === "quick" ? QUICK_DURATION : durationForDay(dayNumber);
+  if (sessionType === "quick") return QUICK_DURATION;
+  if (sessionType === "focus") return focusDurationForDay(dayNumber);
+  return durationForDay(dayNumber);
 }
 
 export function shouldAdvanceDay(sessionType: SessionType, completed: boolean): boolean {
   return completed && sessionType === "standard";
+}
+
+/** #765: only a completed focus session steps the focus goal. */
+export function shouldAdvanceFocusDay(sessionType: SessionType, completed: boolean): boolean {
+  return completed && sessionType === "focus";
 }
 
 export function calculateSessionStats(sessions: SessionStatsInput[]) {

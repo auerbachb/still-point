@@ -74,6 +74,19 @@ describe("POST /api/track — enable dual track (#240)", () => {
     expect(returned.secondTrackDay).toBe(4);
   });
 
+  test("returns focusActivityDay on both the enable and the already-enabled path (#835)", async () => {
+    const user = await makeUser({ currentDay: FORK_DAY + 1, dualTrackEnabled: false, focusActivityDay: 6 });
+    getCurrentUser.mockResolvedValue({ userId: user.id, email: user.email });
+
+    const enabled = await POST();
+    expect(enabled.status).toBe(200);
+    expect((await enabled.json()).user.focusActivityDay).toBe(6);
+
+    const again = await POST();
+    expect(again.status).toBe(200);
+    expect((await again.json()).user.focusActivityDay).toBe(6);
+  });
+
   test("401 when unauthenticated", async () => {
     getCurrentUser.mockResolvedValue(null);
     const res = await POST();

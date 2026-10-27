@@ -250,7 +250,7 @@ those — an app cannot suppress notifications it did not send.
 |------|---------|
 | Day | The user's local practice day: the row's `window_key` date, matched to `sessions.session_date`. A weekly reminder's `YYYY-Www` key is that week's Monday. A call's `YYYY-MM-DDTHH` key is the day of that slot. No timestamp is converted to a date. |
 | Sent | Push (`daily_reminder`, `miss_a_day`, `failure_reason_reminder`): a `notification_dispatches` row. The row survives only if at least one device accepted the push. APNs and web push are pooled, because the ledger does not record which one delivered. Call (`missed_sit_call`): a `call_attempts` row with status `initiated`. Ledger `missed_sit_call` rows are listed as not measured, because the scheduler keeps that claim when Vapi rejects the call. |
-| Converted | A completed sit credited to that day and saved (`sessions.created_at`) at or after the day's first send of that type. Several calls on one day are one nudged day. |
+| Converted | A completed sit credited to that day and saved (`sessions.created_at`) at or after the day's first send of that type. A focus session (#765) is not a sit, the same rule `userCompletedSessionOnDate` applies. Several calls on one day are one nudged day. |
 | Conversion | Converted days ÷ nudged days, with a 95% Wilson interval. |
 | Baseline | For the users who got the nudge at least once: the sit rate on their nudged days, and on their days with no nudge of any kind (from signup to the window end). Users who never got a type are not in its row at all. |
 | Calls attempted but not placed | Days with a `failed` call attempt and no placed call. They are selected the same way as call days, so they are the closest thing to a holdout. They are not randomized. |

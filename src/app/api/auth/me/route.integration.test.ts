@@ -170,4 +170,23 @@ describe("GET /api/auth/me — miss-a-day recovery detection (#238)", () => {
     const { user: body } = await res.json();
     expect(body.ambientSoundEnabled).toBe(false);
   });
+
+  test("returns focusActivityDay, 1 for an existing user (#835)", async () => {
+    const existing = await makeUser({ currentDay: 30 });
+    getCurrentUser.mockResolvedValue({ userId: existing.id, email: existing.email });
+
+    const res = await GET(meRequest("2026-06-11"));
+    expect(res.status).toBe(200);
+    const { user: body } = await res.json();
+    expect(body.focusActivityDay).toBe(1);
+  });
+
+  test("returns the stored focusActivityDay (#835)", async () => {
+    const focused = await makeUser({ focusActivityDay: 9 });
+    getCurrentUser.mockResolvedValue({ userId: focused.id, email: focused.email });
+
+    const res = await GET(meRequest("2026-06-11"));
+    const { user: body } = await res.json();
+    expect(body.focusActivityDay).toBe(9);
+  });
 });

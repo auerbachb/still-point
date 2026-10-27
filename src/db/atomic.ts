@@ -5,7 +5,7 @@ import {
   thoughts,
   users,
 } from "@/db/schema";
-import { shouldAdvanceDay, type SessionType, type Track } from "@/lib/constants";
+import { shouldAdvanceDay, shouldAdvanceFocusDay, type SessionType, type Track } from "@/lib/constants";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { isUniqueViolation } from "@/lib/dbErrors";
 
@@ -36,6 +36,7 @@ type UsernameUpdateResult =
         ambientSoundEnabled: boolean;
         dualTrackEnabled: boolean;
         secondTrackDay: number;
+        focusActivityDay: number;
         longSessionPeriod: string;
         recoveryTargetDay: number | null;
         recoveryCurrentStep: number | null;
@@ -79,6 +80,7 @@ export async function atomicUpdateUsername(params: {
         ambientSoundEnabled: users.ambientSoundEnabled,
         dualTrackEnabled: users.dualTrackEnabled,
         secondTrackDay: users.secondTrackDay,
+        focusActivityDay: users.focusActivityDay,
         longSessionPeriod: users.longSessionPeriod,
         recoveryTargetDay: users.recoveryTargetDay,
         recoveryCurrentStep: users.recoveryCurrentStep,
@@ -551,7 +553,12 @@ const activeRecoverySql = sql`(
   and u.recovery_current_step <= u.recovery_total_steps
 )`;
 
-function progressionUpdateSql(shouldAdvance: boolean, track: Track) {
+/**
+ * `shouldAdvance` (a completed standard sit) drives the meditation columns;
+ * `shouldAdvanceFocus` (a completed focus session, #765) drives only
+ * `focus_activity_day`. The two never both hold for one session.
+ */
+function progressionUpdateSql(shouldAdvance: boolean, track: Track, shouldAdvanceFocus: boolean) {
   return sql`
     current_day = case
       when not ${shouldAdvance} or ${track} <> 'primary' then u.current_day
@@ -589,6 +596,10 @@ function progressionUpdateSql(shouldAdvance: boolean, track: Track) {
       then u.second_track_day
       else u.second_track_day + 1
     end,
+    focus_activity_day = case
+      when not ${shouldAdvanceFocus} then u.focus_activity_day
+      else u.focus_activity_day + 1
+    end,
     updated_at = now()
   `;
 }
@@ -601,6 +612,7 @@ export async function atomicCreateSessionWithProgression(params: {
   track: Track;
 }): Promise<{ session: typeof sessions.$inferSelect; already: boolean }> {
   const shouldAdvance = shouldAdvanceDay(params.sessionType, params.completed);
+  const shouldAdvanceFocus = shouldAdvanceFocusDay(params.sessionType, params.completed);
   const { session, userId, track } = params;
   const clientSessionId = session.clientSessionId ?? null;
 
@@ -654,7 +666,7 @@ export async function atomicCreateSessionWithProgression(params: {
       ),
       progressed as (
         update users u
-        set ${progressionUpdateSql(shouldAdvance, track)}
+        set ${progressionUpdateSql(shouldAdvance, track, shouldAdvanceFocus)}
         from locked l
         where u.id = l.id
         returning u.id
@@ -756,7 +768,7 @@ export async function atomicRecordBuddyPersonalSession(params: {
     ),
     progressed as (
       update users u
-      set ${progressionUpdateSql(true, "primary")}
+      set ${progressionUpdateSql(true, "primary", false)}
       from user_row ur
       where u.id = ${params.userId}::uuid
         and exists (select 1 from user_row)

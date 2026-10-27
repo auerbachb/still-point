@@ -52,6 +52,11 @@ export const users = pgTable("users", {
    *  Both are backward-compatible defaults so existing rows stay single-track. */
   dualTrackEnabled: boolean("dual_track_enabled").default(false).notNull(),
   secondTrackDay: integer("second_track_day").default(1).notNull(),
+  /** #765: the focus goal counter, one for every focus category. Each completed
+   *  `focus` session adds one; nothing else touches it (no recovery ramp). The
+   *  goal is `focusDurationForDay(focusActivityDay)`. Unrelated to the
+   *  per-session `focusRating` self-report. */
+  focusActivityDay: integer("focus_activity_day").default(1).notNull(),
   /** #708: whether the long (primary) session is the morning or evening sit.
    *  am | pm. The short track is the opposite. A label only — sits are not
    *  locked to the clock. */
@@ -510,7 +515,7 @@ export const sessions = pgTable("sessions", {
   buddyIdx: index("idx_sessions_buddy_session").on(table.buddySessionId),
   sessionTypeCheck: check(
     "sessions_session_type_allowed",
-    sql`${table.sessionType} in ('standard', 'quick', 'breath')`,
+    sql`${table.sessionType} in ('standard', 'quick', 'breath', 'focus')`,
   ),
   trackCheck: check(
     "sessions_track_allowed",
