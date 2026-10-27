@@ -11,81 +11,28 @@ struct HomeView: View {
     /// #898: the "Combine today's sits?" confirmation is up.
     @State private var showCombineConfirmation = false
 
+    /// Home hides content that would push the session buttons off-screen (or block
+    /// the screen) while UI tests drive the app.
+    private static var isUITestMode: Bool {
+        ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1"
+    }
+
+    /// The primary track's cap, in whole minutes (the dual-track fork threshold).
+    private static var maxDurationMinutes: Int { StillPoint.maxDuration / 60 }
+
     var body: some View {
         ScrollView {
             VStack(spacing: SPSpacing.s5) {
-                // Welcome header
-                if let username = appVM.currentUser?.username {
-                    Text("WELCOME, \(username.uppercased())")
-                        .font(SPFont.mono(11, weight: .medium))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .tracking(3)
-                        .padding(.top, SPSpacing.s4)
-                }
+                welcomeHeader
 
                 Spacer().frame(height: SPSpacing.s4)
 
                 // #240: dual-track shows two independently-startable track cards;
                 // single-track keeps the classic day readout.
                 if appVM.dualTrackEnabled {
-                    VStack(spacing: SPSpacing.s3) {
-                        trackCard(
-                            label: "TRACK ONE · \(StillPoint.maxDuration / 60) MIN",
-                            day: appVM.currentDay,
-                            duration: appVM.todayDuration,
-                            blocks: appVM.todayBlockCount,
-                            doneToday: appVM.primaryDoneToday,
-                            recovery: appVM.activeRecovery,
-                            identifier: "home.trackOne",
-                            onBegin: { appVM.beginSession(track: .primary) }
-                        )
-                        trackCard(
-                            label: "TRACK TWO",
-                            day: appVM.secondTrackDay,
-                            duration: appVM.secondTrackDuration,
-                            blocks: appVM.secondTrackBlockCount,
-                            doneToday: appVM.secondDoneToday,
-                            recovery: nil,
-                            identifier: "home.trackTwo",
-                            onBegin: { appVM.beginSession(track: .second) }
-                        )
-                        // #898: today's two sits as one, directly under Track Two.
-                        // Absent, not disabled, when not offered. Suppressed during
-                        // UI tests, as the fork card is: it would push the quick
-                        // minute, breath and buddy buttons down.
-                        if appVM.combineOffered
-                            && ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
-                            combineSitsAction
-                        }
-                    }
-                    .padding(.horizontal, SPSpacing.s2)
+                    dualTrackCards
                 } else {
-                    // Day number with breathing animation
-                    Text("\(appVM.currentDay)")
-                        .font(SPFont.dayNumber)
-                        .foregroundStyle(Color(SPColor.fg))
-                        .scaleEffect(breatheAnimation ? 1.02 : 1.0)
-                        .opacity(breatheAnimation ? 1.0 : 0.6)
-                        .animation(
-                            .easeInOut(duration: 4).repeatForever(autoreverses: true),
-                            value: breatheAnimation
-                        )
-                        .onAppear { breatheAnimation = true }
-
-                    // Day info
-                    Text("day · \(appVM.todayDuration)s · \(appVM.todayBlockCount) blocks")
-                        .font(SPFont.mono(14, weight: .light))
-                        .foregroundStyle(Color(SPColor.fg3))
-                        .tracking(2)
-
-                    if let recovery = appVM.activeRecovery {
-                        Text(DurationRecovery.recoveryProgressText(recovery))
-                            .font(SPFont.mono(11, weight: .medium))
-                            .foregroundStyle(SPColor.amberText)
-                            .tracking(1)
-                            .multilineTextAlignment(.center)
-                            .accessibilityIdentifier("home.recoveryBadge")
-                    }
+                    singleTrackReadout
                 }
 
                 appGatePill
@@ -94,13 +41,13 @@ struct HomeView: View {
                 // Suppressed during UI tests (would push the Begin button off-screen
                 // for long-running fixture users, producing an invalid hit point).
                 if appVM.dualTrackEligible && !appVM.dualTrackEnabled && !forkDismissed
-                    && ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
+                    && !Self.isUITestMode {
                     dualTrackForkCard
                 }
 
                 // L1–L5 lesson pathway preview (#525 / #587) — not tied to day count.
                 // Suppressed during UI tests (extra vertical content can push Begin off-screen).
-                if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" {
+                if !Self.isUITestMode {
                     PathwayView()
                 }
 
@@ -108,75 +55,7 @@ struct HomeView: View {
 
                 Spacer().frame(height: SPSpacing.s4)
 
-                // Begin button
-                VStack(spacing: SPSpacing.s2) {
-                    // Primary Begin lives inside the track cards in dual-track mode.
-                    if !appVM.dualTrackEnabled {
-                        Button {
-                            withAnimation {
-                                appVM.beginSession()
-                            }
-                        } label: {
-                            Text("Begin")
-                                .font(SPFont.serifItalic(22, weight: .light))
-                                .spCapsuleButtonStyle(.neutral, size: .regular, prominent: true, tall: true, horizontalPadding: SPSpacing.s6)
-                        }
-                        .accessibilityIdentifier("home.beginButton")
-                        .accessibilityLabel("Start session")
-                    }
-
-                    Button {
-                        withAnimation {
-                            appVM.beginSession(type: .quick)
-                        }
-                    } label: {
-                        Text("Quick minute · \(StillPoint.quickDuration)s")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .tracking(1.4)
-                            .spCapsuleButtonStyle(.green, size: .regular)
-                    }
-                    .accessibilityIdentifier("home.quickMinuteButton")
-                    .accessibilityLabel("Start quick minute")
-
-                    Button {
-                        withAnimation {
-                            appVM.beginBreathCounting()
-                        }
-                    } label: {
-                        Text("Breath counting")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .tracking(1.4)
-                            .spCapsuleButtonStyle(.neutral, size: .regular)
-                    }
-                    .accessibilityIdentifier("home.breathCountingButton")
-                    .accessibilityLabel("Start breath counting")
-
-                    // #840: today's focus goal, one for every category.
-                    Button {
-                        withAnimation {
-                            appVM.beginFocusActivity()
-                        }
-                    } label: {
-                        Text("Focus activity · \(FocusActivity.formatGoal(appVM.focusGoalSeconds))")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .tracking(1.4)
-                            .spCapsuleButtonStyle(.neutral, size: .regular)
-                    }
-                    .accessibilityIdentifier("home.focusActivityButton")
-                    .accessibilityLabel("Start focus activity, \(FocusActivity.spokenDuration(appVM.focusGoalSeconds)) goal")
-
-                    Button {
-                        withAnimation {
-                            appVM.beginBuddySession()
-                        }
-                    } label: {
-                        Text("Meditate with a friend")
-                            .font(SPFont.serifItalic(18, weight: .light))
-                            .spCapsuleButtonStyle(.neutral, size: .regular, horizontalPadding: SPSpacing.s5)
-                            .foregroundStyle(Color(SPColor.fg2))
-                    }
-                    .accessibilityIdentifier("home.buddySessionButton")
-                }
+                sessionActions
 
                 if let inviteError = appVM.buddyInviteError {
                     Text(inviteError)
@@ -204,6 +83,160 @@ struct HomeView: View {
         .sheet(isPresented: $showAppGateOnboarding) {
             AppGateOnboardingSheet(appVM: appVM, isPresented: $showAppGateOnboarding)
         }
+    }
+
+    @ViewBuilder
+    private var welcomeHeader: some View {
+        if let username = appVM.currentUser?.username {
+            Text("WELCOME, \(username.uppercased())")
+                .font(SPFont.mono(11, weight: .medium))
+                .foregroundStyle(Color(SPColor.fg3))
+                .tracking(3)
+                .padding(.top, SPSpacing.s4)
+        }
+    }
+
+    /// #240: both track cards, plus the #898 combine action under Track Two.
+    private var dualTrackCards: some View {
+        VStack(spacing: SPSpacing.s3) {
+            trackCard(
+                label: "TRACK ONE · \(Self.maxDurationMinutes) MIN",
+                day: appVM.currentDay,
+                duration: appVM.todayDuration,
+                blocks: appVM.todayBlockCount,
+                doneToday: appVM.primaryDoneToday,
+                recovery: appVM.activeRecovery,
+                identifier: "home.trackOne",
+                onBegin: { appVM.beginSession(track: .primary) }
+            )
+            trackCard(
+                label: "TRACK TWO",
+                day: appVM.secondTrackDay,
+                duration: appVM.secondTrackDuration,
+                blocks: appVM.secondTrackBlockCount,
+                doneToday: appVM.secondDoneToday,
+                recovery: nil,
+                identifier: "home.trackTwo",
+                onBegin: { appVM.beginSession(track: .second) }
+            )
+            // #898: today's two sits as one, directly under Track Two.
+            // Absent, not disabled, when not offered. Suppressed during
+            // UI tests, as the fork card is: it would push the quick
+            // minute, breath and buddy buttons down.
+            if appVM.combineOffered && !Self.isUITestMode {
+                combineSitsAction
+            }
+        }
+        .padding(.horizontal, SPSpacing.s2)
+    }
+
+    /// Single-track day readout: breathing day number, length, recovery badge.
+    @ViewBuilder
+    private var singleTrackReadout: some View {
+        // Day number with breathing animation
+        Text("\(appVM.currentDay)")
+            .font(SPFont.dayNumber)
+            .foregroundStyle(Color(SPColor.fg))
+            .scaleEffect(breatheAnimation ? 1.02 : 1.0)
+            .opacity(breatheAnimation ? 1.0 : 0.6)
+            .animation(
+                .easeInOut(duration: 4).repeatForever(autoreverses: true),
+                value: breatheAnimation
+            )
+            .onAppear { breatheAnimation = true }
+
+        // Day info
+        Text("day · \(appVM.todayDuration)s · \(appVM.todayBlockCount) blocks")
+            .font(SPFont.mono(14, weight: .light))
+            .foregroundStyle(Color(SPColor.fg3))
+            .tracking(2)
+
+        if let recovery = appVM.activeRecovery {
+            recoveryProgressLabel(recovery)
+                .accessibilityIdentifier("home.recoveryBadge")
+        }
+    }
+
+    /// Begin (single-track only), then quick minute, breath counting, focus and buddy.
+    private var sessionActions: some View {
+        VStack(spacing: SPSpacing.s2) {
+            // Primary Begin lives inside the track cards in dual-track mode.
+            if !appVM.dualTrackEnabled {
+                Button {
+                    withAnimation {
+                        appVM.beginSession()
+                    }
+                } label: {
+                    Text("Begin")
+                        .font(SPFont.serifItalic(22, weight: .light))
+                        .spCapsuleButtonStyle(.neutral, size: .regular, prominent: true, tall: true, horizontalPadding: SPSpacing.s6)
+                }
+                .accessibilityIdentifier("home.beginButton")
+                .accessibilityLabel("Start session")
+            }
+
+            Button {
+                withAnimation {
+                    appVM.beginSession(type: .quick)
+                }
+            } label: {
+                secondaryActionLabel("Quick minute · \(StillPoint.quickDuration)s", color: .green)
+            }
+            .accessibilityIdentifier("home.quickMinuteButton")
+            .accessibilityLabel("Start quick minute")
+
+            Button {
+                withAnimation {
+                    appVM.beginBreathCounting()
+                }
+            } label: {
+                secondaryActionLabel("Breath counting", color: .neutral)
+            }
+            .accessibilityIdentifier("home.breathCountingButton")
+            .accessibilityLabel("Start breath counting")
+
+            // #840: today's focus goal, one for every category.
+            Button {
+                withAnimation {
+                    appVM.beginFocusActivity()
+                }
+            } label: {
+                secondaryActionLabel("Focus activity · \(FocusActivity.formatGoal(appVM.focusGoalSeconds))", color: .neutral)
+            }
+            .accessibilityIdentifier("home.focusActivityButton")
+            .accessibilityLabel("Start focus activity, \(FocusActivity.spokenDuration(appVM.focusGoalSeconds)) goal")
+
+            Button {
+                withAnimation {
+                    appVM.beginBuddySession()
+                }
+            } label: {
+                Text("Meditate with a friend")
+                    .font(SPFont.serifItalic(18, weight: .light))
+                    .spCapsuleButtonStyle(.neutral, size: .regular, horizontalPadding: SPSpacing.s5)
+                    .foregroundStyle(Color(SPColor.fg2))
+            }
+            .accessibilityIdentifier("home.buddySessionButton")
+        }
+    }
+
+    /// The small mono capsule label shared by the quick minute, breath counting
+    /// and focus activity buttons.
+    private func secondaryActionLabel(_ title: String, color: SPCapsuleButtonColor) -> some View {
+        Text(title)
+            .font(SPFont.mono(11, weight: .medium))
+            .tracking(1.4)
+            .spCapsuleButtonStyle(color, size: .regular)
+    }
+
+    /// Miss-a-day recovery ramp progress, shared by the single-track readout and
+    /// the Track One card.
+    private func recoveryProgressLabel(_ recovery: DurationRecovery.ActiveRecovery) -> some View {
+        Text(DurationRecovery.recoveryProgressText(recovery))
+            .font(SPFont.mono(11, weight: .medium))
+            .foregroundStyle(SPColor.amberText)
+            .tracking(1)
+            .multilineTextAlignment(.center)
     }
 
     /// Persistent app-gate status indicator. Hidden until the user has picked apps
@@ -293,11 +326,7 @@ struct HomeView: View {
                 .tracking(2)
 
             if let recovery {
-                Text(DurationRecovery.recoveryProgressText(recovery))
-                    .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(SPColor.amberText)
-                    .tracking(1)
-                    .multilineTextAlignment(.center)
+                recoveryProgressLabel(recovery)
             }
 
             Button {
@@ -314,9 +343,7 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, SPSpacing.s4)
         .padding(.horizontal, SPSpacing.s3)
-        .background(SPColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(SPColor.border1))
+        .homeCardChrome()
         .accessibilityIdentifier(identifier)
     }
 
@@ -365,7 +392,7 @@ struct HomeView: View {
     /// #240: fork choice presented once the primary track passes the 10-minute mark.
     private var dualTrackForkCard: some View {
         VStack(spacing: SPSpacing.s3) {
-            Text("\(StillPoint.maxDuration / 60)-MINUTE MARK REACHED")
+            Text("\(Self.maxDurationMinutes)-MINUTE MARK REACHED")
                 .font(SPFont.mono(11, weight: .medium))
                 .foregroundStyle(SPColor.greenText)
                 .tracking(1.5)
@@ -375,7 +402,7 @@ struct HomeView: View {
                 .foregroundStyle(Color(SPColor.fg))
                 .multilineTextAlignment(.center)
 
-            Text("Your sits have grown to \(StillPoint.maxDuration / 60) minutes. Keep that daily sit and start a second one that restarts at 1 minute and grows +10s a day — two tracks, run independently.")
+            Text("Your sits have grown to \(Self.maxDurationMinutes) minutes. Keep that daily sit and start a second one that restarts at 1 minute and grows +10s a day — two tracks, run independently.")
                 .font(SPFont.serif(15, weight: .light))
                 .foregroundStyle(Color(SPColor.fg3))
                 .multilineTextAlignment(.center)
@@ -402,16 +429,14 @@ struct HomeView: View {
             .accessibilityIdentifier("home.keepOneTrackButton")
         }
         .padding(SPSpacing.s4)
-        .background(SPColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(SPColor.border1))
+        .homeCardChrome()
         .padding(.horizontal, SPSpacing.s2)
     }
 
     /// First-run prompt asking whether to set up the app gate. Shown at most once,
     /// and never during UI tests (it would block the home screen).
     private func maybePresentAppGateOnboarding() {
-        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1" else { return }
+        guard !Self.isUITestMode else { return }
         let key = "appBlocking.onboardingShown.v1"
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: key) else { return }
@@ -504,5 +529,15 @@ private struct AppGateOnboardingSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .stillPointBackground()
+    }
+}
+
+private extension View {
+    /// The rounded surface shared by Home's track cards and the dual-track fork card.
+    func homeCardChrome() -> some View {
+        let shape = RoundedRectangle(cornerRadius: 16)
+        return background(SPColor.surface1)
+            .clipShape(shape)
+            .overlay(shape.stroke(SPColor.border1))
     }
 }
