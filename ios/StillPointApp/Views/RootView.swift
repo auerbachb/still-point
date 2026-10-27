@@ -31,8 +31,8 @@ struct RootView: View {
 
             // Brand-lockup overlay during cold-start auth check. Sits on top
             // of the current-view branch and dismisses when checkAuth flips
-            // isLoading to false.
-            if appVM.isLoading {
+            // isLoading to false. Never drawn over a session (#852).
+            if appVM.showsLoadingOverlay {
                 ColdStartBrandOverlay(authStatusMessage: appVM.authStatusMessage)
                     .transition(.opacity)
             }
@@ -52,7 +52,7 @@ struct RootView: View {
             uiTestSettingsRequestCount = max(uiTestSettingsRequestCount, count)
         }
         .animation(.easeInOut(duration: Constants.routeAnimationDuration), value: appVM.currentView)
-        .animation(.easeInOut(duration: Constants.loadingAnimationDuration), value: appVM.isLoading)
+        .animation(.easeInOut(duration: Constants.loadingAnimationDuration), value: appVM.showsLoadingOverlay)
         .onAppear {
             syncIdleTimerForeground(scenePhase)
         }
