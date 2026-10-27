@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { UPLOAD_TIMEOUT_MS } from "./constants";
+import { PARKED_MESSAGE_MAX_LENGTH, UPLOAD_TIMEOUT_MS } from "./constants";
 import { InMemoryOfflineSessionQueueStore, type OfflineSessionQueueStore } from "./queueStore";
 import {
   LocalSessionWriteError,
@@ -250,8 +250,9 @@ describe("WebSessionSyncCoordinator (#558)", () => {
   /**
    * The inverse of #703: the write landed and only the upload was refused with a
    * non-retryable status, which `flushEntry` rethrows. The entry must still be in
-   * the queue for `flushPending` to retry on reconnect, and the error must NOT be
-   * a `LocalSessionWriteError` — that tag is what makes the caller say "nowhere".
+   * the queue (since #978 parked, unless the status was a 401 or 403, which
+   * `flushPending` retries on reconnect), and the error must NOT be a
+   * `LocalSessionWriteError` — that tag is what makes the caller say "nowhere".
    */
   test("#703: a permanent sync failure leaves the entry queued and is not tagged as a write failure", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
@@ -906,7 +907,7 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
     }
   });
 
-  test("flushPending still rejects with the refusal, after uploading the sits behind it", async () => {
+  test("flushPending parks the refusal and resolves with the sits behind it (#978)", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     await store.saveEntries([
       { clientSessionId: "refused", ownerUserId: testOwnerUserId, request: requestWithClientId(baseRequest(), "refused"), thoughts: [], serverSessionId: null, sessionSynced: false, enqueuedAt: "2026-10-27T12:00:00.000Z" },
@@ -921,8 +922,9 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
       },
     });
 
-    await expect(coordinator.flushPending(testOwnerUserId)).rejects.toBe(refusal);
-    const accepted = (await store.loadEntries()).find((entry) => entry.clientSessionId === "accepted");
+    await expect(coordinator.flushPending(testOwnerUserId)).resolves.toBe(1);
+    const [refused, accepted] = await store.loadEntries();
+    expect(refused?.parked).toMatchObject({ message: "rejected" });
     expect(accepted?.sessionSynced).toBe(true);
   });
 
@@ -967,5 +969,216 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
 
     await coordinator.flushAndPruneCompleted(testOwnerUserId);
     expect(await store.loadEntries()).toEqual([]);
+  });
+});
+
+/** Hands out copies, as IndexedDB does: a read is a snapshot, and only a write
+ *  changes what is stored. */
+class CopyingQueueStore implements OfflineSessionQueueStore {
+  private entries: PendingSessionEntry[] = [];
+
+  async loadEntries(): Promise<PendingSessionEntry[]> {
+    return structuredClone(this.entries);
+  }
+
+  async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+    this.entries = structuredClone(entries);
+  }
+}
+
+const rejectedSit = "550e8400-e29b-41d4-a716-446655449780";
+const sitAhead = "550e8400-e29b-41d4-a716-446655449781";
+const sitBehind = "550e8400-e29b-41d4-a716-446655449782";
+
+/** A sit queued with one in-session thought and no server row yet. */
+function queuedSit(clientSessionId: string): PendingSessionEntry {
+  return {
+    clientSessionId,
+    ownerUserId: testOwnerUserId,
+    request: requestWithClientId(baseRequest(), clientSessionId),
+    thoughts: [{ timeInSession: 12, text: `a thought in ${clientSessionId}` }],
+    serverSessionId: null,
+    sessionSynced: false,
+    enqueuedAt: "2026-10-27T09:00:00.000Z",
+  };
+}
+
+/** The same sit once its session row exists, its thought still queued. */
+function syncedSit(clientSessionId: string): PendingSessionEntry {
+  return { ...queuedSit(clientSessionId), sessionSynced: true, serverSessionId: `server-${clientSessionId}` };
+}
+
+type RefusedUpload = { status: number; text: string };
+
+/**
+ * A stand-in for the API behind `liveSessionSyncTransport`. An upload `refuse`
+ * names gets that answer; every other one succeeds, and a created session is
+ * named after its sit. Returns each upload in order, as `<path> <id>`.
+ */
+function stubApi(refuse: (path: string, body: Record<string, unknown>) => RefusedUpload | undefined): string[] {
+  const uploads: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (path: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const id = String(path === "/api/sessions" ? body.clientSessionId : body.sessionId);
+    uploads.push(`${path} ${id}`);
+    const refused = refuse(path, body);
+    if (refused) return new Response(refused.text, { status: refused.status });
+    const answer = path === "/api/sessions" ? { session: { id: `server-${id}` } } : { thoughts: [] };
+    return new Response(JSON.stringify(answer), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  return uploads;
+}
+
+describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("a sit the server refuses with a permanent 4xx is parked, and the sits behind it still upload", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([queuedSit(sitAhead), queuedSit(rejectedSit), queuedSit(sitBehind)]);
+    const uploads = stubApi((path, body) =>
+      path === "/api/sessions" && body.clientSessionId === rejectedSit
+        ? { status: 400, text: '{"error":"Invalid track"}' }
+        : undefined,
+    );
+
+    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+
+    expect(flushed).toBe(2);
+    expect(uploads).toEqual([
+      `/api/sessions ${sitAhead}`,
+      `/api/thoughts/batch server-${sitAhead}`,
+      `/api/sessions ${rejectedSit}`,
+      `/api/sessions ${sitBehind}`,
+      `/api/thoughts/batch server-${sitBehind}`,
+    ]);
+    const [ahead, rejected, behind] = await store.loadEntries();
+    expect(ahead).toEqual({ ...syncedSit(sitAhead), thoughts: [] });
+    expect(behind).toEqual({ ...syncedSit(sitBehind), thoughts: [] });
+    // Kept as it was queued, with the answer that turned it down.
+    expect(rejected).toEqual({
+      ...queuedSit(rejectedSit),
+      parked: { at: expect.any(String), status: 400, message: '{"error":"Invalid track"}' },
+    });
+    expect(Number.isNaN(Date.parse(rejected!.parked!.at))).toBe(false);
+  });
+
+  test("a thoughts batch answered 404 parks its sit, and the next sit's thoughts still upload", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([syncedSit(rejectedSit), syncedSit(sitBehind)]);
+    const uploads = stubApi((path, body) =>
+      path === "/api/thoughts/batch" && body.sessionId === `server-${rejectedSit}`
+        ? { status: 404, text: '{"error":"Session not found"}' }
+        : undefined,
+    );
+
+    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+
+    expect(flushed).toBe(1);
+    expect(uploads).toEqual([`/api/thoughts/batch server-${rejectedSit}`, `/api/thoughts/batch server-${sitBehind}`]);
+    expect(await store.loadEntries()).toEqual([
+      {
+        ...syncedSit(rejectedSit),
+        parked: { at: expect.any(String), status: 404, message: '{"error":"Session not found"}' },
+      },
+      { ...syncedSit(sitBehind), thoughts: [] },
+    ]);
+  });
+
+  test("a sit whose session row went up before its thoughts were turned down still counts as synced", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([queuedSit(rejectedSit)]);
+    const uploads = stubApi((path) =>
+      path === "/api/thoughts/batch" ? { status: 400, text: '{"error":"Invalid thoughts payload"}' } : undefined,
+    );
+
+    // The row moves the server's progression, so the flush still reports it
+    // for `onSynced`.
+    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+
+    expect(flushed).toBe(1);
+    expect(uploads).toEqual([`/api/sessions ${rejectedSit}`, `/api/thoughts/batch server-${rejectedSit}`]);
+    expect(await store.loadEntries()).toEqual([
+      {
+        ...syncedSit(rejectedSit),
+        parked: { at: expect.any(String), status: 400, message: '{"error":"Invalid thoughts payload"}' },
+      },
+    ]);
+  });
+
+  test.each([401, 403])("a %i leaves its sit queued as it was, and a later flush sends it", async (status) => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([queuedSit(rejectedSit), queuedSit(sitBehind)]);
+    let signedOut = true;
+    const uploads = stubApi((path, body) =>
+      signedOut && path === "/api/sessions" && body.clientSessionId === rejectedSit
+        ? { status, text: '{"error":"Unauthorized"}' }
+        : undefined,
+    );
+    const coordinator = new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
+
+    // The sit behind it still uploads.
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(1);
+    expect((await store.loadEntries())[0]).toEqual(queuedSit(rejectedSit));
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
+
+    signedOut = false;
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(1);
+
+    expect(uploads).toEqual([
+      `/api/sessions ${rejectedSit}`,
+      `/api/sessions ${sitBehind}`,
+      `/api/thoughts/batch server-${sitBehind}`,
+      `/api/sessions ${rejectedSit}`,
+      `/api/thoughts/batch server-${rejectedSit}`,
+    ]);
+    expect((await store.loadEntries())[0]).toEqual({ ...syncedSit(rejectedSit), thoughts: [] });
+  });
+
+  test("a parked sit is sent again by no flush, note edit or re-save", async () => {
+    const store = new CopyingQueueStore();
+    const uploads = stubApi(() => ({ status: 422, text: '{"error":"Invalid session"}' }));
+    const coordinator = new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
+
+    // Refused on its first upload: the save rejects, as before, so the caller
+    // still reports the sit as kept on this device (`resolveSessionSaveOutcome`).
+    await expect(coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, []))
+      .rejects.toMatchObject({ status: 422, permanent: true });
+    expect((await store.loadEntries())[0]!.parked).toMatchObject({ status: 422 });
+
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(0);
+    await coordinator.replaceEndNote(rejectedSit, testOwnerUserId, "a note");
+    expect(await coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, []))
+      .toEqual({ sessionId: rejectedSit, isPendingSync: true, serverSessionId: null });
+
+    expect(uploads).toEqual([`/api/sessions ${rejectedSit}`]);
+    // The note is kept with the sit all the same.
+    expect((await store.loadEntries())[0]!.thoughts).toEqual([{ timeInSession: -1, text: "a note" }]);
+  });
+
+  test("a parked sit keeps only the start of a long answer", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([queuedSit(rejectedSit)]);
+    // A proxy's error page, not the route's short JSON.
+    const page = `<html><body>${"Request refused. ".repeat(40)}</body></html>`;
+    stubApi(() => ({ status: 400, text: page }));
+
+    await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+
+    expect((await store.loadEntries())[0]!.parked!.message).toBe(page.slice(0, PARKED_MESSAGE_MAX_LENGTH));
+  });
+
+  test("a parked sit is not counted as pending, and pruning keeps it", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([
+      { ...syncedSit(rejectedSit), parked: { at: "2026-10-27T09:30:00.000Z", status: 404, message: "Session not found" } },
+      queuedSit(sitBehind),
+    ]);
+    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
+    await coordinator.pruneCompletedEntries(testOwnerUserId);
+    expect((await store.loadEntries()).map((entry) => entry.clientSessionId)).toEqual([rejectedSit, sitBehind]);
   });
 });

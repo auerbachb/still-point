@@ -37,6 +37,16 @@ export type CreateSessionPayload = {
   clientSessionId: string;
 };
 
+/** #978: the answer that turned a queued sit down for good. */
+export type ParkedSession = {
+  /** When it came back, as an ISO time. */
+  at: string;
+  /** Its HTTP status, or null for a failure that carried none. */
+  status: number | null;
+  /** Its text, cut to `PARKED_MESSAGE_MAX_LENGTH` characters. */
+  message: string;
+};
+
 /** Durable local record of a completed sit awaiting server sync (#558). */
 export type PendingSessionEntry = {
   clientSessionId: string;
@@ -51,6 +61,11 @@ export type PendingSessionEntry = {
    *  set once the sit has a server row; entries written before this field
    *  existed omit it, which reads as false. */
   clearCompletionNote?: boolean;
+  /** #978: set once the server answers this sit with a permanent 4xx other
+   *  than 401 or 403. No flush sends a parked entry again, and it stays queued
+   *  as the record of the sit. Entries queued before #978, and every entry
+   *  never turned down, omit it. */
+  parked?: ParkedSession;
 };
 
 export type SavedSessionResult = {

@@ -1,5 +1,6 @@
-/** IndexedDB, Background Sync (#558) and Web Lock (#834) identifiers, and the
- *  upload deadline (#907). Keep in sync with `public/sw.js`. */
+/** IndexedDB, Background Sync (#558) and Web Lock (#834) identifiers, the
+ *  upload deadline (#907) and the parked-answer length (#978). Keep in sync
+ *  with `public/sw.js`. */
 export const OFFLINE_IDB_NAME = "stillpoint-offline-v1";
 export const OFFLINE_IDB_STORE = "session-queue";
 export const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
@@ -22,3 +23,9 @@ export const OFFLINE_OPEN_ROW_LOCK_PREFIX = "stillpoint-open-completion:";
  * server start.
  */
 export const UPLOAD_TIMEOUT_MS = 60_000;
+/**
+ * #978: how much of the answer that parked a queued sit is kept with it. The
+ * routes answer with a short JSON error; this bounds what a page from in front
+ * of them (a proxy, the platform) can put in the queue.
+ */
+export const PARKED_MESSAGE_MAX_LENGTH = 200;

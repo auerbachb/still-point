@@ -18,6 +18,31 @@ function isNetworkFailure(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "retryable" in error && (error as { retryable?: boolean }).retryable);
 }
 
+/** A 4xx other than 408 and 429: sent again, the upload gets the same answer. */
+function isPermanentFailure(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "permanent" in error);
+}
+
+/** #978: the HTTP status a failed upload was answered with, or null when it got none. */
+function failureStatus(error: unknown): number | null {
+  const status = error && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
+  return typeof status === "number" ? status : null;
+}
+
+/**
+ * The error a non-2xx answer throws. A 5xx, 408 or 429 is worth retrying; any
+ * other status is the same answer every time. #978: the status goes with it,
+ * so a flush can tell a lapsed sign-in from an answer about the sit itself.
+ * `public/sw.js` classifies its own uploads the same way.
+ */
+function uploadFailure(status: number, message: string): Error {
+  const err = new Error(message);
+  if (status >= 500 || status === 408 || status === 429) {
+    return Object.assign(err, { status, retryable: true });
+  }
+  return Object.assign(err, { status, permanent: true });
+}
+
 /** How `fetch` and body reads reject once their signal aborts. */
 function isAbortError(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && (error as { name?: unknown }).name === "AbortError");
@@ -65,11 +90,7 @@ export function liveSessionSyncTransport(): SessionSyncTransport {
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
-          const err = new Error(text || `Create session failed (${res.status})`);
-          if (res.status >= 500 || res.status === 408 || res.status === 429) {
-            throw Object.assign(err, { retryable: true });
-          }
-          throw Object.assign(err, { permanent: true });
+          throw uploadFailure(res.status, text || `Create session failed (${res.status})`);
         }
         const data = await res.json();
         return data.session as Session;
@@ -86,11 +107,7 @@ export function liveSessionSyncTransport(): SessionSyncTransport {
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
-          const err = new Error(text || `Batch thoughts failed (${res.status})`);
-          if (res.status >= 500 || res.status === 408 || res.status === 429) {
-            throw Object.assign(err, { retryable: true });
-          }
-          throw Object.assign(err, { permanent: true });
+          throw uploadFailure(res.status, text || `Batch thoughts failed (${res.status})`);
         }
       });
     },
@@ -106,4 +123,4 @@ export const alwaysFailingSessionSyncTransport: SessionSyncTransport = {
   },
 };
 
-export { isNetworkFailure };
+export { failureStatus, isNetworkFailure, isPermanentFailure };
