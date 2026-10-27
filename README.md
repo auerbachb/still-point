@@ -356,7 +356,7 @@ src/
     BlockTimer.tsx           # visual block grid + countdown + 60s bar
     MindStateBar.tsx         # green/amber timeline bar
     ThoughtCapture.tsx       # thought input during thinking state
-    CompletionScreen.tsx     # stats + session note + rating input
+    CompletionScreen.tsx     # stats + session note + mood shift
     HistoryView.tsx          # calendar-first history: month grid, mind-state trends, year-in-review
     ThoughtJournal.tsx       # all captured thoughts by day
     PublicBoard.tsx          # practitioners leaderboard
@@ -366,7 +366,6 @@ src/
     FriendsView.tsx          # friend search, requests, list
     Pathway.tsx              # L1–L5 lesson pathway preview
     GuidedExerciseOverlay.tsx # guided breath/movement/insight exercises
-    RatingSlider.tsx         # post-session quality rating
     WebNotificationSettings.tsx # web push opt-in + failure-reason reminder
     # … plus buddy/, layout, and utility components
   db/

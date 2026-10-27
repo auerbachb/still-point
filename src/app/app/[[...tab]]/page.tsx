@@ -487,8 +487,8 @@ export default function StillPoint() {
       // Immersive flows (session/breath/buddy) can exceed the viewport on small
       // phones; centering would clip the timer off the top with no way to scroll
       // up to it. Pin them to the top so the timer is always visible (#473 P2).
-      // The completion overlay can also overflow on mobile now that it includes
-      // survey sliders; centering would clip content above the viewport and push
+      // The completion overlay can also overflow on mobile with its note and
+      // mood grid; centering would clip content above the viewport and push
       // the Return button behind the fixed bottom nav (#479). Use "start" on
       // mobile so the bottom padding reliably clears the nav.
       alignItems: (isImmersive || (overlay === "complete" && isMobile)) ? "start" : "center",
@@ -647,14 +647,11 @@ export default function StillPoint() {
               clearCompletionNote: true,
             });
           } : undefined}
-          onSaveRatings={completionData.sessionId && !completionData.isPendingSync ? async (ratings) => {
-            await api.updateSessionRatings(completionData.sessionId!, ratings);
-          } : undefined}
           onSaveMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async (matrix) => {
-            await api.updateSessionRatings(completionData.sessionId!, { moodMatrix: matrix });
+            await api.updateSessionMoodMatrix(completionData.sessionId!, { moodMatrix: matrix });
           } : undefined}
           onClearMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async () => {
-            await api.updateSessionRatings(completionData.sessionId!, { moodMatrix: null });
+            await api.updateSessionMoodMatrix(completionData.sessionId!, { moodMatrix: null });
           } : undefined}
           compact={isMobile}
         />

@@ -353,3 +353,85 @@ describe("CompletionScreen mood matrix Happiness row (#885)", () => {
     expect(onClearMoodMatrix).not.toHaveBeenCalled();
   });
 });
+
+describe("CompletionScreen with session ratings retired (#889)", () => {
+  /** The callbacks the page passes for a sit that has a server row. */
+  function syncedSitProps(overrides: Partial<Props> = {}): Partial<Props> {
+    return {
+      onSaveNote: vi.fn(async (_text: string) => {}),
+      onClearNote: vi.fn(async () => {}),
+      onSaveMoodMatrix: vi.fn(async (_matrix: Record<string, unknown>) => {}),
+      onClearMoodMatrix: vi.fn(async () => {}),
+      ...overrides,
+    };
+  }
+
+  function returnButton(): HTMLButtonElement {
+    return [...container!.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === COMPLETION_RETURN_LABEL)!;
+  }
+
+  test("shows no rating slider or ratings text, and the Mood shift grid keeps its Happiness row", async () => {
+    await render(syncedSitProps());
+
+    expect(container!.querySelector('input[type="range"], [role="slider"]')).toBeNull();
+    expect(container!.textContent).not.toMatch(/rating/i);
+
+    expect(container!.textContent).toContain("Mood Shift");
+    for (const column of ["before", "after"]) {
+      for (let level = 1; level <= 5; level += 1) {
+        expect(moodCell(`Happiness ${column}: ${level}`)).toBeInstanceOf(HTMLButtonElement);
+      }
+    }
+  });
+
+  test("goes from the note straight to the six-row Mood shift grid, then save and return to home", async () => {
+    await render(syncedSitProps());
+
+    const noteSection = container!.querySelector("textarea")!.parentElement!;
+    const moodSection = noteSection.nextElementSibling!;
+    expect(moodSection.textContent).toContain("Mood Shift");
+    expect(moodSection.querySelectorAll('button[aria-label$=" before: 1"]')).toHaveLength(6);
+    expect(moodSection.nextElementSibling).toBe(returnButton());
+  });
+
+  test("a typed note and a tapped mood cell each autosave", async () => {
+    const onSaveNote = vi.fn(async (_text: string) => {});
+    const onSaveMoodMatrix = vi.fn(async (_matrix: Record<string, unknown>) => {});
+    await render(syncedSitProps({ onSaveNote, onSaveMoodMatrix }));
+
+    await typeNote("steadier than yesterday");
+    await tapMoodCell("Happiness after: 4");
+    await settleAutosave();
+    await flushWrites();
+
+    expect(onSaveNote).toHaveBeenCalledWith("steadier than yesterday");
+    expect(onSaveMoodMatrix).toHaveBeenCalledWith({ happiness: { before: null, after: 4 } });
+    expect(container!.textContent).toContain("note saved");
+    expect(container!.textContent).toContain("mood saved");
+  });
+
+  test("a flush whose note save fails still saves the mood, and the next tap leaves", async () => {
+    const onSaveNote = vi.fn<(text: string) => Promise<void>>()
+      .mockRejectedValue(new Error("offline"));
+    const onSaveMoodMatrix = vi.fn(async (_matrix: Record<string, unknown>) => {});
+    const onReturn = vi.fn();
+    await render(syncedSitProps({ onSaveNote, onSaveMoodMatrix, onReturn }));
+
+    await typeNote("before the flush");
+    await tapMoodCell("Calm after: 4");
+    await tapReturn();
+
+    // Both writes were tried; the note's failure keeps the screen up.
+    expect(onSaveNote).toHaveBeenCalledTimes(1);
+    expect(onSaveMoodMatrix).toHaveBeenCalledWith({ calm: { before: null, after: 4 } });
+    expect(onReturn).not.toHaveBeenCalled();
+    expect(container!.textContent).toContain("failed to save");
+
+    // The second tap leaves without sending either write again.
+    await tapReturn();
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    expect(onSaveNote).toHaveBeenCalledTimes(1);
+    expect(onSaveMoodMatrix).toHaveBeenCalledTimes(1);
+  });
+});
