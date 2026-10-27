@@ -479,9 +479,20 @@ extension AppViewModel {
     func refreshUserAfterSync() {
         guard currentUser != nil, currentView != .auth else { return }
         let generation = authGeneration
-        enqueueSettingsRead { [weak self] () async -> Int? in
+        let read: Task<Int?, Never> = enqueueSettingsRead { [weak self] () async -> Int? in
             guard let self else { return nil }
             return await self.refreshUserFromServer(startedAtGeneration: generation)
+        }
+        // #916: a read naming a different account tore the previous one down — Home
+        // badges reset, widget backfill cancelled — and nothing else behind this
+        // caller repaints them or the widget, unlike `returnHome()` and the sign-in
+        // catch-up. A same-account or failed read returns the entry generation, so
+        // only an adoption gets past the guard. Outside the queue turn so the refresh
+        // does not hold the line.
+        Task { [weak self] in
+            guard let live = await read.value, live != generation,
+                  let self, live == self.authGeneration else { return }
+            await self.refreshTracksDoneToday()
         }
     }
 
@@ -549,7 +560,14 @@ extension AppViewModel {
         // naming a *different* account — keeps going through `applyAuthenticatedUser`:
         // there is nothing to order it against and the guard would read it as
         // `.discarded`.
-        adoptAccountRead(user, startedAtGeneration: generation, requestTicket: settingsTicket)
+        let adoption = adoptAccountRead(user, startedAtGeneration: generation, requestTicket: settingsTicket)
+        // #916: a read naming a different account tore the previous one down, and that
+        // cleared the suppression preference with it. `checkAuth()` and the reconnect
+        // refresh hydrate after every adoption; the callers of this one do not, so the
+        // new account's preference is fetched here.
+        if adoption == .differentAccount {
+            hydrateNotificationSuppressionPreference()
+        }
         return authGeneration
     }
 
@@ -565,7 +583,15 @@ extension AppViewModel {
     ///
     /// Callers own the generation guard that precedes this and the re-capture of
     /// `authGeneration` that follows it.
-    private func adoptAccountRead(_ user: UserDTO, startedAtGeneration generation: Int, requestTicket ticket: Int) {
+    ///
+    /// - Returns: what the adoption replaced (#916). A read of the account on screen is
+    ///   `.sameAccount` whether or not the ordering applied it.
+    @discardableResult
+    private func adoptAccountRead(
+        _ user: UserDTO,
+        startedAtGeneration generation: Int,
+        requestTicket ticket: Int
+    ) -> AccountAdoption {
         if currentUser?.id == user.id {
             applySettingsResponse(
                 user,
@@ -573,9 +599,9 @@ extension AppViewModel {
                 requestTicket: ticket,
                 responseKind: .read
             )
-        } else {
-            applyAuthenticatedUser(user)
+            return .sameAccount
         }
+        return applyAuthenticatedUser(user)
     }
 
     /// Whole milliseconds since `start`, for the cold-start timing metric and its
