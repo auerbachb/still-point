@@ -118,7 +118,7 @@ In App Store Connect, open the app and go to **Distribution** / **App Store** fo
 | # | Check | Owner | Evidence / action |
 |---|-------|-------|-------------------|
 | 20 | [ ] Copy reviewer notes verbatim into #103; link engineering issues per finding (keep implementation discussion out of #103). | Product / App Store | Exact reviewer language and follow-up issue links in #103. |
-| 21 | [ ] Fix code/config and merge it. A merge that changes iOS app code cuts a new TestFlight build with the next build number, but only once both e2e gates pass. If the change is not iOS app code, or a gate fails and claims no build number, cut one by hand per [`ios/RELEASING.md`](../../ios/RELEASING.md#releasing-to-testflight). Never hand-bump `CURRENT_PROJECT_VERSION`. | Engineering | New `ios-v*-build*` tag above the rejected build; TestFlight upload green. |
+| 21 | [ ] Fix code/config and merge it. A merge that changes iOS app code cuts a new TestFlight build with the next build number, but only once both e2e gates pass. If the change is not iOS app code, run the auto-cut workflow by hand from the Actions tab; it still runs the e2e gates. A failed gate claims no build number: re-run or fix per [When a cut fails](../../ios/RELEASING.md#automatic-merge-ios-app-code-default) rather than skipping the gates with a manual tag. Never hand-bump `CURRENT_PROJECT_VERSION`. | Engineering | New `ios-v*-build*` tag above the rejected build; TestFlight upload green. |
 | 22 | [ ] Attach new build; update review notes and recording if the flow changed; resubmit. | Product / App Store + Engineering | Version page references replacement build and updated materials. |
 
 ### Phase F — If approved
