@@ -36,7 +36,7 @@ Pick a path by intent. All TestFlight uploads share the reusable build workflow 
 
 ### Manual TestFlight tag (break-glass)
 
-1. Pick the next build number: 1 + the highest `ios-v*-build*` tag (`git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1`).
+1. Pick the next build number: 1 + the highest `ios-v*-build*` tag (`git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1`). The tags, and the workflow's check, miss builds uploaded some other way (Xcode Organizer, the Fastlane lanes). If App Store Connect → **TestFlight** lists a higher build number, start above that one.
 2. Tag the commit and push: `git tag ios-v1.0.3-build41 <commit> && git push origin ios-v1.0.3-build41`. The tag sets the build number, so no `ios/project.yml` bump is needed. Its marketing version must match `MARKETING_VERSION` at that commit.
 3. Confirm [Build & Upload to TestFlight](../../.github/workflows/ios-testflight.yml) is green and the build reaches **Ready to Test** in App Store Connect → **TestFlight**.
 
@@ -65,7 +65,7 @@ GitHub Actions holds distribution signing material as secrets (values never appe
 
 - **Signing error in CI:** verify certificate validity and that the provisioning profile bundle ID matches.
 - **Upload authentication error:** regenerate the App Store Connect API key and update GitHub secrets.
-- **Build number conflict:** every upload needs an unused build number. TestFlight cuts take theirs from the `ios-v*-build*` tags, and a re-upload is a new cut with a new tag.
+- **Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. TestFlight cuts take theirs from the `ios-v*-build*` tags. Shipping a commit again is a new cut with a new tag, while **Re-run failed jobs** on a cut whose build or upload failed keeps its number.
 - **`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`:** Account Holder must clear Agreements, Tax, and Banking in Apple Developer / App Store Connect before uploads succeed.
 
 The App Store release workflow maps `APPSTORE_*` secrets to Fastlane's `APP_STORE_CONNECT_API_*` environment names at runtime (see [`.github/workflows/ios-app-store-release.yml`](../../.github/workflows/ios-app-store-release.yml)).

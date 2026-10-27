@@ -102,6 +102,9 @@ App Store release path.
    git fetch --tags
    git tag -l 'ios-v*-build*' | sed 's/.*-build//' | sort -n | tail -1
    ```
+   The tags, and the workflow's check, miss builds uploaded some other way (Xcode Organizer,
+   the Fastlane lanes). If App Store Connect → **TestFlight** lists a higher build number,
+   start above that one.
 2. Tag the commit and push the tag, using the **TestFlight** tag pattern
    (`ios-v{MARKETING_VERSION}-build{number}`). The marketing version must match
    `ios/project.yml` at that commit:
@@ -182,7 +185,7 @@ After the intended TestFlight build is processed and valid, use the delegate-rea
 - **Manual TestFlight:** push a tag matching `ios-v*-build*` (e.g. `ios-v1.0.3-build41`) to trigger [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml).
 - **App Store automation:** push a strict semver tag `ios-vMAJOR.MINOR.PATCH` that **equals** `MARKETING_VERSION` to trigger [`.github/workflows/ios-app-store-release.yml`](../.github/workflows/ios-app-store-release.yml).
 - The uploaded marketing version comes from `ios/project.yml`; the TestFlight build number comes from the tag. The manual path rejects a tag whose marketing version differs from `ios/project.yml` or whose build number is not above every other `ios-v*-build*` tag, and the App Store workflow enforces tag ↔ `MARKETING_VERSION`.
-- Every upload needs a new build number. A re-upload of the same commit is a new cut with a new tag.
+- A build number can reach App Store Connect only once. Shipping the same commit again is a new cut with a new tag, while **Re-run failed jobs** on a cut whose build or upload failed keeps its number.
 
 ## Regenerate candidate App Store screenshots (Issue #325)
 
@@ -327,7 +330,7 @@ Include this walkthrough in App Review notes for Guideline 5.1.1(v):
 
 **Upload fails with authentication error:** regenerate App Store Connect API key and update GitHub secrets.
 
-**Build number conflict:** every upload needs an unused build number, including re-uploads. TestFlight cuts take theirs from the `ios-v*-build*` tags, so a build uploaded some other way (Xcode Organizer, the Fastlane lanes) can collide with a later cut.
+**Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. A retry after a failed upload keeps its number; shipping a commit again needs a new cut. TestFlight cuts take their numbers from the `ios-v*-build*` tags, so a build uploaded some other way (Xcode Organizer, the Fastlane lanes) can collide with a later cut. To move the counter past such a build, cut a manual tag above its number.
 
 **A merge didn't cut a build:** check that it changed iOS app code (see [Automatic: merge iOS app code](#automatic-merge-ios-app-code-default)), then look for a red e2e gate in the **Auto TestFlight on merge** runs. A merge that lands while a cut is queued is built by that later cut. To cut `main` now, run the workflow manually from the Actions tab.
 
