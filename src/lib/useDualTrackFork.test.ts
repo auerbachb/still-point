@@ -24,6 +24,14 @@ vi.mock("@/lib/trackingControlPrefs", () => ({
   syncTrackingUnlockFromSessions: mocks.syncTrackingUnlockFromSessions,
 }));
 
+/* -------------------------------------------------------------------------- */
+/* Fixtures                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** The local day the fake clock starts on (see `beforeEach`). */
+const OCT_26 = "2026-10-26";
+const OCT_25 = "2026-10-25";
+
 const USER: User = {
   id: "user-1",
   email: "sitter@example.com",
@@ -34,14 +42,26 @@ const USER: User = {
   ambientSoundEnabled: true,
 };
 
+/** A user on both tracks. */
+const DUAL: User = { ...USER, dualTrackEnabled: true, secondTrackDay: 20 };
+
+const NEITHER_DONE = { primary: false, second: false } as const;
+
+type Track = "primary" | "second";
+
 /** A server row, narrowed to what the badges read. */
-function row(sessionDate: string, track?: "primary" | "second", completed = true): Session {
+function row(sessionDate: string, track?: Track, completed = true): Session {
   return { completed, sessionType: "standard", sessionDate, track, duration: 600 } as Session;
 }
 
 /** #769: today's two sits done as one — a primary row the server marks combined. */
 function combinedRow(sessionDate: string, completed = true): Session {
   return { ...row(sessionDate, "primary", completed), combined: true, duration: 850 } as Session;
+}
+
+/** The completed standard sit `practiceDaySit` derives from a row. */
+function sit(sessionDate: string, track: Track): PracticeDaySit {
+  return { completed: true, sessionType: "standard", sessionDate, track };
 }
 
 function deferred<T>() {
@@ -54,13 +74,21 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+/** Queues the next `getSessions` answer. */
+function serverHas(...sessions: Session[]) {
+  mocks.getSessions.mockResolvedValueOnce({ sessions });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Minimal renderHook (no @testing-library/react in this repo)                 */
 /* -------------------------------------------------------------------------- */
 
 const liveViews: Array<{ unmount: () => Promise<void> }> = [];
 
-async function renderFork({ user = USER, authChecked = true }: { user?: User | null; authChecked?: boolean } = {}) {
+type RenderOptions = { user?: User | null; authChecked?: boolean };
+type Fork = Awaited<ReturnType<typeof renderFork>>;
+
+async function renderFork({ user = USER, authChecked = true }: RenderOptions = {}) {
   const sessionGeneration = { current: 0 };
   const loadedSitsRef: { current: PracticeDaySit[] | null } = { current: null };
   const userRef: { current: User | null } = { current: user };
@@ -100,6 +128,74 @@ async function renderFork({ user = USER, authChecked = true }: { user?: User | n
   return { current: () => latest, sessionGeneration, loadedSitsRef };
 }
 
+/** Mounts the hook with its first refresh answered by `sessions`. */
+async function renderLoaded(sessions: Session[] = [], options?: RenderOptions) {
+  serverHas(...sessions);
+  return renderFork(options);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Actions                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Runs a refresh to completion against whatever `getSessions` is queued to do. */
+async function refresh(fork: Fork) {
+  await act(async () => {
+    await fork.current().refreshTodayTracks();
+  });
+}
+
+/** Runs a refresh whose `getSessions` call fails, as it does offline. */
+async function refreshFailing(fork: Fork, error: unknown = new Error("offline")) {
+  mocks.getSessions.mockRejectedValueOnce(error);
+  await refresh(fork);
+}
+
+/** Starts a refresh and holds its `getSessions` reply until the test settles it. */
+async function startRefresh(fork: Fork) {
+  const reply = deferred<{ sessions: Session[] }>();
+  mocks.getSessions.mockReturnValueOnce(reply.promise);
+  let done!: Promise<void>;
+  await act(async () => {
+    done = fork.current().refreshTodayTracks();
+  });
+  return {
+    answer: (...sessions: Session[]) =>
+      act(async () => {
+        reply.resolve({ sessions });
+        await done;
+      }),
+    fail: (error: unknown = new Error("offline")) =>
+      act(async () => {
+        reply.reject(error);
+        await done;
+      }),
+  };
+}
+
+/** The session ends: every sign-out bumps `sessionGeneration`. */
+function endSession(fork: Fork) {
+  fork.sessionGeneration.current += 1;
+}
+
+/** Account teardown, as `useAuthBootstrap` runs it. */
+async function tearDownAccount(fork: Fork) {
+  endSession(fork);
+  fork.loadedSitsRef.current = null;
+  await act(async () => {
+    fork.current().resetForAccount();
+  });
+}
+
+/** A sit finished offline: its save starts a refresh, then remembers it as pending (#961). */
+async function finishSitOffline(fork: Fork, track: Track, combined = false) {
+  const pending = await startRefresh(fork);
+  fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, OCT_26, track, combined);
+  await pending.fail(new TypeError("Failed to fetch"));
+}
+
+/* -------------------------------------------------------------------------- */
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 9, 26, 12, 0, 0)); // local Oct 26, noon
@@ -109,9 +205,7 @@ afterEach(async () => {
   for (const view of liveViews.splice(0)) {
     await view.unmount();
   }
-  mocks.getSessions.mockReset();
-  mocks.enableDualTrack.mockReset();
-  mocks.syncTrackingUnlockFromSessions.mockReset();
+  for (const mock of Object.values(mocks)) mock.mockReset();
   vi.useRealTimers();
 });
 
@@ -119,17 +213,13 @@ afterEach(async () => {
 
 describe("useDualTrackFork — today's badges (#240)", () => {
   test("loads per-track badges once a signed-in user is known", async () => {
-    const sessions = [row("2026-10-26", "primary"), row("2026-10-25", "second")];
-    mocks.getSessions.mockResolvedValueOnce({ sessions });
-    const fork = await renderFork();
+    const sessions = [row(OCT_26, "primary"), row(OCT_25, "second")];
+    const fork = await renderLoaded(sessions);
 
     expect(mocks.getSessions).toHaveBeenCalledTimes(1);
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
     expect(mocks.syncTrackingUnlockFromSessions).toHaveBeenCalledWith(sessions);
-    expect(fork.loadedSitsRef.current).toEqual([
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary" },
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-25", track: "second" },
-    ]);
+    expect(fork.loadedSitsRef.current).toEqual([sit(OCT_26, "primary"), sit(OCT_25, "second")]);
   });
 
   test("waits for the auth check and for a user", async () => {
@@ -141,41 +231,29 @@ describe("useDualTrackFork — today's badges (#240)", () => {
   test("a queued sit the server does not have yet still counts (#797)", async () => {
     mocks.getSessions.mockResolvedValue({ sessions: [] });
     const fork = await renderFork();
-    fork.loadedSitsRef.current = [
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "second" },
-    ];
+    fork.loadedSitsRef.current = [sit(OCT_26, "second")];
 
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refresh(fork);
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: true });
     expect(fork.loadedSitsRef.current).toHaveLength(1);
   });
 
   test("a failed refresh after the day rolls over keeps no stale badge", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
-    const fork = await renderFork();
+    const fork = await renderLoaded([row(OCT_26, "primary")]);
     expect(fork.current().tracksDoneToday.primary).toBe(true);
 
     // #961: the remembered sit is still there, but it credits yesterday.
     vi.setSystemTime(new Date(2026, 9, 27, 12, 0, 0)); // local Oct 27, noon
-    mocks.getSessions.mockRejectedValueOnce(new Error("offline"));
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refreshFailing(fork);
 
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
   });
 
   test("a failed refresh keeps a sit already loaded for today (#961)", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
-    const fork = await renderFork();
+    const fork = await renderLoaded([row(OCT_26, "primary")]);
 
-    mocks.getSessions.mockRejectedValueOnce(new Error("offline"));
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refreshFailing(fork);
 
     expect(fork.current()).toMatchObject({
       tracksDoneToday: { primary: true, second: false },
@@ -184,90 +262,51 @@ describe("useDualTrackFork — today's badges (#240)", () => {
   });
 
   test("a refresh that outlives its session is dropped (#666)", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
-    const reply = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(reply.promise);
-    let done!: Promise<void>;
-    await act(async () => {
-      done = fork.current().refreshTodayTracks();
-    });
-    fork.sessionGeneration.current += 1;
+    const pending = await startRefresh(fork);
+    endSession(fork);
     fork.loadedSitsRef.current = null;
-    await act(async () => {
-      reply.resolve({ sessions: [row("2026-10-26", "primary")] });
-      await done;
-    });
+    await pending.answer(row(OCT_26, "primary"));
 
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
     expect(fork.loadedSitsRef.current).toBeNull();
   });
 
   test("a failed refresh from an ended session leaves the next account's badges alone (#833)", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
     // The previous account's refresh is still in flight when the account changes.
-    const stale = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(stale.promise);
-    let staleDone!: Promise<void>;
-    await act(async () => {
-      staleDone = fork.current().refreshTodayTracks();
-    });
-    fork.sessionGeneration.current += 1;
-    fork.loadedSitsRef.current = null;
-    await act(async () => {
-      fork.current().resetForAccount();
-    });
+    const stale = await startRefresh(fork);
+    await tearDownAccount(fork);
 
     // The next account's own refresh lands first and earns a badge.
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    serverHas(row(OCT_26, "primary"));
+    await refresh(fork);
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
 
-    await act(async () => {
-      stale.reject(new Error("offline"));
-      await staleDone;
-    });
+    await stale.fail();
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
-    expect(fork.loadedSitsRef.current).toEqual([
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary" },
-    ]);
+    expect(fork.loadedSitsRef.current).toEqual([sit(OCT_26, "primary")]);
   });
 
   test("a sit remembered while a refresh is in flight survives it (#833)", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
     // A pending save starts the refresh, and only then is its sit remembered.
-    const reply = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(reply.promise);
-    let done!: Promise<void>;
-    await act(async () => {
-      done = fork.current().refreshTodayTracks();
-    });
-    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, "2026-10-26", "second");
+    const pending = await startRefresh(fork);
+    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, OCT_26, "second");
 
     // The server answers, but without that sit: its own sync failed.
-    await act(async () => {
-      reply.resolve({ sessions: [row("2026-10-25", "primary")] });
-      await done;
-    });
+    await pending.answer(row(OCT_25, "primary"));
 
-    expect(fork.loadedSitsRef.current).toEqual([
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-25", track: "primary" },
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "second" },
-    ]);
+    expect(fork.loadedSitsRef.current).toEqual([sit(OCT_25, "primary"), sit(OCT_26, "second")]);
     expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: true });
   });
 
   test("resetForAccount clears the badges and the dismissed fork", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
-    const fork = await renderFork();
+    const fork = await renderLoaded([row(OCT_26, "primary")]);
     await act(async () => {
       fork.current().setForkDismissed(true);
     });
@@ -277,10 +316,7 @@ describe("useDualTrackFork — today's badges (#240)", () => {
       fork.current().resetForAccount();
     });
 
-    expect(fork.current()).toMatchObject({
-      forkDismissed: false,
-      tracksDoneToday: { primary: false, second: false },
-    });
+    expect(fork.current()).toMatchObject({ forkDismissed: false, tracksDoneToday: NEITHER_DONE });
   });
 });
 
@@ -291,63 +327,36 @@ describe("useDualTrackFork — whether today's flags are known (#895)", () => {
     const fork = await renderFork();
 
     // Both flags read false here, which is not the same as both sits being due.
-    expect(fork.current()).toMatchObject({
-      tracksDoneToday: { primary: false, second: false },
-      tracksDoneTodayKnown: false,
-    });
+    expect(fork.current()).toMatchObject({ tracksDoneToday: NEITHER_DONE, tracksDoneTodayKnown: false });
 
     await act(async () => {
       reply.resolve({ sessions: [] });
       await reply.promise;
     });
 
-    expect(fork.current()).toMatchObject({
-      tracksDoneToday: { primary: false, second: false },
-      tracksDoneTodayKnown: true,
-    });
+    expect(fork.current()).toMatchObject({ tracksDoneToday: NEITHER_DONE, tracksDoneTodayKnown: true });
   });
 
   test("a failed refresh leaves them unknown, not neither-done", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
     expect(fork.current().tracksDoneTodayKnown).toBe(true);
 
-    mocks.getSessions.mockRejectedValueOnce(new Error("offline"));
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refreshFailing(fork);
 
-    expect(fork.current()).toMatchObject({
-      tracksDoneToday: { primary: false, second: false },
-      tracksDoneTodayKnown: false,
-    });
+    expect(fork.current()).toMatchObject({ tracksDoneToday: NEITHER_DONE, tracksDoneTodayKnown: false });
   });
 
   test("a refresh that fails after an overlapping one answered leaves them unknown", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
-    const first = deferred<{ sessions: Session[] }>();
-    const second = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    let firstDone!: Promise<void>;
-    let secondDone!: Promise<void>;
-    await act(async () => {
-      firstDone = fork.current().refreshTodayTracks();
-      secondDone = fork.current().refreshTodayTracks();
-    });
-    await act(async () => {
-      first.resolve({ sessions: [row("2026-10-26", "primary")] });
-      await firstDone;
-    });
+    const first = await startRefresh(fork);
+    const second = await startRefresh(fork);
+    await first.answer(row(OCT_26, "primary"));
     expect(fork.current().tracksDoneTodayKnown).toBe(true);
 
     // The failure falls back to the remembered sits (#961), which hold what the
     // first one answered, but that is no longer an answer.
-    await act(async () => {
-      second.reject(new Error("offline"));
-      await secondDone;
-    });
+    await second.fail();
 
     expect(fork.current()).toMatchObject({
       tracksDoneToday: { primary: true, second: false },
@@ -356,26 +365,14 @@ describe("useDualTrackFork — whether today's flags are known (#895)", () => {
   });
 
   test("a later refresh holds them unknown until it answers", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
     expect(fork.current().tracksDoneTodayKnown).toBe(true);
 
     // A sit was just saved, so the flags held now are about to change.
-    const reply = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(reply.promise);
-    let done!: Promise<void>;
-    await act(async () => {
-      done = fork.current().refreshTodayTracks();
-    });
-    expect(fork.current()).toMatchObject({
-      tracksDoneToday: { primary: false, second: false },
-      tracksDoneTodayKnown: false,
-    });
+    const pending = await startRefresh(fork);
+    expect(fork.current()).toMatchObject({ tracksDoneToday: NEITHER_DONE, tracksDoneTodayKnown: false });
 
-    await act(async () => {
-      reply.resolve({ sessions: [row("2026-10-26", "primary")] });
-      await done;
-    });
+    await pending.answer(row(OCT_26, "primary"));
 
     expect(fork.current()).toMatchObject({
       tracksDoneToday: { primary: true, second: false },
@@ -384,27 +381,17 @@ describe("useDualTrackFork — whether today's flags are known (#895)", () => {
   });
 
   test("a refresh that outlives its session does not make them known (#666)", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
-    const reply = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(reply.promise);
-    let done!: Promise<void>;
-    await act(async () => {
-      done = fork.current().refreshTodayTracks();
-    });
-    fork.sessionGeneration.current += 1;
-    await act(async () => {
-      reply.resolve({ sessions: [] });
-      await done;
-    });
+    const pending = await startRefresh(fork);
+    endSession(fork);
+    await pending.answer();
 
     expect(fork.current().tracksDoneTodayKnown).toBe(false);
   });
 
   test("resetForAccount makes them unknown", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
     expect(fork.current().tracksDoneTodayKnown).toBe(true);
 
     await act(async () => {
@@ -416,11 +403,8 @@ describe("useDualTrackFork — whether today's flags are known (#895)", () => {
 });
 
 describe("useDualTrackFork — a combined sit (#892)", () => {
-  const DUAL: User = { ...USER, dualTrackEnabled: true, secondTrackDay: 20 };
-
   test("one combined row checks off both tracks for the day", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([combinedRow(OCT_26)], { user: DUAL });
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
   });
@@ -428,81 +412,49 @@ describe("useDualTrackFork — a combined sit (#892)", () => {
   test("a queued combined sit checks off both tracks while it waits to sync", async () => {
     mocks.getSessions.mockResolvedValue({ sessions: [] });
     const fork = await renderFork({ user: DUAL });
-    fork.loadedSitsRef.current = rememberStandardSit(null, "2026-10-26", "primary", true);
+    fork.loadedSitsRef.current = rememberStandardSit(null, OCT_26, "primary", true);
 
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refresh(fork);
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
   });
 
   test("once it has synced, the remembered sit and the server's combined row are one sit", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork({ user: DUAL });
-    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, "2026-10-26", "primary", true);
+    const fork = await renderLoaded([], { user: DUAL });
+    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, OCT_26, "primary", true);
 
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    serverHas(combinedRow(OCT_26));
+    await refresh(fork);
 
-    expect(fork.loadedSitsRef.current).toEqual([
-      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary", combined: true },
-    ]);
+    expect(fork.loadedSitsRef.current).toEqual([{ ...sit(OCT_26, "primary"), combined: true }]);
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
   });
 
   test("before 6:00, yesterday's combined sit has closed it, so the badges are the new day's", async () => {
     vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0)); // local Oct 27, 5:30
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26")] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([combinedRow(OCT_26)], { user: DUAL });
 
     // Both of Oct 26's tracks are done, so 5:30 already belongs to Oct 27.
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
   });
 
   test("control: before 6:00, a plain primary sit leaves a two-a-day yesterday open", async () => {
-    vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0));
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
-    const fork = await renderFork({ user: DUAL });
+    vi.setSystemTime(new Date(2026, 9, 27, 5, 30, 0)); // local Oct 27, 5:30
+    const fork = await renderLoaded([row(OCT_26, "primary")], { user: DUAL });
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
   });
 
   test("an ended-early combined sit checks off nothing", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [combinedRow("2026-10-26", false)] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([combinedRow(OCT_26, false)], { user: DUAL });
 
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
   });
 });
 
 describe("useDualTrackFork — a failed refresh falls back to the remembered sits (#961)", () => {
-  const DUAL: User = { ...USER, dualTrackEnabled: true, secondTrackDay: 20 };
-
-  /** A sit finished offline: its save starts a refresh, then remembers it as pending. */
-  async function finishSitOffline(
-    fork: Awaited<ReturnType<typeof renderFork>>,
-    track: "primary" | "second",
-    combined = false,
-  ) {
-    const reply = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(reply.promise);
-    let done!: Promise<void>;
-    await act(async () => {
-      done = fork.current().refreshTodayTracks();
-    });
-    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, "2026-10-26", track, combined);
-    await act(async () => {
-      reply.reject(new TypeError("Failed to fetch"));
-      await done;
-    });
-  }
-
   test("a sit finished offline shows as done, and stays done while refreshes keep failing", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork();
+    const fork = await renderLoaded();
 
     await finishSitOffline(fork, "primary");
     expect(fork.current()).toMatchObject({
@@ -510,16 +462,12 @@ describe("useDualTrackFork — a failed refresh falls back to the remembered sit
       tracksDoneTodayKnown: false,
     });
 
-    mocks.getSessions.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
+    await refreshFailing(fork, new TypeError("Failed to fetch"));
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
   });
 
   test("a second-track sit finished offline checks off only Track Two", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([], { user: DUAL });
 
     await finishSitOffline(fork, "second");
 
@@ -527,8 +475,7 @@ describe("useDualTrackFork — a failed refresh falls back to the remembered sit
   });
 
   test("a combined sit finished offline checks off both tracks", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([], { user: DUAL });
 
     await finishSitOffline(fork, "primary", true);
 
@@ -540,50 +487,36 @@ describe("useDualTrackFork — a failed refresh falls back to the remembered sit
     const fork = await renderFork({ user: DUAL });
 
     expect(fork.loadedSitsRef.current).toBeNull();
-    expect(fork.current()).toMatchObject({
-      tracksDoneToday: { primary: false, second: false },
-      tracksDoneTodayKnown: false,
-    });
+    expect(fork.current()).toMatchObject({ tracksDoneToday: NEITHER_DONE, tracksDoneTodayKnown: false });
   });
 
   test("a failed refresh after a sign-out and a new sign-in shows nothing of the previous account", async () => {
-    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
-    const fork = await renderFork({ user: DUAL });
+    const fork = await renderLoaded([], { user: DUAL });
     await finishSitOffline(fork, "primary", true);
     expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: true });
 
     // The previous account's next refresh is still in flight when it signs out.
-    const stale = deferred<{ sessions: Session[] }>();
-    mocks.getSessions.mockReturnValueOnce(stale.promise);
-    let staleDone!: Promise<void>;
-    await act(async () => {
-      staleDone = fork.current().refreshTodayTracks();
-    });
-    // Account teardown, as `useAuthBootstrap` runs it.
-    fork.sessionGeneration.current += 1;
-    fork.loadedSitsRef.current = null;
-    await act(async () => {
-      fork.current().resetForAccount();
-    });
+    const stale = await startRefresh(fork);
+    await tearDownAccount(fork);
 
     // The next account's own refresh fails too: it has remembered nothing.
-    mocks.getSessions.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await act(async () => {
-      await fork.current().refreshTodayTracks();
-    });
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    await refreshFailing(fork, new TypeError("Failed to fetch"));
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
 
     // The previous account's failure lands last and changes nothing.
-    await act(async () => {
-      stale.reject(new TypeError("Failed to fetch"));
-      await staleDone;
-    });
-    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
+    await stale.fail(new TypeError("Failed to fetch"));
+    expect(fork.current().tracksDoneToday).toEqual(NEITHER_DONE);
     expect(fork.loadedSitsRef.current).toBeNull();
   });
 });
 
 describe("useDualTrackFork — enabling the second track (#240, #664)", () => {
+  async function enableDualTrack(fork: Fork) {
+    await act(async () => {
+      await fork.current().handleEnableDualTrack();
+    });
+  }
+
   test("merges the response into the user instead of replacing it", async () => {
     mocks.getSessions.mockResolvedValue({ sessions: [] });
     // The route's projection omits `ambientSoundEnabled`.
@@ -592,9 +525,7 @@ describe("useDualTrackFork — enabling the second track (#240, #664)", () => {
     });
     const fork = await renderFork();
 
-    await act(async () => {
-      await fork.current().handleEnableDualTrack();
-    });
+    await enableDualTrack(fork);
 
     expect(fork.current().user).toMatchObject({
       dualTrackEnabled: true,
@@ -610,9 +541,7 @@ describe("useDualTrackFork — enabling the second track (#240, #664)", () => {
     mocks.enableDualTrack.mockResolvedValueOnce({ user: { id: "user-1", dualTrackEnabled: true } });
     const fork = await renderFork({ user: null });
 
-    await act(async () => {
-      await fork.current().handleEnableDualTrack();
-    });
+    await enableDualTrack(fork);
 
     expect(fork.current().user).toBeNull();
   });
@@ -627,7 +556,7 @@ describe("useDualTrackFork — enabling the second track (#240, #664)", () => {
     await act(async () => {
       done = fork.current().handleEnableDualTrack();
     });
-    fork.sessionGeneration.current += 1;
+    endSession(fork);
     await act(async () => {
       reply.resolve({ user: { id: "user-1", dualTrackEnabled: true } });
       await done;
