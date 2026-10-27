@@ -49,7 +49,7 @@ extension AppViewModel {
             // captured by Xcode UI test xcresult bundles — that's why the
             // prior diagnostic from PR #261 never showed up in CI.
             if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
-                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                let elapsedMs = Self.elapsedMs(since: startedAt)
                 Self.diagLog.notice("[E2E-DIAG] checkAuth.done currentView=\(self.viewSlug(self.currentView), privacy: .public) currentUser=\(self.currentUser?.email ?? "nil", privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)")
             }
         }
@@ -93,7 +93,7 @@ extension AppViewModel {
         // makes this check's own consume below return early, and routes when it lands.
         isAuthCheckRouteResetPending = false
         authStatusMessage = nil
-        lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        lastColdStartAuthCheckMs = Self.elapsedMs(since: startedAt)
         PushNotificationCoordinator.shared.registerIfAlreadyAuthorized()
         hydrateNotificationSuppressionPreference()
         await refreshTracksDoneToday()
@@ -176,20 +176,9 @@ extension AppViewModel {
                 // read would change nothing anyway: a newer settings write already
                 // described this account, `isOfflineMode` included, so the side effects
                 // below run either way; they are keyed to this being the newest check,
-                // not to the adoption.
-                if currentUser?.id == user.id {
-                    applySettingsResponse(
-                        user,
-                        startedAtGeneration: generation,
-                        requestTicket: settingsTicket,
-                        responseKind: .read
-                    )
-                } else {
-                    // A cold start, or an account switch. Nothing to order it
-                    // against, and the guards inside `applySettingsResponse` would
-                    // read it as `.discarded`.
-                    applyAuthenticatedUser(user)
-                }
+                // not to the adoption. A cold start or an account switch adopts
+                // directly instead; see `adoptAccountRead`.
+                adoptAccountRead(user, startedAtGeneration: generation, requestTicket: settingsTicket)
                 // Re-captured deliberately, and handed back rather than used here.
                 // Adopting the user is itself an expected transition on a cold start
                 // (nil -> user), so the entry generation is stale from here on *by
@@ -236,13 +225,13 @@ extension AppViewModel {
                 // network `await`s (its catch-up is detached), so it holds the line for
                 // local work only.
                 await enterOfflineMode(user: user, cause: cause)
-                lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                lastColdStartAuthCheckMs = Self.elapsedMs(since: startedAt)
                 return nil
             case (.offline, .none), (.signedOut, _):
                 applySignedOut(cause: outcome.cause, message: Self.authStatusMessage(for: error))
             }
         }
-        lastColdStartAuthCheckMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        lastColdStartAuthCheckMs = Self.elapsedMs(since: startedAt)
         return nil
     }
 
@@ -339,16 +328,7 @@ extension AppViewModel {
             // *different* account is a legitimate transition and keeps adopting
             // directly, as before — it is not this race, and the guard would read it
             // as `.discarded`.
-            if currentUser?.id == user.id {
-                applySettingsResponse(
-                    user,
-                    startedAtGeneration: generation,
-                    requestTicket: settingsTicket,
-                    responseKind: .read
-                )
-            } else {
-                applyAuthenticatedUser(user)
-            }
+            adoptAccountRead(user, startedAtGeneration: generation, requestTicket: settingsTicket)
             // Re-captured after adoption and handed back, as in `performAuthCheck()`:
             // if the reconnect ever returns a different account, that adoption is a
             // legitimate transition and the caller's follow-up belongs to the account
@@ -569,16 +549,38 @@ extension AppViewModel {
         // naming a *different* account — keeps going through `applyAuthenticatedUser`:
         // there is nothing to order it against and the guard would read it as
         // `.discarded`.
+        adoptAccountRead(user, startedAtGeneration: generation, requestTicket: settingsTicket)
+        return authGeneration
+    }
+
+    /// Adopts the account a queued `me()` read returned. Shared by `performAuthCheck`,
+    /// `performReconnectRefresh` and `refreshUserFromServer`.
+    ///
+    /// Re-confirming the account already on screen enters the settings ordering as a
+    /// `.read` (#697), so a read that a newer settings write superseded leaves that
+    /// write's response in place. A response naming a *different* account — a cold
+    /// start (nil -> user) or an account switch — is a legitimate transition with
+    /// nothing to order it against, and the identity guards inside
+    /// `applySettingsResponse` would read it as `.discarded`, so it is adopted directly.
+    ///
+    /// Callers own the generation guard that precedes this and the re-capture of
+    /// `authGeneration` that follows it.
+    private func adoptAccountRead(_ user: UserDTO, startedAtGeneration generation: Int, requestTicket ticket: Int) {
         if currentUser?.id == user.id {
             applySettingsResponse(
                 user,
                 startedAtGeneration: generation,
-                requestTicket: settingsTicket,
+                requestTicket: ticket,
                 responseKind: .read
             )
         } else {
             applyAuthenticatedUser(user)
         }
-        return authGeneration
+    }
+
+    /// Whole milliseconds since `start`, for the cold-start timing metric and its
+    /// diagnostic line.
+    private static func elapsedMs(since start: Date) -> Int {
+        Int(Date().timeIntervalSince(start) * 1_000)
     }
 }
