@@ -385,42 +385,59 @@ final class SessionViewModel {
     /// alert's Retry. An abandoned sit is never saved here. A retry reuses the
     /// first attempt's client id and credited day (see `saveSession`), so it
     /// stores the same sit rather than a second one.
+    ///
+    /// A save that settles after a sign-out shows nothing, whatever its outcome:
+    /// by then the screen belongs to another session, even when the same account
+    /// has signed back in (#854). The save itself is not undone.
     @MainActor
     func completeSit(appVM: AppViewModel) async {
         guard let ownerUserId = appVM.currentUser?.id else {
             applySaveOutcome(.noSignedInUser, appVM: appVM)
             return
         }
-        // Persist session before navigating to completion screen
-        guard let session = await saveSession(
-            completed: completedNaturally,
-            ownerUserId: ownerUserId,
-            sessionDate: appVM.creditedSessionDate()
-        ) else {
-            // #703: the alert already blocks the false-success completion; the
-            // flag additionally withdraws the offline strip's "sits are saved"
-            // promise, which stays on screen after the user picks "Continue
-            // without saving".
-            applySaveOutcome(.notStored, appVM: appVM)
-            return
+        // #854: the save waits on the server flush, so a sign-out and a sign-in as
+        // someone else can land before it settles. Everything after it is for the
+        // account that sat: the #703 flag, the alert, and `completeSession`, which
+        // credits the sit and opens its completion screen. A save that settles
+        // under another generation does none of it. Web: `handleSessionComplete`
+        // (#666).
+        await GenerationScopedWork.run(
+            startedAt: appVM.authGeneration,
+            liveGeneration: { appVM.authGeneration }
+        ) {
+            // Persist session before navigating to completion screen
+            await saveSession(
+                completed: completedNaturally,
+                ownerUserId: ownerUserId,
+                sessionDate: appVM.creditedSessionDate()
+            )
+        } apply: { session in
+            guard let session else {
+                // #703: the alert already blocks the false-success completion; the
+                // flag additionally withdraws the offline strip's "sits are saved"
+                // promise, which stays on screen after the user picks "Continue
+                // without saving".
+                applySaveOutcome(.notStored, appVM: appVM)
+                return
+            }
+            applySaveOutcome(.stored, appVM: appVM)
+            appVM.completeSession(
+                sessionId: session.id,
+                clientSessionId: lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
+                clearPercent: clearPercent,
+                thoughtCount: thoughtCount,
+                thoughts: capturedThoughts,
+                dayNumber: session.dayNumber,
+                sessionType: session.sessionType,
+                track: track,
+                duration: plannedSeconds,
+                bonusSeconds: bonusSeconds,
+                unlockAppGate: completedNaturally,
+                attentionLog: attentionLog,
+                attentionElapsed: attentionLog != nil ? elapsed : nil,
+                ambientSoundSummary: ambientSoundSummary
+            )
         }
-        applySaveOutcome(.stored, appVM: appVM)
-        appVM.completeSession(
-            sessionId: session.id,
-            clientSessionId: lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
-            clearPercent: clearPercent,
-            thoughtCount: thoughtCount,
-            thoughts: capturedThoughts,
-            dayNumber: session.dayNumber,
-            sessionType: session.sessionType,
-            track: track,
-            duration: plannedSeconds,
-            bonusSeconds: bonusSeconds,
-            unlockAppGate: completedNaturally,
-            attentionLog: attentionLog,
-            attentionElapsed: attentionLog != nil ? elapsed : nil,
-            ambientSoundSummary: ambientSoundSummary
-        )
     }
 
     /// The alert's "Continue without saving": the completion screen, with no
