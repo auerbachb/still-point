@@ -86,6 +86,12 @@ export default function StillPoint() {
   const tab: Tab = isTab(rawTab) ? rawTab : DEFAULT_TAB;
 
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  // #947: read by the return-home prune once its flush settles, which can be
+  // minutes later. A completion screen opened since then still needs its row.
+  const overlayRef = useRef<Overlay | null>(overlay);
+  useEffect(() => {
+    overlayRef.current = overlay;
+  }, [overlay]);
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   // #240: which track the in-progress standard sit belongs to.
   const [activeTrack, setActiveTrack] = useState<Track>("primary");
@@ -630,10 +636,28 @@ export default function StillPoint() {
           // #703: only offered while the sit is nowhere; it reuses the original
           // client id, so a retry can never produce a second sit.
           onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
-          onReturn={() => {
+          onReturn={(writesSettled) => {
             setOverlay(null);
             router.push(pathForTab(DEFAULT_TAB));
             refreshUserFromServer();
+            // #947: as iOS's returnHome() does, upload what is owed and drop the
+            // rows of sits that owe nothing more. Only now, with the screen closed
+            // and its note writes settled: they find a pending sit by its row.
+            // Skipped if the account changed meanwhile, or if the next sit's
+            // completion screen is already open; the next return home prunes.
+            const ownerUserId = user.id;
+            const generation = sessionGeneration.current;
+            void writesSettled
+              .then(() => getWebSessionSyncCoordinator().flushAndPruneCompleted(
+                ownerUserId,
+                () => sessionGeneration.current === generation && overlayRef.current !== "complete",
+              ))
+              .then((syncedCount) => {
+                if (syncedCount > 0 && sessionGeneration.current === generation) refreshUserFromServer();
+              })
+              .catch((error) => {
+                console.error("Failed to prune the offline session queue:", error);
+              });
           }}
           // #703: with nothing stored there is no queue entry to append a note to
           // and no session to post one against, so the field is not offered.

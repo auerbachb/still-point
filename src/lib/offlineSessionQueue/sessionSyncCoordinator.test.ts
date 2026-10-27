@@ -780,3 +780,123 @@ describe("WebSessionSyncCoordinator thought ids (#948)", () => {
     expect((await store.loadEntries())[0]!.thoughts).toEqual([twin]);
   });
 });
+
+describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
+  type CreatedSession = Awaited<ReturnType<SessionSyncTransport["createSession"]>>;
+
+  /** Online for new sits, offline for thought batches: a row that still owes a
+   *  batch stays owing it. */
+  const sitsOnlyTransport: SessionSyncTransport = {
+    createSession: async (payload) => ({ id: `server-${payload.clientSessionId}` }) as CreatedSession,
+    batchThoughts: async () => {
+      throw new TypeError("Network unavailable");
+    },
+  };
+
+  /** One row per owing state, plus a clean one owned by someone else. */
+  async function seedQueue(store: InMemoryOfflineSessionQueueStore): Promise<void> {
+    const row = (
+      clientSessionId: string,
+      overrides: Partial<PendingSessionEntry> = {},
+    ): PendingSessionEntry => ({
+      clientSessionId,
+      ownerUserId: testOwnerUserId,
+      request: requestWithClientId(baseRequest(), clientSessionId),
+      thoughts: [],
+      serverSessionId: `server-${clientSessionId}`,
+      sessionSynced: true,
+      enqueuedAt: "2026-10-27T12:00:00.000Z",
+      ...overrides,
+    });
+    await store.saveEntries([
+      row("unsynced", { sessionSynced: false, serverSessionId: null }),
+      row("synced"),
+      row("queued-thoughts", { thoughts: [{ timeInSession: -1, text: "a note" }] }),
+      row("pending-clear", { clearCompletionNote: true }),
+      row("other-account", { ownerUserId: "user-other" }),
+    ]);
+  }
+
+  const queuedIds = async (store: InMemoryOfflineSessionQueueStore) =>
+    (await store.loadEntries()).map((entry) => entry.clientSessionId);
+
+  test("drops the account's rows that owe nothing, after uploading what it can", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+
+    const synced = await new WebSessionSyncCoordinator(store, sitsOnlyTransport)
+      .flushAndPruneCompleted(testOwnerUserId);
+
+    // The unsynced sit uploaded on the way home, so it goes with the synced one.
+    expect(synced).toBe(1);
+    expect(await queuedIds(store)).toEqual(["queued-thoughts", "pending-clear", "other-account"]);
+  });
+
+  test("offline, every row that still owes the server stays", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+
+    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport)
+      .flushAndPruneCompleted(testOwnerUserId);
+
+    expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
+  });
+
+  test("a sign-out during the flush prunes nothing", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+
+    await new WebSessionSyncCoordinator(store, sitsOnlyTransport)
+      .flushAndPruneCompleted(testOwnerUserId, () => false);
+
+    const entries = await store.loadEntries();
+    expect(entries).toHaveLength(5);
+    expect(entries.find((entry) => entry.clientSessionId === "unsynced")?.sessionSynced).toBe(true);
+  });
+
+  test("a permanent upload failure stays queued and does not stop the prune", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+    const refusing: SessionSyncTransport = {
+      ...sitsOnlyTransport,
+      createSession: async () => {
+        throw Object.assign(new Error("rejected"), { permanent: true });
+      },
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await new WebSessionSyncCoordinator(store, refusing).flushAndPruneCompleted(testOwnerUserId);
+
+      expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test("a note edited after the sit synced, with the completion screen still open, saves; return home then prunes", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440947";
+    // Saved offline, so the completion screen writes notes through the queue.
+    const saved = await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport)
+      .saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
+    expect(saved.isPendingSync).toBe(true);
+    // A reconnect flush uploads it while the screen is open. Nothing prunes yet.
+    const batches: SentBatch[] = [];
+    const online: SessionSyncTransport = {
+      createSession: sitsOnlyTransport.createSession,
+      batchThoughts: async (data) => {
+        batches.push(data);
+      },
+    };
+    const coordinator = new WebSessionSyncCoordinator(store, online);
+    expect(await coordinator.flushPending(testOwnerUserId)).toBe(1);
+
+    await coordinator.replaceEndNote(clientSessionId, testOwnerUserId, "still here");
+    expect(batches.map((batch) => batch.thoughts)).toEqual([[{ timeInSession: -1, text: "still here" }]]);
+
+    await coordinator.flushAndPruneCompleted(testOwnerUserId);
+    expect(await store.loadEntries()).toEqual([]);
+  });
+});

@@ -226,6 +226,36 @@ export class WebSessionSyncCoordinator {
     });
   }
 
+  /**
+   * #947: the return-home sync, as iOS's `returnHome()` runs it. Uploads what
+   * this account still owes, then drops its rows that owe nothing more — a
+   * synced sit otherwise stays queued until sign-out. Resolves to the number of
+   * sits the flush uploaded.
+   *
+   * Call it only once the completion screen is closed and its writes have
+   * settled: its note edits find a pending sit by its row, and `writeEndNote`
+   * throws `entryNotFound` without one. `isCurrent` is read between the flush and
+   * the prune; false means the account signed out (or another signed in) in the
+   * meantime, so nothing is pruned for a session that has ended.
+   */
+  async flushAndPruneCompleted(
+    ownerUserId: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<number> {
+    if (!ownerUserId) return 0;
+    let syncedCount = 0;
+    try {
+      syncedCount = await this.flushPending(ownerUserId);
+    } catch (error) {
+      // A permanent upload failure leaves its row queued and does not stop the
+      // prune: it only drops rows that owe nothing, so the failed one stays.
+      console.error("Failed to flush the offline session queue:", error);
+    }
+    if (!isCurrent()) return syncedCount;
+    await this.pruneCompletedEntries(ownerUserId);
+    return syncedCount;
+  }
+
   async clearQueue(): Promise<void> {
     // #666: sign-out empties the queue now, not once an upload in flight in some
     // tab settles, which can take up to `UPLOAD_TIMEOUT_MS` per request (#907).

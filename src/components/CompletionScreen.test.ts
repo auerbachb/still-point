@@ -434,4 +434,35 @@ describe("CompletionScreen with session ratings retired (#889)", () => {
     expect(onSaveNote).toHaveBeenCalledTimes(1);
     expect(onSaveMoodMatrix).toHaveBeenCalledTimes(1);
   });
+
+  test("#947: the second tap leaves at once but hands over a promise that waits for a write still in flight", async () => {
+    let finishSave!: () => void;
+    const onSaveNote = vi.fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementation(() => new Promise<void>((resolve) => { finishSave = resolve; }));
+    const onReturn = vi.fn<(writesSettled: Promise<void>) => void>();
+    await render(syncedSitProps({ onSaveNote, onReturn }));
+
+    await typeNote("before the flush");
+    await tapReturn();
+    expect(onReturn).not.toHaveBeenCalled();
+
+    // An edit after the failure autosaves, and that save is still on the wire.
+    await typeNote("after the flush");
+    await settleAutosave();
+    expect(onSaveNote).toHaveBeenCalledTimes(2);
+
+    await tapReturn();
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    let settled = false;
+    void onReturn.mock.calls[0]![0].then(() => { settled = true; });
+    await flushWrites();
+    expect(settled).toBe(false);
+
+    await act(async () => {
+      finishSave();
+    });
+    await flushWrites();
+    expect(settled).toBe(true);
+  });
 });

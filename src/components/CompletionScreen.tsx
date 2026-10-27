@@ -26,7 +26,9 @@ type CompletionScreenProps = {
   /** Planned duration of the next standard sit (#238: recovery-ramp aware — see
    *  `previewNextStandardDuration` / `@/lib/duration`). */
   nextDuration: number;
-  onReturn: () => void;
+  /** `writesSettled` resolves once every note and mood write this screen
+   *  started has settled (#947), so work that needs them done can wait. */
+  onReturn: (writesSettled: Promise<void>) => void;
   onSaveNote?: (text: string) => Promise<void>;
   /** #792: delete the stored note once the field is emptied. Offered under the
    *  same conditions as `onSaveNote`; without it an emptied field is not saved. */
@@ -233,7 +235,9 @@ export function CompletionScreen({
     if (returningRef.current) return;
     // A failed flush must not trap the user here. The next tap leaves.
     if (flushFailedRef.current) {
-      onReturn();
+      // #947: an autosave that fired since the failure may still be on the
+      // wire. The screen leaves now; whatever runs after it waits for that write.
+      onReturn(inflight.current);
       return;
     }
     returningRef.current = true;
@@ -261,7 +265,7 @@ export function CompletionScreen({
       flushFailedRef.current = true;
       return;
     }
-    onReturn();
+    onReturn(inflight.current);
   }
 
   const isQuick = sessionType === "quick";
