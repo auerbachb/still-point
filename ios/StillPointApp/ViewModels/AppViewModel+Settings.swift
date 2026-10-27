@@ -180,8 +180,10 @@ extension AppViewModel {
     ///   - authorize: runs inside the queued operation before anything is sent and
     ///     says whether to go on — a permission prompt goes here. Returning `false`
     ///     abandons the save; the gate puts the control back and tells the user why
-    ///     itself. Not run at all when the account changed while the save waited its
-    ///     turn. `nil` for a control that needs no permission.
+    ///     itself. If the account changed while its prompt was up, the gate leaves the
+    ///     control alone instead, and the save re-syncs it as for any other identity
+    ///     change (#888). Not run at all when the account changed while the save waited
+    ///     its turn. `nil` for a control that needs no permission.
     ///   - send: the PATCH carrying this control's field.
     ///   - revert: puts the control back to what it showed before the change. Called
     ///     when the request throws, or when its response belongs to a session that is
@@ -248,7 +250,18 @@ extension AppViewModel {
             // a change the account now on screen never made, nor let a denial reset the
             // control and raise an alert in place of the resync (#851).
             guard identityAtStart == identityGeneration else { return .identityChanged }
-            guard await authorize() else { return .notAuthorized }
+            guard await authorize() else {
+                // A "no" given after the account changed while the prompt was up ends as
+                // an identity change, so the control re-syncs from the account now on
+                // screen. The gate asked the same question and left the control and its
+                // alert alone. For the account that asked, this is `.notAuthorized` with
+                // the gate's reset in place, as before (#888).
+                let denial = SettingsControlSave.denial(
+                    promptedAt: identityAtStart,
+                    answeredAt: identityGeneration
+                )
+                return denial.ending
+            }
         }
         do {
             // Re-checked before issuing the write: sending this would otherwise

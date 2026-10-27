@@ -199,16 +199,23 @@ struct SettingsSessionSection: View {
 
     /// Asks for the camera when tracking is being turned on; turning it off needs
     /// nothing. A device without TrueDepth, or a denied prompt, turns the toggle
-    /// back off and raises the matching alert instead of saving.
+    /// back off and raises the matching alert instead of saving — unless the account
+    /// changed while the prompt was up. That "no" leaves both alone, and the save
+    /// re-syncs the toggle from the account now on screen (#888).
     private func authorizeAttentionTracking(enabling: Bool) async -> Bool {
         guard enabling else { return true }
+        let promptedAt = appVM.identityGeneration
         let capability = await AttentionTrackingCapability.requestCameraAccessIfNeeded()
         switch capability {
         case .unsupported:
+            // No prompt on a device without TrueDepth, but the answer still comes back
+            // across an await, so it takes the same check as a denied prompt.
+            guard denial(promptedAt: promptedAt) == .resetAndAlert else { return false }
             attentionTrackingEnabled = false
             showAttentionUnsupportedAlert = true
             return false
         case .permissionDenied:
+            guard denial(promptedAt: promptedAt) == .resetAndAlert else { return false }
             attentionTrackingEnabled = false
             showAttentionPermissionDeniedAlert = true
             return false
@@ -219,15 +226,29 @@ struct SettingsSessionSection: View {
 
     /// Asks for the microphone when ambient sound is being turned on; turning it off
     /// needs nothing. A denied prompt turns the toggle back off and raises the alert
-    /// instead of saving.
+    /// instead of saving — unless the account changed while the prompt was up. That
+    /// "no" leaves both alone, and the save re-syncs the toggle from the account now
+    /// on screen (#888).
     private func authorizeAmbientSound(enabling: Bool) async -> Bool {
         guard enabling else { return true }
+        let promptedAt = appVM.identityGeneration
         let granted = await AVAudioApplication.requestRecordPermission()
         if !granted {
+            guard denial(promptedAt: promptedAt) == .resetAndAlert else { return false }
             ambientSoundEnabled = false
             showAmbientSoundPermissionDeniedAlert = true
             return false
         }
         return true
+    }
+
+    /// #888: what a gate does with its "no", asked once the prompt is answered.
+    ///
+    /// The save runs a gate only while the generation is still the one it captured with
+    /// the user's change, so `promptedAt` matches it. When the gate returns `false`, the
+    /// save asks the same question with the same generations, so it re-syncs the toggle
+    /// exactly when this leaves it alone.
+    private func denial(promptedAt: Int) -> SettingsControlSave.Denial {
+        SettingsControlSave.denial(promptedAt: promptedAt, answeredAt: appVM.identityGeneration)
     }
 }
