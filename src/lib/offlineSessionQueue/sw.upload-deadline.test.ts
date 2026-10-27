@@ -32,37 +32,56 @@ function queuedSit(clientSessionId: string, sessionSynced: boolean) {
 
 type QueuedSit = ReturnType<typeof queuedSit>;
 
+type PostOptions = { readBody?: boolean };
+
+/** A copy of the queue, as each IndexedDB read hands out. */
+function copyOf(sits: QueuedSit[]): QueuedSit[] {
+  return JSON.parse(JSON.stringify(sits)) as QueuedSit[];
+}
+
 /** Loads `public/sw.js` with this `fetch`, on the timers in force when called. */
 function loadServiceWorker(fetch: (url: string, init: RequestInit) => Promise<unknown>) {
   const listeners = new Map<string, (event: unknown) => void>();
   /** The `type` of each message the worker posts to the tabs. */
   const tabMessages: unknown[] = [];
+  const matchAll = vi.fn(async () => [
+    { postMessage: (message: { type?: unknown }) => tabMessages.push(message.type) },
+  ]);
   const context = vm.createContext({
     self: { addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener) },
-    clients: { matchAll: async () => [{ postMessage: (message: { type?: unknown }) => tabMessages.push(message.type) }] },
+    clients: { matchAll },
     fetch,
     AbortController,
     setTimeout,
     clearTimeout,
   });
   vm.runInContext(serviceWorkerSource, context);
-  const postJson = vm.runInContext("postJson", context) as (url: string, body: unknown) => Promise<unknown>;
+  const postJson = vm.runInContext("postJson", context) as (
+    url: string,
+    body: unknown,
+    options?: PostOptions,
+  ) => Promise<unknown>;
   return {
     // Adopted into this realm's Promise, so the matchers see a native one.
-    postJson: (url: string, body: unknown) => Promise.resolve(postJson(url, body)),
+    postJson: (url: string, body: unknown, options?: PostOptions) => Promise.resolve(postJson(url, body, options)),
     uploadTimeoutMs: vm.runInContext("UPLOAD_TIMEOUT_MS", context) as unknown,
     tabMessages,
+    /** The `clients.matchAll` the worker calls to message the tabs. */
+    matchAll,
     /** Makes `sits` the worker's queue, signed in as their owner. Returns a copy of each save. */
     useQueue(sits: QueuedSit[]): QueuedSit[][] {
+      let stored = copyOf(sits);
       const saves: QueuedSit[][] = [];
       // The worker's function declarations are properties of its context, so
-      // these replace its Cache Storage and IndexedDB reads and writes.
+      // these replace its Cache Storage and IndexedDB reads and writes. Each read
+      // is a fresh copy, so only a save changes the queue, as in IndexedDB.
       Object.assign(context, {
         readOfflineOwnerUserId: async () => OWNER_USER_ID,
         openOfflineDb: async () => ({ close: () => {} }),
-        loadOfflineEntries: async () => sits,
+        loadOfflineEntries: async () => copyOf(stored),
         saveOfflineEntries: async (_db: unknown, entries: QueuedSit[]) => {
-          saves.push(JSON.parse(JSON.stringify(entries)) as QueuedSit[]);
+          stored = copyOf(entries);
+          saves.push(copyOf(entries));
         },
       });
       return saves;
@@ -142,6 +161,15 @@ describe("public/sw.js upload deadline (#907)", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  test("an upload that skips its body cancels it, so it does not hold the connection", async () => {
+    const cancel = vi.fn(async () => {});
+    const { postJson } = loadServiceWorker(async () => ({ ok: true, status: 200, body: { cancel }, json: async () => ({}) }));
+
+    await expect(postJson("/api/thoughts/batch", {}, { readBody: false })).resolves.toBeNull();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   test("a sync whose upload timed out keeps what it sent, tells the tabs and fails, so the browser retries it", async () => {
     const sw = loadServiceWorker(async (url, init) =>
       url === "/api/sessions" ? rejectOnAbort(init.signal) : { ok: true, status: 200, json: async () => ({}) },
@@ -169,5 +197,28 @@ describe("public/sw.js upload deadline (#907)", () => {
     expect(saves).toEqual([[{ ...queuedSit("answered", true), thoughts: [] }]]);
     expect(sw.tabMessages).toEqual(["flush-offline-session-queue"]);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("a sync that sent everything resolves, though telling the tabs fails", async () => {
+    const sw = loadServiceWorker(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    const saves = sw.useQueue([queuedSit("answered", true)]);
+    sw.matchAll.mockRejectedValue(new Error("clients unavailable"));
+
+    await expect(sw.sync()).resolves.toBeUndefined();
+    // Asked once: a failed message is not sent again, and is no reason to retry the sync.
+    expect(sw.matchAll).toHaveBeenCalledTimes(1);
+    expect(saves).toEqual([[{ ...queuedSit("answered", true), thoughts: [] }]]);
+  });
+
+  test("a sync whose upload timed out fails with that error, though telling the tabs fails too", async () => {
+    const sw = loadServiceWorker((_url, init) => rejectOnAbort(init.signal));
+    sw.useQueue([queuedSit("stalls", false)]);
+    sw.matchAll.mockRejectedValue(new Error("clients unavailable"));
+    const outcome = sw.sync().then(() => "resolved", (error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS);
+
+    expect(((await outcome) as DOMException).name).toBe("AbortError");
+    expect(sw.matchAll).toHaveBeenCalledTimes(1);
   });
 });

@@ -139,6 +139,7 @@ function saveOfflineEntries(db, entries) {
  * `readBody: false` resolves on the status alone, as the page's `batchThoughts`
  * does. The server has stored a thoughts batch once it answers 2xx, so a body
  * that stalls after that must not fail the upload and send the batch again.
+ * The unread body is cancelled, so it does not hold its connection open.
  */
 async function postJson(url, body, { readBody = true } = {}) {
   const controller = new AbortController();
@@ -155,7 +156,10 @@ async function postJson(url, body, { readBody = true } = {}) {
       const text = await res.text().catch(() => "");
       throw new Error(text || `Request failed (${res.status})`);
     }
-    if (!readBody) return null;
+    if (!readBody) {
+      void res.body?.cancel().catch(() => {});
+      return null;
+    }
     // Awaited inside the try, so the deadline still covers the body.
     return await res.json();
   } finally {
@@ -327,15 +331,18 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("sync", (event) => {
   if (event.tag !== OFFLINE_SYNC_TAG) return;
   event.waitUntil(
-    withOfflineQueueLock(() => flushOfflineQueueFromSw())
-      .then(() => notifyClientsToFlush())
-      // #907: a failed flush, such as an upload that timed out, still fails the
-      // event once the tabs are told. The browser then retries the sync later,
-      // so a queued sit is retried even when no tab is open to flush it.
-      .catch(async (error) => {
-        await notifyClientsToFlush();
+    // #907: a failed flush, such as an upload that timed out, still fails the
+    // event once the tabs are told. The browser then retries the sync later, so
+    // a queued sit is retried even when no tab is open to flush it. Telling the
+    // tabs is best-effort: it never fails a sync that sent everything, and never
+    // replaces the flush's own error.
+    withOfflineQueueLock(() => flushOfflineQueueFromSw()).then(
+      () => notifyClientsToFlush().catch(() => {}),
+      async (error) => {
+        await notifyClientsToFlush().catch(() => {});
         throw error;
-      }),
+      },
+    ),
   );
 });
 
