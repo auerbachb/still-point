@@ -1,6 +1,5 @@
 import SwiftUI
 import StillPointShared
-import UIKit
 import os
 
 struct CompletionView: View {
@@ -37,10 +36,6 @@ struct CompletionView: View {
     @State private var returnFlushFailed = false
     @State private var isReturning = false
 
-    // Session environment photo (optional, local-only MVP)
-    @State private var capturedPhoto: UIImage?
-    @State private var showPhotoPicker = false
-
     // Before/after mood matrix (#472 / #635)
     @State private var moodMatrix: [MoodKey: MoodMatrixEntry] = [:]
     @State private var moodMatrixSaved = false
@@ -58,11 +53,6 @@ struct CompletionView: View {
 
     /// #792: where this sit stands in the offline queue — nil until it is read.
     @State private var queueState: SessionSyncCoordinator.QueuedSessionState?
-
-    private enum MoodMatrixColumn {
-        case before
-        case after
-    }
 
     /// #792: the id the mood is loaded from and sent against. Nil until the
     /// queue says the sit has a server row: a pending sit's `sessionId` is its
@@ -122,109 +112,19 @@ struct CompletionView: View {
                         .accessibilityIdentifier("completion.durationLabel")
                 }
 
-                // Stats cards
-                VStack(spacing: SPSpacing.s3) {
-                    HStack(spacing: SPSpacing.s3) {
-                        statCard(
-                            value: "\(clearPercent)%",
-                            label: "AWARENESS",
-                            color: SPColor.green,
-                            bgColor: SPColor.greenBgFaint,
-                            borderColor: SPColor.greenBorderSubtle
-                        )
+                CompletionStatsSection(
+                    clearPercent: clearPercent,
+                    thoughtCount: thoughtCount,
+                    attentionSummary: attentionSummary,
+                    ambientSoundSummary: ambientSoundSummary
+                )
 
-                        statCard(
-                            value: "\(max(0, 100 - clearPercent))%",
-                            label: "DISTRACTION",
-                            color: SPColor.amber,
-                            bgColor: SPColor.amberBgFaint,
-                            borderColor: SPColor.amberBorderSubtle
-                        )
-                    }
-
-                    statCard(
-                        value: "\(thoughtCount)",
-                        label: "CAPTURED NOTES",
-                        color: SPColor.amber,
-                        bgColor: SPColor.amberBgFaint,
-                        borderColor: SPColor.amberBorderSubtle
-                    )
-
-                    if let attentionSummary {
-                        HStack(spacing: SPSpacing.s3) {
-                            statCard(
-                                value: "\(attentionSummary.attentivePercent)%",
-                                label: "GAZE ON SCREEN",
-                                color: SPColor.green,
-                                bgColor: SPColor.greenBgFaint,
-                                borderColor: SPColor.greenBorderSubtle
-                            )
-
-                            statCard(
-                                value: "\(attentionSummary.awayPercent)%",
-                                label: "GAZE AWAY",
-                                color: SPColor.amber,
-                                bgColor: SPColor.amberBgFaint,
-                                borderColor: SPColor.amberBorderSubtle
-                            )
-                        }
-                        .accessibilityIdentifier("completion.attentionSummary")
-                    }
-
-                    if let ambient = ambientSoundSummary {
-                        HStack(spacing: SPSpacing.s3) {
-                            statCard(
-                                value: "\(ambient.quietPercent)%",
-                                label: "QUIET TIME",
-                                color: SPColor.green,
-                                bgColor: SPColor.greenBgFaint,
-                                borderColor: SPColor.greenBorderSubtle
-                            )
-
-                            statCard(
-                                value: String(format: "%.0f dBFS", ambient.avgDb),
-                                label: "AVG LEVEL",
-                                color: SPColor.amber,
-                                bgColor: SPColor.amberBgFaint,
-                                borderColor: SPColor.amberBorderSubtle
-                            )
-                        }
-                        .accessibilityIdentifier("completion.ambientSoundSummary")
-                    }
-                }
-
-                // Captured thoughts
                 if !thoughts.isEmpty {
-                    VStack(alignment: .leading, spacing: SPSpacing.s2) {
-                        Text("THOUGHTS CAPTURED")
-                            .font(SPFont.mono(11, weight: .medium))
-                            .foregroundStyle(Color(SPColor.fg4))
-                            .tracking(2)
-
-                        ForEach(thoughts) { thought in
-                            HStack(alignment: .top, spacing: SPSpacing.s2) {
-                                Text("@\(thought.timeInSession)s")
-                                    .font(SPFont.mono(11))
-                                    .foregroundStyle(SPColor.amberText)
-                                    .frame(width: 50, alignment: .trailing)
-
-                                Text(thought.text)
-                                    .font(SPFont.serifItalic(15))
-                                    .foregroundStyle(Color(SPColor.fg2))
-                            }
-                        }
-                    }
-                    .padding(SPSpacing.s3)
-                    .background(SPColor.amberBgFaint)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(SPColor.amberBorderSubtle)
-                    )
+                    CompletionThoughtsSection(thoughts: thoughts)
                 }
 
                 // Session environment photo (optional)
-                sessionPhotoSection
+                CompletionPhotoSection(sessionId: sessionId)
 
                 // End-of-session note
                 VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -266,7 +166,15 @@ struct CompletionView: View {
                 // pending sync, as on web — there is no server row to attach
                 // it to, so "save and return to home" leaves on the first tap.
                 if detailSessionId != nil {
-                    moodMatrixSection
+                    MoodShiftSection(
+                        moodMatrix: moodMatrix,
+                        cellsDisabled: moodMatrixCellsDisabled,
+                        saved: moodMatrixSaved,
+                        saveError: moodMatrixSaveError,
+                        onToggle: { key, column, level in
+                            toggleMoodCell(key: key, column: column, level: level)
+                        }
+                    )
                 }
 
                 // Progression preview
@@ -324,330 +232,16 @@ struct CompletionView: View {
             if trimmed != lastSavedNote { noteSaved = false }
             scheduleNoteAutosave(for: newValue)
         }
-        .sheet(isPresented: $showPhotoPicker) {
-            SessionPhotoPicker { image in
-                handlePhotoSelected(image)
-            }
-        }
         .task(id: sessionId) {
             await resolveQueueState()
             await loadPersistedSessionData()
         }
     }
 
-    // MARK: - Session Photo Section
-
-    @ViewBuilder
-    private var sessionPhotoSection: some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            Text("SESSION PHOTO")
-                .font(SPFont.mono(11, weight: .medium))
-                .foregroundStyle(Color(SPColor.fg4))
-                .tracking(2)
-
-            if let photo = capturedPhoto {
-                // Thumbnail with retake / remove controls
-                VStack(alignment: .leading, spacing: SPSpacing.s2) {
-                    Image(uiImage: photo)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .clipped()
-                        .accessibilityIdentifier("completion.photoThumbnail")
-
-                    HStack {
-                        Button {
-                            showPhotoPicker = true
-                        } label: {
-                            Text("Retake")
-                                .font(SPFont.mono(11, weight: .medium))
-                                .foregroundStyle(Color(SPColor.fg3))
-                        }
-                        .accessibilityIdentifier("completion.retakePhotoButton")
-
-                        Spacer()
-
-                        Button {
-                            removePhoto()
-                        } label: {
-                            Text("Remove")
-                                .font(SPFont.mono(11, weight: .medium))
-                                .foregroundStyle(SPColor.dangerMuted)
-                        }
-                        .accessibilityIdentifier("completion.removePhotoButton")
-                    }
-                }
-            } else {
-                // Dashed "add" affordance — intentionally low-prominence so it never feels mandatory.
-                // Disabled until sessionId is assigned by the server (mirrors isSaveDisabled guard).
-                Button {
-                    showPhotoPicker = true
-                } label: {
-                    HStack(spacing: SPSpacing.s2) {
-                        Image(systemName: "camera")
-                            .font(.system(size: 15))
-                        Text("Add photo of your environment")
-                            .font(SPFont.serifItalic(15, weight: .light))
-                    }
-                    .foregroundStyle(Color(SPColor.fg3))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SPSpacing.s3)
-                    .background(Color(SPColor.surface1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(SPColor.border2, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                    )
-                }
-                .disabled(sessionId.isEmpty)
-                .accessibilityIdentifier("completion.addPhotoButton")
-            }
-        }
-    }
-
-    private func handlePhotoSelected(_ image: UIImage) {
-        guard !sessionId.isEmpty else { return }
-        guard SessionPhotoStore.shared.save(image, forSessionId: sessionId) != nil else { return }
-        capturedPhoto = image
-    }
-
-    private func removePhoto() {
-        SessionPhotoStore.shared.delete(forSessionId: sessionId)
-        capturedPhoto = nil
-    }
-
-    // MARK: - Mood Matrix Section (#472 / #635)
-
-    /// #885: the column-header, scale-hint and mood rows share one label width
-    /// and one spacing so their columns line up. #911: the headers, hints and
-    /// cell groups also share one scale width, so they line up in the stacked
-    /// layout too. The widths come from `MoodMatrixGeometry`, whose tests pin
-    /// which iPhones get which layout.
-    private enum MoodMatrixLayout {
-        static let labelWidth = CGFloat(MoodMatrixGeometry.labelWidth)
-        static let rowSpacing = CGFloat(MoodMatrixGeometry.columnSpacing)
-        static let boxSpacing = CGFloat(MoodMatrixGeometry.cellSpacing)
-        static let cellSize = CGFloat(MoodMatrixGeometry.cellSize)
-        static let scaleWidth = CGFloat(MoodMatrixGeometry.scaleWidth)
-        static let phaseLabelWidth = CGFloat(MoodMatrixGeometry.phaseLabelWidth)
-        /// Between a stacked mood's label, its BEFORE row and its AFTER row.
-        static let stackedRowSpacing: CGFloat = 4
-    }
-
-    @ViewBuilder
-    private var moodMatrixSection: some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            Text("MOOD SHIFT")
-                .font(SPFont.mono(11, weight: .medium))
-                .foregroundStyle(Color(SPColor.fg4))
-                .tracking(2)
-
-            // #911: a wide row needs 388pt, more than the 327pt column of a
-            // 375pt iPhone. Where it does not fit, each mood stacks BEFORE above
-            // AFTER instead. Only one layout is shown, so the cell identifiers
-            // stay unique.
-            ViewThatFits(in: .horizontal) {
-                moodMatrixWideGrid
-                moodMatrixStackedGrid
-            }
-
-            if moodMatrixSaved {
-                Text("mood saved")
-                    .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(SPColor.green)
-                    .accessibilityIdentifier("completion.moodMatrixSavedIndicator")
-            }
-
-            if let moodMatrixSaveError {
-                Text(moodMatrixSaveError)
-                    .font(SPFont.mono(11))
-                    .foregroundStyle(SPColor.dangerMuted)
-            }
-        }
-    }
-
-    /// BEFORE and AFTER side by side, each mood on one row.
-    private var moodMatrixWideGrid: some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            moodMatrixColumnHeaders
-            moodMatrixScaleHints
-
-            VStack(spacing: SPSpacing.s2) {
-                ForEach(MoodKey.allCases, id: \.self) { key in
-                    moodMatrixRow(for: key)
-                }
-            }
-        }
-    }
-
-    /// #911: one low/high hint row, then each mood's label on a line of its
-    /// own, followed by a BEFORE row and an AFTER row. Centered in the
-    /// section, as on web.
-    private var moodMatrixStackedGrid: some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            HStack(spacing: MoodMatrixLayout.rowSpacing) {
-                Text("")
-                    .frame(width: MoodMatrixLayout.phaseLabelWidth)
-                moodMatrixScaleHint
-            }
-
-            ForEach(MoodKey.allCases, id: \.self) { key in
-                moodMatrixStackedBlock(for: key)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var moodMatrixColumnHeaders: some View {
-        HStack(spacing: MoodMatrixLayout.rowSpacing) {
-            Text("")
-                .frame(width: MoodMatrixLayout.labelWidth, alignment: .trailing)
-            moodMatrixSideLabel(.before)
-                .frame(width: MoodMatrixLayout.scaleWidth)
-                .frame(maxWidth: .infinity)
-            moodMatrixSideLabel(.after)
-                .frame(width: MoodMatrixLayout.scaleWidth)
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var moodMatrixScaleHints: some View {
-        HStack(spacing: MoodMatrixLayout.rowSpacing) {
-            Text("")
-                .frame(width: MoodMatrixLayout.labelWidth)
-            ForEach(0..<2, id: \.self) { _ in
-                moodMatrixScaleHint
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    /// Low/high ends of the scale, one scale wide so each end sits over the
-    /// first or the fifth cell.
-    private var moodMatrixScaleHint: some View {
-        HStack {
-            Text("low")
-            Spacer()
-            Text("high")
-        }
-        .font(SPFont.mono(9))
-        .foregroundStyle(Color(SPColor.fg4))
-        .frame(width: MoodMatrixLayout.scaleWidth)
-    }
-
-    /// The BEFORE / AFTER column headers, and the stacked layout's row labels.
-    private func moodMatrixSideLabel(_ column: MoodMatrixColumn) -> some View {
-        Text(column == .before ? "BEFORE" : "AFTER")
-            .font(SPFont.mono(10, weight: .medium))
-            .foregroundStyle(Color(SPColor.fg4))
-            .tracking(1.4)
-            .lineLimit(1)
-    }
-
-    private func moodMatrixMoodLabel(_ key: MoodKey) -> some View {
-        Text(key.label.uppercased())
-            .font(SPFont.mono(10, weight: .medium))
-            .foregroundStyle(Color(SPColor.fg3))
-            .tracking(1)
-            .lineLimit(1)
-    }
+    // MARK: - Mood Matrix (#472 / #635)
 
     private var moodMatrixCellsDisabled: Bool {
         isSavingMoodMatrix || isReturning || !moodLoaded
-    }
-
-    private func moodMatrixRow(for key: MoodKey) -> some View {
-        let entry = moodMatrix[key] ?? MoodMatrixEntry()
-        return HStack(spacing: MoodMatrixLayout.rowSpacing) {
-            moodMatrixMoodLabel(key)
-                .frame(width: MoodMatrixLayout.labelWidth, alignment: .trailing)
-
-            moodMatrixTapRow(
-                moodKey: key,
-                column: .before,
-                selected: entry.before,
-                disabled: moodMatrixCellsDisabled
-            )
-            .frame(maxWidth: .infinity)
-
-            moodMatrixTapRow(
-                moodKey: key,
-                column: .after,
-                selected: entry.after,
-                disabled: moodMatrixCellsDisabled
-            )
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private func moodMatrixStackedBlock(for key: MoodKey) -> some View {
-        let entry = moodMatrix[key] ?? MoodMatrixEntry()
-        return VStack(alignment: .leading, spacing: MoodMatrixLayout.stackedRowSpacing) {
-            moodMatrixMoodLabel(key)
-
-            ForEach([MoodMatrixColumn.before, .after], id: \.self) { column in
-                HStack(spacing: MoodMatrixLayout.rowSpacing) {
-                    moodMatrixSideLabel(column)
-                        .frame(width: MoodMatrixLayout.phaseLabelWidth, alignment: .trailing)
-
-                    moodMatrixTapRow(
-                        moodKey: key,
-                        column: column,
-                        selected: column == .before ? entry.before : entry.after,
-                        disabled: moodMatrixCellsDisabled
-                    )
-                }
-            }
-        }
-    }
-
-    private func moodMatrixTapRow(
-        moodKey: MoodKey,
-        column: MoodMatrixColumn,
-        selected: Int?,
-        disabled: Bool
-    ) -> some View {
-        HStack(spacing: MoodMatrixLayout.boxSpacing) {
-            ForEach(1...5, id: \.self) { level in
-                Button {
-                    toggleMoodCell(key: moodKey, column: column, level: level)
-                } label: {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(moodBoxFill(selected: selected == level, level: level))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(
-                                    selected == level ? SPColor.greenBorderSubtle : SPColor.border2,
-                                    lineWidth: 1
-                                )
-                        )
-                        .overlay {
-                            if selected == level {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(SPColor.green.opacity(0.35 + Double(level) * 0.12))
-                                    .frame(width: 10, height: 10)
-                            }
-                        }
-                        .frame(width: MoodMatrixLayout.cellSize, height: MoodMatrixLayout.cellSize)
-                }
-                .disabled(disabled)
-                .accessibilityIdentifier(moodMatrixAccessibilityId(moodKey: moodKey, column: column, level: level))
-            }
-        }
-    }
-
-    private func moodBoxFill(selected: Bool, level: Int) -> Color {
-        if selected {
-            return SPColor.green.opacity(0.08 + Double(level) * 0.07)
-        }
-        return Color(SPColor.surface1)
-    }
-
-    private func moodMatrixAccessibilityId(moodKey: MoodKey, column: MoodMatrixColumn, level: Int) -> String {
-        let side = column == .before ? "before" : "after"
-        return "completion.moodMatrix.\(moodKey.rawValue).\(side).\(level)"
     }
 
     private func toggleMoodCell(key: MoodKey, column: MoodMatrixColumn, level: Int) {
@@ -783,31 +377,7 @@ struct CompletionView: View {
         moodLoaded = true
     }
 
-    private func statCard(
-        value: String,
-        label: String,
-        color: Color,
-        bgColor: Color,
-        borderColor: Color
-    ) -> some View {
-        VStack(spacing: SPSpacing.s1) {
-            Text(value)
-                .font(SPFont.statValue)
-                .foregroundStyle(color)
-            Text(label)
-                .font(SPFont.statLabel)
-                .foregroundStyle(color.opacity(0.6))
-                .tracking(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, SPSpacing.s3)
-        .background(bgColor)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(borderColor)
-        )
-    }
+    // MARK: - Session Note
 
     /// Saves the trimmed note, or — #792 — clears the stored one once the field
     /// is emptied. An empty note that was never saved sends nothing.
