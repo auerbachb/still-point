@@ -12,7 +12,15 @@ import {
 import { liveSessionSyncTransport, type SessionSyncTransport } from "./transport";
 import type { PendingSessionEntry, PendingSessionThought } from "./types";
 
+// ---------------------------------------------------------------------------
+// Shared fixtures. Each feature block below adds tests, not setup: reach for
+// these before writing another entry literal, transport stub, or store.
+// ---------------------------------------------------------------------------
+
 const testOwnerUserId = "user-test-558";
+
+type SentBatch = Parameters<SessionSyncTransport["batchThoughts"]>[0];
+type CreatedSession = Awaited<ReturnType<SessionSyncTransport["createSession"]>>;
 
 function baseRequest(overrides: Record<string, unknown> = {}) {
   return {
@@ -29,10 +37,128 @@ function baseRequest(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** A queue row as a build would have written it: no server row yet, nothing
+ *  queued, owned by the test user. Omits every optional field, so it also
+ *  stands in for a row an older build saved. */
+function queueEntry(
+  clientSessionId: string,
+  overrides: Partial<PendingSessionEntry> = {},
+): PendingSessionEntry {
+  return {
+    clientSessionId,
+    ownerUserId: testOwnerUserId,
+    request: requestWithClientId(baseRequest(), clientSessionId),
+    thoughts: [],
+    serverSessionId: null,
+    sessionSynced: false,
+    enqueuedAt: "2026-07-17T12:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** A coordinator that can never reach the server, as on a device offline. */
+function offlineCoordinator(store: OfflineSessionQueueStore): WebSessionSyncCoordinator {
+  return new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+}
+
+/** The error a transport throws for an answer that retrying cannot change. */
+function permanentError(message: string): Error {
+  return Object.assign(new Error(message), { permanent: true });
+}
+
+/** A store that reads as empty and refuses every write. */
+function refusingWriteStore(writeFailure: Error): OfflineSessionQueueStore {
+  return {
+    loadEntries: async (): Promise<PendingSessionEntry[]> => [],
+    saveEntries: async () => {
+      throw writeFailure;
+    },
+  };
+}
+
+/** Let every queued microtask run, so a chain that is blocked shows as blocked. */
+const drainMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A promise and the function that settles it, for holding a call mid-flight. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => { resolve = settle; });
+  return { promise, resolve };
+}
+
+/** Runs `body` with `console.error` silenced, and hands back the spy so the
+ *  test can assert the error was still reported. */
+async function withConsoleErrorSilenced(
+  body: (consoleError: ReturnType<typeof vi.spyOn>) => Promise<void>,
+): Promise<void> {
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await body(consoleError);
+  } finally {
+    consoleError.mockRestore();
+  }
+}
+
+/** A synced sit with these thoughts still queued, as a flush would find it. */
+async function seedSyncedEntry(
+  store: InMemoryOfflineSessionQueueStore,
+  clientSessionId: string,
+  thoughts: PendingSessionEntry["thoughts"],
+): Promise<void> {
+  await offlineCoordinator(store).saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
+  const seeded = await store.loadEntries();
+  seeded[0]!.sessionSynced = true;
+  seeded[0]!.serverSessionId = `server-${clientSessionId}`;
+  seeded[0]!.thoughts = thoughts;
+  await store.saveEntries(seeded);
+}
+
+/** Offline for new sits; records every thoughts batch and accepts it. */
+function recordingTransport(batches: SentBatch[]): SessionSyncTransport {
+  return {
+    ...alwaysFailingSessionSyncTransport,
+    batchThoughts: async (data) => {
+      batches.push(data);
+    },
+  };
+}
+
+/** Offline for new sits; runs `onBatch` in place of each thoughts upload, as
+ *  another tab writing the queue while this tab's batch is on the wire. */
+function batchHookTransport(onBatch: () => Promise<void>): SessionSyncTransport {
+  return { ...alwaysFailingSessionSyncTransport, batchThoughts: onBatch };
+}
+
+/** Rewrites the first queued row in place, as another tab's write would. */
+async function editFirstEntry(
+  store: OfflineSessionQueueStore,
+  edit: (entry: PendingSessionEntry) => void,
+): Promise<void> {
+  const entries = await store.loadEntries();
+  edit(entries[0]!);
+  await store.saveEntries(entries);
+}
+
+/** Hands out copies, as IndexedDB does: a read is a snapshot, and only a write
+ *  changes what is stored. */
+class CopyingQueueStore implements OfflineSessionQueueStore {
+  private entries: PendingSessionEntry[] = [];
+
+  async loadEntries(): Promise<PendingSessionEntry[]> {
+    return structuredClone(this.entries);
+  }
+
+  async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+    this.entries = structuredClone(entries);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 describe("WebSessionSyncCoordinator (#558)", () => {
   test("saveCompletedSession enqueues when sync unavailable", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await coordinator.saveCompletedSession(
@@ -53,7 +179,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("duplicate clientSessionId does not duplicate queue entries", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440001";
 
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
@@ -64,7 +190,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("flushPending skips entries owned by another user", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440002";
 
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, "user-a", []);
@@ -109,7 +235,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
       },
     };
 
-    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+    await offlineCoordinator(store).saveCompletedSession(
       baseRequest(),
       clientSessionId,
       testOwnerUserId,
@@ -128,7 +254,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("replaceEndNote queues note for pending entry", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440005";
 
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
@@ -140,7 +266,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("replaceEndNote replaces the queued end note instead of appending another", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440015";
 
     await coordinator.saveCompletedSession(
@@ -162,26 +288,18 @@ describe("WebSessionSyncCoordinator (#558)", () => {
   test("a flush keeps an end note replaced while its batch was in flight", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440016";
-    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
-      baseRequest(),
-      clientSessionId,
-      testOwnerUserId,
-      [],
-    );
-    const seeded = await store.loadEntries();
-    seeded[0]!.sessionSynced = true;
-    seeded[0]!.serverSessionId = "server-session-16";
-    seeded[0]!.thoughts = [{ timeInSession: -1, text: "first draft" }];
-    await store.saveEntries(seeded);
+    await offlineCoordinator(store).saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
+    await editFirstEntry(store, (entry) => {
+      entry.sessionSynced = true;
+      entry.serverSessionId = "server-session-16";
+      entry.thoughts = [{ timeInSession: -1, text: "first draft" }];
+    });
 
-    const transport: SessionSyncTransport = {
-      ...alwaysFailingSessionSyncTransport,
-      batchThoughts: async () => {
-        const entries = await store.loadEntries();
-        entries[0]!.thoughts = [{ timeInSession: -1, text: "revised note" }];
-        await store.saveEntries(entries);
-      },
-    };
+    const transport = batchHookTransport(() =>
+      editFirstEntry(store, (entry) => {
+        entry.thoughts = [{ timeInSession: -1, text: "revised note" }];
+      }),
+    );
 
     await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
 
@@ -190,14 +308,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
   });
 
   test("#703: a refused IndexedDB write throws LocalSessionWriteError, not a pending result", async () => {
-    const writeFailure = new Error("QuotaExceededError");
-    const refusingStore: OfflineSessionQueueStore = {
-      loadEntries: async (): Promise<PendingSessionEntry[]> => [],
-      saveEntries: async () => {
-        throw writeFailure;
-      },
-    };
-    const coordinator = new WebSessionSyncCoordinator(refusingStore, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(refusingWriteStore(new Error("QuotaExceededError")));
 
     await expect(
       coordinator.saveCompletedSession(
@@ -211,13 +322,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("#703: the refused write keeps the underlying storage error as its cause", async () => {
     const writeFailure = new Error("QuotaExceededError");
-    const refusingStore: OfflineSessionQueueStore = {
-      loadEntries: async (): Promise<PendingSessionEntry[]> => [],
-      saveEntries: async () => {
-        throw writeFailure;
-      },
-    };
-    const coordinator = new WebSessionSyncCoordinator(refusingStore, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(refusingWriteStore(writeFailure));
 
     const error = await coordinator
       .saveCompletedSession(baseRequest(), "550e8400-e29b-41d4-a716-446655440008", testOwnerUserId, [])
@@ -235,7 +340,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
       },
       saveEntries: async () => {},
     };
-    const coordinator = new WebSessionSyncCoordinator(unreadableStore, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(unreadableStore);
 
     const error = await coordinator
       .saveCompletedSession(baseRequest(), "550e8400-e29b-41d4-a716-446655440009", testOwnerUserId, [])
@@ -258,7 +363,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const permanentTransport = {
       createSession: async () => {
-        throw Object.assign(new Error("Create session failed (400)"), { permanent: true });
+        throw permanentError("Create session failed (400)");
       },
       batchThoughts: async () => {},
     };
@@ -274,7 +379,7 @@ describe("WebSessionSyncCoordinator (#558)", () => {
 
   test("replaceEndNote rejects owner mismatch", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440006";
 
     await coordinator.saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
@@ -311,15 +416,9 @@ describe("WebSessionSyncCoordinator combined sits (#892)", () => {
   test("an entry queued without combined (an older build) still syncs and sends no combined key", async () => {
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440030";
     // Written before #892: its request has no `combined` field at all.
-    const legacy: PendingSessionEntry = {
-      clientSessionId,
-      ownerUserId: testOwnerUserId,
+    const legacy = queueEntry(clientSessionId, {
       request: requestWithClientId(baseRequest({ track: "primary" }), clientSessionId),
-      thoughts: [],
-      serverSessionId: null,
-      sessionSynced: false,
-      enqueuedAt: "2026-07-17T12:00:00.000Z",
-    };
+    });
     const store = new InMemoryOfflineSessionQueueStore();
     await store.saveEntries([legacy]);
 
@@ -338,7 +437,7 @@ describe("WebSessionSyncCoordinator combined sits (#892)", () => {
   test("a queued combined sit uploads with combined: true", async () => {
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440031";
     const store = new InMemoryOfflineSessionQueueStore();
-    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+    await offlineCoordinator(store).saveCompletedSession(
       baseRequest({ track: "primary", combined: true, duration: 850, actualTime: 850 }),
       clientSessionId,
       testOwnerUserId,
@@ -352,43 +451,10 @@ describe("WebSessionSyncCoordinator combined sits (#892)", () => {
   });
 });
 
-/** Let every queued microtask run, so a chain that is blocked shows as blocked. */
-const drainMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-type SentBatch = Parameters<SessionSyncTransport["batchThoughts"]>[0];
-
-/** A synced sit with these thoughts still queued, as a flush would find it. */
-async function seedSyncedEntry(
-  store: InMemoryOfflineSessionQueueStore,
-  clientSessionId: string,
-  thoughts: PendingSessionEntry["thoughts"],
-): Promise<void> {
-  await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
-    baseRequest(),
-    clientSessionId,
-    testOwnerUserId,
-    [],
-  );
-  const seeded = await store.loadEntries();
-  seeded[0]!.sessionSynced = true;
-  seeded[0]!.serverSessionId = `server-${clientSessionId}`;
-  seeded[0]!.thoughts = thoughts;
-  await store.saveEntries(seeded);
-}
-
-function recordingTransport(batches: SentBatch[]): SessionSyncTransport {
-  return {
-    ...alwaysFailingSessionSyncTransport,
-    batchThoughts: async (data) => {
-      batches.push(data);
-    },
-  };
-}
-
 describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
   test("clearEndNote before sync drops the queued note, keeps in-sit thoughts, and sends nothing", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440020";
 
     await coordinator.saveCompletedSession(
@@ -428,7 +494,7 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
 
   test("a clear that cannot reach the server stays queued, counts as pending, and survives pruning", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440022";
     await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "saved note" }]);
 
@@ -453,7 +519,7 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440023";
     await seedSyncedEntry(store, clientSessionId, []);
-    const offline = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const offline = offlineCoordinator(store);
     await offline.clearEndNote(clientSessionId, testOwnerUserId);
     await offline.replaceEndNote(clientSessionId, testOwnerUserId, "second thoughts");
 
@@ -474,15 +540,12 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "first draft" }]);
 
     // Another tab clears the note while this tab's upload of it is on the wire.
-    const transport: SessionSyncTransport = {
-      ...alwaysFailingSessionSyncTransport,
-      batchThoughts: async () => {
-        const entries = await store.loadEntries();
-        entries[0]!.thoughts = [];
-        entries[0]!.clearCompletionNote = true;
-        await store.saveEntries(entries);
-      },
-    };
+    const transport = batchHookTransport(() =>
+      editFirstEntry(store, (entry) => {
+        entry.thoughts = [];
+        entry.clearCompletionNote = true;
+      }),
+    );
 
     await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
 
@@ -496,23 +559,21 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     await seedSyncedEntry(store, clientSessionId, [{ timeInSession: -1, text: "first draft" }]);
 
     const batches: SentBatch[] = [];
-    let uploadStarted!: () => void;
-    const started = new Promise<void>((resolve) => { uploadStarted = resolve; });
-    let releaseUpload!: () => void;
-    const released = new Promise<void>((resolve) => { releaseUpload = resolve; });
+    const uploadStarted = deferred();
+    const uploadReleased = deferred();
     const coordinator = new WebSessionSyncCoordinator(store, {
       ...alwaysFailingSessionSyncTransport,
       batchThoughts: async (data) => {
         batches.push(data);
         if (batches.length === 1) {
-          uploadStarted();
-          await released;
+          uploadStarted.resolve();
+          await uploadReleased.promise;
         }
       },
     });
 
     const flushing = coordinator.flushPending(testOwnerUserId);
-    await started;
+    await uploadStarted.promise;
     const clearing = coordinator.clearEndNote(clientSessionId, testOwnerUserId);
     await drainMicrotasks();
 
@@ -521,7 +582,7 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     expect(batches).toHaveLength(1);
     expect((await store.loadEntries())[0]!.thoughts).toEqual([{ timeInSession: -1, text: "first draft" }]);
 
-    releaseUpload();
+    uploadReleased.resolve();
     await flushing;
     await clearing;
 
@@ -544,31 +605,29 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
     // A read that returns its snapshot late, like an IndexedDB read whose
     // result lands after other work has run.
     let holdNextRead = false;
-    let readTaken!: () => void;
-    const taken = new Promise<void>((resolve) => { readTaken = resolve; });
-    let releaseRead!: () => void;
-    const released = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const readTaken = deferred();
+    const readReleased = deferred();
     const store: OfflineSessionQueueStore = {
       loadEntries: async () => {
         const snapshot = await inner.loadEntries();
         if (holdNextRead) {
           holdNextRead = false;
-          readTaken();
-          await released;
+          readTaken.resolve();
+          await readReleased.promise;
         }
         return snapshot;
       },
       saveEntries: (entries) => inner.saveEntries(entries),
     };
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
 
     holdNextRead = true;
     const pruning = coordinator.pruneCompletedEntries(testOwnerUserId);
-    await taken;
+    await readTaken.promise;
     const clearing = coordinator.clearEndNote(clientSessionId, testOwnerUserId);
     const clearOutcome = clearing.then(() => "cleared", (error: Error) => error.message);
     await drainMicrotasks();
-    releaseRead();
+    readReleased.resolve();
     await pruning;
 
     // The prune ran first on its own read, so the clear must find no entry and
@@ -578,15 +637,10 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
   });
 
   test("an entry saved before the clear flag existed reads as having nothing to clear", async () => {
-    const legacy: PendingSessionEntry = {
-      clientSessionId: "550e8400-e29b-41d4-a716-446655440026",
-      ownerUserId: testOwnerUserId,
-      request: requestWithClientId(baseRequest(), "550e8400-e29b-41d4-a716-446655440026"),
-      thoughts: [],
+    const legacy = queueEntry("550e8400-e29b-41d4-a716-446655440026", {
       serverSessionId: "server-legacy",
       sessionSynced: true,
-      enqueuedAt: "2026-07-17T12:00:00.000Z",
-    };
+    });
     const store = new InMemoryOfflineSessionQueueStore();
     await store.saveEntries([legacy]);
     const batches: SentBatch[] = [];
@@ -598,10 +652,7 @@ describe("WebSessionSyncCoordinator end-note clear (#792)", () => {
   });
 
   test("clearEndNote on an unknown sit throws entryNotFound", async () => {
-    const coordinator = new WebSessionSyncCoordinator(
-      new InMemoryOfflineSessionQueueStore(),
-      alwaysFailingSessionSyncTransport,
-    );
+    const coordinator = offlineCoordinator(new InMemoryOfflineSessionQueueStore());
 
     await expect(
       coordinator.clearEndNote("550e8400-e29b-41d4-a716-446655440027", testOwnerUserId),
@@ -630,8 +681,7 @@ type BatchBody = { sessionId: string; thoughts: PendingSessionThought[] };
 function stubServer({ stallBatches = 0 } = {}) {
   const stored: PendingSessionThought[] = [];
   const batches: BatchBody[] = [];
-  let stalled!: () => void;
-  const batchStalled = new Promise<void>((resolve) => { stalled = resolve; });
+  const batchStalled = deferred();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     if (url === "/api/sessions") {
       return { ok: true, status: 201, json: async () => ({ session: { id: "server-948" } }) };
@@ -645,12 +695,12 @@ function stubServer({ stallBatches = 0 } = {}) {
     }
     if (stallBatches > 0) {
       stallBatches -= 1;
-      stalled();
+      batchStalled.resolve();
       return rejectOnAbort(init.signal);
     }
     return { ok: true, status: 200, json: async () => ({ thoughts: [] }) };
   }));
-  return { stored, batches, batchStalled };
+  return { stored, batches, batchStalled: batchStalled.promise };
 }
 
 describe("WebSessionSyncCoordinator thought ids (#948)", () => {
@@ -739,15 +789,7 @@ describe("WebSessionSyncCoordinator thought ids (#948)", () => {
       { timeInSession: -1, text: "a note" },
     ];
     const store = new InMemoryOfflineSessionQueueStore();
-    await store.saveEntries([{
-      clientSessionId,
-      ownerUserId: testOwnerUserId,
-      request: requestWithClientId(baseRequest(), clientSessionId),
-      thoughts: legacyThoughts,
-      serverSessionId: null,
-      sessionSynced: false,
-      enqueuedAt: "2026-07-17T12:00:00.000Z",
-    }]);
+    await store.saveEntries([queueEntry(clientSessionId, { thoughts: legacyThoughts })]);
 
     expect(await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId))
       .toBe(1);
@@ -767,14 +809,11 @@ describe("WebSessionSyncCoordinator thought ids (#948)", () => {
     // A second thought with the same words is queued while the batch is out. A
     // new array, as an IndexedDB read would hand out: the in-memory store
     // shares the one this batch was built from.
-    const transport: SessionSyncTransport = {
-      ...alwaysFailingSessionSyncTransport,
-      batchThoughts: async () => {
-        const entries = await store.loadEntries();
-        entries[0]!.thoughts = [...entries[0]!.thoughts, twin];
-        await store.saveEntries(entries);
-      },
-    };
+    const transport = batchHookTransport(() =>
+      editFirstEntry(store, (entry) => {
+        entry.thoughts = [...entry.thoughts, twin];
+      }),
+    );
 
     await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
 
@@ -783,8 +822,6 @@ describe("WebSessionSyncCoordinator thought ids (#948)", () => {
 });
 
 describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
-  type CreatedSession = Awaited<ReturnType<SessionSyncTransport["createSession"]>>;
-
   /** Online for new sits, offline for thought batches: a row that still owes a
    *  batch stays owing it. */
   const sitsOnlyTransport: SessionSyncTransport = {
@@ -794,21 +831,28 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
     },
   };
 
-  /** One row per owing state, plus a clean one owned by someone else. */
-  async function seedQueue(store: InMemoryOfflineSessionQueueStore): Promise<void> {
-    const row = (
-      clientSessionId: string,
-      overrides: Partial<PendingSessionEntry> = {},
-    ): PendingSessionEntry => ({
-      clientSessionId,
-      ownerUserId: testOwnerUserId,
-      request: requestWithClientId(baseRequest(), clientSessionId),
-      thoughts: [],
+  /** `sitsOnlyTransport`, except the server permanently refuses the sits `refuses` names. */
+  function refusingSitsTransport(refuses: (clientSessionId: string) => boolean): SessionSyncTransport {
+    return {
+      ...sitsOnlyTransport,
+      createSession: async (payload) => {
+        if (refuses(payload.clientSessionId)) throw permanentError("rejected");
+        return sitsOnlyTransport.createSession(payload);
+      },
+    };
+  }
+
+  /** A synced row that owes nothing unless `overrides` says otherwise. */
+  const row = (clientSessionId: string, overrides: Partial<PendingSessionEntry> = {}) =>
+    queueEntry(clientSessionId, {
       serverSessionId: `server-${clientSessionId}`,
       sessionSynced: true,
       enqueuedAt: "2026-10-27T12:00:00.000Z",
       ...overrides,
     });
+
+  /** One row per owing state, plus a clean one owned by someone else. */
+  async function seedQueue(store: InMemoryOfflineSessionQueueStore): Promise<void> {
     await store.saveEntries([
       row("unsynced", { sessionSynced: false, serverSessionId: null }),
       row("synced"),
@@ -837,8 +881,7 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
     const store = new InMemoryOfflineSessionQueueStore();
     await seedQueue(store);
 
-    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport)
-      .flushAndPruneCompleted(testOwnerUserId);
+    await offlineCoordinator(store).flushAndPruneCompleted(testOwnerUserId);
 
     expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
   });
@@ -858,22 +901,14 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
   test("a permanent upload failure stays queued and does not stop the prune", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     await seedQueue(store);
-    const refusing: SessionSyncTransport = {
-      ...sitsOnlyTransport,
-      createSession: async () => {
-        throw Object.assign(new Error("rejected"), { permanent: true });
-      },
-    };
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refusing = refusingSitsTransport(() => true);
 
-    try {
+    await withConsoleErrorSilenced(async (consoleError) => {
       await new WebSessionSyncCoordinator(store, refusing).flushAndPruneCompleted(testOwnerUserId);
 
       expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
       expect(consoleError).toHaveBeenCalled();
-    } finally {
-      consoleError.mockRestore();
-    }
+    });
   });
 
   test("a sit the server refuses does not keep the sits queued after it from uploading", async () => {
@@ -884,43 +919,28 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
       ...(await store.loadEntries()),
       { ...later, clientSessionId: "unsynced-later", request: requestWithClientId(baseRequest(), "unsynced-later") },
     ]);
-    const refusingFirst: SessionSyncTransport = {
-      ...sitsOnlyTransport,
-      createSession: async (payload) => {
-        if (payload.clientSessionId === "unsynced") {
-          throw Object.assign(new Error("rejected"), { permanent: true });
-        }
-        return sitsOnlyTransport.createSession(payload);
-      },
-    };
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refusingFirst = refusingSitsTransport((clientSessionId) => clientSessionId === "unsynced");
 
-    try {
+    await withConsoleErrorSilenced(async (consoleError) => {
       const synced = await new WebSessionSyncCoordinator(store, refusingFirst)
         .flushAndPruneCompleted(testOwnerUserId);
 
       expect(synced).toBe(1);
       expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
       expect(consoleError).toHaveBeenCalled();
-    } finally {
-      consoleError.mockRestore();
-    }
+    });
   });
 
   test("flushPending parks the refusal and resolves with the sits behind it (#978)", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     await store.saveEntries([
-      { clientSessionId: "refused", ownerUserId: testOwnerUserId, request: requestWithClientId(baseRequest(), "refused"), thoughts: [], serverSessionId: null, sessionSynced: false, enqueuedAt: "2026-10-27T12:00:00.000Z" },
-      { clientSessionId: "accepted", ownerUserId: testOwnerUserId, request: requestWithClientId(baseRequest(), "accepted"), thoughts: [], serverSessionId: null, sessionSynced: false, enqueuedAt: "2026-10-27T12:00:00.000Z" },
+      queueEntry("refused", { enqueuedAt: "2026-10-27T12:00:00.000Z" }),
+      queueEntry("accepted", { enqueuedAt: "2026-10-27T12:00:00.000Z" }),
     ]);
-    const refusal = Object.assign(new Error("rejected"), { permanent: true });
-    const coordinator = new WebSessionSyncCoordinator(store, {
-      ...sitsOnlyTransport,
-      createSession: async (payload) => {
-        if (payload.clientSessionId === "refused") throw refusal;
-        return sitsOnlyTransport.createSession(payload);
-      },
-    });
+    const coordinator = new WebSessionSyncCoordinator(
+      store,
+      refusingSitsTransport((clientSessionId) => clientSessionId === "refused"),
+    );
 
     await expect(coordinator.flushPending(testOwnerUserId)).resolves.toBe(1);
     const [refused, accepted] = await store.loadEntries();
@@ -950,7 +970,7 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440947";
     // Saved offline, so the completion screen writes notes through the queue.
-    const saved = await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport)
+    const saved = await offlineCoordinator(store)
       .saveCompletedSession(baseRequest(), clientSessionId, testOwnerUserId, []);
     expect(saved.isPendingSync).toBe(true);
     // A reconnect flush uploads it while the screen is open. Nothing prunes yet.
@@ -972,35 +992,16 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
   });
 });
 
-/** Hands out copies, as IndexedDB does: a read is a snapshot, and only a write
- *  changes what is stored. */
-class CopyingQueueStore implements OfflineSessionQueueStore {
-  private entries: PendingSessionEntry[] = [];
-
-  async loadEntries(): Promise<PendingSessionEntry[]> {
-    return structuredClone(this.entries);
-  }
-
-  async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
-    this.entries = structuredClone(entries);
-  }
-}
-
 const rejectedSit = "550e8400-e29b-41d4-a716-446655449780";
 const sitAhead = "550e8400-e29b-41d4-a716-446655449781";
 const sitBehind = "550e8400-e29b-41d4-a716-446655449782";
 
 /** A sit queued with one in-session thought and no server row yet. */
 function queuedSit(clientSessionId: string): PendingSessionEntry {
-  return {
-    clientSessionId,
-    ownerUserId: testOwnerUserId,
-    request: requestWithClientId(baseRequest(), clientSessionId),
+  return queueEntry(clientSessionId, {
     thoughts: [{ timeInSession: 12, text: `a thought in ${clientSessionId}` }],
-    serverSessionId: null,
-    sessionSynced: false,
     enqueuedAt: "2026-10-27T09:00:00.000Z",
-  };
+  });
 }
 
 /** The same sit once its session row exists, its thought still queued. */
@@ -1029,6 +1030,18 @@ function stubApi(refuse: (path: string, body: Record<string, unknown>) => Refuse
   return uploads;
 }
 
+/** `stubApi` refusing only the session create for `clientSessionId`. */
+function stubApiRefusingCreate(clientSessionId: string, refused: RefusedUpload): string[] {
+  return stubApi((path, body) =>
+    path === "/api/sessions" && body.clientSessionId === clientSessionId ? refused : undefined,
+  );
+}
+
+/** Flushes `store` through the live transport, as a reconnect does. */
+function flushLive(store: OfflineSessionQueueStore): Promise<number> {
+  return new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+}
+
 describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -1037,13 +1050,9 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
   test("a sit the server refuses with a permanent 4xx is parked, and the sits behind it still upload", async () => {
     const store = new CopyingQueueStore();
     await store.saveEntries([queuedSit(sitAhead), queuedSit(rejectedSit), queuedSit(sitBehind)]);
-    const uploads = stubApi((path, body) =>
-      path === "/api/sessions" && body.clientSessionId === rejectedSit
-        ? { status: 400, text: '{"error":"Invalid track"}' }
-        : undefined,
-    );
+    const uploads = stubApiRefusingCreate(rejectedSit, { status: 400, text: '{"error":"Invalid track"}' });
 
-    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+    const flushed = await flushLive(store);
 
     expect(flushed).toBe(2);
     expect(uploads).toEqual([
@@ -1073,7 +1082,7 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
         : undefined,
     );
 
-    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+    const flushed = await flushLive(store);
 
     expect(flushed).toBe(1);
     expect(uploads).toEqual([`/api/thoughts/batch server-${rejectedSit}`, `/api/thoughts/batch server-${sitBehind}`]);
@@ -1095,7 +1104,7 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
 
     // The row moves the server's progression, so the flush still reports it
     // for `onSynced`.
-    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+    const flushed = await flushLive(store);
 
     expect(flushed).toBe(1);
     expect(uploads).toEqual([`/api/sessions ${rejectedSit}`, `/api/thoughts/batch server-${rejectedSit}`]);
@@ -1130,15 +1139,10 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     }
     const store = new FailsReadAfterParkStore();
     await store.saveEntries([queuedSit(rejectedSit), queuedSit(sitBehind)]);
-    const uploads = stubApi((path, body) =>
-      path === "/api/sessions" && body.clientSessionId === rejectedSit
-        ? { status: 400, text: '{"error":"Invalid track"}' }
-        : undefined,
-    );
+    const uploads = stubApiRefusingCreate(rejectedSit, { status: 400, text: '{"error":"Invalid track"}' });
 
     // The read failure is handed back once the sit behind has had its turn.
-    await expect(new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId))
-      .rejects.toBe(readFailure);
+    await expect(flushLive(store)).rejects.toBe(readFailure);
     expect(uploads).toEqual([
       `/api/sessions ${rejectedSit}`,
       `/api/sessions ${sitBehind}`,
@@ -1204,7 +1208,7 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     const page = `<html><body>${"Request refused. ".repeat(40)}</body></html>`;
     stubApi(() => ({ status: 400, text: page }));
 
-    await new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
+    await flushLive(store);
 
     expect((await store.loadEntries())[0]!.parked!.message).toBe(page.slice(0, PARKED_MESSAGE_MAX_LENGTH));
   });
@@ -1215,7 +1219,7 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
       { ...syncedSit(rejectedSit), parked: { at: "2026-10-27T09:30:00.000Z", status: 404, message: "Session not found" } },
       queuedSit(sitBehind),
     ]);
-    const coordinator = new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport);
+    const coordinator = offlineCoordinator(store);
 
     expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
     await coordinator.pruneCompletedEntries(testOwnerUserId);
