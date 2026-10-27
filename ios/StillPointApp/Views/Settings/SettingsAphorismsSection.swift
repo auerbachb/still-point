@@ -35,7 +35,8 @@ struct SettingsAphorismsSection: View {
                 appVM.saveSettingsControl(
                     saving: $isUpdatingAphorisms,
                     send: { try await APIClient.shared.updateSettings(aphorismsEnabled: newValue) },
-                    revert: { aphorismsEnabled = !newValue }
+                    revert: { aphorismsEnabled = !newValue },
+                    resync: { aphorismsEnabled = $0.aphorismsEnabled }
                 )
             }
         }

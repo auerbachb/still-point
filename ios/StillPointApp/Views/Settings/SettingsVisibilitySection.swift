@@ -39,7 +39,8 @@ struct SettingsVisibilitySection: View {
                 appVM.saveSettingsControl(
                     saving: $isUpdating,
                     send: { try await APIClient.shared.updateSettings(isPublic: newValue) },
-                    revert: { isPublic = !newValue }
+                    revert: { isPublic = !newValue },
+                    resync: { isPublic = $0.isPublic }
                 )
             }
         }
