@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-10-26 (#848 — iOS ignores Resume once a sit has ended; web gap logged)  
+Last updated: 2026-10-26 (#876 — iOS session status label recorded as intentional iOS-only)  
 Release owner: iOS release DRI
 
 ## Core product parity
@@ -12,6 +12,7 @@ Release owner: iOS release DRI
 | Home + day progression CTA | Implemented | Implemented | ✅ Complete | “Begin” + day-based duration behavior is present on both clients. |
 | L1–L5 lesson pathway on Home (#452 / #525 / #587) | Implemented | Implemented | ✅ Complete | Shared structure in `src/lib/pathway.ts` / `StillPointShared/Pathway.swift`; UI in `Pathway.tsx` / `PathwayView.swift`. Coming-soon preview — not derived from day count. |
 | Solo session timer + pause for “I’m thinking” | Implemented | Implemented | ✅ Complete | Shared session timing logic is in `StillPointShared/SessionLogic.swift`. #848: iOS never restarts a sit that has ended (`StillPointShared/SessionTickLogic.swift` `canStart`), and its Pause/Resume button is disabled while the sit saves; web still lets Resume restart it — see known gaps. |
+| Session status label (#876) | Not shown — web PR #176 removed its status text from `BlockTimer.tsx` | Implemented (iOS-only) | ✅ Intentional iOS-only | `SessionLogic.statusLabel` in `StillPointShared/SessionLogic.swift`: "minute N of M" for sits over 120 s, held on the last full minute through the final ten-second blocks; otherwise "block N of M", then "session complete". `SessionView.swift` shows it uppercased (`vm.statusLabel.uppercased()`) under the block grid and mind-state bar, and hides it in minimal view. Tested by `SessionLogicStatusLabelTests.swift`. Kept on iOS by decision in #876 — not a parity defect. |
 | Thought capture during session | Implemented | Implemented | ✅ Complete | Both clients write to `/api/thoughts/batch`. |
 | Completion screen + end note | Implemented | Implemented | ✅ Complete | End note uses `timeInSession = -1` in both clients. |
 | Progress/history view | Implemented | Implemented | ✅ Complete | iOS `HistoryView` mirrors web calendar-first History: month grid, prior-month summaries, year-in-review, mind-state trends, and session-buildup journey toggle (#523/#520/#522). |

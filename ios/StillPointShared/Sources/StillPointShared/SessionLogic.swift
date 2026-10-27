@@ -160,7 +160,10 @@ public enum SessionLogic {
         return Int(round((clearTime / totalElapsed) * 100))
     }
 
-    /// Generate a status label matching the web app's logic.
+    /// Generate the iOS-only session status label. Sits over 120 s show "minute N of M",
+    /// with N held on the last full minute through the final ten-second blocks; shorter
+    /// sits show "block N of M", then "session complete". Web has no counterpart to match:
+    /// PR #176 removed its status text. `ios/PARITY_CHECKLIST.md` records the label as iOS-only.
     public static func statusLabel(
         elapsed: Double,
         totalSeconds: Int,
