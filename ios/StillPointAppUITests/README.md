@@ -79,6 +79,12 @@ Coverage matrix: [`docs/testing/e2e-coverage-matrix.md`](../../docs/testing/e2e-
 - **Cross-reference #155/#156:** reuse shared simulator boot, xcodegen generation, and cache priming steps from those issues so iOS lanes do not duplicate setup work unnecessarily.
 - Keep auth/session fixture bootstrapping in app-side launch environment (this folder) rather than cloning separate backend setup in each lane.
 
+## Where helpers live
+
+- [`Helpers/XCTestCase+StillPointUITest.swift`](Helpers/XCTestCase+StillPointUITest.swift) — `makeApp` (every launch-environment knob above), `waitForRoot`, `stableFrame`, and the capsule rendering asserts. Shared by every UI test class.
+- [`Helpers/StillPointAppUITests+Interaction.swift`](Helpers/StillPointAppUITests+Interaction.swift) — fixture login, Settings username editing, tab navigation, stable-center taps, scrolling, keyboard handling, and reliable termination for `StillPointAppUITests`. Scoped to that class so `SnapshotTests` can keep its own same-named private helpers.
+- [`StillPointAppUITests.swift`](StillPointAppUITests.swift) — setup, teardown, and the test methods.
+
 ## Patterns and pitfalls
 
 ### Wait for the destination root before terminating after navigation
@@ -113,7 +119,7 @@ terminateAppReliably(app)
 
 ### When `tap(_:thenWaitForRoot:in:)` is fine vs when it bites
 
-The `tap(_:thenWaitForRoot:in:)` helper in [`StillPointAppUITests.swift`](StillPointAppUITests.swift) is a one-liner for "tap, then wait for the destination root". Tests like `testRotationDecisionSessionRemainsUsableInLandscape` use it successfully. Internally it composes `tapByStableCenter` (an 8s stable-frame check) with a 12s root-existence wait, retried up to 3 times.
+The `tap(_:thenWaitForRoot:in:)` helper in [`Helpers/StillPointAppUITests+Interaction.swift`](Helpers/StillPointAppUITests+Interaction.swift) is a one-liner for "tap, then wait for the destination root". Tests like `testRotationDecisionSessionRemainsUsableInLandscape` use it successfully. Internally it composes `tapByStableCenter` (an 8s stable-frame check) with a 12s root-existence wait, retried up to 3 times.
 
 The trap: in flows where the source element's frame is briefly unstable (e.g. immediately after the home screen mounts following a fresh login), `tapByStableCenter` returns `false` *without ever tapping* — the helper then waits 12s for a root that never appears, retries, and ultimately asserts `Expected tap to transition to root.currentView.<slug>`.
 

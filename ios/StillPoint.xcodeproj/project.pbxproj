@@ -39,6 +39,7 @@
 		25FBDBD24F739006CC114774 /* HapticCuePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */; };
 		28A26FD004B3D21899D12484 /* WidgetSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E4EF5A9F8C90CBD9D5CA5A /* WidgetSyncCoordinator.swift */; };
 		2E31C1B6A86E612EF7171348 /* ThoughtJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44912B427658554F984CCC3A /* ThoughtJournalView.swift */; };
+		2E66D8164CD85111E583C3E8 /* StillPointAppUITests+Interaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33899D50316053D052FD9B95 /* StillPointAppUITests+Interaction.swift */; };
 		2ED5B543006723041CC28CCB /* SessionNotificationSuppressionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */; };
 		2F0A389984605DC18A0773B2 /* SessionPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */; };
 		30AEF9D9DF3820CF00E882E3 /* SessionDeepLinkParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */; };
@@ -260,6 +261,7 @@
 		2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPhotoStore.swift; sourceTree = "<group>"; };
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
 		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
+		33899D50316053D052FD9B95 /* StillPointAppUITests+Interaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StillPointAppUITests+Interaction.swift"; sourceTree = "<group>"; };
 		359072B628F0A3E3329DF9D6 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = System/Library/Frameworks/ARKit.framework; sourceTree = SDKROOT; };
 		377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkReachabilityMonitor.swift; sourceTree = "<group>"; };
 		3BFF8666F7BA01638CB50293 /* 16.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 16.mp3; sourceTree = "<group>"; };
@@ -531,6 +533,7 @@
 		54D40F602F07E94E9BD6CF37 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				33899D50316053D052FD9B95 /* StillPointAppUITests+Interaction.swift */,
 				92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */,
 				EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */,
 				3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */,
@@ -1018,6 +1021,7 @@
 				3AD114B1095E5A14BABFA49B /* SPCapsuleButtonStyleUITests.swift in Sources */,
 				1AD1C504911C0820878EFAA4 /* SnapshotHelper.swift in Sources */,
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
+				2E66D8164CD85111E583C3E8 /* StillPointAppUITests+Interaction.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
 				8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */,
 				63EC131F3FAD3DFAFDE698B6 /* XCUIDevice+Portrait.swift in Sources */,

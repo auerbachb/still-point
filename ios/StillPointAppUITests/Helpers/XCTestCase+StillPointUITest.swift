@@ -1,5 +1,15 @@
 import XCTest
 
+/// How `UITestAPIStore` fails the sessions API (`SP_UI_TEST_FORCE_SESSIONS_FAILURE`).
+enum UITestSessionsFailure: String {
+    /// Sessions calls succeed.
+    case none = "0"
+    /// `getSessions` and `getTracksDoneToday` fail with a 503 on every call.
+    case always = "1"
+    /// #957: only the first `getSessions` call in the launch fails with a 503.
+    case once
+}
+
 extension XCTestCase {
     func makeApp(
         seedAuthenticated: Bool,
@@ -8,7 +18,7 @@ extension XCTestCase {
         timerMultiplier: Double = 1.0,
         forceLaunchOffline: Bool = false,
         forceTokenExpired: Bool = false,
-        forceSessionsFailure: Bool = false,
+        sessionsFailure: UITestSessionsFailure = .none,
         forceCreateSessionFailure: Bool = false,
         appBlockingSelected: Bool = false,
         forceProgressTab: Bool = false,
@@ -16,7 +26,9 @@ extension XCTestCase {
         forceUsernameConflict: Bool = false,
         forceStartSession: Bool = false,
         forceBreathCounting: Bool = false,
-        forceBuddyHub: Bool = false
+        forceBuddyHub: Bool = false,
+        holdMeSeconds: Double? = nil,
+        secondAccount: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -26,7 +38,7 @@ extension XCTestCase {
         app.launchEnvironment["SP_UI_TEST_TIMER_MULTIPLIER"] = String(timerMultiplier)
         app.launchEnvironment["SP_UI_TEST_FORCE_LAUNCH_OFFLINE"] = forceLaunchOffline ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_TOKEN_EXPIRED"] = forceTokenExpired ? "1" : "0"
-        app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = forceSessionsFailure ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_SESSIONS_FAILURE"] = sessionsFailure.rawValue
         app.launchEnvironment["SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE"] = forceCreateSessionFailure ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_START_SESSION"] = forceStartSession ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_BREATH_COUNTING"] = forceBreathCounting ? "1" : "0"
@@ -35,6 +47,8 @@ extension XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_PROGRESS_TAB"] = forceProgressTab ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_SETTINGS_TAB"] = forceSettingsTab ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_HOLD_ME_SECONDS"] = holdMeSeconds.map { String($0) } ?? "0"
+        app.launchEnvironment["SP_UI_TEST_SECOND_ACCOUNT"] = secondAccount ? "1" : "0"
         return app
     }
 
