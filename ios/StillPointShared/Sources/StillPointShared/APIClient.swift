@@ -49,6 +49,9 @@ public actor APIClient {
     /// Static analog of `clearLocalSessionArtifacts()` for use during init,
     /// when the actor's instance methods are not yet available.
     private static func clearPersistedSessionArtifacts(session: URLSession) {
+        // #1058: the credentials are going, so their owner is unknown from here
+        // until the next sign-in publishes one.
+        CredentialOwner.shared.invalidate()
         _ = AuthTokenStore.clear()
         // #665: the offline identity cache is a session artifact too. Clearing it
         // here covers every authoritative teardown at once — sign-out (including a
@@ -82,14 +85,7 @@ public actor APIClient {
         }
         let body: [String: String] = ["email": email, "username": username, "password": password]
         let response: UserResponse = try await post("/api/auth/signup", body: body)
-        if let token = response.token, !token.isEmpty {
-            guard AuthTokenStore.save(token) else {
-                throw APIError(status: 0, message: "Unable to securely save auth token")
-            }
-        } else {
-            _ = AuthTokenStore.clear()
-        }
-        return response.user
+        return try installCredentials(from: response)
     }
 
     public func login(email: String, password: String) async throws -> UserDTO {
@@ -99,14 +95,7 @@ public actor APIClient {
         // Web app sends username too but only uses email+password for login
         let body: [String: String] = ["email": email, "username": "", "password": password]
         let response: UserResponse = try await post("/api/auth/login", body: body)
-        if let token = response.token, !token.isEmpty {
-            guard AuthTokenStore.save(token) else {
-                throw APIError(status: 0, message: "Unable to securely save auth token")
-            }
-        } else {
-            _ = AuthTokenStore.clear()
-        }
-        return response.user
+        return try installCredentials(from: response)
     }
 
     /// Native Sign in with Apple → server verifies JWT and returns `user` + `token` (same as login with ios header).
@@ -115,14 +104,7 @@ public actor APIClient {
             return try await uiTestAPIStore.signInWithApple()
         }
         let response: UserResponse = try await post("/api/auth/apple-native", body: request)
-        if let token = response.token, !token.isEmpty {
-            guard AuthTokenStore.save(token) else {
-                throw APIError(status: 0, message: "Unable to securely save auth token")
-            }
-        } else {
-            _ = AuthTokenStore.clear()
-        }
-        return response.user
+        return try installCredentials(from: response)
     }
 
     /// Native Sign in with Google → server verifies the Google ID token and returns `user` + `token` (same as login with ios header).
@@ -131,13 +113,26 @@ public actor APIClient {
             return try await uiTestAPIStore.signInWithGoogle()
         }
         let response: UserResponse = try await post("/api/auth/google-native", body: request)
+        return try installCredentials(from: response)
+    }
+
+    /// Installs the credentials a sign-in response carries and publishes their owner
+    /// (#1058). The owner is invalidated first, so no reader pairs the outgoing
+    /// account with the incoming token, and published only once the credentials are
+    /// in place. A failed save leaves the owner unknown, so nothing reports a session
+    /// hold until `/me` confirms who the device is signed in as.
+    private func installCredentials(from response: UserResponse) throws -> UserDTO {
+        CredentialOwner.shared.invalidate()
         if let token = response.token, !token.isEmpty {
             guard AuthTokenStore.save(token) else {
                 throw APIError(status: 0, message: "Unable to securely save auth token")
             }
         } else {
+            // No bearer token: the session cookie this response set is the
+            // credential, and it belongs to the same user.
             _ = AuthTokenStore.clear()
         }
+        CredentialOwner.shared.publish(accountId: response.user.id)
         return response.user
     }
 
@@ -190,8 +185,13 @@ public actor APIClient {
         } else {
             path = "/api/auth/me"
         }
+        // #1058: `/me` names the account behind the credentials already installed,
+        // which is how the owner becomes known after a cold start. Taken before the
+        // request so a sign-in that lands while it is in flight is not overwritten.
+        let ownerBeforeRequest = CredentialOwner.shared.snapshot
         do {
             let response: UserResponse = try await get(path)
+            CredentialOwner.shared.confirm(accountId: response.user.id, ifStillCurrent: ownerBeforeRequest)
             return response.user
         } catch let error as APIError where error.status == 401 && error.code != "TOKEN_EXPIRED" {
             return nil
@@ -374,11 +374,24 @@ public actor APIClient {
     /// Reports whether a sit is running so the server withholds Still Point's own
     /// pushes for the duration (#709). The server stores a short TTL, so callers
     /// refresh this while the sit runs and clear it when the sit ends.
-    public func reportSessionNotificationState(active: Bool, sessionKey: String? = nil) async throws {
+    ///
+    /// - Parameter expectedOwnerAccountId: the account the hold belongs to (#1058).
+    ///   The report is skipped, silently, unless that account owns the credentials
+    ///   the request is built with: a hold queued for one account must never be
+    ///   sent under another's, which would silence the wrong account's pushes.
+    public func reportSessionNotificationState(
+        active: Bool,
+        sessionKey: String? = nil,
+        expectedOwnerAccountId: String
+    ) async throws {
         if uiTestAPIStore != nil {
             return
         }
+        let owner = CredentialOwner.shared.snapshot
+        guard owner.accountId == expectedOwnerAccountId else { return }
         var request = makeRequest(method: "POST", path: "/api/notifications/session-state")
+        // `makeRequest` loaded the token; skip if the owner changed while it did.
+        guard CredentialOwner.shared.isCurrent(owner) else { return }
         request.httpBody = try JSONEncoder().encode(
             SessionNotificationStateRequest(active: active, sessionKey: sessionKey)
         )

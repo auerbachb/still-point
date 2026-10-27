@@ -37,12 +37,31 @@ enum SessionNotificationSuppressionController {
         /// Identifies this scene's live sit on the server (#741). Minted when the
         /// sit starts and cleared after the `active: false` report is queued.
         var sessionKey: String?
+        /// The account `sessionKey` was minted for (#1058): the credential owner at
+        /// that moment, so its refreshes and its release go out only under that
+        /// account's credentials. Set and cleared together with `sessionKey`.
+        var sessionKeyOwner: String?
+        /// The account that started the running sit (#1058). Captured on the
+        /// aggregate false→true transition and never reassigned while it runs,
+        /// so a sit kept running across an account switch stays the old account's.
+        var ownership = SessionHoldOwnership()
 
         init(appViewModel: AppViewModel) {
             self.appViewModel = appViewModel
         }
 
         var sitting: Bool { localSessionRunning || buddySessionActive }
+
+        /// Records the new flags' aggregate `sitting` value against the scene's
+        /// account. Call after every flag change.
+        func updateOwnership(sceneAccountId: String?) {
+            ownership.update(sitting: sitting, sceneAccountId: sceneAccountId)
+        }
+
+        func clearSessionKey() {
+            sessionKey = nil
+            sessionKeyOwner = nil
+        }
     }
 
     private static var registrations: [ObjectIdentifier: Registration] = [:]
@@ -54,7 +73,14 @@ enum SessionNotificationSuppressionController {
     /// session key (see `report(active:sessionKey:)`). `nil` task means nothing
     /// is draining.
     private static var reportTask: Task<Void, Never>?
-    private static var queuedReports: [String: Bool] = [:]
+    /// One queued report: the newest state for a session key, and the account it
+    /// is for (#1058). The drain sends it only under that account's credentials.
+    private struct QueuedReport {
+        let active: Bool
+        let ownerAccountId: String
+    }
+
+    private static var queuedReports: [String: QueuedReport] = [:]
     /// Bumped at every auth boundary so a drain task started by the previous
     /// account cannot outlive `cancelPendingReports()` or clear a newer task,
     /// and so a preference response that left before a sign-out cannot be
@@ -152,22 +178,29 @@ enum SessionNotificationSuppressionController {
         stopHeartbeat()
         cancelPendingReports()
         reportedActiveKeys = []
+        // Keep each registration's flags and its sit's owner (#1058): a scene still
+        // sitting for the outgoing account stays that account's, so the next
+        // account's hydration cannot report it (see `syncServerSessionState`).
         for registration in registrations.values {
-            registration.sessionKey = nil
+            registration.clearSessionKey()
         }
     }
 
     /// Call when local `SessionView` appears/disappears or its in-progress state changes.
     static func syncLocalSession(appVM: AppViewModel, inProgress: Bool) {
         pruneDeadRegistrations()
-        registration(for: appVM).localSessionRunning = inProgress
+        let registration = registration(for: appVM)
+        registration.localSessionRunning = inProgress
+        registration.updateOwnership(sceneAccountId: appVM.currentUser?.id)
         syncServerSessionState()
     }
 
     /// Call when a buddy shared sit enters/leaves the `active` server state.
     static func syncBuddySessionActive(appVM: AppViewModel, active: Bool) {
         pruneDeadRegistrations()
-        registration(for: appVM).buddySessionActive = active
+        let registration = registration(for: appVM)
+        registration.buddySessionActive = active
+        registration.updateOwnership(sceneAccountId: appVM.currentUser?.id)
         syncServerSessionState()
     }
 
@@ -183,23 +216,43 @@ enum SessionNotificationSuppressionController {
     /// Push each live sit's own key to the server, and keep those holds refreshed.
     /// Best-effort: a failed report leaves `willPresent` as the remaining layer,
     /// and the server's TTL cleans up a hold we stop refreshing.
+    ///
+    /// #1058: only a sit owned by the account that owns the credentials now is
+    /// reported. A scene still sitting for a previous account holds no key here,
+    /// so that account's sit never silences the next account's notifications.
     private static func syncServerSessionState() {
         var activeKeys = Set<String>()
         let holdsEnabled = suppressPreferenceEnabled
+        let credentialOwner = CredentialOwner.shared.snapshot.accountId
         for registration in registrations.values where registration.appViewModel != nil {
-            if holdsEnabled && registration.sitting {
+            if holdsEnabled,
+               registration.ownership.isReportable(forCredentialOwner: credentialOwner),
+               let credentialOwner {
+                if let sessionKey = registration.sessionKey, registration.sessionKeyOwner != credentialOwner {
+                    // Minted for another account: drop it without a release, as
+                    // `clearSuppressPreference()` does, and take a fresh key below.
+                    reportedActiveKeys.remove(sessionKey)
+                    registration.clearSessionKey()
+                }
                 if registration.sessionKey == nil {
                     registration.sessionKey = UUID().uuidString
+                    registration.sessionKeyOwner = credentialOwner
                 }
                 if let sessionKey = registration.sessionKey {
                     activeKeys.insert(sessionKey)
                     if !reportedActiveKeys.contains(sessionKey) {
-                        report(active: true, sessionKey: sessionKey)
+                        report(active: true, sessionKey: sessionKey, ownerAccountId: credentialOwner)
                     }
                 }
             } else if let sessionKey = registration.sessionKey {
-                registration.sessionKey = nil
-                report(active: false, sessionKey: sessionKey)
+                let keyOwner = registration.sessionKeyOwner
+                registration.clearSessionKey()
+                // Release only under the account the key was minted for. Any other
+                // account's credentials would make it a cross-account request, so
+                // the server TTL expires that hold instead.
+                if let keyOwner, keyOwner == credentialOwner {
+                    report(active: false, sessionKey: sessionKey, ownerAccountId: keyOwner)
+                }
             }
         }
         reportedActiveKeys = activeKeys
@@ -225,12 +278,22 @@ enum SessionNotificationSuppressionController {
     }
 
     private static func refreshActiveHolds() {
+        let credentialOwner = CredentialOwner.shared.snapshot.accountId
+        var refreshedAny = false
         for registration in registrations.values {
             guard registration.appViewModel != nil,
                   suppressPreferenceEnabled,
-                  registration.sitting,
-                  let sessionKey = registration.sessionKey else { continue }
-            report(active: true, sessionKey: sessionKey)
+                  registration.ownership.isReportable(forCredentialOwner: credentialOwner),
+                  let sessionKey = registration.sessionKey,
+                  let keyOwner = registration.sessionKeyOwner,
+                  keyOwner == credentialOwner else { continue }
+            report(active: true, sessionKey: sessionKey, ownerAccountId: keyOwner)
+            refreshedAny = true
+        }
+        // #1058: nothing left this account may refresh (the credentials changed
+        // under a running sit), so stop until a sync starts a hold again.
+        if !refreshedAny {
+            stopHeartbeat()
         }
     }
 
@@ -242,8 +305,8 @@ enum SessionNotificationSuppressionController {
     /// Reports serially, newest-wins per session key. One sit's trailing `true`
     /// must not replace another sit's `false`: the server stores a row per key
     /// (#741), and only the newest report for *that* key still matters.
-    private static func report(active: Bool, sessionKey: String) {
-        queuedReports[sessionKey] = active
+    private static func report(active: Bool, sessionKey: String, ownerAccountId: String) {
+        queuedReports[sessionKey] = QueuedReport(active: active, ownerAccountId: ownerAccountId)
         guard reportTask == nil else { return }
 
         let generation = reportGeneration
@@ -251,7 +314,11 @@ enum SessionNotificationSuppressionController {
             defer { if generation == reportGeneration { reportTask = nil } }
             while generation == reportGeneration, !Task.isCancelled, let sessionKey = queuedReports.keys.first {
                 guard let next = queuedReports.removeValue(forKey: sessionKey) else { continue }
-                try? await APIClient.shared.reportSessionNotificationState(active: next, sessionKey: sessionKey)
+                try? await APIClient.shared.reportSessionNotificationState(
+                    active: next.active,
+                    sessionKey: sessionKey,
+                    expectedOwnerAccountId: next.ownerAccountId
+                )
             }
         }
     }
@@ -283,14 +350,23 @@ enum SessionNotificationSuppressionController {
         let dead = registrations.filter { _, registration in registration.appViewModel == nil }
         guard !dead.isEmpty else { return }
         registrations = registrations.filter { _, registration in registration.appViewModel != nil }
+        let credentialOwner = CredentialOwner.shared.snapshot.accountId
         for (_, registration) in dead {
             guard let sessionKey = registration.sessionKey else { continue }
-            registration.sessionKey = nil
+            let keyOwner = registration.sessionKeyOwner
+            registration.clearSessionKey()
             reportedActiveKeys.remove(sessionKey)
-            report(active: false, sessionKey: sessionKey)
+            // #1058: release only under the account the key was minted for;
+            // otherwise the server TTL expires the hold.
+            if let keyOwner, keyOwner == credentialOwner {
+                report(active: false, sessionKey: sessionKey, ownerAccountId: keyOwner)
+            }
         }
         let stillSitting = registrations.values.contains { registration in
-            registration.appViewModel != nil && registration.sitting && registration.sessionKey != nil
+            registration.appViewModel != nil
+                && registration.ownership.isReportable(forCredentialOwner: credentialOwner)
+                && registration.sessionKey != nil
+                && registration.sessionKeyOwner == credentialOwner
         }
         if !stillSitting {
             stopHeartbeat()
