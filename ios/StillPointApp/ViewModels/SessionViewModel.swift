@@ -45,6 +45,8 @@ final class SessionViewModel {
     var showGuidedExercise = false
     /// Pre-session intro overlay; gates `start()` until dismissed (#560).
     var showIntroOverlay = false
+    /// #724: the "Session could not be saved" alert, raised by `completeSit(appVM:)`.
+    var showSaveError = false
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
 
@@ -366,6 +368,89 @@ final class SessionViewModel {
         } catch {
             print("Failed to persist session locally: \(error)")
             return nil
+        }
+    }
+
+    // MARK: - Completion (#724)
+
+    /// Saves the finished sit, then hands it to `appVM` for the completion
+    /// screen, or raises `showSaveError` when it could not be saved.
+    ///
+    /// `SessionView` calls this once the sit completes, after its trackers have
+    /// written `attentionLog` and `ambientSoundSummary`, and again from the
+    /// alert's Retry. An abandoned sit is never saved here. A retry reuses the
+    /// first attempt's client id and credited day (see `saveSession`), so it
+    /// stores the same sit rather than a second one.
+    @MainActor
+    func completeSit(appVM: AppViewModel) async {
+        guard let ownerUserId = appVM.currentUser?.id else {
+            applySaveOutcome(.noSignedInUser, appVM: appVM)
+            return
+        }
+        // Persist session before navigating to completion screen
+        guard let session = await saveSession(
+            completed: completedNaturally,
+            ownerUserId: ownerUserId,
+            sessionDate: appVM.creditedSessionDate()
+        ) else {
+            // #703: the alert already blocks the false-success completion; the
+            // flag additionally withdraws the offline strip's "sits are saved"
+            // promise, which stays on screen after the user picks "Continue
+            // without saving".
+            applySaveOutcome(.notStored, appVM: appVM)
+            return
+        }
+        applySaveOutcome(.stored, appVM: appVM)
+        appVM.completeSession(
+            sessionId: session.id,
+            clientSessionId: lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
+            clearPercent: clearPercent,
+            thoughtCount: thoughtCount,
+            thoughts: capturedThoughts,
+            dayNumber: session.dayNumber,
+            sessionType: session.sessionType,
+            track: track,
+            duration: plannedSeconds,
+            bonusSeconds: bonusSeconds,
+            unlockAppGate: completedNaturally,
+            attentionLog: attentionLog,
+            attentionElapsed: attentionLog != nil ? elapsed : nil,
+            ambientSoundSummary: ambientSoundSummary
+        )
+    }
+
+    /// The alert's "Continue without saving": the completion screen, with no
+    /// stored session behind it.
+    ///
+    /// The payload is the one this button sent from `SessionView` before #724:
+    /// no session id, and no attention log, so an unsaved sit's completion
+    /// screen shows no gaze summary.
+    @MainActor
+    func continueWithoutSaving(appVM: AppViewModel) {
+        appVM.completeSession(
+            sessionId: "",
+            clientSessionId: UUID(),
+            clearPercent: clearPercent,
+            thoughtCount: thoughtCount,
+            thoughts: capturedThoughts,
+            dayNumber: dayNumber,
+            sessionType: sessionType,
+            track: track,
+            duration: plannedSeconds,
+            bonusSeconds: bonusSeconds,
+            unlockAppGate: completedNaturally,
+            ambientSoundSummary: ambientSoundSummary
+        )
+    }
+
+    /// Carries out what a save outcome decides: the #703 flag first, then the alert.
+    @MainActor
+    private func applySaveOutcome(_ outcome: SessionCompletionLogic.SaveOutcome, appVM: AppViewModel) {
+        if let localSaveFailed = SessionCompletionLogic.localSaveFailed(after: outcome) {
+            appVM.localSaveFailed = localSaveFailed
+        }
+        if SessionCompletionLogic.showsSaveError(after: outcome) {
+            showSaveError = true
         }
     }
 
