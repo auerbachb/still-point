@@ -215,6 +215,24 @@ final class SessionTickLogicTests: XCTestCase {
         XCTAssertEqual(withVoice.effects.voiceCountdownSecond, 60)
     }
 
+    /// #853: outside the final minute the bell follows the chime switch in
+    /// voice mode too. Web's `sessionCues.test.ts` pins the same rule.
+    func testVoiceCountdownLeavesABellOutsideTheFinalMinuteToTheChimeSwitch() {
+        let outcome = advance(60.02, total: 300, prefs: prefs(chime: true, voice: true))
+        XCTAssertTrue(outcome.effects.playChime)
+        XCTAssertNil(outcome.effects.voiceCountdownSecond)
+        XCTAssertFalse(outcome.effects.cancelVoiceCountdown)
+    }
+
+    /// #853: a five-minute sit rings at one, two and three minutes. At four
+    /// minutes the countdown opens the final minute instead.
+    func testAFiveMinuteVoiceCountdownSitRingsEveryMinuteButTheOneThatOpensTheFinalMinute() {
+        let effects = simulateSit(total: 300, prefs: prefs(chime: true, voice: true))
+        // `effects[i]` is the tick at elapsed (i + 1) / 20 s.
+        let bellTimes = effects.indices.filter { effects[$0].playChime }.map { Double($0 + 1) / 20 }
+        XCTAssertEqual(bellTimes, [60, 120, 180])
+    }
+
     func testABonusThatLiftsRemainingAboveAMinuteRestartsTheCountdown() {
         // 30 had been spoken with 30 s left; a 60 s bonus put 90 s back on the clock.
         let announcing = cursor(tick: 270, minuteBlock: 3, hapticInterval: 4, voice: 30)

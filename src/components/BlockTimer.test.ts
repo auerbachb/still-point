@@ -379,7 +379,9 @@ describe("BlockTimer voice countdown", () => {
     expect(ticks()).toEqual([]);
   });
 
-  it("suppresses the minute chime but not the minute buzz", async () => {
+  // #853: the chime keeps its own switch; only the one opening the final
+  // minute gives way to the countdown.
+  it("silences only the chime that opens the final minute, never the buzz", async () => {
     await mount({
       totalSeconds: 180,
       soundPrefs: prefs({ tick: false, voiceCountdown: true, chime: true, haptics: true }),
@@ -388,6 +390,7 @@ describe("BlockTimer voice countdown", () => {
     await advance(121_000);
 
     expect(cues()).toEqual([
+      "60.00 chime",
       "60.00 haptic:minuteMarker",
       "120.00 voice:60",
       "120.00 haptic:minuteMarker",

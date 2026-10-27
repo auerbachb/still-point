@@ -172,9 +172,11 @@ public enum SessionTickLogic {
         let voiceActive = prefs.voiceCountdown && VoiceCountdownLogic.isActive(remaining: remaining)
 
         // Voice countdown — fires once per second in the final minute.
-        // Suppresses tick and per-minute chime while active. Web's counterpart is
-        // `planCountdownCues` in `src/lib/sessionCues.ts`, which instead suppresses
-        // both for the whole sit in voice mode (#853).
+        // Suppresses tick and per-minute chime while active (`voiceActive`: the
+        // toggle on and 60 s or less left). The only bell inside that window is
+        // the one that opens the final minute; every earlier bell follows the
+        // chime switch. Web's `planCountdownCues` in `src/lib/sessionCues.ts`
+        // applies the same bell rule (#853).
         var cancelVoiceCountdown = false
         var voiceCountdownSecond: Int?
         if prefs.voiceCountdown {

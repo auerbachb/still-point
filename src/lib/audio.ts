@@ -348,7 +348,12 @@ export type SoundPrefs = {
   tick: boolean;
   chime: boolean;
   completion: boolean;
-  /** Spoken final-minute countdown (1–60); suppresses tick/chime while active. */
+  /**
+   * Spoken final-minute countdown (1–60). With the toggle on, the tick never
+   * plays; exclusive cue mode (#807) keeps it off anyway. The chime is
+   * silenced only in the final minute, while the countdown speaks, so only
+   * the bell that opens the final minute gives way (#853).
+   */
   voiceCountdown: boolean;
   /**
    * #712: vibrate at each minute marker and at the end of the sit, for someone

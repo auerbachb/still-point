@@ -142,15 +142,21 @@ export function planCountdownCues(
   const cues: Cue[] = [];
   const remaining = totalSeconds - elapsed;
   const voiceMode = Boolean(prefs.voiceCountdown);
+  // #853: the countdown speaks only in the final minute — the same window as
+  // iOS `VoiceCountdownLogic.isActive`.
+  const voiceActive = voiceMode && remaining > 0 && remaining <= 60;
   const currentSec = Math.floor(elapsed);
 
+  // Voice mode stops the tick for the whole sit, where iOS stops it only while
+  // `voiceActive`. Nobody hears the difference: exclusive cue mode (#807)
+  // never has tick and voice on together.
   if (voiceMode) {
     if (remaining > 60) {
       if (next.lastVoiceSec <= 60) {
         cues.push({ kind: "cancelVoice" });
         next.lastVoiceSec = 61;
       }
-    } else if (remaining > 0) {
+    } else if (voiceActive) {
       let announceSec = Math.floor(remaining);
       if (announceSec < 1) announceSec = 1;
       if (remaining > 59 && next.lastVoiceSec > 60) {
@@ -183,7 +189,11 @@ export function planCountdownCues(
       const fullMinuteRemains =
         Math.floor((totalSeconds - blockEnd) / 60) >= 1;
 
-      if (prefs.chime && !voiceMode && fullMinuteRemains) {
+      // #853: in voice mode the chime still follows its own switch (#807). It
+      // gives way only while the countdown is active, which in practice is
+      // the bell that opens the final minute, due on the update that speaks
+      // "60". iOS `SessionTickLogic.advance` uses the same rule.
+      if (prefs.chime && !voiceActive && fullMinuteRemains) {
         cues.push({ kind: "chime" });
       }
     }
