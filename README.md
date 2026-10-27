@@ -296,6 +296,7 @@ Automated code review on pull requests via [CodeRabbit](https://coderabbit.ai). 
 Cross-cutting web + iOS E2E standards (retries, deterministic waits, secrets/env guardrails, artifact policy, flake triage rubric, tags/lanes, visual+perf scope, merge gates, and reproducibility) are documented in:
 
 - [docs/testing/e2e-policy.md](docs/testing/e2e-policy.md)
+- [docs/testing/e2e-policy-enforcement.md](docs/testing/e2e-policy-enforcement.md) — how the scripts enforce it (retry classifier signatures, sleep-check matching)
 - [docs/testing/e2e-strategy.md](docs/testing/e2e-strategy.md)
 - [ios/E2E_RUNBOOK.md](ios/E2E_RUNBOOK.md)
 
