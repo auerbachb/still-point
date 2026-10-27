@@ -377,14 +377,26 @@ async function warmRscPath(cache, path) {
 }
 
 let rscWarmInFlight = null;
+let rscWarmQueued = null;
 let rscWarmedAt = 0;
 
 /** Refreshes every app route's payload, at most once per RSC_WARM_INTERVAL_MS.
  *  The throttle holds only after a pass that stored every route, and only while
  *  every route is still stored: a partial pass, or a cache the page cleared on
- *  a sign-out (src/lib/swRouteDataCache.ts), is warmed again on the next load. */
+ *  a sign-out (src/lib/swRouteDataCache.ts), is warmed again on the next load.
+ *
+ *  A load that arrives while a pass is running queues one follow-up pass rather
+ *  than joining it: the running pass may be writing into a cache the page has
+ *  since deleted, under the previous account. The follow-up re-checks the live
+ *  cache once that pass ends, and is a no-op when every route is stored. */
 function warmRscCache() {
-  if (rscWarmInFlight) return rscWarmInFlight;
+  if (rscWarmInFlight) {
+    rscWarmQueued ??= rscWarmInFlight.then(() => {
+      rscWarmQueued = null;
+      return warmRscCache();
+    });
+    return rscWarmQueued;
+  }
   rscWarmInFlight = caches
     .open(RSC_CACHE)
     .then(async (cache) => {
@@ -439,26 +451,29 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
+    // #967: an app document loaded online refreshes the route data for the
+    // in-app moves it may make offline later. waitUntil has to be called while
+    // the event is dispatched, so it takes a promise settled once the load has
+    // answered: with the refresh when the app was reachable, at once otherwise.
+    let settleWarm = () => {};
+    if (isAppDocumentPath(url.pathname)) {
+      event.waitUntil(new Promise((resolve) => {
+        settleWarm = resolve;
+      }));
+    }
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
             void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
-            // #967: the app is reachable, so refresh its route data for the
-            // in-app moves this document may make offline later.
-            // Best-effort: a refresh that cannot run must not fail the page load.
-            if (isAppDocumentPath(url.pathname)) {
-              try {
-                event.waitUntil(warmRscCache());
-              } catch {
-                void warmRscCache();
-              }
-            }
+            if (isAppDocumentPath(url.pathname)) settleWarm(warmRscCache());
           }
+          settleWarm();
           return response;
         })
         .catch(async () => {
+          settleWarm();
           const cached = await caches.match(request);
           if (cached) return cached;
           const shell = await caches.match("/app/progress");

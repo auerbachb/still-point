@@ -103,8 +103,11 @@ function loadServiceWorker(fetch: FetchStub) {
       },
       waitUntil: (promise: Promise<unknown>) => waited.push(Promise.resolve(promise)),
     });
+    // A worker may only call waitUntil while the event is being dispatched.
+    const waitUntilCallsDuringDispatch = waited.length;
     return {
       responded,
+      waitUntilCallsDuringDispatch,
       /** Settles once the response and everything handed to `waitUntil` have. */
       settled: async () => {
         await responded?.catch(() => {});
@@ -287,6 +290,45 @@ describe("public/sw.js offline route data (#967)", () => {
       expect(await caches.stores.get("stillpoint-rsc-v1")?.get(`${RSC_KEY_ORIGIN}/app/journal`)?.text()).toBe(
         "payload for /app/journal",
       );
+    });
+
+    test("an app document load extends the event while it is dispatched", () => {
+      const { network } = countingNetwork(new Set());
+      const { dispatchFetch } = loadServiceWorker(network);
+
+      const { waitUntilCallsDuringDispatch } = dispatchFetch({ url: `${ORIGIN}/app/progress`, mode: "navigate" });
+
+      expect(waitUntilCallsDuringDispatch).toBe(1);
+    });
+
+    test("a load during a pass the page then cleared warms the live cache", async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let holding = true;
+      const network = vi.fn<FetchStub>(async (input) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("?_rsc")) {
+          if (holding) await held;
+          return rscResponse(`payload for ${url.split("?")[0]}`);
+        }
+        return new Response("<html></html>", { headers: { "Content-Type": "text/html" } });
+      });
+      const { dispatchFetch, caches, warmPaths } = loadServiceWorker(network);
+
+      // The previous account's pass is still running when the page signs out...
+      const first = dispatchFetch({ url: `${ORIGIN}/app/progress`, mode: "navigate" });
+      await vi.waitFor(() => expect(caches.stores.has("stillpoint-rsc-v1")).toBe(true));
+      await caches.api.delete("stillpoint-rsc-v1");
+      // ...and the next account's app loads before it ends.
+      const second = dispatchFetch({ url: `${ORIGIN}/app/progress`, mode: "navigate" });
+      holding = false;
+      release();
+      await first.settled();
+      await second.settled();
+
+      expect(caches.stores.get("stillpoint-rsc-v1")?.size).toBe(warmPaths.length);
     });
 
     test("a cache cleared on sign-out is warmed again at once", async () => {
