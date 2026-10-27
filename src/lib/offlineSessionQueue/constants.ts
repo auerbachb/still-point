@@ -5,6 +5,11 @@ export const OFFLINE_IDB_STORE = "session-queue";
 export const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
 /** Held by every queue write, in every tab and in the service worker. */
 export const OFFLINE_QUEUE_LOCK_NAME = "stillpoint-session-queue";
+/** #947: prefix of the shared Web Lock a tab holds, per sit, while its
+ *  completion screen still writes that sit's notes through the queue. The
+ *  return-home prune skips a row whose lock any tab holds. Tabs only: the
+ *  service worker never prunes. */
+export const OFFLINE_OPEN_ROW_LOCK_PREFIX = "stillpoint-open-completion:";
 /**
  * #907: how long one upload may take, response body included, before it is
  * aborted and left queued for the next flush. Uploads run inside the lock above,

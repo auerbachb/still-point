@@ -465,4 +465,27 @@ describe("CompletionScreen with session ratings retired (#889)", () => {
     await flushWrites();
     expect(settled).toBe(true);
   });
+
+  test("#947: an edit still inside its debounce when the second tap leaves is sent, not lost", async () => {
+    const onSaveNote = vi.fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
+    const onReturn = vi.fn<(writesSettled: Promise<void>) => void>();
+    await render(syncedSitProps({ onSaveNote, onReturn }));
+
+    await typeNote("before the flush");
+    await tapReturn();
+    expect(onReturn).not.toHaveBeenCalled();
+
+    // Typed after the failure, and left before its autosave timer fired.
+    await typeNote("after the flush");
+    await tapReturn();
+
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await onReturn.mock.calls[0]![0];
+    });
+    expect(onSaveNote).toHaveBeenCalledTimes(2);
+    expect(onSaveNote).toHaveBeenLastCalledWith("after the flush");
+  });
 });

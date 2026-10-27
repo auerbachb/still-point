@@ -235,8 +235,19 @@ export function CompletionScreen({
     if (returningRef.current) return;
     // A failed flush must not trap the user here. The next tap leaves.
     if (flushFailedRef.current) {
-      // #947: an autosave that fired since the failure may still be on the
-      // wire. The screen leaves now; whatever runs after it waits for that write.
+      // #947: an edit made since the failure is sent now rather than lost with
+      // its pending autosave timer, unawaited. The screen leaves at once, and
+      // whatever runs after it waits for that write and any still on the wire.
+      if (noteTimer.current) {
+        clearTimeout(noteTimer.current);
+        noteTimer.current = null;
+        void track(() => persistNote(noteTextToAutosave(note))).catch(() => {});
+      }
+      if (moodTimer.current) {
+        clearTimeout(moodTimer.current);
+        moodTimer.current = null;
+        void track(() => persistMood(moodMatrix)).catch(() => {});
+      }
       onReturn(inflight.current);
       return;
     }

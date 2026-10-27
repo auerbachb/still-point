@@ -86,12 +86,6 @@ export default function StillPoint() {
   const tab: Tab = isTab(rawTab) ? rawTab : DEFAULT_TAB;
 
   const [overlay, setOverlay] = useState<Overlay | null>(null);
-  // #947: read by the return-home prune once its flush settles, which can be
-  // minutes later. A completion screen opened since then still needs its row.
-  const overlayRef = useRef<Overlay | null>(overlay);
-  useEffect(() => {
-    overlayRef.current = overlay;
-  }, [overlay]);
   const [activeSessionType, setActiveSessionType] = useState<SessionType>("standard");
   // #240: which track the in-progress standard sit belongs to.
   const [activeTrack, setActiveTrack] = useState<Track>("primary");
@@ -173,6 +167,25 @@ export default function StillPoint() {
     refreshTodayTracks,
     setOverlay,
   });
+
+  // #947: while a pending sit's completion screen is open, its note writes go
+  // through the queue row, so the return-home prune — in this tab or another —
+  // must keep that row. Returning home takes the hold and lets it go once the
+  // screen's writes settle; any other way out (sign-out, a new sit) lets it go
+  // on close.
+  const completionRowHold = useRef<(() => void) | null>(null);
+  const heldClientSessionId =
+    overlay === "complete" && completionData?.isPendingSync ? completionData.clientSessionId : null;
+  useEffect(() => {
+    if (!heldClientSessionId) return;
+    const release = getWebSessionSyncCoordinator().holdRowOpen(heldClientSessionId);
+    completionRowHold.current = release;
+    return () => {
+      if (completionRowHold.current !== release) return;
+      completionRowHold.current = null;
+      release();
+    };
+  }, [heldClientSessionId]);
 
   const clearAccountScopedLocalState = () => {
     resetDualTrackFork();
@@ -637,21 +650,26 @@ export default function StillPoint() {
           // client id, so a retry can never produce a second sit.
           onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
           onReturn={(writesSettled) => {
+            const releaseRow = completionRowHold.current;
+            completionRowHold.current = null;
             setOverlay(null);
             router.push(pathForTab(DEFAULT_TAB));
             refreshUserFromServer();
             // #947: as iOS's returnHome() does, upload what is owed and drop the
             // rows of sits that owe nothing more. Only now, with the screen closed
             // and its note writes settled: they find a pending sit by its row.
-            // Skipped if the account changed meanwhile, or if the next sit's
-            // completion screen is already open; the next return home prunes.
+            // Skipped if the account changed meanwhile. A row some completion
+            // screen still holds, in any tab, stays for a later return home.
             const ownerUserId = user.id;
             const generation = sessionGeneration.current;
             void writesSettled
-              .then(() => getWebSessionSyncCoordinator().flushAndPruneCompleted(
-                ownerUserId,
-                () => sessionGeneration.current === generation && overlayRef.current !== "complete",
-              ))
+              .then(() => {
+                releaseRow?.();
+                return getWebSessionSyncCoordinator().flushAndPruneCompleted(
+                  ownerUserId,
+                  () => sessionGeneration.current === generation,
+                );
+              })
               .then((syncedCount) => {
                 if (syncedCount > 0 && sessionGeneration.current === generation) refreshUserFromServer();
               })

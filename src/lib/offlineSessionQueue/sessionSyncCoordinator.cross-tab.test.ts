@@ -7,7 +7,7 @@
  * existing coordinator tests cover that order within one tab.
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { OFFLINE_QUEUE_LOCK_NAME, UPLOAD_TIMEOUT_MS } from "./constants";
+import { OFFLINE_OPEN_ROW_LOCK_PREFIX, OFFLINE_QUEUE_LOCK_NAME, UPLOAD_TIMEOUT_MS } from "./constants";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import type { SessionSyncTransport } from "./transport";
 import type { PendingSessionEntry } from "./types";
@@ -340,6 +340,56 @@ describe("WebSessionSyncCoordinator upload deadline (#907)", () => {
     const [stuck, saved] = await store.loadEntries();
     expect(stuck).toEqual(queued);
     expect(saved).toMatchObject({ clientSessionId: nextSitId, ownerUserId, sessionSynced: false });
+  });
+});
+
+describe("WebSessionSyncCoordinator return-home prune across tabs (#947)", () => {
+  test("keeps a row another tab's completion screen holds open", async () => {
+    const { request } = fakeLockManager();
+    const query = vi.fn(async () => ({
+      held: [{ name: `${OFFLINE_OPEN_ROW_LOCK_PREFIX}${clientSessionId}`, mode: "shared" as const }],
+      pending: [],
+    }));
+    vi.stubGlobal("navigator", { locks: { request, query } });
+    const tab = await openTab();
+    const store = new CopyingQueueStore();
+    await store.saveEntries([syncedEntry([])]);
+
+    await new tab.WebSessionSyncCoordinator(store, tab.alwaysFailingSessionSyncTransport)
+      .flushAndPruneCompleted(ownerUserId);
+
+    expect(query).toHaveBeenCalled();
+    expect(await store.loadEntries()).toEqual([syncedEntry([])]);
+  });
+
+  test("with no screen holding it, the row is dropped", async () => {
+    const { request } = fakeLockManager();
+    const query = vi.fn(async () => ({ held: [], pending: [] }));
+    vi.stubGlobal("navigator", { locks: { request, query } });
+    const tab = await openTab();
+    const store = new CopyingQueueStore();
+    await store.saveEntries([syncedEntry([])]);
+
+    await new tab.WebSessionSyncCoordinator(store, tab.alwaysFailingSessionSyncTransport)
+      .flushAndPruneCompleted(ownerUserId);
+
+    expect(await store.loadEntries()).toEqual([]);
+  });
+
+  test("when the other tabs' holds cannot be read, nothing is dropped", async () => {
+    const { request } = fakeLockManager();
+    const query = vi.fn(async () => {
+      throw new Error("InvalidStateError");
+    });
+    vi.stubGlobal("navigator", { locks: { request, query } });
+    const tab = await openTab();
+    const store = new CopyingQueueStore();
+    await store.saveEntries([syncedEntry([])]);
+
+    await new tab.WebSessionSyncCoordinator(store, tab.alwaysFailingSessionSyncTransport)
+      .flushAndPruneCompleted(ownerUserId);
+
+    expect(await store.loadEntries()).toEqual([syncedEntry([])]);
   });
 });
 

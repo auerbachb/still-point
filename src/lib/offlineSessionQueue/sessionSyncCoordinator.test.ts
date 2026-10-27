@@ -875,6 +875,75 @@ describe("WebSessionSyncCoordinator return-home prune (#947)", () => {
     }
   });
 
+  test("a sit the server refuses does not keep the sits queued after it from uploading", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+    const later = (await store.loadEntries())[0]!;
+    await store.saveEntries([
+      ...(await store.loadEntries()),
+      { ...later, clientSessionId: "unsynced-later", request: requestWithClientId(baseRequest(), "unsynced-later") },
+    ]);
+    const refusingFirst: SessionSyncTransport = {
+      ...sitsOnlyTransport,
+      createSession: async (payload) => {
+        if (payload.clientSessionId === "unsynced") {
+          throw Object.assign(new Error("rejected"), { permanent: true });
+        }
+        return sitsOnlyTransport.createSession(payload);
+      },
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const synced = await new WebSessionSyncCoordinator(store, refusingFirst)
+        .flushAndPruneCompleted(testOwnerUserId);
+
+      expect(synced).toBe(1);
+      expect(await queuedIds(store)).toEqual(["unsynced", "queued-thoughts", "pending-clear", "other-account"]);
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test("flushPending still rejects with the refusal, after uploading the sits behind it", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await store.saveEntries([
+      { clientSessionId: "refused", ownerUserId: testOwnerUserId, request: requestWithClientId(baseRequest(), "refused"), thoughts: [], serverSessionId: null, sessionSynced: false, enqueuedAt: "2026-10-27T12:00:00.000Z" },
+      { clientSessionId: "accepted", ownerUserId: testOwnerUserId, request: requestWithClientId(baseRequest(), "accepted"), thoughts: [], serverSessionId: null, sessionSynced: false, enqueuedAt: "2026-10-27T12:00:00.000Z" },
+    ]);
+    const refusal = Object.assign(new Error("rejected"), { permanent: true });
+    const coordinator = new WebSessionSyncCoordinator(store, {
+      ...sitsOnlyTransport,
+      createSession: async (payload) => {
+        if (payload.clientSessionId === "refused") throw refusal;
+        return sitsOnlyTransport.createSession(payload);
+      },
+    });
+
+    await expect(coordinator.flushPending(testOwnerUserId)).rejects.toBe(refusal);
+    const accepted = (await store.loadEntries()).find((entry) => entry.clientSessionId === "accepted");
+    expect(accepted?.sessionSynced).toBe(true);
+  });
+
+  test("a row an open completion screen holds is kept until the hold is let go", async () => {
+    const store = new InMemoryOfflineSessionQueueStore();
+    await seedQueue(store);
+    const coordinator = new WebSessionSyncCoordinator(store, sitsOnlyTransport);
+
+    const release = coordinator.holdRowOpen("synced");
+    try {
+      await coordinator.flushAndPruneCompleted(testOwnerUserId);
+      expect(await queuedIds(store)).toEqual(["synced", "queued-thoughts", "pending-clear", "other-account"]);
+    } finally {
+      release();
+      release();
+    }
+
+    await coordinator.flushAndPruneCompleted(testOwnerUserId);
+    expect(await queuedIds(store)).toEqual(["queued-thoughts", "pending-clear", "other-account"]);
+  });
+
   test("a note edited after the sit synced, with the completion screen still open, saves; return home then prunes", async () => {
     const store = new InMemoryOfflineSessionQueueStore();
     const clientSessionId = "550e8400-e29b-41d4-a716-446655440947";
