@@ -10,6 +10,15 @@ struct RootView: View {
     /// #887: UI-test mode only. Settings requests `UITestAPIStore` has received.
     @State private var uiTestSettingsRequestCount = 0
 
+    private enum Constants {
+        static let routeAnimationDuration: Double = 0.3
+        static let loadingAnimationDuration: Double = 0.2
+        static let uiTestModeEnvironmentKey = "SP_UI_TEST_MODE"
+        static let truthyEnvironmentValues: Set<String> = ["1", "true", "yes", "on"]
+        static let currentViewIdentifierPrefix = "root.currentView."
+        static let settingsRequestCountIdentifier = "uiTest.settingsRequestCount"
+    }
+
     var body: some View {
         ZStack {
             SPColor.bg.ignoresSafeArea()
@@ -18,110 +27,14 @@ struct RootView: View {
             // Always render the current-view branch so the accessibility
             // tree (and the `root.currentView.*` identifier on the ZStack
             // below) is consistent from t=0. Issue #276.
-            switch appVM.currentView {
-            case .auth:
-                AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
-                    .transition(.opacity)
-
-            case .session(let sessionType, let track, let combined):
-                SessionView(appVM: appVM, sessionType: sessionType, track: track, combined: combined)
-                    .transition(.opacity)
-
-            case .buddyHub:
-                BuddySessionHubView(appVM: appVM)
-                    .transition(.opacity)
-
-            case .buddyCalendar:
-                BuddyCalendarView(appVM: appVM, mode: .unified)
-                    .transition(.opacity)
-
-            case .buddyCalendarWithBuddy(let buddyId, let buddyUsername):
-                BuddyCalendarView(
-                    appVM: appVM,
-                    mode: .perBuddy(buddyId: buddyId, buddyUsername: buddyUsername)
-                )
-                .transition(.opacity)
-
-            case .buddySession(let sessionId):
-                BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
-                    .id(sessionId)
-                    .transition(.opacity)
-
-            case .completion(let sessionId, let clientSessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let track, let sessionCompleted, let duration, let bonusSeconds, let attentionLog, let attentionElapsed, let ambientSoundSummary, let combined):
-                CompletionView(
-                    appVM: appVM,
-                    sessionId: sessionId,
-                    clientSessionId: clientSessionId,
-                    clearPercent: clearPercent,
-                    thoughtCount: thoughtCount,
-                    thoughts: thoughts,
-                    dayNumber: dayNumber,
-                    sessionType: sessionType,
-                    track: track,
-                    sessionCompleted: sessionCompleted,
-                    duration: duration,
-                    bonusSeconds: bonusSeconds,
-                    attentionLog: attentionLog,
-                    attentionElapsed: attentionElapsed,
-                    ambientSoundSummary: ambientSoundSummary,
-                    combined: combined
-                )
-                .transition(.opacity)
-
-            case .breathCounting:
-                BreathCountingView(appVM: appVM)
-                    .transition(.opacity)
-
-            case .focusPicker:
-                FocusCategoryPickerView(appVM: appVM)
-                    .transition(.opacity)
-
-            case .focusActivity(let category, let focusActivityDay):
-                FocusActivityView(appVM: appVM, category: category, focusActivityDay: focusActivityDay)
-                    .transition(.opacity)
-
-            case .logReason(let date):
-                LogReasonView(appVM: appVM, targetDate: date)
-                    .transition(.opacity)
-
-            default:
-                MainTabView(appVM: appVM)
-                    // #916: keyed by the account, so a different account adopted while
-                    // the route stays on the tabs rebuilds History, Journal, Board,
-                    // Settings and Home with fresh state and loads. Re-confirming the
-                    // same account keeps the key and the tabs as they are.
-                    .id(appVM.currentUser?.id)
-                    .transition(.opacity)
-            }
+            currentRouteView
 
             // Brand-lockup overlay during cold-start auth check. Sits on top
             // of the current-view branch and dismisses when checkAuth flips
             // isLoading to false.
             if appVM.isLoading {
-                ZStack {
-                    SPColor.bg.ignoresSafeArea()
-                    VStack(spacing: SPSpacing.s2) {
-                        Text("Still Point")
-                            .font(SPFont.brandTitle)
-                            .foregroundStyle(Color(SPColor.fg))
-                        Text("ATTENTION TRAINING")
-                            .font(SPFont.brandSubtitle)
-                            .foregroundStyle(Color(SPColor.fg3))
-                            .tracking(4)
-                        if let authStatusMessage = appVM.authStatusMessage {
-                            Text(authStatusMessage)
-                                .font(SPFont.mono(12))
-                                .foregroundStyle(SPColor.dangerMuted)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, SPSpacing.s4)
-                                .padding(.top, SPSpacing.s3)
-                                .accessibilityIdentifier("root.authStatusMessage")
-                        }
-                    }
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .transition(.opacity)
+                ColdStartBrandOverlay(authStatusMessage: appVM.authStatusMessage)
+                    .transition(.opacity)
             }
         }
         // Explicit accessibility marker for UI tests. Putting the identifier
@@ -130,42 +43,23 @@ struct RootView: View {
         // resolution. This tiny UIKit marker is queryable but never interactive.
         .overlay(alignment: .topLeading) {
             if isUITestMode {
-                AccessibilityMarkerView(
-                    identifier: "root.currentView.\(viewAccessibilitySlug)",
-                    value: coldStartMetricAccessibilityValue
-                )
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-
-                // #887: how many Settings requests reached `UITestAPIStore` since
-                // launch, so a UI test can check that a dropped save sent nothing.
-                AccessibilityMarkerView(
-                    identifier: "uiTest.settingsRequestCount",
-                    value: String(uiTestSettingsRequestCount)
-                )
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
+                uiTestMarkers
             }
-
         }
         .onReceive(NotificationCenter.default.publisher(for: UITestSettingsRequests.didRecord)) { note in
             guard let count = note.userInfo?[UITestSettingsRequests.countKey] as? Int else { return }
             // Each post carries the running total, so the largest one seen is the count.
             uiTestSettingsRequestCount = max(uiTestSettingsRequestCount, count)
         }
-        .animation(.easeInOut(duration: 0.3), value: appVM.currentView)
-        .animation(.easeInOut(duration: 0.2), value: appVM.isLoading)
+        .animation(.easeInOut(duration: Constants.routeAnimationDuration), value: appVM.currentView)
+        .animation(.easeInOut(duration: Constants.loadingAnimationDuration), value: appVM.isLoading)
         .onAppear {
-            SessionIdleTimerController.syncSceneForegroundActive(
-                appVM: appVM,
-                isForegroundActive: scenePhase == .active
-            )
+            syncIdleTimerForeground(scenePhase)
         }
         .task {
             reachability.ownerUserIdProvider = { appVM.currentUser?.id }
             reachability.onSynced = { appVM.refreshUserAfterSync() }
-            await appVM.checkAuth()
-            await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
+            await checkAuthAndFlushOfflineQueue()
         }
         // #665: connectivity returning is the read/identity half of the reconnect.
         // The monitor already flushes the queued sits itself (#557); this refreshes
@@ -177,38 +71,7 @@ struct RootView: View {
             appVM.refreshAfterReconnectInBackground()
         }
         .onChange(of: scenePhase) { _, phase in
-            SessionIdleTimerController.syncSceneForegroundActive(
-                appVM: appVM,
-                isForegroundActive: phase == .active
-            )
-            switch phase {
-            case .active, .inactive, .background:
-                // Reconcile shields on every lifecycle transition so a stale
-                // unlock cannot survive when the app is backgrounded (#549).
-                appVM.appBlockingManager.refreshShielding()
-            @unknown default:
-                break
-            }
-            if phase == .active {
-                SessionIdleTimerController.applyDesiredIdleTimerState()
-                Task {
-                    await appVM.checkAuth()
-                    await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
-                }
-            } else if phase == .inactive || phase == .background {
-                // Multi-window: only clear when no scene is foreground-active (issue #87).
-                SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()
-            }
-            if phase == .background {
-                // #663: while the app stays closed, a background refresh is the only
-                // way a sit saved on the web reaches the widget.
-                BackgroundRefreshScheduler.reschedule()
-                // #887: arms the held `me()` read for the scene-activation check when
-                // the app comes back. No-op unless a UI test configured a hold.
-                if isUITestMode {
-                    Task { await APIClient.shared.uiTestSceneDidEnterBackground() }
-                }
-            }
+            handleScenePhaseChange(phase)
         }
         .onOpenURL { url in
             // Let Google Sign-In claim its OAuth callback (reversed client-ID scheme)
@@ -237,6 +100,143 @@ struct RootView: View {
                 appVM.handlePushDeepLink(url)
             }
         }
+    }
+
+    // MARK: - Routing
+
+    /// The screen for `appVM.currentView`. `Group` applies the shared
+    /// `.transition(.opacity)` to whichever branch is active.
+    private var currentRouteView: some View {
+        Group {
+            switch appVM.currentView {
+            case .auth:
+                AuthView(appVM: appVM, launchAuthStatusMessage: appVM.authStatusMessage)
+
+            case .session(let sessionType, let track, let combined):
+                SessionView(appVM: appVM, sessionType: sessionType, track: track, combined: combined)
+
+            case .buddyHub:
+                BuddySessionHubView(appVM: appVM)
+
+            case .buddyCalendar:
+                BuddyCalendarView(appVM: appVM, mode: .unified)
+
+            case .buddyCalendarWithBuddy(let buddyId, let buddyUsername):
+                BuddyCalendarView(
+                    appVM: appVM,
+                    mode: .perBuddy(buddyId: buddyId, buddyUsername: buddyUsername)
+                )
+
+            case .buddySession(let sessionId):
+                BuddySessionContainerView(appVM: appVM, sessionId: sessionId)
+                    .id(sessionId)
+
+            case .completion(let sessionId, let clientSessionId, let clearPercent, let thoughtCount, let thoughts, let dayNumber, let sessionType, let track, let sessionCompleted, let duration, let bonusSeconds, let attentionLog, let attentionElapsed, let ambientSoundSummary, let combined):
+                CompletionView(
+                    appVM: appVM,
+                    sessionId: sessionId,
+                    clientSessionId: clientSessionId,
+                    clearPercent: clearPercent,
+                    thoughtCount: thoughtCount,
+                    thoughts: thoughts,
+                    dayNumber: dayNumber,
+                    sessionType: sessionType,
+                    track: track,
+                    sessionCompleted: sessionCompleted,
+                    duration: duration,
+                    bonusSeconds: bonusSeconds,
+                    attentionLog: attentionLog,
+                    attentionElapsed: attentionElapsed,
+                    ambientSoundSummary: ambientSoundSummary,
+                    combined: combined
+                )
+
+            case .breathCounting:
+                BreathCountingView(appVM: appVM)
+
+            case .focusPicker:
+                FocusCategoryPickerView(appVM: appVM)
+
+            case .focusActivity(let category, let focusActivityDay):
+                FocusActivityView(appVM: appVM, category: category, focusActivityDay: focusActivityDay)
+
+            case .logReason(let date):
+                LogReasonView(appVM: appVM, targetDate: date)
+
+            default:
+                MainTabView(appVM: appVM)
+                    // #916: keyed by the account, so a different account adopted while
+                    // the route stays on the tabs rebuilds History, Journal, Board,
+                    // Settings and Home with fresh state and loads. Re-confirming the
+                    // same account keeps the key and the tabs as they are.
+                    .id(appVM.currentUser?.id)
+            }
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: - Lifecycle
+
+    private func checkAuthAndFlushOfflineQueue() async {
+        await appVM.checkAuth()
+        await reachability.flushOfflineQueue(ownerUserId: appVM.currentUser?.id)
+    }
+
+    private func syncIdleTimerForeground(_ phase: ScenePhase) {
+        SessionIdleTimerController.syncSceneForegroundActive(
+            appVM: appVM,
+            isForegroundActive: phase == .active
+        )
+    }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        syncIdleTimerForeground(phase)
+        switch phase {
+        case .active, .inactive, .background:
+            // Reconcile shields on every lifecycle transition so a stale
+            // unlock cannot survive when the app is backgrounded (#549).
+            appVM.appBlockingManager.refreshShielding()
+        @unknown default:
+            break
+        }
+        if phase == .active {
+            SessionIdleTimerController.applyDesiredIdleTimerState()
+            Task {
+                await checkAuthAndFlushOfflineQueue()
+            }
+        } else if phase == .inactive || phase == .background {
+            // Multi-window: only clear when no scene is foreground-active (issue #87).
+            SessionIdleTimerController.applyBackgroundIdleTimerPolicyIfNoForegroundScene()
+        }
+        if phase == .background {
+            // #663: while the app stays closed, a background refresh is the only
+            // way a sit saved on the web reaches the widget.
+            BackgroundRefreshScheduler.reschedule()
+            // #887: arms the held `me()` read for the scene-activation check when
+            // the app comes back. No-op unless a UI test configured a hold.
+            if isUITestMode {
+                Task { await APIClient.shared.uiTestSceneDidEnterBackground() }
+            }
+        }
+    }
+
+    // MARK: - UI-test accessibility markers
+
+    @ViewBuilder
+    private var uiTestMarkers: some View {
+        AccessibilityMarkerView(
+            identifier: Constants.currentViewIdentifierPrefix + viewAccessibilitySlug,
+            value: coldStartMetricAccessibilityValue
+        )
+        .uiTestMarkerFrame()
+
+        // #887: how many Settings requests reached `UITestAPIStore` since
+        // launch, so a UI test can check that a dropped save sent nothing.
+        AccessibilityMarkerView(
+            identifier: Constants.settingsRequestCountIdentifier,
+            value: String(uiTestSettingsRequestCount)
+        )
+        .uiTestMarkerFrame()
     }
 
     private var viewAccessibilitySlug: String {
@@ -282,12 +282,58 @@ struct RootView: View {
     }
 
     private var isUITestMode: Bool {
-        truthy(ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"])
+        truthy(ProcessInfo.processInfo.environment[Constants.uiTestModeEnvironmentKey])
     }
 
     private func truthy(_ value: String?) -> Bool {
         guard let value else { return false }
-        return ["1", "true", "yes", "on"].contains(value.lowercased())
+        return Constants.truthyEnvironmentValues.contains(value.lowercased())
+    }
+}
+
+/// Brand lockup shown over the current route while the cold-start auth check
+/// runs, plus any auth status message. Decorative only: not hit-testable and
+/// hidden from accessibility.
+private struct ColdStartBrandOverlay: View {
+    let authStatusMessage: String?
+
+    private enum Constants {
+        static let subtitleTracking: CGFloat = 4
+        static let statusMessageFontSize: CGFloat = 12
+    }
+
+    var body: some View {
+        ZStack {
+            SPColor.bg.ignoresSafeArea()
+            VStack(spacing: SPSpacing.s2) {
+                Text("Still Point")
+                    .font(SPFont.brandTitle)
+                    .foregroundStyle(Color(SPColor.fg))
+                Text("ATTENTION TRAINING")
+                    .font(SPFont.brandSubtitle)
+                    .foregroundStyle(Color(SPColor.fg3))
+                    .tracking(Constants.subtitleTracking)
+                if let authStatusMessage {
+                    Text(authStatusMessage)
+                        .font(SPFont.mono(Constants.statusMessageFontSize))
+                        .foregroundStyle(SPColor.dangerMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, SPSpacing.s4)
+                        .padding(.top, SPSpacing.s3)
+                        .accessibilityIdentifier("root.authStatusMessage")
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private extension View {
+    /// Shrinks a UI-test accessibility marker to a 1x1, non-interactive point.
+    func uiTestMarkerFrame() -> some View {
+        frame(width: 1, height: 1)
+            .allowsHitTesting(false)
     }
 }
 
