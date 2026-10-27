@@ -94,9 +94,11 @@ public actor SessionSyncCoordinator {
     }
 
     /// Number of sits still waiting for server sync for the signed-in user.
+    /// #983: a parked sit stays queued but is not counted, since no flush
+    /// sends it again (web `pendingCount`, #978).
     public func pendingCount(ownerUserId: String) async throws -> Int {
         try queueStore.loadEntries()
-            .filter { $0.ownerUserId == ownerUserId && $0.awaitsSync }
+            .filter { $0.ownerUserId == ownerUserId && $0.awaitsFlush }
             .count
     }
 
@@ -167,7 +169,9 @@ public actor SessionSyncCoordinator {
 
         let entries = try queueStore.loadEntries()
         var syncedCount = 0
-        for entry in entries where entry.ownerUserId == ownerUserId && entry.awaitsSync {
+        // #983: a failed upload ends only its own sit, so the sits behind it
+        // still go up. A parked sit is skipped: it would get the same answer.
+        for entry in entries where entry.ownerUserId == ownerUserId && entry.awaitsFlush {
             // #792: one entry at a time, taking turns with note edits.
             let flushed = try await serialized {
                 try await flushEntry(clientSessionId: entry.clientSessionId, ownerUserId: ownerUserId)
@@ -200,13 +204,14 @@ public actor SessionSyncCoordinator {
         return entry?.serverSessionId
     }
 
-    /// Drop fully-synced entries once the completion flow finishes.
+    /// Drop fully-synced entries once the completion flow finishes. #983: a
+    /// parked entry is kept as the record of the sit and of why it was turned down.
     public func pruneCompletedEntries(ownerUserId: String) async throws {
         guard !ownerUserId.isEmpty else { return }
 
         var entries = try queueStore.loadEntries()
         let before = entries.count
-        entries.removeAll { $0.ownerUserId == ownerUserId && !$0.awaitsSync }
+        entries.removeAll { $0.ownerUserId == ownerUserId && !$0.awaitsSync && $0.parked == nil }
         if entries.count != before {
             try queueStore.saveEntries(entries)
         }
@@ -305,7 +310,8 @@ public actor SessionSyncCoordinator {
     private func flushEntry(clientSessionId: UUID, ownerUserId: String) async throws -> SessionDTO? {
         guard var entry = try queueStore.loadEntries().first(where: {
             $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
-        }) else {
+        }), entry.parked == nil else {
+            // #983: sent again, a parked sit would only get the same answer.
             return nil
         }
 
@@ -323,6 +329,7 @@ public actor SessionSyncCoordinator {
                 try queueStore.saveEntries(entries)
                 entry = entries[index]
             } catch {
+                parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
                 return nil
             }
         }
@@ -370,11 +377,47 @@ public actor SessionSyncCoordinator {
                 try queueStore.saveEntries(entries)
                 entry = entries[index]
             } catch {
+                parkIfRejected(by: error, clientSessionId: clientSessionId, ownerUserId: ownerUserId)
                 return nil
             }
         }
 
         return Self.sessionDTO(from: entry.request, id: serverSessionId)
+    }
+
+    /// #983: whether an upload failure is the server turning this sit down for
+    /// good, as web decides since #978 (`uploadFailure` and `rejectsTheSit`). A
+    /// 5xx, a 408 or a 429 is worth retrying. A 401 means the sign-in lapsed and a
+    /// 403 comes from in front of the routes; a later flush can get past both.
+    /// Any other 4xx (a validation 400, the 404 for a session that is gone, …)
+    /// would be the same every time. A network failure, or an `APIError` with
+    /// status 0, never parks.
+    static func rejectsTheSit(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError else { return false }
+        switch apiError.status {
+        case 401, 403, 408, 429:
+            return false
+        case 400..<500:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// #983: keeps the sit, with the answer that turned it down, where no flush
+    /// sends it again. Runs in the caller's queue turn, like the rest of
+    /// `flushEntry`. A park that cannot be saved leaves the sit queued as before,
+    /// so the next flush sends it and gets the answer again.
+    private func parkIfRejected(by error: Error, clientSessionId: UUID, ownerUserId: String) {
+        guard Self.rejectsTheSit(error), let apiError = error as? APIError else { return }
+        guard var entries = try? queueStore.loadEntries(),
+              let index = entries.firstIndex(where: {
+                  $0.clientSessionId == clientSessionId && $0.ownerUserId == ownerUserId
+              }) else {
+            return
+        }
+        entries[index].parked = PendingSessionParked(status: apiError.status, message: apiError.message)
+        try? queueStore.saveEntries(entries)
     }
 
     /// #971: an id for each in-session thought, given before the entry is first
