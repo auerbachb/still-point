@@ -3,10 +3,12 @@ import XCTest
 
 /// #724 — what a finished sit's save attempt decides.
 ///
-/// `SessionViewModel.completeSit(appVM:startedAtGeneration:)` and
+/// `SessionViewModel.completeSit(appVM:startedAtGeneration:)`,
+/// `SessionViewModel.continueWithoutSaving(appVM:)` and
 /// `AppViewModel.completeBreathSession` carry out whatever `SessionCompletionLogic`
-/// returns, so these cases pin the #703 flag rule and the "Session could not be
-/// saved" alert without a device, a queue, or a view.
+/// returns, so these cases pin the #703 flag rule, the "Session could not be
+/// saved" alert and the #921 completion-screen rules without a device, a queue,
+/// or a view.
 final class SessionCompletionLogicTests: XCTestCase {
 
     // MARK: - #703: the offline strip's not-stored flag
@@ -38,5 +40,56 @@ final class SessionCompletionLogicTests: XCTestCase {
 
     func testASitWithNoSignedInUserStopsOnTheAlert() {
         XCTAssertTrue(SessionCompletionLogic.showsSaveError(after: .noSignedInUser))
+    }
+
+    // MARK: - #921: the gaze summary's elapsed time
+
+    func testASitWithNoAttentionLogHandsOverNoElapsedTime() {
+        XCTAssertNil(SessionCompletionLogic.attentionElapsed(attentionLog: nil, elapsed: 312))
+    }
+
+    func testASitWithAnAttentionLogHandsOverItsElapsedTime() {
+        let log = [
+            AttentionEntry(time: 0, state: "attentive"),
+            AttentionEntry(time: 40, state: "away"),
+        ]
+        XCTAssertEqual(SessionCompletionLogic.attentionElapsed(attentionLog: log, elapsed: 312), 312)
+    }
+
+    func testAnEmptyAttentionLogStillHandsOverTheElapsedTime() {
+        // Tracking ran and logged nothing. That is still a log, so the screen gets
+        // the time to measure it against.
+        XCTAssertEqual(SessionCompletionLogic.attentionElapsed(attentionLog: [], elapsed: 312), 312)
+    }
+
+    func testTheElapsedTimePassesThroughUnchangedAtZero() {
+        // `CompletionView` decides that a sit with no elapsed time has no summary;
+        // this rule hands the time over as it is.
+        let log = [AttentionEntry(time: 0, state: "attentive")]
+        XCTAssertEqual(SessionCompletionLogic.attentionElapsed(attentionLog: log, elapsed: 0), 0)
+    }
+
+    // MARK: - #921: "Continue without saving" after a sign-out
+
+    func testContinueWithoutSavingOpensTheScreenUnderTheGenerationThatRaisedTheAlert() {
+        XCTAssertTrue(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 3, isSignedIn: true))
+    }
+
+    func testContinueWithoutSavingOpensNothingAfterASignOut() {
+        // A sign-out moves the generation once. Someone is signed in here, so the
+        // moved generation alone turns the tap away.
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 4, isSignedIn: true))
+    }
+
+    func testContinueWithoutSavingOpensNothingWhenNoAlertWasRaised() {
+        // 0 is the generation a launch starts on, so a missing value must not read
+        // as that one.
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: nil, liveGeneration: 0, isSignedIn: true))
+    }
+
+    func testContinueWithoutSavingOpensNothingWithNobodySignedIn() {
+        // A Retry tapped after a sign-out raises the alert again under the new
+        // generation, so the generations match and nobody is signed in.
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 4, liveGeneration: 4, isSignedIn: false))
     }
 }

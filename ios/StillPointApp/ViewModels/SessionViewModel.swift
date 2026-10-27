@@ -48,6 +48,9 @@ final class SessionViewModel {
     /// #724: the "Session could not be saved" alert, raised by
     /// `completeSit(appVM:startedAtGeneration:)`.
     var showSaveError = false
+    /// #921: the identity generation whose save raised that alert. Its "Continue
+    /// without saving" opens the completion screen only while this one is live.
+    private var saveErrorGeneration: Int?
     var controlsVisible = true
     var soundPrefs: AudioEngine.SoundPrefs
 
@@ -401,7 +404,7 @@ final class SessionViewModel {
         // account's. Nothing is saved or shown for it.
         guard generation == appVM.authGeneration else { return }
         guard let ownerUserId = appVM.currentUser?.id else {
-            applySaveOutcome(.noSignedInUser, appVM: appVM)
+            applySaveOutcome(.noSignedInUser, appVM: appVM, generation: generation)
             return
         }
         // #854: the save waits on the server flush, so a sign-out and a sign-in as
@@ -426,10 +429,10 @@ final class SessionViewModel {
                 // flag additionally withdraws the offline strip's "sits are saved"
                 // promise, which stays on screen after the user picks "Continue
                 // without saving".
-                applySaveOutcome(.notStored, appVM: appVM)
+                applySaveOutcome(.notStored, appVM: appVM, generation: generation)
                 return
             }
-            applySaveOutcome(.stored, appVM: appVM)
+            applySaveOutcome(.stored, appVM: appVM, generation: generation)
             appVM.completeSession(
                 sessionId: session.id,
                 clientSessionId: lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
@@ -443,7 +446,7 @@ final class SessionViewModel {
                 bonusSeconds: bonusSeconds,
                 unlockAppGate: completedNaturally,
                 attentionLog: attentionLog,
-                attentionElapsed: attentionLog != nil ? elapsed : nil,
+                attentionElapsed: SessionCompletionLogic.attentionElapsed(attentionLog: attentionLog, elapsed: elapsed),
                 ambientSoundSummary: ambientSoundSummary
             )
         }
@@ -453,11 +456,22 @@ final class SessionViewModel {
     /// stored session behind it.
     ///
     /// The payload has no session id, so that screen saves nothing: its note is
-    /// never sent, no photo can be added, and ratings and mood stay hidden. The
+    /// never sent, no photo can be added, and the mood stays hidden. The
     /// attention log goes along as it does from `completeSit`, so the screen
     /// shows the same gaze summary a saved sit's does (#873).
+    ///
+    /// Nothing opens once the generation that raised the alert is gone, or with
+    /// nobody signed in (#921). A sign-out that lands between the alert and this
+    /// action has routed to sign-in, and the completion screen would cover it. A
+    /// Retry tapped after that sign-out raises the alert again under the new
+    /// generation, so only the signed-in check turns that alert's tap away.
     @MainActor
     func continueWithoutSaving(appVM: AppViewModel) {
+        guard SessionCompletionLogic.continuesWithoutSaving(
+            alertRaisedAt: saveErrorGeneration,
+            liveGeneration: appVM.authGeneration,
+            isSignedIn: appVM.currentUser != nil
+        ) else { return }
         appVM.completeSession(
             sessionId: "",
             clientSessionId: UUID(),
@@ -471,18 +485,26 @@ final class SessionViewModel {
             bonusSeconds: bonusSeconds,
             unlockAppGate: completedNaturally,
             attentionLog: attentionLog,
-            attentionElapsed: attentionLog != nil ? elapsed : nil,
+            attentionElapsed: SessionCompletionLogic.attentionElapsed(attentionLog: attentionLog, elapsed: elapsed),
             ambientSoundSummary: ambientSoundSummary
         )
     }
 
     /// Carries out what a save outcome decides: the #703 flag first, then the alert.
+    ///
+    /// - Parameter generation: the generation `completeSit` ran under. An alert
+    ///   raised here belongs to it (#921).
     @MainActor
-    private func applySaveOutcome(_ outcome: SessionCompletionLogic.SaveOutcome, appVM: AppViewModel) {
+    private func applySaveOutcome(
+        _ outcome: SessionCompletionLogic.SaveOutcome,
+        appVM: AppViewModel,
+        generation: Int
+    ) {
         if let localSaveFailed = SessionCompletionLogic.localSaveFailed(after: outcome) {
             appVM.localSaveFailed = localSaveFailed
         }
         if SessionCompletionLogic.showsSaveError(after: outcome) {
+            saveErrorGeneration = generation
             showSaveError = true
         }
     }
