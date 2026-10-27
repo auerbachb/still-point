@@ -72,11 +72,14 @@ Never point seed or E2E users at production data.
 Naked sleeps are banned for test synchronization:
 
 - disallowed: `waitForTimeout(...)`, `sleep(...)`, `Thread.sleep`, `Task.sleep` in test code/workflows
-- allowed exception: bounded infra backoff in non-test provisioning steps (documented inline)
+- allowed exception: bounded infra backoff in non-test provisioning steps (documented inline). The checker accepts it in two forms:
+  - a workflow shell retry written as `sleep $((attempt * N))`
+  - named lines of a non-test provisioning script, listed in `ALLOWED_SLEEP_LINES_BY_PATH` (`scripts/e2e/check-no-naked-sleep.mjs`). Each entry names one repo-relative path and the exact line text it allows, and its comment says what the back-off retries. A pattern must match the whole line, so a sleep written any other way in that file still fails. Matching is by text, not by line number or count, so another line in that file with exactly an allowed text passes too. The only entry today is the `git ls-remote` / tag-push retry in `scripts/ci/ios-testflight-build-number.mjs` (Issue #920). Never add an entry for a file under `e2e/` or for any other test code.
 
 Enforcement:
 
 - `npm run e2e:policy:no-sleep`
+- `npm run test:unit` runs `scripts/e2e/check-no-naked-sleep.test.ts`, which runs the check over the repository on every PR and pins the scope of the exception above
 - Playwright tests must rely on role/locator contracts and assertion-driven waits
 - iOS tests must use XCTest expectations/predicate waits and accessibility identifiers
 
