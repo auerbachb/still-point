@@ -65,11 +65,26 @@ for (const width of MOBILE_WIDTHS) {
       await ensureLoggedIn();
       await page.goto("/app");
 
+      // The reload shows the auth loading screen until /api/auth/me answers, and
+      // that screen fits the viewport, so a scroll sent before Home renders does
+      // nothing (#865). `exact` keeps sign-up's "Begin the journey" out (#906).
+      const begin = page.getByRole("button", { name: "Begin", exact: true });
+      await expect(begin).toBeVisible();
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const root = document.scrollingElement ?? document.documentElement;
+              return root.scrollHeight - root.clientHeight;
+            }),
+          { message: "Home should be tall enough to scroll" },
+        )
+        .toBeGreaterThan(0);
+
+      // The browser clamps the request to Home's scroll range; any offset will do.
       await page.evaluate(() => window.scrollTo(0, 900));
       expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
-      const begin = page.getByRole("button", { name: "Begin" });
-      await expect(begin).toBeVisible();
       // Direct DOM click so the fixed bottom nav cannot intercept the tap.
       await begin.evaluate((el: HTMLElement) => el.click());
 
