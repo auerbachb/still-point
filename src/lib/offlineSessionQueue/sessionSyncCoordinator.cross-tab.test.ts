@@ -7,7 +7,7 @@
  * existing coordinator tests cover that order within one tab.
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { OFFLINE_QUEUE_LOCK_NAME } from "./constants";
+import { OFFLINE_QUEUE_LOCK_NAME, UPLOAD_TIMEOUT_MS } from "./constants";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import type { SessionSyncTransport } from "./transport";
 import type { PendingSessionEntry } from "./types";
@@ -30,10 +30,12 @@ const sitRequest = {
   sessionDate: "2026-10-26",
 };
 
-/** Let every queued microtask run, so a write that is blocked shows as blocked. */
+/** Let every queued microtask run, so a write that is blocked shows as blocked.
+ *  Real timers only: under fake ones, advance the clock instead. */
 const drainMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -90,6 +92,25 @@ function syncedEntry(thoughts: PendingSessionEntry["thoughts"]): PendingSessionE
     sessionSynced: true,
     enqueuedAt: "2026-10-26T12:00:00.000Z",
   };
+}
+
+/**
+ * #907: `fetch` over a connection that never answers, as the live transport
+ * sees it. A call settles only once its signal aborts, and then rejects the way
+ * `fetch` does. With no signal, it never settles.
+ */
+function stubStalledFetch() {
+  const signals: Array<RequestInit["signal"]> = [];
+  let uploadStarted!: () => void;
+  const started = new Promise<void>((resolve) => { uploadStarted = resolve; });
+  vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+    signals.push(init.signal);
+    uploadStarted();
+    return new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+    });
+  }));
+  return { signals, started };
 }
 
 describe("WebSessionSyncCoordinator cross-tab lock (#834)", () => {
@@ -168,7 +189,7 @@ describe("WebSessionSyncCoordinator cross-tab lock (#834)", () => {
     const clearing = new tab.WebSessionSyncCoordinator(store, tab.alwaysFailingSessionSyncTransport).clearQueue();
     await drainMicrotasks();
 
-    // Sign-out does not wait for an upload, which has no timeout.
+    // Sign-out does not wait for an upload, which can run to its deadline (#907).
     expect(await store.loadEntries()).toEqual([]);
 
     releaseUpload();
@@ -253,6 +274,72 @@ describe("WebSessionSyncCoordinator cross-tab lock (#834)", () => {
     expect(await store.loadEntries()).toHaveLength(1);
     expect(request).toHaveBeenCalledTimes(1);
     expect(uploadAttempts).toBe(1);
+  });
+});
+
+describe("WebSessionSyncCoordinator upload deadline (#907)", () => {
+  test("an upload that never settles is aborted at the deadline: the lock is freed and the entry stays queued", async () => {
+    const { request } = fakeLockManager();
+    vi.stubGlobal("navigator", { locks: { request } });
+    const { signals, started } = stubStalledFetch();
+    const store = new CopyingQueueStore();
+    const queued = syncedEntry([{ timeInSession: -1, text: "first draft" }]);
+    await store.saveEntries([queued]);
+    const tab = await openTab();
+    vi.useFakeTimers();
+
+    // The live transport, so the upload is a real `fetch` call.
+    const flushing = new tab.WebSessionSyncCoordinator(store).flushPending(ownerUserId);
+    await started;
+    // The next writer in line, from any tab.
+    let nextWriterRan = false;
+    const nextWriter = request(OFFLINE_QUEUE_LOCK_NAME, async () => {
+      nextWriterRan = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS - 1);
+    expect(nextWriterRan).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(nextWriterRan).toBe(true);
+    await nextWriter;
+    await expect(flushing).resolves.toBe(0);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(true);
+    // Still queued, thoughts and all, for the next flush.
+    expect(await store.loadEntries()).toEqual([queued]);
+  });
+
+  test("another tab's queue write goes ahead once the stuck upload is aborted", async () => {
+    const { request } = fakeLockManager();
+    vi.stubGlobal("navigator", { locks: { request } });
+    const { started } = stubStalledFetch();
+    const store = new CopyingQueueStore();
+    const queued = syncedEntry([{ timeInSession: -1, text: "first draft" }]);
+    await store.saveEntries([queued]);
+    const uploadingTab = await openTab();
+    const savingTab = await openTab();
+    vi.useFakeTimers();
+
+    const flushing = new uploadingTab.WebSessionSyncCoordinator(store).flushPending(ownerUserId);
+    await started;
+    // A sit that ends in the other tab meanwhile. Its own upload fails at once,
+    // so the stuck one is all it waits for.
+    const nextSitId = "550e8400-e29b-41d4-a716-446655440907";
+    const saving = new savingTab.WebSessionSyncCoordinator(store, savingTab.alwaysFailingSessionSyncTransport)
+      .saveCompletedSession(sitRequest, nextSitId, ownerUserId, []);
+
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS - 1);
+    // Still waiting for the lock, so the new sit is not stored yet.
+    expect((await store.loadEntries()).map((entry) => entry.clientSessionId)).toEqual([clientSessionId]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await store.loadEntries()).map((entry) => entry.clientSessionId)).toEqual([clientSessionId, nextSitId]);
+    await expect(saving).resolves.toMatchObject({ isPendingSync: true, serverSessionId: null });
+    await expect(flushing).resolves.toBe(0);
+    const [stuck, saved] = await store.loadEntries();
+    expect(stuck).toEqual(queued);
+    expect(saved).toMatchObject({ clientSessionId: nextSitId, ownerUserId, sessionSynced: false });
   });
 });
 

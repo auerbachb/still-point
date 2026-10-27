@@ -7,6 +7,8 @@ const OFFLINE_IDB_NAME = "stillpoint-offline-v1";
 const OFFLINE_IDB_STORE = "session-queue";
 const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
 const OFFLINE_QUEUE_LOCK_NAME = "stillpoint-session-queue";
+/** #907: one upload's deadline; constants.ts explains its size. */
+const UPLOAD_TIMEOUT_MS = 60 * 1000;
 const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
 const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
@@ -128,18 +130,32 @@ function saveOfflineEntries(db, entries) {
   });
 }
 
+/*
+ * #907: each upload is aborted after UPLOAD_TIMEOUT_MS. The flush below holds
+ * the queue lock across its uploads, so one that never settled would keep every
+ * tab's queue writes waiting until the sync event ran out. A rejection ends the
+ * flush before its save, so the stored entries stay queued for the next one.
+ */
 async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+    // Awaited inside the try, so the deadline still covers the body.
+    return await res.json();
+  } finally {
+    clearTimeout(deadline);
   }
-  return res.json();
 }
 
 async function readOfflineOwnerUserId() {
