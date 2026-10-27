@@ -64,7 +64,7 @@ The command reads `README.md`, `ios/RELEASING.md`, this runbook, `.github/workfl
 
 Set `APPSTORE_APP_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and `APPSTORE_API_PRIVATE_KEY` to let the dry run query App Store Connect builds and version records. Add `-- --require-live` when a real submission must fail fast if live API validation cannot run. The script does not submit for review; submission remains blocked until the generated human gates are approved.
 
-**Which build it checks:** by default the latest TestFlight cut (the highest `ios-v*-build*` tag on origin). If you validated a different build, pass its tag with `-- --intended-tag ios-v<marketing>-build<N>`. Fallback rules are in [`ios/RELEASING.md`](../../ios/RELEASING.md#manual-tag-break-glass). A tag shows that a build was cut, not that App Store Connect processed it, so keep `--require-live` for a real submission.
+**Which build it checks:** by default the highest `ios-v*-build*` tag on origin. That is the newest build cut by any lane, and App Store release runs claim these tags too, so it may not be the TestFlight build you validated. If you validated a different build, pass its tag with `-- --intended-tag ios-v<marketing>-build<N>`. Fallback rules are in [`ios/RELEASING.md`](../../ios/RELEASING.md#manual-tag-break-glass). A tag shows that a build was cut, not that App Store Connect processed it, so keep `--require-live` for a real submission.
 
 ## Release checklist (Phases A–F)
 
