@@ -4,7 +4,11 @@ name: Build & Upload to TestFlight (reusable)
 # to App Store Connect / TestFlight. Single source of truth for the build +
 # upload logic, called by:
 #   - ios-testflight.yml      (manual ios-v*-build* tag push — escape hatch)
-#   - ios-testflight-auto.yml (PR merged to main with the release:ios label)
+#   - ios-testflight-auto.yml (merge to main that changes iOS app code)
+#
+# Both callers pass the N from the ios-v<marketing>-build<N> tag they cut as
+# `build_number`; it overrides CURRENT_PROJECT_VERSION in ios/project.yml so the
+# binary always matches its tag (#707).
 #
 # The heavy App Store release gates (PARITY/QA checklists, App Store dry-run
 # evidence) are intentionally NOT here: TestFlight IS the testing surface, so
@@ -18,6 +22,10 @@ on:
     inputs:
       ref:
         description: "Commit ref (SHA or tag) to build from"
+        type: string
+        required: true
+      build_number:
+        description: "CFBundleVersion for the app and its extensions: the N of the ios-v<marketing>-build<N> tag being built"
         type: string
         required: true
     secrets:
@@ -215,9 +223,11 @@ jobs:
           cp "$WIDGET_PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${WIDGET_PP_UUID}".mobileprovision
           # Export the installed UUIDs so the always()-cleanup step removes the
           # actual UUID-named files (not the raw build_pp names).
-          echo "PP_UUID=${PP_UUID}" >> "$GITHUB_ENV"
-          echo "EXT_PP_UUID=${EXT_PP_UUID}" >> "$GITHUB_ENV"
-          echo "WIDGET_PP_UUID=${WIDGET_PP_UUID}" >> "$GITHUB_ENV"
+          {
+            echo "PP_UUID=${PP_UUID}"
+            echo "EXT_PP_UUID=${EXT_PP_UUID}"
+            echo "WIDGET_PP_UUID=${WIDGET_PP_UUID}"
+          } >> "$GITHUB_ENV"
 
       - name: Build archive
         working-directory: ios
@@ -231,12 +241,18 @@ jobs:
           GID_CLIENT_ID: ${{ secrets.GID_CLIENT_ID }}
           GID_REVERSED_CLIENT_ID: ${{ secrets.GID_REVERSED_CLIENT_ID }}
           GID_SERVER_CLIENT_ID: ${{ secrets.GID_SERVER_CLIENT_ID }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           # Hard-fail the misconfiguration that caused #471 (build 14 shipped with no iOS
           # Google client ID) without printing the value itself — the client IDs are
           # registered secrets and masked in logs anyway.
           if [[ -z "${GID_CLIENT_ID}" || -z "${GID_REVERSED_CLIENT_ID}" ]]; then
             echo "::error::GID_CLIENT_ID and GID_REVERSED_CLIENT_ID must both be set for a TestFlight archive — refusing to ship a build with native Google sign-in disabled (see #471)."
+            exit 1
+          fi
+
+          if [[ ! "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build_number must be a positive integer (got '${BUILD_NUMBER}')."
             exit 1
           fi
 
@@ -250,6 +266,10 @@ jobs:
           # GID_* are passed as build settings so xcodebuild substitutes them into the
           # Info.plist's $(GID_…) placeholders at build time, overriding project.yml's
           # empty defaults.
+          #
+          # CURRENT_PROJECT_VERSION works the same way for every target's
+          # CFBundleVersion: the build number comes from the caller's tag, not from
+          # project.yml, and the app and both extensions stay in lockstep (#707).
           xcodebuild archive \
             -project StillPoint.xcodeproj \
             -scheme StillPoint \
@@ -259,9 +279,36 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=T5UU4BP6AV \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             GID_CLIENT_ID="${GID_CLIENT_ID}" \
             GID_REVERSED_CLIENT_ID="${GID_REVERSED_CLIENT_ID}" \
             GID_SERVER_CLIENT_ID="${GID_SERVER_CLIENT_ID}"
+
+      - name: Verify archived build number
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Upload only if the app and every embedded extension carry the tag's build
+          # number. Frameworks and resource bundles keep their own versions and are
+          # not checked.
+          shopt -s nullglob
+          apps=("$RUNNER_TEMP"/StillPoint.xcarchive/Products/Applications/*.app)
+          if [[ "${#apps[@]}" -ne 1 ]]; then
+            echo "::error::Expected one .app in the archive, found ${#apps[@]}."
+            exit 1
+          fi
+          mismatch=0
+          for bundle in "${apps[0]}" "${apps[0]}"/PlugIns/*.appex; do
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$bundle/Info.plist")"
+            echo "$(basename "$bundle"): CFBundleVersion ${version}"
+            if [[ "$version" != "$BUILD_NUMBER" ]]; then
+              echo "::error::$(basename "$bundle") has CFBundleVersion ${version}, expected ${BUILD_NUMBER}."
+              mismatch=1
+            fi
+          done
+          exit "$mismatch"
 
       - name: Upload to App Store Connect
         env:

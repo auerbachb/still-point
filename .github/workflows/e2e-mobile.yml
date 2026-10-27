@@ -5,7 +5,7 @@ name: E2E Mobile Web
 # no path filter) and blocked PRs that couldn't affect mobile web at all. It
 # now runs ONLY:
 #   - as part of the release pipeline — `ios-testflight-auto.yml` calls it via
-#     `workflow_call` and gates the build-number bump + TestFlight build on a
+#     `workflow_call` and gates the build-number tag + TestFlight build on a
 #     green run;
 #   - on demand via `workflow_dispatch` for ad-hoc verification.
 # The manual `ios-v*-build*` tag path (`ios-testflight.yml`) intentionally does
@@ -22,7 +22,7 @@ on:
     # passes `secrets: inherit`, and the repo does not define POSTGRES_URL /
     # E2E_WEB_EMAIL / E2E_WEB_PASSWORD — marking a secret the caller can't supply
     # as `required: true` fails the whole workflow_call at startup (no runner,
-    # ~2s), which silently blocked every release:ios auto-build. e2e/global-setup.ts
+    # ~2s), which silently blocked every automatic TestFlight build. e2e/global-setup.ts
     # already skips DB provisioning and runs the mobile suite in mock mode when
     # these are empty, so absent secrets are expected, not an error.
     secrets:

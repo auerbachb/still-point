@@ -1,15 +1,24 @@
 name: Build & Upload to TestFlight
 
 # Manual escape-hatch path: push an ios-v<marketing>-build<n> tag (e.g.
-# ios-v1.0.3-build11) to build and upload to TestFlight. The automatic
-# PR-merge + release:ios label path lives in ios-testflight-auto.yml. Both call
-# the shared reusable workflow ios-testflight-build.yml, so the build/upload
-# logic has a single source of truth.
+# ios-v1.0.3-build41) to build and upload to TestFlight. The automatic path —
+# every merge to main that changes iOS app code — lives in
+# ios-testflight-auto.yml. Both call the shared reusable workflow
+# ios-testflight-build.yml, so the build/upload logic has a single source of
+# truth.
+#
+# The tag sets the build number: <n> becomes CFBundleVersion, whatever
+# CURRENT_PROJECT_VERSION in ios/project.yml says, so no bump commit is needed
+# (#707). Pick <n> = 1 + the highest existing ios-v*-build* tag. If another cut
+# already took it, the tag push is rejected. The build-number job also refuses
+# a tag whose <n> is not above every other build tag, such as a number that a
+# tag for another marketing version already holds. <marketing> must equal
+# MARKETING_VERSION in ios/project.yml at the tagged commit.
 #
 # Unlike ios-testflight-auto.yml, this path intentionally does NOT run the
-# mobile-web e2e gate (e2e-mobile.yml) — it's the break-glass path for shipping
-# a build by hand when e2e infra itself is down, or for an ad-hoc ref that
-# didn't go through the normal PR-merge flow. Run
+# e2e gates (e2e-mobile.yml, e2e-ios.yml) — it's the break-glass path for
+# shipping a build by hand when e2e infra itself is down, or for an ad-hoc ref
+# that didn't go through the normal PR-merge flow. Run
 # `gh workflow run e2e-mobile.yml -f ref=<ref>` first if you want the signal
 # without gating on it. See #494.
 #
@@ -24,15 +33,40 @@ on:
 permissions:
   contents: read
 
-# Shared with ios-testflight-auto.yml so the two TestFlight paths never upload
-# (or bump build numbers) two at a time.
+# Manual cuts run one at a time. The auto path uses its own group, so a merge
+# never cancels a queued break-glass build (or the reverse).
 concurrency:
   group: ios-testflight
   cancel-in-progress: false
 
 jobs:
+  build-number:
+    name: Read build number from tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build_number: ${{ steps.tag.outputs.build_number }}
+    steps:
+      # Credentials stay persisted (a read-only token): the tag check lists
+      # origin's build tags.
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Validate tag and read build number
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/ci/ios-testflight-build-number.mjs from-tag "$TAG"
+
   build:
+    needs: build-number
     uses: ./.github/workflows/ios-testflight-build.yml
     with:
       ref: ${{ github.sha }}
+      build_number: ${{ needs.build-number.outputs.build_number }}
     secrets: inherit

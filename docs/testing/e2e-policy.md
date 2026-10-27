@@ -232,12 +232,12 @@ Issue [#537](https://github.com/auerbachb/still-point/issues/537) (require `web-
 
 As of [#494](https://github.com/auerbachb/still-point/issues/494) (mirroring [auerbachb/skingod#1402](https://github.com/auerbachb/skingod/issues/1402)), the mobile-web Playwright suite (`e2e-mobile.yml`, the 3-project cross-browser matrix) no longer runs on `pull_request` — it was the slowest, flakiest per-PR check, had no path filter, and blocked every PR regardless of relevance. It is now a reusable workflow (`workflow_call` + `workflow_dispatch` only) that runs:
 
-- as the first job of [`ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml) (the automatic PR-merge + `release:ios`-label release path) — the build-number bump + tag step only proceeds when **both** mobile-web and native iOS e2e succeed (#588);
+- as the first job of [`ios-testflight-auto.yml`](../../.github/workflows/ios-testflight-auto.yml), the automatic release path that every merge to `main` changing iOS app code triggers (#707). The step that claims the build number and pushes its tag only proceeds when **both** mobile-web and native iOS e2e succeed (#588);
 - on demand via `gh workflow run e2e-mobile.yml -f ref=<ref>` for ad-hoc verification.
 
 [`ios-testflight.yml`](../../.github/workflows/ios-testflight.yml) (the manual `ios-v*-build*` tag push, a break-glass escape hatch for shipping when e2e infra itself is down) intentionally does **not** call this gate.
 
-As of [#588](https://github.com/auerbachb/still-point/issues/588), native iOS e2e (`e2e-ios.yml` — XCTest smoke/critical) also moved off `pull_request` and gates the same `release:ios` TestFlight path alongside mobile-web e2e. Info.plist sync moved to [`infoplist-sync.yml`](../../.github/workflows/infoplist-sync.yml) as a fast required PR check.
+As of [#588](https://github.com/auerbachb/still-point/issues/588), native iOS e2e (`e2e-ios.yml` — XCTest smoke/critical) also moved off `pull_request` and gates the same automatic TestFlight path alongside mobile-web e2e. Info.plist sync moved to [`infoplist-sync.yml`](../../.github/workflows/infoplist-sync.yml) as a fast required PR check.
 
 ### Nightly web e2e (#588)
 

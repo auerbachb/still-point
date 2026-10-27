@@ -11,8 +11,8 @@ Long-running e2e (Playwright web lanes, macOS XCTest) blocked every PR merge wit
 | Suite | When | Blocks merge? | Workflow |
 | --- | --- | --- | --- |
 | **Web smoke + critical** | Nightly on `main` + `workflow_dispatch` | No | [e2e-web-nightly.yml](../../.github/workflows/e2e-web-nightly.yml) → [e2e-web.yml](../../.github/workflows/e2e-web.yml) |
-| **Mobile-web matrix** | `release:ios` PR merge → TestFlight auto path | No (PR); **yes (release)** | [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml) → [e2e-mobile.yml](../../.github/workflows/e2e-mobile.yml) |
-| **Native iOS smoke/critical** | `release:ios` PR merge → TestFlight auto path | No (PR); **yes (release)** | [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml) → [e2e-ios.yml](../../.github/workflows/e2e-ios.yml) |
+| **Mobile-web matrix** | Merge to `main` that changes iOS app code → TestFlight auto path (#707) | No (PR); **yes (release)** | [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml) → [e2e-mobile.yml](../../.github/workflows/e2e-mobile.yml) |
+| **Native iOS smoke/critical** | Merge to `main` that changes iOS app code → TestFlight auto path (#707) | No (PR); **yes (release)** | [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml) → [e2e-ios.yml](../../.github/workflows/e2e-ios.yml) |
 | **PR advisory smoke** | Every PR | No (`continue-on-error`) | [e2e-smoke.yml](../../.github/workflows/e2e-smoke.yml) |
 | **Coverage nudge** | Every PR | No (neutral check) | [e2e-coverage-nudge.yml](../../.github/workflows/e2e-coverage-nudge.yml) |
 
@@ -45,7 +45,7 @@ npm run e2e:policy
 E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:web:smoke
 E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:web:critical
 
-# iOS lanes (what release:ios gates)
+# iOS lanes (what gates the automatic TestFlight cut)
 E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:ios:smoke
 E2E_BASE_URL=http://127.0.0.1:3000 npm run e2e:ios:critical
 ```

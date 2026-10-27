@@ -25,7 +25,7 @@ Comprehensive e2e (web + native iOS) runs **nightly** and on the **iOS TestFligh
 | Check | Runs when | Notes |
 | --- | --- | --- |
 | `web-e2e-smoke` / `web-e2e-critical` | Nightly + `workflow_dispatch` | Full suite via [e2e-web.yml](../../.github/workflows/e2e-web.yml) / [e2e-web-nightly.yml](../../.github/workflows/e2e-web-nightly.yml). **Do not require on PRs** (#588). |
-| `ios-e2e-smoke` / `ios-e2e-critical` | `release:ios` merge gate | [e2e-ios.yml](../../.github/workflows/e2e-ios.yml) via [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml). |
+| `ios-e2e-smoke` / `ios-e2e-critical` | Automatic TestFlight cut (merge to `main` changing iOS app code) | [e2e-ios.yml](../../.github/workflows/e2e-ios.yml) via [ios-testflight-auto.yml](../../.github/workflows/ios-testflight-auto.yml). |
 | `pr-e2e-smoke (advisory)` | Every PR (optional) | [e2e-smoke.yml](../../.github/workflows/e2e-smoke.yml) — `continue-on-error: true`. |
 | `e2e coverage nudge (advisory)` | Every PR (neutral) | [e2e-coverage-nudge.yml](../../.github/workflows/e2e-coverage-nudge.yml). |
 | `web-e2e-auth-db` | Nightly / dispatch | Skips when secrets unset; keep optional. |

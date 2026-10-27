@@ -1,163 +1,126 @@
 name: Auto TestFlight on merge
 
-# Auto-cut a TestFlight build when a PR is merged to main carrying the
-# `release:ios` label. Mirrors auerbachb/skingod's mobile-testflight.yml,
-# adapted for Still Point's self-hosted xcodebuild pipeline (skingod uses EAS).
+# Cut one TestFlight build whenever a merge to main changes iOS app code
+# (#707). Nobody applies a label: the `paths` filter below is the gate, so
+# web-only and doc-only merges never start a run.
 #
 # Flow:
 #   1. Run mobile-web e2e (e2e-mobile.yml) AND native iOS e2e (e2e-ios.yml) in
-#      parallel against the merge commit (#588 — both gate the release).
-#   2. Only if both are green: read CURRENT_PROJECT_VERSION from ios/project.yml
-#      at the merge commit.
-#   3. Increment it (build-number source of truth: the committed project.yml).
-#   4. Commit the bump back to main with [skip ci].
-#   5. Cut an ios-v<marketing>-build<n> tag on that commit.
-#   6. Call the shared reusable workflow to build + upload from that commit.
+#      parallel against the pushed commit (#588 — both gate the release).
+#   2. Only if both are green: claim the next build number by pushing an
+#      ios-v<MARKETING_VERSION>-build<N> tag on that commit, where N is 1 + the
+#      highest ios-v*-build* tag on origin
+#      (scripts/ci/ios-testflight-build-number.mjs).
+#   3. Call the shared reusable workflow to build + upload that commit with
+#      CURRENT_PROJECT_VERSION=N.
 #
-# The e2e gate runs BEFORE the bump/tag step (not just before the build) on
-# purpose (#494): the bump commit + tag push are themselves release side
-# effects, and this workflow only fires once per merged PR (no natural retry
-# trigger), so a failing e2e must prevent them too — not just skip the build
-# after a tag already exists. `tag`'s `if:` checks both e2e gates succeeded; a
-# failed OR skipped e2e run (no release:ios label) leaves `tag` skipped and
-# nothing is committed/tagged/built.
+# Nothing is committed back to main. The tag, not ios/project.yml, carries the
+# build number, so a cut never rewrites project.yml under open iOS PRs and never
+# adds a commit that makes them BEHIND. (The workflow this replaces pushed a bump
+# commit to main, which branch protection rejects, and waited on a release:ios
+# label that nothing applied — it never uploaded a build.)
 #
-# The bump commit and tag are pushed with the default GITHUB_TOKEN. GitHub does
-# NOT start new workflow runs for GITHUB_TOKEN-authored pushes, so:
-#   * push-on-main CI (web-build) does not fire on the bump — the [skip ci] is
-#     belt-and-suspenders for that, plus clarity for humans;
-#   * the new ios-v*-build* tag does NOT re-trigger ios-testflight.yml, so there
-#     is no double build. The reusable build is invoked directly below instead.
-#     If this is ever switched to a PAT, add a guard so the manual workflow does
-#     not also fire on the bot-cut tag.
+# The e2e gate runs BEFORE the tag is claimed (#494): the tag push is itself a
+# release side effect, so a failing e2e must prevent it, not just the build.
+#
+# The tag is pushed with the default GITHUB_TOKEN. GitHub does NOT start new
+# workflow runs for GITHUB_TOKEN-authored pushes, so the new ios-v*-build* tag
+# does not also trigger ios-testflight.yml — no double build. If this is ever
+# switched to a PAT, add a guard so the manual workflow skips bot-cut tags.
+#
+# `workflow_dispatch` cuts the current main on demand (still e2e-gated), for a
+# merge the path filter missed or a cut that needs a fresh number.
 
 on:
-  pull_request:
-    types: [closed]
+  push:
+    branches: [main]
+    # Everything under ios/ except files that never reach the shipped binary.
+    # Order matters: a later pattern overrides an earlier one for the same file.
+    # Keep in sync with the cases in scripts/ci/ios-testflight-build-number.test.ts.
+    paths:
+      - 'ios/**'
+      - '!ios/**/*.md'
+      - '!ios/docs/**'
+      - '!ios/screenshots/**'
+      - '!ios/fastlane/**'
+      - '!ios/Gemfile'
+      - '!ios/Gemfile.lock'
+      - '!ios/ExportOptionsFastlane.plist'
+      - '!ios/StillPointAppUITests/**'
+      - '!ios/StillPointShared/Tests/**'
+      # CI regenerates the Xcode project from ios/project.yml before every build.
+      - '!ios/StillPoint.xcodeproj/**'
+      # Bundled app resources ship whatever their extension.
+      - 'ios/StillPointApp/Resources/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Share the ios-testflight concurrency group with the manual tag workflow so
-# build-number bumps and TestFlight uploads never run two at a time.
+# One cut at a time. A newer iOS merge replaces a queued (not yet running) cut;
+# the replacement builds the newer main, which contains the replaced merge. A
+# running cut is never cancelled, so a claimed tag always gets its build. The
+# manual tag path (ios-testflight.yml) uses its own group so neither path
+# cancels the other; the tag push keeps their build numbers apart.
 concurrency:
-  group: ios-testflight
+  group: ios-testflight-auto-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   e2e-mobile:
     name: release e2e (mobile web)
-    if: >-
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'main' &&
-      contains(github.event.pull_request.labels.*.name, 'release:ios')
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/e2e-mobile.yml
     with:
-      ref: ${{ github.event.pull_request.merge_commit_sha }}
+      ref: ${{ github.sha }}
     secrets: inherit
 
   e2e-ios:
     name: release e2e (native iOS)
-    if: >-
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'main' &&
-      contains(github.event.pull_request.labels.*.name, 'release:ios')
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/e2e-ios.yml
     with:
-      ref: ${{ github.event.pull_request.merge_commit_sha }}
+      ref: ${{ github.sha }}
     secrets: inherit
 
   tag:
-    name: Bump build number and cut TestFlight tag
+    name: Claim build number and cut TestFlight tag
     needs: [e2e-mobile, e2e-ios]
     if: >-
       needs.e2e-mobile.result == 'success' &&
       needs.e2e-ios.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     outputs:
-      sha: ${{ steps.bump.outputs.sha }}
-      tag: ${{ steps.bump.outputs.tag }}
+      tag: ${{ steps.claim.outputs.tag }}
+      build_number: ${{ steps.claim.outputs.build_number }}
     steps:
-      - name: Checkout merge commit
+      # Credentials stay persisted: the claim step pushes the tag.
+      - name: Checkout pushed commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
 
-      - name: Bump build number, commit, and tag
-        id: bump
-        shell: bash
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Claim build number and push tag
+        id: claim
+        env:
+          SHA: ${{ github.sha }}
         run: |
-          set -euo pipefail
-
-          PROJECT="ios/project.yml"
-
-          MARKETING="$(grep -E '^[[:space:]]+MARKETING_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*MARKETING_VERSION:[[:space:]]*"?([^"#]+)"?.*/\1/' | xargs)"
-          CURRENT="$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" | head -1 | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' | xargs)"
-
-          if [[ -z "$MARKETING" || -z "$CURRENT" ]]; then
-            echo "::error::Could not read MARKETING_VERSION ('$MARKETING') or CURRENT_PROJECT_VERSION ('$CURRENT') from $PROJECT"
-            exit 1
-          fi
-
-          NEW=$((CURRENT + 1))
-          TAG="ios-v${MARKETING}-build${NEW}"
-
-          echo "Marketing version: $MARKETING"
-          echo "Build number: $CURRENT -> $NEW"
-          echo "Tag: $TAG"
-
-          # Fail fast if the tag already exists locally or on origin. Forces a
-          # human to reconcile project.yml if the build-number state has drifted.
-          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
-             || git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
-            echo "::error::Tag ${TAG} already exists. Bump CURRENT_PROJECT_VERSION in ios/project.yml before merging release:ios PRs."
-            exit 1
-          fi
-
-          # Bump CURRENT_PROJECT_VERSION for every target that defines it — the app
-          # and the StillPointMonitor extension (#446) — so their build numbers stay
-          # in lockstep. sed runs per line, so each target entry is rewritten; the
-          # optional quotes keep it working even if a value is ever written as "13".
-          sed -i.bak -E "s/^([[:space:]]+CURRENT_PROJECT_VERSION:[[:space:]]*)\"?[0-9]+\"?.*/\1${NEW}/" "$PROJECT"
-          rm -f "${PROJECT}.bak"
-
-          # Verify EVERY entry reached ${NEW}, not just the first match. A partial
-          # update would silently break app/extension version lockstep and get
-          # rejected at upload, so fail loudly here instead.
-          if grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" \
-             | sed -E 's/.*CURRENT_PROJECT_VERSION:[[:space:]]*"?([0-9]+)"?.*/\1/' \
-             | grep -qv "^${NEW}$"; then
-            echo "::error::Not all CURRENT_PROJECT_VERSION entries were updated to ${NEW}."
-            grep -nE '^[[:space:]]+CURRENT_PROJECT_VERSION:' "$PROJECT" >&2
-            exit 1
-          fi
-
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add "$PROJECT"
-          git commit -m "chore(ios): bump build to ${NEW} for TestFlight [skip ci]"
-          git tag -a "${TAG}" -m "Automated TestFlight release ${TAG}"
-
-          # Push the bump commit and the tag together atomically: with --atomic
-          # both refs update or neither does, so main can never gain a higher
-          # CURRENT_PROJECT_VERSION without the matching tag. main is a
-          # fast-forward from the merge commit; if another commit landed first the
-          # whole push is rejected and the job fails (no partial state, no double bump).
-          git push --atomic origin HEAD:main "refs/tags/${TAG}"
-
-          {
-            echo "sha=$(git rev-parse HEAD)"
-            echo "tag=${TAG}"
-          } >> "$GITHUB_OUTPUT"
+          node scripts/ci/ios-testflight-build-number.mjs claim "$SHA"
 
   build:
     needs: tag
-    # Build the freshly tagged bump commit so the binary's CFBundleVersion
-    # matches the just-incremented CURRENT_PROJECT_VERSION.
     uses: ./.github/workflows/ios-testflight-build.yml
     with:
-      ref: ${{ needs.tag.outputs.sha }}
+      ref: ${{ github.sha }}
+      build_number: ${{ needs.tag.outputs.build_number }}
     secrets: inherit
