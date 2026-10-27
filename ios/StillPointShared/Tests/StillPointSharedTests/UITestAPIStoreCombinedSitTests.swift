@@ -79,4 +79,20 @@ final class UITestAPIStoreCombinedSitTests: XCTestCase {
         XCTAssertFalse(done.primary)
         XCTAssertFalse(done.second)
     }
+
+    /// As `POST /api/sessions` does, a combined sit on Track Two is a 400 and
+    /// saves nothing.
+    func testCombinedSecondTrackSitIsRejected() async throws {
+        let store = makeStore()
+        do {
+            _ = try await store.createSession(request(completed: true, combined: true, track: .second))
+            XCTFail("expected a 400")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, 400)
+        }
+        let me = try await store.me(today: "2026-10-27")
+        let user = try XCTUnwrap(me)
+        XCTAssertEqual(user.currentDay, 45)
+        XCTAssertEqual(user.secondTrackDay, 10)
+    }
 }

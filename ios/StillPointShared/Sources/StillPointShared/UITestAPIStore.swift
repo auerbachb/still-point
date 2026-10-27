@@ -139,7 +139,7 @@ actor UITestAPIStore {
             resetStore: false,
             forceLaunchOffline: false,
             forceTokenExpired: false,
-            forceSessionsFailure: false,
+            sessionsFailureMode: .none,
             forceCreateSessionFailure: false,
             forceUsernameConflict: false,
             snapshotSeed: false,
@@ -393,6 +393,12 @@ actor UITestAPIStore {
         // pending sync instead of being parked.
         if config.forceCreateSessionFailure {
             throw APIError(status: 0, message: "No internet connection")
+        }
+
+        // #896: as `POST /api/sessions` does (#769), a combined sit must be a
+        // standard sit on the primary track; anything else is a 400.
+        if data.combined && (data.sessionType != .standard || data.track != .primary) {
+            throw APIError(status: 400, message: "Invalid combined session")
         }
 
         if let clientSessionId = data.clientSessionId?.uuidString,
