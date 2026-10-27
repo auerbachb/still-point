@@ -3,9 +3,9 @@ import Foundation
 // #678: newest-wins writes for the shared widget snapshot.
 //
 // `WidgetDataStore` has one writer that must suspend before it writes: the
-// `/api/sessions` backfill behind `AppViewModel.refreshWidgetWeekHistory()`. It
-// captures the world, awaits a network round-trip, and then saves what it
-// captured. Anything that writes a *fresher* snapshot during that await — a sit
+// `/api/sessions` backfill behind `AppViewModel.refreshWidgetWeekHistory()`, which
+// the background refresh runs too (#663). It captures the world, awaits a network
+// round-trip, and then saves what it captured. Anything that writes a *fresher* snapshot during that await — a sit
 // finishing, or `refreshTracksDoneToday()` learning from the server that today
 // is already done — is silently undone when the backfill lands and overwrites
 // with its pre-await view, unchecking today's box and dropping the streak by one

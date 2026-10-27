@@ -77,7 +77,6 @@
 		5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00D7B1EDF2C56A1B6EB4C28 /* AuthView.swift */; };
 		63EC131F3FAD3DFAFDE698B6 /* XCUIDevice+Portrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1EC551DF14B7B10AD590ED /* XCUIDevice+Portrait.swift */; };
 		6760DF427777049973A0D182 /* AppleSignInController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807A08DBDE8A121951350FD /* AppleSignInController.swift */; };
-		68C3A6205945A55E953DE283 /* AppBlockingBackgroundScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */; };
 		69607B53AA6B1E3D62AC7A15 /* 3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = F05568F31FE83D1EC32A9173 /* 3.mp3 */; };
 		6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F0B6135A30B315B9962460 /* AppBlockingManager.swift */; };
 		6D02D1A8A6D6A077223C172A /* SettingsAphorismsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */; };
@@ -123,6 +122,7 @@
 		AC092ECADA2EA4C161CAF5E7 /* AppBlockingShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */; };
 		AC4DAD06FA75C7C480DDFF27 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE2D028ACC5D7FEFD82703D /* SessionViewModel.swift */; };
 		AF6B6BC3AFE6E7BF51EB55E4 /* 43.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 54816ED19E21CAB37F0AE81A /* 43.mp3 */; };
+		B0604DFFDD3FDF43609DF099 /* WidgetHistoryRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */; };
 		B0EED661A52F8EE674A6BD4D /* 46.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */; };
 		B106890588723F191CC4AEAA /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B5A3374B6B8AC64C22F537 /* MainTabView.swift */; };
 		B2C69D176260DEF6EE91C9BA /* BuddyVideoWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A926CF90DAFC03754D7434B3 /* BuddyVideoWebView.swift */; };
@@ -151,6 +151,7 @@
 		D471E84C5A3A1528BCCD00A9 /* AppViewModel+Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 814985B238F7288CD8852173 /* AppViewModel+Auth.swift */; };
 		D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */; };
 		DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DB5450A89E28AB89E7D265F4 /* BackgroundRefreshScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9968F025007BD4BAB8E26A05 /* BackgroundRefreshScheduler.swift */; };
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
 		DDC0AA3B25A6D0AF5D2F52B7 /* 51.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = E17D1E13F75A9811452B4895 /* 51.mp3 */; };
 		DE4CACA493D76D725E84175E /* 31.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 06353C957A9C0111FE540DD9 /* 31.mp3 */; };
@@ -317,6 +318,7 @@
 		9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		95B9BFB54C47EA75C997B1AC /* 7.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 7.mp3; sourceTree = "<group>"; };
 		96564931B9635CCC906F2C4C /* 27.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 27.mp3; sourceTree = "<group>"; };
+		9968F025007BD4BAB8E26A05 /* BackgroundRefreshScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefreshScheduler.swift; sourceTree = "<group>"; };
 		9978D1E5B100991F2FBF53AB /* TabBarAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarAppearance.swift; sourceTree = "<group>"; };
 		99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsVisibilitySection.swift; sourceTree = "<group>"; };
 		9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Widget.swift"; sourceTree = "<group>"; };
@@ -339,6 +341,7 @@
 		B3C905A2D3D5DA83146A9CC9 /* StillPointMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillPointMonitorExtension.swift; sourceTree = "<group>"; };
 		B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		B72DC4A41DAD78C377853469 /* AppBlockingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingSettingsView.swift; sourceTree = "<group>"; };
+		B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHistoryRefresher.swift; sourceTree = "<group>"; };
 		BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionTrackingManager.swift; sourceTree = "<group>"; };
 		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
 		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
@@ -361,7 +364,6 @@
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
 		E17D1E13F75A9811452B4895 /* 51.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 51.mp3; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingBackgroundScheduler.swift; sourceTree = "<group>"; };
 		E892E8EB42C0764E814EEA26 /* 38.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 38.mp3; sourceTree = "<group>"; };
 		EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPermissionHelper.swift; sourceTree = "<group>"; };
 		ED37F3314647BC15A050C270 /* HabitWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidget.swift; sourceTree = "<group>"; };
@@ -603,15 +605,16 @@
 			isa = PBXGroup;
 			children = (
 				CF9AF24AE9DD231CBF53C30E /* AmbientSoundManager.swift */,
-				E3D0A5B99B120A73572B1C94 /* AppBlockingBackgroundScheduler.swift */,
 				92F0B6135A30B315B9962460 /* AppBlockingManager.swift */,
 				BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */,
+				9968F025007BD4BAB8E26A05 /* BackgroundRefreshScheduler.swift */,
 				EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */,
 				B0455EB76051867B7A859B3E /* HapticCuePlayer.swift */,
 				1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */,
 				A6E33764A65F00E292996351 /* SessionNotificationSuppressionController.swift */,
 				7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */,
 				5B69E308638D22A642322EE2 /* TrackingControlPrefsManager.swift */,
+				B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */,
 				1323BADA0EDAEC51003268E7 /* WidgetTimelineReloader.swift */,
 			);
 			path = Managers;
@@ -980,7 +983,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				18F95661598F458E0CCF7C21 /* AmbientSoundManager.swift in Sources */,
-				68C3A6205945A55E953DE283 /* AppBlockingBackgroundScheduler.swift in Sources */,
 				6B6572152FB23B94F990D66B /* AppBlockingManager.swift in Sources */,
 				B6A3805810E44935E75EEC11 /* AppBlockingSettingsView.swift in Sources */,
 				A1636CD509D32399A02C45B3 /* AppBlockingShared.swift in Sources */,
@@ -997,6 +999,7 @@
 				8A353E6C36EA771941CFF33D /* AttentionTrackingManager.swift in Sources */,
 				5EA3E8C9B84298DE1F37251F /* AuthView.swift in Sources */,
 				8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */,
+				DB5450A89E28AB89E7D265F4 /* BackgroundRefreshScheduler.swift in Sources */,
 				F370AA8F6AA102355FC599C9 /* BlockGridView.swift in Sources */,
 				432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */,
 				101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */,
@@ -1058,6 +1061,7 @@
 				3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */,
 				2116887AC8E70DCCBA57A9B6 /* TrackingControlPrefsManager.swift in Sources */,
 				C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */,
+				B0604DFFDD3FDF43609DF099 /* WidgetHistoryRefresher.swift in Sources */,
 				32072FFE8D1D6CFC79FB776F /* WidgetTimelineReloader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -50,6 +50,22 @@ extension WidgetDataStore {
         session.completed && session.sessionType == .standard
     }
 
+    /// Whether `sessions` hold a completed **primary-track standard** sit on
+    /// `day`. That is the fact `/api/track/done-today` reports as `primary`, and
+    /// so what the Home badge `primaryDoneToday` means. A session with no `track`
+    /// predates the dual-track fork and counts as primary, as it does for the rows.
+    ///
+    /// The background refresh (#663) has no Home badge to read, so it reads this
+    /// from the history it just fetched instead.
+    public static func primaryStandardSitCompleted(on day: String, in sessions: [SessionDTO]) -> Bool {
+        sessions.contains { session in
+            session.sessionDate == day
+                && session.completed
+                && session.sessionType == .standard
+                && (session.track ?? .primary) == .primary
+        }
+    }
+
     /// The local days in the trailing 7-day window carrying a completed standard
     /// sit on either track — the set `reconciledStreak` may extend `serverStreak`
     /// with (#679). Pure and network-free so it's unit-testable; the caller

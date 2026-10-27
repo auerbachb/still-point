@@ -5,8 +5,9 @@ import StillPointShared
 /// week-history backfill from `/api/sessions`, and the network-free "done today" path
 /// a finished sit takes.
 ///
-/// The backfill's task and throttle marker are stored properties, declared in
-/// `AppViewModel.swift`.
+/// The backfill itself is `WidgetHistoryRefresher`, which the background refresh
+/// also runs (#663). This scene's instance, `widgetHistory`, is a stored property
+/// declared in `AppViewModel.swift`.
 extension AppViewModel {
     /// Persist a widget snapshot to the App Group container and reload timelines.
     /// Called from auth + session-completion flows; no extra API calls.
@@ -45,15 +46,13 @@ extension AppViewModel {
             // #671: the next sign-in must re-backfill the week. Without this the
             // once-per-account-per-day throttle below would suppress the fetch for
             // the rest of the day, leaving the row blank on a sign-out/sign-in.
-            clearWidgetHistoryRefreshMarker()
+            widgetHistory.clearMarker()
+            // #663: and withdraw the widget's background refresh. A run refreshes
+            // as the identity cached on this device, which the sign-out has just
+            // cleared.
+            BackgroundRefreshScheduler.reschedule()
         }
         WidgetTimelineReloader.reloadHabitWidget()
-    }
-
-    func clearWidgetHistoryRefreshMarker() {
-        widgetHistoryRefreshUserId = nil
-        widgetHistoryRefreshDay = nil
-        widgetHistoryRefreshedAt = nil
     }
 
     /// #84 follow-up: backfill the widget's 7-day completion row from real
@@ -61,108 +60,22 @@ extension AppViewModel {
     /// just days seen since install). Runs as a cancellable task off the auth/home
     /// path so it never blocks cold-start; a fetch failure keeps the
     /// locally-accumulated week that `syncWidgetData()` already wrote.
+    ///
+    /// The fetch and the snapshot it writes are `WidgetHistoryRefresher`'s, the
+    /// same code the background refresh runs while the app is closed (#663).
     func refreshWidgetWeekHistory() {
-        guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",
-              let user = currentUser else { return }
-        // `/api/sessions` is the full history, so don't refetch on every
-        // foreground. Do refetch when the day or account changes, and again
-        // after a few minutes, so a sit saved on the web is not stuck behind
-        // a once-a-day in-memory guard (#663). Sign-out clears the marker.
-        let attemptedAt = Date()
-        guard WidgetDataStore.shouldRefreshWidgetHistory(
-            userId: user.id,
-            now: attemptedAt,
-            lastUserId: widgetHistoryRefreshUserId,
-            lastLocalDay: widgetHistoryRefreshDay,
-            lastSuccessAt: widgetHistoryRefreshedAt
-        ) else { return }
-        let attemptUserId = user.id
-        let attemptDay = WidgetDataStore.localDayString(attemptedAt)
-        widgetHistoryRefreshUserId = attemptUserId
-        widgetHistoryRefreshDay = attemptDay
-        widgetHistoryRefreshedAt = attemptedAt
-
-        widgetHistoryTask?.cancel()
-        widgetHistoryTask = Task {
-            // #678: the generation of the stored snapshot as it is *before* this
-            // task suspends. Every `WidgetDataStore` write advances it, so if a
-            // sit finishes — or `refreshTracksDoneToday()` learns from the server
-            // that today is already done — while `getSessions()` is in flight,
-            // the save below sees the move and merges onto that fresher snapshot
-            // instead of overwriting it with this pre-await view. Read here
-            // rather than outside the task so nothing can slip between the read
-            // and the `await`.
-            let baselineGeneration = WidgetDataStore.currentWriteGeneration()
-            guard let result = try? await APIClient.shared.getSessions() else {
-                // A cancelled attempt was replaced by a newer one. Only the
-                // attempt that still owns the marker may clear it.
-                if WidgetDataStore.failedAttemptOwnsWidgetHistoryMarker(
-                    cancelled: Task.isCancelled,
-                    markerUserId: widgetHistoryRefreshUserId,
-                    markerDay: widgetHistoryRefreshDay,
-                    markerAttemptedAt: widgetHistoryRefreshedAt,
-                    attemptUserId: attemptUserId,
-                    attemptDay: attemptDay,
-                    attemptedAt: attemptedAt
-                ) {
-                    clearWidgetHistoryRefreshMarker()
-                }
-                return
+        widgetHistory.refresh(
+            currentUser: { self.currentUser },
+            // The Home badge, read once the fetch lands. The background refresh
+            // has no badge and reads the same fact from the fetched sessions.
+            primaryDoneToday: { _, _ in self.primaryDoneToday },
+            didFetch: { sessions in
+                // #526: backfill tracking-controls unlock from history so existing
+                // users who have a qualifying sit start in the unlocked state
+                // (mirrors web's syncTrackingUnlockFromSessions).
+                self.trackingControlPrefsManager.syncTrackingUnlockFromSessions(sessions)
             }
-            // Drop if superseded, or the account changed during the await.
-            guard !Task.isCancelled,
-                  let current = currentUser, current.id == user.id else { return }
-            let now = Date()
-            // #684: one completed-date set per track, so each weekday row is
-            // backfilled from that track's own sits.
-            let completed = WidgetDataStore.recentCompletedPracticeDates(from: result.sessions, now: now)
-            // Derive today's completion from the fetched sessions (consistent with
-            // `now`) rather than the in-memory flags, which could be stale past midnight.
-            let today = WidgetDataStore.localDayString(now)
-            let doneToday = completed.primary.contains(today)
-            let secondDone = completed.second.contains(today)
-            // #671: keep the server-computed streak (the same number the app and
-            // web history show) instead of discarding it — it's the only source
-            // that knows about days older than the widget's trailing-7 row. It is
-            // anchored onto a day, so it can only ever extend a run both rows
-            // already corroborate (#684 day-credit rule: either track keeps a day).
-            let snapshot = WidgetDataStore.makeSnapshot(
-                user: current,
-                primaryDoneToday: primaryDoneToday,
-                secondDoneToday: secondDone,
-                practiceDoneToday: doneToday,
-                now: now,
-                // Deliberately no `flagsAsOf` here. The two flags above are derived
-                // from `result.sessions` against this same `now`, so they are fresh
-                // by construction — stamping the set would retire freshly-computed
-                // truth if this fetch happened to span midnight. This path also
-                // supplies the authoritative sets below, so none of the same-day
-                // folds `flagsAsOf` guards are reachable from here.
-                completedPracticeDates: completed.primary,
-                secondCompletedPracticeDates: completed.second,
-                // #679: the days that actually produced `result.stats.streak` —
-                // completed standard sits on either track, the same policy web's
-                // `calculateSessionStats` applies. Persisted so a later day may
-                // extend that total only when the server would have counted it;
-                // the rows above also count quick and breath sits, so extending
-                // by them pushed the widget past the app and web.
-                completedStandardDates: WidgetDataStore.recentCompletedStandardDates(
-                    from: result.sessions,
-                    now: now
-                ),
-                serverStreak: result.stats.streak,
-                serverStreakDate: WidgetDataStore.serverStreakAnchorDate(from: result.sessions)
-            )
-            // Newest-wins (#678): merges rather than clobbers when the stored
-            // snapshot moved during the fetch, and declines to write at all if
-            // the container was cleared by a sign-out in the meantime.
-            WidgetDataStore.save(snapshot, ifWriteGeneration: baselineGeneration, now: now)
-            WidgetTimelineReloader.reloadHabitWidget()
-            // #526: backfill tracking-controls unlock from history so existing users
-            // who have a qualifying sit start in the unlocked state (mirrors web's
-            // syncTrackingUnlockFromSessions).
-            trackingControlPrefsManager.syncTrackingUnlockFromSessions(result.sessions)
-        }
+        )
     }
 
     /// Mark today as done on the completed sit's own track and push an immediate
@@ -211,8 +124,7 @@ extension AppViewModel {
         // raises `practiceDoneToday` from the server response and syncs without
         // one. The store-level write generation is what actually makes a late
         // backfill merge instead of overwrite (#678).
-        widgetHistoryTask?.cancel()
-        clearWidgetHistoryRefreshMarker()
+        widgetHistory.cancel()
         syncWidgetData()
     }
 }
