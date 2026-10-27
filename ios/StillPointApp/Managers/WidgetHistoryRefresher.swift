@@ -51,9 +51,12 @@ final class WidgetHistoryRefresher {
     ///     snapshot, read after the fetch. It is given the fetched sessions and
     ///     the moment the snapshot describes.
     ///   - snapshotInstant: The moment the snapshot describes, given the fetched
-    ///     sessions, the account, and the time the fetch landed. The foreground
-    ///     keeps that time. The background refresh moves it into a practice day
-    ///     the 6:00 grace window still holds open (#767).
+    ///     sessions, the account, and the time the fetch landed. Before 6:00 it
+    ///     moves that time into a practice day the grace window still holds open
+    ///     (#767). The foreground reads that day from its own practice-day state,
+    ///     and the background refresh reads it from the fetched history. It has
+    ///     no default, because the foreground once fell back to the time the fetch
+    ///     landed and rolled the widget past that day early (#918).
     ///   - didFetch: Runs after a successful fetch, with the sessions it returned.
     /// - Returns: The started fetch, which yields whether its snapshot reached the
     ///   store. `nil` means nothing started: nobody is signed in, the last attempt
@@ -66,7 +69,7 @@ final class WidgetHistoryRefresher {
             _ sessions: [SessionDTO],
             _ user: UserDTO,
             _ landedAt: Date
-        ) -> Date = { _, _, landedAt in landedAt },
+        ) -> Date,
         didFetch: @escaping @MainActor (_ sessions: [SessionDTO]) -> Void = { _ in }
     ) -> Task<Bool, Never>? {
         guard ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] != "1",

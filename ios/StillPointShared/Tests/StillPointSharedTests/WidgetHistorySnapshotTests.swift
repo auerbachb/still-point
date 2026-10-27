@@ -321,4 +321,123 @@ final class WidgetHistorySnapshotTests: XCTestCase, WidgetDataTestSupport {
             in: sessions
         ))
     }
+
+    // MARK: - practiceInstant(previousDayComplete:) — the foreground's instant (#918)
+
+    /// The instant the foreground's history refresh stamps when its fetch lands:
+    /// `creditedPracticeInstant(now:)`, which applies this rule to the app's own
+    /// answer for whether the previous day is finished, as `syncWidgetData()` does.
+    private func foregroundInstant(previousDayComplete: Bool, at now: Date) -> Date {
+        WidgetDataStore.practiceInstant(previousDayComplete: previousDayComplete, now: now, calendar: newYork)
+    }
+
+    /// From midnight to 5:59, after a day whose sits are unfinished, the
+    /// foreground stamps that day, so the widget keeps it as today until 6:00.
+    func testBefore6TheForegroundStampsTheUnfinishedPreviousDay() {
+        for now in [october(27, 0, 0), october(27, 2, 30), october(27, 5, 59)] {
+            let instant = foregroundInstant(previousDayComplete: false, at: now)
+
+            XCTAssertEqual(instant, october(26, 23))
+            XCTAssertTrue(WidgetDataStore.graceKeepsPreviousPracticeDay(
+                lastUpdated: instant,
+                now: now,
+                requiredSitsComplete: false,
+                calendar: newYork
+            ))
+        }
+    }
+
+    func testBefore6AFinishedPreviousDayLeavesTheForegroundOnTheClock() {
+        let now = october(27, 2, 30)
+        XCTAssertEqual(foregroundInstant(previousDayComplete: true, at: now), now)
+    }
+
+    func testFrom6TheForegroundStampsTheClockEitherWay() {
+        for now in [october(27, 6, 0), october(27, 13, 0), october(27, 23, 59)] {
+            XCTAssertEqual(foregroundInstant(previousDayComplete: false, at: now), now)
+            XCTAssertEqual(foregroundInstant(previousDayComplete: true, at: now), now)
+        }
+    }
+
+    // MARK: - The foreground's history snapshot in the grace window (#918)
+
+    /// `makeHistorySnapshot` and the widget's display read the device's time
+    /// zone, so these fixtures are built in it, in July, clear of DST changes.
+    private func july(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = Calendar.current.timeZone
+        return calendar.date(from: DateComponents(year: 2026, month: 7, day: day, hour: hour, minute: minute))!
+    }
+
+    /// What the foreground fetches at 2:30 on July 15: July 12 and 13 kept, and
+    /// nothing yet on July 14, the day the grace window holds open.
+    private func graceHistorySnapshot(stampedAt instant: Date) -> WidgetData {
+        WidgetDataStore.makeHistorySnapshot(
+            user: makeUser(id: "u1"),
+            primaryDoneToday: false,
+            sessions: [session(date: "2026-07-12"), session(date: "2026-07-13")],
+            serverStreak: 2,
+            now: instant,
+            previous: .loggedOut
+        )
+    }
+
+    /// The #918 report. Stamped on the open practice day, the snapshot keeps that
+    /// day on the widget as today, still pending, with the streak standing. The
+    /// clock time the foreground stamped before rolled the widget onto the
+    /// calendar day early: the open day read as missed and the streak as 0.
+    func testTheForegroundHistorySnapshotKeepsTheOpenDayAndItsStreak() {
+        let now = july(15, 2, 30)
+        let snapshot = graceHistorySnapshot(
+            stampedAt: WidgetDataStore.practiceInstant(previousDayComplete: false, now: now)
+        )
+
+        XCTAssertEqual(WidgetDataStore.localDayString(snapshot.lastUpdated), "2026-07-14")
+        let shown = WidgetDataStore.normalizedForDisplay(snapshot, now: now)
+        XCTAssertEqual(shown.streak, 2)
+        let today = shown.weekMarks(now: now).last
+        XCTAssertEqual(today?.iso, "2026-07-14")
+        XCTAssertEqual(today?.done, false)
+
+        let clockStamped = WidgetDataStore.normalizedForDisplay(graceHistorySnapshot(stampedAt: now), now: now)
+        XCTAssertEqual(clockStamped.streak, 0)
+        let missed = clockStamped.weekMarks(now: now).dropLast().last
+        XCTAssertEqual(missed?.iso, "2026-07-14")
+        XCTAssertEqual(missed?.done, false)
+    }
+
+    /// The refresher hands `save` the same instant, so a history snapshot that
+    /// lands after another write merges onto it and still keeps the open day.
+    func testAMergedForegroundHistorySnapshotKeepsTheOpenDay() throws {
+        let now = july(15, 2, 30)
+        let instant = WidgetDataStore.practiceInstant(previousDayComplete: false, now: now)
+        // What `syncWidgetData()` stored while the fetch was in flight.
+        let (seeded, _) = WidgetDataStore.resolveWrite(
+            incoming: WidgetDataStore.makeSnapshot(
+                user: makeUser(id: "u1"),
+                primaryDoneToday: false,
+                secondDoneToday: false,
+                practiceDoneToday: false,
+                now: instant,
+                flagsAsOf: instant,
+                previous: .loggedOut
+            ),
+            observedGeneration: 0,
+            stored: nil,
+            now: instant
+        )
+        let stored = try XCTUnwrap(seeded)
+
+        let (resolved, outcome) = WidgetDataStore.resolveWrite(
+            incoming: graceHistorySnapshot(stampedAt: instant),
+            observedGeneration: 0,
+            stored: stored,
+            now: instant
+        )
+
+        XCTAssertEqual(outcome, .merged)
+        let merged = try XCTUnwrap(resolved)
+        XCTAssertEqual(WidgetDataStore.localDayString(merged.lastUpdated), "2026-07-14")
+        XCTAssertEqual(WidgetDataStore.normalizedForDisplay(merged, now: now).streak, 2)
+    }
 }

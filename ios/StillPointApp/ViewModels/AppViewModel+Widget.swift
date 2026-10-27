@@ -71,6 +71,9 @@ extension AppViewModel {
             // The Home badge, read once the fetch lands. The background refresh
             // has no badge and reads the same fact from the fetched sessions.
             primaryDoneToday: { _, _ in self.primaryDoneToday },
+            // #918: the instant `syncWidgetData()` stamps, so both snapshots keep
+            // the practice day the 6:00 grace window holds open.
+            snapshotInstant: { _, _, landedAt in self.creditedPracticeInstant(now: landedAt) },
             didFetch: { sessions in
                 // #526: backfill tracking-controls unlock from history so existing
                 // users who have a qualifying sit start in the unlocked state

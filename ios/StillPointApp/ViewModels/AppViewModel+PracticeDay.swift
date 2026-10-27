@@ -46,13 +46,14 @@ extension AppViewModel {
     }
 
     /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
+    /// The rule is shared with the background refresh (`WidgetDataStore.practiceInstant`).
     func creditedPracticeInstant(now: Date = Date()) -> Date {
-        let credited = creditedSessionDate(now: now)
-        let calendarToday = SessionCalendar.localIsoDate(now: now)
-        guard credited != calendarToday else { return now }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: now)
-        return calendar.date(byAdding: .hour, value: -1, to: start) ?? now
+        // The rollover `creditedSessionDate(now:)` runs, so the answer read below is current.
+        rollOverDoneTodayFlagsIfNeeded(now: now)
+        return WidgetDataStore.practiceInstant(
+            previousDayComplete: previousCalendarDayComplete,
+            now: now
+        )
     }
 
     /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.

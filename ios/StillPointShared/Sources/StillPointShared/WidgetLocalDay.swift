@@ -30,13 +30,35 @@ extension WidgetDataStore {
         return calendar.isDate(lastUpdated, inSameDayAs: yesterday)
     }
 
-    /// The moment a snapshot built from fetched `sessions` describes. Before
-    /// 6:00, while the previous calendar day's required sits are unfinished in
-    /// that history, the previous day is still the open practice day, so this is
-    /// an instant inside it: the one the foreground's `creditedPracticeInstant()`
-    /// gives `syncWidgetData()`. A snapshot stamped there keeps the widget's
-    /// grace display (`graceKeepsPreviousPracticeDay`), and its "done today"
-    /// flags read that day. Otherwise it is `now`.
+    /// The moment a widget snapshot describes, given whether the previous
+    /// calendar day's required sits are finished. Before 6:00, while they are
+    /// not, the previous day is still the open practice day, so this is an
+    /// instant inside it: 23:00 on that day. A snapshot stamped there keeps the
+    /// widget's grace display (`graceKeepsPreviousPracticeDay`), and its "done
+    /// today" flags read that day. Otherwise it is `now`.
+    ///
+    /// The foreground's `creditedPracticeInstant(now:)` applies this to the app's
+    /// own practice-day state, and both foreground writers stamp that instant:
+    /// `syncWidgetData()` and the history refresh that follows it (#918). The
+    /// background refresh reads the previous day's answer from the history it
+    /// fetched instead (`practiceInstant(forHistory:)`).
+    public static func practiceInstant(
+        previousDayComplete: Bool,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        let credited = SessionCalendar.effectiveLocalIsoDate(
+            previousDayComplete: previousDayComplete,
+            now: now,
+            calendar: calendar
+        )
+        guard credited != SessionCalendar.localIsoDate(now: now, calendar: calendar) else { return now }
+        return calendar.date(byAdding: .hour, value: -1, to: calendar.startOfDay(for: now)) ?? now
+    }
+
+    /// The moment a snapshot built from fetched `sessions` describes:
+    /// `practiceInstant(previousDayComplete:now:calendar:)`, with the previous
+    /// day's answer read from that history.
     ///
     /// The background refresh (#663) uses this. It has none of the foreground's
     /// practice-day state, so it reads whether the previous day is finished from
@@ -61,13 +83,7 @@ extension WidgetDataStore {
             isoDay: previousDay,
             dualTrackEnabled: dualTrackEnabled
         )
-        let credited = SessionCalendar.effectiveLocalIsoDate(
-            previousDayComplete: previousDayComplete,
-            now: now,
-            calendar: calendar
-        )
-        guard credited != SessionCalendar.localIsoDate(now: now, calendar: calendar) else { return now }
-        return calendar.date(byAdding: .hour, value: -1, to: calendar.startOfDay(for: now)) ?? now
+        return practiceInstant(previousDayComplete: previousDayComplete, now: now, calendar: calendar)
     }
 
     /// Local-day `yyyy-MM-dd` for `date`, matching exactly how the app stamps
