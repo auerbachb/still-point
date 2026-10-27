@@ -113,7 +113,10 @@ public actor SessionSyncCoordinator {
                 return SaveResult(session: synced, isPendingSync: false)
             }
 
-            let entry = try queueStore.loadEntries().first { $0.clientSessionId == clientSessionId }
+            // #1092: the sit is already queued, and may already have its server
+            // row, so a queue read that throws here falls back to the request
+            // instead of failing a save that went through.
+            let entry = (try? queueStore.loadEntries())?.first { $0.clientSessionId == clientSessionId }
             let provisionalRequest = entry?.request ?? Self.requestWithClientId(request, clientSessionId: clientSessionId)
             return SaveResult(
                 session: Self.provisionalSessionDTO(from: provisionalRequest, clientSessionId: clientSessionId),
@@ -319,7 +322,18 @@ public actor SessionSyncCoordinator {
 
         guard let serverSessionId = entry.serverSessionId else { return nil }
 
-        entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
+        // #1092: the sit has its server row by now, so a queue read that throws
+        // here is a failed upload like any other, not a failed save. The sit
+        // stays queued as synced, and the next flush sends its thoughts. With
+        // nothing queued to send, the sit is fully synced, so return its server
+        // row: a pending result would keep the provisional id, and no later
+        // upload would come to replace it.
+        do {
+            entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
+        } catch {
+            guard entry.thoughts.isEmpty, !entry.clearCompletionNote else { return nil }
+            return Self.sessionDTO(from: entry.request, id: serverSessionId)
+        }
 
         if !entry.thoughts.isEmpty || entry.clearCompletionNote {
             guard let uploaded = await uploadThoughts(of: entry, serverSessionId: serverSessionId) else {
