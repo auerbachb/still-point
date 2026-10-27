@@ -62,9 +62,9 @@ jobs:
           fi
           # The `StillPoint` scheme also compiles AppBlockingShared, the
           # StillPointMonitor and StillPointWidget extensions, and the
-          # StillPointShared package, so a change to any of them can break
-          # the app build.
-          if printf '%s\n' "$files" | grep -E '^(ios/(StillPointApp|AppBlockingShared|StillPointMonitor|StillPointWidget|StillPointShared)/|ios/project\.yml$|\.github/workflows/ios-app-build\.yml$)' >/dev/null; then
+          # StillPointShared and StillPointModels packages, so a change to
+          # any of them can break the app build.
+          if printf '%s\n' "$files" | grep -E '^(ios/(StillPointApp|AppBlockingShared|StillPointMonitor|StillPointWidget|StillPointShared|StillPointModels)/|ios/project\.yml$|\.github/workflows/ios-app-build\.yml$)' >/dev/null; then
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"

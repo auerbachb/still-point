@@ -57,7 +57,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### iOS shared package tests (`swift test`)
 
-`ios/StillPointShared` runs its unit tests with `swift test`, the same suite as the required `StillPointShared swift test` check. It needs **full Xcode as the active developer directory**. Command Line Tools alone cannot build the package: they lack the SwiftData macro plugin, which the `@Model` types in `Sources/StillPointShared/Models/` need, and they lack XCTest. The failure aborts the whole package build, so no test runs, not even the pure-logic ones.
+`ios/StillPointShared` runs its unit tests with `swift test`, the same suite as the required `StillPointShared swift test` check. The SwiftData `@Model` types (`User`, `Session`, `Thought`) live in a separate package, `ios/StillPointModels`, which depends on `StillPointShared`. Only the `StillPoint` app target links it; the widget and monitor extensions use `StillPointShared` alone (Issue [#870](https://github.com/auerbachb/still-point/issues/870)). So `StillPointShared` no longer needs the SwiftData macro plugin. The only macros it uses are the Observation macros, and Command Line Tools ship that plugin.
+
+What each toolchain can run:
+
+| Command | Full Xcode | Command Line Tools only |
+|---|---|---|
+| `swift test` in `ios/StillPointShared` | Yes | No. Every suite imports XCTest, which ships only with Xcode: `no such module 'XCTest'`. |
+| `swift build` in `ios/StillPointShared` | Yes | Should work, since nothing in the package needs SwiftData any more. Not verified: the Command Line Tools 27.0 install used for #870 could not load any `Package.swift` (the `Invalid manifest` failure below). |
+| `swift build` in `ios/StillPointModels` | Yes | No. The SwiftData macro plugin ships only with Xcode: `plugin for module 'SwiftDataMacros' not found`. |
+
+**XCTest decision:** the suites stay on XCTest for now, so `swift test` still needs full Xcode. Moving them to swift-testing, which Command Line Tools do ship, is tracked in Issue [#1072](https://github.com/auerbachb/still-point/issues/1072).
 
 Check which toolchain is active:
 
@@ -65,13 +75,7 @@ Check which toolchain is active:
 xcode-select -p   # needs …/Xcode.app/Contents/Developer, not /Library/Developer/CommandLineTools
 ```
 
-With Command Line Tools active, the build fails with:
-
-```text
-error: external macro implementation type 'SwiftDataMacros.PersistentModelMacro' could not be found for macro 'Model()'; plugin for module 'SwiftDataMacros' not found
-```
-
-Some Command Line Tools installs fail even earlier, while loading `Package.swift`. An upgrade can leave an older `PackageDescription` interface behind:
+Some Command Line Tools installs fail even before compiling, while loading `Package.swift`. An upgrade can leave an older `PackageDescription` interface behind:
 
 ```text
 error: 'stillpointshared': Invalid manifest (compiled with: ["/Library/Developer/CommandLineTools/usr/bin/swiftc", …])
@@ -88,9 +92,11 @@ sudo xcode-select -s /Applications/Xcode.app
 # Or for one command, with no sudo (the form an agent can run)
 cd ios/StillPointShared
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+cd ../StillPointModels
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build
 ```
 
-If Xcode lives somewhere else, such as `Xcode-beta.app`, use that path. Without Xcode installed, the suite cannot run locally. Install Xcode, or treat the `StillPointShared swift test` CI check as the first real run and say so in the PR.
+If Xcode lives somewhere else, such as `Xcode-beta.app`, use that path. Without Xcode installed, neither command can run locally. Install Xcode, or treat the `StillPointShared swift test` CI check as the first real run and say so in the PR. That check runs `swift test` in `ios/StillPointShared` and then `swift build` in `ios/StillPointModels` whenever either package changes. When neither changes, it passes as a no-op.
 
 ## Building
 
@@ -308,7 +314,7 @@ What should be green before merge:
 
 - `typecheck` — full-project `tsc --noEmit` (includes test files)
 - `unit-tests` — Jest/unit suite (#434)
-- `StillPointShared swift test` — shared Swift parity suite (no-op pass when the package is unchanged; issue #463)
+- `StillPointShared swift test` — shared Swift parity suite plus a `swift build` of `ios/StillPointModels` (no-op pass when neither package changed; issues #463, #870)
 - `build` — repeatable clean Next builds + design-token parity lint
 - `Info.plist in sync with project.yml` — XcodeGen drift guard (no-op when plist inputs unchanged; #439/#588)
 - `Vercel` — preview deployment completed successfully

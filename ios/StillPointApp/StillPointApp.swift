@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import StillPointShared
+import StillPointModels
 import os
 
 @main

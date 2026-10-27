@@ -109,6 +109,7 @@
 		89ED5EFB8F1DDCD3BAC2E6D2 /* 56.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 17583EAA0BE13F36F1DF9877 /* 56.mp3 */; };
 		8A353E6C36EA771941CFF33D /* AttentionTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */; };
 		8A9734076E9FB3D5477913A0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CBD1A192FD74748A6D36BF /* AuthViewModel.swift */; };
+		8CA290B90CE6FEFD1AF63029 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 3152E47B6A19C92FD8070D82 /* GoogleSignIn */; };
 		8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B23F8B7485676B36D719DE /* XCTestCase+StillPointUITest.swift */; };
 		92415E1B8326C5322B4AF20F /* 59.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */; };
 		93184A5F531520F4C650ECFB /* 36.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0D147E22AE19B02C80DE77AF /* 36.mp3 */; };
@@ -141,7 +142,7 @@
 		BA8BA44730EBFB64490EC8D1 /* 30.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = CE56360FD9CD132827B311AF /* 30.mp3 */; };
 		BBF548B1FAB4296935A585E9 /* AppViewModel+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0FC90BC5AE7D1078AAAFA70 /* AppViewModel+Navigation.swift */; };
 		BD23A540968EF65ED9D78BB9 /* SPCapsuleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */; };
-		BD77E7316F2586D24570DB43 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 3152E47B6A19C92FD8070D82 /* GoogleSignIn */; };
+		BD77E7316F2586D24570DB43 /* StillPointModels in Frameworks */ = {isa = PBXBuildFile; productRef = 3721E56DA4F151AE3CD5DC71 /* StillPointModels */; };
 		C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */; };
 		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
 		C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */; };
@@ -329,6 +330,7 @@
 		92F0B6135A30B315B9962460 /* AppBlockingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingManager.swift; sourceTree = "<group>"; };
 		9311B0CBDED4DF207E799ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		932E78D5A64007E7738FFE6F /* SettingsDangerZoneSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDangerZoneSection.swift; sourceTree = "<group>"; };
+		934532CC2EE26C3F3F5F071A /* StillPointModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = StillPointModels; path = StillPointModels; sourceTree = SOURCE_ROOT; };
 		94DFA2C5F21DCFFFE3E0DE8F /* 46.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 46.mp3; sourceTree = "<group>"; };
 		9575283E12598011BAAD3FEB /* SessionDeepLinkParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDeepLinkParser.swift; sourceTree = "<group>"; };
 		95B9BFB54C47EA75C997B1AC /* 7.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 7.mp3; sourceTree = "<group>"; };
@@ -403,7 +405,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				8260BE3D7302FE11A35677B2 /* StillPointShared in Frameworks */,
-				BD77E7316F2586D24570DB43 /* GoogleSignIn in Frameworks */,
+				BD77E7316F2586D24570DB43 /* StillPointModels in Frameworks */,
+				8CA290B90CE6FEFD1AF63029 /* GoogleSignIn in Frameworks */,
 				783596788FCBE118748CF294 /* ARKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -668,6 +671,7 @@
 		72C36256C4A12941449D9B2F /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				934532CC2EE26C3F3F5F071A /* StillPointModels */,
 				A67F64CE400EF98ED2925FF9 /* StillPointShared */,
 			);
 			name = Packages;
@@ -806,6 +810,7 @@
 			name = StillPoint;
 			packageProductDependencies = (
 				FE1475755D9C9BA63C80748F /* StillPointShared */,
+				3721E56DA4F151AE3CD5DC71 /* StillPointModels */,
 				3152E47B6A19C92FD8070D82 /* GoogleSignIn */,
 			);
 			productName = StillPoint;
@@ -904,6 +909,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D48F4ACCEE89340A99CDA970 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				A93CDF95A3A68965A9B0DF72 /* XCLocalSwiftPackageReference "StillPointModels" */,
 				33432E91F4550EE24838A4B5 /* XCLocalSwiftPackageReference "StillPointShared" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1520,6 +1526,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = StillPointShared;
 		};
+		A93CDF95A3A68965A9B0DF72 /* XCLocalSwiftPackageReference "StillPointModels" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = StillPointModels;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1538,6 +1548,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D48F4ACCEE89340A99CDA970 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignIn;
+		};
+		3721E56DA4F151AE3CD5DC71 /* StillPointModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StillPointModels;
 		};
 		A693158BF7B588EA9D5744E5 /* StillPointShared */ = {
 			isa = XCSwiftPackageProductDependency;

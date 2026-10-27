@@ -39,8 +39,12 @@ jobs:
           # Use the paginated files API — `gh pr view --json files` caps the list
           # (~100 files), which on a large PR could miss StillPointShared changes
           # and skip the real test via the no-op. `--paginate` returns every file.
+          # StillPointModels depends on StillPointShared, so a change to either
+          # package runs the real job (issue #870).
+          # Plain grep reads the whole stream; `grep -q` exits on the first match,
+          # which can SIGPIPE printf and, under pipefail, skip the real job.
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || true)"
-          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/StillPointShared/|\.github/workflows/ios-shared-tests\.yml$)'; then
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -E '^(ios/StillPointShared/|ios/StillPointModels/|\.github/workflows/ios-shared-tests\.yml$)' >/dev/null; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"
@@ -63,15 +67,23 @@ jobs:
       # StillPointShared is a pure SwiftPM package, so `swift test` builds and runs
       # the suite without xcodegen/xcodebuild (the same path agents use locally,
       # where the app's Xcode project can't be parsed). It still needs full Xcode,
-      # not just Command Line Tools: the SwiftData macro plugin and XCTest ship only
-      # with Xcode, which the macOS runner image has selected. For local runs, see
-      # README "iOS shared package tests" (issue #682). The suite itself takes
-      # seconds; wall-clock is dominated by macOS runner spin-up + the package
-      # build. Runs only when the package (or this workflow) changed.
+      # not just Command Line Tools, because every suite imports XCTest, which
+      # ships only with Xcode; the macOS runner image has Xcode selected. For local
+      # runs, see README "iOS shared package tests" (issues #682, #870). Wall-clock
+      # is dominated by macOS runner spin-up + the package build. Runs only when
+      # either package (or this workflow) changed.
       - name: Run StillPointShared unit tests
         if: needs.changes.outputs.shared == 'true'
         working-directory: ios/StillPointShared
         run: swift test
+
+      # The SwiftData `@Model` types live in their own package so StillPointShared
+      # builds without the SwiftData macro plugin (issue #870). That plugin ships
+      # only with full Xcode, so this build runs on the macOS runner too.
+      - name: Build StillPointModels
+        if: needs.changes.outputs.shared == 'true'
+        working-directory: ios/StillPointModels
+        run: swift build
 
       # No-op pass for PRs that don't touch the package: keeps the required
       # "StillPointShared swift test" check green without macOS minutes (issue #463).

@@ -53,6 +53,8 @@ next-env.d.ts
 ios/build/
 ios/StillPointShared/build/
 ios/StillPointShared/.build/
+ios/StillPointModels/build/
+ios/StillPointModels/.build/
 
 # Fastlane snapshot output (regenerate via `fastlane screenshots`; curate into screenshots/selected/)
 ios/screenshots/candidates/
