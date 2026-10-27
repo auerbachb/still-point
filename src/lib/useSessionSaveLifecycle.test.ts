@@ -31,6 +31,8 @@ const USER: User = {
   aphorismsEnabled: false,
 };
 
+const USER_B: User = { ...USER, id: "user-b", email: "b@example.com", username: "beta" };
+
 function sit(overrides: Partial<CompletedSitInput> = {}): CompletedSitInput {
   return {
     dayNumber: 5,
@@ -78,10 +80,10 @@ function saveCall(index: number) {
 
 const liveViews: Array<{ unmount: () => Promise<void> }> = [];
 
-async function renderLifecycle(user: User | null = USER) {
+async function renderLifecycle(initialUser: User | null = USER) {
   const sessionGeneration = { current: 0 };
   const loadedSitsRef: { current: PracticeDaySit[] | null } = { current: null };
-  const userRef = { current: user };
+  const userRef = { current: initialUser };
   const refreshUserFromServer = vi.fn();
   const refreshTodayTracks = vi.fn(async () => {});
   const setOverlay = vi.fn();
@@ -91,7 +93,8 @@ async function renderLifecycle(user: User | null = USER) {
   let root: Root | null = null;
   let latest!: ReturnType<typeof useSessionSaveLifecycle>;
 
-  function Probe() {
+  function Probe({ user }: { user: User | null }) {
+    userRef.current = user;
     latest = useSessionSaveLifecycle({
       sessionGeneration,
       loadedSitsRef,
@@ -116,7 +119,7 @@ async function renderLifecycle(user: User | null = USER) {
   liveViews.push(view);
   await act(async () => {
     root = createRoot(container);
-    root.render(createElement(Probe));
+    root.render(createElement(Probe, { user: initialUser }));
   });
 
   return {
@@ -126,6 +129,13 @@ async function renderLifecycle(user: User | null = USER) {
     refreshUserFromServer,
     refreshTodayTracks,
     setOverlay,
+    /** A sign-out, then a sign-in as `next`. Each bumps the generation, as the auth hook does. */
+    switchAccount: async (next: User) => {
+      sessionGeneration.current += 2;
+      await act(async () => {
+        root?.render(createElement(Probe, { user: next }));
+      });
+    },
   };
 }
 
@@ -455,6 +465,84 @@ describe("useSessionSaveLifecycle — sign-out mid-save (#666)", () => {
     });
 
     expect(hook.current().localWriteFailed).toBe(false);
+  });
+});
+
+describe("useSessionSaveLifecycle — a save that outlives its account (#833)", () => {
+  test("an abandoned sit that settles after an account switch leaves the next account's sit open", async () => {
+    const pending = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(pending.promise);
+    const hook = await renderLifecycle();
+
+    let done!: Promise<void>;
+    await act(async () => {
+      done = hook.current().handleSessionAbandon(sit());
+    });
+    await hook.switchAccount(USER_B);
+    await act(async () => {
+      pending.resolve(synced("server-1"));
+      await done;
+    });
+
+    expect(hook.setOverlay).not.toHaveBeenCalled();
+  });
+
+  test("a breath sit that settles after an account switch leaves the next account's sit open", async () => {
+    const pending = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(pending.promise);
+    const hook = await renderLifecycle();
+
+    let done!: Promise<void>;
+    await act(async () => {
+      done = hook.current().handleBreathEnd({ elapsedSeconds: 30, breathCount: 5, tapCount: 10 });
+    });
+    await hook.switchAccount(USER_B);
+    await act(async () => {
+      pending.resolve(synced("server-1"));
+      await done;
+    });
+
+    expect(hook.setOverlay).not.toHaveBeenCalled();
+  });
+
+  test("the previous account's pending breath save neither swallows nor ends the next account's", async () => {
+    const saveA = deferred<SavedSessionResult>();
+    const saveB = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(saveA.promise).mockReturnValueOnce(saveB.promise);
+    const hook = await renderLifecycle();
+
+    let endA!: Promise<void>;
+    await act(async () => {
+      endA = hook.current().handleBreathEnd({ elapsedSeconds: 30, breathCount: 5, tapCount: 10 });
+    });
+    await hook.switchAccount(USER_B);
+
+    // The next account's End is not swallowed: it saves its own sit.
+    let endB!: Promise<void>;
+    await act(async () => {
+      endB = hook.current().handleBreathEnd({ elapsedSeconds: 20, breathCount: 4, tapCount: 8 });
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(2);
+    expect(saveCall(1).ownerUserId).toBe("user-b");
+
+    // The previous save settling closes nothing and leaves the new gate held,
+    // so a second End from the next account is still a duplicate.
+    await act(async () => {
+      saveA.resolve(synced("server-a"));
+      await endA;
+    });
+    expect(hook.setOverlay).not.toHaveBeenCalled();
+    await act(async () => {
+      await hook.current().handleBreathEnd({ elapsedSeconds: 21, breathCount: 4, tapCount: 9 });
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      saveB.resolve(synced("server-b"));
+      await endB;
+    });
+    expect(hook.setOverlay).toHaveBeenCalledTimes(1);
+    expect(hook.setOverlay).toHaveBeenCalledWith(null);
   });
 });
 

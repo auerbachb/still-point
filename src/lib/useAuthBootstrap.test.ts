@@ -329,11 +329,13 @@ describe("useAuthBootstrap — sign-in and sign-out", () => {
     const fresh = { ...USER_A, recoveryTargetDay: 5, recoveryCurrentStep: 1, recoveryTotalSteps: 4 };
     const refetch = deferred<Response>();
     fetchMock.mockReturnValueOnce(refetch.promise);
+    // The 401 above already moved it (#833); signing in moves it once more.
+    const before = auth.sessionGeneration.current;
     await act(async () => {
       auth.current().signIn(USER_A);
     });
     expect(auth.current().user).toEqual(USER_A);
-    expect(auth.sessionGeneration.current).toBe(1);
+    expect(auth.sessionGeneration.current).toBe(before + 1);
 
     refetch.resolve(respond(200, { user: fresh }));
     await settle();
@@ -425,6 +427,42 @@ describe("useAuthBootstrap — sign-in and sign-out", () => {
     await settle();
 
     expect(auth.current().user).toBeNull();
+  });
+});
+
+describe("useAuthBootstrap — an authoritative sign-out mid-flight (#833)", () => {
+  test.each([
+    ["a 401", () => respond(401)],
+    ["a 403", () => respond(403)],
+    ["a 404", () => respond(404)],
+    ["a 2xx with no user", () => respond(200, { user: null })],
+  ])("%s invalidates a user re-read already in flight", async (_answer, answer) => {
+    saveCachedUser(USER_A);
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const auth = await renderAuth({ isOnline: false });
+    await settle();
+    expect(auth.current()).toMatchObject({ user: USER_A, runningFromCache: true });
+
+    // A queued sit flushes and re-reads the user...
+    const reply = deferred<{ user: User }>();
+    mocks.me.mockReturnValueOnce(reply.promise);
+    await act(async () => {
+      auth.current().refreshUserFromServer();
+    });
+
+    // ...while the reconnect re-check learns the session is over.
+    fetchMock.mockResolvedValueOnce(answer());
+    await auth.setOnline(true);
+    await settle();
+    expect(auth.current().user).toBeNull();
+    expect(auth.sessionGeneration.current).toBe(1);
+    expect(auth.onAccountTeardown).toHaveBeenCalledTimes(1);
+
+    reply.resolve({ user: USER_A });
+    await settle();
+
+    expect(auth.current().user).toBeNull();
+    expect(loadCachedUser()).toBeNull();
   });
 });
 

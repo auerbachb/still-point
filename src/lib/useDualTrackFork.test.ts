@@ -3,6 +3,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Session, User } from "./api";
+import { rememberStandardSit } from "./practiceDaySits";
 import type { PracticeDaySit } from "./sessionCalendar";
 import { useDualTrackFork } from "./useDualTrackFork";
 
@@ -40,10 +41,12 @@ function row(sessionDate: string, track?: "primary" | "second", completed = true
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -177,6 +180,67 @@ describe("useDualTrackFork — today's badges (#240)", () => {
 
     expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: false });
     expect(fork.loadedSitsRef.current).toBeNull();
+  });
+
+  test("a failed refresh from an ended session leaves the next account's badges alone (#833)", async () => {
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
+    const fork = await renderFork();
+
+    // The previous account's refresh is still in flight when the account changes.
+    const stale = deferred<{ sessions: Session[] }>();
+    mocks.getSessions.mockReturnValueOnce(stale.promise);
+    let staleDone!: Promise<void>;
+    await act(async () => {
+      staleDone = fork.current().refreshTodayTracks();
+    });
+    fork.sessionGeneration.current += 1;
+    fork.loadedSitsRef.current = null;
+    await act(async () => {
+      fork.current().resetForAccount();
+    });
+
+    // The next account's own refresh lands first and earns a badge.
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [row("2026-10-26", "primary")] });
+    await act(async () => {
+      await fork.current().refreshTodayTracks();
+    });
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
+
+    await act(async () => {
+      stale.reject(new Error("offline"));
+      await staleDone;
+    });
+
+    expect(fork.current().tracksDoneToday).toEqual({ primary: true, second: false });
+    expect(fork.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "primary" },
+    ]);
+  });
+
+  test("a sit remembered while a refresh is in flight survives it (#833)", async () => {
+    mocks.getSessions.mockResolvedValueOnce({ sessions: [] });
+    const fork = await renderFork();
+
+    // A pending save starts the refresh, and only then is its sit remembered.
+    const reply = deferred<{ sessions: Session[] }>();
+    mocks.getSessions.mockReturnValueOnce(reply.promise);
+    let done!: Promise<void>;
+    await act(async () => {
+      done = fork.current().refreshTodayTracks();
+    });
+    fork.loadedSitsRef.current = rememberStandardSit(fork.loadedSitsRef.current, "2026-10-26", "second");
+
+    // The server answers, but without that sit: its own sync failed.
+    await act(async () => {
+      reply.resolve({ sessions: [row("2026-10-25", "primary")] });
+      await done;
+    });
+
+    expect(fork.loadedSitsRef.current).toEqual([
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-25", track: "primary" },
+      { completed: true, sessionType: "standard", sessionDate: "2026-10-26", track: "second" },
+    ]);
+    expect(fork.current().tracksDoneToday).toEqual({ primary: false, second: true });
   });
 
   test("resetForAccount clears the badges and the dismissed fork", async () => {
