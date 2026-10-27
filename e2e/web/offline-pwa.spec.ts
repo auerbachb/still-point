@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
-import { test, expect } from "../fixtures/auth.fixture";
+import { test, expect, handleMockApiRequest } from "../fixtures/auth.fixture";
+import { startStandInOrigin, type StandInOrigin } from "../fixtures/stand-in-origin";
 import { DEFAULT_TAB, pathForTab } from "../../src/lib/appTabs";
 import { OFFLINE_IDB_NAME, OFFLINE_IDB_STORE } from "../../src/lib/offlineSessionQueue/constants";
 import type { PendingSessionEntry } from "../../src/lib/offlineSessionQueue/types";
@@ -10,19 +11,28 @@ import { tap, tapWithControlReveal } from "../utils/mobile-helpers";
  * lands on the normal view from the cached identity, a full sit runs and queues,
  * and reconnecting syncs it and clears the indicator.
  *
- * **How "offline" is simulated.** The auth fixture serves the whole API from
- * `page.route`, which intercepts *before* the network — so `setOffline(true)`
- * alone would leave the mocked API answering happily. Offline here is therefore
- * two things at once: `context.setOffline(true)` (so `navigator.onLine` is false
- * and the document/asset fetches go through the service worker) and an API
- * abort switch (so `/api/**` rejects with a genuine transport error, which is
- * what `resolveAuthBootstrap` classifies as `unreachable`). Both flip back
- * together on reconnect.
+ * **Where the API comes from.** These specs let the service worker run, and
+ * once it controls a page, WebKit sends that page's `fetch()` calls through it,
+ * where `page.route` never sees them (#862). So the two worker specs load the
+ * app from a stand-in origin of their own (`e2e/fixtures/stand-in-origin.ts`):
+ * a local server in front of the dev server that answers `/api/**` from the
+ * test's `mockApiState` and forwards the rest. Every request crosses it, worker
+ * or not, so the same stand-in answers on every engine (#919). On Chromium the
+ * fixture's `page.route` still answers first, from the same state.
+ *
+ * **How "offline" is simulated.** Nothing answers: the stand-in origin drops
+ * every connection, so the worker falls back to its cache for documents and
+ * assets, and an API abort switch layered over `page.route` makes `/api/**`
+ * reject with a genuine transport error, which is what `resolveAuthBootstrap`
+ * classifies as `unreachable`. The browser's own link (`context.setOffline`)
+ * stays up while offline and drops and returns on reconnect, so the page still
+ * gets its `online` event: on WebKit, a worker-controlled page cannot navigate
+ * under `setOffline(true)` (PR #880), and these specs navigate offline.
  */
 
-/** Route-level kill switch for the mocked API, layered over the auth fixture.
- *  `goOffline` and `goOnline` flip both halves of "offline" together. */
-async function installApiOfflineSwitch(page: Page) {
+/** The connection switch, over both ways the API can answer: the auth
+ *  fixture's `page.route` handler and the stand-in origin (#919). */
+async function installApiOfflineSwitch(page: Page, standIn: StandInOrigin) {
   const state = { offline: false };
   // Registered after the fixture's own handler, so Playwright runs this one
   // first and can abort before the mock replies.
@@ -31,12 +41,22 @@ async function installApiOfflineSwitch(page: Page) {
     return route.fallback();
   });
   return {
-    goOffline: async () => {
+    /** Nothing answers: API calls fail at transport, and so does every
+     *  document and asset fetch, which the worker then serves from its cache. */
+    goOffline: () => {
       state.offline = true;
-      await page.context().setOffline(true);
+      standIn.setReachable(false);
     },
+    /** Everything answers again, and the browser fires its own `online` event,
+     *  as when a radio comes back. The link's drop and return are emulated here,
+     *  together, rather than for the whole time offline: once a worker controls
+     *  the page, WebKit fails any navigation under `context.setOffline(true)`
+     *  with "WebKit encountered an internal error" (PR #880), and these specs
+     *  navigate while offline. */
     goOnline: async () => {
       state.offline = false;
+      standIn.setReachable(true);
+      await page.context().setOffline(true);
       await page.context().setOffline(false);
     },
   };
@@ -46,7 +66,7 @@ type ApiOfflineSwitch = Awaited<ReturnType<typeof installApiOfflineSwitch>>;
 
 /** Drop the connection, then reload: a launch with nothing reachable. */
 async function reloadOffline(page: Page, network: ApiOfflineSwitch) {
-  await network.goOffline();
+  network.goOffline();
   await page.reload();
 }
 
@@ -163,24 +183,39 @@ function isSameDocument(page: Page) {
   return page.evaluate(() => (window as SameDocumentMarker).__sameDocument);
 }
 
+/** The worker specs' own origin in front of the dev server, serving the test's
+ *  `mockApiState` on the network path, where WebKit's worker-controlled fetches
+ *  still pass (#919). */
+const workerTest = test.extend<{ standInOrigin: StandInOrigin }>({
+  // Playwright requires the first argument destructured, even when empty.
+  standInOrigin: async ({}, use, testInfo) => {
+    const upstream = testInfo.project.use.baseURL;
+    if (!upstream) throw new Error("the stand-in origin needs the project's baseURL");
+    const origin = await startStandInOrigin(upstream);
+    await use(origin);
+    await origin.close();
+  },
+  baseURL: async ({ standInOrigin }, use) => {
+    await use(standInOrigin.url);
+  },
+  mockApiState: async ({ mockApiState, standInOrigin }, use) => {
+    standInOrigin.serveApi((request) => handleMockApiRequest(mockApiState, request));
+    await use(mockApiState);
+  },
+});
+
 test.describe("offline-first web PWA", () => {
   // These two specs test the worker, so they opt back in; the config blocks it (#862).
-  // On WebKit the worker then hides their API calls from page.route, so both skip
-  // there; #919 tracks it.
   test.describe(() => {
-    test.use({ serviceWorkers: "allow" });
-    test.skip(
-      ({ browserName }) => browserName === "webkit",
-      "WebKit hides a worker-controlled page's API calls from page.route, and an offline reload " +
-        "throws there (PR #880); tracked in #919",
-    );
+    workerTest.use({ serviceWorkers: "allow" });
 
-    test("@critical reload with no connection lands on the app, not an auth error", async ({
+    workerTest("@critical reload with no connection lands on the app, not an auth error", async ({
       page,
       ensureLoggedIn,
       mockApiState,
+      standInOrigin,
     }) => {
-      const network = await installApiOfflineSwitch(page);
+      const network = await installApiOfflineSwitch(page, standInOrigin);
       await ensureLoggedIn();
 
       // The signed-in day number the offline view has to reproduce. Not the
@@ -212,12 +247,13 @@ test.describe("offline-first web PWA", () => {
       await expect(offlineIndicator(page)).toContainText(/offline/i);
     });
 
-    test("a full sit completes offline, queues, and syncs on reconnect", async ({
+    workerTest("a full sit completes offline, queues, and syncs on reconnect", async ({
       page,
       ensureLoggedIn,
       mockApiState,
+      standInOrigin,
     }) => {
-      const network = await installApiOfflineSwitch(page);
+      const network = await installApiOfflineSwitch(page, standInOrigin);
       await ensureLoggedIn();
       await primeOfflineLaunch(page, {
         onReloaded: () => expect(beginButton(page)).toBeVisible(),
