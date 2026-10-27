@@ -41,8 +41,10 @@ jobs:
           # and skip the real test via the no-op. `--paginate` returns every file.
           # StillPointModels depends on StillPointShared, so a change to either
           # package runs the real job (issue #870).
+          # Plain grep reads the whole stream; `grep -q` exits on the first match,
+          # which can SIGPIPE printf and, under pipefail, skip the real job.
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || true)"
-          if [ -z "$files" ] || printf '%s\n' "$files" | grep -qE '^(ios/StillPointShared/|ios/StillPointModels/|\.github/workflows/ios-shared-tests\.yml$)'; then
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -E '^(ios/StillPointShared/|ios/StillPointModels/|\.github/workflows/ios-shared-tests\.yml$)' >/dev/null; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"
