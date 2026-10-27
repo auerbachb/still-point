@@ -204,9 +204,14 @@ export class WebSessionSyncCoordinator {
   }
 
   async clearQueue(): Promise<void> {
-    // #834: in turn too, so a flush that was mid-upload at sign-out cannot save
-    // its earlier read back over the cleared queue.
-    return withQueueMutation(() => this.queueStore.saveEntries([]));
+    // #666: sign-out empties the queue now, not once an upload in flight in some
+    // tab settles: uploads have no timeout, so that wait has no bound. #834: and
+    // again in turn, so a flush that was mid-upload at sign-out cannot save its
+    // earlier read back over the cleared queue.
+    await Promise.all([
+      withQueueMutation(() => this.queueStore.saveEntries([])),
+      this.queueStore.saveEntries([]),
+    ]);
   }
 
   /** `note` null clears it. Either way the queue keeps at most one end note

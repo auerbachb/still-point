@@ -144,6 +144,41 @@ describe("WebSessionSyncCoordinator cross-tab lock (#834)", () => {
     expect(entry!.clearCompletionNote).toBe(false);
   });
 
+  test("a sign-out clear empties the queue at once, and again after an upload that held the lock", async () => {
+    const { request } = fakeLockManager();
+    vi.stubGlobal("navigator", { locks: { request } });
+    const store = new CopyingQueueStore();
+    await store.saveEntries([syncedEntry([{ timeInSession: -1, text: "first draft" }])]);
+
+    // The service worker's flush: it holds the lock across its uploads, then
+    // saves back the whole queue it read before them.
+    let readDone!: () => void;
+    const read = new Promise<void>((resolve) => { readDone = resolve; });
+    let releaseUpload!: () => void;
+    const released = new Promise<void>((resolve) => { releaseUpload = resolve; });
+    const workerFlush = request(OFFLINE_QUEUE_LOCK_NAME, async () => {
+      const snapshot = await store.loadEntries();
+      readDone();
+      await released;
+      await store.saveEntries(snapshot);
+    });
+    await read;
+
+    const tab = await openTab();
+    const clearing = new tab.WebSessionSyncCoordinator(store, tab.alwaysFailingSessionSyncTransport).clearQueue();
+    await drainMicrotasks();
+
+    // Sign-out does not wait for an upload, which has no timeout.
+    expect(await store.loadEntries()).toEqual([]);
+
+    releaseUpload();
+    await workerFlush;
+    await clearing;
+
+    // The flush saved its earlier read back; the clear in turn removed it.
+    expect(await store.loadEntries()).toEqual([]);
+  });
+
   test("every queue write takes the shared lock, and reads do not", async () => {
     const { request } = fakeLockManager();
     vi.stubGlobal("navigator", { locks: { request } });
