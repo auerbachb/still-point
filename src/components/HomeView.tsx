@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import { BLOCK_DURATION, MAX_DURATION, QUICK_DURATION } from "@/lib/constants";
 import {
   activeRecovery,
@@ -37,8 +38,11 @@ type HomeViewProps = {
   onBreath?: () => void;
   /** #836: the focus goal counter; the button shows `focusSessionDuration` of it. */
   focusActivityDay?: number;
-  /** #836: open the focus activity timer. The button only renders when set. */
+  /** #836: open the focus activity timer (#837: its category picker first).
+   *  The button only renders when set. */
   onFocusActivity?: () => void;
+  /** #837: the "Focus activity" button, which the picker gives focus back to. */
+  focusActivityButtonRef?: Ref<HTMLButtonElement>;
   onBuddy?: () => void;
 };
 
@@ -184,6 +188,7 @@ export function HomeView({
   onBreath,
   focusActivityDay = 1,
   onFocusActivity,
+  focusActivityButtonRef,
   onBuddy,
 }: HomeViewProps) {
   const todayDuration = sessionDurationForUser("standard", currentDay, recovery);
@@ -390,6 +395,7 @@ export function HomeView({
 
       {onFocusActivity && (
         <button
+          ref={focusActivityButtonRef}
           type="button"
           onClick={onFocusActivity}
           style={{

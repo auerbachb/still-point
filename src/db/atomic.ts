@@ -538,6 +538,7 @@ function mapSessionRow(row: Record<string, unknown>): typeof sessions.$inferSele
     clearPercent: Number(row.clear_percent),
     thoughtCount: Number(row.thought_count),
     breathCount: row.breath_count == null ? null : Number(row.breath_count),
+    focusCategory: row.focus_category == null ? null : String(row.focus_category),
     mindStateLog: row.mind_state_log as typeof sessions.$inferSelect["mindStateLog"],
     attentionLog: row.attention_log as typeof sessions.$inferSelect["attentionLog"],
     ambientSoundSummary: row.ambient_sound_summary as typeof sessions.$inferSelect["ambientSoundSummary"],
@@ -658,7 +659,7 @@ export async function atomicCreateSessionWithProgression(params: {
         insert into sessions (
           user_id, client_session_id, buddy_session_id, day_number, session_type, track, combined,
           duration, bonus_seconds, completed, actual_time, clear_percent, thought_count,
-          breath_count, mind_state_log, attention_log, ambient_sound_summary, session_date
+          breath_count, focus_category, mind_state_log, attention_log, ambient_sound_summary, session_date
         )
         values (
           ${userId}::uuid,
@@ -675,6 +676,7 @@ export async function atomicCreateSessionWithProgression(params: {
           ${session.clearPercent},
           ${session.thoughtCount ?? 0},
           ${session.breathCount ?? null},
+          ${session.focusCategory ?? null},
           ${JSON.stringify(session.mindStateLog ?? [])}::jsonb,
           ${session.attentionLog ? JSON.stringify(session.attentionLog) : null}::jsonb,
           ${session.ambientSoundSummary ? JSON.stringify(session.ambientSoundSummary) : null}::jsonb,

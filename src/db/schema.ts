@@ -491,6 +491,9 @@ export const sessions = pgTable("sessions", {
   thoughtCount: integer("thought_count").default(0).notNull(),
   /** #374: taps-per-breath count for breath-counting sessions; null for other types. */
   breathCount: integer("breath_count"),
+  /** #837: what a focus session was for (`FOCUS_CATEGORIES`), a label only.
+   *  Null for other types and for focus sessions saved before categories existed. */
+  focusCategory: varchar("focus_category", { length: 32 }),
   mindStateLog: jsonb("mind_state_log").$type<Array<{ time: number; state: string }>>(),
   /** #113: ARKit gaze attention transitions ({ time, state: "attentive" | "away" }). */
   attentionLog: jsonb("attention_log").$type<Array<{ time: number; state: string }>>(),
@@ -523,6 +526,10 @@ export const sessions = pgTable("sessions", {
   trackCheck: check(
     "sessions_track_allowed",
     sql`${table.track} in ('primary', 'second')`,
+  ),
+  focusCategoryCheck: check(
+    "sessions_focus_category_allowed",
+    sql`${table.focusCategory} is null or ${table.focusCategory} in ('reading', 'writing', 'listening')`,
   ),
   /** #240: backs "did this user complete each track's standard sit today?" —
    *  the per-track completion badges HomeView shows for the dual-track view. */

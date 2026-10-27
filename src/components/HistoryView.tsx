@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import type { Session, Thought } from "@/lib/api";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
+import { focusSessionLabel } from "@/lib/focusActivityContent";
 import { buildCurrentMonthGrid, buildPriorMonthSummaries, formatTotalTime } from "@/lib/historyMonthGrid";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -30,6 +31,8 @@ type HistoryEntry = {
   clearPercent: number;
   thoughtCount: number;
   sessionType?: Session["sessionType"];
+  /** #837: what a focus session was for, when it has a category. */
+  focusCategory?: Session["focusCategory"];
   missed?: boolean;
   collapsed?: boolean;
   collapsedDayCount?: number;
@@ -248,6 +251,7 @@ export function HistoryView({
           clearPercent: s.clearPercent,
           thoughtCount: s.thoughtCount,
           sessionType: s.sessionType,
+          focusCategory: s.focusCategory,
           sessionIndexInDay: row.sessionIndexInDay,
         };
       }),
@@ -667,7 +671,8 @@ export function HistoryView({
                 : isBreath
                   ? "Breath"
                   : isFocus
-                    ? "Focus"
+                    // #837: "Focus · Reading"; a row with no category reads "Focus".
+                    ? focusSessionLabel(entry.focusCategory)
                     : `Session ${sessionOrdinal}`;
 
               const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;

@@ -58,6 +58,27 @@ export function parseOptionalTrack(value: unknown): Track | null {
   return isTrack(value) ? value : null;
 }
 
+/** #837: what a focus session was for. A label only: every category shares the
+ *  one focus goal (`FOCUS_DURATION_CONFIG`, stepped by `focusActivityDay`). */
+export const FOCUS_CATEGORIES = ["reading", "writing", "listening"] as const;
+export type FocusCategory = (typeof FOCUS_CATEGORIES)[number];
+
+export function isFocusCategory(value: unknown): value is FocusCategory {
+  return typeof value === "string" && FOCUS_CATEGORIES.includes(value as FocusCategory);
+}
+
+/**
+ * Missing/absent category parses to `null` (no category), so focus sessions from
+ * before #837, and ones still queued offline, keep saving. Any other value that
+ * is not a category (wrong case, empty string, a number) is invalid: `undefined`.
+ */
+export function parseOptionalFocusCategory(value: unknown): FocusCategory | null | undefined {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return isFocusCategory(value) ? value : undefined;
+}
+
 export type SessionStatsInput = {
   sessionType?: string;
   dayNumber: number;

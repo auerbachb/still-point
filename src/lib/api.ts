@@ -1,3 +1,4 @@
+import type { FocusCategory } from "@/lib/constants";
 import type { MoodMatrixPayload } from "@/lib/moodMatrix";
 
 export class ApiError extends Error {
@@ -61,6 +62,9 @@ export type Session = {
   bonusSeconds?: number;
   /** #765: a `focus` session is a focus activity timer run (#836), not a sit. */
   sessionType: "standard" | "quick" | "breath" | "focus";
+  /** #837: what a focus session was for. Null for other types and for focus
+   *  sessions saved before categories; omitted by a server that predates them. */
+  focusCategory?: FocusCategory | null;
   /** #240: which daily track this sit advanced ("primary" | "second"). */
   track?: "primary" | "second";
   completed: boolean;
@@ -238,6 +242,8 @@ export const api = {
     bonusSeconds?: number;
     /** #836: for `focus`, `dayNumber` carries the user's `focusActivityDay`. */
     sessionType?: "standard" | "quick" | "breath" | "focus";
+    /** #837: read only for `focus`; absent or null saves no category. */
+    focusCategory?: FocusCategory | null;
     /** #240: which daily track this sit advanced. Defaults to "primary" server-side. */
     track?: "primary" | "second";
     completed: boolean;

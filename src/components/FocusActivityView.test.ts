@@ -404,6 +404,26 @@ describe("FocusActivityView — legible from one minute to two hours (#836)", ()
   });
 });
 
+describe("FocusActivityView — the chosen category (#837)", () => {
+  it("names the picker's category in place of \"focus\"", async () => {
+    const view = await mount({ goalSeconds: 720, category: "reading" });
+    expect(goalLabel(view.container)).toBe("Reading · 12 min");
+  });
+
+  it("reads \"focus\" without one", async () => {
+    const view = await mount({ goalSeconds: 720, category: null });
+    expect(goalLabel(view.container)).toBe("focus · 12 min");
+  });
+
+  it("changes nothing about the session it reports", async () => {
+    const view = await mount({ goalSeconds: 60, category: "listening" });
+
+    await advance(60_000);
+
+    expect(view.ends).toEqual([{ duration: 60, actualTime: 60, completed: true }]);
+  });
+});
+
 describe("unlockFocusCompletionAudio (#836)", () => {
   it("unlocks audio from the opening tap when the completion sound is on", () => {
     savePrefs({ completion: true });

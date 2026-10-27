@@ -448,13 +448,15 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
     const hook = await renderLifecycle(FOCUSER);
 
     await act(async () => {
-      await hook.current().handleFocusEnd({ duration: 240, actualTime: 240, completed: true });
+      await hook.current().handleFocusEnd({ duration: 240, actualTime: 240, completed: true }, "writing");
     });
 
     const { request, clientSessionId, ownerUserId, thoughts } = saveCall(0);
     expect(request).toEqual({
       dayNumber: 4,
       sessionType: "focus",
+      // #837: the picker's choice travels with the queued request.
+      focusCategory: "writing",
       duration: 240,
       bonusSeconds: 0,
       completed: true,
@@ -478,6 +480,23 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
     expect(hook.current().completionData).toBeNull();
     expect(hook.setOverlay).toHaveBeenCalledTimes(1);
     expect(hook.setOverlay).toHaveBeenCalledWith(null);
+  });
+
+  test("a session with no category saves null, and every category steps the one goal (#837)", async () => {
+    queue.saveCompletedSession.mockResolvedValue(synced("server-1"));
+    const hook = await renderLifecycle(FOCUSER);
+
+    await act(async () => {
+      await hook.current().handleFocusEnd({ duration: 240, actualTime: 240, completed: true });
+    });
+    expect(saveCall(0).request).toMatchObject({ sessionType: "focus", focusCategory: null });
+    expect(hook.user()?.focusActivityDay).toBe(5);
+
+    await act(async () => {
+      await hook.current().handleFocusEnd({ duration: 300, actualTime: 300, completed: true }, "listening");
+    });
+    expect(saveCall(1).request).toMatchObject({ dayNumber: 5, focusCategory: "listening" });
+    expect(hook.user()?.focusActivityDay).toBe(6);
   });
 
   test("each session gets its own client id", async () => {

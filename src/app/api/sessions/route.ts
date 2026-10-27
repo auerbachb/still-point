@@ -3,7 +3,13 @@ import { db } from "@/db";
 import { atomicCreateSessionWithProgression } from "@/db/atomic";
 import { requireAuth } from "@/lib/api/requireAuth";
 import { withApiHandler } from "@/lib/api/withApiHandler";
-import { calculateSessionStats, parseCompleted, parseOptionalSessionType, parseOptionalTrack } from "@/lib/constants";
+import {
+  calculateSessionStats,
+  parseCompleted,
+  parseOptionalFocusCategory,
+  parseOptionalSessionType,
+  parseOptionalTrack,
+} from "@/lib/constants";
 import { calculateHistoryPeriodStats } from "@/lib/historyStats";
 import { calculateMindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { isValidSessionCalendarDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
@@ -45,6 +51,7 @@ export const GET = withApiHandler("Get sessions", async (request: NextRequest) =
     createdAt: sessions.createdAt,
     buddySessionId: sessions.buddySessionId,
     breathCount: sessions.breathCount,
+    focusCategory: sessions.focusCategory,
     track: sessions.track,
     combined: sessions.combined,
     ambientSoundSummary: sessions.ambientSoundSummary,
@@ -120,6 +127,10 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
     sessionType === "breath" && typeof breathCountRaw === "number" && Number.isFinite(breathCountRaw)
       ? Math.min(2_147_483_647, Math.max(0, Math.floor(breathCountRaw)))
       : null;
+  // #837: read only for a focus session, as `breathCount` is only for breath;
+  // every other type stores null whatever was sent. `undefined` is a value that
+  // is not a category.
+  const focusCategory = sessionType === "focus" ? parseOptionalFocusCategory(body.focusCategory) : null;
   const bonusSecondsRaw = body.bonusSeconds;
   const bonusSeconds =
     typeof bonusSecondsRaw === "number" && Number.isFinite(bonusSecondsRaw)
@@ -146,6 +157,9 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
   // a sit someone has already finished would lose it.
   if (combined && (sessionType !== "standard" || track !== "primary")) {
     return NextResponse.json({ error: "Invalid combined session" }, { status: 400 });
+  }
+  if (focusCategory === undefined) {
+    return NextResponse.json({ error: "Invalid focus category" }, { status: 400 });
   }
 
   const clientSessionIdRaw = body.clientSessionId;
@@ -176,6 +190,7 @@ export const POST = withApiHandler("Create session", async (request: NextRequest
       clearPercent,
       thoughtCount: thoughtCount ?? 0,
       breathCount,
+      focusCategory,
       mindStateLog: mindStateLog ?? [],
       attentionLog: Array.isArray(attentionLog) ? attentionLog : null,
       ambientSoundSummary,
