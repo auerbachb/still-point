@@ -62,6 +62,9 @@ struct CompletionView: View {
     /// the rows of the write that failed, so a later patch still empties them.
     @State private var moodUnsure = false
     @State private var isSavingMoodMatrix = false
+    /// #792: false until the stored matrix has loaded. The grid stays disabled
+    /// until then, so the load cannot replace a cell picked while it was in flight.
+    @State private var moodLoaded = false
     @State private var moodMatrixSaveError: String?
 
     /// #792: where this sit stands in the offline queue — nil until it is read.
@@ -646,7 +649,7 @@ struct CompletionView: View {
                 moodKey: key,
                 column: .before,
                 selected: entry.before,
-                disabled: isSavingMoodMatrix || isReturning
+                disabled: isSavingMoodMatrix || isReturning || !moodLoaded
             )
             .frame(maxWidth: .infinity)
 
@@ -654,7 +657,7 @@ struct CompletionView: View {
                 moodKey: key,
                 column: .after,
                 selected: entry.after,
-                disabled: isSavingMoodMatrix || isReturning
+                disabled: isSavingMoodMatrix || isReturning || !moodLoaded
             )
             .frame(maxWidth: .infinity)
         }
@@ -821,6 +824,7 @@ struct CompletionView: View {
     @MainActor
     private func loadPersistedSessionData() async {
         guard let detailSessionId else { return }
+        moodLoaded = false
         moodMatrix = [:]
         moodMatrixSaved = false
         moodMatrixSaveError = nil
@@ -835,6 +839,8 @@ struct CompletionView: View {
         } catch {
             // Non-blocking: recap still works when reload fails.
         }
+        // #792: after a failed load too, so the grid is never left disabled.
+        moodLoaded = true
     }
 
     private func statCard(
