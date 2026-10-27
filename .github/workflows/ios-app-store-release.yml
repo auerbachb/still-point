@@ -4,7 +4,12 @@ name: iOS App Store release (Fastlane)
 # App Store binary with Fastlane and upload it with its metadata.
 #
 # Flow:
-#   1. Release-config UI smoke gate (pre-flight-tests).
+#   1. Two gates run side by side, and build-number needs both:
+#      - pre-flight-tests: the release-config UI smoke gate.
+#      - release-secrets: scripts/ci/ios-app-store-release-secrets.mjs checks
+#        that every secret fastlane-release needs is set, and names any that
+#        are missing, so a missing secret fails the run before it costs a
+#        build number (#937).
 #   2. build-number: check the tag against MARKETING_VERSION and the release-
 #      readiness checklists, then claim the next build number the way TestFlight
 #      cuts do (#838): push an ios-v<MARKETING_VERSION>-build<N> tag on this
@@ -107,13 +112,50 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  release-secrets:
+    name: Check release secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Read-only. The secrets reach only the check step, and the job installs no
+    # packages, so no npm code runs on a runner that holds them.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      # Prints the name of each missing secret, never a value. Bind the same
+      # list as the script's REQUIRED_SECRETS.
+      - name: Check every secret fastlane-release needs is set
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          BUILD_PROVISION_PROFILE_EXTENSION_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_EXTENSION_BASE64 }}
+          BUILD_PROVISION_PROFILE_WIDGET_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_WIDGET_BASE64 }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          GID_CLIENT_ID: ${{ secrets.GID_CLIENT_ID }}
+          GID_REVERSED_CLIENT_ID: ${{ secrets.GID_REVERSED_CLIENT_ID }}
+        run: node scripts/ci/ios-app-store-release-secrets.mjs
+
   build-number:
     name: Claim build number
-    needs: pre-flight-tests
+    needs: [pre-flight-tests, release-secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The only job that can write: it pushes the build tag. Signing and upload
-    # stay in fastlane-release, which keeps a read-only token.
+    # The only job that can write: it pushes the build tag. It gets no secrets:
+    # release-secrets checks them, and fastlane-release signs and uploads with
+    # them, both with a read-only token.
     permissions:
       contents: write
     outputs:

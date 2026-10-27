@@ -46,15 +46,15 @@ Before the first upload, the Account Holder should create an internal testing gr
 
 ## Code signing (CI)
 
-GitHub Actions holds distribution signing material as secrets (values never appear in logs or git). Both TestFlight and App Store release workflows import these on the macOS runner before `xcodebuild` / Fastlane `gym`.
+GitHub Actions holds distribution signing material as secrets (values never appear in logs or git). Both TestFlight and App Store release workflows import these on the macOS runner before `xcodebuild` / Fastlane `gym`. Both need every secret in this table.
 
 | Secret | Used for |
 |--------|----------|
 | `BUILD_CERTIFICATE_BASE64` | Distribution certificate (`.p12`) |
 | `P12_PASSWORD` | Certificate import password |
 | `BUILD_PROVISION_PROFILE_BASE64` | App Store provisioning profile (main app) |
-| `BUILD_PROVISION_PROFILE_EXTENSION_BASE64` | App extension profile (if applicable) |
-| `BUILD_PROVISION_PROFILE_WIDGET_BASE64` | Widget extension profile (if applicable) |
+| `BUILD_PROVISION_PROFILE_EXTENSION_BASE64` | App Store provisioning profile (`StillPointMonitor` extension) |
+| `BUILD_PROVISION_PROFILE_WIDGET_BASE64` | App Store provisioning profile (`StillPointWidget` extension) |
 | `APPSTORE_API_KEY_ID` | App Store Connect API key ID (`kid`) |
 | `APPSTORE_API_ISSUER_ID` | App Store Connect API issuer |
 | `APPSTORE_API_PRIVATE_KEY` | API private key (full `.p8` contents) |
@@ -64,6 +64,7 @@ GitHub Actions holds distribution signing material as secrets (values never appe
 **Troubleshooting:**
 
 - **Signing error in CI:** verify certificate validity and that the provisioning profile bundle ID matches.
+- **App Store release fails in Check release secrets:** each error names a secret that is missing or empty. The check covers this table plus `GID_CLIENT_ID` and `GID_REVERSED_CLIENT_ID` (see [`docs/mobile-oauth-integration.md`](../mobile-oauth-integration.md)). It runs before the build-number claim, so no number was used. Add the secret, then **Re-run failed jobs** (#937).
 - **Upload authentication error:** regenerate the App Store Connect API key and update GitHub secrets.
 - **Build number conflict:** App Store Connect rejects an upload that repeats a build number it already has for that version. TestFlight cuts and App Store release runs take theirs from the `ios-v*-build*` tags. Shipping a commit again is a new cut with a new tag, while **Re-run failed jobs** on a run whose build or upload failed keeps its number.
 - **`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`:** Account Holder must clear Agreements, Tax, and Banking in Apple Developer / App Store Connect before uploads succeed.
