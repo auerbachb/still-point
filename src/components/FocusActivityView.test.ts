@@ -25,6 +25,8 @@ const env = vi.hoisted(() => {
     wakeLock: [] as boolean[],
     /** Every `useSessionSuppressionRelay(active, key)` call, in render order. */
     suppression: [] as Array<{ active: boolean; key: string }>,
+    /** How many times an existing audio context was asked to resume. */
+    resumes: 0,
   };
   const record = (what: string) => {
     state.log.push(`${((Date.now() - state.t0) / 1000).toFixed(2)} ${what}`);
@@ -45,7 +47,10 @@ vi.mock("@/lib/audio", async (importOriginal) => {
     playCompletion: () => env.play("completion"),
     playVoiceCountdown: (seconds: number) => env.play(`voice:${seconds}`),
     cancelVoiceCountdownPlayback: () => {},
-    resumeAudioContext: () => Promise.resolve(true),
+    resumeAudioContext: () => {
+      env.state.resumes += 1;
+      return Promise.resolve(true);
+    },
     subscribeAudioContextState: () => () => {},
     unlockAudioContext: () => {
       env.record("unlock");
@@ -182,6 +187,7 @@ beforeEach(() => {
   env.state.keepAwakePref = true;
   env.state.wakeLock.length = 0;
   env.state.suppression.length = 0;
+  env.state.resumes = 0;
   localStorage.clear();
   // Hidden keeps `useAudioContextResume`'s own resume attempts quiet.
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
@@ -332,6 +338,30 @@ describe("FocusActivityView — the session environment (#836)", () => {
 
     expect(env.state.wakeLock.every(enabled => !enabled)).toBe(true);
     expect(env.state.suppression.at(-1)?.active).toBe(true);
+  });
+
+  it("keeps an existing audio context resumed while it runs when the completion sound is on", async () => {
+    savePrefs({ completion: true });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    await mount({ goalSeconds: 60 });
+
+    expect(env.state.resumes).toBeGreaterThan(0);
+  });
+
+  it("never resumes an existing audio context when the completion sound is off", async () => {
+    savePrefs({ completion: false, tick: false, haptics: true });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    await mount({ goalSeconds: 60 });
+
+    // Coming back to the tab is when a running sit resumes a suspended context.
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await advance(60_000);
+
+    expect(env.state.resumes).toBe(0);
+    // The end haptic needs no audio, and still fires.
+    expect(cueNames()).toEqual(["haptic:sessionEnd", "end"]);
   });
 });
 

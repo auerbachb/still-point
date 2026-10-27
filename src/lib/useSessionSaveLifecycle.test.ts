@@ -470,8 +470,9 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
     expect(thoughts).toEqual([]);
     // One step, the rule the server applies, so Home shows the next goal now.
     expect(hook.user()?.focusActivityDay).toBe(5);
+    // Then the server's own counter is re-read, as after a synced standard sit.
+    expect(hook.refreshUserFromServer).toHaveBeenCalledTimes(1);
     // A focus session moves no meditation state and has no completion screen.
-    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
     expect(hook.refreshTodayTracks).not.toHaveBeenCalled();
     expect(hook.loadedSitsRef.current).toBeNull();
     expect(hook.current().completionData).toBeNull();
@@ -506,8 +507,26 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
     expect(saveCall(0).request).toMatchObject({ sessionType: "focus", completed: true });
     expect(hook.user()?.focusActivityDay).toBe(5);
     expect(hook.setUser).toHaveBeenCalledTimes(1);
+    // Not on the server yet: the `onSynced` refresh after its upload re-reads.
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
     expect(hook.current().localWriteFailed).toBe(false);
     expect(hook.setOverlay).toHaveBeenCalledWith(null);
+  });
+
+  test("a synced save adopts the server's counter when another client stepped it too", async () => {
+    queue.saveCompletedSession.mockResolvedValueOnce(synced("server-1"));
+    const hook = await renderLifecycle(FOCUSER);
+    // Another client also finished a session from day 4, so the server is at 6.
+    hook.refreshUserFromServer.mockImplementation(() => {
+      hook.setUser((prev) => (prev ? { ...prev, focusActivityDay: 6 } : prev));
+    });
+
+    await act(async () => {
+      await hook.current().handleFocusEnd({ duration: 240, actualTime: 240, completed: true });
+    });
+
+    expect(hook.refreshUserFromServer).toHaveBeenCalledTimes(1);
+    expect(hook.user()?.focusActivityDay).toBe(6);
   });
 
   test("ending early saves the time spent and leaves the goal where it was", async () => {
@@ -526,6 +545,7 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
       completed: false,
     });
     expect(hook.setUser).not.toHaveBeenCalled();
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
     expect(hook.user()?.focusActivityDay).toBe(4);
     expect(hook.setOverlay).toHaveBeenCalledWith(null);
   });
@@ -553,6 +573,7 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
 
     expect(hook.current().localWriteFailed).toBe(true);
     expect(hook.setUser).not.toHaveBeenCalled();
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
     expect(hook.user()?.focusActivityDay).toBe(4);
     expect(hook.setOverlay).toHaveBeenCalledWith(null);
   });
@@ -628,6 +649,7 @@ describe("useSessionSaveLifecycle — focus sessions (#836)", () => {
     });
 
     expect(hook.setUser).not.toHaveBeenCalled();
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
     expect(hook.user()?.focusActivityDay).toBe(9);
     expect(hook.setOverlay).not.toHaveBeenCalled();
   });

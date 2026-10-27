@@ -62,7 +62,11 @@ export function FocusActivityView({ goalSeconds, onEnd }: FocusActivityViewProps
   // Only `end()` is ever called. The running cues are planned by `advance()`,
   // which this view never calls, so the session is silent by construction.
   const [soundPrefs] = useState(() => loadSoundPrefs());
-  const cues = useSessionCues({ isActive: running, soundPrefs });
+  // `isActive` keeps the audio context resumed while the timer runs. Only the
+  // completion sound needs it (the end haptic never touches audio), so with that
+  // sound off a context left by an earlier sit stays suspended, as
+  // `unlockFocusCompletionAudio` leaves it unopened.
+  const cues = useSessionCues({ isActive: running && soundPrefs.completion, soundPrefs });
 
   // Wake lock parity with sits (#317): keep the screen awake while it runs.
   const keepAwakePref = useKeepScreenAwakePref();

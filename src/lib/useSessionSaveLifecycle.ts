@@ -445,6 +445,12 @@ export function useSessionSaveLifecycle({
           setUser((prev) => (prev
             ? { ...prev, focusActivityDay: focusActivityDayAfterCompletedSave(prev.focusActivityDay, focusActivityDay) }
             : prev));
+          // The server increments its own counter, so a session finished on
+          // another client since this one last read the user leaves the step
+          // above short. A synced save re-reads the server's value, as a synced
+          // standard sit does; a queued one is re-read by the `onSynced` refresh
+          // that follows its upload.
+          if (outcome.status === "synced") refreshUserFromServer();
         }
       }
     } finally {
@@ -452,7 +458,7 @@ export function useSessionSaveLifecycle({
       if (focusSavingRef.current === generation) focusSavingRef.current = null;
       if (generation === sessionGeneration.current) setOverlay(null);
     }
-  }, [sessionGeneration, user, setUser, saveSitToQueue, setOverlay]);
+  }, [sessionGeneration, user, setUser, refreshUserFromServer, saveSitToQueue, setOverlay]);
 
   /** Account teardown: the not-stored warning was about the previous account's sit. */
   const clearLocalWriteFailed = useCallback(() => {
