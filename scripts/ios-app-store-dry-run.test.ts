@@ -5,7 +5,20 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { gitRunner } from "./ci/ios-testflight-build-number.mjs";
-import { extractRunbookPhases, listBuildTags, queryAsc, resolveIntendedBuild } from "./ios-app-store-dry-run.mjs";
+import {
+  checkWorkflowSecrets,
+  classifyIssueChecklist,
+  createReportContext,
+  evaluateAsc,
+  extractProjectVersion,
+  extractRunbookPhases,
+  listBuildTags,
+  parseArgs,
+  queryAsc,
+  resolveIntendedBuild,
+  runLocalChecks,
+  writeMarkdown,
+} from "./ios-app-store-dry-run.mjs";
 
 const REPO_ROOT = process.cwd();
 const DRY_RUN = path.join(REPO_ROOT, "scripts/ios-app-store-dry-run.mjs");
@@ -200,6 +213,360 @@ describe("queryAsc (#838)", () => {
     const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "40" }, fakeAsc);
 
     expect(asc).toMatchObject({ live: true, intendedBuild: null });
+  });
+});
+
+describe("queryAsc without App Store Connect access (#1132)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test.each([
+    ["no marketing version", { buildNumber: "31" }],
+    ["no build number", { marketingVersion: "1.0.3" }],
+  ])("has no intended build to look up with %s", async (_label, project) => {
+    const get = vi.fn();
+
+    expect(await queryAsc(project, get)).toEqual({ live: false, reason: "There is no intended build to look up; see A2." });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  test("asks for the credentials when APPSTORE_APP_ID is unset", async () => {
+    const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+    vi.stubEnv("APPSTORE_APP_ID", "");
+    vi.stubEnv("APPSTORE_API_KEY_ID", "TESTKEYID");
+    vi.stubEnv("APPSTORE_API_ISSUER_ID", "test-issuer");
+    vi.stubEnv("APPSTORE_API_PRIVATE_KEY", privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+    const get = vi.fn();
+
+    const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "31" }, get);
+
+    expect(asc).toEqual({ live: false, reason: expect.stringMatching(/^Set APPSTORE_APP_ID, APPSTORE_API_KEY_ID/) });
+    expect(get).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseArgs (#1132)", () => {
+  test("reads every flag", () => {
+    expect(
+      parseArgs([
+        "--require-live",
+        "--output-dir", "out",
+        "--intended-tag", "ios-v1.0.3-build9",
+        "--release-owner", "Pat",
+        "--tracking-issue", "#5",
+        "--submission-url", "https://example.com/s",
+      ]),
+    ).toEqual({
+      requireLive: true,
+      outputDir: "out",
+      intendedTag: "ios-v1.0.3-build9",
+      releaseOwner: "Pat",
+      trackingIssue: "#5",
+      submissionUrl: "https://example.com/s",
+    });
+    expect(parseArgs([])).toEqual({});
+  });
+
+  test("refuses an unknown flag", () => {
+    expect(() => parseArgs(["--submit"])).toThrow("Unknown argument: --submit");
+  });
+
+  test.each([[["--output-dir"]], [["--intended-tag", "--require-live"]]])("refuses a flag without a value: %j", (argv) => {
+    expect(() => parseArgs(argv)).toThrow(`Missing value for ${argv[0]}`);
+  });
+});
+
+describe("extractProjectVersion (#1132)", () => {
+  test("reads the version, build, bundle ID, and encryption flag", () => {
+    const yml = [
+      '    MARKETING_VERSION: "1.0.3"',
+      "    CURRENT_PROJECT_VERSION: 31",
+      "    PRODUCT_BUNDLE_IDENTIFIER: me.still-point.app",
+      "    ITSAppUsesNonExemptEncryption: false",
+    ].join("\n");
+
+    expect(extractProjectVersion(yml)).toEqual({
+      marketingVersion: "1.0.3",
+      buildNumber: "31",
+      bundleId: "me.still-point.app",
+      usesNonExemptEncryption: false,
+    });
+  });
+
+  test("leaves what it can't find undefined", () => {
+    expect(extractProjectVersion("name: StillPoint\n")).toEqual({
+      marketingVersion: undefined,
+      buildNumber: undefined,
+      bundleId: undefined,
+      usesNonExemptEncryption: false,
+    });
+  });
+});
+
+/** A report context whose log does not print. */
+function quietContext() {
+  const context = createReportContext();
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  return context;
+}
+
+describe("createReportContext (#1132)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("keeps each run's checks and logs apart", () => {
+    const first = quietContext();
+    const second = quietContext();
+
+    first.pass("A1", "ok", { n: 1 });
+    first.warn("B2", "careful");
+    first.fail("A5", "missing");
+    first.log("hello");
+
+    expect(first.checks).toEqual([
+      { id: "A1", status: "pass", message: "ok", evidence: { n: 1 } },
+      { id: "B2", status: "warning", message: "careful", evidence: {} },
+      { id: "A5", status: "fail", message: "missing", evidence: {} },
+    ]);
+    expect(first.logs).toEqual([expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z hello$/)]);
+    expect(second.checks).toEqual([]);
+    expect(second.logs).toEqual([]);
+  });
+});
+
+describe("runLocalChecks A3-A5 (#1132)", () => {
+  const goodDocs = {
+    readme: "See ios/RELEASING.md and docs/operations/ios-app-store-submission.md.",
+    submissionRunbook: "ABCDEF".split("").map((phase) => `### Phase ${phase} \u2014 Step`).join("\n"),
+    workflow: "on:\n  push:\n    tags:\n      - 'ios-v*-build*'\n",
+    releaseWorkflow: "on:\n  push:\n    tags:\n      - 'ios-v*.*.*'\n",
+    parity: [
+      "- [x] Feature parity checklist between iOS and web is completed.",
+      "- [X] All critical parity gaps are fixed or explicitly deferred with owner/date.",
+    ].join("\n"),
+    qa: [
+      "- [x] Regression/QA pass for release candidate is completed.",
+      "- [x] App Store metadata/versioning/release notes are finalized.",
+    ].join("\n"),
+  };
+  const intended = { marketingVersion: "1.0.3", buildNumber: "31", intendedTag: "ios-v1.0.3-build31", source: "origin" };
+  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
+
+  function statuses(docs: typeof goodDocs) {
+    const context = createReportContext();
+    runLocalChecks(context, { docs, intended, project });
+    return Object.fromEntries(context.checks.map((check) => [check.id, check.status]));
+  }
+
+  test("passes A1-A5 on complete docs", () => {
+    expect(statuses(goodDocs)).toEqual({ A1: "pass", A2: "pass", A3: "pass", A4: "pass", A5: "pass" });
+  });
+
+  test("A3 fails when the runbook is missing a phase", () => {
+    expect(statuses({ ...goodDocs, submissionRunbook: "### Phase A \u2014 Step\n### Phase B \u2014 Step\n" }).A3).toBe("fail");
+  });
+
+  test.each([
+    ["the TestFlight workflow has no build-tag trigger", { workflow: "on:\n  push:\n    tags:\n      - 'ios-v*'\n" }],
+    ["the release workflow has no tag trigger", { releaseWorkflow: "on: workflow_dispatch\n" }],
+  ])("A4 fails when %s", (_label, change) => {
+    expect(statuses({ ...goodDocs, ...change }).A4).toBe("fail");
+  });
+
+  test.each([
+    ["a parity item is unchecked", { parity: goodDocs.parity.replace("- [X]", "- [ ]") }],
+    ["a QA item is unchecked", { qa: goodDocs.qa.replace("- [x] Regression", "- [ ] Regression") }],
+    ["a parity item is indented, not a top-level checklist line", { parity: goodDocs.parity.replace("- [x]", "  - [x]") }],
+  ])("A5 fails when %s", (_label, change) => {
+    expect(statuses({ ...goodDocs, ...change }).A5).toBe("fail");
+  });
+});
+
+describe("checkWorkflowSecrets B2 (#1132)", () => {
+  const SECRETS = [
+    "BUILD_CERTIFICATE_BASE64",
+    "P12_PASSWORD",
+    "BUILD_PROVISION_PROFILE_BASE64",
+    "BUILD_PROVISION_PROFILE_EXTENSION_BASE64",
+    "BUILD_PROVISION_PROFILE_WIDGET_BASE64",
+    "APPSTORE_API_KEY_ID",
+    "APPSTORE_API_ISSUER_ID",
+    "APPSTORE_API_PRIVATE_KEY",
+  ];
+  const refs = (names: string[]) => names.map((name) => `\${{ secrets.${name} }}`).join("\n");
+  // The TestFlight workflow holds the signing secrets, the release workflow the API key.
+  const docs = { workflow: refs(SECRETS.slice(0, 5)), releaseWorkflow: refs(SECRETS.slice(5)) };
+  const listed = (names: string[]) => () => ({ available: true, names });
+
+  test("fails, naming them, when a workflow doesn't reference every secret", () => {
+    const context = createReportContext();
+
+    const secretStatus = checkWorkflowSecrets(
+      context,
+      { ...docs, releaseWorkflow: refs(["APPSTORE_API_KEY_ID"]) },
+      listed(SECRETS),
+    );
+
+    expect(context.checks).toEqual([
+      expect.objectContaining({
+        id: "B2",
+        status: "fail",
+        evidence: {
+          requiredWorkflowSecrets: SECRETS,
+          workflowSecretRefs: SECRETS.slice(0, 6),
+          missingWorkflowRefs: ["APPSTORE_API_ISSUER_ID", "APPSTORE_API_PRIVATE_KEY"],
+        },
+      }),
+    ]);
+    expect(secretStatus).toEqual({
+      status: "fail",
+      message: "Workflow(s) missing required secret references: APPSTORE_API_ISSUER_ID, APPSTORE_API_PRIVATE_KEY.",
+    });
+  });
+
+  test("passes, with one message for the check and the checklist, when GitHub lists every secret", () => {
+    const context = createReportContext();
+
+    const secretStatus = checkWorkflowSecrets(context, docs, listed(SECRETS));
+
+    expect(context.checks).toEqual([expect.objectContaining({ id: "B2", status: "pass" })]);
+    expect(secretStatus).toEqual({ status: "pass", message: context.checks[0].message });
+  });
+
+  test("warns, naming them, when GitHub lacks a secret", () => {
+    const context = createReportContext();
+
+    const secretStatus = checkWorkflowSecrets(context, docs, listed(SECRETS.slice(1)));
+
+    expect(context.checks[0]).toMatchObject({ status: "warning", evidence: { missingGithubSecrets: ["BUILD_CERTIFICATE_BASE64"] } });
+    expect(secretStatus).toEqual({ status: "warning", message: "GitHub secret names missing: BUILD_CERTIFICATE_BASE64." });
+  });
+
+  test("warns when GitHub's secrets can't be listed", () => {
+    const context = createReportContext();
+
+    const secretStatus = checkWorkflowSecrets(context, docs, () => ({ available: false, reason: "gh: not logged in", names: [] }));
+
+    expect(context.checks[0]).toMatchObject({ status: "warning", evidence: { reason: "gh: not logged in" } });
+    expect(secretStatus).toEqual({
+      status: "warning",
+      message: "Workflows reference required secrets; GitHub secret list unavailable: gh: not logged in.",
+    });
+  });
+});
+
+describe("evaluateAsc (#1132)", () => {
+  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
+  const offline = async () => ({ live: false, reason: "no credentials" });
+  const live = (intendedBuild: object | null) => async () => ({ live: true, intendedBuild });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function run(query: () => Promise<unknown>, requireLive = false) {
+    const context = quietContext();
+    const asc = await evaluateAsc(context, { project, requireLive }, query);
+    return { asc, checks: context.checks.map(({ id, status }) => [id, status]) };
+  }
+
+  test("records no check when the query is skipped without --require-live", async () => {
+    expect(await run(offline)).toEqual({ asc: { live: false, reason: "no credentials" }, checks: [] });
+  });
+
+  test("a query that throws is a warning, and the run goes on offline", async () => {
+    const result = await run(async () => {
+      throw new Error("ASC 500");
+    });
+
+    expect(result).toEqual({ asc: { live: false, reason: "ASC 500" }, checks: [["ASC", "warning"]] });
+  });
+
+  test("a query that throws fails with --require-live", async () => {
+    const result = await run(async () => {
+      throw new Error("ASC 500");
+    }, true);
+
+    expect(result.checks).toEqual([["ASC", "warning"], ["ASC_REQUIRE_LIVE", "fail"]]);
+  });
+
+  test("a skipped query fails with --require-live", async () => {
+    expect((await run(offline, true)).checks).toEqual([["ASC_REQUIRE_LIVE", "fail"]]);
+  });
+
+  test("fails a live intended build that is not VALID", async () => {
+    expect((await run(live({ version: "31", processingState: "PROCESSING" }))).checks).toEqual([["ASC_BUILD_STATE", "fail"]]);
+  });
+
+  test("fails when the live query finds no intended build", async () => {
+    expect((await run(live(null), true)).checks).toEqual([["ASC_BUILD_MISSING", "fail"]]);
+  });
+
+  test("passes a live VALID intended build", async () => {
+    expect((await run(live({ version: "31", processingState: "VALID" }), true)).checks).toEqual([]);
+  });
+});
+
+describe("classifyIssueChecklist (#1132)", () => {
+  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
+  const secretStatus = { status: "warning", message: "GitHub secret names missing: P12_PASSWORD." };
+  type Asc = { live: boolean; reason?: string; intendedBuild?: { processingState?: string } | null };
+  type CheckRecord = { id: string; status: string; message: string; evidence: object };
+  const classify = (asc: Asc, requireLive = false, checks: CheckRecord[] = []) =>
+    classifyIssueChecklist({ checks, secretStatus, project, asc, trackingIssue: "#5", requireLive });
+  const item = (list: { id: string }[], id: string) => list.find((entry) => entry.id === id);
+
+  test.each([
+    ["offline", { live: false, reason: "no credentials" }, false, "warning", "no credentials"],
+    ["offline with --require-live", { live: false, reason: "no credentials" }, true, "fail", "no credentials"],
+    ["live without the intended build", { live: true, intendedBuild: null }, false, "fail", "Intended TestFlight build was not found in App Store Connect."],
+    ["live and VALID", { live: true, intendedBuild: { processingState: "VALID" } }, false, "pass", "ASC build query completed and the intended build is VALID."],
+    ["live and still processing", { live: true, intendedBuild: { processingState: "PROCESSING" } }, false, "fail", "Intended TestFlight build is PROCESSING."],
+  ])("B5 %s", (_label, asc, requireLive, status, message) => {
+    expect(item(classify(asc, requireLive), "B5")).toMatchObject({ status, message, evidence: { version: "1.0.3", build: "31" } });
+  });
+
+  test("lists all 38 items, in order", () => {
+    expect(classify({ live: false, reason: "x" }).map((entry: { id: string }) => entry.id)).toEqual(ISSUE_242_IDS);
+  });
+
+  test("a check covering an item wins over the table", () => {
+    const checks = [{ id: "B2", status: "pass", message: "from the check", evidence: { a: 1 } }];
+
+    expect(item(classify({ live: false, reason: "x" }, false, checks), "B2")).toMatchObject({
+      status: "pass",
+      message: "from the check",
+      evidence: { a: 1 },
+    });
+  });
+
+  test("B2 falls back to the secret status without a B2 check, and E1 names the tracking issue", () => {
+    const list = classify({ live: false, reason: "x" });
+
+    expect(item(list, "B2")).toMatchObject(secretStatus);
+    expect(item(list, "E1")).toMatchObject({ message: expect.stringContaining("GitHub issue #5") });
+  });
+});
+
+describe("writeMarkdown (#1132)", () => {
+  test("escapes | in checklist messages so the table keeps its columns", () => {
+    const report = {
+      generatedAt: "2026-10-27T00:00:00.000Z",
+      project: { marketingVersion: "1.0.3", buildNumber: "31", bundleId: "me.still-point.app" },
+      intendedTag: "ios-v1.0.3-build31",
+      intendedBuild: { source: "origin" },
+      releaseOwner: "Pat",
+      submissionUrl: "UNSET_SUBMISSION_URL",
+      preflightSummary: {},
+      humanGates: [],
+      fallbackPaths: [],
+      issue242Checklist: [{ id: "B2", status: "warning", text: "Secrets", message: "a | b || c" }],
+      logs: [],
+    };
+
+    expect(writeMarkdown(report)).toContain("| B2 | warning | Secrets | a \\| b \\|\\| c |\n");
   });
 });
 
