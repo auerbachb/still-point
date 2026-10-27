@@ -306,7 +306,13 @@ export class WebSessionSyncCoordinator {
     const serverSessionId = entry.serverSessionId;
     if (!serverSessionId) return null;
 
-    entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId) ?? entry;
+    // #1054: `clearQueue` empties the store outside the queue lock as well as
+    // inside it, so sign-out can land after the row was created. A sit gone from
+    // this re-read was cleared: send nothing, rather than falling back to the
+    // earlier read and uploading a signed-out account's thoughts.
+    const current = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId);
+    if (!current) return null;
+    entry = current;
 
     if (entry.thoughts.length > 0 || entry.clearCompletionNote === true) {
       return this.uploadThoughts(entry, serverSessionId);

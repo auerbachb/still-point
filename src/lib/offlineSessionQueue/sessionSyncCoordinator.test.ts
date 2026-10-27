@@ -1226,3 +1226,53 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     expect((await store.loadEntries()).map((entry) => entry.clientSessionId)).toEqual([rejectedSit, sitBehind]);
   });
 });
+
+describe("WebSessionSyncCoordinator sign-out between row and thoughts (#1054)", () => {
+  /** Empties itself straight after the save that records the sit's server row
+   *  — where `clearQueue`'s unlocked write can land during a flush. */
+  class ClearsAfterRowSyncedStore extends InMemoryOfflineSessionQueueStore {
+    override async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+      await super.saveEntries(entries);
+      if (entries.some((entry) => entry.sessionSynced)) {
+        await super.saveEntries([]);
+      }
+    }
+  }
+
+  test("a queue cleared after the row is created sends none of the sit's thoughts", async () => {
+    const store = new ClearsAfterRowSyncedStore();
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655441054";
+    const thoughtCalls: unknown[] = [];
+    const transport: SessionSyncTransport = {
+      createSession: async (payload) => ({
+        id: "server-session-1054",
+        dayNumber: payload.dayNumber,
+        duration: payload.duration,
+        sessionType: payload.sessionType,
+        completed: payload.completed,
+        actualTime: payload.actualTime,
+        clearPercent: payload.clearPercent,
+        thoughtCount: payload.thoughtCount,
+        mindStateLog: payload.mindStateLog,
+        sessionDate: payload.sessionDate,
+        createdAt: "2026-07-17T12:00:00.000Z",
+      }),
+      batchThoughts: async (data) => {
+        thoughtCalls.push(data);
+      },
+    };
+
+    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+      baseRequest(),
+      clientSessionId,
+      testOwnerUserId,
+      [{ timeInSession: 10, text: "private thought" }],
+    );
+
+    const flushed = await new WebSessionSyncCoordinator(store, transport).flushPending(testOwnerUserId);
+
+    expect(thoughtCalls).toEqual([]);
+    expect(flushed).toBe(0);
+    expect(await store.loadEntries()).toEqual([]);
+  });
+});
