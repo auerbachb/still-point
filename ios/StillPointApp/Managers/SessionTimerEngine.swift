@@ -1,7 +1,5 @@
 import Combine
-import CoreHaptics
 import Foundation
-import UIKit
 import StillPointShared
 
 /// #739: the solo sit's clock and the cues it plays.
@@ -34,15 +32,10 @@ final class SessionTimerEngine {
     private var cursor = SessionTickLogic.Cursor.fresh
     private let timerMultiplier: Double
 
-    /// #712: the two generators behind `HapticCueLogic.Intensity`. Held for the
-    /// life of the sit rather than built per cue — a generator has to be
-    /// `prepare()`d to fire promptly, and one created at the moment of the
-    /// marker arrives noticeably after it.
-    private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
-    private let pronouncedHaptic = UINotificationFeedbackGenerator()
-    /// Plays beside the session audio engine. UIKit generators stay silent
-    /// once that engine is running, which a normal sit does by default (#794).
-    private var coreHapticEngine: CHHapticEngine?
+    /// #849: the haptic cues, shared with the Buddy sit. Solo keeps the
+    /// framework's auto-shutdown default and never calls `stop()`, so the
+    /// engine stays up for the whole sit.
+    private let hapticPlayer = HapticCuePlayer(isAutoShutdownEnabled: false)
 
     /// - Parameter timerMultiplier: Speeds the clock up for UI tests
     ///   (`SP_UI_TEST_TIMER_MULTIPLIER`); 1 otherwise.
@@ -138,7 +131,7 @@ final class SessionTimerEngine {
             AudioEngine.shared.playCompletion()
         }
         if let cue = effects.haptic {
-            fireHaptic(cue)
+            hapticPlayer.fire(cue)
         }
     }
 
@@ -178,76 +171,9 @@ final class SessionTimerEngine {
 
     // MARK: - Haptics (#712)
 
-    /// Primes both generators. Cheap, and an unprepared generator fires late
+    /// Primes the haptic player. Cheap, and an unprepared generator fires late
     /// enough that the tap no longer reads as marking the minute it belongs to.
     func prepareHaptics() {
-        gentleHaptic.prepare()
-        pronouncedHaptic.prepare()
-        startCoreHapticsIfNeeded()
-    }
-
-    private func startCoreHapticsIfNeeded() {
-        guard HapticPlayback.prefersCoreHaptics(
-            hardwareSupportsCoreHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics
-        ) else { return }
-        if let coreHapticEngine {
-            try? coreHapticEngine.start()
-            return
-        }
-        do {
-            let engine = try CHHapticEngine()
-            engine.playsHapticsOnly = true
-            engine.resetHandler = { [weak self] in
-                DispatchQueue.main.async {
-                    try? self?.coreHapticEngine?.start()
-                }
-            }
-            try engine.start()
-            coreHapticEngine = engine
-        } catch {
-            coreHapticEngine = nil
-        }
-    }
-
-    /// Plays a cue at the strength `HapticCueLogic` assigns it. Core Haptics
-    /// first, so a sit with sound on still vibrates. UIKit is the fallback.
-    private func fireHaptic(_ cue: HapticCueLogic.Cue) {
-        if coreHapticEngine == nil {
-            startCoreHapticsIfNeeded()
-        }
-        if playCoreHaptic(cue) { return }
-        switch HapticCueLogic.intensity(for: cue) {
-        case .gentle:
-            gentleHaptic.impactOccurred()
-            gentleHaptic.prepare()
-        case .pronounced:
-            pronouncedHaptic.notificationOccurred(.success)
-        }
-    }
-
-    private func playCoreHaptic(_ cue: HapticCueLogic.Cue) -> Bool {
-        guard let coreHapticEngine else { return false }
-        let events = HapticPlayback.transients(for: HapticCueLogic.intensity(for: cue)).map { tap in
-            CHHapticEvent(
-                eventType: .hapticTransient,
-                parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
-                ],
-                relativeTime: tap.relativeTime
-            )
-        }
-        do {
-            try coreHapticEngine.start()
-            let pattern = try CHHapticPattern(events: events, parameters: [])
-            let player = try coreHapticEngine.makePlayer(with: pattern)
-            try player.start(atTime: CHHapticTimeImmediate)
-            return true
-        } catch {
-            // A failed start leaves a dead engine. Clear the stored property,
-            // not the `guard let` binding, so the next cue can build another.
-            self.coreHapticEngine = nil
-            return false
-        }
+        hapticPlayer.prepare()
     }
 }
