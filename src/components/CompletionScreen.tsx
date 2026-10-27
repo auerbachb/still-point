@@ -499,6 +499,8 @@ export function CompletionScreen({
               if (key !== JSON.stringify(lastSavedMood.current)) setMoodMatrixSaved(false);
             }}
             disabled={returning}
+            // #911: the side-by-side grid is wider than a phone; stack it there.
+            layout={compact ? "stacked" : "grid"}
           />
           {moodMatrixSaveError ? (
             <div
