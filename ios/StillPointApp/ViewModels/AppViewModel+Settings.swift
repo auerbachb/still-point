@@ -9,10 +9,19 @@ import SwiftUI
 /// The queue and its ticket guard (`settingsWrites`, `settingsOrdering`) are stored
 /// properties, so they are declared with the rest of the state in `AppViewModel.swift`.
 extension AppViewModel {
+    // MARK: - Identity and ordering
+
     /// Snapshot of the live identity, taken by a caller that will apply a response
     /// later. Capture this *before* an `await`, hand it back to
     /// `applySettingsUser(_:startedAtGeneration:requestTicket:)`.
     var identityGeneration: Int { authGeneration }
+
+    /// Whether the identity captured as `generation` is still the live one. The
+    /// re-check every settings round trip makes after each `await`, before it sends
+    /// or adopts anything (#665).
+    private func isIdentityLive(_ generation: Int) -> Bool {
+        generation == identityGeneration
+    }
 
     /// Runs a settings mutation once every mutation enqueued before it has finished.
     ///
@@ -65,6 +74,8 @@ extension AppViewModel {
     func nextSettingsRequestTicket() -> Int {
         settingsOrdering.nextTicket()
     }
+
+    // MARK: - Adopting responses
 
     /// Why a settings response was or was not adopted.
     ///
@@ -145,7 +156,7 @@ extension AppViewModel {
         // response from the previous session would overwrite newer local fields,
         // clear offline mode, and persist stale data to the cache. That is the case
         // this generation check exists for (#665).
-        guard generation == authGeneration else { return .discarded }
+        guard isIdentityLive(generation) else { return .discarded }
         guard currentView != .auth, let existing = currentUser, existing.id == user.id else { return .discarded }
         // Same account throughout, so the question left is which response is the
         // newest word. Checked after the identity guards, not before: a response
@@ -163,6 +174,8 @@ extension AppViewModel {
         }
         return .applied
     }
+
+    // MARK: - Settings control save
 
     /// Saves one Settings control's new value — the round trip every account-backed
     /// control on the Settings screen shares: Public Board, Aphorisms, gaze tracking,
@@ -249,7 +262,7 @@ extension AppViewModel {
             // while it waited its turn must not put up a camera or microphone prompt for
             // a change the account now on screen never made, nor let a denial reset the
             // control and raise an alert in place of the resync (#851).
-            guard identityAtStart == identityGeneration else { return .identityChanged }
+            guard isIdentityLive(identityAtStart) else { return .identityChanged }
             guard await authorize() else {
                 // A "no" given after the account changed while the prompt was up ends as
                 // an identity change, so the control re-syncs from the account now on
@@ -266,7 +279,7 @@ extension AppViewModel {
         do {
             // Re-checked before issuing the write: sending this would otherwise
             // apply the previous user's intent to the account that replaced them.
-            guard identityAtStart == identityGeneration else { return .identityChanged }
+            guard isIdentityLive(identityAtStart) else { return .identityChanged }
             // Taken immediately before the request, so it records when this left
             // and outranks the `me()` reads racing it (#697/#709). Ordering against
             // the other settings mutations is the queue's job, not the ticket's.
@@ -278,19 +291,17 @@ extension AppViewModel {
             // nothing else can be in flight to supersede it — so the account now
             // carries what the control shows and Settings' sync from it is a no-op
             // (#697).
-            switch applySettingsUser(
+            return applySettingsUser(
                 updated,
                 startedAtGeneration: identityAtStart,
                 requestTicket: settingsTicket
-            ) {
-            case .applied: return .applied
-            case .superseded: return .superseded
-            case .discarded: return .discarded
-            }
+            ).controlSaveEnding
         } catch {
             return .failed
         }
     }
+
+    // MARK: - Dual-track opt-in
 
     /// #240: opt into the dual-track fork, then refresh local user + badges.
     func enableDualTrack() async {
@@ -313,8 +324,8 @@ extension AppViewModel {
         // enable the fork on — and persist the `UserDTO` of — the account that
         // replaced them (#665). Same capture-then-recheck shape as every Settings
         // write.
-        let identityAtStart = authGeneration
-        await settingsWrites.enqueue { [weak self] in
+        let identityAtStart = identityGeneration
+        await enqueueSettingsWrite { [weak self] in
             guard let self else { return }
             await self.performEnableDualTrack(startedAtGeneration: identityAtStart)
         }.value
@@ -324,7 +335,7 @@ extension AppViewModel {
         // Re-checked now that the wait is over and before the request is issued:
         // sending this would otherwise apply the previous user's intent to the
         // account that replaced them.
-        guard generation == authGeneration else { return }
+        guard isIdentityLive(generation) else { return }
         // Taken immediately before the request, so it records when this left and
         // outranks the `me()` reads racing it (#697).
         let ticket = nextSettingsRequestTicket()
@@ -346,6 +357,18 @@ extension AppViewModel {
             await refreshTracksDoneToday()
         } catch {
             print("Failed to enable dual track: \(error)")
+        }
+    }
+}
+
+private extension AppViewModel.SettingsApplyOutcome {
+    /// How a Settings control's save ends once its response has been through
+    /// `applySettingsUser`: each outcome maps onto the ending of the same name.
+    var controlSaveEnding: SettingsControlSave.Ending {
+        switch self {
+        case .applied: return .applied
+        case .superseded: return .superseded
+        case .discarded: return .discarded
         }
     }
 }
