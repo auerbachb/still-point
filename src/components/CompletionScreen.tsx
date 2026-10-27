@@ -213,6 +213,22 @@ export function CompletionScreen({
     };
   }, [moodMatrix]);
 
+  // #960: on phones the fixed bottom nav covers the bottom of the viewport, and
+  // where the return button first lands depends on how tall the recap is. The
+  // page is what scrolls, so its scroller gets the nav's clearance as scroll
+  // padding: anything that scrolls a recap control into view then stops it
+  // above the nav. A scroll margin on the button itself (#479) was not enough,
+  // because WebKit ignores it when it brings the button into view.
+  useEffect(() => {
+    if (!compact) return;
+    const root = document.documentElement;
+    const previous = root.style.scrollPaddingBottom;
+    root.style.scrollPaddingBottom = "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))";
+    return () => {
+      root.style.scrollPaddingBottom = previous;
+    };
+  }, [compact]);
+
   async function handleReturn() {
     if (returningRef.current) return;
     // A failed flush must not trap the user here. The next tap leaves.
@@ -549,11 +565,6 @@ export function CompletionScreen({
           cursor: returning ? "default" : "pointer",
           opacity: returning ? 0.5 : 1,
           marginTop: "8px",
-          // scrollMarginBottom ensures scrollIntoViewIfNeeded respects the fixed
-          // bottom nav so this button never lands behind it on mobile (#479).
-          scrollMarginBottom: compact
-            ? "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))"
-            : undefined,
         }}
       >
         {COMPLETION_RETURN_LABEL}

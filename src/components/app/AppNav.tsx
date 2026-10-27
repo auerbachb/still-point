@@ -82,7 +82,7 @@ type AppNavProps = {
 /** The persistent tab nav: a fixed bottom bar on mobile, links at the top right on desktop. */
 export function AppNav({ activeTab, isMobile, onSelectTab }: AppNavProps) {
   return (
-    <div style={isMobile ? {
+    <div data-testid="app-nav" style={isMobile ? {
       position: "fixed", bottom: 0, left: 0, right: 0,
       display: "flex", justifyContent: "space-around",
       background: "rgba(var(--bg-rgb), 0.92)", backdropFilter: "blur(10px)",
