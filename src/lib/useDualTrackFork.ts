@@ -5,8 +5,8 @@ import { creditedLocalIsoDate, type PracticeDaySit } from "@/lib/sessionCalendar
 import { syncTrackingUnlockFromSessions } from "@/lib/trackingControlPrefs";
 
 type UseDualTrackForkOptions = {
-  /** #666: the page's session generation. A successful refresh from an ended
-   *  session is dropped; a failed one still clears the badges (#833). */
+  /** #666: the page's session generation. A refresh from an ended session is
+   *  dropped whether it succeeded or failed (#833). */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. Refreshed here. */
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;
@@ -39,19 +39,25 @@ export function useDualTrackFork({
   // as the primary track.
   const refreshTodayTracks = useCallback(async () => {
     const generation = sessionGeneration.current;
-    const remembered = loadedSitsRef.current ?? [];
     try {
       const { sessions } = await api.getSessions();
       if (generation !== sessionGeneration.current) return;
-      const sits = mergeRememberedSits(sessions.map(practiceDaySit), remembered);
+      // #833: merged into the sits as they are now, not a copy taken before the
+      // request. For a pending save, `saveCompletedSit` starts this refresh before
+      // `handleSessionComplete` remembers the sit, so that copy would not have it.
+      const sits = mergeRememberedSits(sessions.map(practiceDaySit), loadedSitsRef.current ?? []);
       loadedSitsRef.current = sits;
       const today = creditedLocalIsoDate(sits, !!userRef.current?.dualTrackEnabled);
       const done = tracksDoneOn(sits, today);
       syncTrackingUnlockFromSessions(sessions);
       setTracksDoneToday(done);
     } catch {
+      // #833: a failure from an ended session is dropped, as its response
+      // would be. Failing closed here would clear the badges of whoever has
+      // signed in since.
+      if (generation !== sessionGeneration.current) return;
       // Fail closed so a failed refresh can't leave a stale "done today"
-      // badge on screen (e.g. after switching accounts).
+      // badge on screen.
       setTracksDoneToday({ primary: false, second: false });
     }
   }, [sessionGeneration, loadedSitsRef, userRef]);
@@ -67,10 +73,10 @@ export function useDualTrackFork({
     // structural — here it is one call site, so merge and it cannot happen.
     //
     // A null `prev` stays null rather than being installed. The generation guard
-    // above catches an explicit logout, which bumps `sessionGeneration` — but the
-    // auth check's `signedOut` outcome clears `user` without bumping it, and
-    // installing this partial response there would resurrect an identity the app
-    // has already signed out, missing whatever the projection omits.
+    // above already drops a response that outlived its session — every sign-out
+    // bumps `sessionGeneration`, the auth check's authoritative one included
+    // (#833) — so this is the backstop: a partial response must never become a
+    // whole identity, missing whatever the projection omits.
     setUser((prev) => (prev ? { ...prev, ...updated } : prev));
     void refreshTodayTracks();
   }, [sessionGeneration, setUser, refreshTodayTracks]);

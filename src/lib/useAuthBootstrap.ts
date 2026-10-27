@@ -7,9 +7,9 @@ import { creditedPracticeDate, practiceDaySit } from "@/lib/practiceDaySits";
 import { GRACE_CUTOFF_HOUR, type PracticeDaySit } from "@/lib/sessionCalendar";
 
 type UseAuthBootstrapOptions = {
-  /** #666: the page's monotonic session generation. An explicit sign-in or
-   *  sign-out bumps it, and every adoption after an await checks it. An
-   *  authoritative 401/403/404 clears `user` without bumping it (#833). */
+  /** #666: the page's monotonic session generation. A sign-in, an explicit
+   *  sign-out, and an authoritative 401/403/404 (#833) all bump it, and every
+   *  adoption after an await checks it. */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. Null until a fetch lands. */
   loadedSitsRef: RefObject<PracticeDaySit[] | null>;
@@ -112,6 +112,11 @@ export function useAuthBootstrap({
       setRunningFromCache(false);
 
       if (outcome.action === "signedOut") {
+        // #833: invalidates every user adoption already in flight, as an explicit
+        // sign-out does. Without it a `refreshUserFromServer` that started before
+        // this answer passes its generation check, re-installs the user signed out
+        // here, and the cache effect stores it again as the offline identity.
+        sessionGeneration.current += 1;
         loadedSitsRef.current = null;
         setUser(null);
         // Teardown is gated on the one shared predicate — asked once, through

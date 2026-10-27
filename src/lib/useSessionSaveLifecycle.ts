@@ -53,9 +53,8 @@ export type CompletedSitInput = {
 
 type UseSessionSaveLifecycleOptions = {
   /** #666: the page's session generation. A save that settles after a sign-out
-   *  (or a different sign-in) cannot re-raise the offline strip or reopen the
-   *  completion screen. Abandon and breath still close the overlay when their
-   *  save settles, whichever session is open by then (#833). */
+   *  (or a different sign-in) cannot re-raise the offline strip, reopen the
+   *  completion screen, or close whatever the next account has open (#833). */
   sessionGeneration: RefObject<number>;
   /** Sits used to decide whether yesterday is still open. A pending sit is
    *  remembered here. */
@@ -97,7 +96,10 @@ export function useSessionSaveLifecycle({
   const lastCompletedSitRef = useRef<
     { data: CompletedSitInput; clientSessionId: string; sessionDate: string } | null
   >(null);
-  const breathSavingRef = useRef(false);
+  // The session generation of the breath save in flight, or null. Scoped to the
+  // generation rather than a boolean so the previous account's save can neither
+  // swallow the next account's End nor release its gate (#833).
+  const breathSavingRef = useRef<number | null>(null);
 
   // #703: every path that writes a sit to the local queue reports here, so the
   // offline strip's promise tracks whether local storage is actually working.
@@ -292,6 +294,10 @@ export function useSessionSaveLifecycle({
   }, [user, saveCompletedSit]);
 
   const handleSessionAbandon = useCallback(async (data: CompletedSitInput) => {
+    // #833: the save below waits on the server flush, so a sign-out and a new
+    // sign-in can land before it settles. Closing the overlay then would end
+    // the next account's sit — the same guard as `handleSessionComplete`.
+    const generation = sessionGeneration.current;
     if (user?.id) {
       // #703: an abandoned sit is still a sit the queue was asked to keep. It
       // gets no completion screen, so the offline strip is the only place a
@@ -322,8 +328,9 @@ export function useSessionSaveLifecycle({
       );
     }
 
+    if (generation !== sessionGeneration.current) return;
     setOverlay(null);
-  }, [loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
+  }, [sessionGeneration, loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
 
   // #376: log a breath-counting session, mirroring iOS `completeBreathSession`
   // (#374). Empty sessions (entered then ended with no taps) are not logged.
@@ -338,8 +345,13 @@ export function useSessionSaveLifecycle({
       setOverlay(null);
       return;
     }
-    if (breathSavingRef.current) return;
-    breathSavingRef.current = true;
+    // #833: the gate and the close below are both scoped to this session's
+    // generation, as in `handleSessionAbandon`. A save still running for an
+    // account that has since signed out neither blocks this End nor closes the
+    // overlay of the account that replaced it.
+    const generation = sessionGeneration.current;
+    if (breathSavingRef.current === generation) return;
+    breathSavingRef.current = generation;
     try {
       if (user?.id) {
         // #703: same as the abandon path — a breath sit has no completion
@@ -370,10 +382,13 @@ export function useSessionSaveLifecycle({
         );
       }
     } finally {
-      breathSavingRef.current = false;
-      setOverlay(null);
+      // Released only while it is still this save's: by now the gate may belong
+      // to the next account's save, and clearing it would let a second End
+      // start a duplicate.
+      if (breathSavingRef.current === generation) breathSavingRef.current = null;
+      if (generation === sessionGeneration.current) setOverlay(null);
     }
-  }, [loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
+  }, [sessionGeneration, loadedSitsRef, userRef, user, saveSitToQueue, setOverlay]);
 
   /** Account teardown: the not-stored warning was about the previous account's sit. */
   const clearLocalWriteFailed = useCallback(() => {
