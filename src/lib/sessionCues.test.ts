@@ -178,9 +178,27 @@ describe("planCountdownCues — minute chime", () => {
     expect(planned.cursor.lastCompletedBlockIndex).toBe(1);
   });
 
-  it("is suppressed by voice mode", () => {
+  // #853: in voice mode the chime keeps its own switch and gives way only to
+  // the countdown. iOS pins the same rule in `SessionTickLogicTests.swift`.
+  it("still strikes in voice mode at a minute outside the final minute", () => {
     const planned = planCountdownCues(seededCueCursor(59.95, 300, VOICE), 60, 300, VOICE);
-    expect(sounds(planned.cues)).toEqual([]);
+    expect(sounds(planned.cues)).toEqual([{ kind: "chime" }]);
+  });
+
+  it("gives way in voice mode to the countdown opening the final minute", () => {
+    const withVoice = planCountdownCues(seededCueCursor(119.95, 180, VOICE), 120, 180, VOICE);
+    expect(sounds(withVoice.cues)).toEqual([{ kind: "voice", second: 60 }]);
+    expect(withVoice.cursor.lastCompletedBlockIndex).toBe(1);
+
+    const chimeOnly: SoundPrefs = { ...VOICE, voiceCountdown: false };
+    const withoutVoice = planCountdownCues(seededCueCursor(119.95, 180, chimeOnly), 120, 180, chimeOnly);
+    expect(sounds(withoutVoice.cues)).toEqual([{ kind: "chime" }]);
+  });
+
+  it("strikes at every minute of a voice-mode sit but the one opening the final minute", () => {
+    const { cues } = run(freshCueCursor(VOICE), updates(0, 299.95), 300, VOICE);
+    const chimes = cues.filter(([, cue]) => cue.kind === "chime").map(([elapsed]) => elapsed);
+    expect(chimes).toEqual([60, 120, 180]);
   });
 
   it("never strikes on a sit too short for minute blocks", () => {
