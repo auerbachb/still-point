@@ -322,7 +322,11 @@ final class AppViewModel {
 
     /// Single place a server-confirmed user is adopted — in memory *and* in the
     /// local copy that survives a launch with no network (#665).
-    func applyAuthenticatedUser(_ user: UserDTO) {
+    ///
+    /// - Returns: what the adoption replaced. `.differentAccount` means the previous
+    ///   account's local state was torn down first (#916).
+    @discardableResult
+    func applyAuthenticatedUser(_ user: UserDTO) -> AccountAdoption {
         // Only an actual *transition* invalidates in-flight work. Re-confirming the
         // same account (a reconnect refresh, a settings PATCH round-trip) is not a
         // transition, and bumping for it was wrong twice over: it made every
@@ -330,10 +334,22 @@ final class AppViewModel {
         // let an unrelated settings save cancel identity work that was still valid.
         // A sign-out sets `currentUser = nil` and bumps, so a sign-out/sign-in cycle
         // on the *same* account still bumps twice and stale work is still rejected.
-        if currentUser?.id != user.id { authGeneration &+= 1 }
-        currentUser = user
-        CachedIdentityStore.save(user)
-        isOfflineMode = false
+        //
+        // #916: a *different* account also tears the previous one down before it is
+        // installed. Another window can sign out and in as someone else, and this
+        // window's next check then hands it that account with the old one's sit,
+        // tasks and per-account state still in place. Web's `adoptUser` (#868).
+        AccountAdoption.adopt(
+            current: currentUser?.id,
+            incoming: user.id,
+            advanceGeneration: { authGeneration &+= 1 },
+            tearDown: { tearDownPreviousAccount() },
+            install: {
+                currentUser = user
+                CachedIdentityStore.save(user)
+                isOfflineMode = false
+            }
+        )
     }
 
     /// Route to sign-in.
@@ -381,10 +397,22 @@ final class AppViewModel {
     /// a network, and consuming a pending invite here would burn the token on a
     /// request that cannot succeed. `refreshAfterReconnect()` picks both up.
     func enterOfflineMode(user: UserDTO, cause: WidgetDataStore.SignedOutCause) async {
-        // Transition-only, matching `applyAuthenticatedUser`.
-        if currentUser?.id != user.id { authGeneration &+= 1 }
-        currentUser = user
-        isOfflineMode = true
+        // Transition-only, matching `applyAuthenticatedUser`, and a cached identity
+        // naming a different account tears the previous one down first (#916): the
+        // cache is shared by every window, so another window's sign-in as someone
+        // else is what this reads back on a bad connection. The teardown resets the
+        // route even mid-sit — that sit belongs to the account being replaced — and
+        // cancels the old `offlineCatchUpTask`, which is started fresh below.
+        AccountAdoption.adopt(
+            current: currentUser?.id,
+            incoming: user.id,
+            advanceGeneration: { authGeneration &+= 1 },
+            tearDown: { tearDownPreviousAccount() },
+            install: {
+                currentUser = user
+                isOfflineMode = true
+            }
+        )
         // `checkAuth()` runs on every scene activation, so this path is reached
         // mid-sit whenever the app is foregrounded on a bad connection. Routing to
         // the initial authenticated view there would eject the user from a session
@@ -427,12 +455,25 @@ final class AppViewModel {
     }
 
     private func cancelIdentityScopedTasks() {
-        offlineCatchUpTask?.cancel()
-        offlineCatchUpTask = nil
+        cancelReplacedAccountTasks()
         reconnectTask?.cancel()
         reconnectTask = nil
         loginCatchUpTask?.cancel()
         loginCatchUpTask = nil
+    }
+
+    /// The identity-scoped tasks that never host an adoption, so replacing the account
+    /// can cancel them from inside one (#916).
+    ///
+    /// `reconnectTask` and `loginCatchUpTask` are left to `cancelIdentityScopedTasks()`.
+    /// Either can be the very task adopting the new account — each awaits the queued
+    /// `me()` read that calls `applyAuthenticatedUser` — and cancelling it there would
+    /// cancel the new account's badge refresh, widget sync and link consumption behind
+    /// it. One still running for the old account is harmless: the generation moved
+    /// before the teardown, and every step after its awaits re-checks it.
+    private func cancelReplacedAccountTasks() {
+        offlineCatchUpTask?.cancel()
+        offlineCatchUpTask = nil
         buddyInviteTask?.cancel()
         buddyInviteTask = nil
         // The widget history backfill is identity-scoped too. Its own key check is
@@ -442,6 +483,35 @@ final class AppViewModel {
         // rather than leaving the row blank. `didLogout` cancelled this already;
         // `applySignedOut` did not, which is the gap this closes.
         widgetHistory.cancel()
+    }
+
+    /// #916: removes the previous account's local state when a different account
+    /// replaces it, with the previous account still installed. Web's
+    /// `clearAccountScopedLocalState`, run by `adoptUser` (#868 / PR #903).
+    ///
+    /// The account-scoped half of `didLogout()`, without the parts only a sign-out
+    /// may do: the cached identity is replaced by the install that follows rather than
+    /// cleared, the last-used sign-in tag and the pending links stay for whoever is
+    /// signed in, and the old account's queued sits stay queued — they are
+    /// owner-scoped and still upload under that account.
+    ///
+    /// Resetting the route closes the previous account's sit, breath or completion
+    /// screen, buddy room, or any other screen, and their own `onDisappear` cleanup
+    /// runs. Late saves for a sit already saving are #854's, and stay its own.
+    private func tearDownPreviousAccount() {
+        cancelReplacedAccountTasks()
+        // #526: the tracking unlock is the previous account's.
+        trackingControlPrefsManager.clearOnLogout()
+        // #709: the "During sessions" choice and its queued reports are too. Clearing
+        // also bumps the controller's epoch, so a preference read still in flight for
+        // the old account cannot write it back; the caller hydrates the new one.
+        SessionNotificationSuppressionController.clearSuppressPreference()
+        // #703: a failed local save of the previous account's sit.
+        localSaveFailed = false
+        resetTrackCompletionBadges()
+        buddyInviteError = nil
+        selectedTab = MainTab.home.rawValue
+        currentView = Self.initialAuthenticatedView(from: ProcessInfo.processInfo.environment)
     }
 
     func didLogout() {

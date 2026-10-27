@@ -85,6 +85,11 @@ struct RootView: View {
 
             default:
                 MainTabView(appVM: appVM)
+                    // #916: keyed by the account, so a different account adopted while
+                    // the route stays on the tabs rebuilds History, Journal, Board,
+                    // Settings and Home with fresh state and loads. Re-confirming the
+                    // same account keeps the key and the tabs as they are.
+                    .id(appVM.currentUser?.id)
                     .transition(.opacity)
             }
 
