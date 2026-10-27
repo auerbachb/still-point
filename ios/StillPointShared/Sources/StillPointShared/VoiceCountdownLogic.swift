@@ -17,7 +17,8 @@ public enum VoiceCountdownLogic {
         guard remaining > 0 && remaining <= 60 else { return nil }
         // Rounds up, clamped to 1–60, so the spoken second matches the iOS
         // countdown digits, which round up too. Web's `planCountdownCues` floors,
-        // as its digits do.
+        // as its digits do, but still speaks 60 when its first final-minute
+        // update lands with 59.x s left.
         let candidate = max(1, min(60, Int(ceil(remaining))))
         guard candidate != lastAnnouncedSec else { return nil }
         return candidate
