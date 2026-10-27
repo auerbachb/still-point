@@ -25,7 +25,8 @@ import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 import { api, ApiError } from "@/lib/api";
 import { DEFAULT_TAB, isTab, pathForTab, type Tab } from "@/lib/appTabs";
 import type { FocusCategory, SessionType, Track } from "@/lib/constants";
-import { focusSessionDuration, isDualTrackEligible } from "@/lib/duration";
+import { combinedDurationForUser, isCombineOffered } from "@/lib/combinedSit";
+import { activeRecovery, focusSessionDuration, isDualTrackEligible } from "@/lib/duration";
 import type { PracticeDaySit } from "@/lib/sessionCalendar";
 import { resetTrackingUnlockOnLogout } from "@/lib/trackingControlPrefs";
 import { getWebSessionSyncCoordinator } from "@/lib/offlineSessionQueue";
@@ -686,6 +687,15 @@ export default function StillPoint() {
           dualTrackEligible={isDualTrackEligible(user.currentDay) && !forkDismissed}
           primaryDoneToday={tracksDoneToday.primary}
           secondDoneToday={tracksDoneToday.second}
+          // #895: from the same done-today flags as the badges above.
+          combineOffered={isCombineOffered({
+            dualTrackEnabled: user.dualTrackEnabled ?? false,
+            primaryDoneToday: tracksDoneToday.primary,
+            secondDoneToday: tracksDoneToday.second,
+            recoveryActive: activeRecovery(userRecovery) !== null,
+          })}
+          combinedDuration={combinedDurationForUser(user.currentDay, user.secondTrackDay ?? 1)}
+          onCombineSessions={() => handleBegin("standard", "primary", { combined: true })}
           onBegin={() => handleBegin("standard", "primary")}
           onBeginSecond={() => handleBegin("standard", "second")}
           onEnableDualTrack={handleEnableDualTrack}
