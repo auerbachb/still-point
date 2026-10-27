@@ -106,6 +106,19 @@ final class SessionTickLogicTests: XCTestCase {
         XCTAssertTrue(SessionTickLogic.canStart(isComplete: false, isAbandoned: false))
     }
 
+    func testASitThatHasEndedCannotBeEndedAgain() {
+        // Ran out, or ended early.
+        XCTAssertFalse(SessionTickLogic.canEndSession(isComplete: true, isAbandoned: false))
+        // Abandoned.
+        XCTAssertFalse(SessionTickLogic.canEndSession(isComplete: true, isAbandoned: true))
+        XCTAssertFalse(SessionTickLogic.canEndSession(isComplete: false, isAbandoned: true))
+    }
+
+    func testASitThatHasNotEndedMayBeEnded() {
+        // Not yet begun, running, or paused.
+        XCTAssertTrue(SessionTickLogic.canEndSession(isComplete: false, isAbandoned: false))
+    }
+
     func testResumingSeedsEachCursorFromThePausedElapsedTime() {
         let resumed = SessionTickLogic.Cursor.resuming(at: 130.4, totalSeconds: 260, hapticIntervalSeconds: 60)
         XCTAssertEqual(resumed, cursor(tick: 130, minuteBlock: 1, hapticInterval: 2, voice: 0))

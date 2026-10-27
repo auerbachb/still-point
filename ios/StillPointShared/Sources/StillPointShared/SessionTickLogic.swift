@@ -111,6 +111,17 @@ public enum SessionTickLogic {
         !isComplete && !isAbandoned
     }
 
+    /// #987: whether End Early or Abandon may act. A sit ends once — it runs
+    /// out, is ended early, or is abandoned — and after that neither button
+    /// does anything. The session screen stays up while the save runs, so
+    /// without this an Abandon tapped then went Home, and the completion
+    /// screen opened over Home when the save settled.
+    ///
+    /// Mirrors web's `canEndSession` (`src/lib/sessionEndGuard.ts`, #930).
+    public static func canEndSession(isComplete: Bool, isAbandoned: Bool) -> Bool {
+        !isComplete && !isAbandoned
+    }
+
     /// Whether starting the timer picks a paused sit back up rather than
     /// beginning a new one. A clock that already reached the duration always
     /// begins again.

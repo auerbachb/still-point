@@ -303,6 +303,8 @@ final class SessionViewModel {
 
     /// End session early but keep the data
     func endEarly() -> (clearPercent: Int, thoughtCount: Int, thoughts: [CapturedThought]) {
+        // #987: a sit that has ended stays as it is; the save already under way owns it.
+        guard canEndSession else { return (clearPercent, thoughtCount, capturedThoughts) }
         finalizeActiveHoldIfNeeded(at: elapsed)
         timerEngine.stop()
         isActive = false
@@ -310,13 +312,23 @@ final class SessionViewModel {
         return (clearPercent, thoughtCount, capturedThoughts)
     }
 
-    /// Abandon session — discard all data, don't save
-    func abandon() {
+    /// Abandon session — discard all data, don't save.
+    /// Returns `false`, changing nothing, once the sit has ended (#987).
+    @discardableResult
+    func abandon() -> Bool {
+        guard canEndSession else { return false }
         finalizeActiveHoldIfNeeded(at: elapsed)
         timerEngine.stop()
         isActive = false
         isAbandoned = true
         isComplete = true
+        return true
+    }
+
+    /// #987: whether End Early and Abandon may act — false once the sit has
+    /// run out, been ended early, or been abandoned.
+    var canEndSession: Bool {
+        SessionTickLogic.canEndSession(isComplete: isComplete, isAbandoned: isAbandoned)
     }
 
     /// #557: stable local key for offline end-note sync during completion.
