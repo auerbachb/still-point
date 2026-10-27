@@ -824,6 +824,8 @@ struct SessionView: View {
                         .spCapsuleButtonStyle(.neutral, size: .compact)
                 }
                 .accessibilityIdentifier("session.endEarlyButton")
+                // #987: once the sit has ended, End Early and Abandon stay off while it saves, as on web.
+                .disabled(!vm.canEndSession)
 
                 if !(sessionInProgress && !vm.showPostDistractionCapture && !vm.showGuidedExercise && (vm.isActive || vm.isPaused)) {
                     Button {
@@ -870,7 +872,8 @@ struct SessionView: View {
 
                 // Abandon
                 Button {
-                    vm.abandon()
+                    // #987: an Abandon after the sit ended leaves the completion screen to open in place.
+                    guard vm.abandon() else { return }
                     Task { await appVM.returnHome() }
                 } label: {
                     Text("Abandon")
@@ -880,6 +883,7 @@ struct SessionView: View {
                         .spCapsuleButtonStyle(.danger, size: .compact)
                 }
                 .accessibilityIdentifier("session.abandonButton")
+                .disabled(!vm.canEndSession)
             }
 
             // One cue at a time. Chime and the end bell stay their own switches.
