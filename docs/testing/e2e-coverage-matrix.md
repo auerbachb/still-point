@@ -14,12 +14,13 @@ Published audit of user journeys across **web** (Playwright mobile web) and **iO
 
 Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [`e2e/README.md`](../../e2e/README.md), [`ios/StillPointAppUITests/README.md`](../../ios/StillPointAppUITests/README.md).
 
+Before editing, read [Maintenance](#maintenance): one journey per row, and a new regression guard gets its own row rather than a clause appended to an existing one.
+
 ---
 
 ## Matrix
 
-| Journey | Risk | Web | iOS | Spec / test reference |
-|---------|:----:|:---:|:---:|------------------------|
+Every area below has its own table, so additions in different areas never touch the same lines.
 
 ### Public
 
@@ -41,6 +42,7 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Password reset — no enumeration | P1 | ✅ | ❌ | `e2e/auth/password-reset.spec.ts` |
 | Auth 401 / token expiry → login | P1 | ✅ | ✅ | `e2e/auth/login.spec.ts`; `testTokenExpiryRoutesToReauthMessage` |
 | Auth network failure + Retry | P1 | ✅ | ✅ | `e2e/auth/login.spec.ts`; `testLaunchOfflineShowsUserVisibleMessage` |
+| Rejected session signs out (vs dead network) | P1 | ✅ | ❌ | `e2e/web/offline-pwa.spec.ts` |
 | Deleted account (410) message | P2 | ✅ | ❌ | `e2e/auth/login.spec.ts` |
 | Username uniqueness / race (DB) | P1 | ✅ | ❌ | `e2e/auth/username-uniqueness.integration.spec.ts` (`@authDbIntegration`) |
 
@@ -72,6 +74,13 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Pause / abandon / thought capture | P2 | ❌ | ❌ | QA manual; snapshot lane only |
 | Landscape session usability | P1 | ✅ | ✅ | `e2e/session/session-flow.spec.ts`; `testRotationDecisionSessionRemainsUsableInLandscape` (non-critical lane) |
 | Pull-to-refresh during session | P2 | ✅ | ➖ | `e2e/session/session-flow.spec.ts` |
+
+### Offline PWA (web)
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
+| Offline reload lands on the app, not an auth error | P0 | ✅ | ➖ | `e2e/web/offline-pwa.spec.ts` `@critical` |
+| Offline sit completes, queues, syncs on reconnect | P1 | ✅ | ➖ | `e2e/web/offline-pwa.spec.ts` |
 
 ### Breath counting (excluded)
 
@@ -105,18 +114,27 @@ Lane wiring and retry policy: [`e2e-policy.md`](./e2e-policy.md). Spec layout: [
 | Public board / aphorisms toggles | P2 | ❌ | ❌ | QA manual |
 | Notifications subpage | P2 | ❌ | ⚠️ | Link exists; no E2E |
 | App blocking / Screen Time gate | P2 | ➖ | ⚠️ | `testCompletedSessionUnlocksConfiguredAppGate` (settings smoke; no shield E2E) |
-| Delete account flow | P2 | ❌ | ❌ | QA manual |
+| Delete account flow + cancel | P2 | ✅ | ✅ | `e2e/settings/account-deletion.spec.ts`; `testAccountDeletionFlow` (critical lane) |
 
 ### Layout / a11y (cross-cutting)
 
 | Journey | Risk | Web | iOS | Spec / test reference |
 |---------|:----:|:---:|:---:|------------------------|
-| Safe area / bottom nav overlap | P1 | ✅ | ✅ | `e2e/layout/safe-area.spec.ts`; recap return button at any recap height (#960) in `issue-960-recap-return-clearance.spec.ts`; `testPrimaryControlsVisibleAboveHomeIndicator` |
+| Safe area / bottom nav overlap | P1 | ✅ | ✅ | `e2e/layout/safe-area.spec.ts`; `testPrimaryControlsVisibleAboveHomeIndicator` |
 | Horizontal overflow / tap targets | P1 | ✅ | ⚠️ | `e2e/layout/overflow.spec.ts`, `login.spec.ts` |
 | Mobile web 320–375px layout (#473) | P1 | ✅ | ➖ | `e2e/layout/issue-473-mobile-web-layout.spec.ts` |
-| Recap Mood shift grid at 320–375px (#911), 44px tap targets (#964) | P1 | ✅ | ✅ | `e2e/layout/issue-911-mood-shift-narrow.spec.ts` (44px minimum box at 320, 375, 601, 620 and 768px); iOS widths in `MoodMatrixGeometryTests`, rendered cells in `testMoodShiftCellsAreFortyFourPointTargetsInsideTheWindow` |
 | VoiceOver timer + primary button | P1 | ❌ | ✅ | `testVoiceOverLabelsForTimerAndPrimaryButton` |
 | Cold-start auth latency bound | P1 | ❌ | ✅ | iOS smoke (`coldStartAuthCheckMs` ≤ 8000 ms) |
+
+### Issue regression guards (layout)
+
+One row per issue. Add new guards as new rows at the bottom; do not fold them into the cross-cutting rows above.
+
+| Journey | Risk | Web | iOS | Spec / test reference |
+|---------|:----:|:---:|:---:|------------------------|
+| Recap Mood Shift grid stacks at 320–375px (#911) | P1 | ✅ | ✅ | `e2e/layout/issue-911-mood-shift-narrow.spec.ts`; iOS widths in `MoodMatrixGeometryTests` |
+| Mood Shift cells are 44px tap targets (#964) | P1 | ✅ | ✅ | `e2e/layout/issue-911-mood-shift-narrow.spec.ts` (320, 375, 601, 620, 768px); `testMoodShiftCellsAreFortyFourPointTargetsInsideTheWindow` |
+| Recap return button clears bottom nav at any recap height (#960) | P1 | ✅ | ➖ | `e2e/layout/issue-960-recap-return-clearance.spec.ts` |
 
 ---
 
@@ -140,7 +158,28 @@ Breath counting is timing-sensitive (sub-second taps, phase animation, keyboard 
 
 ---
 
-## Wave 1 scope (stable areas — Issue #497)
+---
+
+## Maintenance
+
+When adding a user-facing journey:
+
+1. Add a row with risk tier and platform coverage to the area table it belongs in, **appended at the bottom of that table**. A new area gets its own `###` section with its own table.
+2. **One journey per row.** If a fix adds a spec that guards a specific issue, give it its own row (naming the issue) in that area's `### Issue regression guards (<area>)` table (create one after the area's table if none exists) — never append a clause to an existing row's reference cell. Appending to shared rows is what made this file a merge-conflict hotspot (#1083).
+3. Keep the reference cell to spec file + test name; put detail (widths, timings) in the spec, not here.
+4. Tag web merge-blocking specs `@smoke` or `@critical` per [`e2e-policy.md`](./e2e-policy.md) §8.
+5. Wire new iOS tests into `scripts/e2e/run-ios-tests.sh` smoke or critical lanes.
+6. Prefer `auth.fixture.ts` + role/accessibility contracts over naked sleeps.
+
+Do not edit [History](#history-issue-497) — it records the original audit and is frozen.
+
+---
+
+## History (Issue #497)
+
+Frozen record of the original audit wave. Current coverage lives in the [Matrix](#matrix) above.
+
+### Wave 1 scope (stable areas — Issue #497)
 
 This wave covers **stable** journeys only. Session-screen and history/progress UI specs are **deferred** while those surfaces change under [#560](https://github.com/auerbachb/still-point/issues/560) and [#559](https://github.com/auerbachb/still-point/issues/559).
 
@@ -153,7 +192,7 @@ This wave covers **stable** journeys only. Session-screen and history/progress U
 | Session screen / timer flow | ➖ deferred | Existing specs retained; no new session specs this wave |
 | History / progress list | ➖ deferred | Existing specs retained; no new history specs this wave |
 
-## Gap-fill status (this issue)
+### Gap-fill status (Issue #497)
 
 | Gap | Action |
 |-----|--------|
@@ -165,14 +204,3 @@ This wave covers **stable** journeys only. Session-screen and history/progress U
 | iOS username tests not in critical lane | Wired into `scripts/e2e/run-ios-tests.sh` critical lane |
 | Published matrix missing | This document |
 | Locator contract (#152) | iOS `tab.journal`, `tab.board`, `journal.title`, `board.title` identifiers |
-
----
-
-## Maintenance
-
-When adding a user-facing journey:
-
-1. Add a row here with risk tier and platform coverage.  
-2. Tag web merge-blocking specs `@smoke` or `@critical` per [`e2e-policy.md`](./e2e-policy.md) §8.  
-3. Wire new iOS tests into `scripts/e2e/run-ios-tests.sh` smoke or critical lanes.  
-4. Prefer `auth.fixture.ts` + role/accessibility contracts over naked sleeps.
