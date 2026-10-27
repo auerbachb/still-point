@@ -1,6 +1,6 @@
 # iOS vs Web Feature Parity Checklist (Issue #210)
 
-Last updated: 2026-10-27 (#896 — iOS shared layer reads, sends, queues and credits combined sits, #769 increment 4/5; #885 — Happiness row added to the mood matrix on web and iOS; #853 — voice countdown mode silences the same minute bell on web and iOS; #836 — web-only focus activity timer, #765 increment 2/5; #876 — iOS session status label recorded as intentional iOS-only)  
+Last updated: 2026-10-27 (#1071 — iOS combine-sits offer waits for the done-today answer; #898 — iOS combine-sits action, flow and History, #769 increment 5/5; #896 — iOS shared layer reads, sends, queues and credits combined sits, #769 increment 4/5; #885 — Happiness row added to the mood matrix on web and iOS; #853 — voice countdown mode silences the same minute bell on web and iOS; #836 — web-only focus activity timer, #765 increment 2/5; #876 — iOS session status label recorded as intentional iOS-only)  
 Release owner: iOS release DRI
 
 ## Core product parity
