@@ -11,6 +11,33 @@ const REPO_ROOT = process.cwd();
 const DRY_RUN = path.join(REPO_ROOT, "scripts/ios-app-store-dry-run.mjs");
 
 const projectYml = { marketingVersion: "1.0.3", buildNumber: "31" };
+
+/** The issue #242 checklist items, in report order (38). */
+const ISSUE_242_IDS = [
+  "A1", "A2", "A3", "A4", "A5",
+  "B1", "B2", "B3", "B4", "B5",
+  "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9",
+  "D1", "D2", "D3", "D4",
+  "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+  "F1", "F2", "F3",
+  "DOD1", "DOD2", "DOD3", "DOD4", "DOD5",
+];
+
+/** The report's human-owned gates, copied here so a change to them is a test change. */
+const HUMAN_GATES = [
+  { owner: "Account Holder/Admin", decision: "Confirm Apple Agreements, Tax, and Banking have no Action required items.", reason: "Not exposed by public ASC API." },
+  { owner: "Product/App Store", decision: "Approve screenshots, app previews, age rating, reviewer notes, demo credentials, and release timing.", reason: "Compliance/copy/assets require human accountability." },
+  { owner: "Release owner", decision: "Approve programmatic Submit for Review for the intended build.", reason: "Dry-run mode must not submit without explicit live approval." },
+  { owner: "Product/App Store", decision: "Choose manual, automatic, or phased release after approval.", reason: "Business release strategy." },
+];
+
+/** The report's fallback paths for a tracking issue. */
+const fallbackPathsFor = (trackingIssue: string) => [
+  { when: "ASC credentials or APPSTORE_APP_ID are unavailable", action: "Use App Store Connect website to verify TestFlight build status, version page, attached build, metadata, screenshots, review notes, and demo credentials; paste evidence into the generated report." },
+  { when: "API field is unsupported or returns a blocker", action: "Record the exact API error, open App Store Connect -> app -> Distribution/App Store -> target version, fix only that field, then rerun this dry run." },
+  { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, cut a replacement build (merging the fix cuts one; its ios-v<marketing>-build<N> tag carries the new number), attach it, and resubmit.` },
+  { when: "Submission is approved", action: `Record final build and outcome in ${trackingIssue}, choose held/manual/automatic/phased release, and close tracking only when complete.` },
+];
 const onOrigin = (...names: string[]) => ({ names, source: "origin" });
 
 describe("resolveIntendedBuild (#838)", () => {
@@ -259,7 +286,12 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
       delete env[key];
     }
 
-    /** Runs the dry run and returns its summary.json and summary.md. */
+    /**
+     * Runs the dry run and returns its exit status, summary.json, summary.md, and
+     * automation.log. Every run asserts the exit-status contract: 1 when any check
+     * failed, 0 otherwise. Which checks fail depends on this checkout's release
+     * checklists (A5), so the tests compare the two instead of a fixed status.
+     */
     const dryRun = (...args: string[]) => {
       const outputDir = fs.mkdtempSync(path.join(root, "out-"));
       const result = spawnSync(process.execPath, [DRY_RUN, "--output-dir", outputDir, ...args], {
@@ -267,11 +299,18 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
         env,
         encoding: "utf8",
       });
-      const summaryPath = path.join(outputDir, "summary.json");
-      expect(fs.existsSync(summaryPath), `${result.stdout}\n${result.stderr}`).toBe(true);
+      const output = `${result.stdout}\n${result.stderr}`;
+      for (const artifact of ["summary.json", "summary.md", "automation.log"]) {
+        expect(fs.existsSync(path.join(outputDir, artifact)), `${artifact}\n${output}`).toBe(true);
+      }
+      const summary = JSON.parse(fs.readFileSync(path.join(outputDir, "summary.json"), "utf8"));
+      const failed = (summary.checks as Check[]).some((check) => check.status === "fail");
+      expect(result.status, output).toBe(failed ? 1 : 0);
       return {
-        summary: JSON.parse(fs.readFileSync(summaryPath, "utf8")),
+        status: result.status,
+        summary,
         markdown: fs.readFileSync(path.join(outputDir, "summary.md"), "utf8"),
+        automationLog: fs.readFileSync(path.join(outputDir, "automation.log"), "utf8"),
       };
     };
 
@@ -311,8 +350,9 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   test("an --intended-tag that is not a build tag fails A2", () => {
     const { dryRun } = setup();
 
-    const { summary } = dryRun("--intended-tag", "ios-v1.0.3");
+    const { status, summary } = dryRun("--intended-tag", "ios-v1.0.3");
 
+    expect(status).toBe(1);
     expect((summary.checks as Check[]).find((check) => check.id === "A2")?.status).toBe("fail");
     expect(summary.asc).toMatchObject({ live: false, reason: "There is no intended build to look up; see A2." });
   });
@@ -326,6 +366,69 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
     expect(summary.intendedTag).toBe("ios-v1.0.3-build10");
     expect(summary.intendedBuild.source).toBe("local");
     expect((summary.checks as Check[]).find((check) => check.id === "INTENDED_BUILD")?.status).toBe("warning");
+  });
+
+  test("records the report shape and check order (#1132)", () => {
+    const { dryRun } = setup();
+
+    const { summary, automationLog } = dryRun();
+
+    expect(Object.keys(summary)).toEqual([
+      "generatedAt",
+      "issue",
+      "dryRunMode",
+      "project",
+      "intendedTag",
+      "intendedBuild",
+      "releaseOwner",
+      "submissionUrl",
+      "workflows",
+      "asc",
+      "checks",
+      "humanGates",
+      "fallbackPaths",
+      "logs",
+      "preflightSummary",
+      "issue242Checklist",
+    ]);
+    expect((summary.checks as Check[]).map((check) => check.id)).toEqual([
+      "A1", "A2", "A3", "A4", "A5", "B2", "C4", "C7", "D1", "D4", "E2", "F1", "F2", "DOD1", "DOD2",
+    ]);
+    expect((summary.issue242Checklist as ChecklistItem[]).map((item) => item.id)).toEqual(ISSUE_242_IDS);
+    expect(summary.humanGates).toEqual(HUMAN_GATES);
+    expect(summary.preflightSummary.unresolvedHumanGates).toEqual(HUMAN_GATES);
+    expect(summary.fallbackPaths).toEqual(fallbackPathsFor("the tracking issue"));
+    expect(summary.asc).toMatchObject({ live: false });
+    expect(automationLog.trimEnd().split("\n")).toEqual(summary.logs);
+    expect(summary.logs.map((entry: string) => entry.replace(/^\S+ /, ""))).toEqual([
+      "Reading canonical iOS release docs and workflow.",
+      "Listing ios-v*-build* tags for the intended build.",
+      "Intended build: 1.0.3 (10), tag ios-v1.0.3-build10, from the highest build tag on origin.",
+      "Checking App Store Connect live-query readiness.",
+      expect.stringMatching(/^App Store Connect live queries skipped: Set APPSTORE_APP_ID/),
+    ]);
+  });
+
+  test("--tracking-issue names the issue in the fallback paths", () => {
+    const { dryRun } = setup();
+
+    const { summary } = dryRun("--tracking-issue", "#999", "--release-owner", "Pat", "--submission-url", "https://example.com/s");
+
+    expect(summary.fallbackPaths).toEqual(fallbackPathsFor("#999"));
+    expect(summary).toMatchObject({ releaseOwner: "Pat", submissionUrl: "https://example.com/s" });
+  });
+
+  test("--require-live without App Store Connect credentials fails, with every artifact written", () => {
+    const { dryRun } = setup();
+
+    const { status, summary } = dryRun("--require-live");
+
+    expect(status).toBe(1);
+    expect((summary.checks as Check[]).at(-1)).toMatchObject({ id: "ASC_REQUIRE_LIVE", status: "fail" });
+    const checklist = summary.issue242Checklist as (ChecklistItem & { status: string })[];
+    for (const id of ["B1", "B5", "C1", "C2", "C3", "E3", "DOD3"]) {
+      expect(checklist.find((item) => item.id === id)?.status, id).toBe("fail");
+    }
   });
 
   /** The secrets B2 requires (#937), kept apart from the script's own list. */
