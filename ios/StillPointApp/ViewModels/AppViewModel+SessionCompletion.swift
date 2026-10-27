@@ -223,7 +223,8 @@ extension AppViewModel {
         unlockAppGate: Bool,
         attentionLog: [AttentionEntry]? = nil,
         attentionElapsed: Double? = nil,
-        ambientSoundSummary: AmbientSoundSummary? = nil
+        ambientSoundSummary: AmbientSoundSummary? = nil,
+        combined: Bool = false
     ) {
         // #684: every counted sit now earns widget credit on its own track — a
         // second-track standard sit checks the Track Two row instead of being
@@ -233,8 +234,10 @@ extension AppViewModel {
         // `isComplete`, so it reaches this call site too. Crediting there would
         // check a weekday row — and extend the streak — for a sit the user cut
         // short.
+        // #898: a combined sit (#769) counts for both tracks, so it checks both
+        // widget rows; ended early it checks neither, under the same gate.
         if unlockAppGate {
-            markPracticeDoneToday(sessionType: sessionType, track: track)
+            markPracticeDoneToday(sessionType: sessionType, track: track, combined: combined)
         }
         applyAppGateAfterSessionCompletion(unlock: unlockAppGate)
         // #526: unlock hold-cluster controls if this sit qualifies (completed + ≥ 300 s planned).
@@ -253,7 +256,8 @@ extension AppViewModel {
             bonusSeconds: bonusSeconds,
             attentionLog: attentionLog,
             attentionElapsed: attentionElapsed,
-            ambientSoundSummary: ambientSoundSummary
+            ambientSoundSummary: ambientSoundSummary,
+            combined: combined
         )
     }
 

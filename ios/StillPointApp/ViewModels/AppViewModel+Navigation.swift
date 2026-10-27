@@ -5,8 +5,15 @@ import StillPointShared
 /// picker, and the buddy hub and calendar. Ending a sit, with the saving and syncing
 /// that ride on it, is in `AppViewModel+SessionCompletion.swift`.
 extension AppViewModel {
-    func beginSession(type: SessionType = .standard, track: Track = .primary) {
-        currentView = .session(type: type, track: track)
+    /// - Parameter combined: #898, today's two sits as one (#769). A combined sit
+    ///   is always a standard sit on the primary track, whatever `type` and `track`
+    ///   say, as web's `handleBegin` does and as `POST /api/sessions` requires.
+    func beginSession(type: SessionType = .standard, track: Track = .primary, combined: Bool = false) {
+        if combined {
+            currentView = .session(type: .standard, track: .primary, combined: true)
+        } else {
+            currentView = .session(type: type, track: track)
+        }
     }
 
     func beginBreathCounting() {

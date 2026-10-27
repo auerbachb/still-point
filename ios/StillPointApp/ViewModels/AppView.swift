@@ -4,7 +4,9 @@ import StillPointShared
 enum AppView: Equatable {
     case auth
     case home
-    case session(type: SessionType, track: Track)
+    /// #898: `combined` is today's two sits done as one (#769). Always on the
+    /// primary track, as a standard sit.
+    case session(type: SessionType, track: Track, combined: Bool = false)
     case buddyHub
     case buddyCalendar
     case buddyCalendarWithBuddy(buddyId: String, buddyUsername: String)
@@ -23,7 +25,8 @@ enum AppView: Equatable {
         bonusSeconds: Int,
         attentionLog: [AttentionEntry]?,
         attentionElapsed: Double?,
-        ambientSoundSummary: AmbientSoundSummary?
+        ambientSoundSummary: AmbientSoundSummary?,
+        combined: Bool = false
     )
     case breathCounting
     /// #840: choosing what a focus session is for.
@@ -47,8 +50,9 @@ enum AppView: Equatable {
              (.history, .history), (.journal, .journal), (.board, .board),
              (.settings, .settings):
             return true
-        case let (.session(lhsType, lhsTrack), .session(rhsType, rhsTrack)):
-            return lhsType == rhsType && lhsTrack == rhsTrack
+        case let (.session(lhsType, lhsTrack, lhsCombined), .session(rhsType, rhsTrack, rhsCombined)):
+            // #898: a combined sit and an ordinary Track One sit are different routes.
+            return lhsType == rhsType && lhsTrack == rhsTrack && lhsCombined == rhsCombined
         case let (.focusActivity(lhsCategory, lhsDay), .focusActivity(rhsCategory, rhsDay)):
             return lhsCategory == rhsCategory && lhsDay == rhsDay
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
