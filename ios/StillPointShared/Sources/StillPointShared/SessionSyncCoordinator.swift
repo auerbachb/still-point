@@ -324,11 +324,15 @@ public actor SessionSyncCoordinator {
 
         // #1092: the sit has its server row by now, so a queue read that throws
         // here is a failed upload like any other, not a failed save. The sit
-        // stays queued as synced, and the next flush sends its thoughts.
+        // stays queued as synced, and the next flush sends its thoughts. With
+        // nothing queued to send, the sit is fully synced, so return its server
+        // row: a pending result would keep the provisional id, and no later
+        // upload would come to replace it.
         do {
             entry = try loadEntry(clientSessionId: clientSessionId, ownerUserId: ownerUserId) ?? entry
         } catch {
-            return nil
+            guard entry.thoughts.isEmpty, !entry.clearCompletionNote else { return nil }
+            return Self.sessionDTO(from: entry.request, id: serverSessionId)
         }
 
         if !entry.thoughts.isEmpty || entry.clearCompletionNote {

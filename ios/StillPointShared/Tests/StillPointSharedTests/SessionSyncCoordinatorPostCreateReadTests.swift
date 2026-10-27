@@ -131,4 +131,30 @@ struct SessionSyncCoordinatorPostCreateReadTests {
         #expect(batches.first?.thoughts.map(\.text) == ["rain"])
         #expect(try store.stored().first?.thoughts == [])
     }
+
+    /// With no thoughts queued, nothing is left to upload once the server row
+    /// exists, so a failed re-read still returns the synced session and its
+    /// server id instead of a provisional, pending one.
+    @Test(arguments: [1, Int.max])
+    func testAQueueReadThatThrowsAfterTheCreateOfASitWithNoThoughtsReturnsItSynced(failingReads: Int) async throws {
+        let store = FailsReadsAfterCreate(failingReads: failingReads)
+        let server = CountingServer()
+        let coordinator = SessionSyncCoordinator(queueStore: store, transport: server.transport)
+        let clientSessionId = UUID()
+
+        let saved = try await coordinator.saveCompletedSession(
+            request: makeRequest(clientSessionId),
+            clientSessionId: clientSessionId,
+            ownerUserId: owner,
+            thoughts: []
+        )
+
+        #expect(store.failedReads >= 1)
+        #expect(!saved.isPendingSync)
+        #expect(saved.session.id == "server-1092")
+        let creates = await server.creates
+        #expect(creates == 1)
+        let batches = await server.batches
+        #expect(batches.isEmpty)
+    }
 }
