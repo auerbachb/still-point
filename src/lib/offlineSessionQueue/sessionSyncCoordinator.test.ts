@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { InMemoryOfflineSessionQueueStore, type OfflineSessionQueueStore } from "./queueStore";
 import {
   LocalSessionWriteError,
@@ -8,7 +8,7 @@ import {
   provisionalSessionId,
   requestWithClientId,
 } from "./sessionSyncCoordinator";
-import type { SessionSyncTransport } from "./transport";
+import { liveSessionSyncTransport, type SessionSyncTransport } from "./transport";
 import type { PendingSessionEntry } from "./types";
 
 const testOwnerUserId = "user-test-558";
@@ -280,6 +280,73 @@ describe("WebSessionSyncCoordinator (#558)", () => {
     await expect(
       coordinator.replaceEndNote(clientSessionId, "other-user", "note"),
     ).rejects.toThrow(SessionSyncError);
+  });
+});
+
+/** Flushes through the live transport and returns each body it POSTed to `/api/sessions`. */
+async function flushThroughLiveTransport(
+  store: InMemoryOfflineSessionQueueStore,
+): Promise<{ flushed: number; bodies: Array<Record<string, unknown>> }> {
+  const bodies: Array<Record<string, unknown>> = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    bodies.push(body);
+    return new Response(JSON.stringify({ session: { id: `server-${String(body.clientSessionId)}` } }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  }));
+  try {
+    const flushed = await new WebSessionSyncCoordinator(store, liveSessionSyncTransport())
+      .flushPending(testOwnerUserId);
+    return { flushed, bodies };
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
+describe("WebSessionSyncCoordinator combined sits (#892)", () => {
+  test("an entry queued without combined (an older build) still syncs and sends no combined key", async () => {
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440030";
+    // Written before #892: its request has no `combined` field at all.
+    const legacy: PendingSessionEntry = {
+      clientSessionId,
+      ownerUserId: testOwnerUserId,
+      request: requestWithClientId(baseRequest({ track: "primary" }), clientSessionId),
+      thoughts: [],
+      serverSessionId: null,
+      sessionSynced: false,
+      enqueuedAt: "2026-07-17T12:00:00.000Z",
+    };
+    const store = new InMemoryOfflineSessionQueueStore();
+    await store.saveEntries([legacy]);
+
+    const { flushed, bodies } = await flushThroughLiveTransport(store);
+
+    expect(flushed).toBe(1);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ clientSessionId, sessionType: "standard", track: "primary", completed: true });
+    expect(bodies[0]).not.toHaveProperty("combined");
+    expect((await store.loadEntries())[0]).toMatchObject({
+      sessionSynced: true,
+      serverSessionId: `server-${clientSessionId}`,
+    });
+  });
+
+  test("a queued combined sit uploads with combined: true", async () => {
+    const clientSessionId = "550e8400-e29b-41d4-a716-446655440031";
+    const store = new InMemoryOfflineSessionQueueStore();
+    await new WebSessionSyncCoordinator(store, alwaysFailingSessionSyncTransport).saveCompletedSession(
+      baseRequest({ track: "primary", combined: true, duration: 850, actualTime: 850 }),
+      clientSessionId,
+      testOwnerUserId,
+      [],
+    );
+
+    const { flushed, bodies } = await flushThroughLiveTransport(store);
+
+    expect(flushed).toBe(1);
+    expect(bodies).toEqual([expect.objectContaining({ clientSessionId, combined: true, track: "primary", duration: 850 })]);
   });
 });
 

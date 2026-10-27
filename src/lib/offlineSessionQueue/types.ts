@@ -13,6 +13,9 @@ export type CreateSessionPayload = {
   /** Includes `focus` (#765), so a focus session saved offline queues and syncs like a sit. */
   sessionType: SessionType;
   track?: Track;
+  /** #769: today's two sits done as one. Present, as true, only on a combined
+   *  sit; an entry queued without it (an older build) syncs as not combined. */
+  combined?: boolean;
   duration: number;
   bonusSeconds?: number;
   completed: boolean;

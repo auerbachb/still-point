@@ -17,6 +17,7 @@ implementations breaks CI on at least one platform.
 | `buddyCalendarColors.json` | `buddyColorFromUserId` (`src/lib/buddyCalendarColors.ts`) | `buddyColorIndexFromUserId` (`BuddyCalendarColors.swift`) |
 | `durationForDay.json` | `durationForDay` / `isDualTrackEligible` (`src/lib/constants.ts`, `src/lib/duration.ts`) | `StillPoint.duration(forDay:)` / `isDualTrackEligible` (`Constants.swift`). `advanceProgression`, `detectMissedDayGap`, and `recoveryStepDuration` run on both clients via `DurationRecovery.swift` (#524); `recoveryStepDuration` expectations are snapped to whole 10-second blocks (#661). |
 | `pathway.json` | `buildPathway` / `nodeStateForDay` (`src/lib/pathway.ts`) | `Pathway.build` / `Pathway.nodeState(forDay:currentDay:)` (`Pathway.swift`) — preview uses coming-soon state, not day count (#587) |
+| `combinedSit.json` | `combinedDurationForUser` / `isCombineOffered` (`src/lib/combinedSit.ts`) and `tracksCredited` (`src/lib/sessionCalendar.ts`) — today's two sits done as one (#769) | Not loaded yet: the iOS suite reads it in #896 (#769 increment 4/5) |
 
 ## How each suite loads them
 

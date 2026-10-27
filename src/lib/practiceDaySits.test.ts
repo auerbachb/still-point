@@ -12,6 +12,11 @@ function standardSit(sessionDate: string, track?: "primary" | "second"): Practic
   return { completed: true, sessionType: "standard", sessionDate, track };
 }
 
+/** #769: today's two sits done as one, stored on the primary track. */
+function combinedSit(sessionDate: string, overrides: Partial<PracticeDaySit> = {}): PracticeDaySit {
+  return { ...standardSit(sessionDate, "primary"), combined: true, ...overrides };
+}
+
 describe("practiceDaySit", () => {
   test("keeps only the fields the practice-day rule reads", () => {
     const row = {
@@ -28,6 +33,19 @@ describe("practiceDaySit", () => {
       sessionDate: "2026-10-25",
       track: "second",
     });
+  });
+
+  test("keeps a combined row's flag, so the row counts for both tracks (#892)", () => {
+    const row = {
+      id: "s-2",
+      completed: true,
+      sessionType: "standard" as const,
+      sessionDate: "2026-10-25",
+      track: "primary" as const,
+      combined: true,
+      duration: 850,
+    };
+    expect(practiceDaySit(row)).toEqual(combinedSit("2026-10-25"));
   });
 });
 
@@ -60,6 +78,20 @@ describe("mergeRememberedSits", () => {
     mergeRememberedSits(server, [standardSit("2026-10-25")]);
     expect(server).toEqual([standardSit("2026-10-24")]);
   });
+
+  test("a remembered combined sit and the server's combined row are one sit (#892)", () => {
+    const server = [combinedSit("2026-10-25")];
+    expect(mergeRememberedSits(server, [combinedSit("2026-10-25")])).toEqual(server);
+  });
+
+  test("keeps a remembered combined sit beside a plain primary sit that day (#892)", () => {
+    // Both are primary rows, but only the combined one checks off Track Two.
+    const server = [standardSit("2026-10-25", "primary")];
+    const combined = combinedSit("2026-10-25");
+    const merged = mergeRememberedSits(server, [combined]);
+    expect(merged).toEqual([...server, combined]);
+    expect(tracksDoneOn(merged, "2026-10-25")).toEqual({ primary: true, second: true });
+  });
 });
 
 describe("creditedPracticeDate", () => {
@@ -90,6 +122,13 @@ describe("creditedPracticeDate", () => {
     const both = [...primaryOnly, standardSit("2026-10-25", "second")];
     expect(creditedPracticeDate(both, true, beforeCutoff)).toBe("2026-10-26");
   });
+
+  test("one combined sit closes a two-a-day yesterday on its own (#892)", () => {
+    expect(creditedPracticeDate([combinedSit("2026-10-25")], true, beforeCutoff)).toBe("2026-10-26");
+    // Ended early, it closes nothing.
+    expect(creditedPracticeDate([combinedSit("2026-10-25", { completed: false })], true, beforeCutoff))
+      .toBe("2026-10-25");
+  });
 });
 
 describe("rememberStandardSit", () => {
@@ -116,6 +155,22 @@ describe("rememberStandardSit", () => {
     const sits: PracticeDaySit[] = [{ completed: false, sessionType: "standard", sessionDate: "2026-10-25" }];
     expect(rememberStandardSit(sits, "2026-10-25", "primary")).toHaveLength(2);
   });
+
+  test("remembers a combined sit as one sit done for both tracks (#892)", () => {
+    const sits = rememberStandardSit(null, "2026-10-25", "primary", true);
+    expect(sits).toEqual([combinedSit("2026-10-25")]);
+    expect(tracksDoneOn(sits, "2026-10-25")).toEqual({ primary: true, second: true });
+  });
+
+  test("a combined sit already counted is not remembered twice (#892)", () => {
+    const sits = [combinedSit("2026-10-25")];
+    expect(rememberStandardSit(sits, "2026-10-25", "primary", true)).toBe(sits);
+  });
+
+  test("an ordinary remembered sit has no combined key (#892)", () => {
+    const [sit] = rememberStandardSit(null, "2026-10-25", "second");
+    expect(sit).not.toHaveProperty("combined");
+  });
 });
 
 describe("tracksDoneOn", () => {
@@ -141,6 +196,19 @@ describe("tracksDoneOn", () => {
       { completed: false, sessionType: "standard", sessionDate: "2026-10-26", track: "primary" },
       { completed: true, sessionType: "quick", sessionDate: "2026-10-26", track: "second" },
       { completed: true, sessionType: "breath", sessionDate: "2026-10-26" },
+    ];
+    expect(tracksDoneOn(sits, "2026-10-26")).toEqual({ primary: false, second: false });
+  });
+
+  test("a combined row counts for both tracks (#892)", () => {
+    expect(tracksDoneOn([combinedSit("2026-10-26")], "2026-10-26")).toEqual({ primary: true, second: true });
+  });
+
+  test("an ended-early, quick or other-day combined row counts for neither (#892)", () => {
+    const sits = [
+      combinedSit("2026-10-26", { completed: false }),
+      combinedSit("2026-10-26", { sessionType: "quick" }),
+      combinedSit("2026-10-25"),
     ];
     expect(tracksDoneOn(sits, "2026-10-26")).toEqual({ primary: false, second: false });
   });
