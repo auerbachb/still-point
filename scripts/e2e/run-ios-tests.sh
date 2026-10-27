@@ -233,9 +233,17 @@ is_retriable_failure() {
   if grep -qE 'Failed to set device orientation:' "$log"; then
     return 0
   fi
+  # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
+  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Must precede
+  # the broad UI-query timeout grep so real assertion failures are not masked.
+  if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
+    return 1
+  fi
   # Simulator background-assertion timeout (issue #955). XCTest cannot take a
   # background assertion on the target app and reports it as a method-level
-  # error frame, which the method-frame check below would read as a test bug:
+  # error frame, which the method-frame check below would read as a test bug.
+  # Placed after the XCTAssert* check so a genuine assertion failure in another
+  # test of the same lane log still stops the retry:
   #   "error: -[StillPointAppUITests.SPCapsuleButtonStyleUITests testXxx] :
   #    Failed to get background assertion for target app with pid NNN:
   #    Timed out while acquiring background assertion."
@@ -243,12 +251,6 @@ is_retriable_failure() {
   # attempt 1 of https://github.com/auerbachb/still-point/actions/runs/40453121968
   if grep -q 'Timed out while acquiring background assertion' "$log"; then
     return 0
-  fi
-  # XCTAssert* failures (other than timeout-shaped XCTAssertTrue handled above):
-  # e.g., "XCTAssertEqual failed - (<a>) is not equal to (<b>)". Must precede
-  # the broad UI-query timeout grep so real assertion failures are not masked.
-  if grep -qE 'XCTAssert[A-Za-z]* failed' "$log"; then
-    return 1
   fi
   # XCUITest query/wait timeouts that surface as method-level error frames
   # (without XCTAssert* lines). Before the method-frame check so logs containing
