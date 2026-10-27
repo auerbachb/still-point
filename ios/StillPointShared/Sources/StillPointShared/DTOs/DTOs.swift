@@ -192,10 +192,6 @@ public struct SessionDTO: Codable, Sendable {
     public let track: Track?
     /// #563: ambient sound level summary; nil when capture was off or mic was denied.
     public let ambientSoundSummary: AmbientSoundSummary?
-    /// #521: post-session self-report ratings (1–10); nil until set via the PATCH endpoint.
-    public let focusRating: Int?
-    /// #521: post-session self-report ratings (1–10); nil until set via the PATCH endpoint.
-    public let happinessRating: Int?
     /// #472 / #635: before/after mood matrix (1–5 per cell); nil until set via PATCH.
     public let moodMatrix: [String: MoodMatrixEntry]?
 
@@ -217,8 +213,6 @@ public struct SessionDTO: Codable, Sendable {
         breathCount: Int? = nil,
         track: Track? = nil,
         ambientSoundSummary: AmbientSoundSummary? = nil,
-        focusRating: Int? = nil,
-        happinessRating: Int? = nil,
         moodMatrix: [String: MoodMatrixEntry]? = nil
     ) {
         self.id = id
@@ -238,8 +232,6 @@ public struct SessionDTO: Codable, Sendable {
         self.breathCount = breathCount
         self.track = track
         self.ambientSoundSummary = ambientSoundSummary
-        self.focusRating = focusRating
-        self.happinessRating = happinessRating
         self.moodMatrix = moodMatrix
     }
 
@@ -248,6 +240,8 @@ public struct SessionDTO: Codable, Sendable {
     /// tolerated (unknown `sessionType`/`track` raw values fall back rather than throwing),
     /// so one drifted or unexpected value never fails the whole history list. This mirrors
     /// the permissive decoders on `UserDTO`/`StatsDTO` and the web app's tolerant parsing.
+    /// Keys it does not model are ignored, among them the retired session ratings (#521)
+    /// that the server still returns (#766).
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -272,8 +266,6 @@ public struct SessionDTO: Codable, Sendable {
         buddySessionId = try c.decodeIfPresent(String.self, forKey: .buddySessionId)
         breathCount = try c.decodeIfPresent(Int.self, forKey: .breathCount)
         ambientSoundSummary = try? c.decode(AmbientSoundSummary.self, forKey: .ambientSoundSummary)
-        focusRating = try c.decodeIfPresent(Int.self, forKey: .focusRating)
-        happinessRating = try c.decodeIfPresent(Int.self, forKey: .happinessRating)
         moodMatrix = try? c.decode([String: MoodMatrixEntry].self, forKey: .moodMatrix)
     }
 
@@ -281,7 +273,7 @@ public struct SessionDTO: Codable, Sendable {
         case id, dayNumber, sessionType, duration, bonusSeconds, completed, actualTime
         case clearPercent, thoughtCount, mindStateLog, attentionLog, sessionDate
         case createdAt, buddySessionId, breathCount, track, ambientSoundSummary
-        case focusRating, happinessRating, moodMatrix
+        case moodMatrix
     }
 }
 
@@ -508,31 +500,6 @@ public struct BatchThoughtsRequest: Codable, Sendable {
         self.dayNumber = dayNumber
         self.thoughts = thoughts
         self.clearCompletionNote = clearCompletionNote ? true : nil
-    }
-}
-
-/// #521: nil-omitting patch for `PATCH /api/sessions/by-session/{sessionId}`.
-/// Mirrors the web's touched-field payload: only include a rating if it was
-/// explicitly set; omit nil fields so the server's partial-update logic is
-/// used correctly and no unintended default overwrites occur.
-public struct SessionRatingsPatch: Encodable, Sendable {
-    public let focusRating: Int?
-    public let happinessRating: Int?
-
-    public init(focusRating: Int? = nil, happinessRating: Int? = nil) {
-        self.focusRating = focusRating
-        self.happinessRating = happinessRating
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        if let focusRating { try c.encode(focusRating, forKey: .focusRating) }
-        if let happinessRating { try c.encode(happinessRating, forKey: .happinessRating) }
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case focusRating
-        case happinessRating
     }
 }
 

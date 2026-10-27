@@ -54,9 +54,10 @@ public actor SessionSyncCoordinator {
         /// Created on the server under this id.
         case synced(serverSessionId: String)
 
-        /// The id that session-detail requests (ratings, mood) may use for a sit
-        /// whose completion screen was handed `sessionId`. Never the provisional
-        /// id of a pending sit, which the server has no row for.
+        /// The id that session-detail requests (the mood, and a note sent straight
+        /// to the server) may use for a sit whose completion screen was handed
+        /// `sessionId`. Never the provisional id of a pending sit, which the
+        /// server has no row for.
         public func detailSessionId(handedSessionId sessionId: String) -> String? {
             switch self {
             case .synced(let serverSessionId):

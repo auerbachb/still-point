@@ -33,7 +33,6 @@ struct CompletionView: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var noteAutosaveTask: Task<Void, Never>?
-    @State private var ratingsAutosaveTask: Task<Void, Never>?
     @State private var moodAutosaveTask: Task<Void, Never>?
     @State private var returnFlushFailed = false
     @State private var isReturning = false
@@ -41,16 +40,6 @@ struct CompletionView: View {
     // Session environment photo (optional, local-only MVP)
     @State private var capturedPhoto: UIImage?
     @State private var showPhotoPicker = false
-
-    // Post-session ratings (#521)
-    @State private var focusRating: Double = 5
-    @State private var happinessRating: Double = 5
-    @State private var focusTouched = false
-    @State private var happinessTouched = false
-    @State private var ratingsSaved = false
-    @State private var lastSavedRatingsKey = ""
-    @State private var isSavingRatings = false
-    @State private var ratingsSaveError: String?
 
     // Before/after mood matrix (#472 / #635)
     @State private var moodMatrix: [MoodKey: MoodMatrixEntry] = [:]
@@ -75,9 +64,9 @@ struct CompletionView: View {
         case after
     }
 
-    /// #792: the id ratings and mood are sent against. Nil until the queue says
-    /// the sit has a server row: a pending sit's `sessionId` is its provisional
-    /// client id, and every PATCH against it fails.
+    /// #792: the id the mood is loaded from and sent against. Nil until the
+    /// queue says the sit has a server row: a pending sit's `sessionId` is its
+    /// provisional client id, and every PATCH against it fails.
     private var detailSessionId: String? {
         queueState?.detailSessionId(handedSessionId: sessionId)
     }
@@ -273,11 +262,10 @@ struct CompletionView: View {
                     }
                 }
 
-                // Post-session ratings (#521). #792: hidden while the sit is
+                // Mood shift (#472 / #635). #792: hidden while the sit is
                 // pending sync, as on web — there is no server row to attach
-                // them to, so "save and return to home" leaves on the first tap.
+                // it to, so "save and return to home" leaves on the first tap.
                 if detailSessionId != nil {
-                    ratingsSection
                     moodMatrixSection
                 }
 
@@ -428,144 +416,6 @@ struct CompletionView: View {
     private func removePhoto() {
         SessionPhotoStore.shared.delete(forSessionId: sessionId)
         capturedPhoto = nil
-    }
-
-    // MARK: - Ratings Section (#521)
-
-    @ViewBuilder
-    private var ratingsSection: some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s2) {
-            Text("SESSION RATINGS")
-                .font(SPFont.mono(11, weight: .medium))
-                .foregroundStyle(Color(SPColor.fg4))
-                .tracking(2)
-
-            ratingRow(
-                label: "FOCUS",
-                value: $focusRating,
-                onTouch: {
-                    focusTouched = true
-                    ratingsSaved = false
-                    scheduleRatingsAutosave()
-                },
-                disabled: isReturning
-            )
-            .accessibilityIdentifier("completion.focusSlider")
-
-            ratingRow(
-                label: "HAPPINESS",
-                value: $happinessRating,
-                onTouch: {
-                    happinessTouched = true
-                    ratingsSaved = false
-                    scheduleRatingsAutosave()
-                },
-                disabled: isReturning
-            )
-            .accessibilityIdentifier("completion.happinessSlider")
-
-            if ratingsSaved {
-                Text("ratings saved")
-                    .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(SPColor.green)
-                    .accessibilityIdentifier("completion.ratingsSavedIndicator")
-            }
-
-            if let ratingsSaveError {
-                Text(ratingsSaveError)
-                    .font(SPFont.mono(11))
-                    .foregroundStyle(SPColor.dangerMuted)
-            }
-        }
-    }
-
-    private func ratingRow(
-        label: String,
-        value: Binding<Double>,
-        onTouch: @escaping () -> Void,
-        disabled: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: SPSpacing.s1) {
-            HStack {
-                Text(label)
-                    .font(SPFont.mono(11, weight: .medium))
-                    .foregroundStyle(Color(SPColor.fg4))
-                    .tracking(2)
-                Spacer()
-                Text("\(Int(value.wrappedValue))")
-                    .font(SPFont.mono(14))
-                    .foregroundStyle(Color(SPColor.fg))
-            }
-            Slider(value: value, in: 1...10, step: 1)
-                .tint(SPColor.green)
-                .disabled(disabled)
-                .onChange(of: value.wrappedValue) { _, _ in onTouch() }
-        }
-    }
-
-    private func saveRatings() async {
-        guard let detailSessionId, !isSavingRatings else { return }
-        guard focusTouched || happinessTouched else { return }
-        let key = ratingsSaveKey
-        guard key != lastSavedRatingsKey else {
-            ratingsSaved = true
-            ratingsSaveError = nil
-            return
-        }
-        isSavingRatings = true
-        ratingsSaveError = nil
-        let patch = SessionRatingsPatch(
-            focusRating: focusTouched ? Int(focusRating) : nil,
-            happinessRating: happinessTouched ? Int(happinessRating) : nil
-        )
-        do {
-            _ = try await APIClient.shared.updateSessionRatings(sessionId: detailSessionId, ratings: patch)
-            isSavingRatings = false
-            lastSavedRatingsKey = key
-            ratingsSaved = true
-        } catch is CancellationError {
-            isSavingRatings = false
-        } catch let error as APIError {
-            isSavingRatings = false
-            ratingsSaveError = ratingsErrorMessage(for: error.status)
-        } catch {
-            isSavingRatings = false
-            ratingsSaveError = "Unable to save ratings — please try again"
-        }
-    }
-
-    private var ratingsSaveKey: String {
-        let focus = focusTouched ? String(Int(focusRating)) : "-"
-        let happiness = happinessTouched ? String(Int(happinessRating)) : "-"
-        return "\(focus):\(happiness)"
-    }
-
-    private func scheduleRatingsAutosave() {
-        ratingsAutosaveTask?.cancel()
-        ratingsAutosaveTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            while isSavingRatings {
-                guard !Task.isCancelled else { return }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-            }
-            guard !Task.isCancelled else { return }
-            await saveRatings()
-        }
-    }
-
-    private func ratingsErrorMessage(for status: Int) -> String {
-        switch status {
-        case 401:
-            return "Please log in again"
-        case 400:
-            return "Invalid rating value"
-        case 404:
-            return "Session not found — please try again"
-        case 0:
-            return "Unable to save ratings — please try again"
-        default:
-            return "Failed to save ratings"
-        }
     }
 
     // MARK: - Mood Matrix Section (#472 / #635)
@@ -822,8 +672,8 @@ struct CompletionView: View {
 
     /// #792: read once, when the screen opens — like web's `isPendingSync`, a
     /// sit that syncs while the screen is up stays pending here. A failed read
-    /// leaves the state unread, which keeps ratings and mood hidden rather than
-    /// risk sending them against a provisional id.
+    /// leaves the state unread, which keeps the mood hidden rather than risk
+    /// sending it against a provisional id.
     @MainActor
     private func resolveQueueState() async {
         guard let ownerUserId = appVM.currentUser?.id else { return }
@@ -1006,15 +856,13 @@ struct CompletionView: View {
             return
         }
         noteAutosaveTask?.cancel()
-        ratingsAutosaveTask?.cancel()
         moodAutosaveTask?.cancel()
-        while isSaving || isSavingRatings || isSavingMoodMatrix {
+        while isSaving || isSavingMoodMatrix {
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
         await saveEndNote()
-        await saveRatings()
         await saveMoodMatrix()
-        guard saveError == nil, ratingsSaveError == nil, moodMatrixSaveError == nil else {
+        guard saveError == nil, moodMatrixSaveError == nil else {
             returnFlushFailed = true
             isReturning = false
             return

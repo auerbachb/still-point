@@ -21,7 +21,7 @@ private actor BatchRecorder {
 }
 
 /// #792: clearing a completion note through the offline queue, and the queue
-/// state the completion screen reads to keep ratings and mood off a pending sit.
+/// state the completion screen reads to keep the mood off a pending sit.
 /// Named for the behaviour under test: `SessionSyncCoordinatorTests` already
 /// exists in `OfflineSessionQueueTests.swift`.
 final class SessionSyncCoordinatorEndNoteClearTests: XCTestCase {
