@@ -1,0 +1,101 @@
+name: Install Apple signing certificate and provisioning profiles
+description: >-
+  Imports the distribution certificate into a temporary keychain and installs
+  the app, StillPointMonitor, and StillPointWidget provisioning profiles by
+  UUID. Exports PP_UUID, EXT_PP_UUID, and WIDGET_PP_UUID to the job env so
+  ios-signing-cleanup removes the installed files. Shared by the TestFlight and
+  App Store release lanes (#1113).
+
+# Composite actions cannot read `secrets`, so the caller passes each secret in
+# as an input. Values that come from secrets stay masked in the logs.
+inputs:
+  build-certificate-base64:
+    description: Base64 of the distribution certificate (.p12) — secrets.BUILD_CERTIFICATE_BASE64
+    required: true
+  p12-password:
+    description: Password of the .p12 — secrets.P12_PASSWORD
+    required: true
+  provision-profile-base64:
+    description: Base64 of the app's profile — secrets.BUILD_PROVISION_PROFILE_BASE64
+    required: true
+  provision-profile-extension-base64:
+    description: Base64 of the StillPointMonitor profile — secrets.BUILD_PROVISION_PROFILE_EXTENSION_BASE64
+    required: true
+  provision-profile-widget-base64:
+    description: Base64 of the StillPointWidget profile — secrets.BUILD_PROVISION_PROFILE_WIDGET_BASE64
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Apple certificate and provisioning profiles
+      shell: bash
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ inputs.build-certificate-base64 }}
+        P12_PASSWORD: ${{ inputs.p12-password }}
+        BUILD_PROVISION_PROFILE_BASE64: ${{ inputs.provision-profile-base64 }}
+        BUILD_PROVISION_PROFILE_EXTENSION_BASE64: ${{ inputs.provision-profile-extension-base64 }}
+        BUILD_PROVISION_PROFILE_WIDGET_BASE64: ${{ inputs.provision-profile-widget-base64 }}
+      run: |
+        set -euo pipefail
+
+        # The runner does not enforce `required: true` on composite inputs, so
+        # name any empty one here (never its value) instead of failing later in
+        # base64 or security with an unclear error.
+        missing=()
+        for name in BUILD_CERTIFICATE_BASE64 P12_PASSWORD BUILD_PROVISION_PROFILE_BASE64 \
+          BUILD_PROVISION_PROFILE_EXTENSION_BASE64 BUILD_PROVISION_PROFILE_WIDGET_BASE64; do
+          if [[ -z "${!name}" ]]; then
+            missing+=("$name")
+          fi
+        done
+        if [[ "${#missing[@]}" -gt 0 ]]; then
+          echo "::error::Missing signing input(s): ${missing[*]}"
+          exit 1
+        fi
+
+        # Create variables
+        CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+        PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+        EXT_PP_PATH="$RUNNER_TEMP/build_pp_ext.mobileprovision"
+        WIDGET_PP_PATH="$RUNNER_TEMP/build_pp_widget.mobileprovision"
+        KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+        KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+
+        # Import certificate and all three provisioning profiles (app + monitor + widget extensions)
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+        echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+        echo -n "$BUILD_PROVISION_PROFILE_EXTENSION_BASE64" | base64 --decode -o "$EXT_PP_PATH"
+        echo -n "$BUILD_PROVISION_PROFILE_WIDGET_BASE64" | base64 --decode -o "$WIDGET_PP_PATH"
+
+        # Create temporary keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        # Import certificate to keychain
+        security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Each existing keychain must reach -s as its own argument, so the new
+        # keychain joins the search list instead of becoming its only entry. The
+        # array splits the list the way an unquoted $(...) would, without globbing.
+        read -r -a EXISTING_KEYCHAINS <<< "$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+        security list-keychains -d user -s "$KEYCHAIN_PATH" "${EXISTING_KEYCHAINS[@]}"
+
+        # Install all three provisioning profiles by UUID. The app and the embedded
+        # StillPointMonitor and StillPointWidget extensions each sign with their own
+        # profile, selected per-target via PROVISIONING_PROFILE_SPECIFIER in ios/project.yml.
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$PP_PATH")")
+        cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${PP_UUID}".mobileprovision
+        EXT_PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$EXT_PP_PATH")")
+        cp "$EXT_PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${EXT_PP_UUID}".mobileprovision
+        WIDGET_PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(/usr/bin/security cms -D -i "$WIDGET_PP_PATH")")
+        cp "$WIDGET_PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"${WIDGET_PP_UUID}".mobileprovision
+        # Export the installed UUIDs so the always()-cleanup step removes the
+        # actual UUID-named files (not the raw build_pp names).
+        {
+          echo "PP_UUID=${PP_UUID}"
+          echo "EXT_PP_UUID=${EXT_PP_UUID}"
+          echo "WIDGET_PP_UUID=${WIDGET_PP_UUID}"
+        } >> "$GITHUB_ENV"
