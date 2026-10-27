@@ -348,7 +348,7 @@ src/
       sessions/              # CRUD for meditation sessions
       settings/              # user settings (public toggle, attention tracking, etc.)
       thoughts/              # batch insert + list thoughts
-      track/                 # post-session rating track endpoint
+      track/                 # dual-track enable + done-today (which tracks are done on a date)
   components/
     AuthScreen.tsx           # login/signup form (email, Google, Apple)
     HomeView.tsx             # day counter, begin button, pathway preview

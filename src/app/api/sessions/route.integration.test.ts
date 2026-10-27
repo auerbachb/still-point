@@ -2,7 +2,7 @@
  * Issue #612 — GET /api/sessions projection contract.
  *
  * Route-level integration test against a real in-process Postgres (PGlite),
- * mirroring the pattern used for the by-session ratings route. Guards that the
+ * mirroring the pattern used for the by-session mood route. Guards that the
  * history list returns exactly the columns SessionDTO consumes and never leaks
  * userId / clientSessionId / focus & happiness ratings.
  */
