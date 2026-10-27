@@ -24,7 +24,7 @@ private actor BatchRecorder {
 /// #792: clearing a completion note through the offline queue, and the queue
 /// state the completion screen reads to keep the mood off a pending sit.
 /// Named for the behaviour under test: `SessionSyncCoordinatorTests` already
-/// exists in `OfflineSessionQueueTests.swift`.
+/// exists in `SessionSyncCoordinatorTests.swift`.
 struct SessionSyncCoordinatorEndNoteClearTests {
     private let owner = "user-test-792"
 
