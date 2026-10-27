@@ -195,7 +195,7 @@ export function useSessionSaveLifecycle({
 
   // #703 — cross-client note on the completion view. iOS never renders one for a
   // sit it could not store: `SessionViewModel.saveSession` returns nil when the
-  // local write throws, and `SessionView.handleCompletion` puts up the "Session
+  // local write throws, and `SessionViewModel.completeSit` puts up the "Session
   // could not be saved" alert (Retry / Continue without saving) instead of
   // calling `completeSession`. Web has no equivalent interception point — the
   // completion overlay *is* the screen — so it delivers the same two facts

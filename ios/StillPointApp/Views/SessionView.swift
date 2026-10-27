@@ -24,7 +24,6 @@ struct SessionView: View {
     /// Drives the fade-out "tap to come back" hint each time minimal view is entered.
     @State private var minimalHintVisible = false
     @State private var minimalHintToken = 0
-    @State private var showSaveError = false
     @State private var showCaptureHelper = false
     @State private var showAttentionUnsupportedAlert = false
     @State private var showAttentionPermissionAlert = false
@@ -353,26 +352,15 @@ struct SessionView: View {
                 inProgress: sessionInProgress
             )
             if isComplete && !vm.isAbandoned {
-                handleCompletion()
+                Task { await vm.completeSit(appVM: appVM) }
             }
         }
-        .alert("Session could not be saved", isPresented: $showSaveError) {
-            Button("Retry") { handleCompletion() }
+        .alert("Session could not be saved", isPresented: $vm.showSaveError) {
+            Button("Retry") {
+                Task { await vm.completeSit(appVM: appVM) }
+            }
             Button("Continue without saving", role: .destructive) {
-                appVM.completeSession(
-                    sessionId: "",
-                    clientSessionId: UUID(),
-                    clearPercent: vm.clearPercent,
-                    thoughtCount: vm.thoughtCount,
-                    thoughts: vm.capturedThoughts,
-                    dayNumber: vm.dayNumber,
-                    sessionType: vm.sessionType,
-                    track: vm.track,
-                    duration: vm.plannedSeconds,
-                    bonusSeconds: vm.bonusSeconds,
-                    unlockAppGate: vm.completedNaturally,
-                    ambientSoundSummary: vm.ambientSoundSummary
-                )
+                vm.continueWithoutSaving(appVM: appVM)
             }
         } message: {
             Text("Your session couldn't be saved on this device. You can retry or continue without saving.")
@@ -997,47 +985,5 @@ struct SessionView: View {
         // feedback, on, button" instead, since it makes no sound.
         .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label, cue: cue)))
         .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
-    }
-
-    // MARK: - Completion Handler
-
-    private func handleCompletion() {
-        Task {
-            guard let ownerUserId = appVM.currentUser?.id else {
-                showSaveError = true
-                return
-            }
-            // Persist session before navigating to completion screen
-            guard let session = await vm.saveSession(
-                completed: vm.completedNaturally,
-                ownerUserId: ownerUserId,
-                sessionDate: appVM.creditedSessionDate()
-            ) else {
-                // #703: the alert below already blocks the false-success
-                // completion; the flag additionally withdraws the offline
-                // strip's "sits are saved" promise, which stays on screen after
-                // the user picks "Continue without saving".
-                appVM.localSaveFailed = true
-                showSaveError = true
-                return
-            }
-            appVM.localSaveFailed = false
-            appVM.completeSession(
-                sessionId: session.id,
-                clientSessionId: vm.lastClientSessionId ?? UUID(uuidString: session.id) ?? UUID(),
-                clearPercent: vm.clearPercent,
-                thoughtCount: vm.thoughtCount,
-                thoughts: vm.capturedThoughts,
-                dayNumber: session.dayNumber,
-                sessionType: session.sessionType,
-                track: vm.track,
-                duration: vm.plannedSeconds,
-                bonusSeconds: vm.bonusSeconds,
-                unlockAppGate: vm.completedNaturally,
-                attentionLog: vm.attentionLog,
-                attentionElapsed: vm.attentionLog != nil ? vm.elapsed : nil,
-                ambientSoundSummary: vm.ambientSoundSummary
-            )
-        }
     }
 }

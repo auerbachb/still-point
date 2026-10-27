@@ -47,6 +47,7 @@ extension AppViewModel {
             clientSessionId: clientSessionId
         )
 
+        let outcome: SessionCompletionLogic.SaveOutcome
         do {
             _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
                 request: request,
@@ -55,15 +56,19 @@ extension AppViewModel {
                 thoughts: []
             )
             markPracticeDoneToday(sessionType: .breath, track: .primary)
-            localSaveFailed = false
-            currentView = .home
+            outcome = .stored
         } catch {
             print("Failed to persist breath session locally: \(error)")
-            // #703: a breath sit has no completion screen to say this on, so the
-            // offline indicator is the only place the loss can surface.
-            localSaveFailed = true
-            currentView = .home
+            outcome = .notStored
         }
+        // #703: a breath sit has no completion screen to say a failed save on, so
+        // the offline indicator is the only place the loss can surface. Same flag
+        // rule as the standard sit (#724), but no alert: either way the sit
+        // returns home.
+        if let failed = SessionCompletionLogic.localSaveFailed(after: outcome) {
+            localSaveFailed = failed
+        }
+        currentView = .home
         // Breath exits skip `returnHome()`, so an invite held back by the
         // `isInSession` guard during the sit is retried here.
         scheduleBuddyInviteConsume()
