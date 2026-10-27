@@ -329,9 +329,18 @@ export const test = base.extend<AuthFixture>({
 
   ensureLoggedIn: async ({ page, mockApiState }, use) => {
     await use(async () => {
+      // Signed-in Home's start button. `exact: true` is required: a substring match
+      // on "Begin" also finds the sign-up form's "Begin the journey" submit, which
+      // stays on screen when sign-up fails, so the check would pass without a
+      // sign-in and the spec would fail at some later step instead (#906).
+      const homeBeginButton = page.getByRole("button", { name: "Begin", exact: true });
+
       if (mockApiState.authenticated) {
         await page.goto("/app");
-        await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+        await expect(
+          homeBeginButton,
+          "ensureLoggedIn: already signed in, but /app did not show signed-in Home",
+        ).toBeVisible();
         return mockApiState.credentials;
       }
 
@@ -341,7 +350,7 @@ export const test = base.extend<AuthFixture>({
       await page.getByPlaceholder("username").fill(mockApiState.credentials.username);
       await page.getByPlaceholder("password").fill(mockApiState.credentials.password);
       await tap(page.getByRole("button", { name: "Begin the journey" }));
-      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(homeBeginButton, "ensureLoggedIn: sign-up did not reach signed-in Home").toBeVisible();
       return mockApiState.credentials;
     });
   },
