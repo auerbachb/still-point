@@ -3,36 +3,56 @@ import StillPointShared
 
 /// Launch seeds for UI tests. `SP_UI_TEST_*` environment flags pick the starting tab
 /// and the first authenticated route; with none set, these are the Home tab and Home.
+///
+/// Adding a seed: name its key in `SeedKey`, then read it with `flag(_:in:)`. A new
+/// boot destination is one row in `authenticatedRouteSeeds` — no new branch.
 extension AppViewModel {
-    private static func truthy(_ value: String?) -> Bool {
-        guard let value else { return false }
-        return ["1", "true", "yes", "on"].contains(value.lowercased())
+    /// Environment keys these seeds read. Kept in one place so a new seed is a
+    /// one-line addition and a key is never spelled twice.
+    private enum SeedKey {
+        static let uiTestMode = "SP_UI_TEST_MODE"
+        static let snapshotSeed = "SP_UI_TEST_SNAPSHOT_SEED"
+        static let forceSettingsTab = "SP_UI_TEST_FORCE_SETTINGS_TAB"
+        static let forceProgressTab = "SP_UI_TEST_FORCE_PROGRESS_TAB"
+        static let forceStartSession = "SP_UI_TEST_FORCE_START_SESSION"
+        static let forceBreathCounting = "SP_UI_TEST_FORCE_BREATH_COUNTING"
+        static let forceBuddyHub = "SP_UI_TEST_FORCE_BUDDY_HUB"
+    }
+
+    private static let truthyValues: Set<String> = ["1", "true", "yes", "on"]
+
+    /// Whether `key` is set to a truthy value (`1`, `true`, `yes`, `on`; any case).
+    private static func flag(_ key: String, in env: [String: String]) -> Bool {
+        guard let value = env[key] else { return false }
+        return truthyValues.contains(value.lowercased())
     }
 
     /// Initial tab, as a `MainTab` raw value. Reads SP_UI_TEST_FORCE_SETTINGS_TAB
     /// and SP_UI_TEST_FORCE_PROGRESS_TAB; which of them wins is
     /// `MainTab.initial(forceSettings:forceProgress:)`.
-    static func defaultSelectedTab() -> Int {
-        let env = ProcessInfo.processInfo.environment
-        return MainTab.initial(
-            forceSettings: truthy(env["SP_UI_TEST_FORCE_SETTINGS_TAB"]),
-            forceProgress: truthy(env["SP_UI_TEST_FORCE_PROGRESS_TAB"])
+    static func defaultSelectedTab(
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int {
+        MainTab.initial(
+            forceSettings: flag(SeedKey.forceSettingsTab, in: env),
+            forceProgress: flag(SeedKey.forceProgressTab, in: env)
         ).rawValue
     }
 
-    /// Boot destination for authenticated UI-test launches. Seed knobs are
-    /// mutually exclusive; the first match wins.
+    /// Authenticated boot-destination seeds, in priority order. The knobs are
+    /// mutually exclusive; the first set one wins.
+    private static var authenticatedRouteSeeds: [(key: String, view: AppView)] {
+        [
+            (SeedKey.forceStartSession, .session(type: .standard, track: .primary, combined: false)),
+            (SeedKey.forceBreathCounting, .breathCounting),
+            (SeedKey.forceBuddyHub, .buddyHub),
+        ]
+    }
+
+    /// Boot destination for authenticated UI-test launches: the first seed in
+    /// `authenticatedRouteSeeds` that is set, else Home.
     static func initialAuthenticatedView(from env: [String: String]) -> AppView {
-        if truthy(env["SP_UI_TEST_FORCE_START_SESSION"]) {
-            return .session(type: .standard, track: .primary, combined: false)
-        }
-        if truthy(env["SP_UI_TEST_FORCE_BREATH_COUNTING"]) {
-            return .breathCounting
-        }
-        if truthy(env["SP_UI_TEST_FORCE_BUDDY_HUB"]) {
-            return .buddyHub
-        }
-        return .home
+        authenticatedRouteSeeds.first { flag($0.key, in: env) }?.view ?? .home
     }
 
     /// UserDefaults suite for the snapshot seed's tracking-control prefs (#1014).
@@ -49,8 +69,8 @@ extension AppViewModel {
     static func launchTrackingControlPrefsManager(
         env: [String: String] = ProcessInfo.processInfo.environment
     ) -> TrackingControlPrefsManager {
-        guard truthy(env["SP_UI_TEST_MODE"]),
-              truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
+        guard flag(SeedKey.uiTestMode, in: env),
+              flag(SeedKey.snapshotSeed, in: env),
               let defaults = UserDefaults(suiteName: snapshotTrackingControlPrefsSuite) else {
             return TrackingControlPrefsManager()
         }
