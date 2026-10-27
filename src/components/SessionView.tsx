@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, type CSSProperties } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { combinedDurationForUser, combinedSitField } from "@/lib/combinedSit";
 import { type SessionType, type Track } from "@/lib/constants";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
@@ -31,82 +31,16 @@ import {
   resolveMinimalViewRelease,
   type MinimalViewPress,
 } from "@/lib/minimalSessionGestures";
-import {
-  SOUND_TOGGLE_MIN_TAP_TARGET_PX,
-  soundToggleAccessibilityLabel,
-  soundToggleAppearance,
-  soundToggleStateText,
-  soundToggleTestId,
-  type SoundToggleCue,
-} from "@/lib/soundToggleAppearance";
 import { GuidedExerciseOverlay } from "./GuidedExerciseOverlay";
-import { CueModeControl, HapticIntervalControl } from "./CueModeControl";
+import { SessionActionRow } from "./session/SessionActionRow";
+import { SessionEndControls } from "./session/SessionEndControls";
+import { SessionExtendButtons } from "./session/SessionExtendButtons";
+import { SessionHoldControls } from "./session/SessionHoldControls";
+import { SessionMindStateStatus, type SessionMindState } from "./session/SessionMindStateStatus";
+import { SessionSoundControls } from "./session/SessionSoundControls";
+import { minimalExitButtonStyle, mono } from "./session/sessionViewStyles";
 
-type MindState = "clear" | "thinking" | "hyperfocus";
-
-/**
- * #668: the speaker glyph inside a sound toggle. Inline SVG rather than a text
- * glyph so the on/off shapes are the same pair iOS draws with SF Symbols
- * (`speaker.wave.2.fill` / `speaker.slash.fill`) instead of whatever the device
- * font happens to have for `♪`.
- */
-function SoundToggleIcon({
-  muted,
-  cue = "audio",
-}: {
-  muted: boolean;
-  cue?: SoundToggleCue;
-}) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      style={{ flexShrink: 0 }}
-    >
-      {cue === "haptic" ? (
-        <>
-          {/* #712: a phone throwing off waves reads as "this buzzes" where a
-              speaker would read as "this makes a noise". Mirrors the iOS pair
-              iphone.radiowaves.left.and.right / iphone.slash. */}
-          <rect x="5.5" y="2" width="5" height="12" rx="1.25" />
-          {muted ? (
-            // Off: a slash across the phone.
-            <path d="M3.5 13.5l9-11" />
-          ) : (
-            // On: waves leaving both sides.
-            <>
-              <path d="M3.25 5.75a4 4 0 000 4.5" />
-              <path d="M12.75 5.75a4 4 0 010 4.5" />
-            </>
-          )}
-        </>
-      ) : (
-        <>
-          {/* Speaker body, shared by both states. */}
-          <path d="M3 6h2l3-2.5v9L5 10H3z" fill="currentColor" stroke="none" />
-          {muted ? (
-            // Off: a slash through the waves.
-            <path d="M10.5 6l4 4m0-4l-4 4" />
-          ) : (
-            // On: two sound waves, matching speaker.wave.2.fill.
-            <>
-              <path d="M10.5 5.75a3 3 0 010 4.5" />
-              <path d="M12.75 4a5.5 5.5 0 010 8" />
-            </>
-          )}
-        </>
-      )}
-    </svg>
-  );
-}
+type MindState = SessionMindState;
 
 const NO_RECOVERY: RecoveryFields = {
   recoveryTargetDay: null,
@@ -163,10 +97,6 @@ type SessionViewProps = {
    *  save closing it). Called once, on unmount, with the sit's `sitKey`, so a
    *  save still running for it knows not to change the screen when it settles. */
   onScreenClosed?: (sitKey: string) => void;
-};
-
-const mono: CSSProperties = {
-  fontFamily: "var(--font-mono)",
 };
 
 export function SessionView({
@@ -624,83 +554,9 @@ export function SessionView({
   };
 
   const distractionPercent = Math.max(0, 100 - calcClearPercent());
-  const stateLabel =
-    mindState === "thinking" ? "Distracted" : mindState === "hyperfocus" ? "Hyperfocus" : "Aware";
   const capturedCount = sessionThoughts.length;
   const sessionChromeDimmed = isActive && !controlsVisible;
   const showSessionTrackingLayer = (isActive || wasPausedInSession) && !minimalView;
-  /** Off-screen until focused: the keyboard/screen-reader way out of minimal view. */
-  const minimalExitButtonStyle: CSSProperties = minimalExitFocused
-    ? {
-        position: "fixed",
-        top: "12px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 10,
-        background: "var(--surface-1)",
-        border: "1px solid var(--border-2)",
-        color: "var(--fg-3)",
-        ...mono,
-        fontSize: "11px",
-        letterSpacing: "0.15em",
-        textTransform: "uppercase",
-        padding: "14px 24px",
-        minHeight: "44px",
-        borderRadius: "20px",
-        cursor: "pointer",
-      }
-    : {
-        position: "absolute",
-        width: "1px",
-        height: "1px",
-        padding: 0,
-        margin: "-1px",
-        overflow: "hidden",
-        clipPath: "inset(50%)",
-        whiteSpace: "nowrap",
-        border: 0,
-        background: "none",
-      };
-  /** Capture stays in the persistent tracking layer while running so it is never hidden with secondary chrome. */
-  const captureNoteButtonStyle: CSSProperties = {
-    background: "none",
-    border: "1px solid var(--accent-amber-border)",
-    color: "var(--accent-amber-border)",
-    ...mono,
-    fontSize: "11px",
-    letterSpacing: "0.15em",
-    textTransform: "uppercase",
-    padding: "14px 24px",
-    minHeight: "44px",
-    minWidth: "44px",
-    borderRadius: "20px",
-    cursor: "pointer",
-    transition: "opacity 0.5s ease",
-  };
-
-  const holdButtonBase: CSSProperties = {
-    ...mono,
-    fontSize: "12px",
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    padding: "12px 14px",
-    borderRadius: "16px",
-    cursor: isActive ? "pointer" : "default",
-    transition: "all 0.25s",
-    // On phones keep both holds on one row (was wrapping to two, adding height).
-    flex: isMobile ? "1 1 0" : "1 1 140px",
-    minWidth: isMobile ? 0 : "min(160px, 42vw)",
-    maxWidth: isMobile ? "none" : "200px",
-    minHeight: "44px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "6px",
-    border: "1px solid var(--border-2)",
-    background: "var(--surface-1)",
-    color: "var(--fg-2)",
-    opacity: isActive ? 1 : 0.45,
-  };
 
   return (
     <div
@@ -735,7 +591,7 @@ export function SessionView({
           onClick={exitMinimalView}
           onFocus={() => setMinimalExitFocused(true)}
           onBlur={() => setMinimalExitFocused(false)}
-          style={minimalExitButtonStyle}
+          style={minimalExitButtonStyle(minimalExitFocused)}
         >
           show session controls
         </button>
@@ -777,52 +633,11 @@ export function SessionView({
           data-session-tracking-layer="persistent"
           style={{ width: "100%", maxWidth: "min(440px, calc(100vw - 40px))", marginTop: "12px" }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              ...mono,
-              fontSize: "11px",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--fg-3)",
-              justifyContent: "center",
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                width: "10px",
-                height: "10px",
-                borderRadius: "50%",
-                background:
-                  mindState === "thinking"
-                    ? "var(--accent-amber)"
-                    : mindState === "hyperfocus"
-                      ? "rgba(96, 165, 250, 0.95)"
-                      : "var(--accent-green)",
-                boxShadow:
-                  mindState === "thinking"
-                    ? "0 0 12px var(--accent-amber)"
-                    : mindState === "hyperfocus"
-                      ? "0 0 12px rgba(59, 130, 246, 0.6)"
-                      : "none",
-                flexShrink: 0,
-              }}
-            />
-            <span>{stateLabel}</span>
-            {distractionSegmentCount > 0 && (
-              <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
-                · {distractionSegmentCount} light {distractionSegmentCount === 1 ? "segment" : "segments"}
-              </span>
-            )}
-            {capturedCount > 0 && (
-              <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
-                · {capturedCount} captured {capturedCount === 1 ? "note" : "notes"}
-              </span>
-            )}
-          </div>
+          <SessionMindStateStatus
+            mindState={mindState}
+            distractionSegmentCount={distractionSegmentCount}
+            capturedCount={capturedCount}
+          />
 
           {!trackingControlsUnlocked && (
             <p
@@ -842,111 +657,17 @@ export function SessionView({
           )}
 
           {showDistractionHyperfocusCluster && (
-            <>
-              <div
-                data-tracking-controls="visible"
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  justifyContent: "center",
-                  gap: "12px",
-                  marginTop: "16px",
-                  width: "100%",
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={!isActive}
-                  aria-pressed={mindState === "thinking"}
-                  aria-label={isMobile ? "Hold for light distraction. Release when aware again." : "Hold for light distraction, or hold Space. Release when aware again."}
-                  onMouseDown={e => {
-                    e.preventDefault();
-                    handlePointerDistractionDown();
-                  }}
-                  onMouseUp={handlePointerDistractionUp}
-                  onMouseLeave={() => {
-                    if (holdKindRef.current === "pointerHold" && mindStateRef.current === "thinking") {
-                      handlePointerDistractionUp();
-                    }
-                  }}
-                  onTouchStart={e => {
-                    e.preventDefault();
-                    handlePointerDistractionDown();
-                  }}
-                  onTouchEnd={handlePointerDistractionUp}
-                  onTouchCancel={handlePointerDistractionUp}
-                  style={{
-                    ...holdButtonBase,
-                    borderColor:
-                      mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
-                    background:
-                      mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
-                    color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
-                  }}
-                >
-                  <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
-                  {!isMobile && (
-                    <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
-                      or hold Space
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!isActive}
-                  aria-pressed={mindState === "hyperfocus"}
-                  aria-label={isMobile ? "Hold for hyperfocus. Release to return to aware." : "Hold for hyperfocus, or hold Comma. Release to return to aware."}
-                  onMouseDown={e => {
-                    e.preventDefault();
-                    handlePointerHyperfocusDown();
-                  }}
-                  onMouseUp={handlePointerHyperfocusUp}
-                  onMouseLeave={() => {
-                    if (holdKindRef.current === "pointerHold" && mindStateRef.current === "hyperfocus") {
-                      handlePointerHyperfocusUp();
-                    }
-                  }}
-                  onTouchStart={e => {
-                    e.preventDefault();
-                    handlePointerHyperfocusDown();
-                  }}
-                  onTouchEnd={handlePointerHyperfocusUp}
-                  onTouchCancel={handlePointerHyperfocusUp}
-                  style={{
-                    ...holdButtonBase,
-                    borderColor:
-                      mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
-                    background:
-                      mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
-                    color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
-                  }}
-                >
-                  <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>
-                  {!isMobile && (
-                    <span style={{ ...mono, fontSize: "9px", letterSpacing: "0.14em", opacity: 0.85, textTransform: "none" }}>
-                      or hold ,
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              <FlashHint>
-                <p
-                  style={{
-                    margin: "12px 0 0",
-                    textAlign: "center",
-                    ...mono,
-                    fontSize: "10px",
-                    color: "var(--fg-4)",
-                    letterSpacing: "0.05em",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Light distraction holds only log awareness segments. Captured notes are reserved for explicit capture paths.
-                </p>
-              </FlashHint>
-            </>
+            <SessionHoldControls
+              isActive={isActive}
+              isMobile={isMobile}
+              mindState={mindState}
+              mindStateRef={mindStateRef}
+              holdKindRef={holdKindRef}
+              onDistractionDown={handlePointerDistractionDown}
+              onDistractionUp={handlePointerDistractionUp}
+              onHyperfocusDown={handlePointerHyperfocusDown}
+              onHyperfocusUp={handlePointerHyperfocusUp}
+            />
           )}
 
           <div
@@ -965,59 +686,15 @@ export function SessionView({
           </div>
 
           {!showPostDistractionCapture && (
-            <div
-              style={{
-                marginTop: isMobile ? "12px" : "18px",
-                display: "flex",
-                justifyContent: "center",
-                gap: "10px",
-                flexWrap: "wrap",
-                width: "100%",
-              }}
-            >
-              {isActive && (
-                <button
-                  ref={guidedExerciseTriggerRef}
-                  type="button"
-                  onClick={openGuidedExercise}
-                  aria-label="Open guided exercise"
-                  data-testid="guided-exercise-open"
-                  style={{
-                    ...captureNoteButtonStyle,
-                    borderColor: "var(--accent-green-border-subtle)",
-                    color: "var(--accent-green-dim)",
-                    opacity: sessionChromeDimmed ? 0.48 : 0.88,
-                  }}
-                >
-                  guided exercise
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleOpenThoughtCapture}
-                aria-label="Capture note"
-                style={{
-                  ...captureNoteButtonStyle,
-                  opacity: sessionChromeDimmed ? 0.48 : 0.88,
-                }}
-              >
-                capture note
-              </button>
-              <button
-                type="button"
-                onClick={enterMinimalView}
-                aria-label="Show only the timer"
-                data-minimal-view-enter
-                style={{
-                  ...captureNoteButtonStyle,
-                  borderColor: "var(--border-2)",
-                  color: "var(--fg-3)",
-                  opacity: sessionChromeDimmed ? 0.48 : 0.88,
-                }}
-              >
-                just the timer
-              </button>
-            </div>
+            <SessionActionRow
+              isActive={isActive}
+              isMobile={isMobile}
+              dimmed={sessionChromeDimmed}
+              guidedExerciseTriggerRef={guidedExerciseTriggerRef}
+              onOpenGuidedExercise={openGuidedExercise}
+              onOpenThoughtCapture={handleOpenThoughtCapture}
+              onEnterMinimalView={enterMinimalView}
+            />
           )}
 
           {showPostDistractionCapture && (
@@ -1032,52 +709,11 @@ export function SessionView({
       )}
 
       {!sessionFinished && !showPostDistractionCapture && !minimalView && (
-        <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: isMobile ? "12px" : "20px", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            disabled={sessionFinished || showPostDistractionCapture || !isActive}
-            onClick={() => extendSessionSeconds(60)}
-            aria-label="Add one minute to this session"
-            style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border-2)",
-              color: "var(--fg-2)",
-              ...mono,
-              fontSize: "11px",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              padding: "12px 18px",
-              minHeight: "44px",
-              borderRadius: "16px",
-              cursor: sessionFinished || showPostDistractionCapture || !isActive ? "default" : "pointer",
-              opacity: sessionFinished || showPostDistractionCapture || !isActive ? 0.4 : 1,
-            }}
-          >
-            +1 min
-          </button>
-          <button
-            type="button"
-            disabled={sessionFinished || showPostDistractionCapture || !isActive}
-            onClick={() => extendSessionSeconds(300)}
-            aria-label="Add five minutes to this session"
-            style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border-2)",
-              color: "var(--fg-2)",
-              ...mono,
-              fontSize: "11px",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              padding: "12px 18px",
-              minHeight: "44px",
-              borderRadius: "16px",
-              cursor: sessionFinished || showPostDistractionCapture || !isActive ? "default" : "pointer",
-              opacity: sessionFinished || showPostDistractionCapture || !isActive ? 0.4 : 1,
-            }}
-          >
-            +5 min
-          </button>
-        </div>
+        <SessionExtendButtons
+          isMobile={isMobile}
+          disabled={sessionFinished || showPostDistractionCapture || !isActive}
+          onExtend={extendSessionSeconds}
+        />
       )}
 
       {!minimalView && (
@@ -1091,71 +727,15 @@ export function SessionView({
         }}
       >
         {!showPostDistractionCapture && (
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: isMobile ? "16px" : "32px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={togglePause}
-              disabled={!pauseToggleEnabled}
-              style={{
-                background: "none",
-                border: "1px solid var(--border-2)",
-                color: "var(--fg-3)",
-                ...mono,
-                fontSize: "11px",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                padding: "14px 24px",
-                minHeight: "44px",
-                borderRadius: "20px",
-                cursor: pauseToggleEnabled ? "pointer" : "default",
-                opacity: pauseToggleEnabled ? 1 : 0.4,
-              }}
-            >
-              {isActive ? "pause" : "resume"}
-            </button>
-            <button
-              type="button"
-              onClick={handleEndEarly}
-              disabled={!endEnabled}
-              style={{
-                background: "none",
-                border: "1px solid var(--accent-green-border)",
-                color: "var(--accent-green-dim)",
-                ...mono,
-                fontSize: "11px",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                padding: "14px 24px",
-                minHeight: "44px",
-                borderRadius: "20px",
-                cursor: endEnabled ? "pointer" : "default",
-                opacity: endEnabled ? 1 : 0.4,
-              }}
-            >
-              end early &amp; keep
-            </button>
-            <button
-              type="button"
-              onClick={handleAbandon}
-              disabled={!endEnabled}
-              style={{
-                background: "none",
-                border: "1px solid var(--accent-danger-border)",
-                color: "var(--accent-danger-muted)",
-                ...mono,
-                fontSize: "11px",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                padding: "14px 24px",
-                minHeight: "44px",
-                borderRadius: "20px",
-                cursor: endEnabled ? "pointer" : "default",
-                opacity: endEnabled ? 1 : 0.4,
-              }}
-            >
-              abandon
-            </button>
-          </div>
+          <SessionEndControls
+            isMobile={isMobile}
+            isActive={isActive}
+            pauseToggleEnabled={pauseToggleEnabled}
+            endEnabled={endEnabled}
+            onTogglePause={togglePause}
+            onEndEarly={handleEndEarly}
+            onAbandon={handleAbandon}
+          />
         )}
 
         {audioBlocked && (
@@ -1164,83 +744,13 @@ export function SessionView({
           </div>
         )}
 
-        {/*
-          Tick, haptic, and voice are one segmented choice. Chime and the end
-          bell stay independent pills.
-        */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "6px",
-            marginTop: isMobile ? "8px" : "24px",
-            ...mono,
-            fontSize: "10px",
-            letterSpacing: "0.06em",
-          }}
-        >
-          <CueModeControl prefs={soundPrefs} onChange={setCueMode} testId="session.cueMode" />
-          {soundPrefs.haptics && (
-            <HapticIntervalControl
-              value={soundPrefs.hapticInterval}
-              onChange={setHapticInterval}
-              testId="session.hapticInterval"
-            />
-          )}
-          {(
-            [
-              ["chime", "chime", "audio"],
-              ["completion", "end", "audio"],
-            ] as const
-          ).map(([key, label, cue]) => {
-            const isOn = soundPrefs[key];
-            const appearance = soundToggleAppearance(isOn, cue);
-            return (
-              <button
-                type="button"
-                key={key}
-                // Native button + aria-pressed: assistive tech announces
-                // "tick sound, toggle button, pressed" and re-announces on change,
-                // so the state never depends on seeing the fill.
-                aria-pressed={isOn}
-                aria-label={soundToggleAccessibilityLabel(label, cue)}
-                // Becomes the accessible *description*, not the name. Deliberately
-                // restates the state in words: it is the hover tooltip for mouse
-                // users, and a plain-language fallback on the older
-                // browser/screen-reader pairs that handle `aria-pressed` poorly.
-                title={`${soundToggleAccessibilityLabel(label, cue)} \u2014 ${soundToggleStateText(isOn)}`}
-                data-testid={soundToggleTestId(label)}
-                data-sound-toggle={label}
-                data-state={soundToggleStateText(isOn)}
-                onClick={() => handleSoundPrefToggle(key)}
-                style={{
-                  background: appearance.isFilled ? "var(--surface-3)" : "transparent",
-                  border: `1px solid ${
-                    appearance.hasProminentBorder ? "var(--border-2)" : "var(--border-1)"
-                  }`,
-                  cursor: "pointer",
-                  color: isOn ? "var(--fg-2)" : "var(--fg-4)",
-                  transition: "background 0.2s, border-color 0.2s, color 0.2s",
-                  // Padding plus this min-height makes the *visible* pill the tap
-                  // target, rather than a small glyph inside an invisible one.
-                  padding: "0 10px",
-                  minHeight: `${SOUND_TOGGLE_MIN_TAP_TARGET_PX}px`,
-                  borderRadius: `${SOUND_TOGGLE_MIN_TAP_TARGET_PX / 2}px`,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "5px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <SoundToggleIcon muted={appearance.isIconMuted} cue={cue} />
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <SessionSoundControls
+          isMobile={isMobile}
+          soundPrefs={soundPrefs}
+          setCueMode={setCueMode}
+          setHapticInterval={setHapticInterval}
+          onSoundPrefToggle={handleSoundPrefToggle}
+        />
       </div>
       )}
     </div>
