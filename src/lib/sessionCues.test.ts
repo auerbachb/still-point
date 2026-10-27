@@ -30,6 +30,23 @@ const TICK: SoundPrefs = {
 };
 const VOICE: SoundPrefs = { ...TICK, tick: false, voiceCountdown: true };
 const HAPTIC: SoundPrefs = { ...TICK, tick: false, haptics: true };
+const HAPTIC_TEN_SECONDS: SoundPrefs = { ...HAPTIC, hapticInterval: "tenSeconds" };
+
+/** Every second the final minute announces, in order: 60 down to 1. */
+const FULL_COUNTDOWN = Array.from({ length: 60 }, (_, i) => 60 - i);
+
+/**
+ * Plans the one update at `elapsed` for a sit picked up at `seededAt` — the
+ * cursor a resume or late join would hold just before that update.
+ */
+function planFrom(
+  seededAt: number,
+  elapsed: number,
+  totalSeconds: number,
+  prefs: SoundPrefs,
+): { cursor: CueCursor; cues: Cue[] } {
+  return planCountdownCues(seededCueCursor(seededAt, totalSeconds, prefs), elapsed, totalSeconds, prefs);
+}
 
 /** Plays `elapsed` values in order from `cursor`, collecting every cue owed. */
 function run(
@@ -112,7 +129,10 @@ describe("cue cursors", () => {
       lastHapticInterval: 60,
     });
   });
+});
 
+// A parent-controlled timer applies followControlledVoice before every plan.
+describe("followControlledVoice", () => {
   it("keeps a controlled voice cursor from dropping below the current second", () => {
     const at = (lastVoiceSec: number) => ({ ...INITIAL_CUE_CURSOR, lastVoiceSec });
     // Above the final minute it is left for the plan to reset (#844).
@@ -126,7 +146,7 @@ describe("cue cursors", () => {
   // #844: the reset above the final minute used to happen here, before the
   // plan, which left the plan's cancel unreachable on the controlled path.
   it("cancels a clip in flight when a controlled step back leaves the final minute", () => {
-    const spoke = planCountdownCues(seededCueCursor(87.5, 100, VOICE), 88, 100, VOICE);
+    const spoke = planFrom(87.5, 88, 100, VOICE);
     expect(spoke.cues).toEqual([{ kind: "voice", second: 12 }]);
 
     const back = followControlledVoice(spoke.cursor, 30, 100);
@@ -135,15 +155,8 @@ describe("cue cursors", () => {
     expect(planned.cursor.lastVoiceSec).toBe(61);
   });
 
-  it("re-arms the countdown above the final minute outside voice mode too", () => {
-    const stale = { ...seededCueCursor(30, 100, TICK), lastVoiceSec: 12 };
-    const planned = planCountdownCues(stale, 30.05, 100, TICK);
-    expect(planned.cues).toEqual([]);
-    expect(planned.cursor.lastVoiceSec).toBe(61);
-  });
-
   it("does not re-announce the second a controlled step back lands inside", () => {
-    const spokeFifty = planCountdownCues(seededCueCursor(49.95, 100, VOICE), 50, 100, VOICE);
+    const spokeFifty = planFrom(49.95, 50, 100, VOICE);
     expect(spokeFifty.cues).toEqual([{ kind: "voice", second: 50 }]);
     const ahead = planCountdownCues(spokeFifty.cursor, 51, 100, VOICE);
     expect(ahead.cues).toEqual([{ kind: "voice", second: 49 }]);
@@ -186,7 +199,7 @@ describe("planCountdownCues — voice countdown", () => {
 
   it("opens the final minute with 60 and then counts each second down to 1", () => {
     const voice = spoken(run(freshCueCursor(VOICE), updates(14.9, 75), 75, VOICE).cues);
-    expect(voice.map(([, second]) => second)).toEqual(Array.from({ length: 60 }, (_, i) => 60 - i));
+    expect(voice.map(([, second]) => second)).toEqual(FULL_COUNTDOWN);
     expect(voice[0]).toEqual([15, 60]);
     expect(voice[1]).toEqual([16, 59]);
     expect(voice.at(-1)).toEqual([74, 1]);
@@ -226,7 +239,7 @@ describe("planCountdownCues — voice countdown", () => {
       const elapsed = updates(14.9, 74.95).map(at => at + lateMs / 1000);
       const voice = spoken(run(freshCueCursor(VOICE), elapsed, 75, VOICE).cues);
 
-      expect(voice.map(([, second]) => second)).toEqual(Array.from({ length: 60 }, (_, i) => 60 - i));
+      expect(voice.map(([, second]) => second)).toEqual(FULL_COUNTDOWN);
       for (const [at, second] of voice) expect(countdownSeconds(at, 75)).toBe(second);
       for (let i = 1; i < voice.length; i++) {
         expect(voice[i][0] - voice[i - 1][0]).toBeCloseTo(1, 6);
@@ -240,16 +253,23 @@ describe("planCountdownCues — voice countdown", () => {
     expect(planned.cues).toEqual([{ kind: "cancelVoice" }]);
     expect(planned.cursor.lastVoiceSec).toBe(61);
   });
+
+  it("re-arms the countdown above the final minute outside voice mode too", () => {
+    const stale = { ...seededCueCursor(30, 100, TICK), lastVoiceSec: 12 };
+    const planned = planCountdownCues(stale, 30.05, 100, TICK);
+    expect(planned.cues).toEqual([]);
+    expect(planned.cursor.lastVoiceSec).toBe(61);
+  });
 });
 
 describe("planCountdownCues — minute chime", () => {
   it("strikes when a minute block completes with a full minute still to go", () => {
-    const planned = planCountdownCues(seededCueCursor(59.95, 300, TICK), 60, 300, TICK);
+    const planned = planFrom(59.95, 60, 300, TICK);
     expect(sounds(planned.cues)).toEqual([{ kind: "tick" }, { kind: "chime" }]);
   });
 
   it("stays silent for the last minute block when less than a minute remains", () => {
-    const planned = planCountdownCues(seededCueCursor(119.95, 130, TICK), 120, 130, TICK);
+    const planned = planFrom(119.95, 120, 130, TICK);
     expect(sounds(planned.cues)).toEqual([{ kind: "tick" }]);
     expect(planned.cursor.lastCompletedBlockIndex).toBe(1);
   });
@@ -258,17 +278,17 @@ describe("planCountdownCues — minute chime", () => {
   // the countdown. iOS pins the same rule in
   // `SessionTickLogicVoiceCountdownTests.swift`.
   it("still strikes in voice mode at a minute outside the final minute", () => {
-    const planned = planCountdownCues(seededCueCursor(59.95, 300, VOICE), 60, 300, VOICE);
+    const planned = planFrom(59.95, 60, 300, VOICE);
     expect(sounds(planned.cues)).toEqual([{ kind: "chime" }]);
   });
 
   it("gives way in voice mode to the countdown opening the final minute", () => {
-    const withVoice = planCountdownCues(seededCueCursor(119.95, 180, VOICE), 120, 180, VOICE);
+    const withVoice = planFrom(119.95, 120, 180, VOICE);
     expect(sounds(withVoice.cues)).toEqual([{ kind: "voice", second: 60 }]);
     expect(withVoice.cursor.lastCompletedBlockIndex).toBe(1);
 
     const chimeOnly: SoundPrefs = { ...VOICE, voiceCountdown: false };
-    const withoutVoice = planCountdownCues(seededCueCursor(119.95, 180, chimeOnly), 120, 180, chimeOnly);
+    const withoutVoice = planFrom(119.95, 120, 180, chimeOnly);
     expect(sounds(withoutVoice.cues)).toEqual([{ kind: "chime" }]);
   });
 
@@ -285,7 +305,7 @@ describe("planCountdownCues — minute chime", () => {
 
   it("marks the block even with the chime off, so turning it on cannot replay it", () => {
     const silent = { ...TICK, tick: false, chime: false };
-    const off = planCountdownCues(seededCueCursor(59.95, 300, silent), 60, 300, silent);
+    const off = planFrom(59.95, 60, 300, silent);
     expect(sounds(off.cues)).toEqual([]);
     const on = planCountdownCues(off.cursor, 61, 300, { ...silent, chime: true });
     expect(sounds(on.cues)).toEqual([]);
@@ -302,28 +322,27 @@ describe("planCountdownCues — repeating haptic", () => {
   });
 
   it("buzzes every ten seconds when asked to", () => {
-    const tenSeconds: SoundPrefs = { ...HAPTIC, hapticInterval: "tenSeconds" };
-    const { cues } = run(freshCueCursor(tenSeconds), updates(0, 35), 300, tenSeconds);
+    const { cues } = run(freshCueCursor(HAPTIC_TEN_SECONDS), updates(0, 35), 300, HAPTIC_TEN_SECONDS);
     expect(cues.map(([elapsed]) => elapsed)).toEqual([10, 20, 30]);
   });
 
   it("is planned with haptics off too — maybeFireHaptic applies that preference", () => {
-    const planned = planCountdownCues(seededCueCursor(59.95, 300, TICK), 60, 300, { ...TICK, tick: false, chime: false });
+    const planned = planFrom(59.95, 60, 300, { ...TICK, tick: false, chime: false });
     expect(planned.cues).toEqual([{ kind: "haptic", cue: "minuteMarker" }]);
   });
 
   it("re-counts on an interval change instead of firing for the boundaries behind it", () => {
-    const tenSeconds: SoundPrefs = { ...HAPTIC, hapticInterval: "tenSeconds" };
-    const switched = planCountdownCues(seededCueCursor(25, 300, HAPTIC), 25.05, 300, tenSeconds);
+    // Seeded in minutes, then planned in ten-second intervals.
+    const switched = planCountdownCues(seededCueCursor(25, 300, HAPTIC), 25.05, 300, HAPTIC_TEN_SECONDS);
     expect(switched.cues).toEqual([]);
     expect(switched.cursor).toMatchObject({ lastHapticInterval: 10, lastHapticIndex: 2 });
-    const { cues } = run(switched.cursor, updates(25.05, 30), 300, tenSeconds);
+    const { cues } = run(switched.cursor, updates(25.05, 30), 300, HAPTIC_TEN_SECONDS);
     expect(cues).toEqual([[30, { kind: "haptic", cue: "minuteMarker" }]]);
   });
 
   it("plays voice or tick first, then the chime, then the buzz", () => {
     const both: SoundPrefs = { ...TICK, haptics: true };
-    const planned = planCountdownCues(seededCueCursor(59.95, 300, both), 60, 300, both);
+    const planned = planFrom(59.95, 60, 300, both);
     expect(planned.cues).toEqual([
       { kind: "tick" },
       { kind: "chime" },
