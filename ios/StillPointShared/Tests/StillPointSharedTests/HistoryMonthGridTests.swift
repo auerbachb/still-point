@@ -67,6 +67,25 @@ final class HistoryMonthGridTests: XCTestCase {
         XCTAssertEqual(today.state, .today)
     }
 
+    /// #839: a focus session marks its day as any session does, quick and breath
+    /// included, with its own time label.
+    func testFocusSessionMarksItsDayMeditated() {
+        let grid = HistoryMonthGrid.buildCurrentMonthGrid(
+            sessions: [makeSession(date: "2026-10-20", duration: 1800, sessionType: .focus)],
+            todayIso: "2026-10-27"
+        )
+        let dayCells = grid.cells.compactMap { cell -> MonthGridDay? in
+            if case .day(let day) = cell { return day }
+            return nil
+        }
+        let focusDay = dayCells.first { $0.isoDate == "2026-10-20" }!
+        let emptyDay = dayCells.first { $0.isoDate == "2026-10-21" }!
+
+        XCTAssertEqual(focusDay.state, .meditated)
+        XCTAssertEqual(focusDay.durationLabels, ["30m"])
+        XCTAssertEqual(emptyDay.state, .missed)
+    }
+
     func testMultipleSessionsOnOneDay() {
         let grid = HistoryMonthGrid.buildCurrentMonthGrid(
             sessions: [

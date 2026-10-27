@@ -257,6 +257,10 @@ public struct PracticeDayState: Sendable {
         dualTrack: Bool,
         calendar: Calendar = .current
     ) {
+        // #839: a focus session is not meditation practice (#765). It raises none
+        // of the flags below, so it leaves before the rollover too, and changes
+        // nothing here. `markPracticeDoneToday` never sends one.
+        if sessionType == .focus { return }
         // BEFORE the writes below, never after. This sit belongs to the current
         // local day; any flag still standing from yesterday does not. Rolling over
         // first retires those and re-stamps onto today, so the flag raised just
@@ -281,6 +285,9 @@ public struct PracticeDayState: Sendable {
                 // still until `getTracksDoneToday` caught up.
                 primaryStandardDoneToday = true
             }
+        case .focus:
+            // Returned above, before the rollover.
+            return
         }
     }
 }

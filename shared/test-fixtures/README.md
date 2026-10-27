@@ -18,6 +18,7 @@ implementations breaks CI on at least one platform.
 | `durationForDay.json` | `durationForDay` / `isDualTrackEligible` (`src/lib/constants.ts`, `src/lib/duration.ts`) | `StillPoint.duration(forDay:)` / `isDualTrackEligible` (`Constants.swift`). `advanceProgression`, `detectMissedDayGap`, and `recoveryStepDuration` run on both clients via `DurationRecovery.swift` (#524); `recoveryStepDuration` expectations are snapped to whole 10-second blocks (#661). |
 | `pathway.json` | `buildPathway` / `nodeStateForDay` (`src/lib/pathway.ts`) | `Pathway.build` / `Pathway.nodeState(forDay:currentDay:)` (`Pathway.swift`) — preview uses coming-soon state, not day count (#587) |
 | `combinedSit.json` | `combinedDurationForUser` / `isCombineOffered` (`src/lib/combinedSit.ts`) and `tracksCredited` (`src/lib/sessionCalendar.ts`) — today's two sits done as one (#769) | Not loaded yet: the iOS suite reads it in #896 (#769 increment 4/5) |
+| `focusDuration.json` | `FOCUS_DURATION_CONFIG` / `focusDurationForDay` / `shouldAdvanceFocusDay` (`src/lib/constants.ts`), `advanceFocusActivityDay` (`src/lib/duration.ts`) | `StillPoint.focusDurationConfig` / `focusDuration(forDay:)` / `shouldAdvanceFocusDay` / `advanceFocusActivityDay` (`Constants.swift`). The focus goal (#765): 1 min, +1 min per completed focus session, 2 h cap, no recovery ramp; only a completed focus session steps `focusActivityDay`, by one (#839). |
 
 ## How each suite loads them
 
@@ -56,6 +57,10 @@ identical golden values. To keep them in agreement:
   negatives to 0 while iOS does not, so negative inputs are platform-specific
   and tested per-suite. Wall-clock `elapsedSeconds` is omitted because its
   input is a platform-specific timestamp/`Date` rather than a portable scalar.
+- **focusDuration** — includes day 0, which both platforms treat as day 1.
+  Only the focus ramp can carry such a case: iOS's meditation
+  `duration(forDay:)` asserts on days below 1 in debug builds, so
+  `durationForDay.json` keeps to days of 1 or more.
 
 When adding a case, prefer inputs whose expected values are exact on both
 platforms; otherwise document the tolerance in the loading suite.

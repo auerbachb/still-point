@@ -128,12 +128,17 @@ public enum DurationRecovery {
 
     /// The shared duration function (#238): every planner/display for a sit's length
     /// must go through this so normal and recovery modes never drift apart.
+    ///
+    /// #839: a focus session is not a meditation sit. Pass the user's
+    /// `focusActivityDay` as `currentDay`; the result is the focus goal and the
+    /// meditation recovery ramp never applies. Mirrors web `sessionDurationForUser`.
     public static func sessionDurationForUser(
         sessionType: SessionType,
         currentDay: Int,
         recovery: RecoveryFields
     ) -> Int {
         if sessionType == .quick { return StillPoint.quickDuration }
+        if sessionType == .focus { return StillPoint.focusDuration(forDay: currentDay) }
         if let active = activeRecovery(recovery) {
             return recoveryStepDuration(
                 targetDay: active.recoveryTargetDay,

@@ -85,12 +85,10 @@ final class TrackingControlPrefsManager {
     ///
     /// Call this at login / app launch using the full `[SessionDTO]` history so existing
     /// users who completed a 5+ minute sit before this feature shipped start in the
-    /// unlocked state.
+    /// unlocked state. Focus sessions are not sits and never count (#839).
     func syncTrackingUnlockFromSessions(_ sessions: [SessionDTO]) {
         guard !trackingControlsUnlocked else { return }
-        guard sessions.contains(where: {
-            TrackingUnlockGate.qualifies(completed: $0.completed, duration: $0.duration)
-        }) else { return }
+        guard TrackingUnlockGate.historyQualifies(sessions) else { return }
         trackingControlsUnlocked = true
     }
 

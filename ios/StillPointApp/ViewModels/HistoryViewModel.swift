@@ -171,8 +171,7 @@ final class HistoryViewModel {
             todayIsoDate: todayIso ?? todayIsoDate
         )
 
-        let sessionTimes = sessions.map { $0.actualTime ?? $0.duration }
-        maxDuration = max(sessionTimes.max() ?? 60, 60)
+        maxDuration = HistoryJourney.barScaleSeconds(for: sessions)
     }
 
     private func rebuildCalendarAggregates(todayIso: String) {

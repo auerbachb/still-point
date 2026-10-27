@@ -219,6 +219,35 @@ final class WidgetDataDualTrackTests: XCTestCase, WidgetDataTestSupport {
         XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(secondStandard))
     }
 
+    /// #839: a focus session is not meditation practice, so a completed one checks
+    /// neither row, whatever track it carries.
+    func testCompletedFocusSessionCountsForNeitherWidgetRow() {
+        let tracks: [Track?] = [.primary, .second, nil]
+        for track in tracks {
+            let focus = session(date: "2026-10-27", type: .focus, track: track)
+            let label = track?.rawValue ?? "nil"
+            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .primary), label)
+            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus, track: .second), label)
+            XCTAssertFalse(WidgetDataStore.sessionCountsForWidgetPractice(focus), label)
+        }
+    }
+
+    func testRecentCompletedPracticeDatesLeavesOutFocusSessions() {
+        let now = Date()
+        let today = localDay(0, from: now)
+        let oneDayAgo = localDay(-1, from: now)
+
+        let sessions = [
+            session(date: today, type: .focus, track: .primary),
+            session(date: oneDayAgo, type: .standard, track: .primary),
+            session(date: oneDayAgo, type: .focus, track: .second)
+        ]
+
+        let result = WidgetDataStore.recentCompletedPracticeDates(from: sessions, now: now)
+        XCTAssertEqual(result.primary, [oneDayAgo])
+        XCTAssertTrue(result.second.isEmpty)
+    }
+
     func testRecentCompletedPracticeDatesSplitsTracksOverSameWindow() {
         let now = Date()
         let today = localDay(0, from: now)

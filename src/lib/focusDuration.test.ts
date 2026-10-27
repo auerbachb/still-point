@@ -28,6 +28,7 @@ import {
   focusSessionDuration,
   sessionDurationForUser,
 } from "./duration";
+import { loadSharedFixture, type FocusDurationFixture } from "./testing/sharedFixtures";
 
 const ALL_SESSION_TYPES: readonly SessionType[] = ["standard", "quick", "breath", "focus"];
 const NO_RECOVERY = { recoveryTargetDay: null, recoveryCurrentStep: null, recoveryTotalSteps: null };
@@ -150,5 +151,37 @@ describe("focus durations through the shared dispatchers (#835)", () => {
     expect(sessionDurationForUser("focus", 3, ACTIVE_RECOVERY)).toBe(180);
     // The same recovery state does change a standard sit's length.
     expect(sessionDurationForUser("standard", 11, ACTIVE_RECOVERY)).toBe(100);
+  });
+});
+
+// #839: the iOS suite (`FocusDurationTests.swift`) reads the same file, so the
+// duplicated ramp constants and rules cannot drift apart.
+describe("focus goal — shared fixture (#839)", () => {
+  const fixture = loadSharedFixture<FocusDurationFixture>("focusDuration.json");
+
+  test("every case list has cases", () => {
+    expect(fixture.focusDuration.length).toBeGreaterThan(0);
+    expect(fixture.shouldAdvanceFocusDay.length).toBeGreaterThan(0);
+    expect(fixture.advanceFocusActivityDay.length).toBeGreaterThan(0);
+  });
+
+  test("config matches FOCUS_DURATION_CONFIG", () => {
+    expect(fixture.config).toEqual(FOCUS_DURATION_CONFIG);
+  });
+
+  test.each(fixture.focusDuration)("focusDurationForDay day $day", ({ day, expected }) => {
+    expect(focusDurationForDay(day)).toBe(expected);
+    expect(focusSessionDuration(day)).toBe(expected);
+  });
+
+  test.each(fixture.shouldAdvanceFocusDay)(
+    "shouldAdvanceFocusDay $sessionType, completed $completed",
+    ({ sessionType, completed, expected }) => {
+      expect(shouldAdvanceFocusDay(sessionType, completed)).toBe(expected);
+    },
+  );
+
+  test.each(fixture.advanceFocusActivityDay)("$name", ({ sessionType, completed, focusActivityDay, expected }) => {
+    expect(advanceFocusActivityDay(sessionType, completed, focusActivityDay)).toBe(expected);
   });
 });

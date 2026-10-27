@@ -92,6 +92,85 @@ final class HistoryJourneyTests: XCTestCase {
         XCTAssertEqual(n3, 2)
     }
 
+    // MARK: - Focus sessions in the journey (#839)
+
+    func testFocusOnlyDayProducesARow() {
+        let rows = HistoryJourney.buildRows(fromSessions: [
+            makeSession(id: "f1", type: .focus, date: "2026-10-27"),
+        ])
+        XCTAssertEqual(rows.count, 1)
+        guard case .session(let session, let n) = rows[0] else {
+            return XCTFail("expected a session row for a focus session")
+        }
+        XCTAssertEqual(session.sessionType, .focus)
+        XCTAssertEqual(n, 1)
+    }
+
+    /// Focus sessions are numbered within their own type, so a focus session between
+    /// two sits leaves the sits "Session 1" and "Session 2".
+    func testFocusAndStandardMixUsesPerTypeIndices() {
+        let rows = HistoryJourney.buildRows(fromSessions: [
+            makeSession(id: "s1", date: "2026-10-27", createdAt: "2026-10-27T08:00:00.000Z"),
+            makeSession(id: "f1", type: .focus, date: "2026-10-27", createdAt: "2026-10-27T09:00:00.000Z"),
+            makeSession(id: "s2", date: "2026-10-27", createdAt: "2026-10-27T10:00:00.000Z"),
+            makeSession(id: "f2", type: .focus, date: "2026-10-27", createdAt: "2026-10-27T11:00:00.000Z"),
+        ])
+        let numbered = rows.compactMap { row -> (String, Int)? in
+            guard case .session(let session, let n) = row else { return nil }
+            return (session.id, n)
+        }
+        XCTAssertEqual(numbered.map(\.0), ["s1", "f1", "s2", "f2"])
+        XCTAssertEqual(numbered.map(\.1), [1, 1, 2, 2])
+    }
+
+    /// A focus day between two standard days fills the gap: the journey shows a row for
+    /// it, not a missed day, as it does for a quick sit.
+    func testFocusDayIsNotAMissedDay() {
+        let rows = HistoryJourney.buildRows(fromSessions: [
+            makeSession(id: "s1", date: "2026-10-25"),
+            makeSession(id: "f1", type: .focus, date: "2026-10-26"),
+            makeSession(id: "s2", date: "2026-10-27"),
+        ])
+        XCTAssertEqual(rows.count, 3)
+        for row in rows {
+            guard case .session = row else {
+                return XCTFail("expected only session rows, got \(row)")
+            }
+        }
+    }
+
+    /// The bars scale to the longest sit. A two-hour focus session stays out of the
+    /// scale (its bar is capped at full width), as on web (#836).
+    func testBarScaleLeavesOutFocusSessions() {
+        func session(_ id: String, type: SessionType, duration: Int, actualTime: Int?) -> SessionDTO {
+            SessionDTO(
+                id: id,
+                dayNumber: 1,
+                sessionType: type,
+                duration: duration,
+                completed: true,
+                actualTime: actualTime,
+                clearPercent: 50,
+                thoughtCount: 0,
+                mindStateLog: nil,
+                sessionDate: "2026-10-27",
+                buddySessionId: nil
+            )
+        }
+
+        let sits = [
+            session("s1", type: .standard, duration: 300, actualTime: 320),
+            session("q1", type: .quick, duration: 60, actualTime: nil),
+        ]
+        let focus = session("f1", type: .focus, duration: 7200, actualTime: 7200)
+
+        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: sits), 320)
+        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: sits + [focus]), 320)
+        // Never under a minute, even with nothing but focus sessions.
+        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: [focus]), 60)
+        XCTAssertEqual(HistoryJourney.barScaleSeconds(for: []), 60)
+    }
+
     // MARK: - Gap collapsing (#379)
 
     func testShortGapEmitsPerDayMissedRows() {
@@ -227,6 +306,24 @@ final class HistoryJourneyTests: XCTestCase {
         ])
         XCTAssertEqual(mixed.streak, 1, "quick sit on a later day must not extend the streak")
         XCTAssertEqual(mixed.avgThoughtsPerSession, 10, "average must count standard sessions only")
+    }
+
+    /// #839: the streak counts standard sits only, so focus sessions neither start one
+    /// nor extend one, as for quick sits.
+    func testStatsExcludeFocusSessions() {
+        let focusOnly = SessionStatistics.calculateStats(for: [
+            makeSession(id: "f1", type: .focus, date: "2026-10-26"),
+            makeSession(id: "f2", type: .focus, date: "2026-10-27"),
+        ])
+        XCTAssertEqual(focusOnly.streak, 0)
+        XCTAssertEqual(focusOnly.avgClearPercent, 0)
+
+        let mixed = SessionStatistics.calculateStats(for: [
+            makeSession(id: "s1", date: "2026-10-26", thoughtCount: 4),
+            makeSession(id: "f1", type: .focus, date: "2026-10-27"),
+        ])
+        XCTAssertEqual(mixed.streak, 1, "a focus session on a later day must not extend the streak")
+        XCTAssertEqual(mixed.avgThoughtsPerSession, 4, "average must count standard sessions only")
     }
 
     // MARK: - Shared cross-platform fixtures (#421)

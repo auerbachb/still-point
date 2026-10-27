@@ -93,6 +93,8 @@ public struct MindStateTrendStats: Codable, Sendable, Equatable {
 public protocol MindStateTrendSessionInput: HistorySessionTimeInput {
     var mindStateLog: [MindStateEntry]? { get }
     var duration: Int { get }
+    /// #839: `focus` sessions are skipped, as on web (#836).
+    var sessionType: SessionType { get }
 }
 
 extension SessionDTO: MindStateTrendSessionInput {}
@@ -166,6 +168,10 @@ public enum HistoryMindStateTrends {
 
         for session in sessions {
             guard SessionCalendar.isValidSessionCalendarDate(session.sessionDate) else { continue }
+            // #839: a focus session tracks no mind state, so its empty log would read
+            // as up to two hours of aware time and swamp the sit averages. Mirrors
+            // web `calculateMindStateTrendStats` (#836).
+            guard session.sessionType != .focus else { continue }
             let composition = compositionForSession(session)
             guard composition.totalSeconds > 0 else { continue }
 

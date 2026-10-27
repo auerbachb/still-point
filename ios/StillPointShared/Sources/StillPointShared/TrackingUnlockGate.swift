@@ -26,4 +26,15 @@ public enum TrackingUnlockGate {
     public static func qualifies(completed: Bool, duration: Int) -> Bool {
         completed && duration >= minDurationSeconds
     }
+
+    /// The history backfill: whether any session in `sessions` earns the unlock.
+    /// A focus session (#765) is not a sit, so even a long completed one never
+    /// unlocks the sit controls. Mirrors web's `syncTrackingUnlockFromSessions`
+    /// (#836).
+    public static func historyQualifies(_ sessions: [SessionDTO]) -> Bool {
+        sessions.contains { session in
+            session.sessionType != .focus
+                && qualifies(completed: session.completed, duration: session.duration)
+        }
+    }
 }

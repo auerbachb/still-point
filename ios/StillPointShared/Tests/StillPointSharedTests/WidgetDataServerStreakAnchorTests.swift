@@ -65,6 +65,38 @@ final class WidgetDataServerStreakAnchorTests: XCTestCase, WidgetDataTestSupport
         XCTAssertNotEqual(snapshot.streak, 12, "practice days may not extend a standard-only total")
     }
 
+    /// #839: a focus session is not a sit the server counts, and unlike a quick sit
+    /// it checks no row either, so one today leaves the streak where yesterday's
+    /// standard sit put it.
+    func testFocusSessionTodayDoesNotExtendTheStreak() {
+        let now = Date()
+        let sessions = standardRun([-6, -5, -4, -3, -2, -1], from: now)
+            + [session(date: localDay(0, from: now), type: .focus)]
+        let snapshot = backfilled(sessions: sessions, serverStreak: 10, now: now)
+
+        XCTAssertEqual(snapshot.serverStreakDate, localDay(-1, from: now), "a focus session never anchors the total")
+        XCTAssertFalse(snapshot.completedDates.contains(localDay(0, from: now)), "nor checks today's row")
+        XCTAssertEqual(snapshot.streak, 10)
+    }
+
+    /// #839: the server-streak population, asserted directly for focus sessions.
+    func testFocusSessionsNeitherAnchorNorExtendTheServerStreak() {
+        let now = Date()
+        let standard = session(date: localDay(-2, from: now), type: .standard, track: .primary)
+        let focusYesterday = session(date: localDay(-1, from: now), type: .focus, track: .primary)
+        let focusToday = session(date: localDay(0, from: now), type: .focus, track: nil)
+
+        XCTAssertTrue(WidgetDataStore.sessionCountsForServerStreak(standard))
+        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(focusYesterday))
+        XCTAssertFalse(WidgetDataStore.sessionCountsForServerStreak(focusToday))
+
+        let sessions = [standard, focusYesterday, focusToday]
+        XCTAssertEqual(WidgetDataStore.recentCompletedStandardDates(from: sessions, now: now), [localDay(-2, from: now)])
+        XCTAssertEqual(WidgetDataStore.serverStreakAnchorDate(from: sessions), localDay(-2, from: now))
+        XCTAssertNil(WidgetDataStore.serverStreakAnchorDate(from: [focusYesterday, focusToday]))
+        XCTAssertFalse(WidgetDataStore.primaryStandardSitCompleted(on: localDay(0, from: now), in: sessions))
+    }
+
     /// The common single-day version of the same bug: standard yesterday, quick
     /// today. Previously 11 against the app's 10.
     func testQuickSitTodayDoesNotPushThePastTheAppStreak() {

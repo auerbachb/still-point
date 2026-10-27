@@ -260,6 +260,17 @@ public enum HistoryJourney {
         return rows
     }
 
+    /// #839: the session length (seconds) the journey's bars are drawn against: the
+    /// longest session, never under a minute. Focus sessions run up to two hours, so
+    /// they stay out of it, as on web (#836); otherwise one long focus session would
+    /// shrink every meditation bar to a sliver. The view caps a longer bar at full width.
+    public static func barScaleSeconds(for sessions: [SessionDTO]) -> Int {
+        let sessionTimes = sessions
+            .filter { $0.sessionType != .focus }
+            .map { $0.actualTime ?? $0.duration }
+        return max(sessionTimes.max() ?? 60, 60)
+    }
+
     /// Emits rows for the missed days strictly between `fromIso` and `toIso`: per-day
     /// `.missed` rows for short gaps, a single `.missedRange` at the collapse threshold.
     private static func appendGapRows(after fromIso: String, before toIso: String, into rows: inout [HistoryJourneyListRow]) {
