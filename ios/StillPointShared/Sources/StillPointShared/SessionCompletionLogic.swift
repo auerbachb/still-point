@@ -86,10 +86,21 @@ public enum SessionCompletionLogic {
     /// back in as the same account moves the generation too, so it gets no
     /// exception.
     ///
+    /// Someone also has to be signed in. A Retry tapped in that same window reads
+    /// the new generation, finds nobody signed in and raises the alert again, so
+    /// that alert's generation is live. Every way into a sit needs someone signed
+    /// in, so the only alert raised with nobody signed in is one raised after a
+    /// sign-out.
+    ///
     /// - Parameter raisedGeneration: the generation the alert was raised under, or
     ///   `nil` when none was raised.
     /// - Parameter liveGeneration: the identity generation now.
-    public static func continuesWithoutSaving(alertRaisedAt raisedGeneration: Int?, liveGeneration: Int) -> Bool {
-        raisedGeneration == liveGeneration
+    /// - Parameter isSignedIn: whether anyone is signed in now.
+    public static func continuesWithoutSaving(
+        alertRaisedAt raisedGeneration: Int?,
+        liveGeneration: Int,
+        isSignedIn: Bool
+    ) -> Bool {
+        isSignedIn && raisedGeneration == liveGeneration
     }
 }

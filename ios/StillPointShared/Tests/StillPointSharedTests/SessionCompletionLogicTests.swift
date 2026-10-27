@@ -72,17 +72,24 @@ final class SessionCompletionLogicTests: XCTestCase {
     // MARK: - #921: "Continue without saving" after a sign-out
 
     func testContinueWithoutSavingOpensTheScreenUnderTheGenerationThatRaisedTheAlert() {
-        XCTAssertTrue(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 3))
+        XCTAssertTrue(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 3, isSignedIn: true))
     }
 
     func testContinueWithoutSavingOpensNothingAfterASignOut() {
-        // A sign-out moves the generation once.
-        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 4))
+        // A sign-out moves the generation once. Someone is signed in here, so the
+        // moved generation alone turns the tap away.
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 3, liveGeneration: 4, isSignedIn: true))
     }
 
     func testContinueWithoutSavingOpensNothingWhenNoAlertWasRaised() {
         // 0 is the generation a launch starts on, so a missing value must not read
         // as that one.
-        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: nil, liveGeneration: 0))
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: nil, liveGeneration: 0, isSignedIn: true))
+    }
+
+    func testContinueWithoutSavingOpensNothingWithNobodySignedIn() {
+        // A Retry tapped after a sign-out raises the alert again under the new
+        // generation, so the generations match and nobody is signed in.
+        XCTAssertFalse(SessionCompletionLogic.continuesWithoutSaving(alertRaisedAt: 4, liveGeneration: 4, isSignedIn: false))
     }
 }

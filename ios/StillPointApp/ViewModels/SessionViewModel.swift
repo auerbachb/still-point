@@ -460,14 +460,17 @@ final class SessionViewModel {
     /// attention log goes along as it does from `completeSit`, so the screen
     /// shows the same gaze summary a saved sit's does (#873).
     ///
-    /// Nothing opens once the generation that raised the alert is gone (#921): a
-    /// sign-out that lands between the alert and this action has routed to
-    /// sign-in, and the completion screen would cover it.
+    /// Nothing opens once the generation that raised the alert is gone, or with
+    /// nobody signed in (#921). A sign-out that lands between the alert and this
+    /// action has routed to sign-in, and the completion screen would cover it. A
+    /// Retry tapped after that sign-out raises the alert again under the new
+    /// generation, so only the signed-in check turns that alert's tap away.
     @MainActor
     func continueWithoutSaving(appVM: AppViewModel) {
         guard SessionCompletionLogic.continuesWithoutSaving(
             alertRaisedAt: saveErrorGeneration,
-            liveGeneration: appVM.authGeneration
+            liveGeneration: appVM.authGeneration,
+            isSignedIn: appVM.currentUser != nil
         ) else { return }
         appVM.completeSession(
             sessionId: "",
