@@ -8,8 +8,8 @@
  * order, every managed migration that touches that CHECK (this one included)
  * with raw SQL, as `scripts/apply-migrations.ts` does, then apply this one again.
  *
- * The whole `drizzle/` chain is not replayed here: it does not bootstrap an
- * empty database today, for reasons unrelated to this migration.
+ * The whole `drizzle/` chain is not replayed here: `scripts/apply-migrations.test.ts`
+ * replays it on an empty database (#858).
  */
 import { PGlite } from "@electric-sql/pglite";
 import path from "node:path";
