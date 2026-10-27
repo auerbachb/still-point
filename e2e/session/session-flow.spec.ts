@@ -15,7 +15,7 @@ test.describe("mobile session flow", () => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
     await applyTrackingControlsUnlocked(page);
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
 
     const trackingLayer = page.locator('[data-session-tracking-layer="persistent"]');
     const secondaryChrome = page.locator('[data-session-chrome="secondary"]');
@@ -43,7 +43,7 @@ test.describe("mobile session flow", () => {
     await ensureLoggedIn();
     await applyTrackingControlsUnlocked(page);
 
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     await expectMinimumTapTarget(beginButton, "begin session button");
     await tap(beginButton);
 
@@ -104,7 +104,7 @@ test.describe("mobile session flow", () => {
     await page.keyboard.press("Space");
     await tap(page.getByRole("button", { name: "End breath counting session" }));
 
-    await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
     expect(mockApiState.sessions.length, "one-tap breath session should be saved").toBe(1);
     expect(mockApiState.sessions[0]?.sessionType, "session should be persisted as breath").toBe("breath");
     expect(mockApiState.sessions[0]?.duration, "stored duration should meet API minimum").toBe(1);
@@ -114,7 +114,7 @@ test.describe("mobile session flow", () => {
 
   test("locked tracking controls show explainer before unlock", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
 
     await expect(page.locator("[data-tracking-unlock-explainer]")).toBeVisible();
     await expect(page.locator('[data-tracking-controls="visible"]')).toHaveCount(0);
@@ -128,7 +128,7 @@ test.describe("mobile session flow", () => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
     await applyTrackingControlsUnlocked(page);
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
 
     const sessionRoot = page.locator("[data-session-view-mode]");
     const trackingLayer = page.locator('[data-session-tracking-layer="persistent"]');
@@ -168,7 +168,7 @@ test.describe("mobile session flow", () => {
     await seedTrackingControlsUnlocked(page);
     await ensureLoggedIn();
     await applyTrackingControlsUnlocked(page);
-    await tap(page.getByRole("button", { name: "Begin" }));
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
 
     const pauseButton = page.getByRole("button", { name: "pause" });
     await expect(pauseButton).toBeVisible();
@@ -184,7 +184,7 @@ test.describe("mobile session flow", () => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto("/app");
 
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     await expect(beginButton).toBeVisible();
     await expectVisibleInViewport(page, beginButton, "landscape begin button");
     await tap(beginButton);

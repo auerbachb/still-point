@@ -150,7 +150,7 @@ test.describe("offline-first web PWA", () => {
       await page.reload();
 
       // The normal app, from cache — no sign-in screen, no "Unable to verify".
-      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
       await expect(homeDayNumber(page)).toBeVisible();
       await expect(homeDayNumber(page)).toHaveText(String(expectedDay));
       await expect(page.getByText(/unable to verify your sign-in/i)).toHaveCount(0);
@@ -172,7 +172,7 @@ test.describe("offline-first web PWA", () => {
       // One online launch with the worker in control, as in the reload spec, so
       // the worker holds the scripts the offline reload below boots from.
       await page.reload();
-      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
       await waitForAppShellCached(page);
 
       await network.goOffline();
@@ -180,7 +180,7 @@ test.describe("offline-first web PWA", () => {
       await expect(page.getByTestId("offline-indicator")).toBeVisible();
 
       // A whole sit, start to saved, with nothing reachable.
-      await tap(page.getByRole("button", { name: "Begin" }));
+      await tap(page.getByRole("button", { name: "Begin", exact: true }));
       await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
       await expect(page.getByRole("heading", { name: /Complete/i })).toBeVisible();
 
@@ -200,7 +200,7 @@ test.describe("offline-first web PWA", () => {
       // for it here, still offline.
       await tap(page.getByRole("button", { name: "save and return to home" }));
       await page.waitForURL(`**${pathForTab(DEFAULT_TAB)}`);
-      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
       await expect(page.getByTestId("offline-indicator")).toBeVisible();
       await page.evaluate(() => {
         (window as SameDocumentMarker).__sameDocument = true;
@@ -230,7 +230,7 @@ test.describe("offline-first web PWA", () => {
       // ...and the indicator clears on its own once the bootstrap re-runs
       // successfully — no reload, no sign-in flash.
       await expect(page.getByTestId("offline-indicator")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Begin" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Begin", exact: true })).toBeVisible();
       expect(
         await page.evaluate(() => (window as SameDocumentMarker).__sameDocument),
         "the page was not reloaded on reconnect",

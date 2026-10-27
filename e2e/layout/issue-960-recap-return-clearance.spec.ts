@@ -66,7 +66,7 @@ test.describe("#960 recap return button clears the bottom nav at any recap heigh
   for (const [name, start] of Object.entries(STARTS)) {
     test(`when it starts ${name}`, async ({ page, ensureLoggedIn }) => {
       await ensureLoggedIn();
-      await tap(page.getByRole("button", { name: "Begin" }));
+      await tap(page.getByRole("button", { name: "Begin", exact: true }));
       await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
 
       const returnButton = page.getByRole("button", { name: "save and return to home" });

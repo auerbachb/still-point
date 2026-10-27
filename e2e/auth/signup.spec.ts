@@ -14,7 +14,7 @@ test.describe("signup @critical", () => {
     await expectMinimumTapTarget(beginJourney, "signup submit button");
     await tap(beginJourney);
 
-    const beginButton = page.getByRole("button", { name: "Begin" });
+    const beginButton = page.getByRole("button", { name: "Begin", exact: true });
     await expect(beginButton).toBeVisible();
     expect(mockApiState.authenticated, "mock API should mark session authenticated after signup").toBe(true);
     await expectNoHorizontalOverflow(page);
