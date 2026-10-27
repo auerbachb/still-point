@@ -11,7 +11,10 @@ public actor APIClient {
     /// Subsystem matches the bundle id; category lets us filter in Console.
     nonisolated static let diagLog = Logger(subsystem: "com.brettonauerbach.stillpoint", category: "e2e-diag")
 
-    // Default to the deployed web app; override for local dev
+    /// The deployed web app. Every build configuration targets it; local dev
+    /// overrides it at runtime with `setBaseURL(_:)`.
+    private static let defaultBaseURL = URL(string: "https://still-point.me")!
+
     private var baseURL: URL
 
     private let session: URLSession
@@ -22,11 +25,7 @@ public actor APIClient {
     private let uiTestAPIStore: UITestAPIStore?
 
     private init() {
-        #if DEBUG
-        self.baseURL = URL(string: "https://still-point.me")!
-        #else
-        self.baseURL = URL(string: "https://still-point.me")!
-        #endif
+        self.baseURL = Self.defaultBaseURL
 
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .always
@@ -203,8 +202,7 @@ public actor APIClient {
         }
         let path: String
         if let today, !today.isEmpty, SessionCalendar.isValidSessionCalendarDate(today) {
-            let encoded = today.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? today
-            path = "/api/auth/me?date=\(encoded)"
+            path = "/api/auth/me?date=\(queryEncoded(today))"
         } else {
             path = "/api/auth/me"
         }
@@ -235,9 +233,7 @@ public actor APIClient {
         if uiTestAPIStore != nil {
             return
         }
-        var urlRequest = makeRequest(method: "DELETE", path: "/api/device-token")
-        urlRequest.httpBody = try JSONEncoder().encode(request)
-        _ = try await executeRaw(urlRequest)
+        try await delete("/api/device-token", body: request)
     }
 
     // MARK: - Sessions
@@ -248,8 +244,7 @@ public actor APIClient {
         }
         let path: String
         if let today, !today.isEmpty {
-            let encoded = today.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? today
-            path = "/api/sessions?today=\(encoded)"
+            path = "/api/sessions?today=\(queryEncoded(today))"
         } else {
             path = "/api/sessions"
         }
@@ -261,8 +256,7 @@ public actor APIClient {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.getTracksDoneToday(date: date)
         }
-        let encodedDate = date.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? date
-        let response: TracksDoneTodayResponse = try await get("/api/track/done-today?date=\(encodedDate)")
+        let response: TracksDoneTodayResponse = try await get("/api/track/done-today?date=\(queryEncoded(date))")
         return response.tracksDoneToday
     }
 
@@ -427,8 +421,7 @@ public actor APIClient {
         if let uiTestAPIStore {
             return try await uiTestAPIStore.getFailureReason(date: date)
         }
-        let encodedDate = date.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? date
-        return try await get("/api/failure-reasons?date=\(encodedDate)")
+        return try await get("/api/failure-reasons?date=\(queryEncoded(date))")
     }
 
     public func submitFailureReason(_ request: SubmitFailureReasonRequest) async throws -> FailureReasonDTO {
@@ -543,8 +536,8 @@ public actor APIClient {
         offset: Int?
     ) -> String {
         var parts: [String] = []
-        if let from { parts.append("from=\(from.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? from)") }
-        if let to { parts.append("to=\(to.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? to)") }
+        if let from { parts.append("from=\(queryEncoded(from))") }
+        if let to { parts.append("to=\(queryEncoded(to))") }
         if let limit { parts.append("limit=\(limit)") }
         if let offset { parts.append("offset=\(offset)") }
         guard !parts.isEmpty else { return base }
@@ -577,10 +570,21 @@ public actor APIClient {
         _ = try await executeRaw(request)
     }
 
+    private func delete<B: Encodable>(_ path: String, body: B) async throws {
+        var request = makeRequest(method: "DELETE", path: path)
+        request.httpBody = try JSONEncoder().encode(body)
+        _ = try await executeRaw(request)
+    }
+
+    /// Percent-encodes a query-string value, falling back to the raw value if
+    /// encoding fails.
+    private func queryEncoded(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
+
     private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, _) = try await executeRaw(request)
-        let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: data)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     private func executeRaw(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -588,7 +592,7 @@ public actor APIClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError(status: 0, message: "Invalid response")
         }
-        guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
+        guard (200..<300).contains(httpResponse.statusCode) else {
             let errorBody = try? JSONDecoder().decode(ErrorResponse.self, from: data)
             throw APIError(
                 status: httpResponse.statusCode,
@@ -619,7 +623,6 @@ public actor APIClient {
         applyAuthorizationHeader(to: &request)
         return request
     }
-
 }
 
 private struct SettingsPatchBody: Encodable {
