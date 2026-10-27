@@ -88,31 +88,14 @@ extension AppViewModel {
     /// rather than waiting for the other session (#684).
     /// Shared touchpoint with #590 completion-handler work — rebase carefully.
     func markPracticeDoneToday(sessionType: SessionType, track: Track) {
-        // BEFORE the writes below, never after. This sit belongs to the current
-        // local day; any flag still standing from yesterday does not. Rolling over
-        // first retires those and re-stamps onto today, so the flag raised just
-        // below survives the identical (now no-op) rollover inside
-        // `syncWidgetData()`. Doing it afterwards would clear the very sit that
-        // just finished.
-        rollOverDoneTodayFlagsIfNeeded()
-        switch sessionType {
-        case .quick, .breath:
-            // Quick and breath sits are Track One practice whichever track the
-            // user launched them from — they have no second-track counterpart.
-            practiceDoneToday = true
-        case .standard:
-            if track == .second {
-                secondPracticeDoneToday = true
-            } else {
-                practiceDoneToday = true
-                // #679: and record it as a *standard* sit. `practiceDoneToday` alone
-                // cannot say so — quick and breath sits raise it too — and the
-                // standard-only day set that extends `serverStreak` may only take
-                // days the server would have counted. Without this the flame stood
-                // still until `getTracksDoneToday` caught up.
-                primaryStandardDoneToday = true
-            }
-        }
+        // Rolls the flags over first, then raises this sit's own; see
+        // `PracticeDayState.recordCompletion` for why the order matters.
+        practiceDay.recordCompletion(
+            sessionType: sessionType,
+            track: track,
+            now: Date(),
+            dualTrack: dualTrackEnabled
+        )
         // The Home badges (`primaryDoneToday` / `secondDoneToday`) stay
         // server-derived — this flag is the widget's own fast, network-free
         // path, and the two are refreshed from different sources.
