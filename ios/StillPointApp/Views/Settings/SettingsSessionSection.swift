@@ -55,7 +55,8 @@ struct SettingsSessionSection: View {
                         appVM.saveSettingsControl(
                             saving: $isUpdatingLongSessionPeriod,
                             send: { try await APIClient.shared.updateSettings(longSessionPeriod: newValue) },
-                            revert: { longSessionPeriod = previous }
+                            revert: { longSessionPeriod = previous },
+                            resync: { longSessionPeriod = $0.longSessionPeriod }
                         )
                     }
                     Text("The 10-minute track is this sitting. The shorter track is the other one. You can still do either sit at any time of day.")
@@ -129,7 +130,8 @@ struct SettingsSessionSection: View {
                     saving: $isUpdatingAttentionTracking,
                     authorize: { await authorizeAttentionTracking(enabling: newValue) },
                     send: { try await APIClient.shared.updateSettings(attentionTrackingEnabled: newValue) },
-                    revert: { attentionTrackingEnabled = !newValue }
+                    revert: { attentionTrackingEnabled = !newValue },
+                    resync: { attentionTrackingEnabled = $0.attentionTrackingEnabled }
                 )
             }
 
@@ -156,7 +158,8 @@ struct SettingsSessionSection: View {
                     saving: $isUpdatingAmbientSound,
                     authorize: { await authorizeAmbientSound(enabling: newValue) },
                     send: { try await APIClient.shared.updateSettings(ambientSoundEnabled: newValue) },
-                    revert: { ambientSoundEnabled = !newValue }
+                    revert: { ambientSoundEnabled = !newValue },
+                    resync: { ambientSoundEnabled = $0.ambientSoundEnabled }
                 )
             }
         }

@@ -177,19 +177,26 @@ extension AppViewModel {
     ///     lowered when the save ends, however it ends. Settings disables the control
     ///     on it and skips the control when copying the account onto the screen, so it
     ///     has to be live for exactly as long as the save is.
-    ///   - authorize: runs first inside the queued operation and says whether to go
-    ///     on — a permission prompt goes here. Returning `false` abandons the save
-    ///     before anything is sent; the gate puts the control back and tells the user
-    ///     why itself. `nil` for a control that needs no permission.
+    ///   - authorize: runs inside the queued operation before anything is sent and
+    ///     says whether to go on — a permission prompt goes here. Returning `false`
+    ///     abandons the save; the gate puts the control back and tells the user why
+    ///     itself. Not run at all when the account changed while the save waited its
+    ///     turn. `nil` for a control that needs no permission.
     ///   - send: the PATCH carrying this control's field.
     ///   - revert: puts the control back to what it showed before the change. Called
     ///     when the request throws, or when its response belongs to a session that is
     ///     gone.
+    ///   - resync: copies this control's field of the account it is handed onto the
+    ///     control. Called instead of `revert` when the account changed before the
+    ///     request left, so nothing was sent and the control still shows a change made
+    ///     on the previous account. `revert` would put back that account's value, and
+    ///     the account now on screen can differ (#851).
     func saveSettingsControl(
         saving: Binding<Bool>,
         authorize: (@Sendable @MainActor () async -> Bool)? = nil,
         send: @escaping @Sendable @MainActor () async throws -> UserDTO,
-        revert: @escaping @Sendable @MainActor () -> Void
+        revert: @escaping @Sendable @MainActor () -> Void,
+        resync: @escaping @Sendable @MainActor (UserDTO) -> Void
     ) {
         saving.wrappedValue = true
         // Captured synchronously with the user's action rather than inside the
@@ -206,35 +213,69 @@ extension AppViewModel {
         // the save behind a rename the user made while the prompt was up, so the
         // opt-in's slower response could then revert that rename (#697).
         enqueueSettingsWrite { [self] in
-            defer { saving.wrappedValue = false }
-            if let authorize {
-                guard await authorize() else { return }
-            }
-            do {
-                // Re-checked before issuing the write: sending this would otherwise
-                // apply the previous user's intent to the account that replaced them.
-                guard identityAtStart == identityGeneration else { return }
-                // Taken immediately before the request, so it records when this left
-                // and outranks the `me()` reads racing it (#697/#709). Ordering against
-                // the other settings mutations is the queue's job, not the ticket's.
-                let settingsTicket = nextSettingsRequestTicket()
-                let updated = try await send()
-                // A discarded response means the session changed; put the control back
-                // rather than leaving it showing an intent that was never applied
-                // (mirrors the catch below). Otherwise the response is adopted —
-                // nothing else can be in flight to supersede it — so the account now
-                // carries what the control shows and Settings' sync from it is a no-op
-                // (#697).
-                if applySettingsUser(
-                    updated,
-                    startedAtGeneration: identityAtStart,
-                    requestTicket: settingsTicket
-                ) == .discarded {
-                    revert()
-                }
-            } catch {
+            let ending = await runSettingsControlSave(
+                startedAtGeneration: identityAtStart,
+                authorize: authorize,
+                send: send
+            )
+            // The account is only ever copied onto a control that is out of flight, which
+            // is the rule Settings' own copy follows, so a resync waits for the flag. It
+            // still runs in this main-actor turn, not a `Task` of its own, so no frame
+            // shows the control enabled with the previous account's change on it (#851).
+            switch SettingsControlSave.recovery(after: ending, accountOnScreen: currentUser) {
+            case .keep:
+                saving.wrappedValue = false
+            case .revert:
                 revert()
+                saving.wrappedValue = false
+            case .resync(let account):
+                saving.wrappedValue = false
+                resync(account)
             }
+        }
+    }
+
+    /// The round trip `saveSettingsControl` queues, from the permission gate to
+    /// adopting the response. Says how it ended and leaves the control to the caller.
+    private func runSettingsControlSave(
+        startedAtGeneration identityAtStart: Int,
+        authorize: (@Sendable @MainActor () async -> Bool)?,
+        send: @Sendable @MainActor () async throws -> UserDTO
+    ) async -> SettingsControlSave.Ending {
+        if let authorize {
+            // Checked before the gate as well as after it. A save whose account changed
+            // while it waited its turn must not put up a camera or microphone prompt for
+            // a change the account now on screen never made, nor let a denial reset the
+            // control and raise an alert in place of the resync (#851).
+            guard identityAtStart == identityGeneration else { return .identityChanged }
+            guard await authorize() else { return .notAuthorized }
+        }
+        do {
+            // Re-checked before issuing the write: sending this would otherwise
+            // apply the previous user's intent to the account that replaced them.
+            guard identityAtStart == identityGeneration else { return .identityChanged }
+            // Taken immediately before the request, so it records when this left
+            // and outranks the `me()` reads racing it (#697/#709). Ordering against
+            // the other settings mutations is the queue's job, not the ticket's.
+            let settingsTicket = nextSettingsRequestTicket()
+            let updated = try await send()
+            // A discarded response means the session changed, so the caller puts the
+            // control back rather than leaving it showing an intent that was never
+            // applied (mirrors the catch below). Otherwise the response is adopted —
+            // nothing else can be in flight to supersede it — so the account now
+            // carries what the control shows and Settings' sync from it is a no-op
+            // (#697).
+            switch applySettingsUser(
+                updated,
+                startedAtGeneration: identityAtStart,
+                requestTicket: settingsTicket
+            ) {
+            case .applied: return .applied
+            case .superseded: return .superseded
+            case .discarded: return .discarded
+            }
+        } catch {
+            return .failed
         }
     }
 

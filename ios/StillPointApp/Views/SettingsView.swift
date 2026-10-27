@@ -164,8 +164,10 @@ struct SettingsView: View {
     /// of the confirmed value and no rule for when to stop trusting one: the flag is
     /// live for exactly as long as the save is, and it is the same flag that disables
     /// the control, so the user cannot have moved it in the meantime. Once it clears,
-    /// the response has already been adopted (or the control explicitly reverted), so
-    /// the account is what the control should show.
+    /// the response has already been adopted, the control explicitly reverted, or —
+    /// when the account changed before the save was sent — the control re-synced from
+    /// the account that replaced it (#851), so the account is what the control should
+    /// show.
     private func syncFromCurrentUser() {
         sessionIntroEnabled = !SessionIntroPrefs.isIntroOverlayHidden
         guard let user = appVM.currentUser else {
