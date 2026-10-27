@@ -6,6 +6,10 @@ name: iOS App Compile
 # when sources the `StillPoint` scheme compiles, `ios/project.yml`, or this
 # workflow changed; otherwise a cheap ubuntu no-op still satisfies the check. Same shape as
 # ios-shared-tests.yml (#463) and infoplist-sync.yml (#588).
+#
+# On macOS the job compiles the scheme twice: for the simulator, then for a
+# generic iOS device with code signing off, so code behind
+# `#if !targetEnvironment(simulator)` also compiles before merge (issue #926).
 
 on:
   pull_request:
@@ -118,6 +122,26 @@ jobs:
             -scheme StillPoint \
             -configuration Debug \
             -destination "${destination}"
+
+      # The simulator build skips every `#if !targetEnvironment(simulator)`
+      # block, so compile the scheme again for a generic device (issue #926).
+      # CODE_SIGNING_ALLOWED=NO turns off the iphoneos* Manual signing that
+      # ios/project.yml sets for the TestFlight archive, so this step needs no
+      # certificate, provisioning profile or secret, and builds nothing
+      # installable. It reuses the first build's DerivedData, so the Swift
+      # packages are not fetched again.
+      - name: Compile StillPoint app target (device, unsigned)
+        if: needs.changes.outputs.app == 'true'
+        run: |
+          set -euo pipefail
+          destination="generic/platform=iOS"
+          echo "Using iOS compile destination: ${destination} (code signing off)"
+          xcodebuild build \
+            -project ios/StillPoint.xcodeproj \
+            -scheme StillPoint \
+            -configuration Debug \
+            -destination "${destination}" \
+            CODE_SIGNING_ALLOWED=NO
 
       # No-op pass for PRs that don't touch the app target: keeps the required
       # "StillPointApp compile" check green without macOS minutes (issue #698).

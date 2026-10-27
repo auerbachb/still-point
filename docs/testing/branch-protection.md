@@ -1,9 +1,10 @@
 # Branch protection — required status checks (#588)
 
-GitHub branch protection on `main` currently requires only:
+On 2026-10-27, GitHub branch protection on `main` required five of the six checks below. `StillPointApp compile` was not required yet; it waits on an admin `--apply` (#943). Read the live list with:
 
-- `typecheck`
-- `StillPointShared swift test`
+```bash
+gh api repos/auerbachb/still-point/branches/main/protection --jq '.required_status_checks.contexts'
+```
 
 This document lists the **fast PR merge gate** from issue #588, which **folds** #434 (`unit-tests`) and #439 (`Info.plist in sync with project.yml`) into a **single admin update**. It **supersedes #537** (which would have required `web-e2e-smoke` / `web-e2e-critical` on every PR).
 
@@ -18,7 +19,7 @@ Comprehensive e2e (web + native iOS) runs **nightly** and on the **iOS TestFligh
 | `build` | [Web Build](../../.github/workflows/web-build.yml) | `build` | `npm run build:verify` + design-token parity (#420). |
 | `StillPointShared swift test` | [iOS Shared Unit Tests](../../.github/workflows/ios-shared-tests.yml) | `swift-test` | Shared Swift parity; ubuntu no-op when unchanged (#463). |
 | `Info.plist in sync with project.yml` | [Info.plist sync](../../.github/workflows/infoplist-sync.yml) | `infoplist-sync` | XcodeGen drift guard — #439; split out of path-filtered e2e-ios (#588). |
-| `StillPointApp compile` | [iOS App Compile](../../.github/workflows/ios-app-build.yml) | `app-compile` | Compiles the `StillPoint` app target (`ios/StillPointApp`) with `xcodebuild`; ubuntu no-op when unchanged (#698). |
+| `StillPointApp compile` | [iOS App Compile](../../.github/workflows/ios-app-build.yml) | `app-compile` | Compiles the `StillPoint` app target (`ios/StillPointApp`) with `xcodebuild` twice: for the simulator, then for an unsigned generic iOS device, so a break inside `#if !targetEnvironment(simulator)` fails before TestFlight (#926). Ubuntu no-op when unchanged (#698). |
 
 ## Checks to **not** require (advisory / off-PR)
 
