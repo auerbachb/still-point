@@ -219,6 +219,15 @@ public struct PracticeDayState: Sendable {
         now: Date,
         calendar: Calendar = .current
     ) {
+        // The flags have rolled past `creditedDate` while the query was out, e.g. it
+        // left before 6:00 and a sit at 6:00 or later rolled them onto today. The
+        // answer describes a day they no longer do: raising its flags would claim it
+        // for today, and moving the stamp back to yesterday would let the next
+        // rollover clear today's sit. Drop it; the next refresh asks about today.
+        if let stamp = doneTodayFlagsStamp,
+           SessionCalendar.localIsoDate(now: stamp, calendar: calendar) > creditedDate {
+            return
+        }
         primaryDoneToday = tracks.primary
         secondDoneToday = tracks.second
         if primaryDoneToday {

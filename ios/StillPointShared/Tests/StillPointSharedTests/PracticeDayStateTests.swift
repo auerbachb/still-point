@@ -81,6 +81,19 @@ private final class PracticeDayScreen {
         state.rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
     }
 
+    /// The credited-day badge query that left at `leftAt` for `creditedDate`, landing
+    /// now with `primary`/`second`, then the rollover its `syncWidgetData()` opens with
+    /// at `landedAt`.
+    func landBadgeAnswer(primary: Bool, second: Bool, creditedDate: String, leftAt: Date, landedAt: Date) {
+        state.applyTracksDoneAnswer(
+            TracksDoneTodayDTO(primary: primary, second: second),
+            creditedDate: creditedDate,
+            now: leftAt,
+            calendar: calendar
+        )
+        state.rollOverIfNeeded(now: landedAt, dualTrack: dualTrack, calendar: calendar)
+    }
+
     /// `markPracticeDoneToday(sessionType:track:)`, then the rollover its
     /// `syncWidgetData()` opens with.
     func finishSit(_ sessionType: SessionType, track: Track = .primary, at now: Date) {
@@ -272,6 +285,26 @@ final class PracticeDayStateTests: XCTestCase {
         await resolving.value
 
         XCTAssertEqual(screen.creditedSessionDate(at: october(27, 6, 10)), today)
+    }
+
+    /// A badge query about yesterday that left before 6:00 and lands after a sit at
+    /// 6:00 or later rolled the flags onto today. Its answer must not move the stamp
+    /// back to yesterday, or the next rollover clears today's sit.
+    func testABadgeAnswerAboutYesterdayLandingAfterATodaySitKeepsTheSit() {
+        let screen = makeScreen()
+        let leftAt = october(27, 5, 59)
+        XCTAssertEqual(screen.creditedSessionDate(at: leftAt), yesterday)
+
+        screen.finishSit(.standard, at: october(27, 6, 1))
+        screen.landBadgeAnswer(
+            primary: false, second: true, creditedDate: yesterday,
+            leftAt: leftAt, landedAt: october(27, 6, 2)
+        )
+
+        XCTAssertEqual(stampDay(screen), today, "a late answer about yesterday rewound the stamp")
+        XCTAssertTrue(screen.state.primaryStandardDoneToday, "the next rollover cleared today's sit")
+        XCTAssertTrue(screen.state.practiceDoneToday)
+        XCTAssertFalse(screen.state.secondPracticeDoneToday, "yesterday's second-track sit was claimed for today")
     }
 
     /// A reset disowns a lookup still in flight. Its answer here would have finished
