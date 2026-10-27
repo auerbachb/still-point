@@ -44,8 +44,12 @@ function homeDayNumber(page: import("@playwright/test").Page) {
   return page.getByText(/^day · \d+s · \d+ blocks$/).locator("xpath=preceding-sibling::*[1]");
 }
 
-/** Wait until the service worker actually controls the page, so a reload with
- *  the network off is served from the precached app shell rather than failing.
+/** Wait until the service worker actually controls the page. Control alone does
+ *  not let an offline reload boot the app: the worker precaches the HTML shell,
+ *  but caches the app's scripts only as they pass through it. A spec that
+ *  reloads offline therefore also needs one online load under control and then
+ *  waitForAppShellCached, as the reload spec does (the queue-sync spec does not
+ *  yet; #864 tracks it).
  *  Polled with expect.poll: waitForFunction does not await an async predicate,
  *  so the pending promise it returned counted as "done" on the first check. */
 async function waitForServiceWorkerControl(page: import("@playwright/test").Page) {
