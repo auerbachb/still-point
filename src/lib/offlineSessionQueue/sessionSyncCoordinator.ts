@@ -1,4 +1,4 @@
-import { OFFLINE_SYNC_TAG } from "./constants";
+import { OFFLINE_QUEUE_LOCK_NAME, OFFLINE_SYNC_TAG } from "./constants";
 import { defaultOfflineSessionQueueStore } from "./idbStore";
 import type { OfflineSessionQueueStore } from "./queueStore";
 import {
@@ -171,9 +171,10 @@ export class WebSessionSyncCoordinator {
     for (const entry of entries) {
       if (entry.ownerUserId !== ownerUserId) continue;
       if (!awaitsSync(entry)) continue;
-      // #792: through the same chain as note edits, so an edit can never land
-      // between this upload and the queue update that follows it — and a clear
-      // can never reach the server ahead of the note it is meant to delete.
+      // #792: in the same turn as note edits — in every tab (#834) — so an edit
+      // can never land between this upload and the queue update that follows
+      // it, and a clear can never reach the server ahead of the note it is
+      // meant to delete. One sit per turn: `flushEntry` re-reads the queue.
       const flushed = await withQueueMutation(() => this.flushEntry(entry.clientSessionId, ownerUserId));
       if (flushed) syncedCount += 1;
     }
@@ -203,7 +204,14 @@ export class WebSessionSyncCoordinator {
   }
 
   async clearQueue(): Promise<void> {
-    await this.queueStore.saveEntries([]);
+    // #666: sign-out empties the queue now, not once an upload in flight in some
+    // tab settles: uploads have no timeout, so that wait has no bound. #834: and
+    // again in turn, so a flush that was mid-upload at sign-out cannot save its
+    // earlier read back over the cleared queue.
+    await Promise.all([
+      withQueueMutation(() => this.queueStore.saveEntries([])),
+      this.queueStore.saveEntries([]),
+    ]);
   }
 
   /** `note` null clears it. Either way the queue keeps at most one end note
@@ -323,13 +331,48 @@ export class WebSessionSyncCoordinator {
 let sharedCoordinator: WebSessionSyncCoordinator | null = null;
 let queueMutation: Promise<unknown> = Promise.resolve();
 
+/**
+ * Runs queue writes one at a time, in call order.
+ *
+ * #834: the queue lives in IndexedDB, which every tab and the service worker
+ * share, so where the browser has Web Locks the turn is an exclusive lock they
+ * all take. The in-memory chain orders only this tab's writes; it is the
+ * fallback where Web Locks is missing (outside a secure context, in older
+ * browsers, in tests).
+ */
 async function withQueueMutation<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = queueLockManager();
+  if (!locks) return withTabQueueMutation(fn);
+  let granted = false;
+  try {
+    return await locks.request(OFFLINE_QUEUE_LOCK_NAME, () => {
+      granted = true;
+      return fn();
+    });
+  } catch (error) {
+    // A lock that was never granted ran nothing, so the write can still take
+    // this tab's turn. Rejecting instead would hand `saveCompletedSession` an
+    // untagged error, which reads as a queued sit with nothing stored (#703).
+    if (granted) throw error;
+    return withTabQueueMutation(fn);
+  }
+}
+
+function withTabQueueMutation<T>(fn: () => Promise<T>): Promise<T> {
   const result = queueMutation.then(fn);
   queueMutation = result.then(
     () => undefined,
     () => undefined,
   );
   return result;
+}
+
+/** Read on every call. The DOM types declare `navigator.locks` always
+ *  present, but it is missing outside a secure context. */
+function queueLockManager(): LockManager | null {
+  if (typeof navigator === "undefined") return null;
+  const locks = navigator.locks as LockManager | undefined;
+  return typeof locks?.request === "function" ? locks : null;
 }
 
 export function getWebSessionSyncCoordinator(): WebSessionSyncCoordinator {

@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/api/requireAuth";
 import { RouteParams, withApiHandler } from "@/lib/api/withApiHandler";
 import { isUuid } from "@/lib/friends";
 import { MOOD_KEYS } from "@/lib/moodMatrix";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql, type SQL } from "drizzle-orm";
 
 type RouteContext = RouteParams<{ sessionId: string }>;
 
@@ -65,20 +65,29 @@ function validateMoodMatrix(
 
 /** Merge submitted rows into the stored matrix. An all-null row removes that
  *  row, and a matrix left with no rows is stored as null — the same value GET
- *  returns for a session with no mood recorded. */
-function mergeMoodMatrix(
-  prior: Record<string, MoodRow>,
-  submitted: Record<string, MoodRow>,
-): Record<string, MoodRow> | null {
-  const merged = { ...prior };
+ *  returns for a session with no mood recorded.
+ *
+ *  #834: the merge is SQL over the column, so the UPDATE that writes the matrix
+ *  is also the one that reads it. Merged from an earlier SELECT, two PATCHes
+ *  that overlapped both started from the same stored rows, and the later write
+ *  dropped the other's rows or brought back one it had deleted. Each part is one
+ *  JSON parameter, so no driver has to encode an array. */
+function mergeMoodMatrixSql(submitted: Record<string, MoodRow>): SQL {
+  const setRows: Record<string, MoodRow> = {};
+  const deletedKeys: string[] = [];
   for (const [key, row] of Object.entries(submitted)) {
     if (row.before === null && row.after === null) {
-      delete merged[key];
+      deletedKeys.push(key);
     } else {
-      merged[key] = row;
+      setRows[key] = row;
     }
   }
-  return Object.keys(merged).length > 0 ? merged : null;
+  return sql`NULLIF(
+    (COALESCE(${sessions.moodMatrix}, '{}'::jsonb)
+      - ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(deletedKeys)}::jsonb)))
+      || ${JSON.stringify(setRows)}::jsonb,
+    '{}'::jsonb
+  )`;
 }
 
 export const GET = withApiHandler(
@@ -153,7 +162,7 @@ export const PATCH = withApiHandler(
     }
     const updates: Partial<
       Record<(typeof RATING_FIELDS)[number], number> & {
-        moodMatrix: Record<string, MoodRow> | null;
+        moodMatrix: SQL | null;
       }
     > = {};
     const bodyObj = body as Record<string, unknown>;
@@ -167,30 +176,16 @@ export const PATCH = withApiHandler(
     }
 
     // #472: mood matrix — validate incoming rows and merge with persisted data.
-    // #792: `null` clears it; the update below still scopes to the owner, so a
-    // clear against another user's session is a 404 like any other write.
+    // #792: `null` clears it. #834: the merge runs inside the update below, which
+    // scopes to the owner, so a mood write against another user's session (or
+    // one that no longer exists) is a 404 like any other write.
     if (bodyObj.moodMatrix !== undefined) {
       const result = validateMoodMatrix(bodyObj.moodMatrix);
       if ("error" in result) {
         return NextResponse.json({ error: result.error }, { status: 400 });
       }
 
-      if (result.validated === null) {
-        updates.moodMatrix = null;
-      } else {
-        const [existing] = await db
-          .select({ moodMatrix: sessions.moodMatrix })
-          .from(sessions)
-          .where(and(eq(sessions.id, sessionId), eq(sessions.userId, auth.user.userId)))
-          .limit(1);
-
-        if (!existing) {
-          return NextResponse.json({ error: "Session not found" }, { status: 404 });
-        }
-
-        const prior = (existing.moodMatrix as Record<string, MoodRow> | null) ?? {};
-        updates.moodMatrix = mergeMoodMatrix(prior, result.validated);
-      }
+      updates.moodMatrix = result.validated === null ? null : mergeMoodMatrixSql(result.validated);
     }
 
     if (Object.keys(updates).length === 0) {

@@ -6,6 +6,7 @@
 const OFFLINE_IDB_NAME = "stillpoint-offline-v1";
 const OFFLINE_IDB_STORE = "session-queue";
 const OFFLINE_SYNC_TAG = "stillpoint-session-sync";
+const OFFLINE_QUEUE_LOCK_NAME = "stillpoint-session-queue";
 const APP_SHELL_CACHE = "stillpoint-app-shell-v1";
 const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanifest"];
 
@@ -192,6 +193,19 @@ async function flushOfflineQueueFromSw() {
   }
 }
 
+/*
+ * #834: every tab holds this Web Lock for each of its queue writes
+ * (`withQueueMutation` in src/lib/offlineSessionQueue/sessionSyncCoordinator.ts).
+ * The flush above rewrites the whole store from the one read it starts with, so
+ * without the lock it could undo a tab's note edit, or drop a sit that a tab
+ * queued while the uploads were running.
+ */
+function withOfflineQueueLock(fn) {
+  const locks = self.navigator?.locks;
+  if (!locks || typeof locks.request !== "function") return fn();
+  return locks.request(OFFLINE_QUEUE_LOCK_NAME, () => fn());
+}
+
 async function notifyClientsToFlush() {
   const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
   for (const client of windowClients) {
@@ -283,7 +297,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("sync", (event) => {
   if (event.tag !== OFFLINE_SYNC_TAG) return;
   event.waitUntil(
-    flushOfflineQueueFromSw()
+    withOfflineQueueLock(() => flushOfflineQueueFromSw())
       .then(() => notifyClientsToFlush())
       .catch(() => notifyClientsToFlush()),
   );
