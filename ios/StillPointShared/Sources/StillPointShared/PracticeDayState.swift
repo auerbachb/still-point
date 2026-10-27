@@ -10,7 +10,7 @@ import Foundation
 /// ``beginPreviousDayRead(now:calendar:)`` and the two `apply` methods, then about the
 /// credited day through the badge query, which lands through
 /// ``applyTracksDoneAnswer(_:creditedDate:now:calendar:)`` or
-/// ``applyFailedTracksDoneRead()``. A finished sit lands through
+/// ``applyFailedTracksDoneRead(now:dualTrack:calendar:)``. A finished sit lands through
 /// ``recordCompletion(sessionType:track:now:dualTrack:calendar:)``. The rules live
 /// here, not on the view model, so the shared tests can hold that read open across a
 /// sit's end (#894), and fail the badge query (#970).
@@ -66,7 +66,7 @@ public struct PracticeDayState: Sendable {
     /// #970: the yesterday lookup's answer, per track, and the calendar day it is
     /// about. Kept for crediting only: `requiredSitsCompleteFromFlags` counts it with
     /// the flags while they describe that day. The Home badges and the widget flags
-    /// never read it, so a failed badge query still clears what Home shows. A failed
+    /// never read it, so a failed badge query shows only the local flags. A failed
     /// lookup keeps it, a newer answer replaces it, and ``reset()`` drops it.
     private var previousDayTracks: (day: String, tracks: TracksDoneTodayDTO)?
 
@@ -234,8 +234,8 @@ public struct PracticeDayState: Sendable {
             practiceDoneToday = true
             // #679: the server confirming a primary standard sit today is the
             // same fact the local flag records, so raise it here too. Like its
-            // siblings this only ever goes up — ``applyFailedTracksDoneRead()``
-            // clears the server badges, never the local flags.
+            // siblings this only ever goes up — ``applyFailedTracksDoneRead(now:dualTrack:calendar:)``
+            // reads the local flags into the badges, never lowers them.
             primaryStandardDoneToday = true
         }
         if secondDoneToday {
@@ -251,15 +251,23 @@ public struct PracticeDayState: Sendable {
         }
     }
 
-    /// The credited-day badge query failed, at rest (mid-sit the app keeps the
-    /// badges). Fails the Home badges closed, so a stale "done today" does not stay
-    /// on screen. Nothing else: the local flags hold sits this device finished and
-    /// answers that already came in, and a failed request is an absent answer, not
-    /// the server contradicting them. The yesterday lookup's answer stays too, for
-    /// crediting (#970).
-    public mutating func applyFailedTracksDoneRead() {
-        primaryDoneToday = false
-        secondDoneToday = false
+    /// The credited-day badge query failed at `now`, at rest (mid-sit the app keeps
+    /// the badges). The Home badges fall back to the sits this app run remembers for
+    /// the practice day: the #679 local standard-sit flags, which hold sits this
+    /// device finished (offline ones still queued for sync included) and the
+    /// standard sits earlier badge answers reported (#1021). Web does the same from
+    /// the sits its session remembers (`loadedSitsRef`, #961).
+    ///
+    /// Rolled over first, so a stale "done today" from a day the flags no longer
+    /// describe never reaches the badges: on a new practice day the flags are
+    /// cleared and the badges read "neither done", as they did before. Nothing else
+    /// changes: a failed request is an absent answer, not the server contradicting
+    /// the local flags, so they are only read here. The yesterday lookup's answer
+    /// stays too, for crediting (#970), and the badges never read it.
+    public mutating func applyFailedTracksDoneRead(now: Date, dualTrack: Bool, calendar: Calendar = .current) {
+        rollOverIfNeeded(now: now, dualTrack: dualTrack, calendar: calendar)
+        primaryDoneToday = primaryStandardDoneToday
+        secondDoneToday = secondPracticeDoneToday
     }
 
     /// Retire the "done today" flags when the local day has advanced past the one
@@ -276,9 +284,9 @@ public struct PracticeDayState: Sendable {
     ///
     /// Called before the flags are written and before they are read, so no caller
     /// has to remember the rollover. The server-derived Home badges are rolled
-    /// over with the rest for the same reason and on the same fail-closed logic
-    /// the refresh failure path already uses: on a new day nothing has been sat
-    /// yet, and the next successful refresh restores the truth.
+    /// over with the rest for the same reason: on a new day nothing has been sat
+    /// yet, and the next successful refresh restores the truth. The refresh failure
+    /// path rolls over first too, before it reads the local flags into the badges.
     public mutating func rollOverIfNeeded(now: Date, dualTrack: Bool, calendar: Calendar = .current) {
         if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
             return
