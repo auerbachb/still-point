@@ -6,14 +6,18 @@ import { MOOD_KEYS } from "../../src/lib/moodMatrix";
 // #911: the recap's Mood shift grid at phone widths. Below 424px the
 // side-by-side grid was wider than its wrapper, so the AFTER boxes were cut off
 // and the headers and hints drifted off their boxes. Narrow screens now stack
-// BEFORE above AFTER. Widths are set explicitly, as in the #473 spec, so the
-// spec does not depend on the project's device preset.
+// BEFORE above AFTER. #964 raised every box to a 44px tap target and put each
+// stacked phase label above its scale. Widths are set explicitly, as in the
+// #473 spec, so the spec does not depend on the project's device preset.
 const NARROW_WIDTHS = [320, 375] as const;
 /** Above the recap's 600px compact breakpoint, where the grid stays side by side. */
 const WIDE_WIDTH = 768;
+/** #964: just above the compact breakpoint the 544px grid may not fit, so the
+ *  recap may pick either layout here; every box must still be on screen. */
+const ABOVE_BREAKPOINT_WIDTHS = [601, 620] as const;
 const VIEWPORT_HEIGHT = 667;
-/** The design call's minimum tap target: no layout shrinks a box below 28px. */
-const MIN_BOX_PX = 28;
+/** #964: the minimum tap target, 44 × 44 (Apple's minimum, WCAG 2.5.5), in every layout. */
+const MIN_BOX_PX = 44;
 const TOLERANCE_PX = 1;
 const SIDES = ["before", "after"] as const;
 const BOX_COUNT = MOOD_KEYS.length * SIDES.length * 5;
@@ -64,7 +68,7 @@ function measure(page: Page) {
 
 type Geometry = Awaited<ReturnType<typeof measure>>;
 
-/** AC 1 and 3: every box in both columns is at least 28 × 28 and sits wholly
+/** AC 1 and 3: every box in both columns is at least 44 × 44 and sits wholly
  *  inside the viewport and the matrix. */
 function expectEveryBoxOnScreen(geometry: Geometry) {
   const boxes = Object.entries(geometry.boxes);
@@ -111,17 +115,15 @@ for (const width of NARROW_WIDTHS) {
       expectEveryBoxOnScreen(geometry);
 
       // AC 2: one hint row spans every scale, and each BEFORE / AFTER label sits
-      // on its own scale's row, left of the boxes.
+      // directly above its own scale, flush with its left edge (#964).
       const hint = geometry.parts["mood-matrix-hint"];
       for (const key of MOOD_KEYS) {
         for (const side of SIDES) {
           const scale = geometry.parts[`mood-matrix-scale-${key}-${side}`];
           const label = geometry.parts[`mood-matrix-phase-${key}-${side}`];
           expectSameSpan(scale, hint, `${key} ${side} scale under the hint`);
-          const labelMiddle = (label.top + label.bottom) / 2;
-          expect(labelMiddle, `${key} ${side} label on its row`).toBeGreaterThan(scale.top);
-          expect(labelMiddle, `${key} ${side} label on its row`).toBeLessThan(scale.bottom);
-          expect(label.right, `${key} ${side} label left of its boxes`).toBeLessThanOrEqual(scale.left + TOLERANCE_PX);
+          expect(label.bottom, `${key} ${side} label above its boxes`).toBeLessThanOrEqual(scale.top + TOLERANCE_PX);
+          expect(Math.abs(label.left - scale.left), `${key} ${side} label flush with its boxes`).toBeLessThanOrEqual(TOLERANCE_PX);
         }
         expect(
           geometry.parts[`mood-matrix-scale-${key}-before`].bottom,
@@ -164,6 +166,28 @@ for (const width of NARROW_WIDTHS) {
   });
 }
 
+/** In the side-by-side grid each header is centred over its scales and each
+ *  hint spans them, its ends over the first and the fifth box. */
+function expectGridAligned(geometry: Geometry) {
+  for (const side of SIDES) {
+    const header = geometry.parts[`mood-matrix-header-${side}`];
+    const hint = geometry.parts[`mood-matrix-hint-${side}`];
+    for (const key of MOOD_KEYS) {
+      const scale = geometry.parts[`mood-matrix-scale-${key}-${side}`];
+      const headerMiddle = (header.left + header.right) / 2;
+      const scaleMiddle = (scale.left + scale.right) / 2;
+      expect(Math.abs(headerMiddle - scaleMiddle), `${side} header centered over ${key}`).toBeLessThanOrEqual(TOLERANCE_PX);
+      expectSameSpan(scale, hint, `${key} ${side} scale under its hint`);
+    }
+    expectHintEndsOverEndBoxes(
+      geometry.hintEnds[`mood-matrix-hint-${side}`],
+      geometry.boxes[`Calm ${side}: 1`],
+      geometry.boxes[`Calm ${side}: 5`],
+      `${side} hint`,
+    );
+  }
+}
+
 test.describe(`#911 Mood shift @ ${WIDE_WIDTH}px`, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: WIDE_WIDTH, height: VIEWPORT_HEIGHT });
@@ -179,23 +203,24 @@ test.describe(`#911 Mood shift @ ${WIDE_WIDTH}px`, () => {
     const geometry = await measure(page);
     expect(geometry.layout).toBe("grid");
     expectEveryBoxOnScreen(geometry);
-
-    for (const side of SIDES) {
-      const header = geometry.parts[`mood-matrix-header-${side}`];
-      const hint = geometry.parts[`mood-matrix-hint-${side}`];
-      for (const key of MOOD_KEYS) {
-        const scale = geometry.parts[`mood-matrix-scale-${key}-${side}`];
-        const headerMiddle = (header.left + header.right) / 2;
-        const scaleMiddle = (scale.left + scale.right) / 2;
-        expect(Math.abs(headerMiddle - scaleMiddle), `${side} header centered over ${key}`).toBeLessThanOrEqual(TOLERANCE_PX);
-        expectSameSpan(scale, hint, `${key} ${side} scale under its hint`);
-      }
-      expectHintEndsOverEndBoxes(
-        geometry.hintEnds[`mood-matrix-hint-${side}`],
-        geometry.boxes[`Calm ${side}: 1`],
-        geometry.boxes[`Calm ${side}: 5`],
-        `${side} hint`,
-      );
-    }
+    expectGridAligned(geometry);
   });
 });
+
+for (const width of ABOVE_BREAKPOINT_WIDTHS) {
+  test.describe(`#964 Mood shift @ ${width}px`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width, height: VIEWPORT_HEIGHT });
+    });
+
+    test("picks a layout that fits: every 44px box on screen, no overflow", async ({ page, ensureLoggedIn }) => {
+      await openRecap(page, ensureLoggedIn);
+      await expectNoHorizontalOverflow(page);
+
+      const geometry = await measure(page);
+      expect(["grid", "stacked"]).toContain(geometry.layout);
+      expectEveryBoxOnScreen(geometry);
+      if (geometry.layout === "grid") expectGridAligned(geometry);
+    });
+  });
+}

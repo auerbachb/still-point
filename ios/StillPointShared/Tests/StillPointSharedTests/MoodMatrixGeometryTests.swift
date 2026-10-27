@@ -4,7 +4,8 @@ import StillPointShared
 /// #911 — the recap's Mood shift grid was wider than an iPhone's column, so on
 /// narrow screens it stacks BEFORE above AFTER. `CompletionView` lets
 /// `ViewThatFits` pick between the two layouts from these widths; these tests
-/// pin the arithmetic that decides which iPhones get which one.
+/// pin the arithmetic that decides which iPhones get which one. #964 raised the
+/// cells to 44 × 44 and moved the stacked phase labels above their scales.
 final class MoodMatrixGeometryTests: XCTestCase {
 
     /// `CompletionView` pads the recap by `SPSpacing.s4` (24pt) on each side.
@@ -15,14 +16,14 @@ final class MoodMatrixGeometryTests: XCTestCase {
     }
 
     func testRowWidthsAddUpFromTheCellsLabelsAndSpacing() {
-        XCTAssertEqual(MoodMatrixGeometry.scaleWidth, 152)
-        XCTAssertEqual(MoodMatrixGeometry.wideWidth, 388)
-        XCTAssertEqual(MoodMatrixGeometry.stackedWidth, 212)
+        XCTAssertEqual(MoodMatrixGeometry.scaleWidth, 232)
+        XCTAssertEqual(MoodMatrixGeometry.wideWidth, 548)
+        XCTAssertEqual(MoodMatrixGeometry.stackedWidth, 232)
     }
 
-    /// The design call: the cells stay 28 × 28, the minimum tap target, in both layouts.
-    func testCellsKeepTheTwentyEightPointTapTarget() {
-        XCTAssertGreaterThanOrEqual(MoodMatrixGeometry.cellSize, 28)
+    /// #964's design call: every cell is a 44 × 44 tap target in both layouts.
+    func testCellsAreFortyFourPointTapTargets() {
+        XCTAssertGreaterThanOrEqual(MoodMatrixGeometry.cellSize, 44)
     }
 
     /// The acceptance criterion: on a 375pt iPhone (a 327pt column) every
@@ -34,14 +35,18 @@ final class MoodMatrixGeometryTests: XCTestCase {
         XCTAssertLessThanOrEqual(MoodMatrixGeometry.stackedWidth, column)
     }
 
-    /// Only a column of 388pt or more holds the wide grid. Among current
-    /// iPhones that is the 440pt Pro Max; every other width stacks.
-    func testOnlyTheWidestIPhoneHoldsTheWideGrid() {
-        for screenWidth in [375.0, 390, 393, 402, 414, 428, 430] {
+    /// Only a column of 548pt or more holds the wide grid, so every current
+    /// iPhone, the 440pt Pro Max included, stacks.
+    func testEveryIPhoneStacks() {
+        for screenWidth in [375.0, 390, 393, 402, 414, 428, 430, 440] {
             let column = columnWidth(onScreenWidth: screenWidth)
             XCTAssertLessThan(column, MoodMatrixGeometry.wideWidth, "\(screenWidth)pt should stack")
             XCTAssertLessThanOrEqual(MoodMatrixGeometry.stackedWidth, column, "\(screenWidth)pt should fit stacked")
         }
-        XCTAssertGreaterThanOrEqual(columnWidth(onScreenWidth: 440), MoodMatrixGeometry.wideWidth)
+    }
+
+    /// A tablet-width column (a 768pt iPad portrait) still holds the wide grid.
+    func testATabletWidthHoldsTheWideGrid() {
+        XCTAssertGreaterThanOrEqual(columnWidth(onScreenWidth: 768), MoodMatrixGeometry.wideWidth)
     }
 }

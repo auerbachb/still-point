@@ -22,9 +22,11 @@ type Layout = "grid" | "stacked";
 
 const LAYOUTS: readonly Layout[] = ["grid", "stacked"];
 const SIDES = ["before", "after"] as const;
-/** Five 28px boxes and four 3px gaps. */
-const SCALE_WIDTH = `${5 * 28 + 4 * 3}px`;
-/** The recap's Mood shift wrapper at a 320px viewport: min(420px, 100vw - 40px). */
+/** #964: every box is a 44px tap target. */
+const BOX_WIDTH = "44px";
+/** Five 44px boxes and four 3px gaps. */
+const SCALE_WIDTH = `${5 * 44 + 4 * 3}px`;
+/** The recap's Mood shift wrapper at a 320px viewport: min(544px, 100vw - 40px). */
 const NARROWEST_WRAPPER_PX = 280;
 
 const ALL_CELL_LABELS = MOOD_KEYS.flatMap((key) =>
@@ -95,14 +97,14 @@ function grids(): HTMLElement[] {
 }
 
 describe("MoodMatrix layouts (#911)", () => {
-  test.each(LAYOUTS)("the %s layout renders every cell, 28px square, in row order", async (layout) => {
+  test.each(LAYOUTS)("the %s layout renders every cell, 44px square, in row order", async (layout) => {
     await renderMatrix(layout);
 
     expect(container!.querySelector('[data-testid="mood-matrix"]')?.getAttribute("data-layout")).toBe(layout);
     expect(cells().map((button) => button.getAttribute("aria-label"))).toEqual(ALL_CELL_LABELS);
     for (const button of cells()) {
-      expect(button.style.width).toBe("28px");
-      expect(button.style.height).toBe("28px");
+      expect(button.style.width).toBe(BOX_WIDTH);
+      expect(button.style.height).toBe(BOX_WIDTH);
     }
   });
 
@@ -137,17 +139,14 @@ describe("MoodMatrix layouts (#911)", () => {
     const stacked = grids();
     // The low/high hint row, then one block per mood.
     expect(stacked).toHaveLength(MOOD_KEYS.length + 1);
-    expect(new Set(stacked.map((grid) => grid.style.gridTemplateColumns))).toEqual(
-      new Set([`52px ${SCALE_WIDTH}`]),
-    );
+    // #964: one scale-wide column; the phase labels sit above the scales.
+    expect(new Set(stacked.map((grid) => grid.style.gridTemplateColumns))).toEqual(new Set([SCALE_WIDTH]));
     for (const grid of stacked) {
-      const tracks = grid.style.gridTemplateColumns.split(" ").map((track) => Number.parseFloat(track));
-      const width = tracks.reduce((sum, track) => sum + track, 0) + Number.parseFloat(grid.style.columnGap);
-      expect(width).toBeLessThanOrEqual(NARROWEST_WRAPPER_PX);
+      expect(Number.parseFloat(grid.style.gridTemplateColumns)).toBeLessThanOrEqual(NARROWEST_WRAPPER_PX);
     }
   });
 
-  test("a stacked mood is its label on a line of its own, then a BEFORE row and an AFTER row", async () => {
+  test("a stacked mood is its label on a line of its own, then BEFORE over its scale and AFTER over its scale", async () => {
     await renderMatrix("stacked");
 
     const blocks = grids().slice(1);
@@ -160,8 +159,10 @@ describe("MoodMatrix layouts (#911)", () => {
       expect(label.style.gridColumn).toBe("1 / -1");
       expect(label.style.whiteSpace).toBe("nowrap");
       expect(beforeLabel.textContent).toBe("Before");
+      expect(beforeLabel.style.textAlign).toBe("left");
       expect(beforeScale.getAttribute("data-testid")).toBe(`mood-matrix-scale-${key}-before`);
       expect(afterLabel.textContent).toBe("After");
+      expect(afterLabel.style.textAlign).toBe("left");
       expect(afterScale.getAttribute("data-testid")).toBe(`mood-matrix-scale-${key}-after`);
     });
   });

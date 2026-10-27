@@ -1,6 +1,8 @@
 "use client";
 
-import { MoodMatrix, type MoodMatrixValue } from "@/components/MoodMatrix";
+import { useRef } from "react";
+import { MOOD_MATRIX_GRID_PX, MoodMatrix, type MoodMatrixValue } from "@/components/MoodMatrix";
+import { useElementWidth } from "@/lib/useElementWidth";
 import { SaveStatus, type SaveStatusState } from "./SaveStatus";
 
 type SessionNoteFieldProps = {
@@ -53,9 +55,16 @@ type MoodShiftSectionProps = {
 
 /** Mood matrix (#472). */
 export function MoodShiftSection({ value, onChange, disabled, compact, status }: MoodShiftSectionProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const wrapperWidth = useElementWidth(wrapperRef);
+  // #911: the side-by-side grid is wider than a phone; stack it there.
+  // #964: at 44px boxes the grid needs 544px, which a window just above the
+  // compact breakpoint may not have, so it also stacks whenever the measured
+  // column is narrower than the grid.
+  const stacked = compact || (wrapperWidth !== null && wrapperWidth < MOOD_MATRIX_GRID_PX);
   return (
-    <div style={{
-      width: "100%", maxWidth: "min(420px, calc(100vw - 40px))",
+    <div ref={wrapperRef} style={{
+      width: "100%", maxWidth: `min(${MOOD_MATRIX_GRID_PX}px, calc(100vw - 40px))`,
       display: "flex", flexDirection: "column", alignItems: "center", gap: "14px",
     }}>
       <div style={{
@@ -71,8 +80,7 @@ export function MoodShiftSection({ value, onChange, disabled, compact, status }:
         value={value}
         onChange={onChange}
         disabled={disabled}
-        // #911: the side-by-side grid is wider than a phone; stack it there.
-        layout={compact ? "stacked" : "grid"}
+        layout={stacked ? "stacked" : "grid"}
       />
       <SaveStatus status={status} savedLabel="mood saved" />
     </div>

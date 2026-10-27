@@ -15,6 +15,10 @@
  * layouts render the same cells and send the same values; only the
  * arrangement differs.
  *
+ * #964: every box is a 44 × 44 tap target (Apple's minimum, WCAG 2.5.5). To
+ * fit a 320px phone, the stacked layout puts each BEFORE/AFTER label above
+ * its scale rather than beside it.
+ *
  * Pure helpers (isMoodMatrixTouched, buildMoodMatrixPayload, MOOD_KEYS, etc.)
  * live in @/lib/moodMatrix so vitest (node mode, jsx:preserve) can test them
  * without a JSX transform. They are re-exported here for convenience.
@@ -43,26 +47,31 @@ export {
 
 // #885: the column-header, scale-hint and mood-row grids share one label
 // column so they stay aligned. 68px leaves 66px of text after the right
-// padding; HAPPINESS measures 63–65px at the label style below. The 3px box gap
-// pays for the wider column, so the grid's minimum width is still 384px:
-// 68 + 2 × 6 gap + 2 × (5 × 28 + 4 × 3).
+// padding; HAPPINESS measures 63–65px at the label style below.
 const LABEL_COLUMN_PX = 68;
 const LABEL_PADDING_PX = 2;
 const COLUMN_GAP_PX = 6;
-const BOX_PX = 28;
+// #964: a box is the 44 × 44 minimum tap target in both layouts (#911 had 28).
+const BOX_PX = 44;
 const BOX_GAP_PX = 3;
 const GRID_COLUMNS = `${LABEL_COLUMN_PX}px 1fr 1fr`;
-// #911: one mood's five boxes. The column headers, the low/high hints and the
-// box groups all take this width, so they line up in both layouts.
+// #911: one mood's five boxes, 5 × 44 + 4 × 3 = 232px. The column headers, the
+// low/high hints and the box groups all take this width, so they line up in
+// both layouts.
 const SCALE_PX = 5 * BOX_PX + 4 * BOX_GAP_PX;
-// #911: a stacked row is a phase label and one scale, 52 + 6 + 152 = 210px,
-// which fits the 280px the recap has at a 320px viewport. BEFORE measures
-// about 45px at the phase-label style.
-const PHASE_COLUMN_PX = 52;
-const STACKED_COLUMNS = `${PHASE_COLUMN_PX}px ${SCALE_PX}px`;
+/** #964: the side-by-side grid's minimum width, the label column and both
+ *  scales: 68 + 2 × 6 + 2 × 232 = 544px. The recap picks `stacked` whenever
+ *  its Mood Shift column is narrower than this. */
+export const MOOD_MATRIX_GRID_PX = LABEL_COLUMN_PX + 2 * COLUMN_GAP_PX + 2 * SCALE_PX;
+// #964: a stacked block is one scale wide, 232px, with each phase label on the
+// line above its scale. That fits the 280px the recap has at a 320px viewport;
+// a label beside the scale would make the row 290px.
+const STACKED_COLUMNS = `${SCALE_PX}px`;
+/** The selected marker inside a box, kept in proportion to the box (10 / 28). */
+const MARKER_PX = Math.round((BOX_PX * 10) / 28);
 
-/** #911: `grid` puts BEFORE and AFTER side by side (384px minimum); `stacked`
- *  puts them one above the other (210px), for narrow screens. */
+/** #911: `grid` puts BEFORE and AFTER side by side (544px minimum); `stacked`
+ *  puts them one above the other (232px), for narrow screens. */
 export type MoodMatrixLayout = "grid" | "stacked";
 
 type MoodSide = "before" | "after";
@@ -132,9 +141,9 @@ function MoodBox({ level, selected, disabled, onClick, ariaLabel }: MoodBoxProps
       {selected && (
         <div
           style={{
-            width: "10px",
-            height: "10px",
-            borderRadius: "2px",
+            width: `${MARKER_PX}px`,
+            height: `${MARKER_PX}px`,
+            borderRadius: "3px",
             background: `rgba(74, 222, 128, ${0.4 + level * 0.12})`,
           }}
         />
@@ -249,16 +258,14 @@ function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
 }
 
 /** #911: one mood in the stacked layout: its label on a line of its own, then
- *  a BEFORE row and an AFTER row. */
+ *  BEFORE and AFTER. #964: each phase label sits on the line above its scale. */
 function StackedMoodBlock({ moodKey, entry, disabled, onChange }: MoodRowProps) {
   return (
     <div
       style={{
         display: "grid",
         gridTemplateColumns: STACKED_COLUMNS,
-        columnGap: `${COLUMN_GAP_PX}px`,
         rowGap: "4px",
-        alignItems: "center",
         justifyContent: "center",
       }}
     >
@@ -270,7 +277,11 @@ function StackedMoodBlock({ moodKey, entry, disabled, onChange }: MoodRowProps) 
         <Fragment key={side}>
           <div
             data-testid={`mood-matrix-phase-${moodKey}-${side}`}
-            style={{ ...SIDE_LABEL_STYLE, textAlign: "right" }}
+            style={{
+              ...SIDE_LABEL_STYLE,
+              textAlign: "left",
+              marginTop: side === "after" ? "4px" : undefined,
+            }}
           >
             {SIDE_LABELS[side]}
           </div>
@@ -313,12 +324,10 @@ export function MoodMatrix({ value, onChange, disabled = false, layout = "grid" 
           style={{
             display: "grid",
             gridTemplateColumns: STACKED_COLUMNS,
-            columnGap: `${COLUMN_GAP_PX}px`,
             justifyContent: "center",
             marginBottom: "10px",
           }}
         >
-          <div />
           <ScaleHint testId="mood-matrix-hint" />
         </div>
 
