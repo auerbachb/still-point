@@ -83,42 +83,44 @@ final class AppViewModel {
         set { SessionIdleTimerController.setKeepScreenAwakePreferenceEnabled(newValue) }
     }
 
+    /// The "done today" flags, the day they describe, and what is known about
+    /// whether yesterday is finished (the 6:00 grace window). The rules are
+    /// `PracticeDayState`'s, in StillPointShared so its tests can drive them (#894);
+    /// `AppViewModel+PracticeDay.swift` runs the server reads around it.
+    var practiceDay = PracticeDayState()
+
+    // The flags and their stamp, read and written by name across these files and
+    // by `HomeView`. Each is documented on `PracticeDayState`.
+
     /// #240: per-track "completed a standard sit today", drives the Home badges.
-    var primaryDoneToday = false
-    var secondDoneToday = false
-    /// Any counted Track One practice today (standard primary, quick, or breath)
-    /// for the widget. Deliberately separate from `primaryDoneToday`: the Home
-    /// badges are server-derived, while this drives the widget's weekday row.
-    var practiceDoneToday = false
-    /// #684: the Track Two equivalent — a second-track standard sit today. Feeds
-    /// the widget's second weekday row without touching the Home badge above.
-    var secondPracticeDoneToday = false
-    /// #679: a *primary* **standard** sit today, known locally. The Track One
-    /// analogue of `secondPracticeDoneToday`, and narrower than
-    /// `practiceDoneToday`, which quick and breath sits also raise. It exists
-    /// because the widget's standard-only day set may only be extended by days the
-    /// server would itself have counted, and `primaryDoneToday` — the server-derived
-    /// Home badge — is still false in the moment a sit finishes, which delayed the
-    /// streak until the next `getTracksDoneToday` round-trip.
-    var primaryStandardDoneToday = false
-    /// The moment the five flags above were last rolled over — i.e. the local day
-    /// they are a statement *about*. They are all same-day claims, and
-    /// `WidgetDataStore.makeSnapshot` folds each of them into *today*; carrying
-    /// one across local midnight would claim a day that was never sat. Passed to
-    /// `makeSnapshot` as `flagsAsOf` so the fold is retired at the boundary, and
-    /// used by `rollOverDoneTodayFlagsIfNeeded()` to retire the flags themselves.
-    var doneTodayFlagsStamp: Date?
-    /// Whether every required sit for the previous calendar day is done.
-    /// False before 6:00 keeps that day open. Defaults to finished so a daytime
-    /// launch does not invent a grace window; a pre-6:00 launch resolves it.
-    var previousCalendarDayComplete = true
-    /// Set once `resolvePreviousPracticeDay` has an answer, so a later rollover
-    /// does not replace it with the pre-6:00 "unknown" default.
-    var previousDayResolved = false
-    /// Calendar day `previousDayResolved` describes. A new morning must ask again.
-    var resolvedForCalendarDay: String?
-    /// Orders overlapping yesterday lookups so a slow answer cannot replace a newer one.
-    var previousDayRequest = 0
+    var primaryDoneToday: Bool {
+        get { practiceDay.primaryDoneToday }
+        set { practiceDay.primaryDoneToday = newValue }
+    }
+    var secondDoneToday: Bool {
+        get { practiceDay.secondDoneToday }
+        set { practiceDay.secondDoneToday = newValue }
+    }
+    /// Any counted Track One practice today, for the widget.
+    var practiceDoneToday: Bool {
+        get { practiceDay.practiceDoneToday }
+        set { practiceDay.practiceDoneToday = newValue }
+    }
+    /// #684: a second-track standard sit today, for the widget.
+    var secondPracticeDoneToday: Bool {
+        get { practiceDay.secondPracticeDoneToday }
+        set { practiceDay.secondPracticeDoneToday = newValue }
+    }
+    /// #679: a primary standard sit today, known locally.
+    var primaryStandardDoneToday: Bool {
+        get { practiceDay.primaryStandardDoneToday }
+        set { practiceDay.primaryStandardDoneToday = newValue }
+    }
+    /// The local day the five flags above describe.
+    var doneTodayFlagsStamp: Date? {
+        get { practiceDay.doneTodayFlagsStamp }
+        set { practiceDay.doneTodayFlagsStamp = newValue }
+    }
 
     /// Bumped on every identity transition — adopt, offline-adopt, sign-out,
     /// logout. `@MainActor` serializes these mutations but an `await` is still a

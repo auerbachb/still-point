@@ -5,156 +5,43 @@ import StillPointShared
 /// midnight rollover, the 6:00 grace window that keeps an unfinished day open, and the
 /// per-track refresh from the server.
 ///
-/// The flags and the grace-window state are stored properties, declared in
-/// `AppViewModel.swift`.
+/// The flags and the grace-window state live in `practiceDay`, a `PracticeDayState`
+/// declared in `AppViewModel.swift`. Its rules are in StillPointShared (#894); the
+/// server reads that feed it are here.
 extension AppViewModel {
     func resetTrackCompletionBadges() {
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
-        previousCalendarDayComplete = true
-        previousDayResolved = false
-        resolvedForCalendarDay = nil
-        previousDayRequest += 1
-        doneTodayFlagsStamp = nil
-    }
-
-    /// Single-track: the primary standard sit. Two-a-day: both standard sits.
-    private func requiredSitsCompleteFromFlags() -> Bool {
-        let dual = currentUser?.dualTrackEnabled ?? false
-        // Local flags cover a sit that finished offline and has not reached the
-        // server badges yet. Without them the day stays open and the next sit
-        // before 6:00 is stored on yesterday again.
-        let primary = primaryDoneToday || primaryStandardDoneToday
-        let second = secondDoneToday || secondPracticeDoneToday
-        return dual ? (primary && second) : primary
-    }
-
-    private func previousDayAnswerIsCurrent(now: Date) -> Bool {
-        previousDayResolved && resolvedForCalendarDay == SessionCalendar.localIsoDate(now: now)
+        practiceDay.reset()
     }
 
     /// Practice day a new sit is stored on, and the `?date=` sent to `/api/auth/me`.
     func creditedSessionDate(now: Date = Date()) -> String {
-        rollOverDoneTodayFlagsIfNeeded(now: now)
-        return SessionCalendar.effectiveLocalIsoDate(
-            previousDayComplete: previousCalendarDayComplete,
-            now: now
-        )
+        practiceDay.creditedSessionDate(now: now, dualTrack: dualTrackEnabled)
     }
 
     /// Instant `makeSnapshot` should treat as "now" so flags fold into the credited day.
     /// The rule is shared with the background refresh (`WidgetDataStore.practiceInstant`).
     func creditedPracticeInstant(now: Date = Date()) -> Date {
-        // The rollover `creditedSessionDate(now:)` runs, so the answer read below is current.
-        rollOverDoneTodayFlagsIfNeeded(now: now)
-        return WidgetDataStore.practiceInstant(
-            previousDayComplete: previousCalendarDayComplete,
-            now: now
-        )
+        practiceDay.creditedPracticeInstant(now: now, dualTrack: dualTrackEnabled)
     }
 
     /// Learns whether yesterday is finished. Before 6:00 an unknown answer keeps it open.
     private func resolvePreviousPracticeDay(now: Date) async {
-        let calendarDay = SessionCalendar.localIsoDate(now: now)
-        if previousDayResolved && previousCalendarDayComplete && resolvedForCalendarDay == calendarDay {
-            return
-        }
-        guard Calendar.current.component(.hour, from: now) < SessionCalendar.graceCutoffHour else {
-            previousCalendarDayComplete = true
-            previousDayResolved = true
-            resolvedForCalendarDay = calendarDay
-            return
-        }
-        previousDayRequest += 1
-        let ticket = previousDayRequest
+        guard let ticket = practiceDay.beginPreviousDayRead(now: now) else { return }
         let yesterday = SessionCalendar.localIsoDate(now: now, offsetDays: -1)
         do {
             let tracks = try await APIClient.shared.getTracksDoneToday(date: yesterday)
-            guard ticket == previousDayRequest else { return }
-            let dual = currentUser?.dualTrackEnabled ?? false
-            previousCalendarDayComplete = dual
-                ? (tracks.primary && tracks.second)
-                : tracks.primary
-            previousDayResolved = true
-            resolvedForCalendarDay = calendarDay
+            practiceDay.applyPreviousDayAnswer(tracks, ticket: ticket, now: now, dualTrack: dualTrackEnabled)
         } catch {
-            guard ticket == previousDayRequest else { return }
-            let calendar = Calendar.current
-            if let stamp = doneTodayFlagsStamp,
-               let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-               calendar.isDate(stamp, inSameDayAs: yesterday) {
-                previousCalendarDayComplete = requiredSitsCompleteFromFlags()
-            } else {
-                previousCalendarDayComplete = calendar.component(.hour, from: now) >= SessionCalendar.graceCutoffHour
-            }
-            // Unresolved so the next refresh retries the lookup.
-            previousDayResolved = false
-            resolvedForCalendarDay = nil
+            practiceDay.applyFailedPreviousDayRead(ticket: ticket, now: now, dualTrack: dualTrackEnabled)
         }
     }
 
     /// Retire the "done today" flags when the local day has advanced past the one
-    /// they describe, and re-stamp them onto the current day.
-    ///
-    /// The flags used to be cleared in exactly one place: the top of
-    /// `refreshTracksDoneToday()`, which is a network round-trip. The path that
-    /// actually crosses midnight with them raised is the one deliberately built to
-    /// need no network — `markPracticeDoneToday` -> `syncWidgetData()`, called the
-    /// instant a sit ends. A quick sit at 00:05, or a second-track sit, therefore
-    /// reached the snapshot with yesterday's primary-standard flag still true and
-    /// let it fold today into the standard-only set that extends `serverStreak`:
-    /// the exact inflation #679 exists to remove.
-    ///
-    /// Called before the flags are written and before they are read, so no caller
-    /// has to remember the rollover. The server-derived Home badges are rolled
-    /// over with the rest for the same reason and on the same fail-closed logic
-    /// the refresh failure path already uses: on a new day nothing has been sat
-    /// yet, and the next successful refresh restores the truth.
+    /// they describe, and re-stamp them onto the current day. Called before the
+    /// flags are written and before they are read; see
+    /// `PracticeDayState.rollOverIfNeeded(now:dualTrack:calendar:)` for why.
     func rollOverDoneTodayFlagsIfNeeded(now: Date = Date()) {
-        let calendar = Calendar.current
-        if let stamp = doneTodayFlagsStamp, calendar.isDate(stamp, inSameDayAs: now) {
-            return
-        }
-        let hour = calendar.component(.hour, from: now)
-        if doneTodayFlagsStamp == nil {
-            // Nothing claimed yet. Before 6:00 keep yesterday open until a fetch
-            // says it is finished, unless that fetch already answered.
-            if !previousDayAnswerIsCurrent(now: now) {
-                previousCalendarDayComplete = hour >= SessionCalendar.graceCutoffHour
-            }
-            doneTodayFlagsStamp = now
-            return
-        }
-        if hour < SessionCalendar.graceCutoffHour,
-           let stamp = doneTodayFlagsStamp,
-           let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
-           calendar.isDate(stamp, inSameDayAs: yesterday) {
-            if previousDayAnswerIsCurrent(now: now) {
-                if !previousCalendarDayComplete {
-                    return
-                }
-            } else if !requiredSitsCompleteFromFlags() {
-                previousCalendarDayComplete = false
-                return
-            }
-        }
-        // The previous day is finished, the clock is at or after 6:00, or the
-        // stamp is older than yesterday. Roll onto the calendar day. A resolved
-        // answer for *this* calendar day is kept. A stale one must not.
-        if !previousDayAnswerIsCurrent(now: now) {
-            previousCalendarDayComplete = true
-            previousDayResolved = false
-            resolvedForCalendarDay = nil
-        }
-        primaryDoneToday = false
-        secondDoneToday = false
-        practiceDoneToday = false
-        secondPracticeDoneToday = false
-        primaryStandardDoneToday = false
-        doneTodayFlagsStamp = now
+        practiceDay.rollOverIfNeeded(now: now, dualTrack: dualTrackEnabled)
     }
 
     /// #240: derive per-track "completed a standard sit today" from a lightweight
