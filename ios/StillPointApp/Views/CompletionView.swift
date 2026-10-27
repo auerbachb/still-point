@@ -570,6 +570,17 @@ struct CompletionView: View {
 
     // MARK: - Mood Matrix Section (#472 / #635)
 
+    /// #885: the column-header, scale-hint and mood rows share one label width
+    /// and one spacing so their columns line up. HAPPINESS measures 64.6pt in
+    /// the label font (SF Mono 10pt medium, 1pt tracking); 68pt holds it on one
+    /// line. The tighter spacing pays for the wider label, so a row needs
+    /// 68 + 2 × 8 + 2 × (5 × 28 + 4 × 3) = 388pt, not the 392pt it needed before.
+    private enum MoodMatrixLayout {
+        static let labelWidth: CGFloat = 68
+        static let rowSpacing: CGFloat = SPSpacing.s1
+        static let boxSpacing: CGFloat = 3
+    }
+
     @ViewBuilder
     private var moodMatrixSection: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -603,9 +614,9 @@ struct CompletionView: View {
     }
 
     private var moodMatrixColumnHeaders: some View {
-        HStack(spacing: SPSpacing.s2) {
+        HStack(spacing: MoodMatrixLayout.rowSpacing) {
             Text("")
-                .frame(width: 56, alignment: .trailing)
+                .frame(width: MoodMatrixLayout.labelWidth, alignment: .trailing)
             Text("BEFORE")
                 .font(SPFont.mono(10, weight: .medium))
                 .foregroundStyle(Color(SPColor.fg4))
@@ -620,9 +631,9 @@ struct CompletionView: View {
     }
 
     private var moodMatrixScaleHints: some View {
-        HStack(spacing: SPSpacing.s2) {
+        HStack(spacing: MoodMatrixLayout.rowSpacing) {
             Text("")
-                .frame(width: 56)
+                .frame(width: MoodMatrixLayout.labelWidth)
             ForEach(0..<2, id: \.self) { _ in
                 HStack {
                     Text("low")
@@ -638,12 +649,13 @@ struct CompletionView: View {
 
     private func moodMatrixRow(for key: MoodKey) -> some View {
         let entry = moodMatrix[key] ?? MoodMatrixEntry()
-        return HStack(spacing: SPSpacing.s2) {
+        return HStack(spacing: MoodMatrixLayout.rowSpacing) {
             Text(key.label.uppercased())
                 .font(SPFont.mono(10, weight: .medium))
                 .foregroundStyle(Color(SPColor.fg3))
                 .tracking(1)
-                .frame(width: 56, alignment: .trailing)
+                .lineLimit(1)
+                .frame(width: MoodMatrixLayout.labelWidth, alignment: .trailing)
 
             moodMatrixTapRow(
                 moodKey: key,
@@ -669,7 +681,7 @@ struct CompletionView: View {
         selected: Int?,
         disabled: Bool
     ) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MoodMatrixLayout.boxSpacing) {
             ForEach(1...5, id: \.self) { level in
                 Button {
                     toggleMoodCell(key: moodKey, column: column, level: level)

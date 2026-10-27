@@ -16,7 +16,7 @@ const { getCurrentUser } = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getCurrentUser }));
 vi.mock("@/db", async () => ({ db: await getTestDb() }));
 
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 let db: TestDb;
 let userId: string;
@@ -197,11 +197,12 @@ describe("PATCH /api/sessions/by-session/[sessionId] — ratings", () => {
 describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", () => {
   test("saves a full mood matrix and returns it in the session", async () => {
     const matrix = {
-      calm:    { before: 2, after: 4 },
-      focus:   { before: 3, after: 5 },
-      energy:  { before: 1, after: 3 },
-      anxiety: { before: 4, after: 2 },
-      overall: { before: 3, after: 5 },
+      calm:      { before: 2, after: 4 },
+      focus:     { before: 3, after: 5 },
+      energy:    { before: 1, after: 3 },
+      anxiety:   { before: 4, after: 2 },
+      happiness: { before: 2, after: 5 },
+      overall:   { before: 3, after: 5 },
     };
 
     const res = await PATCH(
@@ -327,6 +328,31 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix (#472)", ()
       focus: { before: 4, after: 5 },
     });
   });
+
+  // #885: `happiness` is accepted through MOOD_KEYS, with no route change.
+  test.each([
+    { before: 1, after: 5 },
+    { before: null, after: 3 },
+    { before: 4, after: null },
+  ])("saves a happiness row %o and reads it back unchanged", async (happiness) => {
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: { happiness } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).session.moodMatrix).toEqual({ happiness });
+
+    const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+    expect(row!.moodMatrix).toEqual({ happiness });
+
+    const read = await GET(
+      new NextRequest(`http://test.local/api/sessions/by-session/${sessionId}`),
+      { params: Promise.resolve({ sessionId }) },
+    );
+    expect(read.status).toBe(200);
+    expect((await read.json()).session.moodMatrix).toEqual({ happiness });
+  });
 });
 
 /**
@@ -369,6 +395,24 @@ describe("PATCH /api/sessions/by-session/[sessionId] — mood matrix clear (#792
     expect(res.status).toBe(200);
     expect((await res.json()).session.moodMatrix).toEqual({ focus: { before: 3, after: 5 } });
     expect(await storedMood()).toEqual({ focus: { before: 3, after: 5 } });
+  });
+
+  test("an all-null happiness row deletes only that row (#885)", async () => {
+    await seedMood({
+      calm: { before: 2, after: 4 },
+      happiness: { before: 3, after: 5 },
+      overall: { before: 1, after: 2 },
+    });
+
+    const res = await PATCH(
+      patchRequest(sessionId, { moodMatrix: { happiness: { before: null, after: null } } }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    const remaining = { calm: { before: 2, after: 4 }, overall: { before: 1, after: 2 } };
+    expect(res.status).toBe(200);
+    expect((await res.json()).session.moodMatrix).toEqual(remaining);
+    expect(await storedMood()).toEqual(remaining);
   });
 
   test("an all-null row can ride along with an edited row", async () => {
