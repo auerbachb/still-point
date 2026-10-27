@@ -93,34 +93,44 @@ function isSuppressing(state, now) {
   return state?.suppress === true && typeof state.expiresAt === "number" && now < state.expiresAt;
 }
 
-async function persistSuppressState(state) {
+/*
+ * Small JSON records kept in STATE_CACHE, so they outlive a worker restart.
+ * A read resolves null when the record is missing or cannot be read.
+ */
+async function readStateJson(url) {
   try {
     const cache = await caches.open(STATE_CACHE);
-    await cache.put(
-      SUPPRESSION_STATE_URL,
-      new Response(JSON.stringify(state), {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    const cached = await cache.match(url);
+    if (!cached) return null;
+    return await cached.json();
+  } catch {
+    return null;
+  }
+}
+
+async function writeStateJson(url, value) {
+  const cache = await caches.open(STATE_CACHE);
+  await cache.put(
+    url,
+    new Response(JSON.stringify(value), {
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+}
+
+async function persistSuppressState(state) {
+  try {
+    await writeStateJson(SUPPRESSION_STATE_URL, state);
   } catch {
     // Best-effort: fall back to in-memory state only.
   }
 }
 
 async function shouldSuppressDisplay() {
-  const now = Date.now();
-  if (suppressState) {
-    return isSuppressing(suppressState, now);
+  if (!suppressState) {
+    suppressState = await readStateJson(SUPPRESSION_STATE_URL);
   }
-  try {
-    const cache = await caches.open(STATE_CACHE);
-    const cached = await cache.match(SUPPRESSION_STATE_URL);
-    if (!cached) return false;
-    suppressState = await cached.json();
-    return isSuppressing(suppressState, Date.now());
-  } catch {
-    return false;
-  }
+  return isSuppressing(suppressState, Date.now());
 }
 
 try {
@@ -242,15 +252,75 @@ function rejectsTheSit(error) {
 }
 
 async function readOfflineOwnerUserId() {
-  try {
-    const cache = await caches.open(STATE_CACHE);
-    const cached = await cache.match(OFFLINE_OWNER_STATE_URL);
-    if (!cached) return null;
-    const data = await cached.json();
-    return typeof data.userId === "string" ? data.userId : null;
-  } catch {
-    return null;
+  const data = await readStateJson(OFFLINE_OWNER_STATE_URL);
+  return typeof data?.userId === "string" ? data.userId : null;
+}
+
+/*
+ * #980: a cleared end note is queued as this flag, as the page's `flushEntry`
+ * sends it, so an entry with only the flag still owes a batch.
+ */
+function owesClearCompletionNote(entry) {
+  return entry.clearCompletionNote === true;
+}
+
+function owesThoughts(entry) {
+  return entry.thoughts?.length > 0;
+}
+
+/** Whether a flush has anything to send for this sit. */
+function owesUpload(entry) {
+  return !entry.sessionSynced || owesThoughts(entry) || owesClearCompletionNote(entry);
+}
+
+/*
+ * Sends what one sit still owes: its session row, then its thoughts batch.
+ * Mutates `entry` as each upload succeeds and calls `markChanged` after each
+ * mutation, so a failure part-way still saves what went up (#907). Rejects
+ * with the upload's error, classified by `uploadFailure`.
+ */
+async function uploadOfflineEntry(entry, progress, markChanged) {
+  const hasThoughts = owesThoughts(entry);
+  const sendClear = owesClearCompletionNote(entry);
+  if (!entry.sessionSynced) {
+    const data = await postJson("/api/sessions", entry.request);
+    entry.serverSessionId = data.session?.id ?? null;
+    entry.sessionSynced = true;
+    markChanged();
+    progress.sessionSynced = true;
   }
+  if (entry.serverSessionId && (hasThoughts || sendClear)) {
+    await postJson(
+      "/api/thoughts/batch",
+      {
+        sessionId: entry.serverSessionId,
+        dayNumber: entry.request.dayNumber,
+        // #948: sent as queued. Each in-session thought keeps the
+        // `clientThoughtId` the page gave it, so a batch the server stored
+        // before its upload timed out is stored once when sent again.
+        thoughts: entry.thoughts ?? [],
+        // #980: replaying a clear deletes the one stored note row again,
+        // so a clear whose answer was lost is safe to send twice.
+        ...(sendClear ? { clearCompletionNote: true } : {}),
+      },
+      { readBody: false },
+    );
+    // Reached only on a 2xx: a failed or timed-out upload rejects above
+    // and leaves the thoughts and the flag queued for the next flush.
+    entry.thoughts = [];
+    if (sendClear) entry.clearCompletionNote = false;
+    markChanged();
+  }
+}
+
+/** #978: records the permanent answer that turned this sit down. A parked sit
+ *  is skipped by every later flush. */
+function parkOfflineEntry(entry, error) {
+  entry.parked = {
+    at: new Date().toISOString(),
+    status: error.status,
+    message: error.message.slice(0, PARKED_MESSAGE_MAX_LENGTH),
+  };
 }
 
 /*
@@ -269,6 +339,9 @@ async function flushOfflineQueueFromSw(progress = {}) {
   try {
     const entries = await loadOfflineEntries(db);
     let changed = false;
+    const markChanged = () => {
+      changed = true;
+    };
     // #978: the first 401 or 403. Its sit is still queued for a later flush.
     let retryLater = null;
     try {
@@ -276,55 +349,17 @@ async function flushOfflineQueueFromSw(progress = {}) {
         if (entry.ownerUserId !== ownerUserId) continue;
         // #978: sent again, a parked sit would only get the same answer.
         if (entry.parked) continue;
-        const hasThoughts = entry.thoughts?.length > 0;
-        // #980: a cleared end note is queued as this flag, as the page's
-        // `flushEntry` sends it, so an entry with only the flag still owes a batch.
-        const sendClear = entry.clearCompletionNote === true;
-        if (entry.sessionSynced && !hasThoughts && !sendClear) {
-          continue;
-        }
+        if (!owesUpload(entry)) continue;
         try {
-          if (!entry.sessionSynced) {
-            const data = await postJson("/api/sessions", entry.request);
-            entry.serverSessionId = data.session?.id ?? null;
-            entry.sessionSynced = true;
-            changed = true;
-            progress.sessionSynced = true;
-          }
-          if (entry.serverSessionId && (hasThoughts || sendClear)) {
-            await postJson(
-              "/api/thoughts/batch",
-              {
-                sessionId: entry.serverSessionId,
-                dayNumber: entry.request.dayNumber,
-                // #948: sent as queued. Each in-session thought keeps the
-                // `clientThoughtId` the page gave it, so a batch the server stored
-                // before its upload timed out is stored once when sent again.
-                thoughts: entry.thoughts ?? [],
-                // #980: replaying a clear deletes the one stored note row again,
-                // so a clear whose answer was lost is safe to send twice.
-                ...(sendClear ? { clearCompletionNote: true } : {}),
-              },
-              { readBody: false },
-            );
-            // Reached only on a 2xx: a failed or timed-out upload rejects above
-            // and leaves the thoughts and the flag queued for the next flush.
-            entry.thoughts = [];
-            if (sendClear) entry.clearCompletionNote = false;
-            changed = true;
-          }
+          await uploadOfflineEntry(entry, progress, markChanged);
         } catch (error) {
           // #978: a permanent answer stops only this sit, so the sits behind it
           // still upload. A timeout, a network failure or a retryable answer
           // still ends the flush (#907).
           if (!error?.permanent) throw error;
           if (rejectsTheSit(error)) {
-            entry.parked = {
-              at: new Date().toISOString(),
-              status: error.status,
-              message: error.message.slice(0, PARKED_MESSAGE_MAX_LENGTH),
-            };
-            changed = true;
+            parkOfflineEntry(entry, error);
+            markChanged();
           } else if (!retryLater) {
             retryLater = error;
           }
@@ -363,6 +398,14 @@ async function notifyClientsToFlush(progress = {}) {
   for (const client of windowClients) {
     client.postMessage({ type: "flush-offline-session-queue", sessionSynced: progress.sessionSynced === true });
   }
+}
+
+/** Stores a copy of an ok `response` in the app-shell cache, in the
+ *  background. The caller still returns the original. */
+function cacheAppShellCopy(request, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
 }
 
 function isStaticAssetRequest(request) {
@@ -525,11 +568,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
-            if (isAppDocumentPath(url.pathname)) settleWarm(warmRscCache());
-          }
+          cacheAppShellCopy(request, response);
+          if (response.ok && isAppDocumentPath(url.pathname)) settleWarm(warmRscCache());
           settleWarm();
           return response;
         })
@@ -565,21 +605,14 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) {
+          // Stale-while-revalidate: answer from the cache, refresh it behind.
           void fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                const copy = response.clone();
-                void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
-              }
-            })
+            .then((response) => cacheAppShellCopy(request, response))
             .catch(() => {});
           return cached;
         }
         return fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            void caches.open(APP_SHELL_CACHE).then((cache) => cache.put(request, copy));
-          }
+          cacheAppShellCopy(request, response);
           return response;
         });
       }),
