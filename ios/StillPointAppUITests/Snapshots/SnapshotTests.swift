@@ -80,7 +80,7 @@ final class SnapshotTests: XCTestCase {
         )
         snapshot("08-completion-note-saved", timeWaitingForIdle: 0)
 
-        tapStable(app.buttons["completion.returnButton"], in: app)
+        tapReturnButton(in: app)
         XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 12))
 
         XCTAssertTrue(app.buttons["home.quickMinuteButton"].waitForExistence(timeout: 8))
@@ -89,7 +89,8 @@ final class SnapshotTests: XCTestCase {
         tapStable(app.buttons["session.endEarlyButton"], in: app)
         XCTAssertTrue(app.staticTexts["completion.dayTitle"].waitForExistence(timeout: 25))
         snapshot("17-quick-minute-complete", timeWaitingForIdle: 0)
-        tapStable(app.buttons["completion.returnButton"], in: app)
+        tapReturnButton(in: app)
+        XCTAssertTrue(app.otherElements["root.currentView.home"].waitForExistence(timeout: 12))
 
         XCTAssertTrue(app.buttons["home.beginButton"].waitForExistence(timeout: 12))
         tapStable(app.buttons["home.beginButton"], in: app)
@@ -214,6 +215,37 @@ final class SnapshotTests: XCTestCase {
     private func tapStable(_ element: XCUIElement, in app: XCUIApplication) {
         XCTAssertTrue(element.waitForExistence(timeout: 12))
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    /// The completion recap is taller than the screen, so the return button starts below the
+    /// fold and `tapStable` (which does not scroll) would tap off-screen (#956). Mirrors the
+    /// release-gate tests' `scrollElementIntoVisibleFrame` usage in `StillPointAppUITests.swift`.
+    private func tapReturnButton(in app: XCUIApplication) {
+        let returnButton = app.buttons["completion.returnButton"]
+        XCTAssertTrue(returnButton.waitForExistence(timeout: 12))
+        scrollElementIntoVisibleFrame(returnButton, in: app, maxSwipes: 8)
+        tapStable(returnButton, in: app)
+    }
+
+    private func isElementInVisibleFrame(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let frame = element.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        return !frame.isEmpty
+            && frame.width > 1
+            && frame.height > 1
+            && app.frame.insetBy(dx: -1, dy: -1).contains(center)
+    }
+
+    private func scrollElementIntoVisibleFrame(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 4
+    ) {
+        for _ in 0 ..< maxSwipes {
+            if isElementInVisibleFrame(element, in: app) { return }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
     }
 
     private func waitForRoot(_ slug: String, in app: XCUIApplication, message: String) {
