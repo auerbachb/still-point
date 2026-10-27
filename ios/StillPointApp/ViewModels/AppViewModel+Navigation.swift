@@ -16,19 +16,35 @@ extension AppViewModel {
     /// Save a completed breath session and return to home.
     ///
     /// Local-first via the offline write queue (#557); non-fatal API failures no longer drop data.
-    func completeBreathSession(elapsedSeconds: Int, breathCount: Int) async {
+    ///
+    /// - Parameter generation: `authGeneration`, read by the End tap itself. This runs
+    ///   from a task that starts a main-actor turn after the tap, so a read taken here
+    ///   would belong to whoever is signed in by then (#854).
+    func completeBreathSession(
+        elapsedSeconds: Int,
+        breathCount: Int,
+        startedAtGeneration generation: Int
+    ) async {
+        // #854: an identity transition that landed between the tap and this task has
+        // made the screen another account's. The owner, day and credited date read
+        // below would be that account's too, so nothing is saved and its route is
+        // left alone.
+        guard generation == authGeneration else { return }
         guard elapsedSeconds > 0 || breathCount > 0 else {
             currentView = .home
             scheduleBuddyInviteConsume()
             return
         }
-        guard !isSavingBreathSession else { return }
+        // #854: the save below waits on the server flush, so a sign-out and a sign-in
+        // as someone else can land before it settles. The gate belongs to the account
+        // that tapped End, so a save still running for a previous account neither
+        // swallows this End nor frees this one's gate.
+        guard breathSaveGate.acquire(for: generation) else { return }
+        defer { breathSaveGate.release(for: generation) }
         guard let ownerUserId = currentUser?.id else { return }
         applyAppGateAfterSessionCompletion(unlock: true)
         // #526: breath sessions always complete naturally; unlock if duration qualifies.
         trackingControlPrefsManager.markTrackingUnlockIfQualifying(completed: true, duration: max(elapsedSeconds, 1))
-        isSavingBreathSession = true
-        defer { isSavingBreathSession = false }
 
         let clientSessionId = UUID()
 
@@ -47,31 +63,42 @@ extension AppViewModel {
             clientSessionId: clientSessionId
         )
 
-        let outcome: SessionCompletionLogic.SaveOutcome
-        do {
-            _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
-                request: request,
-                clientSessionId: clientSessionId,
-                ownerUserId: ownerUserId,
-                thoughts: []
-            )
-            markPracticeDoneToday(sessionType: .breath, track: .primary)
-            outcome = .stored
-        } catch {
-            print("Failed to persist breath session locally: \(error)")
-            outcome = .notStored
+        // #854: everything after the save is for the account that sat: the widget
+        // credit, the #703 flag, the trip home and the invite retry. A save that
+        // settles under another generation changes none of it. The save itself is
+        // never undone: a sit that reached the queue stays there under `ownerUserId`.
+        await GenerationScopedWork.run(
+            startedAt: generation,
+            liveGeneration: { authGeneration }
+        ) { () async -> SessionCompletionLogic.SaveOutcome in
+            do {
+                _ = try await SessionSyncCoordinator.shared.saveCompletedSession(
+                    request: request,
+                    clientSessionId: clientSessionId,
+                    ownerUserId: ownerUserId,
+                    thoughts: []
+                )
+                return .stored
+            } catch {
+                print("Failed to persist breath session locally: \(error)")
+                return .notStored
+            }
+        } apply: { outcome in
+            if outcome == .stored {
+                markPracticeDoneToday(sessionType: .breath, track: .primary)
+            }
+            // #703: a breath sit has no completion screen to say a failed save on, so
+            // the offline indicator is the only place the loss can surface. Same flag
+            // rule as the standard sit (#724), but no alert: either way the sit
+            // returns home.
+            if let failed = SessionCompletionLogic.localSaveFailed(after: outcome) {
+                localSaveFailed = failed
+            }
+            currentView = .home
+            // Breath exits skip `returnHome()`, so an invite held back by the
+            // `isInSession` guard during the sit is retried here.
+            scheduleBuddyInviteConsume()
         }
-        // #703: a breath sit has no completion screen to say a failed save on, so
-        // the offline indicator is the only place the loss can surface. Same flag
-        // rule as the standard sit (#724), but no alert: either way the sit
-        // returns home.
-        if let failed = SessionCompletionLogic.localSaveFailed(after: outcome) {
-            localSaveFailed = failed
-        }
-        currentView = .home
-        // Breath exits skip `returnHome()`, so an invite held back by the
-        // `isInSession` guard during the sit is retried here.
-        scheduleBuddyInviteConsume()
     }
 
     func beginBuddySession() {

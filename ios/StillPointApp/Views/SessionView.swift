@@ -352,12 +352,16 @@ struct SessionView: View {
                 inProgress: sessionInProgress
             )
             if isComplete && !vm.isAbandoned {
-                Task { await vm.completeSit(appVM: appVM) }
+                // #854: read here, with the sit's end. The task starts a turn later,
+                // when another account may already be signed in.
+                let generation = appVM.authGeneration
+                Task { await vm.completeSit(appVM: appVM, startedAtGeneration: generation) }
             }
         }
         .alert("Session could not be saved", isPresented: $vm.showSaveError) {
             Button("Retry") {
-                Task { await vm.completeSit(appVM: appVM) }
+                let generation = appVM.authGeneration
+                Task { await vm.completeSit(appVM: appVM, startedAtGeneration: generation) }
             }
             Button("Continue without saving", role: .destructive) {
                 vm.continueWithoutSaving(appVM: appVM)

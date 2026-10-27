@@ -3,10 +3,10 @@ import XCTest
 
 /// #724 — what a finished sit's save attempt decides.
 ///
-/// `SessionViewModel.completeSit(appVM:)` and `AppViewModel.completeBreathSession`
-/// carry out whatever `SessionCompletionLogic` returns, so these cases pin the
-/// #703 flag rule and the "Session could not be saved" alert without a device,
-/// a queue, or a view.
+/// `SessionViewModel.completeSit(appVM:startedAtGeneration:)` and
+/// `AppViewModel.completeBreathSession` carry out whatever `SessionCompletionLogic`
+/// returns, so these cases pin the #703 flag rule and the "Session could not be
+/// saved" alert without a device, a queue, or a view.
 final class SessionCompletionLogicTests: XCTestCase {
 
     // MARK: - #703: the offline strip's not-stored flag

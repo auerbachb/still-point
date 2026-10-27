@@ -8,8 +8,8 @@ import Foundation
 /// standard or quick sit goes on to its completion screen or stops on the
 /// "Session could not be saved" alert.
 ///
-/// `SessionViewModel.completeSit(appVM:)` reads both rules, and
-/// `AppViewModel.completeBreathSession` reads the flag rule alone, since a
+/// `SessionViewModel.completeSit(appVM:startedAtGeneration:)` reads both rules,
+/// and `AppViewModel.completeBreathSession` reads the flag rule alone, since a
 /// breath sit has no completion screen to stop in front of. Both rules live here
 /// so `swift test` can hold them; the app target only carries out what they
 /// return.

@@ -47,7 +47,9 @@ final class AppViewModel {
     var lastColdStartAuthCheckMs: Int?
     var buddyInviteError: String?
     /// Guards `completeBreathSession` against re-entrant End taps creating duplicate rows.
-    var isSavingBreathSession = false
+    /// Owned by the identity generation whose End took it, so a save still running for a
+    /// previous account can neither swallow the next account's End nor free its gate (#854).
+    var breathSaveGate = GenerationOwnedGate()
     /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
     var trackingControlPrefsManager = TrackingControlPrefsManager()
     private var appBlockingManagerStorage: AppBlockingManager?
