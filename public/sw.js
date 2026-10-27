@@ -29,7 +29,11 @@ const APP_SHELL_URLS = ["/app/progress", "/app", "/og.png", "/manifest.webmanife
  * They are stored under an internal origin, so the document fallback's
  * `caches.match(request)` can never answer a page load with route data.
  *
- * Keep RSC_WARM_PATHS in sync with ALL_TABS in src/lib/appTabs.ts.
+ * Keep RSC_WARM_PATHS in sync with ALL_TABS in src/lib/appTabs.ts and with
+ * the static pages under src/app/app/ (swRouteData.test.ts checks both).
+ * Pages with a dynamic segment, such as /app/buddies/[id]/calendar, have no
+ * fixed path to warm; an offline move to one still falls back to a document
+ * load.
  */
 const RSC_CACHE = "stillpoint-rsc-v1";
 const RSC_KEY_ORIGIN = "https://still-point.internal/__rsc__";
@@ -42,6 +46,11 @@ const RSC_WARM_PATHS = [
   "/app/friends",
   "/app/settings",
   "/app/buddy",
+  // Static pages linked from the tabs. log-reason reads its `date` on the
+  // client, so the search-less payload also serves `/app/log-reason?date=…`.
+  "/app/settings/notifications",
+  "/app/buddies/calendar",
+  "/app/log-reason",
 ];
 /** A refresh of every payload runs at most this often. */
 const RSC_WARM_INTERVAL_MS = 60 * 1000;

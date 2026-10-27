@@ -7,7 +7,9 @@
  * in a `node:vm` context (as sw.upload-deadline.test.ts does) with an in-memory
  * Cache Storage, then fires its `fetch` listener.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { describe, expect, test, vi } from "vitest";
 import { ALL_TABS, pathForTab } from "./appTabs";
@@ -129,9 +131,23 @@ const offline: FetchStub = async () => {
 };
 
 describe("public/sw.js offline route data (#967)", () => {
-  test("warms a payload for every app tab", () => {
+  test("warms a payload for every app tab and every static app page", () => {
     const { warmPaths } = loadServiceWorker(offline);
-    expect([...warmPaths].sort()).toEqual(["/app", ...ALL_TABS.map(pathForTab)].sort());
+    const staticPages = ["/app/settings/notifications", "/app/buddies/calendar", "/app/log-reason"];
+    expect([...warmPaths].sort()).toEqual(["/app", ...ALL_TABS.map(pathForTab), ...staticPages].sort());
+  });
+
+  test("every static page under src/app/app is warmed", () => {
+    const { warmPaths } = loadServiceWorker(offline);
+    const appDir = fileURLToPath(new URL("../app/app", import.meta.url));
+    const staticPages = readdirSync(appDir, { recursive: true, encoding: "utf8" })
+      .filter((file) => path.basename(file) === "page.tsx")
+      .map((file) => path.dirname(file))
+      // The tab catch-all and dynamic segments have no fixed path to warm.
+      .filter((dir) => dir !== "." && !dir.split(path.sep).some((part) => part.startsWith("[")))
+      .map((dir) => `/app/${dir.split(path.sep).join("/")}`);
+    expect(staticPages.length).toBeGreaterThan(0);
+    for (const page of staticPages) expect(warmPaths).toContain(page);
   });
 
   test("online, a move's route data comes from the network", async () => {
