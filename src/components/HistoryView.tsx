@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import type { Session, Thought } from "@/lib/api";
 import { sessionDurationForUser, type RecoveryFields } from "@/lib/duration";
-import { focusSessionLabel } from "@/lib/focusActivityContent";
 import { buildCurrentMonthGrid, buildPriorMonthSummaries, formatTotalTime } from "@/lib/historyMonthGrid";
 import { buildHistoryJourneyRows } from "@/lib/historyJourney";
+import { historySessionLabel } from "@/lib/historySessionLabel";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { creditedLocalIsoDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import type { MindStateTrendStats } from "@/lib/historyMindStateTrends";
@@ -33,6 +33,8 @@ type HistoryEntry = {
   sessionType?: Session["sessionType"];
   /** #837: what a focus session was for, when it has a category. */
   focusCategory?: Session["focusCategory"];
+  /** #895: today's two sits done as one; its row reads "Combined". */
+  combined?: boolean;
   missed?: boolean;
   collapsed?: boolean;
   collapsedDayCount?: number;
@@ -252,6 +254,7 @@ export function HistoryView({
           thoughtCount: s.thoughtCount,
           sessionType: s.sessionType,
           focusCategory: s.focusCategory,
+          combined: s.combined,
           sessionIndexInDay: row.sessionIndexInDay,
         };
       }),
@@ -663,17 +666,7 @@ export function HistoryView({
               const dateLabelFull = formatFullDateLabel(entry.date);
               const dateLabelShort = formatShortDateLabel(entry.date);
               const isQuick = entry.sessionType === "quick";
-              const isBreath = entry.sessionType === "breath";
-              const isFocus = entry.sessionType === "focus";
-              const sessionOrdinal = entry.sessionIndexInDay ?? 1;
-              const sessionLabel = isQuick
-                ? "Quick"
-                : isBreath
-                  ? "Breath"
-                  : isFocus
-                    // #837: "Focus · Reading"; a row with no category reads "Focus".
-                    ? focusSessionLabel(entry.focusCategory)
-                    : `Session ${sessionOrdinal}`;
+              const sessionLabel = historySessionLabel(entry);
 
               const entryId = entry.sessionId ? `sess-${entry.sessionId}` : `day-${entry.day}-${idx}`;
               const isExpanded = expandedEntryId === entryId;

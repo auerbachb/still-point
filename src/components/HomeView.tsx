@@ -1,6 +1,7 @@
 "use client";
 
-import type { Ref } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent, type Ref } from "react";
+import { elapsedDisplay } from "@/lib/breathCounting";
 import { BLOCK_DURATION, MAX_DURATION, QUICK_DURATION } from "@/lib/constants";
 import {
   activeRecovery,
@@ -27,6 +28,14 @@ type HomeViewProps = {
   /** Per-track "completed a standard sit today" — drives the completion badges. */
   primaryDoneToday?: boolean;
   secondDoneToday?: boolean;
+  /** #895: today's two sits can be done as one (`isCombineOffered`). */
+  combineOffered: boolean;
+  /** #895: the combined sit's planned length in seconds (`combinedDurationForUser`),
+   *  shown in the confirmation. */
+  combinedDuration: number;
+  /** #895: start today's two sits as one. The action only renders when this is
+   *  set and `combineOffered` is true. */
+  onCombineSessions?: () => void;
   onBegin: () => void;
   /** #240: start the second track's sit (only used when dual-track is enabled). */
   onBeginSecond?: () => void;
@@ -171,6 +180,206 @@ function TrackCard({
   );
 }
 
+/** #895: the wording is decided on #895, and iOS uses it character for character in 5/5 (#898). */
+const COMBINE_COPY = {
+  action: "Combine today's sits",
+  title: "Combine today's sits?",
+  advice:
+    "Splitting your sits is better. Two separate sits suit your practice more than one long one, so combine only if you can't sit twice today.",
+  keep: "Keep them separate",
+  combine: "Combine anyway",
+} as const;
+
+/** A keyboard-only focus ring, the one the single-track Begin draws. */
+function showFocusRing(e: FocusEvent<HTMLElement>) {
+  if (e.currentTarget.matches(":focus-visible")) {
+    e.currentTarget.style.outline = "2px solid var(--border-3)";
+    e.currentTarget.style.outlineOffset = "3px";
+  }
+}
+
+function hideFocusRing(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.outline = "none";
+}
+
+/** The quiet text style of the combine action and of "Combine anyway". */
+const quietTextButtonStyle = {
+  background: "none",
+  border: "none",
+  padding: "var(--s1) var(--s2)",
+  minHeight: "44px",
+  color: "var(--fg-3)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "12px",
+  letterSpacing: "0.08em",
+  textDecoration: "underline",
+  textDecorationColor: "var(--border-3)",
+  textUnderlineOffset: "4px",
+  cursor: "pointer",
+} as const;
+
+/**
+ * #895: today's two sits done as one, offered quietly under Track Two's card.
+ * The action starts nothing. It opens an inline confirmation that says
+ * splitting the sits is better, where "Keep them separate" is the prominent
+ * choice and only "Combine anyway" starts the sit. HomeView mounts this only
+ * while the offer stands, so the panel closes by itself if the offer goes away.
+ */
+function CombineSitsAction({
+  combinedDuration,
+  onCombine,
+}: {
+  combinedDuration: number;
+  onCombine: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const actionRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const keepRef = useRef<HTMLButtonElement>(null);
+  // Set by a dismissal, so focus goes back to the action once it is rendered
+  // again. Named explicitly rather than restored to whatever had focus, because
+  // a tap never focuses a button in Safari.
+  const returnFocusRef = useRef(false);
+  const titleId = useId();
+  const adviceId = useId();
+  const lengthId = useId();
+
+  useEffect(() => {
+    if (confirming) {
+      // The panel grows down from where the action was, which on a phone can be
+      // just above the fixed bottom nav. Bring all of it into view (its scroll
+      // margin clears the nav), then focus without scrolling again.
+      panelRef.current?.scrollIntoView({ block: "nearest" });
+      keepRef.current?.focus({ preventScroll: true });
+    } else if (returnFocusRef.current) {
+      returnFocusRef.current = false;
+      actionRef.current?.focus();
+    }
+  }, [confirming]);
+
+  const dismiss = () => {
+    returnFocusRef.current = true;
+    setConfirming(false);
+  };
+
+  if (!confirming) {
+    return (
+      <button
+        ref={actionRef}
+        type="button"
+        onClick={() => setConfirming(true)}
+        onFocus={showFocusRing}
+        onBlur={hideFocusRing}
+        style={quietTextButtonStyle}
+      >
+        {COMBINE_COPY.action}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-labelledby={titleId}
+      aria-describedby={`${adviceId} ${lengthId}`}
+      // Focusable from script only, so a tap on the panel's text keeps focus
+      // inside it, where Escape still answers.
+      tabIndex={-1}
+      onKeyDown={e => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          dismiss();
+        }
+      }}
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        border: "1px solid var(--border-1)",
+        borderRadius: "16px",
+        padding: "var(--s4) var(--s3)",
+        background: "var(--surface-1)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "var(--s2)",
+        textAlign: "center",
+        outline: "none",
+        animation: "fadeIn 0.3s ease",
+        // Clears the fixed bottom nav when the panel is scrolled into view (#479).
+        scrollMarginBottom: "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))",
+      }}
+    >
+      <h2
+        id={titleId}
+        style={{
+          margin: 0,
+          fontFamily: "var(--font-serif)",
+          fontSize: "20px",
+          fontWeight: 300,
+          fontStyle: "italic",
+          color: "var(--fg)",
+        }}
+      >
+        {COMBINE_COPY.title}
+      </h2>
+      <p id={adviceId} style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: "var(--fg-2)" }}>
+        {COMBINE_COPY.advice}
+      </p>
+      <p id={lengthId} style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: "var(--fg-2)" }}>
+        This will be one{" "}
+        <span style={{ fontFamily: "var(--font-mono)", color: "var(--fg)" }}>
+          {elapsedDisplay(combinedDuration)}
+        </span>{" "}
+        sit, and it counts for both tracks.
+      </p>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "var(--s1)",
+          marginTop: "var(--s2)",
+        }}
+      >
+        <button
+          ref={keepRef}
+          type="button"
+          onClick={dismiss}
+          onFocus={showFocusRing}
+          onBlur={hideFocusRing}
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg)",
+            fontFamily: "var(--font-serif)",
+            fontSize: "16px",
+            fontStyle: "italic",
+            padding: "12px 32px",
+            borderRadius: "40px",
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+          }}
+        >
+          {COMBINE_COPY.keep}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setConfirming(false);
+            onCombine();
+          }}
+          onFocus={showFocusRing}
+          onBlur={hideFocusRing}
+          style={{ ...quietTextButtonStyle, fontSize: "11px" }}
+        >
+          {COMBINE_COPY.combine}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HomeView({
   currentDay,
   aphorismsEnabled,
@@ -180,6 +389,9 @@ export function HomeView({
   dualTrackEligible = false,
   primaryDoneToday = false,
   secondDoneToday = false,
+  combineOffered,
+  combinedDuration,
+  onCombineSessions,
   onBegin,
   onBeginSecond,
   onEnableDualTrack,
@@ -247,6 +459,10 @@ export function HomeView({
             recovery={null}
             onBegin={onBeginSecond ?? onBegin}
           />
+          {/* #895: absent, not disabled, whenever it is not offered. */}
+          {combineOffered && onCombineSessions && (
+            <CombineSitsAction combinedDuration={combinedDuration} onCombine={onCombineSessions} />
+          )}
         </div>
       ) : (
         <div style={{
