@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { gitRunner } from "./ci/ios-testflight-build-number.mjs";
-import { listBuildTags, queryAsc, resolveIntendedBuild } from "./ios-app-store-dry-run.mjs";
+import { extractRunbookPhases, listBuildTags, queryAsc, resolveIntendedBuild } from "./ios-app-store-dry-run.mjs";
 
 const REPO_ROOT = process.cwd();
 const DRY_RUN = path.join(REPO_ROOT, "scripts/ios-app-store-dry-run.mjs");
@@ -173,6 +173,39 @@ describe("queryAsc (#838)", () => {
     const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "40" }, fakeAsc);
 
     expect(asc).toMatchObject({ live: true, intendedBuild: null });
+  });
+});
+
+// Dashes are escaped: \u2013 is an en dash, \u2014 an em dash.
+describe("extractRunbookPhases (#910)", () => {
+  test("finds phases A through F, in order, in the real submission runbook", () => {
+    const runbook = fs.readFileSync(path.join(REPO_ROOT, "docs/operations/ios-app-store-submission.md"), "utf8");
+
+    expect(extractRunbookPhases(runbook)).toEqual(["A", "B", "C", "D", "E", "F"]);
+  });
+
+  test.each([
+    ["the runbook's h3 em-dash heading", "### Phase A \u2014 Preconditions before submission"],
+    ["an h3 en-dash heading", "### Phase A \u2013 Preconditions before submission"],
+    ["the h2 hyphen heading from before #644", "## Phase A - Preconditions before submission"],
+  ])("accepts %s", (_shape, heading) => {
+    expect(extractRunbookPhases(`Intro.\n\n${heading}\n\n| # | Check |\n`)).toEqual(["A"]);
+  });
+
+  test.each([
+    ["the checklist's parent heading", "## Release checklist (Phases A\u2013F)"],
+    ["an h4 heading", "#### Phase A \u2014 Preconditions before submission"],
+    ["an h1 heading", "# Phase A \u2014 Preconditions before submission"],
+    ["a phase named outside a heading", "Phase A \u2014 Preconditions before submission"],
+    ["a letter after F", "### Phase G \u2014 After release"],
+  ])("ignores %s", (_shape, line) => {
+    expect(extractRunbookPhases(`${line}\n`)).toEqual([]);
+  });
+
+  test("keeps document order, so A3 catches phases out of order", () => {
+    const runbook = ["### Phase B \u2014 Version", "## Phase A - Preconditions", "### Phase C \u2013 Review"].join("\n");
+
+    expect(extractRunbookPhases(runbook)).toEqual(["B", "A", "C"]);
   });
 });
 

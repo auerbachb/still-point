@@ -130,6 +130,19 @@ function extractProjectVersion(projectYml) {
 }
 
 /**
+ * The letters of the runbook's Phase A-F headings, in document order (A3).
+ * Matches h2 and h3 headings with a hyphen, en dash, or em dash after the
+ * letter, so both the h3 em-dash headings the runbook has used since #644 and
+ * the older `## Phase A - Title` shape pass (#910).
+ *
+ * @param {string} runbook docs/operations/ios-app-store-submission.md's Markdown
+ * @returns {string[]}
+ */
+export function extractRunbookPhases(runbook) {
+  return [...runbook.matchAll(/^#{2,3} Phase ([A-F]) [-\u2013\u2014] /gm)].map((match) => match[1]);
+}
+
+/**
  * ios-v*-build* tags to pick the default intended build from: origin's, where
  * every cut pushes its tag, or this clone's when origin can't be listed.
  *
@@ -563,7 +576,7 @@ async function main() {
     fail("A2", "Could not determine version/build/tag plan.", { project, intendedTag });
   }
 
-  const phaseMatches = [...submissionRunbook.matchAll(/^## Phase ([A-F]) - /gm)].map((match) => match[1]);
+  const phaseMatches = extractRunbookPhases(submissionRunbook);
   phaseMatches.join("") === "ABCDEF"
     ? pass("A3", "Submission runbook covers phases A-F.", { phases: phaseMatches })
     : fail("A3", "Submission runbook does not cover every phase A-F.", { phases: phaseMatches });

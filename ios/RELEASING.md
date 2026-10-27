@@ -169,10 +169,10 @@ never repeats a TestFlight build. No `ios/project.yml` bump is needed. **Re-run 
 keeps the claimed number. A run that fails after the claim leaves its tag behind, and the next
 cut takes the number after it.
 
-**Not runnable end to end yet ([#910](https://github.com/auerbachb/still-point/issues/910)):**
-the dry run's A3 check and the extension signing still stop this lane before it uploads. Until
-#910 lands, submit the TestFlight build you validated instead (see
-[Submitting to the App Store](#submitting-to-the-app-store)).
+**First run not yet verified ([#927](https://github.com/auerbachb/still-point/issues/927)):**
+no run of this lane has reached `deliver` yet. #910 fixed the dry run's A3 check and the
+extension signing that stopped it before upload. If a run fails anyway, submit the TestFlight
+build you validated instead (see [Submitting to the App Store](#submitting-to-the-app-store)).
 
 **Submit for review:** CI leaves `SUBMIT_FOR_REVIEW` unset, so `deliver` uses `submit_for_review: false` (upload only; harness / #242 default). Issue **#296** can enable programmatic submission by setting `SUBMIT_FOR_REVIEW=1` in the workflow when a release owner approves.
 
