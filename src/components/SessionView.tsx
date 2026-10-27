@@ -20,6 +20,7 @@ import {
 } from "@/lib/useTrackingControlPrefs";
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 import { canTogglePause } from "@/lib/sessionPauseToggle";
+import { canEndSession } from "@/lib/sessionEndGuard";
 import { saveMinimalSessionViewPref } from "@/lib/minimalSessionViewPrefs";
 import { useMinimalSessionViewPref } from "@/lib/useMinimalSessionView";
 import {
@@ -125,6 +126,8 @@ type SessionViewProps = {
   /** #769: Track Two's day, which a combined sit's planned length adds in. */
   secondTrackDay?: number;
   onComplete: (data: {
+    /** #930: one per mount, the same on every way out of this sit. */
+    sitKey: string;
     dayNumber: number;
     sessionType: SessionType;
     track: Track;
@@ -140,6 +143,8 @@ type SessionViewProps = {
     thoughts: Array<{ timeInSession: number; text: string }>;
   }) => void;
   onAbandon: (data: {
+    /** #930: one per mount, the same on every way out of this sit. */
+    sitKey: string;
     dayNumber: number;
     sessionType: SessionType;
     track: Track;
@@ -179,6 +184,13 @@ export function SessionView({
   const [bonusSeconds, setBonusSeconds] = useState(0);
   const totalSeconds = plannedSeconds + bonusSeconds;
   const [sessionFinished, setSessionFinished] = useState(false);
+  // #930: `sessionFinished` for the terminal handlers, set the moment one of
+  // them claims the sit. Clicks that land before React re-renders all read the
+  // state as false, and each would save another sit.
+  const sessionFinishedRef = useRef(false);
+  // #930: which sit this is. Sent on every way out of it, so the save hook can
+  // refuse a second save of the same sit.
+  const sitKeyRef = useRef(crypto.randomUUID());
   const [isActive, setIsActive] = useState(true);
   const [mindState, setMindState] = useState<MindState>("clear");
   const mindStateRef = useRef<MindState>(mindState);
@@ -338,7 +350,19 @@ export function SessionView({
 
   const payloadThoughtCount = () => sessionThoughtsRef.current.length;
 
+  /**
+   * #930: claims the sit for the first way out of it (it ran out, End Early,
+   * or Abandon), before that handler changes anything. Returns false once the
+   * sit is claimed, and the handler then does nothing.
+   */
+  const claimSessionEnd = useCallback(() => {
+    if (!canEndSession({ sessionFinished: sessionFinishedRef.current })) return false;
+    sessionFinishedRef.current = true;
+    return true;
+  }, []);
+
   const handleComplete = useCallback(() => {
+    if (!claimSessionEnd()) return;
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
     setSessionFinished(true);
@@ -347,6 +371,7 @@ export function SessionView({
     const endT = elapsedRef.current || totalSeconds;
     markTrackingUnlockIfQualifying({ duration: plannedSeconds, completed: true });
     onComplete({
+      sitKey: sitKeyRef.current,
       dayNumber: currentDay,
       sessionType,
       track,
@@ -360,7 +385,7 @@ export function SessionView({
       mindStateLog: resolvedLog,
       thoughts: sessionThoughtsRef.current,
     });
-  }, [currentDay, sessionType, track, combined, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete]);
+  }, [currentDay, sessionType, track, combined, plannedSeconds, bonusSeconds, totalSeconds, onComplete, snapshotForComplete, claimSessionEnd]);
 
   const handlePointerDistractionDown = () => {
     if (!isActive || mindStateRef.current !== "clear" || showPostDistractionCapture) return;
@@ -503,6 +528,7 @@ export function SessionView({
   };
 
   const handleEndEarly = () => {
+    if (!claimSessionEnd()) return;
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
     setSessionFinished(true);
@@ -510,6 +536,7 @@ export function SessionView({
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || totalSeconds;
     onComplete({
+      sitKey: sitKeyRef.current,
       dayNumber: currentDay,
       sessionType,
       track,
@@ -526,6 +553,7 @@ export function SessionView({
   };
 
   const handleAbandon = () => {
+    if (!claimSessionEnd()) return;
     const resolvedLog = snapshotForComplete();
     setWasPausedInSession(false);
     setSessionFinished(true);
@@ -533,6 +561,7 @@ export function SessionView({
     const actualTime = Math.round((Date.now() - wallStartRef.current) / 1000);
     const endT = elapsedRef.current || totalSeconds;
     onAbandon({
+      sitKey: sitKeyRef.current,
       dayNumber: currentDay,
       sessionType,
       track,
@@ -561,6 +590,8 @@ export function SessionView({
   // #884: a sit that has ended stays on screen while its save settles, and
   // neither Pause nor Resume applies to it, as on iOS (#848).
   const pauseToggleEnabled = canTogglePause({ sessionFinished });
+  // #930: nor End Early or Abandon, which would save it a second time.
+  const endEnabled = canEndSession({ sessionFinished });
 
   const togglePause = () => {
     // First, before anything changes: a Resume here would set `isActive` again
@@ -1069,6 +1100,7 @@ export function SessionView({
             <button
               type="button"
               onClick={handleEndEarly}
+              disabled={!endEnabled}
               style={{
                 background: "none",
                 border: "1px solid var(--accent-green-border)",
@@ -1080,7 +1112,8 @@ export function SessionView({
                 padding: "14px 24px",
                 minHeight: "44px",
                 borderRadius: "20px",
-                cursor: "pointer",
+                cursor: endEnabled ? "pointer" : "default",
+                opacity: endEnabled ? 1 : 0.4,
               }}
             >
               end early &amp; keep
@@ -1088,6 +1121,7 @@ export function SessionView({
             <button
               type="button"
               onClick={handleAbandon}
+              disabled={!endEnabled}
               style={{
                 background: "none",
                 border: "1px solid var(--accent-danger-border)",
@@ -1099,7 +1133,8 @@ export function SessionView({
                 padding: "14px 24px",
                 minHeight: "44px",
                 borderRadius: "20px",
-                cursor: "pointer",
+                cursor: endEnabled ? "pointer" : "default",
+                opacity: endEnabled ? 1 : 0.4,
               }}
             >
               abandon

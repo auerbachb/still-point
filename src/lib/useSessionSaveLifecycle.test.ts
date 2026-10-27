@@ -34,8 +34,13 @@ const USER: User = {
 
 const USER_B: User = { ...USER, id: "user-b", email: "b@example.com", username: "beta" };
 
+let sitsMade = 0;
+
 function sit(overrides: Partial<CompletedSitInput> = {}): CompletedSitInput {
+  sitsMade += 1;
   return {
+    // #930: every call is a sit of its own, as each `SessionView` mount is.
+    sitKey: `sit-${sitsMade}`,
     dayNumber: 5,
     sessionType: "standard",
     track: "primary",
@@ -1048,6 +1053,162 @@ describe("useSessionSaveLifecycle — a save that outlives its account (#833)", 
     });
     expect(hook.setOverlay).toHaveBeenCalledTimes(1);
     expect(hook.setOverlay).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("useSessionSaveLifecycle — one save per sit (#930)", () => {
+  // `SessionView` sends every terminal call of a sit with the same `sitKey`. A
+  // second call used to mint a second client id, which the queue and
+  // `POST /api/sessions` keep as a second sit.
+
+  test("a second End Early while the sit's save runs saves nothing and changes no screen", async () => {
+    const pending = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(pending.promise);
+    const hook = await renderLifecycle();
+    const ended = sit({ completed: false });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = hook.current().handleSessionComplete(ended);
+    });
+    await act(async () => {
+      await hook.current().handleSessionComplete({ ...ended, actualTime: 101 });
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(1);
+    expect(hook.setOverlay).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pending.resolve(synced("server-1"));
+      await first;
+    });
+    expect(hook.setOverlay.mock.calls).toEqual([["complete"]]);
+    expect(hook.current().completionData?.clientSessionId).toBe(saveCall(0).clientSessionId);
+  });
+
+  test("Abandon after End Early on the same sit is refused", async () => {
+    const pending = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(pending.promise);
+    const hook = await renderLifecycle();
+    const ended = sit({ completed: false });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = hook.current().handleSessionComplete(ended);
+    });
+    await act(async () => {
+      await hook.current().handleSessionAbandon(ended);
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve(synced("server-1"));
+      await first;
+    });
+    // The completion screen opens, and nothing closes it again.
+    expect(hook.setOverlay.mock.calls).toEqual([["complete"]]);
+  });
+
+  test("a second Abandon, or End Early after Abandon, on the same sit is refused", async () => {
+    const pending = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(pending.promise);
+    const hook = await renderLifecycle();
+    const left = sit({ completed: false });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = hook.current().handleSessionAbandon(left);
+    });
+    await act(async () => {
+      await hook.current().handleSessionAbandon(left);
+    });
+    await act(async () => {
+      await hook.current().handleSessionComplete(left);
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve(synced("server-1"));
+      await first;
+    });
+    expect(hook.setOverlay.mock.calls).toEqual([[null]]);
+    expect(hook.current().completionData).toBeNull();
+  });
+
+  test("a sit begun while an earlier sit's save still runs saves too", async () => {
+    // Browser Back closes a sit while its upload may still be waiting, and the
+    // person can begin another before it settles.
+    const earlier = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(earlier.promise).mockResolvedValueOnce(synced("server-2"));
+    const hook = await renderLifecycle();
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = hook.current().handleSessionComplete(sit({ completed: false }));
+    });
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(2);
+    expect(saveCall(1).clientSessionId).not.toBe(saveCall(0).clientSessionId);
+
+    await act(async () => {
+      earlier.resolve(synced("server-1"));
+      await first;
+    });
+  });
+
+  test("an earlier account's save still running does not swallow the next account's sit", async () => {
+    const saveA = deferred<SavedSessionResult>();
+    queue.saveCompletedSession.mockReturnValueOnce(saveA.promise).mockResolvedValueOnce(synced("server-b"));
+    const hook = await renderLifecycle();
+
+    let endA!: Promise<void>;
+    await act(async () => {
+      endA = hook.current().handleSessionAbandon(sit());
+    });
+    await hook.switchAccount(USER_B);
+    await act(async () => {
+      await hook.current().handleSessionAbandon(sit());
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(2);
+    expect(saveCall(1).ownerUserId).toBe("user-b");
+    expect(hook.setOverlay.mock.calls).toEqual([[null]]);
+
+    // The previous account's save settling closes nothing of the next one's.
+    await act(async () => {
+      saveA.resolve(synced("server-a"));
+      await endA;
+    });
+    expect(hook.setOverlay.mock.calls).toEqual([[null]]);
+  });
+
+  // `SessionView` never sends a sit twice; this pins that the hook keeps
+  // nothing of a sit once its save is over.
+  test("holds a sit only while its save runs: let go when it settles, and when it throws", async () => {
+    queue.saveCompletedSession.mockResolvedValue(synced("server-1"));
+    const hook = await renderLifecycle();
+
+    const settled = sit();
+    await act(async () => {
+      await hook.current().handleSessionComplete(settled);
+    });
+    await act(async () => {
+      await hook.current().handleSessionComplete(settled);
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(2);
+
+    const thrown = sit();
+    hook.refreshUserFromServer.mockImplementationOnce(() => {
+      throw new Error("refresh failed");
+    });
+    await act(async () => {
+      await expect(hook.current().handleSessionComplete(thrown)).rejects.toThrow("refresh failed");
+    });
+    await act(async () => {
+      await hook.current().handleSessionComplete(thrown);
+    });
+    expect(queue.saveCompletedSession).toHaveBeenCalledTimes(4);
   });
 });
 
