@@ -79,6 +79,23 @@ final class VoiceBurstLogicTests: XCTestCase {
         XCTAssertEqual(clips.start(at: 11.1), VoiceBurstLogic.Plan(stop: [], playOn: 0))
     }
 
+    func testBurstWindowCountsFromWhenAClipBeganToPlay() {
+        var clips = VoiceBurstLogic.Clips()
+        // "60" is planned at 15 but begins to play at 15.6, once a stopped
+        // engine has restarted.
+        let plan = clips.start(at: 15)
+        clips.moveStart(of: plan.playOn, to: 15.6)
+        // "59" 50 ms after "60" began stops it, so the two cannot overlap.
+        XCTAssertEqual(clips.start(at: 15.65), VoiceBurstLogic.Plan(stop: [0], playOn: 0))
+    }
+
+    func testMovingTheStartOfAFreePlayerRecordsNoClip() {
+        var clips = VoiceBurstLogic.Clips()
+        clips.moveStart(of: 1, to: 10)
+        clips.moveStart(of: VoiceBurstLogic.playerCount, to: 10) // no such player
+        XCTAssertEqual(clips.stopAll(), [])
+    }
+
     func testCancelStopsEveryClip() {
         var clips = VoiceBurstLogic.Clips()
         _ = clips.start(at: 33)

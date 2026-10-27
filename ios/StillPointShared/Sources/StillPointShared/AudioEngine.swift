@@ -411,6 +411,10 @@ public final class AudioEngine: @unchecked Sendable {
         // running, so recovery has to succeed before scheduling. When it does not,
         // this clip is dropped and the next second's play retries from scratch.
         guard ensureEngineRunning() else { return }
+        // #941: the clip starts playing only now. Restarting a stopped engine
+        // above can take a while, so the next clip's burst window counts from
+        // here, not from when this clip was planned.
+        voiceClips.moveStart(of: plan.playOn, to: ProcessInfo.processInfo.systemUptime)
         // .interrupts replaces only what this player still holds and starts the
         // new clip immediately. At the one-second step that is the clip from two
         // seconds back, which has already ended.

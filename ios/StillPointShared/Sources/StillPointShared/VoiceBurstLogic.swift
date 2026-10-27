@@ -50,7 +50,7 @@ public enum VoiceBurstLogic {
     }
 
     /// The clip each voice player holds, by start time. Times come from the
-    /// monotonic clock the caller reads for `start(at:)`.
+    /// monotonic clock the caller reads for `start(at:)` and `moveStart(of:to:)`.
     public struct Clips {
         /// When each player's clip started, or nil while the player is free.
         private var startTimes: [TimeInterval?] = Array(
@@ -82,6 +82,16 @@ public enum VoiceBurstLogic {
             } ?? 0
             startTimes[playOn] = now
             return Plan(stop: stop, playOn: playOn)
+        }
+
+        /// Moves the start of the clip on `player` to `now`, for a clip that
+        /// began to play later than `start(at:)` recorded. `AudioEngine` plans
+        /// a clip before it restarts a stopped engine, which can take a while,
+        /// and the next clip's burst window has to count from when this one
+        /// really started. A player that holds no clip stays free.
+        public mutating func moveStart(of player: Int, to now: TimeInterval) {
+            guard startTimes.indices.contains(player), startTimes[player] != nil else { return }
+            startTimes[player] = now
         }
 
         /// Frees every player and returns the ones that held a clip, so a
