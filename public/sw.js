@@ -349,7 +349,8 @@ function isStorableRscResponse(response) {
     && (response.headers.get("Content-Type") ?? "").startsWith(RSC_CONTENT_TYPE);
 }
 
-/** Fetches and stores one route's whole-tree payload. Best-effort. */
+/** Fetches and stores one route's whole-tree payload. Best-effort: resolves
+ *  true once the payload is stored, false otherwise. */
 async function warmRscPath(cache, path) {
   try {
     // A bare `_rsc` is the cache-busting value Next.js expects with no router
@@ -359,7 +360,7 @@ async function warmRscPath(cache, path) {
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!isStorableRscResponse(response)) return;
+    if (!isStorableRscResponse(response)) return false;
     const headers = new Headers(response.headers);
     // Matched with ignoreVary anyway, and `Vary: *` would make the put throw.
     headers.delete("Vary");
@@ -368,24 +369,38 @@ async function warmRscPath(cache, path) {
       rscCacheKey(path),
       new Response(body, { status: response.status, statusText: response.statusText, headers }),
     );
+    return true;
   } catch {
     // Offline or a failed render: the payload already stored stays.
+    return false;
   }
 }
 
 let rscWarmInFlight = null;
 let rscWarmedAt = 0;
 
-/** Refreshes every app route's payload, at most once per RSC_WARM_INTERVAL_MS. */
+/** Refreshes every app route's payload, at most once per RSC_WARM_INTERVAL_MS.
+ *  The throttle holds only after a pass that stored every route, and only while
+ *  every route is still stored: a partial pass, or a cache the page cleared on
+ *  a sign-out (src/lib/swRouteDataCache.ts), is warmed again on the next load. */
 function warmRscCache() {
   if (rscWarmInFlight) return rscWarmInFlight;
-  if (rscWarmedAt && Date.now() - rscWarmedAt < RSC_WARM_INTERVAL_MS) return Promise.resolve();
   rscWarmInFlight = caches
     .open(RSC_CACHE)
-    .then((cache) => Promise.all(RSC_WARM_PATHS.map((path) => warmRscPath(cache, path))))
-    .catch(() => {})
+    .then(async (cache) => {
+      if (rscWarmedAt && Date.now() - rscWarmedAt < RSC_WARM_INTERVAL_MS) {
+        const stored = await Promise.all(
+          RSC_WARM_PATHS.map((path) => cache.match(rscCacheKey(path), { ignoreVary: true })),
+        );
+        if (stored.every(Boolean)) return;
+      }
+      const results = await Promise.all(RSC_WARM_PATHS.map((path) => warmRscPath(cache, path)));
+      rscWarmedAt = results.every(Boolean) ? Date.now() : 0;
+    })
+    .catch(() => {
+      rscWarmedAt = 0;
+    })
     .then(() => {
-      rscWarmedAt = Date.now();
       rscWarmInFlight = null;
     });
   return rscWarmInFlight;

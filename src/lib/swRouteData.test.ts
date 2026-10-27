@@ -243,6 +243,65 @@ describe("public/sw.js offline route data (#967)", () => {
     );
   });
 
+  describe("refresh throttle", () => {
+    /** A network whose route-data answers can be failed per path, counting them. */
+    function countingNetwork(failing: Set<string>) {
+      const rscCalls: string[] = [];
+      const network = vi.fn<FetchStub>(async (input) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("?_rsc")) {
+          const path = url.split("?")[0];
+          rscCalls.push(path);
+          if (failing.has(path)) throw new TypeError("Failed to fetch");
+          return rscResponse(`payload for ${path}`);
+        }
+        return new Response("<html></html>", { headers: { "Content-Type": "text/html" } });
+      });
+      return { network, rscCalls };
+    }
+
+    async function loadApp(dispatchFetch: ReturnType<typeof loadServiceWorker>["dispatchFetch"]) {
+      await dispatchFetch({ url: `${ORIGIN}/app/progress`, mode: "navigate" }).settled();
+    }
+
+    test("a pass that stored every route holds off the next refresh", async () => {
+      const { network, rscCalls } = countingNetwork(new Set());
+      const { dispatchFetch, warmPaths } = loadServiceWorker(network);
+
+      await loadApp(dispatchFetch);
+      await loadApp(dispatchFetch);
+
+      expect(rscCalls).toHaveLength(warmPaths.length);
+    });
+
+    test("a pass that missed a route does not hold off the next refresh", async () => {
+      const failing = new Set(["/app/journal"]);
+      const { network, rscCalls } = countingNetwork(failing);
+      const { dispatchFetch, caches, warmPaths } = loadServiceWorker(network);
+
+      await loadApp(dispatchFetch);
+      failing.clear();
+      await loadApp(dispatchFetch);
+
+      expect(rscCalls).toHaveLength(warmPaths.length * 2);
+      expect(await caches.stores.get("stillpoint-rsc-v1")?.get(`${RSC_KEY_ORIGIN}/app/journal`)?.text()).toBe(
+        "payload for /app/journal",
+      );
+    });
+
+    test("a cache cleared on sign-out is warmed again at once", async () => {
+      const { network, rscCalls } = countingNetwork(new Set());
+      const { dispatchFetch, caches, warmPaths } = loadServiceWorker(network);
+
+      await loadApp(dispatchFetch);
+      await caches.api.delete("stillpoint-rsc-v1");
+      await loadApp(dispatchFetch);
+
+      expect(rscCalls).toHaveLength(warmPaths.length * 2);
+      expect(caches.stores.get("stillpoint-rsc-v1")?.size).toBe(warmPaths.length);
+    });
+  });
+
   test("an offline page load never gets route data in place of its document", async () => {
     const { dispatchFetch, storePayload } = loadServiceWorker(offline);
     await storePayload("/app/journal", "stored journal");
