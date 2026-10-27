@@ -33,9 +33,9 @@ export function useDualTrackFork({
     second: false,
   });
   // #895: whether `tracksDoneToday` can be read as an answer. Before a refresh
-  // lands, while one is in flight and after one fails, both flags read false,
-  // which is right for the badges but would read as "both sits due" to anything
-  // offered only then.
+  // lands and while one is in flight, both flags read false; after one fails
+  // they hold only the sits this session remembers (#961). Either is right for
+  // the badges but could read as "a sit is due" to anything offered only then.
   const [tracksDoneTodayKnown, setTracksDoneTodayKnown] = useState(false);
   const [forkDismissed, setForkDismissed] = useState(false);
 
@@ -65,9 +65,22 @@ export function useDualTrackFork({
       // would be. Failing closed here would clear the badges of whoever has
       // signed in since.
       if (generation !== sessionGeneration.current) return;
-      // Fail closed so a failed refresh can't leave a stale "done today"
-      // badge on screen.
-      setTracksDoneToday({ primary: false, second: false });
+      // #961: the badges fall back to the sits this session remembers rather
+      // than clearing outright. A sit finished offline is saved as pending and
+      // remembered (`rememberStoredSit`), but the refresh its save starts fails
+      // for the same reason, so clearing here left Home showing neither track
+      // done right after a sit. What fail-closed protected still holds:
+      // - Only this session's sits. The generation check above drops a failure
+      //   that outlived its session, and every account teardown nulls
+      //   `loadedSitsRef`, so a previous account's sits are never read here.
+      // - Only the credited day. `tracksDoneOn` reads the day the sits credit
+      //   now, so a sit from a day that has rolled over checks off nothing.
+      // - Nothing remembered (an offline cold start) still reads neither done.
+      // The flags stay unknown (#895): a sit synced from another device could be
+      // missing, so "not done" here is not an answer anything should act on.
+      const remembered = loadedSitsRef.current ?? [];
+      const today = creditedLocalIsoDate(remembered, !!userRef.current?.dualTrackEnabled);
+      setTracksDoneToday(tracksDoneOn(remembered, today));
       setTracksDoneTodayKnown(false);
     }
   }, [sessionGeneration, loadedSitsRef, userRef]);
