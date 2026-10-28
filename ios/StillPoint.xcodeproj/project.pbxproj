@@ -162,6 +162,7 @@
 		D44FB0782DD33A5900AF8D60 /* BuddyCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */; };
 		D471E84C5A3A1528BCCD00A9 /* AppViewModel+Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 814985B238F7288CD8852173 /* AppViewModel+Auth.swift */; };
 		D4BA6F49AEC3DDCE40AFE5D1 /* BuddySessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */; };
+		D5CE71997B1D332CB173AE18 /* LAUNCH_ENVIRONMENT.md in Resources */ = {isa = PBXBuildFile; fileRef = 75EF36DCD819BEE81EEDCD05 /* LAUNCH_ENVIRONMENT.md */; };
 		DB29DB67C1C843229183E662 /* StillPointMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58A0BC69E330440BE836DDC4 /* StillPointMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DB5450A89E28AB89E7D265F4 /* BackgroundRefreshScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9968F025007BD4BAB8E26A05 /* BackgroundRefreshScheduler.swift */; };
 		DB99CD9DA2E6BB2A49B63025 /* PublicBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD7D2C82C908604A0C3D914 /* PublicBoardView.swift */; };
@@ -170,6 +171,7 @@
 		DFB99FF0486CEB1EEDE70DFE /* SettingsVisibilitySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */; };
 		E0B7E8F73810CD267D2405FB /* NetworkReachabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377636ACB5D7344CA6DF9E5C /* NetworkReachabilityMonitor.swift */; };
 		E15A367CAC8FFA7D3A43A349 /* 11.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 0E20E4DF9BB209813988B1F4 /* 11.mp3 */; };
+		E1CB0FE9E3BC15E2949E0977 /* PITFALLS.md in Resources */ = {isa = PBXBuildFile; fileRef = 4403CCBFAB0BBC4C105959AC /* PITFALLS.md */; };
 		E1FBFCD4730D9BC4E924C938 /* StillPointApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEC6DBFFB1C10CFDDA8424 /* StillPointApp.swift */; };
 		E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */; };
 		E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3B170D19689EEF2E14436A /* SessionIdleTimerController.swift */; };
@@ -272,6 +274,7 @@
 		41013DBBC777DFEDFD21C36F /* 60.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 60.mp3; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		4329194D44E09BC127081EB9 /* MoodShiftSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodShiftSection.swift; sourceTree = "<group>"; };
+		4403CCBFAB0BBC4C105959AC /* PITFALLS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PITFALLS.md; sourceTree = "<group>"; };
 		4448B4F081A909461B669A8B /* StillPointApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointApp.entitlements; sourceTree = "<group>"; };
 		44912B427658554F984CCC3A /* ThoughtJournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalView.swift; sourceTree = "<group>"; };
 		44AE33840A7E2F2DC00B2CCF /* 19.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 19.mp3; sourceTree = "<group>"; };
@@ -308,6 +311,7 @@
 		6FB689884A598D7C6B1BEBE4 /* CompletionPhotoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionPhotoSection.swift; sourceTree = "<group>"; };
 		71997BDA906AB28487E78602 /* 24.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 24.mp3; sourceTree = "<group>"; };
 		71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtCaptureView.swift; sourceTree = "<group>"; };
+		75EF36DCD819BEE81EEDCD05 /* LAUNCH_ENVIRONMENT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = LAUNCH_ENVIRONMENT.md; sourceTree = "<group>"; };
 		7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameEditView.swift; sourceTree = "<group>"; };
 		7C7E4E29267082F9FC37905F /* SessionTimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimerEngine.swift; sourceTree = "<group>"; };
 		7C825D8C3422EC8361A3BD6B /* 8.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 8.mp3; sourceTree = "<group>"; };
@@ -431,6 +435,8 @@
 		00907B112AF3AFED14FA0192 /* StillPointAppUITests */ = {
 			isa = PBXGroup;
 			children = (
+				75EF36DCD819BEE81EEDCD05 /* LAUNCH_ENVIRONMENT.md */,
+				4403CCBFAB0BBC4C105959AC /* PITFALLS.md */,
 				45BC84AB51307C865EF7257A /* README.md */,
 				517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */,
 				AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */,
@@ -1007,6 +1013,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D5CE71997B1D332CB173AE18 /* LAUNCH_ENVIRONMENT.md in Resources */,
+				E1CB0FE9E3BC15E2949E0977 /* PITFALLS.md in Resources */,
 				750987110FAE532744F6571E /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
