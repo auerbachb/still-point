@@ -6,11 +6,13 @@ What each toolchain can run:
 
 | Command | Full Xcode | Command Line Tools only |
 |---|---|---|
-| `swift test` in `ios/StillPointShared` | Yes | No. Most suites use Swift Testing (`import Testing`), but three still import XCTest, which ships only with Xcode: `no such module 'XCTest'`. |
+| `swift test` in `ios/StillPointShared` | Yes | Should work, since every suite uses Swift Testing (`import Testing`) and Command Line Tools ship `Testing.framework`. Not verified: the one install tried could not load `Package.swift` (see **Command Line Tools check** below). |
 | `swift build` in `ios/StillPointShared` | Yes | Should work, since nothing in the package needs SwiftData any more. Not verified: the Command Line Tools 27.0 install used for #870 could not load any `Package.swift` (the `Invalid manifest` failure below). |
 | `swift build` in `ios/StillPointModels` | Yes | No. The SwiftData macro plugin ships only with Xcode: `plugin for module 'SwiftDataMacros' not found`. |
 
-**Test framework:** the suites use Swift Testing (`import Testing`), which Command Line Tools do ship. Three still import XCTest: `PendingDeepLinksTests`, `AuthCheckOwnershipLocalLinksTests`, and `BuddyInviteJoinRoutingTests`. Until they move too, `swift test` still needs full Xcode. Finishing that migration is tracked in Issue [#1072](https://github.com/auerbachb/still-point/issues/1072).
+**Test framework:** every suite in `StillPointSharedTests` uses Swift Testing (`import Testing`), and none imports XCTest (Issue [#1072](https://github.com/auerbachb/still-point/issues/1072)). XCTest ships only with Xcode, so that import was what tied `swift test` to full Xcode. Under full Xcode, `swift test` runs 1047 Swift Testing tests in 116 suites and 0 XCTest tests.
+
+**Command Line Tools check (Issue [#1085](https://github.com/auerbachb/still-point/issues/1085), 2026-10-27):** CLT `27.0.0.0.1788430756` (`pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`), Apple Swift 6.4 (`swiftlang-6.4.0.34.1`). `DEVELOPER_DIR=/Library/Developer/CommandLineTools swift test` failed while loading `Package.swift`, with the `Invalid manifest` / `Undefined symbols` error below, before any test compiled. So the result says nothing about the tests yet. A clean reinstall (`sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install`) or another machine is needed for a real CLT run. Until one passes, use full Xcode.
 
 Check which toolchain is active:
 

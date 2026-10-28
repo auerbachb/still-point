@@ -57,7 +57,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### iOS shared package tests (`swift test`)
 
-`swift test` in `ios/StillPointShared`, and `swift build` in `ios/StillPointModels`, need full Xcode as the active developer directory, not Command Line Tools. The toolchain table, the `Invalid manifest` failure, and the no-sudo `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test` fix are in [ios/SWIFT_PACKAGES.md](ios/SWIFT_PACKAGES.md).
+`swift build` in `ios/StillPointModels` needs full Xcode as the active developer directory, not Command Line Tools. `swift test` in `ios/StillPointShared` no longer imports XCTest, but it has not yet passed under Command Line Tools, so use full Xcode for it too. The toolchain table, the Command Line Tools check, the `Invalid manifest` failure, and the no-sudo `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test` fix are in [ios/SWIFT_PACKAGES.md](ios/SWIFT_PACKAGES.md).
 
 ## Building
 
