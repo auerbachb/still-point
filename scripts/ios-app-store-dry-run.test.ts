@@ -23,7 +23,43 @@ import {
 const REPO_ROOT = process.cwd();
 const DRY_RUN = path.join(REPO_ROOT, "scripts/ios-app-store-dry-run.mjs");
 
+/** The ios/project.yml version most tests run against. */
 const projectYml = { marketingVersion: "1.0.3", buildNumber: "31" };
+
+/** The secrets B2 requires (#937), kept apart from the script's own list so a change to them is a test change. */
+const REQUIRED_SECRETS = [
+  "BUILD_CERTIFICATE_BASE64",
+  "P12_PASSWORD",
+  "BUILD_PROVISION_PROFILE_BASE64",
+  "BUILD_PROVISION_PROFILE_EXTENSION_BASE64",
+  "BUILD_PROVISION_PROFILE_WIDGET_BASE64",
+  "APPSTORE_API_KEY_ID",
+  "APPSTORE_API_ISSUER_ID",
+  "APPSTORE_API_PRIVATE_KEY",
+];
+
+/** The environment variables that give the dry run App Store Connect access. */
+const ASC_ENV_KEYS = ["APPSTORE_APP_ID", "APPSTORE_API_KEY_ID", "APPSTORE_API_ISSUER_ID", "APPSTORE_API_PRIVATE_KEY"] as const;
+
+/** Stubs working App Store Connect credentials, with a fresh P-256 key; `overrides` replaces any of them. */
+function stubAscCredentials(overrides: Partial<Record<(typeof ASC_ENV_KEYS)[number], string>> = {}) {
+  const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const values = {
+    APPSTORE_APP_ID: "1234567890",
+    APPSTORE_API_KEY_ID: "TESTKEYID",
+    APPSTORE_API_ISSUER_ID: "test-issuer",
+    APPSTORE_API_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    ...overrides,
+  };
+  for (const key of ASC_ENV_KEYS) vi.stubEnv(key, values[key]);
+}
+
+type Asc = { live: boolean; reason?: string; intendedBuild?: { processingState?: string } | null };
+type Check = { id: string; status: string; message: string; evidence: object };
+type ChecklistItem = { id: string; status: string; message: string; evidence?: object };
+
+/** The entry with `id` in a list of checks or checklist items. */
+const byId = <T extends { id: string }>(list: T[], id: string) => list.find((entry) => entry.id === id);
 
 /** The issue #242 checklist items, in report order (38). */
 const ISSUE_242_IDS = [
@@ -190,11 +226,7 @@ describe("queryAsc (#838)", () => {
   }
 
   beforeEach(() => {
-    const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
-    vi.stubEnv("APPSTORE_APP_ID", "1234567890");
-    vi.stubEnv("APPSTORE_API_KEY_ID", "TESTKEYID");
-    vi.stubEnv("APPSTORE_API_ISSUER_ID", "test-issuer");
-    vi.stubEnv("APPSTORE_API_PRIVATE_KEY", privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+    stubAscCredentials();
   });
 
   afterEach(() => {
@@ -232,14 +264,10 @@ describe("queryAsc without App Store Connect access (#1132)", () => {
   });
 
   test("asks for the credentials when APPSTORE_APP_ID is unset", async () => {
-    const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
-    vi.stubEnv("APPSTORE_APP_ID", "");
-    vi.stubEnv("APPSTORE_API_KEY_ID", "TESTKEYID");
-    vi.stubEnv("APPSTORE_API_ISSUER_ID", "test-issuer");
-    vi.stubEnv("APPSTORE_API_PRIVATE_KEY", privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+    stubAscCredentials({ APPSTORE_APP_ID: "" });
     const get = vi.fn();
 
-    const asc = await queryAsc({ marketingVersion: "1.0.3", buildNumber: "31" }, get);
+    const asc = await queryAsc(projectYml, get);
 
     expect(asc).toEqual({ live: false, reason: expect.stringMatching(/^Set APPSTORE_APP_ID, APPSTORE_API_KEY_ID/) });
     expect(get).not.toHaveBeenCalled();
@@ -351,12 +379,11 @@ describe("runLocalChecks A3-A5 (#1132)", () => {
       "- [x] App Store metadata/versioning/release notes are finalized.",
     ].join("\n"),
   };
-  const intended = { marketingVersion: "1.0.3", buildNumber: "31", intendedTag: "ios-v1.0.3-build31", source: "origin" };
-  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
+  const intended = { ...projectYml, intendedTag: "ios-v1.0.3-build31", source: "origin" };
 
   function statuses(docs: typeof goodDocs) {
     const context = createReportContext();
-    runLocalChecks(context, { docs, intended, project });
+    runLocalChecks(context, { docs, intended, project: projectYml });
     return Object.fromEntries(context.checks.map((check) => [check.id, check.status]));
   }
 
@@ -385,19 +412,9 @@ describe("runLocalChecks A3-A5 (#1132)", () => {
 });
 
 describe("checkWorkflowSecrets B2 (#1132)", () => {
-  const SECRETS = [
-    "BUILD_CERTIFICATE_BASE64",
-    "P12_PASSWORD",
-    "BUILD_PROVISION_PROFILE_BASE64",
-    "BUILD_PROVISION_PROFILE_EXTENSION_BASE64",
-    "BUILD_PROVISION_PROFILE_WIDGET_BASE64",
-    "APPSTORE_API_KEY_ID",
-    "APPSTORE_API_ISSUER_ID",
-    "APPSTORE_API_PRIVATE_KEY",
-  ];
   const refs = (names: string[]) => names.map((name) => `\${{ secrets.${name} }}`).join("\n");
   // The TestFlight workflow holds the signing secrets, the release workflow the API key.
-  const docs = { workflow: refs(SECRETS.slice(0, 5)), releaseWorkflow: refs(SECRETS.slice(5)) };
+  const docs = { workflow: refs(REQUIRED_SECRETS.slice(0, 5)), releaseWorkflow: refs(REQUIRED_SECRETS.slice(5)) };
   const listed = (names: string[]) => () => ({ available: true, names });
 
   test("fails, naming them, when a workflow doesn't reference every secret", () => {
@@ -406,7 +423,7 @@ describe("checkWorkflowSecrets B2 (#1132)", () => {
     const secretStatus = checkWorkflowSecrets(
       context,
       { ...docs, releaseWorkflow: refs(["APPSTORE_API_KEY_ID"]) },
-      listed(SECRETS),
+      listed(REQUIRED_SECRETS),
     );
 
     expect(context.checks).toEqual([
@@ -414,8 +431,8 @@ describe("checkWorkflowSecrets B2 (#1132)", () => {
         id: "B2",
         status: "fail",
         evidence: {
-          requiredWorkflowSecrets: SECRETS,
-          workflowSecretRefs: SECRETS.slice(0, 6),
+          requiredWorkflowSecrets: REQUIRED_SECRETS,
+          workflowSecretRefs: REQUIRED_SECRETS.slice(0, 6),
           missingWorkflowRefs: ["APPSTORE_API_ISSUER_ID", "APPSTORE_API_PRIVATE_KEY"],
         },
       }),
@@ -429,7 +446,7 @@ describe("checkWorkflowSecrets B2 (#1132)", () => {
   test("passes, with one message for the check and the checklist, when GitHub lists every secret", () => {
     const context = createReportContext();
 
-    const secretStatus = checkWorkflowSecrets(context, docs, listed(SECRETS));
+    const secretStatus = checkWorkflowSecrets(context, docs, listed(REQUIRED_SECRETS));
 
     expect(context.checks).toEqual([expect.objectContaining({ id: "B2", status: "pass" })]);
     expect(secretStatus).toEqual({ status: "pass", message: context.checks[0].message });
@@ -438,7 +455,7 @@ describe("checkWorkflowSecrets B2 (#1132)", () => {
   test("warns, naming them, when GitHub lacks a secret", () => {
     const context = createReportContext();
 
-    const secretStatus = checkWorkflowSecrets(context, docs, listed(SECRETS.slice(1)));
+    const secretStatus = checkWorkflowSecrets(context, docs, listed(REQUIRED_SECRETS.slice(1)));
 
     expect(context.checks[0]).toMatchObject({ status: "warning", evidence: { missingGithubSecrets: ["BUILD_CERTIFICATE_BASE64"] } });
     expect(secretStatus).toEqual({ status: "warning", message: "GitHub secret names missing: BUILD_CERTIFICATE_BASE64." });
@@ -458,7 +475,6 @@ describe("checkWorkflowSecrets B2 (#1132)", () => {
 });
 
 describe("evaluateAsc (#1132)", () => {
-  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
   const offline = async () => ({ live: false, reason: "no credentials" });
   const live = (intendedBuild: object | null) => async () => ({ live: true, intendedBuild });
 
@@ -468,7 +484,7 @@ describe("evaluateAsc (#1132)", () => {
 
   async function run(query: () => Promise<unknown>, requireLive = false) {
     const context = quietContext();
-    const asc = await evaluateAsc(context, { project, requireLive }, query);
+    const asc = await evaluateAsc(context, { project: projectYml, requireLive }, query);
     return { asc, checks: context.checks.map(({ id, status }) => [id, status]) };
   }
 
@@ -510,13 +526,9 @@ describe("evaluateAsc (#1132)", () => {
 });
 
 describe("classifyIssueChecklist (#1132)", () => {
-  const project = { marketingVersion: "1.0.3", buildNumber: "31" };
   const secretStatus = { status: "warning", message: "GitHub secret names missing: P12_PASSWORD." };
-  type Asc = { live: boolean; reason?: string; intendedBuild?: { processingState?: string } | null };
-  type CheckRecord = { id: string; status: string; message: string; evidence: object };
-  const classify = (asc: Asc, requireLive = false, checks: CheckRecord[] = []) =>
-    classifyIssueChecklist({ checks, secretStatus, project, asc, trackingIssue: "#5", requireLive });
-  const item = (list: { id: string }[], id: string) => list.find((entry) => entry.id === id);
+  const classify = (asc: Asc, requireLive = false, checks: Check[] = []): ChecklistItem[] =>
+    classifyIssueChecklist({ checks, secretStatus, project: projectYml, asc, trackingIssue: "#5", requireLive });
 
   test.each([
     ["offline", { live: false, reason: "no credentials" }, false, "warning", "no credentials"],
@@ -525,17 +537,17 @@ describe("classifyIssueChecklist (#1132)", () => {
     ["live and VALID", { live: true, intendedBuild: { processingState: "VALID" } }, false, "pass", "ASC build query completed and the intended build is VALID."],
     ["live and still processing", { live: true, intendedBuild: { processingState: "PROCESSING" } }, false, "fail", "Intended TestFlight build is PROCESSING."],
   ])("B5 %s", (_label, asc, requireLive, status, message) => {
-    expect(item(classify(asc, requireLive), "B5")).toMatchObject({ status, message, evidence: { version: "1.0.3", build: "31" } });
+    expect(byId(classify(asc, requireLive), "B5")).toMatchObject({ status, message, evidence: { version: "1.0.3", build: "31" } });
   });
 
   test("lists all 38 items, in order", () => {
-    expect(classify({ live: false, reason: "x" }).map((entry: { id: string }) => entry.id)).toEqual(ISSUE_242_IDS);
+    expect(classify({ live: false, reason: "x" }).map((entry) => entry.id)).toEqual(ISSUE_242_IDS);
   });
 
   test("a check covering an item wins over the table", () => {
     const checks = [{ id: "B2", status: "pass", message: "from the check", evidence: { a: 1 } }];
 
-    expect(item(classify({ live: false, reason: "x" }, false, checks), "B2")).toMatchObject({
+    expect(byId(classify({ live: false, reason: "x" }, false, checks), "B2")).toMatchObject({
       status: "pass",
       message: "from the check",
       evidence: { a: 1 },
@@ -545,8 +557,8 @@ describe("classifyIssueChecklist (#1132)", () => {
   test("B2 falls back to the secret status without a B2 check, and E1 names the tracking issue", () => {
     const list = classify({ live: false, reason: "x" });
 
-    expect(item(list, "B2")).toMatchObject(secretStatus);
-    expect(item(list, "E1")).toMatchObject({ message: expect.stringContaining("GitHub issue #5") });
+    expect(byId(list, "B2")).toMatchObject(secretStatus);
+    expect(byId(list, "E1")).toMatchObject({ message: expect.stringContaining("GitHub issue #5") });
   });
 });
 
@@ -556,13 +568,13 @@ describe("classifyIssueChecklist write-step items (#1149)", () => {
   const secretStatus = { status: "pass", message: "All required GitHub secret names are referenced." };
   const liveAsc = { live: true, intendedBuild: { processingState: "VALID" } };
   const offlineAsc = { live: false, reason: "ASC credentials are not configured." };
-  type Asc = { live: boolean; reason?: string; intendedBuild?: { processingState?: string } | null };
 
   const classify = (asc: Asc, requireLive: boolean) =>
     new Map(
-      classifyIssueChecklist({ checks: [], secretStatus, project, asc, trackingIssue: "#242", requireLive }).map(
-        (item: { id: string; status: string; message: string }) => [item.id, item],
-      ),
+      classifyIssueChecklist({ checks: [], secretStatus, project, asc, trackingIssue: "#242", requireLive }).map((item) => [
+        item.id,
+        item,
+      ]),
     );
 
   // Live reads never prove write access, so these items are never a plain pass.
@@ -691,16 +703,16 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
     // `gh secret list` must not reach GitHub from a unit test.
     const bin = path.join(root, "bin");
     fs.mkdirSync(bin);
-    fs.writeFileSync(path.join(bin, "gh"), "#!/bin/sh\necho 'gh is stubbed in this test' >&2\nexit 1\n", { mode: 0o755 });
+    /** Replaces the stubbed gh with a shell script whose body is `script`. */
+    const stubGh = (script: string) => fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+    stubGh("echo 'gh is stubbed in this test' >&2\nexit 1");
 
     const env: NodeJS.ProcessEnv = { ...gitEnv, GIT_DIR: path.join(clone, ".git"), PATH: `${bin}${path.delimiter}${process.env.PATH}` };
-    for (const key of ["APPSTORE_APP_ID", "APPSTORE_API_KEY_ID", "APPSTORE_API_ISSUER_ID", "APPSTORE_API_PRIVATE_KEY"]) {
-      delete env[key];
-    }
+    for (const key of ASC_ENV_KEYS) delete env[key];
 
     /**
-     * Runs the dry run and returns its exit status, summary.json, summary.md, and
-     * automation.log. Every run asserts the exit-status contract: 1 when any check
+     * Runs the dry run and returns its exit status, summary.json (with its checks and
+     * checklist typed), summary.md, and automation.log. Every run asserts the exit-status contract: 1 when any check
      * failed, 0 otherwise. Which checks fail depends on this checkout's release
      * checklists (A5), so the tests compare the two instead of a fixed status.
      */
@@ -716,36 +728,33 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
         expect(fs.existsSync(path.join(outputDir, artifact)), `${artifact}\n${output}`).toBe(true);
       }
       const summary = JSON.parse(fs.readFileSync(path.join(outputDir, "summary.json"), "utf8"));
-      const failed = (summary.checks as Check[]).some((check) => check.status === "fail");
-      expect(result.status, output).toBe(failed ? 1 : 0);
+      const checks = summary.checks as Check[];
+      expect(result.status, output).toBe(checks.some((check) => check.status === "fail") ? 1 : 0);
       return {
         status: result.status,
         summary,
+        checks,
+        checklist: summary.issue242Checklist as ChecklistItem[],
         markdown: fs.readFileSync(path.join(outputDir, "summary.md"), "utf8"),
         automationLog: fs.readFileSync(path.join(outputDir, "automation.log"), "utf8"),
       };
     };
 
-    return { git, dryRun, bin };
+    return { git, dryRun, stubGh };
   }
-
-  type Check = { id: string; status: string; evidence?: Record<string, unknown> };
-  type ChecklistItem = { id: string; status?: string; evidence?: Record<string, unknown> };
 
   test("names the highest build tag on origin by default, everywhere it reports the build", () => {
     const { dryRun } = setup();
 
-    const { summary, markdown } = dryRun();
+    const { summary, checks, checklist, markdown } = dryRun();
 
     expect(summary.fatalError).toBeUndefined();
     expect(summary.intendedTag).toBe("ios-v1.0.3-build10");
     expect(summary.project).toMatchObject({ marketingVersion: "1.0.3", buildNumber: "10" });
     expect(summary.intendedBuild.source).toBe("origin");
     expect(summary.preflightSummary).toMatchObject({ intendedTag: "ios-v1.0.3-build10", version: "1.0.3", build: "10" });
-    const a2 = (summary.checks as Check[]).find((check) => check.id === "A2");
-    expect(a2).toMatchObject({ status: "pass", evidence: { buildNumber: "10", intendedTag: "ios-v1.0.3-build10" } });
-    const b5 = (summary.issue242Checklist as ChecklistItem[]).find((item) => item.id === "B5");
-    expect(b5?.evidence).toEqual({ version: "1.0.3", build: "10" });
+    expect(byId(checks, "A2")).toMatchObject({ status: "pass", evidence: { buildNumber: "10", intendedTag: "ios-v1.0.3-build10" } });
+    expect(byId(checklist, "B5")?.evidence).toEqual({ version: "1.0.3", build: "10" });
     expect(markdown).toContain("- Version/build: 1.0.3 (10)\n- Intended tag: ios-v1.0.3-build10 (from the highest build tag on origin)");
   });
 
@@ -762,10 +771,10 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   test("an --intended-tag that is not a build tag fails A2", () => {
     const { dryRun } = setup();
 
-    const { status, summary } = dryRun("--intended-tag", "ios-v1.0.3");
+    const { status, summary, checks } = dryRun("--intended-tag", "ios-v1.0.3");
 
     expect(status).toBe(1);
-    expect((summary.checks as Check[]).find((check) => check.id === "A2")?.status).toBe("fail");
+    expect(byId(checks, "A2")?.status).toBe("fail");
     expect(summary.asc).toMatchObject({ live: false, reason: "There is no intended build to look up; see A2." });
   });
 
@@ -773,11 +782,11 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
     const { git, dryRun } = setup();
     git(["remote", "set-url", "origin", path.join(os.tmpdir(), "still-point-no-such-origin.git")]);
 
-    const { summary } = dryRun();
+    const { summary, checks } = dryRun();
 
     expect(summary.intendedTag).toBe("ios-v1.0.3-build10");
     expect(summary.intendedBuild.source).toBe("local");
-    expect((summary.checks as Check[]).find((check) => check.id === "INTENDED_BUILD")?.status).toBe("warning");
+    expect(byId(checks, "INTENDED_BUILD")?.status).toBe("warning");
   });
 
   // This fixture repo fails unrelated checks, so the exit code is not asserted here; the
@@ -788,16 +797,15 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   ])("B1 and C1\u2013C3 are never a plain pass: %s (#1149)", (_label, args, itemStatus) => {
     const { dryRun } = setup();
 
-    const { status, summary, markdown } = dryRun(...args);
+    const { status, summary, checks, checklist, markdown } = dryRun(...args);
 
     expect(summary.dryRunMode).toBe(true);
     for (const id of ["B1", "C1", "C2", "C3"]) {
-      const item = (summary.issue242Checklist as ChecklistItem[]).find((entry) => entry.id === id);
-      expect(item, id).toMatchObject({ status: itemStatus });
+      expect(byId(checklist, id), id).toMatchObject({ status: itemStatus });
       expect(markdown).toContain(`| ${id} | ${itemStatus} |`);
-      expect((summary.checks as Check[]).some((check) => check.id === id), id).toBe(false);
+      expect(byId(checks, id), id).toBeUndefined();
     }
-    const requireLive = (summary.checks as Check[]).find((check) => check.id === "ASC_REQUIRE_LIVE");
+    const requireLive = byId(checks, "ASC_REQUIRE_LIVE");
     if (args.includes("--require-live")) {
       expect(requireLive?.status).toBe("fail");
       expect(status).toBe(1);
@@ -809,7 +817,7 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   test("records the report shape and check order (#1132)", () => {
     const { dryRun } = setup();
 
-    const { summary, automationLog } = dryRun();
+    const { summary, checks, checklist, automationLog } = dryRun();
 
     expect(Object.keys(summary)).toEqual([
       "generatedAt",
@@ -829,10 +837,10 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
       "preflightSummary",
       "issue242Checklist",
     ]);
-    expect((summary.checks as Check[]).map((check) => check.id)).toEqual([
+    expect(checks.map((check) => check.id)).toEqual([
       "A1", "A2", "A3", "A4", "A5", "B2", "C4", "C7", "D1", "D4", "E2", "F1", "F2", "DOD1", "DOD2",
     ]);
-    expect((summary.issue242Checklist as ChecklistItem[]).map((item) => item.id)).toEqual(ISSUE_242_IDS);
+    expect(checklist.map((item) => item.id)).toEqual(ISSUE_242_IDS);
     expect(summary.humanGates).toEqual(HUMAN_GATES);
     expect(summary.preflightSummary.unresolvedHumanGates).toEqual(HUMAN_GATES);
     expect(summary.fallbackPaths).toEqual(fallbackPathsFor("the tracking issue"));
@@ -859,27 +867,15 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   test("--require-live without App Store Connect credentials fails, with every artifact written", () => {
     const { dryRun } = setup();
 
-    const { status, summary } = dryRun("--require-live");
+    const { status, checks, checklist } = dryRun("--require-live");
 
     expect(status).toBe(1);
-    expect((summary.checks as Check[]).at(-1)).toMatchObject({ id: "ASC_REQUIRE_LIVE", status: "fail" });
-    const checklist = summary.issue242Checklist as (ChecklistItem & { status: string })[];
+    expect(checks.at(-1)).toMatchObject({ id: "ASC_REQUIRE_LIVE", status: "fail" });
     for (const id of ["B1", "B5", "C1", "C2", "C3", "E3", "DOD3"]) {
-      expect(checklist.find((item) => item.id === id)?.status, id).toBe("fail");
+      expect(byId(checklist, id)?.status, id).toBe("fail");
     }
   });
 
-  /** The secrets B2 requires (#937), kept apart from the script's own list. */
-  const B2_SECRETS = [
-    "BUILD_CERTIFICATE_BASE64",
-    "P12_PASSWORD",
-    "BUILD_PROVISION_PROFILE_BASE64",
-    "BUILD_PROVISION_PROFILE_EXTENSION_BASE64",
-    "BUILD_PROVISION_PROFILE_WIDGET_BASE64",
-    "APPSTORE_API_KEY_ID",
-    "APPSTORE_API_ISSUER_ID",
-    "APPSTORE_API_PRIVATE_KEY",
-  ];
   const EXTENSION_PROFILES = ["BUILD_PROVISION_PROFILE_EXTENSION_BASE64", "BUILD_PROVISION_PROFILE_WIDGET_BASE64"];
 
   /** What gh reports, the names it lists (null: it fails), B2's status, and the names B2 finds missing. */
@@ -887,31 +883,27 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
 
   test.each<B2Case>([
     ["cannot list the repository's secrets", null, "warning"],
-    ["lists every required name", B2_SECRETS, "pass"],
+    ["lists every required name", REQUIRED_SECRETS, "pass"],
     [
       "lists all but the extension profiles",
-      B2_SECRETS.filter((name) => !EXTENSION_PROFILES.includes(name)),
+      REQUIRED_SECRETS.filter((name) => !EXTENSION_PROFILES.includes(name)),
       "warning",
       EXTENSION_PROFILES,
     ],
   ])("B2 checks all eight secrets when gh %s", (_label, listed, status, missingGithubSecrets) => {
-    const { dryRun, bin } = setup();
-    if (listed) {
-      const names = JSON.stringify(listed.map((name) => ({ name })));
-      fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\necho '${names}'\n`);
-    }
+    const { dryRun, stubGh } = setup();
+    if (listed) stubGh(`echo '${JSON.stringify(listed.map((name) => ({ name })))}'`);
 
-    const { summary } = dryRun();
+    const { summary, checks, checklist } = dryRun();
 
-    expect(summary.workflows.requiredSecrets).toEqual(B2_SECRETS);
-    const b2 = (summary.checks as Check[]).find((check) => check.id === "B2");
+    expect(summary.workflows.requiredSecrets).toEqual(REQUIRED_SECRETS);
+    const b2 = byId(checks, "B2");
     expect(b2).toMatchObject({
       status,
-      evidence: { requiredWorkflowSecrets: B2_SECRETS, ...(missingGithubSecrets ? { missingGithubSecrets } : {}) },
+      evidence: { requiredWorkflowSecrets: REQUIRED_SECRETS, ...(missingGithubSecrets ? { missingGithubSecrets } : {}) },
     });
     // The workflows reference every name, so a name GitHub lacks is a warning, never a failure.
     expect(b2?.evidence).not.toHaveProperty("missingWorkflowRefs");
-    const item = (summary.issue242Checklist as ChecklistItem[]).find((entry) => entry.id === "B2");
-    expect(item?.evidence).toMatchObject({ requiredWorkflowSecrets: B2_SECRETS });
+    expect(byId(checklist, "B2")?.evidence).toMatchObject({ requiredWorkflowSecrets: REQUIRED_SECRETS });
   });
 });
