@@ -44,7 +44,7 @@ The table is an index only. Each fixture's contract lives in its note under
 ## Per-fixture notes
 
 These fixtures only contain inputs where **both** implementations produce
-identical golden values. Each note is the single place for that fixture's
+identical golden values. Each note is the primary place for that fixture's
 contract.
 
 - **clearPercent** — includes an empty log, for which both platforms return
