@@ -2,13 +2,23 @@
 
 This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyond auth, layout & VoiceOver smoke").
 
+## Docs in this folder
+
+- **This README** — reference simulator, coverage map, how to run, CI lanes, where the code lives, manual VoiceOver steps.
+- [`LAUNCH_ENVIRONMENT.md`](LAUNCH_ENVIRONMENT.md) — every `SP_UI_TEST_*` launch knob the app reads, UI-test-only markers, and the fixture login account. Add new knobs there.
+- [`PITFALLS.md`](PITFALLS.md) — simulator and XCUITest traps already hit, with the shipped fix for each. Add new pitfalls there.
+
 ## Reference simulator
 
 - **Model:** `iPhone 15 Pro` (notch + Dynamic Island + home indicator)
 - **OS:** iOS 17.0+
 - **Cold-start auth bound (documented):** auth check should complete within **5,000 ms** on this simulator class.
 
+Cold-start acceptance guard used by tests: **auth check must complete within 8,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`). Raised from 5,000 ms in [#334](https://github.com/auerbachb/still-point/issues/334) to absorb macos-26/iOS-26 simulator contention. The guard is asserted only on `seedAuthenticated: false` cold-start paths (boot to auth); authenticated boots and seeded relaunches pass `assertColdStart: false`.
+
 ## Test coverage map (Issue #193 / #497)
+
+One line per journey, naming the test that covers it. The cross-platform journey matrix is [`docs/testing/e2e-coverage-matrix.md`](../../docs/testing/e2e-coverage-matrix.md).
 
 - Launch → login (fixture) → main session surface + cold-start bound (`testLaunchLoginCompleteSessionAndHistoryPersistence`)
 - Start session → complete → stats visible + relaunch history persistence (`testLaunchLoginCompleteSessionAndHistoryPersistence`)
@@ -28,37 +38,6 @@ This directory contains native iOS UI smoke tests for Issue #193 ("journeys beyo
 - Settings save dropped by an account switch re-syncs the control from the account on screen (`testAphorismsToggleResyncsWhenHeldReadAdoptsSecondAccount`, #887)
 - A sit left pending sync hides the mood ratings, keeps the note, and leaves on the first "save and return to home" tap (`testPendingSyncCompletionHidesMoodAndReturnsOnFirstTap`, #875)
 
-Cold-start acceptance guard used by tests: **auth check must complete within 8,000 ms** (captured via root accessibility value `coldStartAuthCheckMs=<n>`). Raised from 5,000 ms in [#334](https://github.com/auerbachb/still-point/issues/334) to absorb macos-26/iOS-26 simulator contention. The guard is asserted only on `seedAuthenticated: false` cold-start paths (boot to auth); authenticated boots and seeded relaunches pass `assertColdStart: false`.
-
-## Environment knobs used by tests
-
-The app reads these launch environment keys in UI test mode:
-
-- `SP_UI_TEST_MODE=1`
-- `SP_UI_TEST_RESET_STORE=1` (start each test from a deterministic fixture store)
-- `SP_UI_TEST_SEED_AUTH=1` (boot already-authenticated fixture user)
-- `SP_UI_TEST_SESSION_SECONDS=<int>` (short deterministic session duration)
-- `SP_UI_TEST_TIMER_MULTIPLIER=<double>` (accelerate timer without changing UI copy)
-- `SP_UI_TEST_FORCE_LAUNCH_OFFLINE=1` (simulate failed API/airplane mode on launch)
-- `SP_UI_TEST_FORCE_TOKEN_EXPIRED=1` (simulate expired token during cold-start auth check)
-- `SP_UI_TEST_FORCE_SESSIONS_FAILURE=1` (optional sessions API failure simulation: `getSessions` and `getTracksDoneToday` fail with a 503 on every call)
-- `SP_UI_TEST_FORCE_SESSIONS_FAILURE=once` (#957: only the first `getSessions` call in the launch fails with a 503, so History's Retry can load; `getTracksDoneToday` does not fail in this mode)
-- `SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE=1` (#875: every `createSession` fails as a dead network does, so a completed sit stays pending sync)
-- `SP_UI_TEST_FORCE_USERNAME_CONFLICT=1` (simulate username taken on settings save)
-- `SP_UI_TEST_FORCE_BREATH_COUNTING=1` (boot directly to breath counting screen)
-- `SP_UI_TEST_FORCE_BUDDY_HUB=1` (boot directly to buddy session hub)
-- `SP_UI_TEST_FORCE_SETTINGS_TAB=1` (boot to Settings tab in the main shell)
-- `SP_UI_TEST_HOLD_ME_SECONDS=<double>` (#887: the first `me()` read after the app goes to the background — the scene-activation auth check when it comes back — waits this long before answering, holding the settings queue so a Settings save made meanwhile waits behind it)
-- `SP_UI_TEST_SECOND_ACCOUNT=1` (#887: that held read answers as a second account, `ios_second`, so the app adopts a different account while Settings stays on screen)
-
-`RootView` also shows a UI-test-only marker, `uiTest.settingsRequestCount`, whose accessibility value is the number of Settings requests the fake backend has received since launch (#887).
-- `SP_UI_TEST_SNAPSHOT_SEED=1` (Fastlane snapshot lane — canned sessions, thoughts, and practitioners board for marketing captures; use with `SP_UI_TEST_RESET_STORE=1` on first launch)
-
-Fixture login account (used when auth screen is shown):
-
-- Email: `ios.fixture@stillpoint.test`
-- Password: `stillpoint-pass`
-
 ## Run locally
 
 ```bash
@@ -69,6 +48,8 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.0' \
   -only-testing:StillPointAppUITests
 ```
+
+Launch knobs and the fixture login account: [`LAUNCH_ENVIRONMENT.md`](LAUNCH_ENVIRONMENT.md).
 
 ## CI lane plan
 
@@ -81,62 +62,13 @@ Coverage matrix: [`docs/testing/e2e-coverage-matrix.md`](../../docs/testing/e2e-
 
 ## Where helpers live
 
-- [`Helpers/XCTestCase+StillPointUITest.swift`](Helpers/XCTestCase+StillPointUITest.swift) — `makeApp` (every launch-environment knob above), `waitForRoot`, `stableFrame`, and the capsule rendering asserts. Shared by every UI test class.
+- [`Helpers/XCTestCase+StillPointUITest.swift`](Helpers/XCTestCase+StillPointUITest.swift) — `makeApp` (the launch-environment knobs in [`LAUNCH_ENVIRONMENT.md`](LAUNCH_ENVIRONMENT.md)), `waitForRoot`, `stableFrame`, and the capsule rendering asserts. Shared by every UI test class.
 - [`Helpers/StillPointAppUITests+Interaction.swift`](Helpers/StillPointAppUITests+Interaction.swift) — fixture login, Settings username editing, tab navigation, stable-center taps, scrolling, keyboard handling, and reliable termination for `StillPointAppUITests`. Scoped to that class so `SnapshotTests` can keep its own same-named private helpers.
+- [`Helpers/XCUIElement+TapAndType.swift`](Helpers/XCUIElement+TapAndType.swift) — `tapAndType`: tap a field, wait for keyboard focus on it, then type.
+- [`Helpers/XCUIDevice+Portrait.swift`](Helpers/XCUIDevice+Portrait.swift) — `ensurePortraitOrientation`, which skips the orientation change when the device is already portrait.
 - [`StillPointAppUITests.swift`](StillPointAppUITests.swift) — setup, teardown, and the test methods.
-
-## Patterns and pitfalls
-
-### Wait for the destination root before terminating after navigation
-
-If a test triggers navigation (taps a button that pushes a new screen, starts audio, kicks off any non-trivial transition) and then calls `app.terminate()`, the simulator's `launchd` on macos-26 / iOS 26 sometimes loses track of the process and hangs for tens of seconds before reporting:
-
-```text
-Failed to terminate <bundle>:<pid>
-```
-
-The fix is to wait for the destination's `root.currentView.<slug>` element to exist *before* terminating, so SIGTERM hits a quiescent process.
-
-**Do this:**
-
-```swift
-beginButton.tap()
-XCTAssertTrue(
-    app.otherElements["root.currentView.session"].waitForExistence(timeout: 20),
-    "Session screen did not appear after Begin tap"
-)
-app.launchEnvironment["SP_UI_TEST_SEED_AUTH"] = "1"
-terminateAppReliably(app)
-```
-
-**Don't do this:**
-
-```swift
-beginButton.tap()
-// terminate races launchd while audio engine + timer are still spinning up
-terminateAppReliably(app)
-```
-
-### When `tap(_:thenWaitForRoot:in:)` is fine vs when it bites
-
-The `tap(_:thenWaitForRoot:in:)` helper in [`Helpers/StillPointAppUITests+Interaction.swift`](Helpers/StillPointAppUITests+Interaction.swift) is a one-liner for "tap, then wait for the destination root". Tests like `testRotationDecisionSessionRemainsUsableInLandscape` use it successfully. Internally it composes `tapByStableCenter` (an 8s stable-frame check) with a 12s root-existence wait, retried up to 3 times.
-
-The trap: in flows where the source element's frame is briefly unstable (e.g. immediately after the home screen mounts following a fresh login), `tapByStableCenter` returns `false` *without ever tapping* — the helper then waits 12s for a root that never appears, retries, and ultimately asserts `Expected tap to transition to root.currentView.<slug>`.
-
-Concrete case: the v1 commit (`d9e69aa`) of [#319](https://github.com/auerbachb/still-point/pull/319) used the helper for the post-login `home → session` transition in `testLaunchLoginCompleteSessionAndHistoryPersistence` and failed CI on [run 25218186115](https://github.com/auerbachb/still-point/actions/runs/25218186115). The shipping fix (`ddf7b69`) kept the direct `.tap()` and added an explicit `waitForExistence` for the destination root — verified passing on [run 25218888601](https://github.com/auerbachb/still-point/actions/runs/25218888601).
-
-**Rule of thumb:**
-
-- **Already-quiescent flows** (authenticated boot, lighter session config, no fresh transition in flight): `tap(_:thenWaitForRoot:in:)` is fine.
-- **Right after a transition** (fresh login → home → tap, layout/animation likely still settling): use direct `.tap()` + explicit `waitForExistence` for the destination root.
-
-### Never focus the Sign Up password field on iOS 26
-
-When a `.newPassword` field takes focus, iOS 26 replaces the keyboard with a "Use Strong Password?" panel. The panel swallows `typeText` (only one character arrives). Its Close and Fill Strong Password buttons sit in a remote view whose frames XCUITest reports relative to the panel, not the screen, so a tap on them can't be relied on to land. `testSignupHappyPath` therefore types the password in Log In mode, where the field is a `.password` field. It moves focus to the email field before switching to Sign Up. Evidence: [run 40418500104](https://github.com/auerbachb/still-point/actions/runs/40418500104), [#867](https://github.com/auerbachb/still-point/issues/867).
-
-### Scroll before tapping anything low on the completion recap
-
-The recap (mood grid, photo button) is taller than the screen, so `completion.returnButton` starts below the fold. `tapByStableCenter` does not scroll, so call `scrollElementIntoVisibleFrame` first.
+- [`SPCapsuleButtonStyleUITests.swift`](SPCapsuleButtonStyleUITests.swift) — capsule button rendering checks.
+- [`Snapshots/`](Snapshots/) — `SnapshotTests` and `SnapshotHelper` for the Fastlane screenshot lane.
 
 ## VoiceOver smoke steps (manual fallback)
 
