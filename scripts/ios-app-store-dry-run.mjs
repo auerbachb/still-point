@@ -91,8 +91,18 @@ const expectedIssueChecklistCount = 38;
 function issueChecklistMapping({ asc, secretStatus, trackingIssue, requireLive }) {
   const offlineStatus = requireLive ? "fail" : "warning";
   const apiReady = asc.live ? "pass" : offlineStatus;
+  // B1 and C1–C3 need write access. A successful read proves only that the key can read,
+  // so live reads stay a warning (#1149). This status never adds a check, so it never
+  // changes the exit code.
+  const writeUnverified = asc.live ? "warning" : offlineStatus;
+  const readOnly = (detail) => (asc.live ? `Verified read access; write step not exercised. ${detail}` : asc.reason);
   return {
-    B1: [apiReady, asc.live ? "ASC API credentials generated a valid query token." : asc.reason],
+    B1: [
+      writeUnverified,
+      asc.live
+        ? "ASC API credentials generated a valid query token and read queries succeeded; the key's role is unverified. Confirm in App Store Connect that it has the App Manager role (or higher) for version, build, metadata, screenshot, and submission writes."
+        : asc.reason,
+    ],
     B2: [secretStatus.status, secretStatus.message],
     B3: ["pass", "Fastlane under ios/fastlane/ (gym, pilot, deliver) plus this dry-run script cover ASC API automation paths."],
     B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
@@ -103,9 +113,9 @@ function issueChecklistMapping({ asc, secretStatus, trackingIssue, requireLive }
         : asc.intendedBuild.processingState === "VALID"
           ? ["pass", "ASC build query completed and the intended build is VALID."]
           : ["fail", `Intended TestFlight build is ${asc.intendedBuild.processingState}.`],
-    C1: [apiReady, "ASC appStoreVersions endpoint can locate the target version; creation is reserved for explicit execution tooling."],
-    C2: [apiReady, "ASC version/build relationships can be verified; attaching the build remains gated on human approval."],
-    C3: [apiReady, "ASC metadata endpoints can verify/update supported fields once approved source copy is supplied."],
+    C1: [writeUnverified, readOnly("The appStoreVersions query succeeded; creating or opening the version is reserved for explicit execution tooling.")],
+    C2: [writeUnverified, readOnly("The builds query succeeded; attaching the build to the version remains gated on human approval.")],
+    C3: [writeUnverified, readOnly("Metadata fields were not read or written; setting them waits for approved source copy.")],
     C5: ["warning", "Screenshot/app-preview automation requires approved source assets."],
     C6: ["warning", "Review attachment automation requires a physical-iPhone account-deletion recording asset."],
     C8: ["warning", "Demo credentials are private human-owned review fields unless a signup path is approved."],

@@ -550,6 +550,51 @@ describe("classifyIssueChecklist (#1132)", () => {
   });
 });
 
+describe("classifyIssueChecklist write-step items (#1149)", () => {
+  const WRITE_ITEMS = ["B1", "C1", "C2", "C3"];
+  const project = { marketingVersion: "1.0.3", buildNumber: "10" };
+  const secretStatus = { status: "pass", message: "All required GitHub secret names are referenced." };
+  const liveAsc = { live: true, intendedBuild: { processingState: "VALID" } };
+  const offlineAsc = { live: false, reason: "ASC credentials are not configured." };
+  type Asc = { live: boolean; reason?: string; intendedBuild?: { processingState?: string } | null };
+
+  const classify = (asc: Asc, requireLive: boolean) =>
+    new Map(
+      classifyIssueChecklist({ checks: [], secretStatus, project, asc, trackingIssue: "#242", requireLive }).map(
+        (item: { id: string; status: string; message: string }) => [item.id, item],
+      ),
+    );
+
+  // Live reads never prove write access, so these items are never a plain pass.
+  test.each<[label: string, asc: Asc, requireLive: boolean, status: string]>([
+    ["live reads succeed", liveAsc, false, "warning"],
+    ["live reads succeed under --require-live", liveAsc, true, "warning"],
+    ["offline", offlineAsc, false, "warning"],
+    ["offline under --require-live", offlineAsc, true, "fail"],
+  ])("B1 and C1\u2013C3 report %s as the expected status", (_label, asc, requireLive, status) => {
+    const items = classify(asc, requireLive);
+    for (const id of WRITE_ITEMS) expect(items.get(id)?.status, id).toBe(status);
+  });
+
+  test("live messages say what was and was not verified", () => {
+    const items = classify(liveAsc, false);
+    expect(items.get("B1")?.message).toMatch(/role is unverified/);
+    for (const id of ["C1", "C2", "C3"]) {
+      expect(items.get(id)?.message, id).toMatch(/^Verified read access; write step not exercised\./);
+    }
+  });
+
+  test("offline messages carry the ASC reason", () => {
+    const items = classify(offlineAsc, false);
+    for (const id of WRITE_ITEMS) expect(items.get(id)?.message, id).toBe(offlineAsc.reason);
+  });
+
+  test("E3, DOD3, and B5 still pass on live reads", () => {
+    const items = classify(liveAsc, false);
+    for (const id of ["E3", "DOD3", "B5"]) expect(items.get(id)?.status, id).toBe("pass");
+  });
+});
+
 describe("writeMarkdown (#1132)", () => {
   test("escapes | in checklist messages so the table keeps its columns", () => {
     const report = {
@@ -685,7 +730,7 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
   }
 
   type Check = { id: string; status: string; evidence?: Record<string, unknown> };
-  type ChecklistItem = { id: string; evidence?: Record<string, unknown> };
+  type ChecklistItem = { id: string; status?: string; evidence?: Record<string, unknown> };
 
   test("names the highest build tag on origin by default, everywhere it reports the build", () => {
     const { dryRun } = setup();
@@ -733,6 +778,32 @@ describe("ios-app-store-dry-run.mjs intended build and B2 (#838, #937)", { timeo
     expect(summary.intendedTag).toBe("ios-v1.0.3-build10");
     expect(summary.intendedBuild.source).toBe("local");
     expect((summary.checks as Check[]).find((check) => check.id === "INTENDED_BUILD")?.status).toBe("warning");
+  });
+
+  // This fixture repo fails unrelated checks, so the exit code is not asserted here; the
+  // classifier adds no check of its own, which is what keeps it out of the exit code.
+  test.each<[label: string, args: string[], itemStatus: string]>([
+    ["default offline run", [], "warning"],
+    ["--require-live without credentials", ["--require-live"], "fail"],
+  ])("B1 and C1\u2013C3 are never a plain pass: %s (#1149)", (_label, args, itemStatus) => {
+    const { dryRun } = setup();
+
+    const { status, summary, markdown } = dryRun(...args);
+
+    expect(summary.dryRunMode).toBe(true);
+    for (const id of ["B1", "C1", "C2", "C3"]) {
+      const item = (summary.issue242Checklist as ChecklistItem[]).find((entry) => entry.id === id);
+      expect(item, id).toMatchObject({ status: itemStatus });
+      expect(markdown).toContain(`| ${id} | ${itemStatus} |`);
+      expect((summary.checks as Check[]).some((check) => check.id === id), id).toBe(false);
+    }
+    const requireLive = (summary.checks as Check[]).find((check) => check.id === "ASC_REQUIRE_LIVE");
+    if (args.includes("--require-live")) {
+      expect(requireLive?.status).toBe("fail");
+      expect(status).toBe(1);
+    } else {
+      expect(requireLive).toBeUndefined();
+    }
   });
 
   test("records the report shape and check order (#1132)", () => {
