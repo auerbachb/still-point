@@ -1,4 +1,4 @@
-import XCTest
+import Testing
 @testable import StillPointShared
 
 /// What a buddy-invite join acts on once the server accepts it: the identity
@@ -133,7 +133,7 @@ private final class InviteScreen {
 /// test with a sit or a pending reset in that window would open the buddy session
 /// anyway: over the sit, or on a screen the reset then replaces, with the invite spent.
 @MainActor
-final class BuddyInviteJoinRoutingTests: XCTestCase {
+struct BuddyInviteJoinRoutingTests {
     private func decision(
         startedAt generation: Int,
         live: Int,
@@ -160,42 +160,32 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
     // MARK: - The rule
 
     /// With nothing changed during the request, the join opens the buddy session.
-    func testAJoinWithNothingInTheWayRoutes() {
-        XCTAssertEqual(decision(startedAt: 1, live: 1, inSession: false, resetPending: false), .route)
+    @Test func testAJoinWithNothingInTheWayRoutes() {
+        #expect(decision(startedAt: 1, live: 1, inSession: false, resetPending: false) == .route)
     }
 
     /// AC 2. A sit on screen keeps its screen, and the invite waits for it to end.
-    func testASessionOnScreenDefersTheJoin() {
-        XCTAssertEqual(
-            decision(startedAt: 1, live: 1, inSession: true, resetPending: false),
-            .deferForSession
-        )
+    @Test func testASessionOnScreenDefersTheJoin() {
+        #expect(decision(startedAt: 1, live: 1, inSession: true, resetPending: false) == .deferForSession)
     }
 
     /// AC 3. The newest check has yet to reset the route, so routing now would be undone.
-    func testAPendingRouteResetDefersTheJoin() {
-        XCTAssertEqual(
-            decision(startedAt: 1, live: 1, inSession: false, resetPending: true),
-            .deferForRouteReset
-        )
+    @Test func testAPendingRouteResetDefersTheJoin() {
+        #expect(decision(startedAt: 1, live: 1, inSession: false, resetPending: true) == .deferForRouteReset)
     }
 
     /// With both at once, the sit is the reason reported. The app treats the two
     /// deferrals the same, so this pins the order of the rule, not a behavior.
-    func testASessionOutranksAPendingRouteReset() {
-        XCTAssertEqual(
-            decision(startedAt: 1, live: 1, inSession: true, resetPending: true),
-            .deferForSession
-        )
+    @Test func testASessionOutranksAPendingRouteReset() {
+        #expect(decision(startedAt: 1, live: 1, inSession: true, resetPending: true) == .deferForSession)
     }
 
     /// A join that outlived its account is stale whatever else is on screen (#665).
-    func testAMovedGenerationIsStaleEvenWhenADeferralWouldApply() {
+    @Test func testAMovedGenerationIsStaleEvenWhenADeferralWouldApply() {
         for inSession in [false, true] {
             for resetPending in [false, true] {
-                XCTAssertEqual(
-                    decision(startedAt: 1, live: 2, inSession: inSession, resetPending: resetPending),
-                    .stale,
+                #expect(
+                    decision(startedAt: 1, live: 2, inSession: inSession, resetPending: resetPending) == .stale,
                     "inSession: \(inSession), resetPending: \(resetPending)"
                 )
             }
@@ -206,7 +196,7 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
 
     /// AC 5. With nothing landing during the request, the join opens the buddy session
     /// and spends the invite, as before.
-    func testALoneJoinOpensTheBuddySession() async {
+    @Test func testALoneJoinOpensTheBuddySession() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -215,14 +205,14 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         join.settle()
 
         await consume.value
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
-        XCTAssertEqual(screen.joinsSent, ["invite-1"])
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
+        #expect(screen.joinsSent == ["invite-1"])
     }
 
     /// Gap 1 (AC 1, AC 2). The user starts a sit while the join is in flight: from Home,
     /// or from a session deep link. The join leaves the sit alone and keeps the invite.
-    func testASitStartedDuringTheJoinKeepsTheSitAndTheInvite() async {
+    @Test func testASitStartedDuringTheJoinKeepsTheSitAndTheInvite() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -232,13 +222,13 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         join.settle()
 
         await consume.value
-        XCTAssertEqual(screen.screen, .sit, "the late join replaced the sit")
-        XCTAssertEqual(screen.pendingInvite, "invite-1")
+        #expect(screen.screen == .sit, "the late join replaced the sit")
+        #expect(screen.pendingInvite == "invite-1")
     }
 
     /// The invite kept for a sit opens once the sit ends. `returnHome()` consumes it,
     /// and the server takes the second join as a rejoin.
-    func testTheInviteKeptForASitOpensWhenTheSitEnds() async {
+    @Test func testTheInviteKeptForASitOpensWhenTheSitEnds() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -250,9 +240,9 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         screen.returnHome()
         await consumeAgain(on: screen, joining: "buddy-1")
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
-        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-1"])
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
+        #expect(screen.joinsSent == ["invite-1", "invite-1"])
     }
 
     /// Gap 2 (AC 1, AC 3), in the order that lost the invite. A newer check starts while
@@ -260,7 +250,7 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
     /// invite link. The join returns before that check's route reset. It used to route
     /// and spend the invite, and the reset then sent the user Home. Now it defers, and
     /// the check consumes the invite after its reset.
-    func testAJoinReturningBeforeANewerChecksResetLeavesTheInviteToThatCheck() async {
+    @Test func testAJoinReturningBeforeANewerChecksResetLeavesTheInviteToThatCheck() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -269,16 +259,16 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         let check = screen.startCheck()
         join.settle()
         await consume.value
-        XCTAssertEqual(screen.screen, .home, "the late join routed past the pending reset")
-        XCTAssertEqual(screen.pendingInvite, "invite-1")
+        #expect(screen.screen == .home, "the late join routed past the pending reset")
+        #expect(screen.pendingInvite == "invite-1")
 
         screen.resetRoute(forCheck: check)
         await consumeAgain(on: screen, joining: "buddy-1")
         screen.endCheck(check)
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
-        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-1"])
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
+        #expect(screen.joinsSent == ["invite-1", "invite-1"])
     }
 
     /// Gap 2 in the other order. The newer check's reset lands first, and its own
@@ -287,7 +277,7 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
     /// session opens and nothing joins twice. A join that deferred whenever *any* newer
     /// check had started would strand the invite here, because the check's consume has
     /// already come and gone.
-    func testAJoinReturningAfterTheNewerChecksResetStillOpensTheBuddySession() async {
+    @Test func testAJoinReturningAfterTheNewerChecksResetStillOpensTheBuddySession() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -300,16 +290,16 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         await consume.value
         screen.endCheck(check)
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
-        XCTAssertEqual(screen.joinsSent, ["invite-1"], "the check joined again while the first join was in flight")
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
+        #expect(screen.joinsSent == ["invite-1"], "the check joined again while the first join was in flight")
     }
 
     /// Overlapping checks: a cold start's check and the first scene activation's, both
     /// started during the join. The join returns before either resets. The older check
     /// is superseded and ends without a reset, and that must not release the newest
     /// check's pending reset. The newest check then consumes the invite after its own.
-    func testAnOlderCheckEndingKeepsTheNewestChecksResetPending() async {
+    @Test func testAnOlderCheckEndingKeepsTheNewestChecksResetPending() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -321,21 +311,21 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         screen.endCheck(older)
         join.settle()
         await consume.value
-        XCTAssertEqual(screen.screen, .home, "the late join routed past the newest check's reset")
-        XCTAssertEqual(screen.pendingInvite, "invite-1")
+        #expect(screen.screen == .home, "the late join routed past the newest check's reset")
+        #expect(screen.pendingInvite == "invite-1")
 
         screen.resetRoute(forCheck: newest)
         await consumeAgain(on: screen, joining: "buddy-1")
         screen.endCheck(newest)
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
     }
 
     /// The check the join deferred to ends without a reset, at the offline fallback.
     /// The invite is not lost. It stays pending for the next consume, here the reconnect
     /// refresh, which opens the session.
-    func testAnInviteLeftToACheckThatEndsWithoutAResetWaitsForTheNextConsume() async {
+    @Test func testAnInviteLeftToACheckThatEndsWithoutAResetWaitsForTheNextConsume() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -345,19 +335,19 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         join.settle()
         await consume.value
         screen.endCheck(check)
-        XCTAssertEqual(screen.screen, .home)
-        XCTAssertEqual(screen.pendingInvite, "invite-1")
+        #expect(screen.screen == .home)
+        #expect(screen.pendingInvite == "invite-1")
 
         await consumeAgain(on: screen, joining: "buddy-1")
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-1"))
-        XCTAssertNil(screen.pendingInvite)
+        #expect(screen.screen == .buddySession("buddy-1"))
+        #expect(screen.pendingInvite == nil)
     }
 
     /// A sign-out during the join outranks both deferrals, as before #856. The join opens
     /// nothing on the sign-in screen, and the invite it carried is dropped so the next
     /// account does not inherit it.
-    func testASignOutDuringTheJoinOpensNothingAndDropsTheInvite() async {
+    @Test func testASignOutDuringTheJoinOpensNothingAndDropsTheInvite() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let join = HeldSave(settlingWith: "buddy-1")
         let consume = screen.consumeInvite(joining: join)
@@ -367,8 +357,8 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         join.settle()
 
         await consume.value
-        XCTAssertEqual(screen.screen, .signIn, "the late join routed the signed-out screen")
-        XCTAssertNil(screen.pendingInvite)
+        #expect(screen.screen == .signIn, "the late join routed the signed-out screen")
+        #expect(screen.pendingInvite == nil)
     }
 
     // MARK: - #989: the in-flight gate across a sign-out
@@ -376,7 +366,7 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
     /// The previous account's join is still out when the next account signs in with
     /// an invite of its own. The next account's first consume joins at once instead of
     /// returning at a flag the stale join still holds.
-    func testANextAccountsFirstConsumeIsNotBlockedByAStaleJoin() async {
+    @Test func testANextAccountsFirstConsumeIsNotBlockedByAStaleJoin() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let staleJoin = HeldSave(settlingWith: "buddy-1")
         let stale = screen.consumeInvite(joining: staleJoin)
@@ -387,18 +377,18 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         screen.signIn("user-b")
         await consumeAgain(on: screen, joining: "buddy-2")
 
-        XCTAssertEqual(screen.screen, .buddySession("buddy-2"), "the stale join blocked the next account's consume")
-        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-2"])
+        #expect(screen.screen == .buddySession("buddy-2"), "the stale join blocked the next account's consume")
+        #expect(screen.joinsSent == ["invite-1", "invite-2"])
 
         staleJoin.settle()
         await stale.value
-        XCTAssertEqual(screen.screen, .buddySession("buddy-2"), "the stale join routed the next account")
+        #expect(screen.screen == .buddySession("buddy-2"), "the stale join routed the next account")
     }
 
     /// The stale join returns while the next account's join is in flight. Its release
     /// must not free the gate under the newer attempt, or a second consume of the same
     /// account would POST that token again.
-    func testAStaleJoinsReleaseDoesNotFreeANewerAttempt() async {
+    @Test func testAStaleJoinsReleaseDoesNotFreeANewerAttempt() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let staleJoin = HeldSave(settlingWith: "buddy-1")
         let stale = screen.consumeInvite(joining: staleJoin)
@@ -415,17 +405,17 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         await stale.value
         // An overlapping consume for the live account: return-home, say.
         await consumeAgain(on: screen, joining: "buddy-2")
-        XCTAssertEqual(screen.joinsSent, ["invite-1", "invite-2"], "the live token was posted twice")
+        #expect(screen.joinsSent == ["invite-1", "invite-2"], "the live token was posted twice")
 
         liveJoin.settle()
         await live.value
-        XCTAssertEqual(screen.screen, .buddySession("buddy-2"))
-        XCTAssertNil(screen.pendingInvite)
+        #expect(screen.screen == .buddySession("buddy-2"))
+        #expect(screen.pendingInvite == nil)
     }
 
     /// A sign-out that keeps the pending invite (`applySignedOut`) must not let the next
     /// account POST the token the stale join is still posting. The stale join drops it.
-    func testTheNextAccountCannotRepostTheTokenAStaleJoinHolds() async {
+    @Test func testTheNextAccountCannotRepostTheTokenAStaleJoinHolds() async {
         let screen = InviteScreen(signedIn: "user-a", pendingInvite: "invite-1")
         let staleJoin = HeldSave(settlingWith: "buddy-1")
         let stale = screen.consumeInvite(joining: staleJoin)
@@ -434,11 +424,11 @@ final class BuddyInviteJoinRoutingTests: XCTestCase {
         screen.signOut()
         screen.signIn("user-b")
         await consumeAgain(on: screen, joining: "buddy-1")
-        XCTAssertEqual(screen.joinsSent, ["invite-1"], "the next account posted the stale join's token")
+        #expect(screen.joinsSent == ["invite-1"], "the next account posted the stale join's token")
 
         staleJoin.settle()
         await stale.value
-        XCTAssertNil(screen.pendingInvite, "the stale join's token was inherited")
-        XCTAssertEqual(screen.screen, .home)
+        #expect(screen.pendingInvite == nil, "the stale join's token was inherited")
+        #expect(screen.screen == .home)
     }
 }
