@@ -2,7 +2,7 @@ name: Install XcodeGen and generate the Xcode project
 description: >-
   Installs XcodeGen with Homebrew, retrying transient failures, then runs
   `xcodegen generate` in ios/. Shared by the TestFlight and App Store release
-  lanes (#1113).
+  lanes (#1113), the iOS E2E lanes, and the Info.plist sync check (#1137).
 
 runs:
   using: composite
