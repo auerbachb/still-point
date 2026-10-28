@@ -70,6 +70,23 @@ const STACKED_COLUMNS = `${SCALE_PX}px`;
 /** The selected marker inside a box, kept in proportion to the box (10 / 28). */
 const MARKER_PX = Math.round((BOX_PX * 10) / 28);
 
+/** The grid layout's column headers, low/high hints and mood rows all sit on
+ *  this one grid, so the label column and both scales line up. */
+const GRID_ROW_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: GRID_COLUMNS,
+  gap: `${COLUMN_GAP_PX}px`,
+};
+/** The stacked layout's low/high hint and mood blocks share one centred scale
+ *  column. */
+const STACKED_ROW_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: STACKED_COLUMNS,
+  justifyContent: "center",
+};
+
+const EMPTY_ENTRY: MoodEntry = { before: null, after: null };
+
 /** #911: `grid` puts BEFORE and AFTER side by side (544px minimum); `stacked`
  *  puts them one above the other (232px), for narrow screens. */
 export type MoodMatrixLayout = "grid" | "stacked";
@@ -224,14 +241,7 @@ type MoodRowProps = {
 
 function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: GRID_COLUMNS,
-        gap: `${COLUMN_GAP_PX}px`,
-        alignItems: "center",
-      }}
-    >
+    <div style={{ ...GRID_ROW_STYLE, alignItems: "center" }}>
       {/* Mood label */}
       <div
         style={{
@@ -261,14 +271,7 @@ function MoodRow({ moodKey, entry, disabled, onChange }: MoodRowProps) {
  *  BEFORE and AFTER. #964: each phase label sits on the line above its scale. */
 function StackedMoodBlock({ moodKey, entry, disabled, onChange }: MoodRowProps) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: STACKED_COLUMNS,
-        rowGap: "4px",
-        justifyContent: "center",
-      }}
-    >
+    <div style={{ ...STACKED_ROW_STYLE, rowGap: "4px" }}>
       <div style={{ ...MOOD_LABEL_STYLE, gridColumn: "1 / -1" }}>
         {MOOD_LABELS[moodKey]}
       </div>
@@ -316,87 +319,54 @@ export function MoodMatrix({ value, onChange, disabled = false, layout = "grid" 
     onChange({ ...value, [key]: entry });
   }
 
-  if (layout === "stacked") {
-    return (
-      <div data-testid="mood-matrix" data-layout="stacked" style={{ width: "100%" }}>
-        {/* Scale hint: low → high, over the scale column of every row below */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: STACKED_COLUMNS,
-            justifyContent: "center",
-            marginBottom: "10px",
-          }}
-        >
-          <ScaleHint testId="mood-matrix-hint" />
-        </div>
-
-        {/* Mood blocks */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {MOOD_KEYS.map((key) => (
-            <StackedMoodBlock
-              key={key}
-              moodKey={key}
-              entry={value[key] ?? { before: null, after: null }}
-              disabled={disabled}
-              onChange={handleRowChange}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const stacked = layout === "stacked";
+  const MoodBlock = stacked ? StackedMoodBlock : MoodRow;
 
   return (
-    <div data-testid="mood-matrix" data-layout="grid" style={{ width: "100%" }}>
-      {/* Column headers */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: `${COLUMN_GAP_PX}px`,
-          marginBottom: "8px",
-        }}
-      >
-        <div />
-        {SIDES.map((side) => (
-          <div
-            key={side}
-            data-testid={`mood-matrix-header-${side}`}
-            style={{
-              ...SIDE_LABEL_STYLE,
-              width: `${SCALE_PX}px`,
-              justifySelf: "center",
-              textAlign: "center",
-            }}
-          >
-            {SIDE_LABELS[side]}
+    <div data-testid="mood-matrix" data-layout={layout} style={{ width: "100%" }}>
+      {stacked ? (
+        /* Scale hint: low → high, over the scale column of every block below */
+        <div style={{ ...STACKED_ROW_STYLE, marginBottom: "10px" }}>
+          <ScaleHint testId="mood-matrix-hint" />
+        </div>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div style={{ ...GRID_ROW_STYLE, marginBottom: "8px" }}>
+            <div />
+            {SIDES.map((side) => (
+              <div
+                key={side}
+                data-testid={`mood-matrix-header-${side}`}
+                style={{
+                  ...SIDE_LABEL_STYLE,
+                  width: `${SCALE_PX}px`,
+                  justifySelf: "center",
+                  textAlign: "center",
+                }}
+              >
+                {SIDE_LABELS[side]}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Scale hint: low → high */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: `${COLUMN_GAP_PX}px`,
-          marginBottom: "10px",
-        }}
-      >
-        <div />
-        {SIDES.map((side) => (
-          <ScaleHint key={side} testId={`mood-matrix-hint-${side}`} />
-        ))}
-      </div>
+          {/* Scale hint: low → high */}
+          <div style={{ ...GRID_ROW_STYLE, marginBottom: "10px" }}>
+            <div />
+            {SIDES.map((side) => (
+              <ScaleHint key={side} testId={`mood-matrix-hint-${side}`} />
+            ))}
+          </div>
+        </>
+      )}
 
-      {/* Mood rows */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* One row (grid) or block (stacked) per mood */}
+      <div style={{ display: "flex", flexDirection: "column", gap: stacked ? "12px" : "8px" }}>
         {MOOD_KEYS.map((key) => (
-          <MoodRow
+          <MoodBlock
             key={key}
             moodKey={key}
-            entry={value[key] ?? { before: null, after: null }}
+            entry={value[key] ?? EMPTY_ENTRY}
             disabled={disabled}
             onChange={handleRowChange}
           />
