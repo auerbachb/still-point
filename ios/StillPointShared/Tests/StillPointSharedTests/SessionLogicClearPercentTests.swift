@@ -4,8 +4,8 @@ import Testing
 
 struct SessionLogicClearPercentTests {
     // Cross-platform parity: the same clear-percent golden set is asserted by web
-    // computeClearPercentFromLog (#421). Cases avoid .5 boundaries so JS Math.round
-    // and Swift rounded() agree.
+    // computeClearPercentFromLog (#421). Inputs are nonnegative with endTime > 0,
+    // where JS Math.round and Swift rounded() agree (see shared/test-fixtures/README.md).
     @Test func testSharedClearPercentFixtures() throws {
         let fixture = try SharedFixtures.load("clearPercent.json", as: ClearPercentFixture.self)
 
