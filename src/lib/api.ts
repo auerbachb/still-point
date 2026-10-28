@@ -200,13 +200,30 @@ export type BuddyCalendarListResponse = {
   hasMore: boolean;
 };
 
+export type BuddyCalendarParams = {
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+};
+
+/** #350: the `?from&to&limit&offset` suffix both buddy calendar reads share;
+ *  empty when no param is set. */
+function buddyCalendarQuery(params?: BuddyCalendarParams): string {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
+/** Typed client for the routes the web app calls through `request`. #1159:
+ *  only routes with a caller live here — screens that fetch a route directly
+ *  (auth, settings, board, thoughts) own that call, so an unused copy cannot
+ *  drift from the route. */
 export const api = {
-  signup: (data: { email: string; username: string; password: string }) =>
-    request<{ user: User }>("/api/auth/signup", { method: "POST", body: JSON.stringify(data) }),
-
-  login: (data: { email: string; username: string; password: string }) =>
-    request<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify(data) }),
-
   logout: () =>
     request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
@@ -240,9 +257,6 @@ export const api = {
   enableDualTrack: () =>
     request<{ user: User }>("/api/track", { method: "POST" }),
 
-  getSession: (dayNumber: number) =>
-    request<{ session: Session; thoughts: Thought[] }>(`/api/sessions/${dayNumber}`),
-
   /** #472: post-hoc mood-matrix update from the CompletionScreen. It carries
    *  only the mood: the web retired its session ratings under #766. */
   updateSessionMoodMatrix: (
@@ -257,22 +271,6 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
-
-  getThoughts: () =>
-    request<{ thoughts: Thought[] }>("/api/thoughts"),
-
-  batchThoughts: (data: {
-    sessionId: string;
-    dayNumber: number;
-    thoughts: Array<{ timeInSession: number; text: string }>;
-  }) =>
-    request<{ thoughts: Thought[] }>("/api/thoughts/batch", { method: "POST", body: JSON.stringify(data) }),
-
-  getBoard: () =>
-    request<{ board: BoardEntry[] }>("/api/board"),
-
-  updateSettings: (data: { isPublic?: boolean; aphorismsEnabled?: boolean; attentionTrackingEnabled?: boolean }) =>
-    request<{ user: User }>("/api/settings", { method: "PATCH", body: JSON.stringify(data) }),
 
   getFriends: () => request<{ friends: FriendPublicUser[] }>("/api/friends"),
 
@@ -385,36 +383,14 @@ export const api = {
     ),
 
   /** #350: unified multi-buddy calendar — mirrors `listBuddyCalendarSessions`. */
-  getBuddyCalendar: (params?: {
-    from?: string;
-    to?: string;
-    limit?: number;
-    offset?: number;
-  }) => {
-    const q = new URLSearchParams();
-    if (params?.from) q.set("from", params.from);
-    if (params?.to) q.set("to", params.to);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const qs = q.toString();
-    return request<BuddyCalendarListResponse>(
-      `/api/buddy/sessions/calendar${qs ? `?${qs}` : ""}`,
-    );
-  },
+  getBuddyCalendar: (params?: BuddyCalendarParams) =>
+    request<BuddyCalendarListResponse>(
+      `/api/buddy/sessions/calendar${buddyCalendarQuery(params)}`,
+    ),
 
   /** #350: per-buddy shared calendar — mirrors `listBuddyCalendarSessionsForBuddy`. */
-  getBuddyCalendarForBuddy: (
-    buddyId: string,
-    params?: { from?: string; to?: string; limit?: number; offset?: number },
-  ) => {
-    const q = new URLSearchParams();
-    if (params?.from) q.set("from", params.from);
-    if (params?.to) q.set("to", params.to);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const qs = q.toString();
-    return request<BuddyCalendarListResponse>(
-      `/api/buddy/sessions/calendar/${buddyId}${qs ? `?${qs}` : ""}`,
-    );
-  },
+  getBuddyCalendarForBuddy: (buddyId: string, params?: BuddyCalendarParams) =>
+    request<BuddyCalendarListResponse>(
+      `/api/buddy/sessions/calendar/${buddyId}${buddyCalendarQuery(params)}`,
+    ),
 };
