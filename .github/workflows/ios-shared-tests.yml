@@ -28,6 +28,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Paths that run the real suite. StillPointModels depends on
+          # StillPointShared, so a change to either package counts (issue #870).
+          # Adding a SwiftPM package that this job builds means adding it here
+          # and a build/test step below — nothing else in this step changes.
+          REAL_RUN_PATHS_RE: '^(ios/StillPointShared/|ios/StillPointModels/|\.github/workflows/ios-shared-tests\.yml$)'
         run: |
           set -euo pipefail
           # Fail safe toward MORE coverage: if we can't determine the diff
@@ -39,12 +44,10 @@ jobs:
           # Use the paginated files API — `gh pr view --json files` caps the list
           # (~100 files), which on a large PR could miss StillPointShared changes
           # and skip the real test via the no-op. `--paginate` returns every file.
-          # StillPointModels depends on StillPointShared, so a change to either
-          # package runs the real job (issue #870).
           # Plain grep reads the whole stream; `grep -q` exits on the first match,
           # which can SIGPIPE printf and, under pipefail, skip the real job.
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || true)"
-          if [ -z "$files" ] || printf '%s\n' "$files" | grep -E '^(ios/StillPointShared/|ios/StillPointModels/|\.github/workflows/ios-shared-tests\.yml$)' >/dev/null; then
+          if [ -z "$files" ] || printf '%s\n' "$files" | grep -E "$REAL_RUN_PATHS_RE" >/dev/null; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"
@@ -66,22 +69,18 @@ jobs:
 
       # StillPointShared is a pure SwiftPM package, so `swift test` builds and runs
       # the suite without xcodegen/xcodebuild (the same path agents use locally,
-      # where the app's Xcode project can't be parsed). Most suites use Swift
-      # Testing (`import Testing`), but a few still import XCTest, which ships
-      # only with Xcode, so this still needs full Xcode rather than Command Line
-      # Tools until issue #1072 finishes the migration; the macOS runner image has
-      # Xcode selected. For local runs, see ios/SWIFT_PACKAGES.md (issues #682,
-      # #870, #1135). Wall-clock
-      # is dominated by macOS runner spin-up + the package build. Runs only when
-      # either package (or this workflow) changed.
+      # where the app's Xcode project can't be parsed). Both packages run on the
+      # macOS runner, whose image has full Xcode selected. Which commands need
+      # full Xcode rather than Command Line Tools, and why, is tracked in one
+      # place — ios/SWIFT_PACKAGES.md — so toolchain changes (e.g. the XCTest
+      # migration, issue #1072) update that doc, not this workflow (issue #1150).
       - name: Run StillPointShared unit tests
         if: needs.changes.outputs.shared == 'true'
         working-directory: ios/StillPointShared
         run: swift test
 
       # The SwiftData `@Model` types live in their own package so StillPointShared
-      # builds without the SwiftData macro plugin (issue #870). That plugin ships
-      # only with full Xcode, so this build runs on the macOS runner too.
+      # builds without the SwiftData macro plugin (issue #870).
       - name: Build StillPointModels
         if: needs.changes.outputs.shared == 'true'
         working-directory: ios/StillPointModels
