@@ -71,12 +71,108 @@ const issueChecklist = [
   ["DOD5", "The live submission or dry run produces enough evidence to decide what to automate next."],
 ];
 
-const checks = [];
-const logs = [];
+/**
+ * How many items issueChecklist must have. The count guard compares against
+ * this, not issueChecklist.length, so an accidental edit to the list fails the run.
+ */
+const expectedIssueChecklistCount = 38;
 
-function log(message) {
-  logs.push(`${new Date().toISOString()} ${message}`);
-  console.log(message);
+/**
+ * Status and message for each issue #242 item that no check covers directly.
+ * Items listed in neither this table nor the checks pass as covered by the report.
+ *
+ * @param {object} state
+ * @param {{ live: boolean, reason?: string, intendedBuild?: { processingState?: string } | null }} state.asc
+ * @param {{ status: string, message: string }} state.secretStatus B2's outcome
+ * @param {string} state.trackingIssue
+ * @param {boolean} state.requireLive
+ * @returns {Record<string, [status: string, message: string]>}
+ */
+function issueChecklistMapping({ asc, secretStatus, trackingIssue, requireLive }) {
+  const offlineStatus = requireLive ? "fail" : "warning";
+  const apiReady = asc.live ? "pass" : offlineStatus;
+  return {
+    B1: [apiReady, asc.live ? "ASC API credentials generated a valid query token." : asc.reason],
+    B2: [secretStatus.status, secretStatus.message],
+    B3: ["pass", "Fastlane under ios/fastlane/ (gym, pilot, deliver) plus this dry-run script cover ASC API automation paths."],
+    B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
+    B5: !asc.live
+      ? [offlineStatus, asc.reason]
+      : !asc.intendedBuild
+        ? ["fail", "Intended TestFlight build was not found in App Store Connect."]
+        : asc.intendedBuild.processingState === "VALID"
+          ? ["pass", "ASC build query completed and the intended build is VALID."]
+          : ["fail", `Intended TestFlight build is ${asc.intendedBuild.processingState}.`],
+    C1: [apiReady, "ASC appStoreVersions endpoint can locate the target version; creation is reserved for explicit execution tooling."],
+    C2: [apiReady, "ASC version/build relationships can be verified; attaching the build remains gated on human approval."],
+    C3: [apiReady, "ASC metadata endpoints can verify/update supported fields once approved source copy is supplied."],
+    C5: ["warning", "Screenshot/app-preview automation requires approved source assets."],
+    C6: ["warning", "Review attachment automation requires a physical-iPhone account-deletion recording asset."],
+    C8: ["warning", "Demo credentials are private human-owned review fields unless a signup path is approved."],
+    C9: ["pass", "Human gates are listed in the report."],
+    D2: ["warning", "Programmatic submission is intentionally blocked in dry-run mode until human gates are approved."],
+    D3: ["pass", "Fallback paths are listed in the report."],
+    E1: ["warning", `Updating GitHub issue ${trackingIssue} is a release-owner action for the live submission attempt.`],
+    E3: [apiReady, "ASC review status can be polled via API after a submission exists."],
+    E4: ["warning", "Reviewer-note triage is human-owned even when API polling captures status."],
+    E5: ["pass", "Resubmission path is documented in ios/RELEASING.md and this report."],
+    E6: ["warning", "Release strategy is a human-owned decision after approval."],
+    E7: ["warning", "Closing the tracking issue waits for approval/release decision or permanent withdrawal."],
+    F3: ["warning", "Requires the next real submission attempt."],
+    DOD3: [apiReady, "API-supported ASC checks are attempted when credentials are supplied; dry-run mode records missing credentials otherwise."],
+    DOD4: ["pass", "Manual gates are explicitly categorized in the report."],
+    DOD5: ["pass", "The dry-run report identifies automation gaps and next actions."],
+  };
+}
+
+const humanGates = [
+  { owner: "Account Holder/Admin", decision: "Confirm Apple Agreements, Tax, and Banking have no Action required items.", reason: "Not exposed by public ASC API." },
+  { owner: "Product/App Store", decision: "Approve screenshots, app previews, age rating, reviewer notes, demo credentials, and release timing.", reason: "Compliance/copy/assets require human accountability." },
+  { owner: "Release owner", decision: "Approve programmatic Submit for Review for the intended build.", reason: "Dry-run mode must not submit without explicit live approval." },
+  { owner: "Product/App Store", decision: "Choose manual, automatic, or phased release after approval.", reason: "Business release strategy." },
+];
+
+/** @param {string} trackingIssue the --tracking-issue value, or "the tracking issue" */
+function fallbackPaths(trackingIssue) {
+  return [
+    { when: "ASC credentials or APPSTORE_APP_ID are unavailable", action: "Use App Store Connect website to verify TestFlight build status, version page, attached build, metadata, screenshots, review notes, and demo credentials; paste evidence into the generated report." },
+    { when: "API field is unsupported or returns a blocker", action: "Record the exact API error, open App Store Connect -> app -> Distribution/App Store -> target version, fix only that field, then rerun this dry run." },
+    { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, cut a replacement build (merging the fix cuts one; its ios-v<marketing>-build<N> tag carries the new number), attach it, and resubmit.` },
+    { when: "Submission is approved", action: `Record final build and outcome in ${trackingIssue}, choose held/manual/automatic/phased release, and close tracking only when complete.` },
+  ];
+}
+
+/**
+ * @typedef {{ id: string, status: "pass" | "warning" | "fail", message: string, evidence: object }} Check
+ * @typedef {(id: string, message: string, evidence?: object) => void} Recorder
+ * @typedef {{ checks: Check[], logs: string[], log: (message: string) => void, pass: Recorder, warn: Recorder, fail: Recorder }} ReportContext
+ */
+
+/**
+ * One run's checks and automation log, with the helpers that record them.
+ *
+ * @returns {ReportContext}
+ */
+export function createReportContext() {
+  /** @type {Check[]} */
+  const checks = [];
+  /** @type {string[]} */
+  const logs = [];
+  /** @param {Check["status"]} status @returns {Recorder} */
+  const recorder = (status) => (id, message, evidence = {}) => {
+    checks.push({ id, status, message, evidence });
+  };
+  return {
+    checks,
+    logs,
+    log(message) {
+      logs.push(`${new Date().toISOString()} ${message}`);
+      console.log(message);
+    },
+    pass: recorder("pass"),
+    warn: recorder("warning"),
+    fail: recorder("fail"),
+  };
 }
 
 function takeValue(argv, i, flag) {
@@ -87,7 +183,7 @@ function takeValue(argv, i, flag) {
   return value;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -106,19 +202,7 @@ function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
 }
 
-function pass(id, message, evidence = {}) {
-  checks.push({ id, status: "pass", message, evidence });
-}
-
-function warn(id, message, evidence = {}) {
-  checks.push({ id, status: "warning", message, evidence });
-}
-
-function fail(id, message, evidence = {}) {
-  checks.push({ id, status: "fail", message, evidence });
-}
-
-function extractProjectVersion(projectYml) {
+export function extractProjectVersion(projectYml) {
   const marketing = projectYml.match(/MARKETING_VERSION:\s*"?([^"\n]+)"?/);
   const build = projectYml.match(/CURRENT_PROJECT_VERSION:\s*"?([^"\n]+)"?/);
   const bundleId = projectYml.match(/PRODUCT_BUNDLE_IDENTIFIER:\s*([^\s]+)/);
@@ -149,10 +233,10 @@ export function extractRunbookPhases(runbook) {
  * every cut pushes its tag, or this clone's when origin can't be listed.
  *
  * @param {import("./ci/ios-testflight-build-number.mjs").Git} git
- * @param {(message: string) => void} [logMessage]
+ * @param {(message: string) => void} [logMessage] where to report listing failures; the dry run passes its context's log
  * @returns {{ names: string[], source: "origin" | "local" } | null} null when neither can be listed
  */
-export function listBuildTags(git, logMessage = log) {
+export function listBuildTags(git, logMessage = () => {}) {
   /** @param {{ status: number | null, stderr: string }} result */
   const failure = (result) => `exit ${result.status}${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`;
   try {
@@ -393,28 +477,22 @@ export async function queryAsc(project, get = ascGet) {
     get(versionQuery, jwt),
   ]);
   const intendedBuild = intendedBuilds.data?.find((build) => build.attributes?.version === String(project.buildNumber));
+  /** The report's fields for one ASC build resource. */
+  const projectBuild = (build) => ({
+    id: build.id,
+    version: build.attributes?.version,
+    processingState: build.attributes?.processingState,
+    uploadedDate: build.attributes?.uploadedDate,
+    expired: build.attributes?.expired,
+  });
   return {
     live: true,
     appId,
     buildQuery,
     intendedBuildQuery,
     versionQuery,
-    intendedBuild: intendedBuild
-      ? {
-          id: intendedBuild.id,
-          version: intendedBuild.attributes?.version,
-          processingState: intendedBuild.attributes?.processingState,
-          uploadedDate: intendedBuild.attributes?.uploadedDate,
-          expired: intendedBuild.attributes?.expired,
-        }
-      : null,
-    latestBuilds: (builds.data ?? []).map((build) => ({
-      id: build.id,
-      version: build.attributes?.version,
-      processingState: build.attributes?.processingState,
-      uploadedDate: build.attributes?.uploadedDate,
-      expired: build.attributes?.expired,
-    })),
+    intendedBuild: intendedBuild ? projectBuild(intendedBuild) : null,
+    latestBuilds: (builds.data ?? []).map(projectBuild),
     appStoreVersions: (versions.data ?? []).map((version) => ({
       id: version.id,
       versionString: version.attributes?.versionString,
@@ -424,60 +502,31 @@ export async function queryAsc(project, get = ascGet) {
   };
 }
 
-function classifyIssueChecklist({ project, asc, trackingIssue, requireLive }) {
+/**
+ * The issue #242 checklist: each item takes its check's result when a check
+ * covers it, otherwise its issueChecklistMapping entry.
+ *
+ * @param {object} state
+ * @param {{ id: string, status: string, message: string, evidence: object }[]} state.checks the run's checks
+ * @param {{ status: string, message: string }} state.secretStatus B2's outcome, from checkWorkflowSecrets
+ * @param {{ marketingVersion?: string, buildNumber?: string }} state.project the intended build
+ * @param {{ live: boolean, reason?: string, intendedBuild?: { processingState?: string } | null }} state.asc
+ * @param {string} state.trackingIssue
+ * @param {boolean} state.requireLive
+ */
+export function classifyIssueChecklist({ checks, secretStatus, project, asc, trackingIssue, requireLive }) {
   const byId = new Map(checks.map((check) => [check.id, check]));
-  const offlineStatus = requireLive ? "fail" : "warning";
+  const mapping = issueChecklistMapping({ asc, secretStatus, trackingIssue, requireLive });
   return issueChecklist.map(([id, text]) => {
     const direct = byId.get(id);
     if (direct) return { id, text, status: direct.status, evidence: direct.evidence, message: direct.message };
 
-    const apiReady = asc.live ? "pass" : offlineStatus;
-    const mapping = {
-      B1: [apiReady, asc.live ? "ASC API credentials generated a valid query token." : asc.reason],
-      B2: [
-        reportSecretStatus.status,
-        reportSecretStatus.message,
-      ],
-      B3: ["pass", "Fastlane under ios/fastlane/ (gym, pilot, deliver) plus this dry-run script cover ASC API automation paths."],
-      B4: ["warning", "Apple agreements/tax/banking are not exposed by the public ASC API; Account Holder/Admin confirmation remains required."],
-      B5: !asc.live
-        ? [offlineStatus, asc.reason]
-        : !asc.intendedBuild
-          ? ["fail", "Intended TestFlight build was not found in App Store Connect."]
-          : asc.intendedBuild.processingState === "VALID"
-            ? ["pass", "ASC build query completed and the intended build is VALID."]
-            : ["fail", `Intended TestFlight build is ${asc.intendedBuild.processingState}.`],
-      C1: [apiReady, "ASC appStoreVersions endpoint can locate the target version; creation is reserved for explicit execution tooling."],
-      C2: [apiReady, "ASC version/build relationships can be verified; attaching the build remains gated on human approval."],
-      C3: [apiReady, "ASC metadata endpoints can verify/update supported fields once approved source copy is supplied."],
-      C5: ["warning", "Screenshot/app-preview automation requires approved source assets."],
-      C6: ["warning", "Review attachment automation requires a physical-iPhone account-deletion recording asset."],
-      C8: ["warning", "Demo credentials are private human-owned review fields unless a signup path is approved."],
-      C9: ["pass", "Human gates are listed in the report."],
-      D2: ["warning", "Programmatic submission is intentionally blocked in dry-run mode until human gates are approved."],
-      D3: ["pass", "Fallback paths are listed in the report."],
-      E1: ["warning", `Updating GitHub issue ${trackingIssue} is a release-owner action for the live submission attempt.`],
-      E3: [apiReady, "ASC review status can be polled via API after a submission exists."],
-      E4: ["warning", "Reviewer-note triage is human-owned even when API polling captures status."],
-      E5: ["pass", "Resubmission path is documented in ios/RELEASING.md and this report."],
-      E6: ["warning", "Release strategy is a human-owned decision after approval."],
-      E7: ["warning", "Closing the tracking issue waits for approval/release decision or permanent withdrawal."],
-      F3: ["warning", "Requires the next real submission attempt."],
-      DOD3: [apiReady, "API-supported ASC checks are attempted when credentials are supplied; dry-run mode records missing credentials otherwise."],
-      DOD4: ["pass", "Manual gates are explicitly categorized in the report."],
-      DOD5: ["pass", "The dry-run report identifies automation gaps and next actions."],
-    };
     const [status, message] = mapping[id] ?? ["pass", "Covered by the canonical dry-run report."];
     return { id, text, status, message, evidence: { version: project.marketingVersion, build: project.buildNumber } };
   });
 }
 
-let reportSecretStatus = {
-  status: "warning",
-  message: "GitHub secret presence was not checked yet.",
-};
-
-function writeMarkdown(report) {
+export function writeMarkdown(report) {
   const rows = report.issue242Checklist.map((item) => `| ${item.id} | ${item.status} | ${item.text} | ${item.message.replace(/\|/g, "\\|")} |`);
   return `# iOS App Store submission dry-run evidence
 
@@ -524,42 +573,74 @@ ${report.logs.map((entry) => `- ${entry}`).join("\n")}
 `;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const outputDir = path.resolve(root, args.outputDir ?? DEFAULT_OUTPUT_DIR);
-  const requireLive = Boolean(args.requireLive);
-  fs.mkdirSync(outputDir, { recursive: true });
-  log("Reading canonical iOS release docs and workflow.");
+/**
+ * The release docs and workflows the checks read, from this checkout.
+ *
+ * @param {(file: string) => string} [readFile] reads a repo-relative path
+ */
+function readReleaseDocs(readFile = read) {
+  return {
+    readme: readFile("README.md"),
+    releasing: readFile("ios/RELEASING.md"),
+    submissionRunbook: readFile("docs/operations/ios-app-store-submission.md"),
+    workflow: readFile(".github/workflows/ios-testflight.yml"),
+    releaseWorkflow: readFile(".github/workflows/ios-app-store-release.yml"),
+    parity: readFile("ios/PARITY_CHECKLIST.md"),
+    qa: readFile("ios/QA_CHECKLIST.md"),
+    projectYml: extractProjectVersion(readFile("ios/project.yml")),
+  };
+}
 
-  const readme = read("README.md");
-  const releasing = read("ios/RELEASING.md");
-  const submissionRunbook = read("docs/operations/ios-app-store-submission.md");
-  const workflow = read(".github/workflows/ios-testflight.yml");
-  const releaseWorkflow = read(".github/workflows/ios-app-store-release.yml");
-  const parity = read("ios/PARITY_CHECKLIST.md");
-  const qa = read("ios/QA_CHECKLIST.md");
-  const projectYml = extractProjectVersion(read("ios/project.yml"));
-  if (args.intendedTag === undefined) log("Listing ios-v*-build* tags for the intended build.");
+/**
+ * Resolves the intended build and logs it, warning (INTENDED_BUILD) when
+ * resolveIntendedBuild does.
+ *
+ * @param {ReportContext} context
+ * @param {object} inputs
+ * @param {string} [inputs.intendedTag] the --intended-tag value
+ * @param {{ marketingVersion?: string, buildNumber?: string }} inputs.projectYml
+ * @param {() => ReturnType<typeof listBuildTags>} [listTags] lists the build tags; not called with an --intended-tag
+ * @returns {{ intended: ReturnType<typeof resolveIntendedBuild>, project: object }} `project` is the intended
+ *   build: its version and build number come from the tag, everything else from ios/project.yml
+ */
+function resolveIntendedStage(
+  context,
+  { intendedTag, projectYml },
+  listTags = () => listBuildTags(gitRunner(root, { ...process.env, GIT_TERMINAL_PROMPT: "0" }), context.log),
+) {
+  if (intendedTag === undefined) context.log("Listing ios-v*-build* tags for the intended build.");
   const intended = resolveIntendedBuild({
-    intendedTag: args.intendedTag,
-    buildTags:
-      args.intendedTag === undefined ? listBuildTags(gitRunner(root, { ...process.env, GIT_TERMINAL_PROMPT: "0" })) : null,
+    intendedTag,
+    buildTags: intendedTag === undefined ? listTags() : null,
     projectYml,
   });
-  const intendedTag = intended.intendedTag;
-  // From here on, "project" is the intended build: the version and build number
-  // come from its tag, everything else from ios/project.yml.
   const project = { ...projectYml, marketingVersion: intended.marketingVersion, buildNumber: intended.buildNumber };
   if (!intended.problem) {
-    log(
-      `Intended build: ${project.marketingVersion ?? "?"} (${project.buildNumber ?? "?"}), tag ${intendedTag}, ` +
+    context.log(
+      `Intended build: ${project.marketingVersion ?? "?"} (${project.buildNumber ?? "?"}), tag ${intended.intendedTag}, ` +
         `from ${describeIntendedBuildSource(intended.source)}.`,
     );
   }
   if (intended.warning) {
-    log(`Warning: ${intended.warning}`);
-    warn("INTENDED_BUILD", intended.warning, { intendedTag, source: intended.source, projectYml });
+    context.log(`Warning: ${intended.warning}`);
+    context.warn("INTENDED_BUILD", intended.warning, { intendedTag: intended.intendedTag, source: intended.source, projectYml });
   }
+  return { intended, project };
+}
+
+/**
+ * A1-A5: the runbooks, the intended build's tag plan, the runbook phases, the
+ * workflow tag triggers, and the workflow-required release-readiness items.
+ *
+ * @param {ReportContext} context
+ * @param {object} inputs
+ * @param {{ readme: string, submissionRunbook: string, workflow: string, releaseWorkflow: string, parity: string, qa: string }} inputs.docs
+ * @param {ReturnType<typeof resolveIntendedBuild>} inputs.intended
+ * @param {{ marketingVersion?: string, buildNumber?: string }} inputs.project the intended build
+ */
+export function runLocalChecks({ pass, fail }, { docs, intended, project }) {
+  const { readme, submissionRunbook, workflow, releaseWorkflow, parity, qa } = docs;
+  const { intendedTag } = intended;
 
   readme.includes("ios/RELEASING.md") && readme.includes("docs/operations/ios-app-store-submission.md")
     ? pass("A1", "README Release operations references both canonical iOS runbooks.")
@@ -605,11 +686,21 @@ async function main() {
   parityOk && qaOk
     ? pass("A5", "Workflow-required release-readiness checklist items are checked.")
     : fail("A5", "One or more workflow-required release-readiness checklist items are missing.");
+}
 
+/**
+ * B2: every required secret is referenced by a workflow, and GitHub lists it.
+ *
+ * @param {ReportContext} context
+ * @param {{ workflow: string, releaseWorkflow: string }} docs the TestFlight and App Store release workflows
+ * @param {() => { available: boolean, names: string[], reason?: string }} [listSecrets]
+ * @returns {{ status: string, message: string }} B2's outcome for the issue #242 checklist
+ */
+export function checkWorkflowSecrets({ pass, warn, fail }, { workflow, releaseWorkflow }, listSecrets = listGithubSecrets) {
   const workflowSecretRefs = requiredWorkflowSecrets.filter(
     (secret) => workflow.includes(`secrets.${secret}`) || releaseWorkflow.includes(`secrets.${secret}`),
   );
-  const githubSecrets = listGithubSecrets();
+  const githubSecrets = listSecrets();
   const missingWorkflowRefs = requiredWorkflowSecrets.filter((secret) => !workflowSecretRefs.includes(secret));
   const missingGithubSecrets = githubSecrets.available
     ? requiredWorkflowSecrets.filter((secret) => !githubSecrets.names.includes(secret))
@@ -620,39 +711,42 @@ async function main() {
       workflowSecretRefs,
       missingWorkflowRefs,
     });
-    reportSecretStatus = {
-      status: "fail",
-      message: `Workflow(s) missing required secret references: ${missingWorkflowRefs.join(", ")}.`,
-    };
-  } else if (githubSecrets.available && missingGithubSecrets.length === 0) {
-    pass("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, and GitHub reports all required secret names.", {
-      requiredWorkflowSecrets,
-    });
-    reportSecretStatus = {
-      status: "pass",
-      message:
-        "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, and GitHub reports all required secret names.",
-    };
-  } else if (githubSecrets.available) {
+    return { status: "fail", message: `Workflow(s) missing required secret references: ${missingWorkflowRefs.join(", ")}.` };
+  }
+  if (githubSecrets.available && missingGithubSecrets.length === 0) {
+    const message =
+      "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, and GitHub reports all required secret names.";
+    pass("B2", message, { requiredWorkflowSecrets });
+    return { status: "pass", message };
+  }
+  if (githubSecrets.available) {
     warn("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, but GitHub is missing one or more required secret names.", {
       requiredWorkflowSecrets,
       missingGithubSecrets,
     });
-    reportSecretStatus = {
-      status: "warning",
-      message: `GitHub secret names missing: ${missingGithubSecrets.join(", ")}.`,
-    };
-  } else {
-    warn("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, but repository secret visibility could not be confirmed.", {
-      requiredWorkflowSecrets,
-      reason: githubSecrets.reason,
-    });
-    reportSecretStatus = {
-      status: "warning",
-      message: `Workflows reference required secrets; GitHub secret list unavailable: ${githubSecrets.reason}.`,
-    };
+    return { status: "warning", message: `GitHub secret names missing: ${missingGithubSecrets.join(", ")}.` };
   }
+  warn("B2", "Each required secret is referenced by the TestFlight workflow and/or the App Store release workflow, but repository secret visibility could not be confirmed.", {
+    requiredWorkflowSecrets,
+    reason: githubSecrets.reason,
+  });
+  return {
+    status: "warning",
+    message: `Workflows reference required secrets; GitHub secret list unavailable: ${githubSecrets.reason}.`,
+  };
+}
 
+/**
+ * C4, C7, D1, D4, E2, F1, F2, DOD1, DOD2: the canonical docs' required content
+ * and the evidence this report itself provides.
+ *
+ * @param {ReportContext} context
+ * @param {object} inputs
+ * @param {{ releasing: string, submissionRunbook: string }} inputs.docs
+ * @param {string} inputs.outputDir where the reports are written
+ * @param {{ releaseOwner?: string, submissionUrl?: string }} inputs.args
+ */
+function runDocumentChecks({ pass, fail }, { docs: { releasing, submissionRunbook }, outputDir, args }) {
   const privacyPolicyUrl = "https://still-point.me/privacy";
   const privacyUrlInCanonicalDocs =
     submissionRunbook.includes(privacyPolicyUrl) || releasing.includes(privacyPolicyUrl);
@@ -676,11 +770,25 @@ async function main() {
   pass("F2", "Human-owned decisions are saved with the dry-run report.", { output: path.join(outputDir, "summary.json") });
   pass("DOD1", "Canonical runbooks are referenced before submission work starts.");
   pass("DOD2", "The dry-run report turns issue #242 into repeatable worker instructions.");
+}
 
+/**
+ * Queries App Store Connect for the intended build. A query that throws is a
+ * warning (ASC); a skipped query fails only with --require-live; a live query
+ * fails on a missing or not-VALID intended build.
+ *
+ * @param {ReportContext} context
+ * @param {object} inputs
+ * @param {{ marketingVersion?: string, buildNumber?: string }} inputs.project the intended build
+ * @param {boolean} inputs.requireLive
+ * @param {(project: { marketingVersion?: string, buildNumber?: string }) => Promise<any>} [query] queryAsc, or a stand-in
+ * @returns {Promise<{ live: boolean, reason?: string, intendedBuild?: object | null, [key: string]: unknown }>}
+ */
+export async function evaluateAsc({ log, warn, fail }, { project, requireLive }, query = queryAsc) {
   log("Checking App Store Connect live-query readiness.");
   let asc;
   try {
-    asc = await queryAsc(project);
+    asc = await query(project);
     if (asc.live) log("App Store Connect build/version queries completed.");
     else log(`App Store Connect live queries skipped: ${asc.reason}`);
   } catch (error) {
@@ -697,23 +805,20 @@ async function main() {
   if (asc.live && !asc.intendedBuild) {
     fail("ASC_BUILD_MISSING", "Intended TestFlight build was not found in App Store Connect.", { version: project.marketingVersion, build: project.buildNumber });
   }
+  return asc;
+}
 
+/**
+ * The summary.json report. Its `checks` and `logs` are the context's own arrays,
+ * so a check recorded after this (ISSUE_242_COUNT) still reaches the report.
+ *
+ * @param {ReportContext} context
+ * @param {object} inputs
+ */
+function buildReport(context, { args, intended, project, projectYml, asc, secretStatus, requireLive }) {
+  const { checks, logs } = context;
+  const intendedTag = intended.intendedTag;
   const trackingIssue = args.trackingIssue ?? "the tracking issue";
-
-  const humanGates = [
-    { owner: "Account Holder/Admin", decision: "Confirm Apple Agreements, Tax, and Banking have no Action required items.", reason: "Not exposed by public ASC API." },
-    { owner: "Product/App Store", decision: "Approve screenshots, app previews, age rating, reviewer notes, demo credentials, and release timing.", reason: "Compliance/copy/assets require human accountability." },
-    { owner: "Release owner", decision: "Approve programmatic Submit for Review for the intended build.", reason: "Dry-run mode must not submit without explicit live approval." },
-    { owner: "Product/App Store", decision: "Choose manual, automatic, or phased release after approval.", reason: "Business release strategy." },
-  ];
-
-  const fallbackPaths = [
-    { when: "ASC credentials or APPSTORE_APP_ID are unavailable", action: "Use App Store Connect website to verify TestFlight build status, version page, attached build, metadata, screenshots, review notes, and demo credentials; paste evidence into the generated report." },
-    { when: "API field is unsupported or returns a blocker", action: "Record the exact API error, open App Store Connect -> app -> Distribution/App Store -> target version, fix only that field, then rerun this dry run." },
-    { when: "Submission is rejected", action: `Copy reviewer notes verbatim to ${trackingIssue}, create/link implementation issues, cut a replacement build (merging the fix cuts one; its ios-v<marketing>-build<N> tag carries the new number), attach it, and resubmit.` },
-    { when: "Submission is approved", action: `Record final build and outcome in ${trackingIssue}, choose held/manual/automatic/phased release, and close tracking only when complete.` },
-  ];
-
   const report = {
     generatedAt: new Date().toISOString(),
     issue: "https://github.com/auerbachb/still-point/issues/242",
@@ -742,7 +847,7 @@ async function main() {
     asc,
     checks,
     humanGates,
-    fallbackPaths,
+    fallbackPaths: fallbackPaths(trackingIssue),
     logs,
   };
   report.preflightSummary = {
@@ -771,24 +876,49 @@ async function main() {
     demoCredentialsOrSignupPath: "requires release-owner approval before live submission",
     unresolvedHumanGates: humanGates,
   };
-  report.issue242Checklist = classifyIssueChecklist({ project, asc, trackingIssue, requireLive });
+  report.issue242Checklist = classifyIssueChecklist({ checks, secretStatus, project, asc, trackingIssue, requireLive });
+  return report;
+}
 
-  if (report.issue242Checklist.length !== 38) {
-    fail("ISSUE_242_COUNT", "Issue #242 checklist coverage must contain exactly 38 items.", { count: report.issue242Checklist.length });
-  }
-
+/** Writes summary.json, summary.md, and automation.log. */
+function writeReports(outputDir, report, logs) {
   fs.writeFileSync(path.join(outputDir, "summary.json"), `${JSON.stringify(report, null, 2)}\n`);
   fs.writeFileSync(path.join(outputDir, "summary.md"), writeMarkdown(report));
   fs.writeFileSync(path.join(outputDir, "automation.log"), `${logs.join("\n")}\n`);
+}
 
-  const failures = checks.filter((check) => check.status === "fail");
+async function main() {
+  const context = createReportContext();
+  const args = parseArgs(process.argv.slice(2));
+  const outputDir = path.resolve(root, args.outputDir ?? DEFAULT_OUTPUT_DIR);
+  const requireLive = Boolean(args.requireLive);
+  fs.mkdirSync(outputDir, { recursive: true });
+  context.log("Reading canonical iOS release docs and workflow.");
+
+  const docs = readReleaseDocs();
+  const { intended, project } = resolveIntendedStage(context, { intendedTag: args.intendedTag, projectYml: docs.projectYml });
+  runLocalChecks(context, { docs, intended, project });
+  const secretStatus = checkWorkflowSecrets(context, docs);
+  runDocumentChecks(context, { docs, outputDir, args });
+  const asc = await evaluateAsc(context, { project, requireLive });
+
+  const report = buildReport(context, { args, intended, project, projectYml: docs.projectYml, asc, secretStatus, requireLive });
+  if (report.issue242Checklist.length !== expectedIssueChecklistCount) {
+    context.fail("ISSUE_242_COUNT", `Issue #242 checklist coverage must contain exactly ${expectedIssueChecklistCount} items.`, {
+      count: report.issue242Checklist.length,
+    });
+  }
+
+  writeReports(outputDir, report, context.logs);
+
+  const failures = context.checks.filter((check) => check.status === "fail");
   if (failures.length > 0) {
     console.error(`Dry run completed with ${failures.length} blocking failure(s). See ${path.join(outputDir, "summary.md")}`);
     process.exitCode = 1;
     return;
   }
 
-  log(`Dry run evidence written to ${outputDir}`);
+  context.log(`Dry run evidence written to ${outputDir}`);
 }
 
 /** True when node runs this file, false when a test imports it. Symlinked paths compare equal. */
