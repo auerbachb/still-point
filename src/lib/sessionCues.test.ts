@@ -3,7 +3,7 @@
  *
  * Pure rules, so each case states a cursor and an elapsed time and checks the
  * cues owed. End-to-end timing through the real clocks is pinned separately by
- * `src/components/BlockTimer.test.ts`.
+ * the `src/components/BlockTimer*.test.ts` files.
  */
 import { describe, expect, it } from "vitest";
 import type { SoundPrefs } from "@/lib/audio";
