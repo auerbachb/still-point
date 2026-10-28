@@ -1,8 +1,8 @@
 import Foundation
 @testable import StillPointShared
 
-/// Builders shared by `OfflineSessionQueueTests` (the queue store) and
-/// `SessionSyncCoordinatorTests` (the coordinator that fills it) (#1127).
+/// Builders shared by the queue-store suites and the `SessionSyncCoordinator*`
+/// suites that fill the queue (#1127, #1139).
 enum QueuedSitFixtures {
     /// A completed sit's create request. Every sit these suites queue ran to its
     /// planned length, so `actualTime` is `duration`.

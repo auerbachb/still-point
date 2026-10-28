@@ -21,22 +21,16 @@ private actor BatchRecorder {
     }
 }
 
-/// #792: clearing a completion note through the offline queue, and the queue
-/// state the completion screen reads to keep the mood off a pending sit.
-/// Named for the behaviour under test: `SessionSyncCoordinatorTests` already
-/// exists in `SessionSyncCoordinatorTests.swift`.
+/// #792: clearing a completion note through the offline queue. The queue state
+/// the completion screen reads lives in `SessionSyncCoordinatorQueuedStateTests`.
 struct SessionSyncCoordinatorEndNoteClearTests {
     private let owner = "user-test-792"
 
     private func makeRequest(_ clientSessionId: UUID) -> CreateSessionRequest {
-        CreateSessionRequest(
+        QueuedSitFixtures.request(
             dayNumber: 4,
-            duration: 60,
-            completed: true,
-            actualTime: 60,
             clearPercent: 90,
             thoughtCount: 1,
-            mindStateLog: [],
             sessionDate: "2026-10-26",
             clientSessionId: clientSessionId
         )
@@ -279,54 +273,5 @@ struct SessionSyncCoordinatorEndNoteClearTests {
         let clearJSON = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(clear)) as? [String: Any])
         #expect((clearJSON["clearCompletionNote"] as? Bool) == true)
         #expect((clearJSON["thoughts"] as? [Any])?.count == 0)
-    }
-
-    // MARK: - Queue state for the completion screen
-
-    @Test func testQueuedSessionStateReadsPendingThenSynced() async throws {
-        let clientSessionId = UUID()
-        let store = InMemoryOfflineSessionQueueStore()
-        let coordinator = SessionSyncCoordinator(queueStore: store, transport: .alwaysFailing)
-        _ = try await coordinator.saveCompletedSession(
-            request: makeRequest(clientSessionId),
-            clientSessionId: clientSessionId,
-            ownerUserId: owner,
-            thoughts: []
-        )
-
-        let pending = try await coordinator.queuedSessionState(clientSessionId: clientSessionId, ownerUserId: owner)
-        #expect(pending == .pending)
-
-        var entries = try store.loadEntries()
-        entries[0].sessionSynced = true
-        entries[0].serverSessionId = "server-9"
-        try store.saveEntries(entries)
-
-        let synced = try await coordinator.queuedSessionState(clientSessionId: clientSessionId, ownerUserId: owner)
-        #expect(synced == .synced(serverSessionId: "server-9"))
-    }
-
-    @Test func testQueuedSessionStateIsNotQueuedForASitThatNeverWentThroughTheQueue() async throws {
-        let clientSessionId = UUID()
-        let store = InMemoryOfflineSessionQueueStore(entries: [syncedEntry(clientSessionId)])
-        let coordinator = SessionSyncCoordinator(queueStore: store, transport: .alwaysFailing)
-
-        let buddySit = try await coordinator.queuedSessionState(clientSessionId: UUID(), ownerUserId: owner)
-        #expect(buddySit == .notQueued)
-        let otherAccount = try await coordinator.queuedSessionState(clientSessionId: clientSessionId, ownerUserId: "someone-else")
-        #expect(otherAccount == .notQueued)
-    }
-
-    @Test func testDetailSessionIdNeverHandsOutAPendingSitsProvisionalId() {
-        let provisional = UUID().uuidString
-        typealias State = SessionSyncCoordinator.QueuedSessionState
-
-        #expect(State.pending.detailSessionId(handedSessionId: provisional) == nil)
-        // A sit that synced after the screen was handed its provisional id uses the server's.
-        #expect(State.synced(serverSessionId: "server-1").detailSessionId(handedSessionId: provisional) == "server-1")
-        // Buddy sits are recorded on the server directly; their handed id is real.
-        #expect(State.notQueued.detailSessionId(handedSessionId: "buddy-sit") == "buddy-sit")
-        // "Continue without saving" hands over no id at all.
-        #expect(State.notQueued.detailSessionId(handedSessionId: "") == nil)
     }
 }
