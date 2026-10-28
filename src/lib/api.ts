@@ -236,30 +236,6 @@ export const api = {
       progressTo10kHours: number;
     } }>(today ? `/api/sessions?today=${encodeURIComponent(today)}` : "/api/sessions"),
 
-  createSession: (data: {
-    dayNumber: number;
-    duration: number;
-    bonusSeconds?: number;
-    /** #836: for `focus`, `dayNumber` carries the user's `focusActivityDay`. */
-    sessionType?: "standard" | "quick" | "breath" | "focus";
-    /** #837: read only for `focus`; absent or null saves no category. */
-    focusCategory?: FocusCategory | null;
-    /** #240: which daily track this sit advanced. Defaults to "primary" server-side. */
-    track?: "primary" | "second";
-    /** #769: today's two sits done as one, on the primary track. Sent only when
-     *  true, so an ordinary sit's body is unchanged. */
-    combined?: boolean;
-    completed: boolean;
-    actualTime: number;
-    clearPercent: number;
-    thoughtCount: number;
-    mindStateLog: Array<{ time: number; state: string }>;
-    sessionDate: string;
-    /** #557/#558: client-generated UUID for offline idempotent create. */
-    clientSessionId?: string;
-  }) =>
-    request<{ session: Session }>("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
-
   /** #240: opt into the dual-track fork (enable a second daily track). */
   enableDualTrack: () =>
     request<{ user: User }>("/api/track", { method: "POST" }),

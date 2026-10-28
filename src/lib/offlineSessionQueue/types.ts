@@ -11,7 +11,11 @@ export type PendingSessionThought = {
   clientThoughtId?: string;
 };
 
-/** POST /api/sessions body with the #557 client idempotency key attached. */
+/** POST /api/sessions body with the #557 client idempotency key attached.
+ *
+ *  #1122: the web client's only description of that body. Every sit, saved
+ *  online or offline, is posted from the queue (its transport or `public/sw.js`), so a new
+ *  session field is added here and read in `src/app/api/sessions/route.ts`. */
 export type CreateSessionPayload = {
   /** The meditation day; for a `focus` session (#836), the `focusActivityDay`. */
   dayNumber: number;
