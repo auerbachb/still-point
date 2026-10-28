@@ -19,7 +19,8 @@ import { closeTestDb, getTestDb, type TestDb } from "./pgliteTestDb";
  * ```
  *
  * then calls `useBySessionFixture()` once at module scope, which registers the
- * hooks that seed two users and a fresh session before every test.
+ * hooks that seed two users once per file (`beforeAll`) and a fresh session
+ * before every test (`beforeEach`).
  */
 
 /** #766: the legacy ratings every seeded session starts with. No test sends
