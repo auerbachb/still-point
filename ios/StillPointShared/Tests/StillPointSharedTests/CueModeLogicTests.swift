@@ -77,14 +77,45 @@ struct CueModeLogicTests {
         #expect(!effects.resetVoiceDedup)
     }
 
-    @Test func testTransitionIntoHapticDoesNotWarmAudio() {
+    @Test func testTransitionIntoSilentHapticDoesNotWarmAudio() {
         let effects = CueModeLogic.transitionEffects(
-            from: prefs(tick: true, haptics: false, voice: false),
-            to: prefs(tick: false, haptics: true, voice: false)
+            from: prefs(tick: true, haptics: false, voice: false, chime: false, completion: false),
+            to: prefs(tick: false, haptics: true, voice: false, chime: false, completion: false)
         )
         #expect(!effects.warmUp)
         #expect(!effects.preloadVoiceCountdown)
         #expect(!effects.cancelVoiceCountdown)
+    }
+
+    /// #1176: the bell keeps ringing in haptic mode, so entering it with the
+    /// bell on keeps the session warm for that bell.
+    @Test func testTransitionIntoHapticWithChimeOnWarmsAudio() {
+        let effects = CueModeLogic.transitionEffects(
+            from: prefs(tick: true, haptics: false, voice: false, chime: true),
+            to: prefs(tick: false, haptics: true, voice: false, chime: true)
+        )
+        #expect(effects.warmUp)
+        #expect(!effects.preloadVoiceCountdown)
+        #expect(!effects.cancelVoiceCountdown)
+    }
+
+    /// #1176: the end sound alone is enough to warm the session.
+    @Test func testTransitionIntoHapticWithOnlyCompletionOnWarmsAudio() {
+        let effects = CueModeLogic.transitionEffects(
+            from: prefs(tick: false, haptics: false, voice: true, chime: false, completion: true),
+            to: prefs(tick: false, haptics: true, voice: false, chime: false, completion: true)
+        )
+        #expect(effects.warmUp)
+        #expect(effects.cancelVoiceCountdown)
+    }
+
+    /// Staying in haptic mode is not a transition into it.
+    @Test func testStayingInHapticDoesNotRewarm() {
+        let effects = CueModeLogic.transitionEffects(
+            from: prefs(tick: false, haptics: true, voice: false, chime: true),
+            to: prefs(tick: false, haptics: true, voice: false, chime: true)
+        )
+        #expect(!effects.warmUp)
     }
 
     @Test func testLeavingVoiceCancelsAndResetsDedup() {

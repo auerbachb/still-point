@@ -62,6 +62,13 @@ export type Cue =
   | { kind: "cancelVoice" }
   | { kind: "haptic"; cue: HapticCue };
 
+/**
+ * #1176: how late the minute bell may still strike, in seconds. Above the 50 ms
+ * clock and a background tab's 1 Hz throttling, well under the minute between
+ * bells. Mirrors iOS `CueDeliveryLogic.maxLatenessSeconds`.
+ */
+export const CHIME_MAX_LATENESS_SECONDS = 1.5;
+
 /** Before any clock has seeded it. A parent-controlled timer starts from here. */
 export const INITIAL_CUE_CURSOR: CueCursor = {
   lastTickSec: -1,
@@ -214,7 +221,11 @@ export function planCountdownCues(
       // gives way only while the countdown is active, which in practice is
       // the bell that opens the final minute, due on the update that speaks
       // "60". iOS `SessionTickLogic.advance` uses the same rule.
-      if (prefs.chime && !voiceActive && fullMinuteRemains) {
+      // #1176: on time or not at all. A bell owed long after its minute — the
+      // tab was throttled or the device slept — is dropped instead of struck
+      // at a random moment. iOS `CueDeliveryLogic.isOnTime` uses the same budget.
+      const onTime = elapsed - blockEnd <= CHIME_MAX_LATENESS_SECONDS;
+      if (prefs.chime && !voiceActive && fullMinuteRemains && onTime) {
         cues.push({ kind: "chime" });
       }
     }

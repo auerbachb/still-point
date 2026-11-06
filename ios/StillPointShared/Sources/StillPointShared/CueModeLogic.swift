@@ -63,7 +63,10 @@ public enum CueModeLogic {
 
     /// Audio side effects of moving from one exclusive mode to another.
     ///
-    /// Haptic mode does not warm the audio session. Enabling tick or voice does.
+    /// Enabling tick or voice warms the audio session. Haptic mode warms it
+    /// only while the bell or the end sound is still on (#1176): those keep
+    /// ringing in haptic mode, and must ring on time every minute. A haptic
+    /// sit with both off stays silent and never activates the session (#712).
     /// Leaving voice cancels an in-flight clip and clears the announced-second
     /// dedup so a later re-enable in the same remaining second still speaks.
     public static func transitionEffects(
@@ -73,8 +76,9 @@ public enum CueModeLogic {
         let enabledTick = !previous.tick && next.tick
         let enabledVoice = !previous.voiceCountdown && next.voiceCountdown
         let disabledVoice = previous.voiceCountdown && !next.voiceCountdown
+        let enabledAudibleHaptic = !previous.haptics && next.haptics && (next.chime || next.completion)
         return SoundToggleLogic.Effects(
-            warmUp: enabledTick || enabledVoice,
+            warmUp: enabledTick || enabledVoice || enabledAudibleHaptic,
             preloadVoiceCountdown: enabledVoice,
             cancelVoiceCountdown: disabledVoice,
             resetVoiceDedup: disabledVoice

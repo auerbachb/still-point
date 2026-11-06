@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { SoundPrefs } from "@/lib/audio";
 import { countdownSeconds } from "@/lib/blockTimerGrid";
 import {
+  CHIME_MAX_LATENESS_SECONDS,
   INITIAL_CUE_CURSOR,
   followControlledVoice,
   freshCueCursor,
@@ -310,6 +311,23 @@ describe("planCountdownCues — minute chime", () => {
     const on = planCountdownCues(off.cursor, 61, 300, { ...silent, chime: true });
     expect(sounds(on.cues)).toEqual([]);
   });
+
+  // #1176: on time or not at all. iOS pins the same rule in
+  // `CueDeliveryLogicTests.swift`.
+  it("still strikes a bell that is late by no more than the lateness budget", () => {
+    const planned = planFrom(59.95, 60 + CHIME_MAX_LATENESS_SECONDS, 300, HAPTIC);
+    expect(sounds(planned.cues)).toEqual([{ kind: "chime" }]);
+  });
+
+  it("drops a bell owed long after its minute, and still marks the block", () => {
+    // The tab slept from 0:58 to 2:47: the bell for minute 2 is 47 s late.
+    const late = planFrom(58, 167, 300, HAPTIC);
+    expect(sounds(late.cues)).toEqual([]);
+    expect(late.cursor.lastCompletedBlockIndex).toBe(1);
+
+    const next = planCountdownCues(late.cursor, 180.05, 300, HAPTIC);
+    expect(sounds(next.cues)).toEqual([{ kind: "chime" }]);
+  });
 });
 
 describe("planCountdownCues — repeating haptic", () => {
@@ -393,8 +411,10 @@ describe("planCountdownCues — a jump across several boundaries", () => {
     expect(planned.cursor.lastVoiceSec).toBe(15);
   });
 
+  // Lands just after a boundary: a jump far past the newest one owes no
+  // bell at all (#1176, "drops a bell owed long after its minute").
   it("owes at most one cue per channel, in the usual order", () => {
-    const planned = planFrom(30, 200.5, 600, TICK);
+    const planned = planFrom(30, 180.5, 600, TICK);
     expect(planned.cues).toEqual([
       { kind: "tick" },
       { kind: "chime" },
@@ -402,7 +422,7 @@ describe("planCountdownCues — a jump across several boundaries", () => {
     ]);
     // The newest block and interval passed, so the skipped ones are not owed later.
     expect(planned.cursor).toMatchObject({
-      lastTickSec: 200,
+      lastTickSec: 180,
       lastCompletedBlockIndex: 2,
       lastHapticIndex: 3,
     });

@@ -262,11 +262,12 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Tick (800Hz sine, 60ms, gain 0.06 → 0.001)
 
     public func playTick() {
-        serialQueue.async { [self] in self._playTick() }
+        let requestedAt = Self.cueClockNanos()
+        serialQueue.async { [self] in self._playTick(requestedAt: requestedAt) }
     }
 
-    private func _playTick() {
-        playSynthesized(duration: 0.06) { phase, sampleRate in
+    private func _playTick(requestedAt: UInt64) {
+        playSynthesized(duration: 0.06, requestedAt: requestedAt) { phase, sampleRate in
             let frequency = 800.0
             let t = phase / sampleRate
             let totalDuration = 0.06
@@ -280,14 +281,15 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Chime (one struck bell, 250ms — waveform lives in ChimeSynth)
 
     public func playChime() {
-        serialQueue.async { [self] in self._playChime() }
+        let requestedAt = Self.cueClockNanos()
+        serialQueue.async { [self] in self._playChime(requestedAt: requestedAt) }
     }
 
-    private func _playChime() {
+    private func _playChime(requestedAt: UInt64) {
         // Single strike, never repeated (#711). The waveform lives in
         // `ChimeSynth`, outside this file's `#if os(macOS)` split, so it
         // compiles — and is tested — on every platform.
-        playSynthesized(duration: ChimeSynth.duration) { phase, sampleRate in
+        playSynthesized(duration: ChimeSynth.duration, requestedAt: requestedAt) { phase, sampleRate in
             ChimeSynth.sample(at: phase / sampleRate)
         }
     }
@@ -295,12 +297,13 @@ public final class AudioEngine: @unchecked Sendable {
     // MARK: - Completion (528Hz + 660Hz, gain 0.2 hold 800ms then ramp to 0.001 at 2.5s)
 
     public func playCompletion() {
-        serialQueue.async { [self] in self._playCompletion() }
+        let requestedAt = Self.cueClockNanos()
+        serialQueue.async { [self] in self._playCompletion(requestedAt: requestedAt) }
     }
 
-    private func _playCompletion() {
+    private func _playCompletion(requestedAt: UInt64) {
         let totalDuration = 2.5
-        playSynthesized(duration: totalDuration) { phase, sampleRate in
+        playSynthesized(duration: totalDuration, requestedAt: requestedAt) { phase, sampleRate in
             let t = phase / sampleRate
             var sample: Float = 0
 
@@ -486,6 +489,17 @@ public final class AudioEngine: @unchecked Sendable {
     /// instead of a stack-allocated var (avoids data race between audio thread and main).
     private final class PhaseBox {
         var value: Double = 0
+        /// #1176: set once the lateness gate silences this sound. Sticky, so a
+        /// dropped sound never starts on a later callback.
+        var dropped = false
+    }
+
+    /// #1176: the clock a synthesized sound's lateness is measured on.
+    /// `CLOCK_MONOTONIC_RAW` keeps counting while the device sleeps — unlike
+    /// `DispatchTime` and `systemUptime` — so a sound requested before a lock
+    /// reads as late after it. A commpage read, safe on the render thread.
+    private static func cueClockNanos() -> UInt64 {
+        clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)
     }
 
     /// Starts the engine if it is not already running, repairing the audio
@@ -801,6 +815,7 @@ public final class AudioEngine: @unchecked Sendable {
 
     private func playSynthesized(
         duration: Double,
+        requestedAt: UInt64,
         generator: @escaping (_ phase: Double, _ sampleRate: Double) -> Float
     ) {
         // #768: hold the cue while the media server is down. The reset handler
@@ -810,6 +825,19 @@ public final class AudioEngine: @unchecked Sendable {
         // attaching, so the fresh engine is started with a source node connected
         // (#262 invariant).
         rebuildEngineIfNeeded()
+        // #1176: an engine that stopped across a hardware change can still
+        // report the old sample rate. Synthesizing at it plays the first sound
+        // after the change off-pitch, so a stopped engine whose mixer disagrees
+        // with the hardware is replaced first. Only a stopped engine: a running
+        // one renders consistently, and replacing it would cut a sound in
+        // flight. Still before any node is attached (#262 invariant).
+        if !engine.isRunning,
+           !CueDeliveryLogic.renderFormatMatchesHardware(
+               mixerSampleRate: engine.mainMixerNode.outputFormat(forBus: 0).sampleRate,
+               hardwareSampleRate: AVAudioSession.sharedInstance().sampleRate
+           ) {
+            rebuildEngine()
+        }
 
         guard let renderFormat = usableRenderFormat() else { return }
         let renderSampleRate = renderFormat.sampleRate
@@ -822,6 +850,22 @@ public final class AudioEngine: @unchecked Sendable {
             let frames = Int(frameCount)
             guard !ablPointer.isEmpty else {
                 return noErr
+            }
+
+            // #1176: on time or not at all. A sound the engine pulls long after
+            // it was asked for — attached while the engine could not run, or
+            // paused mid-strike by backgrounding — renders silence instead.
+            if !phase.dropped,
+               !CueDeliveryLogic.shouldRenderSynthesizedCue(
+                   requestedAtNanos: requestedAt,
+                   nowNanos: AudioEngine.cueClockNanos(),
+                   hasStarted: phase.value > 0,
+                   durationSeconds: duration
+               ) {
+                phase.dropped = true
+            }
+            if phase.dropped {
+                phase.value = max(phase.value, Double(totalFrames))
             }
 
             for frame in 0..<frames {
@@ -854,13 +898,23 @@ public final class AudioEngine: @unchecked Sendable {
 
         engine.attach(sourceNode)
         engine.connect(sourceNode, to: engine.mainMixerNode, format: renderFormat)
-        ensureEngineRunning()
+        guard ensureEngineRunning() else {
+            // #1176: the engine could not start, so this sound is dropped now.
+            // Left attached, a later start would play it late. The engine is
+            // not running, so detaching here is safe.
+            engine.disconnectNodeOutput(sourceNode)
+            engine.detach(sourceNode)
+            return
+        }
 
         // Detach this sound node after playback while keeping the warm engine alive.
         // Skipped when the engine has since been replaced (#710): the node belongs
         // to the discarded graph and is released with it, and detaching it from the
         // new engine would raise.
-        serialQueue.asyncAfter(deadline: .now() + duration + 0.1) { [weak self] in
+        //
+        // #1176: on the wall clock. A `DispatchTime` deadline stops counting while
+        // the device sleeps, which kept this node attached across a lock.
+        serialQueue.asyncAfter(wallDeadline: .now() + duration + 0.1) { [weak self] in
             guard let self, self.graphEpoch == epoch else { return }
             self.engine.disconnectNodeOutput(sourceNode)
             self.engine.detach(sourceNode)

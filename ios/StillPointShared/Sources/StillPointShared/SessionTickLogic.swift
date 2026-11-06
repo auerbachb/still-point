@@ -259,8 +259,14 @@ public enum SessionTickLogic {
         // #711 the bell is one strike, so the value survives purely as that gate
         // and no longer sets how many strikes play.
         let fullMinuteRemains = chimeUpdate.chimeCount != nil
+        // #1176: a bell owed long after its minute (the clock jumped after the
+        // app was suspended) is dropped, not struck at a random moment.
+        let onTime = CueDeliveryLogic.isOnTime(
+            dueAt: CueDeliveryLogic.minuteBellDueAt(completedBlockIndex: chimeUpdate.updatedCompletedBlockIndex),
+            now: elapsed
+        )
         // Per-minute chime suppressed during voice countdown final minute.
-        return prefs.chime && fullMinuteRemains && !voiceActive
+        return prefs.chime && fullMinuteRemains && !voiceActive && onTime
     }
 
     /// Repeating haptic — uses its own interval, not the chime's minute blocks.
