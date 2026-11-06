@@ -177,9 +177,8 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
       </div>
       {entries.length > 0 && (
         <p style={{ margin: 0, color: "var(--fg-2)", fontSize: "14px", lineHeight: 1.5 }}>
-          The server turned {entries.length === 1 ? "this sit" : "these sits"} down, so{" "}
-          {entries.length === 1 ? "it is" : "they are"} saved only on this device and will not upload on
-          {" "}{entries.length === 1 ? "its" : "their"} own.
+          The server turned down {entries.length === 1 ? "this upload" : "these uploads"}, so what it
+          refused is kept only on this device and will not upload on its own.
         </p>
       )}
 
@@ -200,6 +199,13 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
               <div style={{ ...mono, fontSize: "12px", color: "var(--fg)" }}>
                 {parkedSitDateLabel(entry)} · {formatSessionDurationLabel(entry.request.actualTime)}
               </div>
+              {entry.sessionSynced && (
+                // The row went up; only its thoughts or note were turned down.
+                <div data-testid="parked-sit-row-saved" style={{ fontSize: "13px", color: "var(--fg-2)", lineHeight: 1.5 }}>
+                  The sit is saved to your account. Only its thoughts were not accepted; Discard drops
+                  just those from this device.
+                </div>
+              )}
               <div data-testid="parked-sit-reason" style={{ ...mono, fontSize: "11px", color: "var(--fg-3)", wordBreak: "break-word" }}>
                 Reason: {entry.parked.message || "no reason given"}
               </div>
@@ -234,7 +240,7 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
                       onClick={() => { void discard(entry.clientSessionId); }}
                       style={{ ...dangerButton, opacity: busy ? 0.5 : 1 }}
                     >
-                      {busy ? "Discarding..." : "Confirm discard"}
+                      {busy ? "Discarding..." : entry.sessionSynced ? "Confirm: discard its thoughts" : "Confirm discard"}
                     </button>
                     <button
                       type="button"

@@ -158,6 +158,15 @@ describe("ParkedSitsSection (#982)", () => {
     expect(rows()).toHaveLength(1);
   });
 
+  test("a sit whose row already went up says it is saved to the account", async () => {
+    const rowSaved = { ...parkedEntry("a", "thoughts refused"), sessionSynced: true, serverSessionId: "server-a" };
+    await render(fakeQueue([rowSaved, parkedEntry("b", "bad")], { status: "synced" }));
+
+    expect(rows()[0]!.querySelector('[data-testid="parked-sit-row-saved"]')!.textContent)
+      .toMatch(/saved to your account/);
+    expect(rows()[1]!.querySelector('[data-testid="parked-sit-row-saved"]')).toBeNull();
+  });
+
   test("Discard asks to confirm, then removes only that sit", async () => {
     const queue = fakeQueue([parkedEntry("a", "bad"), parkedEntry("b", "bad")], { status: "synced" });
     await render(queue);
