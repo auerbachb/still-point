@@ -4,8 +4,18 @@ name: Info.plist sync
 # `main` (#439, folded into #588). It must report on every PR — previously it
 # lived inside path-filtered `e2e-ios.yml`, which left non-iOS PRs stuck at
 # mergeStateStatus=BLOCKED forever (#442). Same no-op pattern as #463 /
-# ios-shared-tests.yml: run the real xcodegen diff on macOS when iOS plist
-# inputs changed; otherwise a cheap ubuntu no-op still satisfies the check.
+# ios-shared-tests.yml: run the real xcodegen diff on macOS when anything under
+# ios/ (or the guard) changed; otherwise a cheap ubuntu no-op still satisfies the
+# check.
+#
+# Despite the check name (required, so it stays frozen — see
+# scripts/ci/sync-main-required-checks.mjs), this is the XcodeGen drift guard
+# for EVERY committed generated file (#872): the Xcode project
+# (ios/StillPoint.xcodeproj) and all three target Info.plists. It runs a pinned
+# XcodeGen release so a Homebrew update can't fake drift. To move the pin,
+# change XCODEGEN_VERSION and XCODEGEN_SHA256 together, regenerate, and commit
+# the regenerated files in the same PR. Contributor rule: edit ios/project.yml,
+# never the generated files (ios/RELEASING.md "Generated Xcode project").
 
 on:
   pull_request:
@@ -14,6 +24,12 @@ on:
 permissions:
   contents: read
   pull-requests: read
+
+env:
+  # Pinned XcodeGen release (#872). XCODEGEN_SHA256 is the digest of that
+  # release's xcodegen.zip asset (GitHub releases API `digest` field).
+  XCODEGEN_VERSION: "2.45.3"
+  XCODEGEN_SHA256: "0c90f4d28ca57335f9fa78cf5bf6dabfe20a232036dabe36de2eef79cb7c0878"
 
 jobs:
   changes:
@@ -39,7 +55,10 @@ jobs:
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)' 2>/dev/null || true)"
           # Here-string, not a pipe: with pipefail, `grep -q` exiting early can
           # SIGPIPE the writer and flip a match into ios=false (skipping the check).
-          if [ -z "$files" ] || grep -qE '^(ios/project\.yml$|ios/StillPointApp/Info\.plist$|\.github/workflows/infoplist-sync\.yml$|\.github/actions/ios-xcodegen/)' <<< "$files"; then
+          # Watched: everything under ios/ (the spec, every generated output,
+          # and the source/resource dirs project.yml globs — adding or removing
+          # a file there changes project.pbxproj), plus the guard itself.
+          if [ -z "$files" ] || grep -qE '^(ios/|\.github/workflows/infoplist-sync\.yml$|\.github/actions/ios-xcodegen/)' <<< "$files"; then
             echo "ios=true" >> "$GITHUB_OUTPUT"
           else
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -57,22 +76,37 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install XcodeGen and generate Xcode project
+      - name: Install pinned XcodeGen and generate Xcode project
         if: needs.changes.outputs.ios == 'true'
         uses: ./.github/actions/ios-xcodegen
+        with:
+          version: ${{ env.XCODEGEN_VERSION }}
+          sha256: ${{ env.XCODEGEN_SHA256 }}
 
-      - name: Verify committed Info.plist matches XcodeGen output
+      - name: Verify committed generated files match XcodeGen output
         if: needs.changes.outputs.ios == 'true'
         run: |
-          if ! git diff --exit-code -- ios/StillPointApp/Info.plist; then
-            echo "::error::ios/StillPointApp/Info.plist is out of sync with ios/project.yml."
-            echo "CI regenerates Info.plist via 'xcodegen generate' before every build, so any key that"
-            echo "exists only in the committed Info.plist (not in project.yml info.properties) is DROPPED"
-            echo "from shipped builds. Fix: add the key(s) to ios/project.yml -> targets.StillPoint.info.properties,"
-            echo "then run 'cd ios && xcodegen generate' and commit the regenerated ios/StillPointApp/Info.plist."
+          set -euo pipefail
+          # Check the whole ios/ tree, not a fixed file list: a new target or a
+          # moved info.path/entitlements path in project.yml writes output
+          # elsewhere, and a fresh checkout plus `xcodegen generate` must leave
+          # ios/ untouched. --porcelain also lists new (untracked) or deleted
+          # files, which `git diff --exit-code` alone would miss.
+          generated=(ios)
+          drift="$(git status --porcelain --untracked-files=all -- "${generated[@]}")"
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            git --no-pager diff -- "${generated[@]}" || true
+            echo "::error::Committed XcodeGen output is out of sync with ios/project.yml."
+            echo "ios/project.yml is the source of truth. Never hand-edit project.pbxproj or a target Info.plist:"
+            echo "CI regenerates them via 'xcodegen generate' before every build, so anything that exists only in"
+            echo "a committed generated file is DROPPED from shipped builds. An app Info.plist key belongs in"
+            echo "ios/project.yml -> targets.StillPoint.info.properties."
+            echo "Fix: edit ios/project.yml, run 'cd ios && xcodegen generate' with XcodeGen $XCODEGEN_VERSION,"
+            echo "and commit ALL regenerated files (ios/StillPoint.xcodeproj and the Info.plists) with the spec change."
             exit 1
           fi
 
-      - name: Skip (Info.plist inputs unchanged)
+      - name: Skip (XcodeGen inputs and outputs unchanged)
         if: needs.changes.outputs.ios != 'true'
-        run: 'echo "Info.plist inputs unchanged on this PR — required check satisfied without macOS (issue #588 / #439)."'
+        run: 'echo "XcodeGen inputs and outputs unchanged on this PR — required check satisfied without macOS (issue #588 / #439 / #872)."'

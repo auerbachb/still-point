@@ -62,6 +62,33 @@ This section owns the version and build-number rules; other sections link here.
   Fastlane lanes run locally) is not in the tags, so a later cut can collide with it. See
   [Build number conflict](#troubleshooting).
 
+## Generated Xcode project (XcodeGen)
+
+`ios/project.yml` is the source of truth for the Xcode project
+([#872](https://github.com/auerbachb/still-point/issues/872)). XcodeGen generates these files from it, and they are
+committed so local tools (Xcode, `xcodebuild test`, Fastlane, the UI tests) work from a fresh clone:
+
+- `ios/StillPoint.xcodeproj/` (`project.pbxproj` and the workspace data)
+- `ios/StillPointApp/Info.plist`, `ios/StillPointMonitor/Info.plist`, `ios/StillPointWidget/Info.plist`
+
+Rules:
+
+- **Never hand-edit a generated file.** Change `ios/project.yml` (targets, sources, resources, settings,
+  `info.properties`), then run `cd ios && xcodegen generate`.
+- **Commit every regenerated file with the spec change**, in the same PR.
+- **Use the pinned XcodeGen version** — `XCODEGEN_VERSION` in
+  [`infoplist-sync.yml`](../.github/workflows/infoplist-sync.yml) (currently 2.45.3). Check yours with
+  `xcodegen --version`. Another version can produce a different `project.pbxproj` from the same spec.
+- The required `Info.plist in sync with project.yml` check is the drift guard. It regenerates with the pinned
+  version and fails the PR when regeneration changes, adds, or deletes any file under `ios/` (so a new target's
+  output counts too).
+
+Churn in `project.pbxproj` is expected whenever targets, sources, resources, or settings change. A churn
+report on it is not by itself a reason to restructure the project. Release builds don't rely on the committed
+project: CI regenerates it before every build, and the build number comes from the tag (see
+[Version numbering](#version-numbering)), so no release automation rewrites `ios/project.yml` or the
+generated files.
+
 ## Release-readiness artifacts (Issue #210)
 
 Treat these files as required merge artifacts for iOS release candidates. They gate the **App Store release** path only (see [Release paths](#release-paths)), because TestFlight is itself the testing surface.
@@ -275,7 +302,7 @@ The repo ships a **wide candidate set** (Fastlane snapshot) under `ios/screensho
 ### One-time setup (Mac)
 
 1. Install Xcode and command-line tools.
-2. From repo root: `cd ios && brew install xcodegen` (CI uses the same).
+2. From repo root: `cd ios && brew install xcodegen`. Before committing regenerated project files, confirm `xcodegen --version` matches the pinned version (see [Generated Xcode project](#generated-xcode-project-xcodegen)).
 3. `cd ios && bundle install` (installs Fastlane from `ios/Gemfile`).
 4. Edit `ios/fastlane/Snapfile` so every `devices([...])` entry matches a name from `xcrun simctl list devices available` on your machine (6.7", 6.5", 5.5", iPad Pro 12.9" class).
 

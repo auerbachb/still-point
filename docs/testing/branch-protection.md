@@ -18,7 +18,7 @@ Comprehensive e2e (web + native iOS) runs **nightly** and on the **iOS TestFligh
 | `unit-tests` | [Unit Tests](../../.github/workflows/unit-tests.yml) | `unit-tests` | Jest/unit suite — #434. |
 | `build` | [Web Build](../../.github/workflows/web-build.yml) | `build` | `npm run build:verify` + design-token parity (#420). |
 | `StillPointShared swift test` | [iOS Shared Unit Tests](../../.github/workflows/ios-shared-tests.yml) | `swift-test` | Shared Swift parity; ubuntu no-op when unchanged (#463). |
-| `Info.plist in sync with project.yml` | [Info.plist sync](../../.github/workflows/infoplist-sync.yml) | `infoplist-sync` | XcodeGen drift guard — #439; split out of path-filtered e2e-ios (#588). |
+| `Info.plist in sync with project.yml` | [Info.plist sync](../../.github/workflows/infoplist-sync.yml) | `infoplist-sync` | XcodeGen drift guard (pinned XcodeGen) — compares the committed `ios/StillPoint.xcodeproj` and all three target Info.plists with regenerated output; #439, #872; split out of path-filtered e2e-ios (#588). |
 | `StillPointApp compile` | [iOS App Compile](../../.github/workflows/ios-app-build.yml) | `app-compile` | Compiles the `StillPoint` app target (`ios/StillPointApp`) with `xcodebuild` twice: for the simulator, then for an unsigned generic iOS device, so a break inside `#if !targetEnvironment(simulator)` fails before TestFlight (#926). Ubuntu no-op when unchanged (#698). |
 
 ## Checks to **not** require (advisory / off-PR)
@@ -41,7 +41,7 @@ Only require checks that report a result on **every** pull request. Required che
 | --- | --- | --- |
 | `unit-tests` / `typecheck` / `build` | ✅ | No path filters. |
 | `StillPointShared swift test` | ✅ | Ubuntu no-op when package unchanged (#463). |
-| `Info.plist in sync with project.yml` | ✅ | Ubuntu no-op when plist inputs unchanged (#588 / #439). |
+| `Info.plist in sync with project.yml` | ✅ | Ubuntu no-op when the PR touches neither `ios/` nor the guard (#588 / #439 / #872). |
 | `StillPointApp compile` | ✅ | Ubuntu no-op when the scheme's sources (`ios/StillPointApp`, `ios/AppBlockingShared`, `ios/StillPointMonitor`, `ios/StillPointWidget`, `ios/StillPointShared`), `ios/project.yml`, and the workflow are unchanged (#698). Reports on every PR, so it does not leave PRs `BLOCKED`. |
 | `web-e2e-*` / `ios-e2e-*` | ❌ | Off PR path — do not require globally. |
 

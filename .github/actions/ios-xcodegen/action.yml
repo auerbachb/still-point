@@ -1,29 +1,82 @@
 name: Install XcodeGen and generate the Xcode project
 description: >-
-  Installs XcodeGen with Homebrew, retrying transient failures, then runs
-  `xcodegen generate` in ios/. Shared by the TestFlight and App Store release
-  lanes (#1113), the iOS E2E lanes, and the Info.plist sync check (#1137).
+  Installs XcodeGen, retrying transient failures, then runs `xcodegen generate`
+  in ios/. Shared by the TestFlight and App Store release lanes (#1113), the iOS
+  E2E lanes, and the XcodeGen drift guard (#1137, #872). With no `version`
+  input it installs the current Homebrew formula (those lanes build only from
+  the regenerated output, never compare it). With `version` + `sha256` it
+  installs that exact GitHub release artifact, so the drift guard's comparison
+  against the committed files is reproducible (#872).
+
+inputs:
+  version:
+    description: >-
+      Exact XcodeGen release tag to install (e.g. 2.45.3). Empty installs the
+      current Homebrew formula.
+    required: false
+    default: ""
+  sha256:
+    description: >-
+      SHA-256 of that release's xcodegen.zip asset. Required with `version`.
+    required: false
+    default: ""
 
 runs:
   using: composite
   steps:
-    - name: Install XcodeGen (retry on transient Homebrew failures)
+    - name: Install XcodeGen (retry on transient failures)
       env:
         HOMEBREW_NO_AUTO_UPDATE: "1"
+        XCODEGEN_VERSION: ${{ inputs.version }}
+        XCODEGEN_SHA256: ${{ inputs.sha256 }}
       shell: bash
       run: |
+        set -euo pipefail
+        if [[ -z "$XCODEGEN_VERSION" ]]; then
+          for attempt in 1 2 3; do
+            if brew install xcodegen; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Failed to install xcodegen after 3 attempts."
+          exit 1
+        fi
+
+        if [[ -z "$XCODEGEN_SHA256" ]]; then
+          echo "::error::ios-xcodegen: a pinned version needs its sha256 input."
+          exit 1
+        fi
+        install_dir="$RUNNER_TEMP/xcodegen-$XCODEGEN_VERSION"
+        zip="$RUNNER_TEMP/xcodegen-$XCODEGEN_VERSION.zip"
+        url="https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+        downloaded=false
         for attempt in 1 2 3; do
-          if brew install xcodegen; then
-            exit 0
+          if curl --fail --location --silent --show-error --output "$zip" "$url"; then
+            downloaded=true
+            break
           fi
           if [[ "$attempt" -lt 3 ]]; then
             sleep $((attempt * 10))
           fi
         done
-        echo "Failed to install xcodegen after 3 attempts."
-        exit 1
+        if [[ "$downloaded" != true ]]; then
+          echo "Failed to download xcodegen $XCODEGEN_VERSION after 3 attempts."
+          exit 1
+        fi
+        echo "$XCODEGEN_SHA256  $zip" | shasum -a 256 --check
+        rm -rf "$install_dir"
+        mkdir -p "$install_dir"
+        unzip -q "$zip" -d "$install_dir"
+        # The binary finds its SettingPresets relative to itself, so run it in place.
+        echo "$install_dir/xcodegen/bin" >> "$GITHUB_PATH"
+        "$install_dir/xcodegen/bin/xcodegen" --version
 
     - name: Generate Xcode project
       working-directory: ios
       shell: bash
-      run: xcodegen generate
+      run: |
+        xcodegen --version
+        xcodegen generate
