@@ -126,6 +126,9 @@ export function HistoryView({
   const [viewMode, setViewMode] = useState<"calendar" | "journey">("calendar");
   const [calendarSubView, setCalendarSubView] = useState<"default" | "yearInReview">("default");
   const [todayDate, setTodayDate] = useState<string>(() => todayLocalIsoDate());
+  // Bumped when a parked sit is retried successfully, so the sessions and
+  // stats below refetch and the newly recorded sit shows up right away.
+  const [reloadKey, setReloadKey] = useState(0);
   const isMobile = useIsMobile();
   const sessionLabelColWidth = isMobile ? "88px" : "100px";
   const cellSize = isMobile ? "36px" : "44px";
@@ -182,7 +185,7 @@ export function HistoryView({
     return () => {
       cancelled = true;
     };
-  }, [dualTrackEnabled]);
+  }, [dualTrackEnabled, reloadKey]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -325,7 +328,13 @@ export function HistoryView({
         Progress
       </h2>
 
-      {ownerUserId && <ParkedSitsSection ownerUserId={ownerUserId} onSynced={onParkedSitSynced} />}
+      {ownerUserId && <ParkedSitsSection
+          ownerUserId={ownerUserId}
+          onSynced={() => {
+            setReloadKey((k) => k + 1);
+            onParkedSitSynced?.();
+          }}
+        />}
 
       {/* View toggle */}
       <div style={{ display: "flex", gap: "8px", ...mono, fontSize: "11px" }}>
