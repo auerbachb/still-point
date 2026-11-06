@@ -99,11 +99,16 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
   // latest one is shown, and none once the section has unmounted or the
   // account changed, so a slow early read never brings back a discarded row.
   const latestRead = useRef(0);
+  // The account shown now. A reload captured before an account change (say, by
+  // a retry still in flight) must not show the previous account's rows.
+  const currentOwner = useRef(ownerUserId);
+  currentOwner.current = ownerUserId;
   const reload = useCallback(async () => {
+    if (currentOwner.current !== ownerUserId) return;
     const read = ++latestRead.current;
     try {
       const next = await queue.parkedEntries(ownerUserId);
-      if (read === latestRead.current) setEntries(next);
+      if (read === latestRead.current && currentOwner.current === ownerUserId) setEntries(next);
     } catch (error) {
       console.error("Failed to read parked sits:", error);
     }

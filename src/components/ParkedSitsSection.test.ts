@@ -177,6 +177,34 @@ describe("ParkedSitsSection (#982)", () => {
     expect(onSynced).toHaveBeenCalledTimes(1);
   });
 
+  test("a retry that finishes after an account change never shows the old account's rows", async () => {
+    const otherOwner = "user-other";
+    let finishRetry: (result: ParkedRetryResult) => void = () => {};
+    const queue = {
+      parkedEntries: vi.fn(async (ownerUserId: string) =>
+        ownerUserId === owner ? [parkedEntry("a", "bad")] : []),
+      retryParkedEntry: vi.fn(
+        () => new Promise<ParkedRetryResult>((resolve) => { finishRetry = resolve; }),
+      ),
+      discardParkedEntry: vi.fn(async () => true),
+    };
+    await render(queue as unknown as ReturnType<typeof fakeQueue>);
+    expect(rows()).toHaveLength(1);
+
+    await click(rows()[0]!.querySelector('[data-testid="parked-sit-retry"]'));
+    await act(async () => {
+      root!.render(createElement(ParkedSitsSection, { ownerUserId: otherOwner, coordinator: queue }));
+    });
+    expect(rows()).toHaveLength(0);
+
+    await act(async () => {
+      finishRetry({ status: "parked", parked: { at: "2026-11-05T12:00:00.000Z", status: 400, message: "bad" }, sessionUploaded: false });
+    });
+
+    expect(rows()).toHaveLength(0);
+    expect(queue.parkedEntries).not.toHaveBeenLastCalledWith(owner);
+  });
+
   test("Discard asks to confirm, then removes only that sit", async () => {
     const queue = fakeQueue([parkedEntry("a", "bad"), parkedEntry("b", "bad")], { status: "synced" });
     await render(queue);
