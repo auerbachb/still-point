@@ -22,5 +22,7 @@ export type {
   ParkedSession,
   PendingSessionEntry,
   PendingSessionThought,
+  QueuedSessionRequest,
   SavedSessionResult,
+  SessionStateLogEntry,
 } from "./types";

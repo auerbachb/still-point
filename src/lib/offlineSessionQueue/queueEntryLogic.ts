@@ -9,11 +9,12 @@ import type {
   ParkedSession,
   PendingSessionEntry,
   PendingSessionThought,
+  QueuedSessionRequest,
   SavedSessionResult,
 } from "./types";
 
 export function requestWithClientId(
-  request: Omit<CreateSessionPayload, "clientSessionId">,
+  request: QueuedSessionRequest,
   clientSessionId: string,
 ): CreateSessionPayload {
   return { ...request, clientSessionId };
@@ -84,7 +85,7 @@ export function findOwnedEntry(
 
 /** A new entry for a sit not yet queued. */
 export function newPendingEntry(
-  request: Omit<CreateSessionPayload, "clientSessionId">,
+  request: QueuedSessionRequest,
   clientSessionId: string,
   ownerUserId: string,
   thoughts: PendingSessionThought[],

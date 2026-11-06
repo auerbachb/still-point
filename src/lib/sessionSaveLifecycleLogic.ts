@@ -13,7 +13,7 @@ import type { User } from "@/lib/api";
 import { combinedSitField, previewNextCombinedDuration } from "@/lib/combinedSit";
 import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 import type { FocusSessionResult } from "@/lib/focusActivity";
-import type { CreateSessionPayload } from "@/lib/offlineSessionQueue";
+import type { QueuedSessionRequest } from "@/lib/offlineSessionQueue";
 import type { SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
 import { previewNextStandardDuration } from "@/lib/userProgression";
 
@@ -65,7 +65,7 @@ export type CompletedSitInput = {
 };
 
 /** A save request before the queue stamps its client id on it. */
-export type SessionSaveRequest = Omit<CreateSessionPayload, "clientSessionId">;
+export type SessionSaveRequest = QueuedSessionRequest;
 
 /**
  * The request for a standard sit, completed or abandoned. `completed` is the

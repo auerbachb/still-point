@@ -11,11 +11,16 @@ export type PendingSessionThought = {
   clientThoughtId?: string;
 };
 
+/** One timestamped reading in a sit's mind-state or attention log. */
+export type SessionStateLogEntry = { time: number; state: string };
+
 /** POST /api/sessions body with the #557 client idempotency key attached.
  *
  *  #1122: the web client's only description of that body. Every sit, saved
  *  online or offline, is posted from the queue (its transport or `public/sw.js`), so a new
- *  session field is added here and read in `src/app/api/sessions/route.ts`. */
+ *  session field is added here and read in `src/app/api/sessions/route.ts`.
+ *  A new field's type is declared here once; `QueuedSessionRequest` and the
+ *  queue helpers derive from this type rather than restating it. */
 export type CreateSessionPayload = {
   /** The meditation day; for a `focus` session (#836), the `focusActivityDay`. */
   dayNumber: number;
@@ -31,8 +36,8 @@ export type CreateSessionPayload = {
   actualTime: number;
   clearPercent: number;
   thoughtCount: number;
-  mindStateLog: Array<{ time: number; state: string }>;
-  attentionLog?: Array<{ time: number; state: string }> | null;
+  mindStateLog: SessionStateLogEntry[];
+  attentionLog?: SessionStateLogEntry[] | null;
   sessionDate: string;
   breathCount?: number;
   /** #837: the category a focus session was for, kept so a queued one uploads
@@ -40,6 +45,9 @@ export type CreateSessionPayload = {
   focusCategory?: FocusCategory | null;
   clientSessionId: string;
 };
+
+/** A save request before the queue stamps its client id on it. */
+export type QueuedSessionRequest = Omit<CreateSessionPayload, "clientSessionId">;
 
 /** #978: the answer that turned a queued sit down for good. */
 export type ParkedSession = {

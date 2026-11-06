@@ -26,9 +26,9 @@ import {
   type SessionSyncTransport,
 } from "./transport";
 import type {
-  CreateSessionPayload,
   PendingSessionEntry,
   PendingSessionThought,
+  QueuedSessionRequest,
   SavedSessionResult,
 } from "./types";
 
@@ -54,7 +54,7 @@ export class WebSessionSyncCoordinator {
   }
 
   async saveCompletedSession(
-    request: Omit<CreateSessionPayload, "clientSessionId">,
+    request: QueuedSessionRequest,
     clientSessionId: string,
     ownerUserId: string,
     thoughts: PendingSessionThought[],
