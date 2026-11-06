@@ -86,14 +86,12 @@ jobs:
         if: needs.changes.outputs.ios == 'true'
         run: |
           set -euo pipefail
-          generated=(
-            ios/StillPoint.xcodeproj
-            ios/StillPointApp/Info.plist
-            ios/StillPointMonitor/Info.plist
-            ios/StillPointWidget/Info.plist
-          )
-          # --porcelain also lists generated files that are new (untracked)
-          # or deleted, which `git diff --exit-code` alone would miss.
+          # Check the whole ios/ tree, not a fixed file list: a new target or a
+          # moved info.path/entitlements path in project.yml writes output
+          # elsewhere, and a fresh checkout plus `xcodegen generate` must leave
+          # ios/ untouched. --porcelain also lists new (untracked) or deleted
+          # files, which `git diff --exit-code` alone would miss.
+          generated=(ios)
           drift="$(git status --porcelain --untracked-files=all -- "${generated[@]}")"
           if [ -n "$drift" ]; then
             echo "$drift"

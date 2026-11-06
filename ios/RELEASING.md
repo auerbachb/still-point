@@ -80,7 +80,8 @@ Rules:
   [`infoplist-sync.yml`](../.github/workflows/infoplist-sync.yml) (currently 2.45.3). Check yours with
   `xcodegen --version`. Another version can produce a different `project.pbxproj` from the same spec.
 - The required `Info.plist in sync with project.yml` check is the drift guard. It regenerates with the pinned
-  version and fails the PR when any generated file above differs from what is committed.
+  version and fails the PR when regeneration changes, adds, or deletes any file under `ios/` (so a new target's
+  output counts too).
 
 Churn in `project.pbxproj` is expected whenever targets, sources, resources, or settings change. A churn
 report on it is not by itself a reason to restructure the project. Release builds don't rely on the committed
