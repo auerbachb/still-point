@@ -23,11 +23,14 @@ import {
 } from "@/lib/haptics";
 
 /**
- * How far into the sit each cue has already played.
+ * How far into the sit each cue has already played — one consumed position per
+ * channel.
  *
- * Every guard is monotonic: a cursor seeded at some position swallows the cues
- * before it, which is how a resume, a late join, or a restart avoids replaying
- * cues that are behind it.
+ * A cursor seeded at some position swallows the cues before it, which is how a
+ * resume, a late join, or a restart avoids replaying cues that are behind it.
+ * Within a run the tick, chime, and haptic fields only move forward; the voice
+ * field counts down, and {@link followControlledVoice} may raise it. A reset or
+ * a rewind re-arms them all for a new run.
  */
 export type CueCursor = Readonly<{
   /** Last elapsed whole second that ticked; -1 before the first. */
@@ -99,6 +102,14 @@ export function seededCueCursor(
  * A parent-controlled elapsed that moved backwards — a fresh run on the same
  * mounted timer. Re-seeds exactly as a synced join does, except the voice
  * cursor, which {@link followControlledVoice} keeps on its own rule.
+ *
+ * A controlled update runs: this rewind when elapsed moved back, then
+ * {@link followControlledVoice}, then {@link planCountdownCues}. The voice
+ * cursor survives the rewind so the plan can still see a countdown in progress
+ * and cancel it, and so a step back inside the final minute suppresses only the
+ * number it lands on. Restarts differ on purpose: a fresh local run and a first
+ * controlled mount both tick at second zero, while a controlled rewind seeds
+ * second zero as already ticked.
  */
 export function rewoundCueCursor(
   cursor: CueCursor,
@@ -193,13 +204,9 @@ export function planCountdownCues(
       next.lastCompletedBlockIndex = completedBlockIndex;
 
       const blockEnd = (completedBlockIndex + 1) * 60;
-      // Unchanged rule for *when* the marker fires: only on a completed
-      // minute block with at least one full minute still to go. Since #711
-      // the count no longer sets how many strikes play — the bell is one
-      // strike — so it survives purely as that gate. Hoisted out of the chime
-      // branch by #712 so the buzz can share it: one timing source, two
-      // channels, marking the same instants. (Since #811 the buzz repeats on
-      // its own interval below; the chime still uses this gate.)
+      // The chime marks a completed minute block only while at least one
+      // full minute is still to go. The repeating buzz does not use this
+      // gate: it keeps its own interval cursor below (#811).
       const fullMinuteRemains =
         Math.floor((totalSeconds - blockEnd) / 60) >= 1;
 
