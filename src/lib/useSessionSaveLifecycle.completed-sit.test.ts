@@ -159,6 +159,50 @@ describe("useSessionSaveLifecycle — completed sit (#703)", () => {
     expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
   });
 
+  test("#982: a sit parked on its first upload is not reported as pending", async () => {
+    queue.saveCompletedSession.mockImplementationOnce(async (_request, clientSessionId: string): Promise<SavedSessionResult> => ({
+      sessionId: clientSessionId,
+      isPendingSync: false,
+      serverSessionId: null,
+      parked: { at: "2026-11-05T12:00:00.000Z", status: 400, message: '{"error":"Invalid track"}' },
+    }));
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+
+    const { clientSessionId } = saveCall(0);
+    expect(hook.current().completionData).toMatchObject({
+      sessionId: clientSessionId,
+      clientSessionId,
+      isPendingSync: false,
+      notStored: false,
+      parkedReason: '{"error":"Invalid track"}',
+    });
+    // Kept on this device, so the strip is not raised; no row went up, so the
+    // user is not re-read.
+    expect(hook.current().localWriteFailed).toBe(false);
+    expect(hook.refreshUserFromServer).not.toHaveBeenCalled();
+  });
+
+  test("#982: a parked sit whose session row went up re-reads the user", async () => {
+    queue.saveCompletedSession.mockImplementationOnce(async (_request, clientSessionId: string): Promise<SavedSessionResult> => ({
+      sessionId: clientSessionId,
+      isPendingSync: false,
+      serverSessionId: "server-1",
+      parked: { at: "2026-11-05T12:00:00.000Z", status: 404, message: "Session not found" },
+    }));
+    const hook = await renderLifecycle();
+
+    await act(async () => {
+      await hook.current().handleSessionComplete(sit());
+    });
+
+    expect(hook.current().completionData?.parkedReason).toBe("Session not found");
+    expect(hook.refreshUserFromServer).toHaveBeenCalledTimes(1);
+  });
+
   test("an abandoned standard sit through onComplete neither refreshes nor is remembered", async () => {
     queue.saveCompletedSession.mockResolvedValueOnce(synced("server-1"));
     const hook = await renderLifecycle();

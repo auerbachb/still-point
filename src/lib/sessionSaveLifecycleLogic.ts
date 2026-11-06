@@ -26,6 +26,10 @@ export type CompletionData = {
   /** #703: true when the sit reached neither the server nor this device. Never
    *  true at the same time as `isPendingSync` — that conflation is the bug. */
   notStored: boolean;
+  /** #982: the server's answer when it turned the sit down on its first
+   *  upload (#978), else null. The sit is on this device but will not upload
+   *  on reconnect. Never set with `isPendingSync` or `notStored`. */
+  parkedReason: string | null;
   dayNumber: number;
   sessionType: SessionType;
   /** #240: which daily track this completed sit belonged to. */
@@ -170,6 +174,7 @@ export function buildCompletionData(
     clientSessionId,
     isPendingSync: outcome?.status === "pending",
     notStored: outcome?.status === "notStored",
+    parkedReason: outcome?.status === "parked" ? outcome.message : null,
     dayNumber: data.dayNumber,
     sessionType: data.sessionType,
     track: data.track,
@@ -205,5 +210,6 @@ export function applyRetryOutcome(
     sessionId: outcome.sessionId,
     isPendingSync: outcome.status === "pending",
     notStored: false,
+    parkedReason: outcome.status === "parked" ? outcome.message : null,
   };
 }

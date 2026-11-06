@@ -11,6 +11,7 @@ import { creditedLocalIsoDate, todayLocalIsoDate } from "@/lib/sessionCalendar";
 import type { MindStateTrendStats } from "@/lib/historyMindStateTrends";
 import { HistoryMindStateTrends } from "@/components/HistoryMindStateTrends";
 import { HistoryYearInReview } from "@/components/HistoryYearInReview";
+import { ParkedSitsSection } from "@/components/ParkedSitsSection";
 
 const NO_RECOVERY: RecoveryFields = {
   recoveryTargetDay: null,
@@ -68,6 +69,10 @@ function sessionSortKey(s: Session): string {
 }
 
 type HistoryViewProps = {
+  /** #982: whose parked sits to list. Omitted, the list is not shown. */
+  ownerUserId?: string;
+  /** #982: a retried parked sit reached the server. */
+  onParkedSitSynced?: () => void;
   currentDay: number;
   recovery?: RecoveryFields;
   username: string;
@@ -93,6 +98,8 @@ const EMPTY_MIND_STATE_TRENDS: MindStateTrendStats = {
 };
 
 export function HistoryView({
+  ownerUserId,
+  onParkedSitSynced,
   currentDay,
   recovery = NO_RECOVERY,
   username,
@@ -119,6 +126,9 @@ export function HistoryView({
   const [viewMode, setViewMode] = useState<"calendar" | "journey">("calendar");
   const [calendarSubView, setCalendarSubView] = useState<"default" | "yearInReview">("default");
   const [todayDate, setTodayDate] = useState<string>(() => todayLocalIsoDate());
+  // Bumped when a parked sit is retried successfully, so the sessions and
+  // stats below refetch and the newly recorded sit shows up right away.
+  const [reloadKey, setReloadKey] = useState(0);
   const isMobile = useIsMobile();
   const sessionLabelColWidth = isMobile ? "88px" : "100px";
   const cellSize = isMobile ? "36px" : "44px";
@@ -175,7 +185,7 @@ export function HistoryView({
     return () => {
       cancelled = true;
     };
-  }, [dualTrackEnabled]);
+  }, [dualTrackEnabled, reloadKey]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -317,6 +327,14 @@ export function HistoryView({
         fontFamily: "var(--font-serif)", color: "var(--fg)" }}>
         Progress
       </h2>
+
+      {ownerUserId && <ParkedSitsSection
+          ownerUserId={ownerUserId}
+          onSynced={() => {
+            setReloadKey((k) => k + 1);
+            onParkedSitSynced?.();
+          }}
+        />}
 
       {/* View toggle */}
       <div style={{ display: "flex", gap: "8px", ...mono, fontSize: "11px" }}>

@@ -127,6 +127,16 @@ export function pendingResult(clientSessionId: string): SavedSessionResult {
   };
 }
 
+/** #982: a sit kept on this device that no flush will send. */
+export function parkedResult(entry: PendingSessionEntry & { parked: ParkedSession }): SavedSessionResult {
+  return {
+    sessionId: provisionalSessionId(entry.clientSessionId),
+    isPendingSync: false,
+    serverSessionId: entry.serverSessionId,
+    parked: entry.parked,
+  };
+}
+
 /** An upload failure that keeps the entry queued: a network failure, or any
  *  error not marked permanent. A permanent one is the same answer every time. */
 export function keepsEntryQueued(error: unknown): boolean {
@@ -134,7 +144,9 @@ export function keepsEntryQueued(error: unknown): boolean {
 }
 
 /** #978: the server turned this sit down for good, so no flush sends it again. */
-export function isParked(entry: PendingSessionEntry): boolean {
+export function isParked(
+  entry: PendingSessionEntry,
+): entry is PendingSessionEntry & { parked: ParkedSession } {
   return Boolean(entry.parked);
 }
 
