@@ -95,8 +95,9 @@ export class WebSessionSyncCoordinator {
         const parked = await this.parkedEntryAfter(error, clientSessionId, ownerUserId);
         if (parked) return parkedResult(parked);
         // Parked, but the queue could not be read back afterwards. Still
-        // parked, not queued, so say so rather than reject.
-        if (rejectsTheSit(error)) {
+        // parked, not queued, so say so rather than reject. Only a permanent
+        // answer parks: a storage failure (no status) is not one.
+        if (isPermanentFailure(error) && rejectsTheSit(error)) {
           return {
             sessionId: provisionalSessionId(clientSessionId),
             isPendingSync: false,
@@ -155,19 +156,31 @@ export class WebSessionSyncCoordinator {
           return { status: "parked", parked: parked.parked, sessionUploaded: parked.sessionSynced === true } as const;
         }
         // The answer parked the sit, but the queue could not be read back
-        // afterwards. It is still parked, not queued, so say so.
-        if (rejectsTheSit(error)) {
+        // afterwards. It is still parked, not queued, so say so. Only a
+        // permanent answer parks: a storage failure (no status) is not one.
+        if (isPermanentFailure(error) && rejectsTheSit(error)) {
           return { status: "parked", parked: parkedBy(error), sessionUploaded: false } as const;
         }
         if (!isPermanentFailure(error)) throw error;
         // A 401 or 403: queued again, for a flush once signed back in.
         await requestBackgroundSync();
-        return { status: "pending" } as const;
+        return { status: "pending", sessionUploaded: await this.rowUploaded(clientSessionId, ownerUserId) } as const;
       }
       if (synced) return { status: "synced" } as const;
       await requestBackgroundSync();
-      return { status: "pending" } as const;
+      // The row may have gone up before its thoughts hit a transient failure.
+      return { status: "pending", sessionUploaded: await this.rowUploaded(clientSessionId, ownerUserId) } as const;
     });
+  }
+
+  /** #982: whether this sit's server row exists, per the queue. False when the
+   *  queue cannot be read. */
+  private async rowUploaded(clientSessionId: string, ownerUserId: string): Promise<boolean> {
+    try {
+      return findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId)?.sessionSynced === true;
+    } catch {
+      return false;
+    }
   }
 
   /** #982: drops one parked sit for good. Only a parked sit of this account:

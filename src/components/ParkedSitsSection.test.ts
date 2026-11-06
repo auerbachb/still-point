@@ -167,6 +167,16 @@ describe("ParkedSitsSection (#982)", () => {
     expect(rows()[1]!.querySelector('[data-testid="parked-sit-row-saved"]')).toBeNull();
   });
 
+  test("Try again left pending after the row went up still refreshes progression", async () => {
+    const queue = fakeQueue([parkedEntry("a", "bad")], { status: "pending", sessionUploaded: true });
+    const onSynced = vi.fn();
+    await render(queue, onSynced);
+
+    await click(rows()[0]!.querySelector('[data-testid="parked-sit-retry"]'));
+
+    expect(onSynced).toHaveBeenCalledTimes(1);
+  });
+
   test("Discard asks to confirm, then removes only that sit", async () => {
     const queue = fakeQueue([parkedEntry("a", "bad"), parkedEntry("b", "bad")], { status: "synced" });
     await render(queue);

@@ -94,6 +94,7 @@ export type SavedSessionResult = {
  *  - `synced`  — the server took it.
  *  - `pending` — it could not reach the server, or got a 401 or 403; it is an
  *                ordinary queued sit again and a later flush sends it.
+ *                `sessionUploaded` says its row went up before that.
  *  - `parked`  — the server gave the same kind of answer; parked again with it.
  *                `sessionUploaded` says the sit's row is on the server anyway
  *                (only a later part, such as its thoughts, was turned down), so
@@ -102,6 +103,6 @@ export type SavedSessionResult = {
  *                meanwhile). */
 export type ParkedRetryResult =
   | { status: "synced" }
-  | { status: "pending" }
+  | { status: "pending"; sessionUploaded?: boolean }
   | { status: "parked"; parked: ParkedSession; sessionUploaded: boolean }
   | { status: "gone" };

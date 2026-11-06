@@ -1352,9 +1352,36 @@ describe("WebSessionSyncCoordinator parked sits: list, retry, discard (#982)", (
     await store.saveEntries([{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
     const coordinator = offlineCoordinator(store);
 
-    expect(await coordinator.retryParkedEntry(rejectedSit, testOwnerUserId)).toEqual({ status: "pending" });
+    expect(await coordinator.retryParkedEntry(rejectedSit, testOwnerUserId))
+      .toEqual({ status: "pending", sessionUploaded: false });
     expect(await store.loadEntries()).toEqual([queuedSit(rejectedSit)]);
     expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
+  });
+
+  test("a retry left pending says when the sit's row is already on the server", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([{ ...syncedSit(rejectedSit), parked: parkedBy404 }]);
+
+    expect(await offlineCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId))
+      .toEqual({ status: "pending", sessionUploaded: true });
+  });
+
+  test("a retry whose park cannot be saved rejects rather than reporting parked", async () => {
+    const writeFailure = new Error("queue unwritable");
+    /** Fails every write that would park an entry. */
+    class FailsParkWriteStore extends CopyingQueueStore {
+      override async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+        if (entries.some((entry) => entry.parked)) throw writeFailure;
+        await super.saveEntries(entries);
+      }
+    }
+    const store = new FailsParkWriteStore();
+    await CopyingQueueStore.prototype.saveEntries.call(store, [{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
+    stubApiRefusingCreate(rejectedSit, { status: 400, text: '{"error":"Still invalid"}' });
+
+    await expect(liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId)).rejects.toBe(writeFailure);
+    // Not parked: an ordinary queued sit that a later flush sends.
+    expect(await store.loadEntries()).toEqual([queuedSit(rejectedSit)]);
   });
 
   test("a retry for a sit this account has not queued sends nothing", async () => {

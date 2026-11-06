@@ -132,7 +132,10 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
       setStatus(parkedRetryMessage(result));
       // A row that went up before a later part was turned down still moved
       // progression, so the caller re-reads it then too.
-      if (result.status === "synced" || (result.status === "parked" && result.sessionUploaded)) onSynced?.();
+      if (
+        result.status === "synced" ||
+        ((result.status === "parked" || result.status === "pending") && result.sessionUploaded)
+      ) onSynced?.();
     } catch (error) {
       console.error("Failed to retry a parked sit:", error);
       setStatus("Could not try it again. Please retry.");
