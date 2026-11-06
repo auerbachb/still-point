@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { BuddySnapshot } from "@/lib/api";
-import type { CueMode, HapticInterval, SoundPrefs } from "@/lib/audio";
+import {
+  minuteChimeApplies,
+  type CueMode,
+  type HapticInterval,
+  type SoundPrefs,
+} from "@/lib/audio";
 import { CueModeControl, HapticIntervalControl } from "../CueModeControl";
 import {
   SOUND_TOGGLE_MIN_TAP_TARGET_PX,
@@ -443,7 +448,10 @@ export function BuddySessionActive({
                   ["completion", "end", "audio"],
                 ] as const
               ).map(([key, label, cue]) => {
-                const isOn = soundPrefs[key];
+                // #1176 (owner decision): haptic mode rings no minute bell, so
+                // the bell pill reads as not applicable. The stored switch stays.
+                const applies = key !== "chime" || minuteChimeApplies(soundPrefs);
+                const isOn = applies && soundPrefs[key];
                 const appearance = soundToggleAppearance(isOn, cue);
                 return (
                   <button
@@ -451,15 +459,21 @@ export function BuddySessionActive({
                     key={key}
                     aria-pressed={isOn}
                     aria-label={`${soundToggleAccessibilityLabel(label, cue)}; only you hear this`}
-                    title="Only you hear this — does not change audio for others"
+                    title={
+                      applies
+                        ? "Only you hear this — does not change audio for others"
+                        : "Not used in haptic mode"
+                    }
+                    disabled={!applies}
                     data-testid={`buddySession.soundToggle.${label}`}
                     onClick={() => onSoundPrefToggle(key)}
                     style={{
+                      opacity: applies ? 1 : 0.45,
                       background: appearance.isFilled ? "var(--surface-3)" : "transparent",
                       border: `1px solid ${
                         appearance.hasProminentBorder ? "var(--border-2)" : "var(--border-1)"
                       }`,
-                      cursor: "pointer",
+                      cursor: applies ? "pointer" : "not-allowed",
                       color: isOn ? "var(--fg-2)" : "var(--fg-4)",
                       transition: "background 0.2s, border-color 0.2s, color 0.2s",
                       padding: "0 10px",

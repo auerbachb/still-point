@@ -248,6 +248,10 @@ struct SessionView: View {
             )
         }
         .onChange(of: vm.showIntroOverlay) { _, showIntro in
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: sessionTimerRunning
+            )
             if showIntro {
                 attentionStartGeneration += 1
                 attentionManager.stop()
@@ -274,6 +278,27 @@ struct SessionView: View {
             }
         }
         .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: sessionTimerRunning
+            )
+        }
+        // #1176: keep-awake re-asserted wherever it could lapse — a cue-mode
+        // change, and an overlay over the sit (intro, guided exercise,
+        // post-distraction capture) opening or closing. Idempotent.
+        .onChange(of: CueModeLogic.mode(of: vm.soundPrefs)) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: sessionTimerRunning
+            )
+        }
+        .onChange(of: vm.showGuidedExercise) { _, _ in
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: sessionTimerRunning
+            )
+        }
+        .onChange(of: vm.showPostDistractionCapture) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -945,8 +970,16 @@ struct SessionView: View {
         .accessibilityIdentifier("session.hapticInterval")
     }
 
+    /// #1176 (owner decision): haptic mode rings no minute bell, so the bell
+    /// switch reads as not applicable there. The stored switch is untouched,
+    /// and the pill comes back as it was in tick or voice mode.
     private var chimeToggle: some View {
-        soundToggle("chime", isOn: vm.soundPrefs.chime) { vm.toggleSound(\.chime) }
+        let applies = CueModeLogic.minuteChimeApplies(to: vm.soundPrefs)
+        return soundToggle(
+            "chime",
+            isOn: applies && vm.soundPrefs.chime,
+            isApplicable: applies
+        ) { vm.toggleSound(\.chime) }
     }
 
     private var endToggle: some View {
@@ -967,6 +1000,7 @@ struct SessionView: View {
         _ label: String,
         isOn: Bool,
         cue: SoundToggleAppearance.Cue = .audio,
+        isApplicable: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         let appearance = SoundToggleAppearance.appearance(isOn: isOn, cue: cue)
@@ -993,11 +1027,17 @@ struct SessionView: View {
             .contentShape(Capsule())
         }
         .animation(.easeInOut(duration: 0.2), value: isOn)
+        .disabled(!isApplicable)
+        .opacity(isApplicable ? 1 : 0.45)
         .accessibilityIdentifier(SoundToggleAppearance.accessibilityIdentifier(label: label))
         // VoiceOver reads "tick sound, on, button" — the state is announced, not
         // left to the colour of the pill. The haptics pill reads "haptics
         // feedback, on, button" instead, since it makes no sound.
         .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label, cue: cue)))
-        .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
+        .accessibilityValue(Text(
+            isApplicable
+                ? SoundToggleAppearance.accessibilityValue(isOn: isOn)
+                : "not used in haptic mode"
+        ))
     }
 }

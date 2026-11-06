@@ -226,7 +226,10 @@ final class BuddySessionViewModel {
         }
 
         let effects = CueModeLogic.transitionEffects(from: previous, to: next)
-        if effects.warmUp {
+        // #1176: this room plays only the tick and the voice countdown. It rings
+        // no minute bell and no end sound, so entering haptic mode never needs
+        // the session warm here, whatever `completion` says.
+        if effects.warmUp && (next.tick || next.voiceCountdown) {
             AudioEngine.shared.warmUp()
         }
         if effects.preloadVoiceCountdown {
@@ -238,6 +241,9 @@ final class BuddySessionViewModel {
         if effects.cancelVoiceCountdown {
             AudioEngine.shared.cancelVoiceCountdownPlayback()
         }
+        // #1176: re-assert keep-awake on every cue-mode change. The decision
+        // never reads the mode, so this only re-applies what should hold.
+        SessionIdleTimerController.applyDesiredIdleTimerState()
     }
 
     func toggleSound(_ keyPath: WritableKeyPath<AudioEngine.SoundPrefs, Bool>) {

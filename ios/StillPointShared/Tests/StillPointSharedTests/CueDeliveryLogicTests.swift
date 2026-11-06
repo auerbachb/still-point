@@ -10,25 +10,85 @@ struct CueDeliveryLogicTests: SessionTickLogicTestSupport {
     // MARK: - The tick loop's minute bell
 
     @Test func testABellOwedOnTimeStillStrikes() {
-        let outcome = advance(61.4, total: 600, prefs: prefs(chime: true, haptics: true))
+        let outcome = advance(61.4, total: 600, prefs: prefs(tick: true, chime: true))
         #expect(outcome.effects.playChime)
     }
 
-    /// The haptic-mode report: the app slept through minutes 1–3 and the first
+    /// The report's clock jump: the app slept through minutes 1–3 and the first
     /// tick back lands at 3:47. The bell for minute 3 is 47 s late — dropped,
     /// and the cursor still moves so the next minute is not replayed either.
+    /// Run in tick mode, since haptic mode no longer rings the bell at all.
     @Test func testABellOwedAfterAClockJumpIsDroppedNotStruckLate() {
         let outcome = advance(
             227,
             total: 600,
-            prefs: prefs(chime: true, haptics: true),
+            prefs: prefs(tick: true, chime: true),
             cursor: cursor(tick: 0, minuteBlock: 0, hapticInterval: 1)
         )
         #expect(!outcome.effects.playChime)
         #expect(outcome.cursor.lastCompletedMinuteBlockIndex == 2)
 
-        let nextMinute = advance(240.03, total: 600, prefs: prefs(chime: true, haptics: true), cursor: outcome.cursor)
+        let nextMinute = advance(240.03, total: 600, prefs: prefs(tick: true, chime: true), cursor: outcome.cursor)
         #expect(nextMinute.effects.playChime)
+    }
+
+    // MARK: - Haptic mode rings no minute bell (owner decision)
+
+    /// Haptic mode means no minute bell, whatever the stored switch says. The
+    /// cursor still moves, so switching to tick later does not replay it.
+    @Test func testHapticModeNeverRingsTheMinuteBell() {
+        let haptic = prefs(chime: true, haptics: true)
+        let outcome = advance(60.02, total: 600, prefs: haptic)
+        #expect(!outcome.effects.playChime)
+        #expect(outcome.effects.haptic != nil)
+        #expect(outcome.cursor.lastCompletedMinuteBlockIndex == 0)
+        #expect(haptic.chime, "the gate leaves the stored pref alone")
+
+        let wholeSit = simulateSit(total: 300, prefs: haptic)
+        #expect(!wholeSit.contains { $0.playChime })
+    }
+
+    /// The stored bell survives the haptic gate: back in tick mode it rings.
+    @Test func testTickModeStillRingsTheStoredBell() {
+        let haptic = prefs(chime: true, haptics: true)
+        let tick = CueModeLogic.applying(.tick, to: haptic)
+        #expect(tick.chime)
+        #expect(advance(60.02, total: 600, prefs: tick).effects.playChime)
+        #expect(!CueModeLogic.minuteChimeApplies(to: haptic))
+        #expect(CueModeLogic.minuteChimeApplies(to: tick))
+        #expect(CueModeLogic.minuteChimeApplies(to: CueModeLogic.applying(.voice, to: haptic)))
+    }
+
+    /// With the bell gated out, a haptic sit's only possible sound is the end.
+    @Test func testHasAudibleCueIgnoresTheGatedBell() {
+        #expect(!CueModeLogic.hasAudibleCue(prefs(chime: true, haptics: true)))
+        #expect(CueModeLogic.hasAudibleCue(prefs(chime: true, completion: true, haptics: true)))
+        #expect(CueModeLogic.hasAudibleCue(prefs(chime: true)))
+    }
+
+    // MARK: - The end sound (owner decision)
+
+    @Test func testAnOnTimeEndSoundPlays() {
+        let outcome = advance(300.04, total: 300, prefs: prefs(completion: true, haptics: true))
+        #expect(outcome.completedNaturally)
+        #expect(outcome.effects.playCompletion)
+    }
+
+    /// The app slept through the end and the first tick back is past the
+    /// budget: the end sound is dropped, the end buzz and the completion land.
+    @Test func testALateEndSoundIsDroppedButTheSitStillEnds() {
+        let outcome = advance(
+            300 + CueDeliveryLogic.maxLatenessSeconds + 0.01,
+            total: 300,
+            prefs: prefs(completion: true, haptics: true)
+        )
+        #expect(outcome.completedNaturally)
+        #expect(outcome.elapsed == 300)
+        #expect(!outcome.effects.playCompletion)
+        #expect(outcome.effects.haptic == .sessionEnd)
+
+        let atBudget = advance(300 + CueDeliveryLogic.maxLatenessSeconds, total: 300, prefs: prefs(completion: true))
+        #expect(atBudget.effects.playCompletion)
     }
 
     @Test func testTheLatenessBudgetIsInclusiveAndThenDrops() {

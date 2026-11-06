@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import StillPointShared
 
@@ -8,6 +9,15 @@ import StillPointShared
 ///
 /// Tracks activity per `AppViewModel` so multiple `WindowGroup` scenes do not overwrite
 /// each other. Re-applies after foreground using stored registration state.
+///
+/// #1176: the rule lives in `KeepAwakeLogic` (StillPointShared, `swift test`-covered)
+/// and never reads cue mode, so a haptic sit is held like any other. Besides the
+/// view call sites (scene phase, pause/resume, cue-mode change, overlays closing),
+/// the controller re-applies itself when an audio interruption ends and when the
+/// app becomes active, since neither always reaches a view.
+///
+/// The iOS limit: a side-button lock suspends the app regardless, and no haptic or
+/// bell can fire until the sitter reopens it.
 @MainActor
 enum SessionIdleTimerController {
     private final class IdleRegistration {
@@ -22,6 +32,7 @@ enum SessionIdleTimerController {
     }
 
     private static var registrations: [ObjectIdentifier: IdleRegistration] = [:]
+    private static var systemObservers: [NSObjectProtocol] = []
 
     /// Resolved through `WakeLockPrefs`, which distinguishes "never set" (default on)
     /// from an explicit `false` — `UserDefaults.bool(forKey:)` cannot (#730).
@@ -64,11 +75,17 @@ enum SessionIdleTimerController {
     /// Recompute from all registrations and UserDefaults (e.g. after foreground).
     static func applyDesiredIdleTimerState() {
         pruneDeadRegistrations()
-        let pref = keepScreenAwakePreferenceEnabled
-        let shouldDisable = pref && registrations.values.contains { reg in
-            reg.appViewModel != nil && reg.sceneForegroundActive
-                && (reg.localSessionRunning || reg.buddySessionActive)
-        }
+        let shouldDisable = KeepAwakeLogic.shouldDisableIdleTimer(
+            preferenceEnabled: keepScreenAwakePreferenceEnabled,
+            registrations: registrations.values.map { reg in
+                KeepAwakeLogic.Registration(
+                    isAlive: reg.appViewModel != nil,
+                    sceneForegroundActive: reg.sceneForegroundActive,
+                    localSessionRunning: reg.localSessionRunning,
+                    buddySessionActive: reg.buddySessionActive
+                )
+            }
+        )
         UIApplication.shared.isIdleTimerDisabled = shouldDisable
     }
 
@@ -92,7 +109,32 @@ enum SessionIdleTimerController {
         }
         let reg = IdleRegistration(appViewModel: appVM)
         registrations[id] = reg
+        installSystemObserversIfNeeded()
         return reg
+    }
+
+    /// #1176: re-apply after an audio interruption ends (a call, Siri, an alarm)
+    /// and when the app becomes active, so a lapse during either never outlasts it.
+    /// Installed once, on the first registration, for the life of the process.
+    private static func installSystemObserversIfNeeded() {
+        guard systemObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        systemObservers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            guard raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .ended else { return }
+            MainActor.assumeIsolated { applyDesiredIdleTimerState() }
+        })
+        systemObservers.append(center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { applyDesiredIdleTimerState() }
+        })
     }
 
     private static func pruneDeadRegistrations() {

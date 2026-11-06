@@ -87,14 +87,14 @@ struct CueModeLogicTests {
         #expect(!effects.cancelVoiceCountdown)
     }
 
-    /// #1176: the bell keeps ringing in haptic mode, so entering it with the
-    /// bell on keeps the session warm for that bell.
-    @Test func testTransitionIntoHapticWithChimeOnWarmsAudio() {
+    /// #1176 (owner decision): haptic mode rings no minute bell, so the stored
+    /// bell alone is no reason to warm the session on the way in.
+    @Test func testTransitionIntoHapticWithOnlyChimeOnStaysCold() {
         let effects = CueModeLogic.transitionEffects(
             from: prefs(tick: true, haptics: false, voice: false, chime: true),
             to: prefs(tick: false, haptics: true, voice: false, chime: true)
         )
-        #expect(effects.warmUp)
+        #expect(!effects.warmUp)
         #expect(!effects.preloadVoiceCountdown)
         #expect(!effects.cancelVoiceCountdown)
     }

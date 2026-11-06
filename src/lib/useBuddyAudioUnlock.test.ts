@@ -150,12 +150,13 @@ describe("useBuddyAudioUnlock", () => {
 
     // Enabling an audio cue starts an unlock that has not settled yet.
     await act(async () => {
-      view.current().handleSoundPrefToggle("chime");
+      view.current().handleSoundPrefToggle("completion");
     });
     expect(pendingUnlocks).toHaveLength(1);
 
     // Haptics needs no audio context, so this toggle starts no unlock of its
-    // own. It must therefore not invalidate the chime unlock still in flight.
+    // own. It must therefore not invalidate the end-sound unlock still in
+    // flight. (The bell would not do here: haptic mode gates it out, #1176.)
     await act(async () => {
       view.current().handleSoundPrefToggle("haptics");
     });
@@ -166,25 +167,26 @@ describe("useBuddyAudioUnlock", () => {
     });
 
     // The regression this guards: the discarded result left the sitter with the
-    // chime on, audio genuinely blocked, and no warning saying so.
+    // end sound on, audio genuinely blocked, and no warning saying so.
     expect(view.current().audioBlocked).toBe(true);
   });
 
   it("keeps the warning cleared when the last audio cue is switched off mid-unlock", async () => {
-    // Haptic mode is the silent cue, so chime is the only sound that can be on.
+    // Haptic mode rings no minute bell (#1176), so the end sound is the only
+    // sound that can be on.
     seedPrefs({ haptics: true });
     const view = await renderHook(() => useBuddyAudioUnlock("session-2"));
 
     await act(async () => {
-      view.current().handleSoundPrefToggle("chime");
+      view.current().handleSoundPrefToggle("completion");
     });
     expect(pendingUnlocks).toHaveLength(1);
 
-    // Chime back off: no audio cue is left, so the in-flight unlock is
+    // End sound back off: no audio cue is left, so the in-flight unlock is
     // cancelled and its late "blocked" result must not raise a warning about
     // sound the sitter has just silenced.
     await act(async () => {
-      view.current().handleSoundPrefToggle("chime");
+      view.current().handleSoundPrefToggle("completion");
     });
 
     await act(async () => {
@@ -211,8 +213,19 @@ describe("useBuddyAudioUnlock", () => {
 });
 
 describe("useAudioUnlock — solo blocked affordance", () => {
-  it("does not restore the warning when playback fails after every sound is off", async () => {
+  it("raises no warning for a bell that haptic mode gates out (#1176)", async () => {
     seedPrefs({ haptics: true, chime: true });
+    const view = await renderHook(() => useAudioUnlock("solo"));
+
+    await act(async () => {
+      view.current().handleSoundPlaybackBlocked();
+    });
+    expect(view.current().audioBlocked).toBe(false);
+    expect(view.current().soundPrefs.chime).toBe(true);
+  });
+
+  it("does not restore the warning when playback fails after every sound is off", async () => {
+    seedPrefs({ haptics: true, completion: true });
     const view = await renderHook(() => useAudioUnlock("solo"));
 
     await act(async () => {
@@ -221,7 +234,7 @@ describe("useAudioUnlock — solo blocked affordance", () => {
     expect(view.current().audioBlocked).toBe(true);
 
     await act(async () => {
-      view.current().handleSoundPrefToggle("chime");
+      view.current().handleSoundPrefToggle("completion");
     });
     expect(view.current().audioBlocked).toBe(false);
 

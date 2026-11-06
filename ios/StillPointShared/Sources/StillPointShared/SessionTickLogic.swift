@@ -119,7 +119,7 @@ public enum SessionTickLogic {
         cursor: Cursor
     ) -> Outcome {
         if elapsed >= Double(totalSeconds) {
-            return completingOutcome(totalSeconds: totalSeconds, prefs: prefs, isAbandoned: isAbandoned, cursor: cursor)
+            return completingOutcome(elapsed: elapsed, totalSeconds: totalSeconds, prefs: prefs, isAbandoned: isAbandoned, cursor: cursor)
         }
 
         var next = cursor
@@ -165,6 +165,7 @@ public enum SessionTickLogic {
     /// The tick that ends the sit: it owes the completion cues and none of the
     /// running ones, and leaves the cursor where it was.
     private static func completingOutcome(
+        elapsed: Double,
         totalSeconds: Int,
         prefs: AudioEngine.SoundPrefs,
         isAbandoned: Bool,
@@ -180,8 +181,12 @@ public enum SessionTickLogic {
                 voiceCountdownSecond: nil,
                 playTick: false,
                 playChime: false,
-                // Completion sound plays unconditionally even in voice countdown mode.
-                playCompletion: prefs.completion,
+                // Completion sound plays unconditionally even in voice countdown
+                // mode. #1176: on time or not at all — a tick that first sees the
+                // end long after it (the app was suspended through it) drops the
+                // sound. The end haptic below and the save are unaffected.
+                playCompletion: prefs.completion
+                    && CueDeliveryLogic.isOnTime(dueAt: Double(totalSeconds), now: elapsed),
                 // #712: the end cue, felt rather than heard. Not gated on
                 // `prefs.completion` — silencing the bell must not silence the
                 // buzz — but it is the same moment, so a sitter with both on
@@ -265,8 +270,10 @@ public enum SessionTickLogic {
             dueAt: CueDeliveryLogic.minuteBellDueAt(completedBlockIndex: chimeUpdate.updatedCompletedBlockIndex),
             now: elapsed
         )
-        // Per-minute chime suppressed during voice countdown final minute.
-        return prefs.chime && fullMinuteRemains && !voiceActive && onTime
+        // Per-minute chime suppressed during voice countdown final minute, and
+        // never rung in haptic mode (#1176 owner decision; the stored switch is
+        // left alone so tick mode still rings).
+        return CueModeLogic.minuteChimeEnabled(prefs) && fullMinuteRemains && !voiceActive && onTime
     }
 
     /// Repeating haptic — uses its own interval, not the chime's minute blocks.

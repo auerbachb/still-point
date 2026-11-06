@@ -9,6 +9,7 @@ import {
   type SoundToggleCue,
 } from "@/lib/soundToggleAppearance";
 import type { useAudioUnlock } from "@/lib/useAudioUnlock";
+import { minuteChimeApplies } from "@/lib/audio";
 import { CueModeControl, HapticIntervalControl } from "../CueModeControl";
 import { mono } from "./sessionViewStyles";
 
@@ -125,7 +126,10 @@ export function SessionSoundControls({
           ["completion", "end", "audio"],
         ] as const
       ).map(([key, label, cue]) => {
-        const isOn = soundPrefs[key];
+        // #1176 (owner decision): haptic mode rings no minute bell, so the bell
+        // pill reads as not applicable there. The stored switch is untouched.
+        const applies = key !== "chime" || minuteChimeApplies(soundPrefs);
+        const isOn = applies && soundPrefs[key];
         const appearance = soundToggleAppearance(isOn, cue);
         return (
           <button
@@ -140,17 +144,23 @@ export function SessionSoundControls({
             // restates the state in words: it is the hover tooltip for mouse
             // users, and a plain-language fallback on the older
             // browser/screen-reader pairs that handle `aria-pressed` poorly.
-            title={`${soundToggleAccessibilityLabel(label, cue)} — ${soundToggleStateText(isOn)}`}
+            title={
+              applies
+                ? `${soundToggleAccessibilityLabel(label, cue)} — ${soundToggleStateText(isOn)}`
+                : `${soundToggleAccessibilityLabel(label, cue)} — not used in haptic mode`
+            }
+            disabled={!applies}
             data-testid={soundToggleTestId(label)}
             data-sound-toggle={label}
-            data-state={soundToggleStateText(isOn)}
+            data-state={applies ? soundToggleStateText(isOn) : "n/a"}
             onClick={() => onSoundPrefToggle(key)}
             style={{
+              opacity: applies ? 1 : 0.45,
               background: appearance.isFilled ? "var(--surface-3)" : "transparent",
               border: `1px solid ${
                 appearance.hasProminentBorder ? "var(--border-2)" : "var(--border-1)"
               }`,
-              cursor: "pointer",
+              cursor: applies ? "pointer" : "not-allowed",
               color: isOn ? "var(--fg-2)" : "var(--fg-4)",
               transition: "background 0.2s, border-color 0.2s, color 0.2s",
               // Padding plus this min-height makes the *visible* pill the tap

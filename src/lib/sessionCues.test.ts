@@ -31,6 +31,8 @@ const TICK: SoundPrefs = {
 };
 const VOICE: SoundPrefs = { ...TICK, tick: false, voiceCountdown: true };
 const HAPTIC: SoundPrefs = { ...TICK, tick: false, haptics: true };
+/** Every cue flag off resolves to tick mode, so the bell applies, without the tick sound. */
+const SILENT_TICK: SoundPrefs = { ...TICK, tick: false };
 const HAPTIC_TEN_SECONDS: SoundPrefs = { ...HAPTIC, hapticInterval: "tenSeconds" };
 const HAPTIC_EVERY_SECOND: SoundPrefs = { ...HAPTIC, hapticInterval: "everySecond" };
 
@@ -314,20 +316,36 @@ describe("planCountdownCues — minute chime", () => {
   });
 
   // #1176: on time or not at all. iOS pins the same rule in
-  // `CueDeliveryLogicTests.swift`.
+  // `CueDeliveryLogicTests.swift`. Run with every cue off (tick mode), since
+  // haptic mode no longer rings the bell at all.
   it("still strikes a bell that is late by no more than the lateness budget", () => {
-    const planned = planFrom(59.95, 60 + CHIME_MAX_LATENESS_SECONDS, 300, HAPTIC);
+    const planned = planFrom(59.95, 60 + CHIME_MAX_LATENESS_SECONDS, 300, SILENT_TICK);
     expect(sounds(planned.cues)).toEqual([{ kind: "chime" }]);
   });
 
   it("drops a bell owed long after its minute, and still marks the block", () => {
     // The tab slept from 0:58 to 2:47: the bell for minute 2 is 47 s late.
-    const late = planFrom(58, 167, 300, HAPTIC);
+    const late = planFrom(58, 167, 300, SILENT_TICK);
     expect(sounds(late.cues)).toEqual([]);
     expect(late.cursor.lastCompletedBlockIndex).toBe(1);
 
-    const next = planCountdownCues(late.cursor, 180.05, 300, HAPTIC);
+    const next = planCountdownCues(late.cursor, 180.05, 300, SILENT_TICK);
     expect(sounds(next.cues)).toEqual([{ kind: "chime" }]);
+  });
+
+  // #1176 (owner decision): haptic mode means no minute bell. iOS pins the same
+  // gate in `CueDeliveryLogicTests.swift`.
+  it("never strikes in haptic mode, and the stored switch still rings in tick mode", () => {
+    expect(HAPTIC.chime).toBe(true);
+    const { cues } = run(freshCueCursor(HAPTIC), updates(0, 300), 300, HAPTIC);
+    expect(cues.filter(([, cue]) => cue.kind === "chime")).toEqual([]);
+    expect(cues.filter(([, cue]) => cue.kind === "haptic")).not.toEqual([]);
+
+    const haptic = planFrom(59.95, 60, 300, HAPTIC);
+    expect(sounds(haptic.cues)).toEqual([]);
+    expect(haptic.cursor.lastCompletedBlockIndex).toBe(0);
+    const backToTick = planCountdownCues(haptic.cursor, 120, 300, SILENT_TICK);
+    expect(sounds(backToTick.cues)).toEqual([{ kind: "chime" }]);
   });
 });
 
@@ -378,8 +396,10 @@ describe("planCountdownCues — repeating haptic", () => {
 
   it("consumes the boundary an interval change lands on, keeping the other cues due there", () => {
     // The switch lands exactly on 60 s: a ten-second and a minute boundary.
+    // The minute block is consumed too; haptic mode rings no bell for it (#1176).
     const switched = planCountdownCues(seededCueCursor(59.95, 300, HAPTIC), 60, 300, HAPTIC_TEN_SECONDS);
-    expect(switched.cues).toEqual([{ kind: "chime" }]);
+    expect(switched.cues).toEqual([]);
+    expect(switched.cursor.lastCompletedBlockIndex).toBe(0);
     expect(switched.cursor).toMatchObject({ lastHapticInterval: 10, lastHapticIndex: 6 });
     expect(planCountdownCues(switched.cursor, 60.05, 300, HAPTIC_TEN_SECONDS).cues).toEqual([]);
   });
@@ -465,5 +485,17 @@ describe("planSessionEndCues", () => {
       { kind: "haptic", cue: "sessionEnd" },
     ]);
     expect(planSessionEndCues(undefined)).toEqual([{ kind: "haptic", cue: "sessionEnd" }]);
+  });
+
+  // #1176 (owner decision): a late end sound is dropped; the buzz is not.
+  it("drops the end sound when the clock saw the end past the lateness budget", () => {
+    expect(planSessionEndCues(HAPTIC, CHIME_MAX_LATENESS_SECONDS)).toEqual([
+      { kind: "haptic", cue: "sessionEnd" },
+      { kind: "completion" },
+    ]);
+    expect(planSessionEndCues(HAPTIC, CHIME_MAX_LATENESS_SECONDS + 0.01)).toEqual([
+      { kind: "haptic", cue: "sessionEnd" },
+    ]);
+    expect(planSessionEndCues(TICK, 180)).toEqual([{ kind: "haptic", cue: "sessionEnd" }]);
   });
 });
