@@ -40,8 +40,12 @@ One line per journey, naming the test that covers it. The cross-platform journey
 
 ## Run locally
 
+Regenerate the Xcode project from `ios/project.yml` first, so the run matches the spec
+(rules: [`ios/RELEASING.md` — Generated Xcode project](../RELEASING.md#generated-xcode-project-xcodegen)):
+
 ```bash
 cd ios
+xcodegen generate
 xcodebuild test \
   -project StillPoint.xcodeproj \
   -scheme StillPoint \
