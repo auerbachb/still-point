@@ -938,9 +938,10 @@ struct SessionView: View {
         )) {
             Text("Every minute").tag(HapticCueLogic.Interval.minute)
             Text("Every 10 sec").tag(HapticCueLogic.Interval.tenSeconds)
+            Text("Every second").tag(HapticCueLogic.Interval.everySecond)
         }
         .pickerStyle(.segmented)
-        .frame(maxWidth: 280)
+        .frame(maxWidth: 360)
         .accessibilityIdentifier("session.hapticInterval")
     }
 

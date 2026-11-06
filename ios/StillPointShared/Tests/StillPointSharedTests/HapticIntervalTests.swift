@@ -26,7 +26,8 @@ struct HapticIntervalTests {
             HapticCueLogic.repeatingCue(
                 hapticsEnabled: true,
                 crossedBoundary: first.crossedBoundary,
-                isAbandoned: false
+                isAbandoned: false,
+                interval: .minute
             ) == .minuteMarker
         )
 
@@ -83,14 +84,16 @@ struct HapticIntervalTests {
             HapticCueLogic.repeatingCue(
                 hapticsEnabled: false,
                 crossedBoundary: true,
-                isAbandoned: false
+                isAbandoned: false,
+                interval: .minute
             ) == nil
         )
         #expect(
             HapticCueLogic.repeatingCue(
                 hapticsEnabled: true,
                 crossedBoundary: true,
-                isAbandoned: true
+                isAbandoned: true,
+                interval: .everySecond
             ) == nil
         )
     }
@@ -112,5 +115,88 @@ struct HapticIntervalTests {
         let encoded = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: encoded)
         #expect(decoded.hapticInterval == .tenSeconds)
+    }
+
+    // MARK: - Every second (#1175)
+
+    @Test func testOneSecondIsAValidInterval() {
+        #expect(HapticCueLogic.Interval.seconds(validating: 1) == 1)
+        #expect(HapticCueLogic.Interval.seconds(validating: 10) == 10)
+        #expect(HapticCueLogic.Interval.seconds(validating: 60) == 60)
+        #expect(HapticCueLogic.Interval.seconds(validating: 2) == nil)
+        #expect(HapticCueLogic.Interval.everySecond.seconds == 1)
+    }
+
+    @Test func testOneSecondIntervalFiresOnEachCompletedSecond() {
+        let first = update(elapsed: 1, duration: 5, interval: 1, last: 0)
+        #expect(first.crossedBoundary)
+        #expect(first.completedIndex == 1)
+
+        let mid = update(elapsed: 1.5, duration: 5, interval: 1, last: 1)
+        #expect(!mid.crossedBoundary)
+        #expect(mid.completedIndex == 1)
+
+        let second = update(elapsed: 2.02, duration: 5, interval: 1, last: 1)
+        #expect(second.crossedBoundary)
+        #expect(second.completedIndex == 2)
+    }
+
+    @Test func testOneSecondIntervalJumpFiresOnceAndDoesNotReplay() {
+        let jumped = update(elapsed: 4.3, duration: 10, interval: 1, last: 1)
+        #expect(jumped.crossedBoundary)
+        #expect(jumped.completedIndex == 4)
+
+        let next = update(elapsed: 4.8, duration: 10, interval: 1, last: jumped.completedIndex)
+        #expect(!next.crossedBoundary)
+        #expect(next.completedIndex == 4)
+    }
+
+    @Test func testOneSecondIntervalNeverLandsOnTheEndTick() {
+        let end = update(elapsed: 5, duration: 5, interval: 1, last: 4)
+        #expect(!end.crossedBoundary)
+        #expect(end.completedIndex == 4)
+
+        let seeded = HapticCueLogic.completedHapticIntervalIndex(
+            elapsedSeconds: 5,
+            durationSeconds: 5,
+            intervalSeconds: 1
+        )
+        #expect(seeded == 4)
+    }
+
+    @Test func testEachIntervalPlaysItsOwnCue() {
+        #expect(
+            HapticCueLogic.repeatingCue(
+                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .everySecond
+            ) == .secondPulse
+        )
+        #expect(
+            HapticCueLogic.repeatingCue(
+                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .tenSeconds
+            ) == .minuteMarker
+        )
+        #expect(
+            HapticCueLogic.repeatingCue(
+                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .minute
+            ) == .minuteMarker
+        )
+    }
+
+    @Test func testEverySecondIntervalRoundTrips() throws {
+        let original = AudioEngine.SoundPrefs(
+            tick: false, chime: true, completion: true, haptics: true, hapticInterval: .everySecond
+        )
+        let encoded = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: encoded)
+        #expect(decoded.hapticInterval == .everySecond)
+    }
+
+    @Test func testUnknownIntervalDecodesAsEveryMinute() throws {
+        let json = """
+        {"tick":false,"chime":true,"completion":true,"voiceCountdown":false,"haptics":true,"hapticInterval":"everyHour"}
+        """
+        let data = try #require(json.data(using: .utf8))
+        let prefs = try JSONDecoder().decode(AudioEngine.SoundPrefs.self, from: data)
+        #expect(prefs.hapticInterval == .minute)
     }
 }

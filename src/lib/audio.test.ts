@@ -542,6 +542,17 @@ describe("audio-channel classification of SoundPrefs (#712)", () => {
   });
 });
 
+describe("stored haptic interval (#1175)", () => {
+  it("keeps every known interval and falls back to every minute otherwise", async () => {
+    const { sanitizeHapticInterval } = await loadAudio();
+    expect(sanitizeHapticInterval("everySecond")).toBe("everySecond");
+    expect(sanitizeHapticInterval("tenSeconds")).toBe("tenSeconds");
+    expect(sanitizeHapticInterval("minute")).toBe("minute");
+    expect(sanitizeHapticInterval("everyHour")).toBe("minute");
+    expect(sanitizeHapticInterval(undefined)).toBe("minute");
+  });
+});
+
 describe("exclusive cue mode", () => {
   const base = {
     tick: false,

@@ -31,4 +31,13 @@ struct SessionTickLogicHapticTests: SessionTickLogicTestSupport {
         #expect(abandoned.effects.haptic == nil)
         #expect(abandoned.cursor.lastHapticIntervalIndex == 1)
     }
+
+    /// #1175: every second plays the light pulse, never on the end tick, and
+    /// the end buzz still closes the sit.
+    @Test func testTheEverySecondIntervalPulsesEachSecondThenEnds() {
+        let effects = simulateSit(total: 5, prefs: prefs(haptics: true, interval: .everySecond))
+        #expect(effects.compactMap(\.haptic) == [
+            .secondPulse, .secondPulse, .secondPulse, .secondPulse, .sessionEnd,
+        ])
+    }
 }

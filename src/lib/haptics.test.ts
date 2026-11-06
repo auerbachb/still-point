@@ -9,8 +9,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   HAPTIC_PATTERNS,
   fireHaptic,
+  hapticIntervalSeconds,
   maybeFireHaptic,
   nextRepeatingHaptic,
+  repeatingHapticCue,
   supportsVibration,
 } from "@/lib/haptics";
 
@@ -130,6 +132,22 @@ describe("patterns", () => {
     );
   });
 
+  /** #1175: pulse, marker, and end are pairwise distinct shapes. */
+  test("no two cues share a pattern", () => {
+    const shapes = Object.values(HAPTIC_PATTERNS).map((p) => p.join(","));
+    expect(new Set(shapes).size).toBe(shapes.length);
+  });
+
+  /** #1175: the marker got stronger; the old tiny tap became the every-second pulse. */
+  test("the every-second pulse is short and the minute marker is clearly stronger", () => {
+    const total = (p: readonly number[]) => p.reduce((a, b) => a + b, 0);
+    expect(HAPTIC_PATTERNS.secondPulse).toEqual([30]);
+    expect(total(HAPTIC_PATTERNS.minuteMarker)).toBeGreaterThanOrEqual(100);
+    expect(total(HAPTIC_PATTERNS.minuteMarker)).toBeGreaterThan(
+      total(HAPTIC_PATTERNS.secondPulse) * 3,
+    );
+  });
+
   /** A minute marker that drones would be the disruption the ticket rules out. */
   test("every buzz stays short", () => {
     for (const pattern of Object.values(HAPTIC_PATTERNS)) {
@@ -217,7 +235,7 @@ describe("repeating haptic interval", () => {
     ).toBe(false);
   });
 
-  test("rejects intervals other than 10s and 60s", () => {
+  test("rejects intervals other than 1s, 10s, and 60s", () => {
     expect(
       nextRepeatingHaptic({
         elapsedSeconds: 30,
@@ -226,5 +244,69 @@ describe("repeating haptic interval", () => {
         lastCompletedIndex: 0,
       }),
     ).toEqual({ completedIndex: 0, shouldFire: false });
+  });
+});
+
+describe("every-second interval (#1175)", () => {
+  test("accepts the one-second value and falls back to every minute otherwise", () => {
+    expect(hapticIntervalSeconds("everySecond")).toBe(1);
+    expect(hapticIntervalSeconds(1)).toBe(1);
+    expect(hapticIntervalSeconds("tenSeconds")).toBe(10);
+    expect(hapticIntervalSeconds("minute")).toBe(60);
+    expect(hapticIntervalSeconds("everyHour")).toBe(60);
+    expect(hapticIntervalSeconds(undefined)).toBe(60);
+  });
+
+  test("fires on each completed second", () => {
+    const first = nextRepeatingHaptic({
+      elapsedSeconds: 1,
+      durationSeconds: 5,
+      intervalSeconds: 1,
+      lastCompletedIndex: 0,
+    });
+    expect(first).toEqual({ completedIndex: 1, shouldFire: true });
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 1.5,
+        durationSeconds: 5,
+        intervalSeconds: 1,
+        lastCompletedIndex: 1,
+      }),
+    ).toEqual({ completedIndex: 1, shouldFire: false });
+  });
+
+  test("a jump fires once and does not replay", () => {
+    const jumped = nextRepeatingHaptic({
+      elapsedSeconds: 4.3,
+      durationSeconds: 10,
+      intervalSeconds: 1,
+      lastCompletedIndex: 1,
+    });
+    expect(jumped).toEqual({ completedIndex: 4, shouldFire: true });
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 4.8,
+        durationSeconds: 10,
+        intervalSeconds: 1,
+        lastCompletedIndex: jumped.completedIndex,
+      }).shouldFire,
+    ).toBe(false);
+  });
+
+  test("never lands on the end tick", () => {
+    expect(
+      nextRepeatingHaptic({
+        elapsedSeconds: 5,
+        durationSeconds: 5,
+        intervalSeconds: 1,
+        lastCompletedIndex: 4,
+      }),
+    ).toEqual({ completedIndex: 4, shouldFire: false });
+  });
+
+  test("every second plays the pulse; the longer intervals play the marker", () => {
+    expect(repeatingHapticCue(1)).toBe("secondPulse");
+    expect(repeatingHapticCue(10)).toBe("minuteMarker");
+    expect(repeatingHapticCue(60)).toBe("minuteMarker");
   });
 });

@@ -247,6 +247,7 @@ struct BuddyActiveSessionView: View {
                 )) {
                     Text("Every minute").tag(HapticCueLogic.Interval.minute)
                     Text("Every 10 sec").tag(HapticCueLogic.Interval.tenSeconds)
+                    Text("Every second").tag(HapticCueLogic.Interval.everySecond)
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("buddySession.hapticInterval")

@@ -14,30 +14,36 @@ import Foundation
 /// Free of UIKit / CoreHaptics so it compiles and runs under `swift test` on macOS.
 public enum HapticCueLogic {
 
-    /// The two moments a sit announces by feel.
+    /// The moments a sit announces by feel.
     public enum Cue: String, Sendable, Equatable, CaseIterable {
-        /// A minute block just completed — the same instant the bell strikes.
+        /// A minute (or ten-second) mark just passed.
         case minuteMarker
+        /// #1175: another second of the sit passed — the every-second interval.
+        case secondPulse
         /// The sit ran its full length.
         case sessionEnd
     }
 
     /// How a cue should feel.
     ///
-    /// The end of a sit has to be tellable from a minute marker with your eyes
-    /// shut, so the two never share a value — that inequality is the point of
-    /// the type, and `HapticCueLogicTests` asserts it directly.
+    /// The end of a sit has to be tellable from a marker with your eyes shut,
+    /// and the every-second pulse from both, so no two cues share a value —
+    /// that inequality is the point of the type, and `HapticCueLogicTests`
+    /// asserts it directly.
     public enum Intensity: String, Sendable, Equatable, CaseIterable {
-        /// A single light tap.
-        case gentle
-        /// A stronger, distinctly different pattern.
+        /// #1175: a single tiny tap, light enough to repeat every second.
+        case pulse
+        /// A firm buzz for each minute or ten-second mark.
+        case marker
+        /// The end of the sit — a different shape again.
         case pronounced
     }
 
     /// Maps a cue to the strength the app target should play it at.
     public static func intensity(for cue: Cue) -> Intensity {
         switch cue {
-        case .minuteMarker: return .gentle
+        case .secondPulse:  return .pulse
+        case .minuteMarker: return .marker
         case .sessionEnd:   return .pronounced
         }
     }
@@ -73,20 +79,32 @@ public enum HapticCueLogic {
         return .minuteMarker
     }
 
-    /// How often the repeating haptic fires. Only these two values exist.
+    /// How often the repeating haptic fires. Only these three values exist.
     public enum Interval: String, Codable, CaseIterable, Sendable, Equatable {
         case minute
         case tenSeconds
+        /// #1175: the tiny pulse, once a second.
+        case everySecond
 
         public var seconds: Int {
             switch self {
             case .minute: return 60
             case .tenSeconds: return 10
+            case .everySecond: return 1
+            }
+        }
+
+        /// The cue each boundary of this interval plays. The every-second
+        /// interval plays the light pulse; the others play the firm marker.
+        public var cue: Cue {
+            switch self {
+            case .everySecond: return .secondPulse
+            case .minute, .tenSeconds: return .minuteMarker
             }
         }
 
         public static func seconds(validating raw: Int) -> Int? {
-            raw == 10 || raw == 60 ? raw : nil
+            raw == 1 || raw == 10 || raw == 60 ? raw : nil
         }
     }
 
@@ -163,14 +181,16 @@ public enum HapticCueLogic {
         )
     }
 
-    /// The repeating cue, or nil. The end cue stays on `sessionEndCue`.
+    /// The repeating cue for `interval`, or nil. The end cue stays on
+    /// `sessionEndCue`.
     public static func repeatingCue(
         hapticsEnabled: Bool,
         crossedBoundary: Bool,
-        isAbandoned: Bool
+        isAbandoned: Bool,
+        interval: Interval
     ) -> Cue? {
         guard hapticsEnabled, crossedBoundary, !isAbandoned else { return nil }
-        return .minuteMarker
+        return interval.cue
     }
 
     /// The cue owed as the timer runs out, or nil for stillness.
