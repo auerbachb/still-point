@@ -141,7 +141,14 @@ export class WebSessionSyncCoordinator {
         synced = await this.flushEntry(clientSessionId, ownerUserId);
       } catch (error) {
         const parked = await this.parkedEntryAfter(error, clientSessionId, ownerUserId);
-        if (parked) return { status: "parked", parked: parked.parked } as const;
+        if (parked) {
+          return { status: "parked", parked: parked.parked, sessionUploaded: parked.sessionSynced === true } as const;
+        }
+        // The answer parked the sit, but the queue could not be read back
+        // afterwards. It is still parked, not queued, so say so.
+        if (rejectsTheSit(error)) {
+          return { status: "parked", parked: parkedBy(error), sessionUploaded: false } as const;
+        }
         if (!isPermanentFailure(error)) throw error;
         // A 401 or 403: queued again, for a flush once signed back in.
         await requestBackgroundSync();

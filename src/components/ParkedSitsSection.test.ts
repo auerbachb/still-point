@@ -127,6 +127,7 @@ describe("ParkedSitsSection (#982)", () => {
     const reparked: ParkedRetryResult = {
       status: "parked",
       parked: { at: "2026-11-05T12:00:00.000Z", status: 400, message: "still invalid" },
+      sessionUploaded: false,
     };
     const queue = fakeQueue([parkedEntry("a", "bad")], reparked);
     const onSynced = vi.fn();
@@ -139,6 +140,22 @@ describe("ParkedSitsSection (#982)", () => {
     expect(container!.querySelector('[role="status"]')!.textContent).toBe(
       "The server turned it down again: still invalid",
     );
+  });
+
+  test("Try again whose row went up before its thoughts were turned down still refreshes progression", async () => {
+    const reparked: ParkedRetryResult = {
+      status: "parked",
+      parked: { at: "2026-11-05T12:00:00.000Z", status: 404, message: "thoughts refused" },
+      sessionUploaded: true,
+    };
+    const queue = fakeQueue([parkedEntry("a", "bad")], reparked);
+    const onSynced = vi.fn();
+    await render(queue, onSynced);
+
+    await click(rows()[0]!.querySelector('[data-testid="parked-sit-retry"]'));
+
+    expect(onSynced).toHaveBeenCalledTimes(1);
+    expect(rows()).toHaveLength(1);
   });
 
   test("Discard asks to confirm, then removes only that sit", async () => {
@@ -160,7 +177,7 @@ describe("ParkedSitsSection (#982)", () => {
 describe("parkedRetryMessage (#982)", () => {
   test("names each way a retry ends", () => {
     expect(parkedRetryMessage({ status: "synced" })).toMatch(/^Uploaded/);
-    expect(parkedRetryMessage({ status: "pending" })).toMatch(/queued and uploads once you are back online/);
+    expect(parkedRetryMessage({ status: "pending" })).toMatch(/queued again and uploads once you are online and signed in/);
     expect(parkedRetryMessage({ status: "gone" })).toMatch(/no longer on this device/);
   });
 });

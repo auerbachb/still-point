@@ -1282,7 +1282,7 @@ describe("WebSessionSyncCoordinator parked sits: list, retry, discard (#982)", (
     const result = await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId);
 
     const reparked = { at: expect.any(String), status: 400, message: '{"error":"Still invalid"}' };
-    expect(result).toEqual({ status: "parked", parked: reparked });
+    expect(result).toEqual({ status: "parked", parked: reparked, sessionUploaded: false });
     expect(uploads).toEqual([`/api/sessions ${rejectedSit}`]);
     const [entry] = await store.loadEntries();
     expect(entry).toEqual({ ...queuedSit(rejectedSit), parked: reparked });

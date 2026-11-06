@@ -32,7 +32,7 @@ export function parkedRetryMessage(result: ParkedRetryResult): string {
     case "synced":
       return "Uploaded. The sit is saved to your account.";
     case "pending":
-      return "Could not reach the server. The sit is queued and uploads once you are back online.";
+      return "Not uploaded yet. The sit is queued again and uploads once you are online and signed in.";
     case "parked":
       return `The server turned it down again: ${result.parked.message || "no reason given"}`;
     case "gone":
@@ -83,7 +83,15 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
   const queue = coordinator ?? getWebSessionSyncCoordinator();
 
   const [entries, setEntries] = useState<ParkedEntry[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // Per row, so one row's action finishing never re-enables another's buttons.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const setRowBusy = (clientSessionId: string, busy: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(clientSessionId);
+      else next.delete(clientSessionId);
+      return next;
+    });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -102,6 +110,10 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
   }, [queue, ownerUserId]);
 
   useEffect(() => {
+    // A new account never sees the previous one's rows, even if its read fails.
+    setEntries([]);
+    setStatus(null);
+    setConfirmingId(null);
     void reload();
     const onOnline = () => { void reload(); };
     window.addEventListener("online", onOnline);
@@ -112,24 +124,26 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
   }, [reload]);
 
   const retry = async (clientSessionId: string) => {
-    setBusyId(clientSessionId);
+    setRowBusy(clientSessionId, true);
     setConfirmingId(null);
     setStatus(null);
     try {
       const result = await queue.retryParkedEntry(clientSessionId, ownerUserId);
       setStatus(parkedRetryMessage(result));
-      if (result.status === "synced") onSynced?.();
+      // A row that went up before a later part was turned down still moved
+      // progression, so the caller re-reads it then too.
+      if (result.status === "synced" || (result.status === "parked" && result.sessionUploaded)) onSynced?.();
     } catch (error) {
       console.error("Failed to retry a parked sit:", error);
       setStatus("Could not try it again. Please retry.");
     } finally {
-      setBusyId(null);
+      setRowBusy(clientSessionId, false);
       await reload();
     }
   };
 
   const discard = async (clientSessionId: string) => {
-    setBusyId(clientSessionId);
+    setRowBusy(clientSessionId, true);
     setStatus(null);
     try {
       const removed = await queue.discardParkedEntry(clientSessionId, ownerUserId);
@@ -139,7 +153,7 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
       setStatus("Could not discard it. Please retry.");
     } finally {
       setConfirmingId(null);
-      setBusyId(null);
+      setRowBusy(clientSessionId, false);
       await reload();
     }
   };
@@ -175,7 +189,7 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
 
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
         {entries.map((entry) => {
-          const busy = busyId === entry.clientSessionId;
+          const busy = busyIds.has(entry.clientSessionId);
           const confirming = confirmingId === entry.clientSessionId;
           return (
             <li
