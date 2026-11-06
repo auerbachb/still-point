@@ -1042,6 +1042,26 @@ function flushLive(store: OfflineSessionQueueStore): Promise<number> {
   return new WebSessionSyncCoordinator(store, liveSessionSyncTransport()).flushPending(testOwnerUserId);
 }
 
+/** Fails the one queue read that follows a park being saved. */
+class ReadFailsOnceAfterParkStore extends CopyingQueueStore {
+  private failNextLoad = false;
+  private failed = false;
+  override async loadEntries(): Promise<PendingSessionEntry[]> {
+    if (this.failNextLoad) {
+      this.failNextLoad = false;
+      throw new Error("queue unreadable");
+    }
+    return super.loadEntries();
+  }
+  override async saveEntries(entries: PendingSessionEntry[]): Promise<void> {
+    await super.saveEntries(entries);
+    if (!this.failed && entries.some((entry) => entry.parked)) {
+      this.failed = true;
+      this.failNextLoad = true;
+    }
+  }
+}
+
 describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -1149,6 +1169,20 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
       `/api/thoughts/batch server-${sitBehind}`,
     ]);
     expect((await store.loadEntries())[1]).toEqual({ ...syncedSit(sitBehind), thoughts: [] });
+  });
+
+  test("a save refused for good still resolves as parked when the queue cannot be read back", async () => {
+    const store = new ReadFailsOnceAfterParkStore();
+    stubApi(() => ({ status: 422, text: '{"error":"Invalid session"}' }));
+    const coordinator = new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
+
+    expect(await coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, [])).toEqual({
+      sessionId: rejectedSit,
+      isPendingSync: false,
+      serverSessionId: null,
+      parked: { at: expect.any(String), status: 422, message: '{"error":"Invalid session"}' },
+    });
+    expect((await store.loadEntries())[0]!.parked).toMatchObject({ status: 422 });
   });
 
   test.each([401, 403])("a %i leaves its sit queued as it was, and a later flush sends it", async (status) => {
@@ -1287,6 +1321,20 @@ describe("WebSessionSyncCoordinator parked sits: list, retry, discard (#982)", (
     const [entry] = await store.loadEntries();
     expect(entry).toEqual({ ...queuedSit(rejectedSit), parked: reparked });
     expect(entry!.parked!.at).not.toBe(parkedBy400.at);
+  });
+
+  test("a retry refused again still reports parked when the queue cannot be read back", async () => {
+    const store = new ReadFailsOnceAfterParkStore();
+    stubApiRefusingCreate(rejectedSit, { status: 400, text: '{"error":"Still invalid"}' });
+    // Seed the parked entry without tripping the one-shot read failure.
+    await CopyingQueueStore.prototype.saveEntries.call(store, [{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
+
+    expect(await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId)).toEqual({
+      status: "parked",
+      parked: { at: expect.any(String), status: 400, message: '{"error":"Still invalid"}' },
+      sessionUploaded: false,
+    });
+    expect((await store.loadEntries())[0]!.parked).toMatchObject({ status: 400 });
   });
 
   test("a retry of a sit parked by its thoughts sends only the batch, once", async () => {

@@ -94,6 +94,16 @@ export class WebSessionSyncCoordinator {
         // a later flush will send. A 401 or 403 parks nothing and still rejects.
         const parked = await this.parkedEntryAfter(error, clientSessionId, ownerUserId);
         if (parked) return parkedResult(parked);
+        // Parked, but the queue could not be read back afterwards. Still
+        // parked, not queued, so say so rather than reject.
+        if (rejectsTheSit(error)) {
+          return {
+            sessionId: provisionalSessionId(clientSessionId),
+            isPendingSync: false,
+            serverSessionId: null,
+            parked: parkedBy(error),
+          };
+        }
         throw error;
       }
       return synced ? syncedResult(synced.serverSessionId!) : pendingResult(clientSessionId);
@@ -476,8 +486,8 @@ export class WebSessionSyncCoordinator {
     throw error;
   }
 
-  /** #982: the entry an upload failure just parked, if it did. A queue that
-   *  cannot be read here hands back the upload failure, as before. */
+  /** #982: the entry an upload failure just parked, if it did. Null when the
+   *  queue cannot be read here; callers then report the park from the error. */
   private async parkedEntryAfter(
     error: unknown,
     clientSessionId: string,
