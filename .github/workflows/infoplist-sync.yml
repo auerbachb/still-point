@@ -4,8 +4,8 @@ name: Info.plist sync
 # `main` (#439, folded into #588). It must report on every PR — previously it
 # lived inside path-filtered `e2e-ios.yml`, which left non-iOS PRs stuck at
 # mergeStateStatus=BLOCKED forever (#442). Same no-op pattern as #463 /
-# ios-shared-tests.yml: run the real xcodegen diff on macOS when XcodeGen
-# inputs or outputs changed; otherwise a cheap ubuntu no-op still satisfies the
+# ios-shared-tests.yml: run the real xcodegen diff on macOS when anything under
+# ios/ (or the guard) changed; otherwise a cheap ubuntu no-op still satisfies the
 # check.
 #
 # Despite the check name (required, so it stays frozen — see
@@ -55,9 +55,10 @@ jobs:
           files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)' 2>/dev/null || true)"
           # Here-string, not a pipe: with pipefail, `grep -q` exiting early can
           # SIGPIPE the writer and flip a match into ios=false (skipping the check).
-          # Watched: the spec, every generated output (so a hand edit to a
-          # generated file alone still runs the guard), and the guard itself.
-          if [ -z "$files" ] || grep -qE '^(ios/project\.yml$|ios/StillPoint\.xcodeproj/|ios/StillPoint(App|Monitor|Widget)/Info\.plist$|\.github/workflows/infoplist-sync\.yml$|\.github/actions/ios-xcodegen/)' <<< "$files"; then
+          # Watched: everything under ios/ (the spec, every generated output,
+          # and the source/resource dirs project.yml globs — adding or removing
+          # a file there changes project.pbxproj), plus the guard itself.
+          if [ -z "$files" ] || grep -qE '^(ios/|\.github/workflows/infoplist-sync\.yml$|\.github/actions/ios-xcodegen/)' <<< "$files"; then
             echo "ios=true" >> "$GITHUB_OUTPUT"
           else
             echo "ios=false" >> "$GITHUB_OUTPUT"

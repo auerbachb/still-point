@@ -41,7 +41,7 @@ Only require checks that report a result on **every** pull request. Required che
 | --- | --- | --- |
 | `unit-tests` / `typecheck` / `build` | ✅ | No path filters. |
 | `StillPointShared swift test` | ✅ | Ubuntu no-op when package unchanged (#463). |
-| `Info.plist in sync with project.yml` | ✅ | Ubuntu no-op when `ios/project.yml`, the generated project and Info.plists, and the guard are unchanged (#588 / #439 / #872). |
+| `Info.plist in sync with project.yml` | ✅ | Ubuntu no-op when the PR touches neither `ios/` nor the guard (#588 / #439 / #872). |
 | `StillPointApp compile` | ✅ | Ubuntu no-op when the scheme's sources (`ios/StillPointApp`, `ios/AppBlockingShared`, `ios/StillPointMonitor`, `ios/StillPointWidget`, `ios/StillPointShared`), `ios/project.yml`, and the workflow are unchanged (#698). Reports on every PR, so it does not leave PRs `BLOCKED`. |
 | `web-e2e-*` / `ios-e2e-*` | ❌ | Off PR path — do not require globally. |
 
