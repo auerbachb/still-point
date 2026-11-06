@@ -1,4 +1,4 @@
-import XCTest
+import Testing
 @testable import StillPointShared
 
 /// What `didLogin(user:)`'s catch-up and `returnHome()` act on once their buddy-invite
@@ -109,10 +109,10 @@ private final class PendingLinkScreen {
 /// tail may still open when it resumes. Without the re-check after the join, each tail
 /// below that a sign-in or an account switch ends would open the links anyway.
 @MainActor
-final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
+struct AuthCheckOwnershipLocalLinksTests {
     /// AC 4. With nothing landing during the join, a sign-in opens its links as before.
     /// The session link starts a sit, and the log-reason link waits behind it.
-    func testALoneSignInOpensItsPendingLinks() async {
+    @Test func testALoneSignInOpensItsPendingLinks() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.session, .logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startSignInTail(afterJoining: join)
@@ -121,12 +121,12 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [.init(link: .session, account: "user-a")])
-        XCTAssertEqual(screen.pending, [.logReason])
+        #expect(screen.opened == [.init(link: .session, account: "user-a")])
+        #expect(screen.pending == [.logReason])
     }
 
     /// AC 4. A lone `returnHome()` opens the log-reason link that waited behind the sit.
-    func testALoneReturnHomeOpensThePendingLogReasonLink() async {
+    @Test func testALoneReturnHomeOpensThePendingLogReasonLink() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startReturnHomeTail(afterJoining: join)
@@ -135,13 +135,13 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [.init(link: .logReason, account: "user-a")])
-        XCTAssertEqual(screen.pending, [])
+        #expect(screen.opened == [.init(link: .logReason, account: "user-a")])
+        #expect(screen.pending == [])
     }
 
     /// A `checkAuth()` or reconnect refresh that re-confirms the same account during the
     /// join is not an identity change, so the tail still opens the link.
-    func testReconfirmingTheSameAccountDuringTheJoinKeepsTheTail() async {
+    @Test func testReconfirmingTheSameAccountDuringTheJoinKeepsTheTail() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startReturnHomeTail(afterJoining: join)
@@ -151,13 +151,13 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [.init(link: .logReason, account: "user-a")])
+        #expect(screen.opened == [.init(link: .logReason, account: "user-a")])
     }
 
     /// Log Out (`didLogout()`) clears A's links. A log-reason link that arrives before B
     /// signs in is B's. Nothing cancels the task running `returnHome()`, so A's tail can
     /// still be joining when B signs in, and it must leave the link to B.
-    func testALogOutAndAnotherSignInDuringTheJoinLeaveTheNextAccountsLinkPending() async {
+    @Test func testALogOutAndAnotherSignInDuringTheJoinLeaveTheNextAccountsLinkPending() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startReturnHomeTail(afterJoining: join)
@@ -169,13 +169,13 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [], "A's tail opened B's link outside B's own sign-in")
-        XCTAssertEqual(screen.pending, [.logReason])
+        #expect(screen.opened == [], "A's tail opened B's link outside B's own sign-in")
+        #expect(screen.pending == [.logReason])
     }
 
     /// An expired or rejected session (`applySignedOut`) keeps the pending links for the
     /// next sign-in on purpose. They are B's to open, not A's tail's.
-    func testAnAuthDrivenSignOutAndAnotherSignInDuringTheJoinLeaveTheKeptLinkPending() async {
+    @Test func testAnAuthDrivenSignOutAndAnotherSignInDuringTheJoinLeaveTheKeptLinkPending() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startReturnHomeTail(afterJoining: join)
@@ -186,13 +186,13 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [], "A's tail opened the kept link outside B's own sign-in")
-        XCTAssertEqual(screen.pending, [.logReason])
+        #expect(screen.opened == [], "A's tail opened the kept link outside B's own sign-in")
+        #expect(screen.pending == [.logReason])
     }
 
     /// Signing out and back in as A is two identity changes, so the old tail ends here
     /// too. A's new sign-in opens the link in its own order.
-    func testSigningBackInAsTheSameAccountDuringTheJoinStillEndsTheTail() async {
+    @Test func testSigningBackInAsTheSameAccountDuringTheJoinStillEndsTheTail() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startReturnHomeTail(afterJoining: join)
@@ -203,15 +203,15 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [])
-        XCTAssertEqual(screen.pending, [.logReason])
+        #expect(screen.opened == [])
+        #expect(screen.pending == [.logReason])
     }
 
     /// The case that reaches `didLogin(user:)`'s catch-up. A sign-out cancels that tail
     /// and its join, but adopting a different account cancels nothing: for example, a
     /// `checkAuth()` whose `me()` answers for someone else after another window signed
     /// in as them (#916).
-    func testAdoptingAnotherAccountDuringTheJoinEndsTheTail() async {
+    @Test func testAdoptingAnotherAccountDuringTheJoinEndsTheTail() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.session, .logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startSignInTail(afterJoining: join)
@@ -221,15 +221,15 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [], "A's tail started a sit for B")
-        XCTAssertEqual(screen.pending, [.session, .logReason])
+        #expect(screen.opened == [], "A's tail started a sit for B")
+        #expect(screen.pending == [.session, .logReason])
     }
 
     /// A sign-out with nobody signed in yet when the join returns. The tail opens
     /// nothing, and the links wait for the next sign-in. The consumers' own
     /// `currentUser != nil` already held this before #857. It is how a `didLogin(user:)`
     /// tail that the sign-out cancelled usually ends.
-    func testASignOutAloneDuringTheJoinOpensNothing() async {
+    @Test func testASignOutAloneDuringTheJoinOpensNothing() async {
         let screen = PendingLinkScreen(signedIn: "user-a", pending: [.session, .logReason])
         let join = HeldSave(settlingWith: ())
         let tail = screen.startSignInTail(afterJoining: join)
@@ -239,7 +239,7 @@ final class AuthCheckOwnershipLocalLinksTests: XCTestCase {
         join.settle()
 
         await tail.value
-        XCTAssertEqual(screen.opened, [])
-        XCTAssertEqual(screen.pending, [.session, .logReason])
+        #expect(screen.opened == [])
+        #expect(screen.pending == [.session, .logReason])
     }
 }
