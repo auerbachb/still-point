@@ -159,7 +159,9 @@ export class WebSessionSyncCoordinator {
         // afterwards. It is still parked, not queued, so say so. Only a
         // permanent answer parks: a storage failure (no status) is not one.
         if (isPermanentFailure(error) && rejectsTheSit(error)) {
-          return { status: "parked", parked: parkedBy(error), sessionUploaded: false } as const;
+          // Unknown whether the row went up: say it may have, since an extra
+          // progression refresh is harmless and a missed one is not.
+          return { status: "parked", parked: parkedBy(error), sessionUploaded: true } as const;
         }
         if (!isPermanentFailure(error)) throw error;
         // A 401 or 403: queued again, for a flush once signed back in.
@@ -173,13 +175,14 @@ export class WebSessionSyncCoordinator {
     });
   }
 
-  /** #982: whether this sit's server row exists, per the queue. False when the
-   *  queue cannot be read. */
+  /** #982: whether this sit's server row exists, per the queue. True when the
+   *  queue cannot be read: an extra progression refresh is harmless, a missed
+   *  one leaves History stale. */
   private async rowUploaded(clientSessionId: string, ownerUserId: string): Promise<boolean> {
     try {
       return findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId)?.sessionSynced === true;
     } catch {
-      return false;
+      return true;
     }
   }
 

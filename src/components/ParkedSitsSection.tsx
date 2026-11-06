@@ -205,8 +205,8 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
               {entry.sessionSynced && (
                 // The row went up; only its thoughts or note were turned down.
                 <div data-testid="parked-sit-row-saved" style={{ fontSize: "13px", color: "var(--fg-2)", lineHeight: 1.5 }}>
-                  The sit is saved to your account. Only its thoughts were not accepted; Discard drops
-                  just those from this device.
+                  The sit is saved to your account. Only a later change (its thoughts or note) was not
+                  accepted; Discard drops just that change from this device.
                 </div>
               )}
               <div data-testid="parked-sit-reason" style={{ ...mono, fontSize: "11px", color: "var(--fg-3)", wordBreak: "break-word" }}>
@@ -243,7 +243,7 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
                       onClick={() => { void discard(entry.clientSessionId); }}
                       style={{ ...dangerButton, opacity: busy ? 0.5 : 1 }}
                     >
-                      {busy ? "Discarding..." : entry.sessionSynced ? "Confirm: discard its thoughts" : "Confirm discard"}
+                      {busy ? "Discarding..." : entry.sessionSynced ? "Confirm: discard the change" : "Confirm discard"}
                     </button>
                     <button
                       type="button"
