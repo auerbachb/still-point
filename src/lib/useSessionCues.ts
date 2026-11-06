@@ -40,8 +40,12 @@ export type SessionCues = {
   advance(elapsed: number, totalSeconds: number): void;
   /** {@link advance} for a parent-controlled elapsed, which keeps its own voice rule. */
   advanceControlled(elapsed: number, totalSeconds: number): void;
-  /** The sit ran its full length: play the end-of-sit cues. */
-  end(): void;
+  /**
+   * The sit ran its full length: play the end-of-sit cues. `lateBySeconds` is
+   * how far past the end the clock was when it noticed (#1176); a late end
+   * sound is dropped, the end buzz is not.
+   */
+  end(lateBySeconds?: number): void;
 };
 
 type UseSessionCuesOptions = {
@@ -227,10 +231,10 @@ export function useSessionCues({
       },
       // Not idempotent — each call plays the end cues again. The clocks in
       // `useElapsedClock` own calling it exactly once per sit.
-      end() {
+      end(lateBySeconds = 0) {
         sitEndedRef.current = true;
         const prefs = soundPrefsRef.current;
-        playCues(planSessionEndCues(prefs), prefs);
+        playCues(planSessionEndCues(prefs, lateBySeconds), prefs);
       },
     };
   });

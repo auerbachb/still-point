@@ -510,7 +510,16 @@ describe("audio-channel classification of SoundPrefs (#712)", () => {
     expect(hasEnabledAudio({ ...allOff, completion: true })).toBe(true);
     expect(hasEnabledAudio({ ...allOff, voiceCountdown: true })).toBe(true);
     // Haptics alongside a real sound is still sound.
-    expect(hasEnabledAudio({ ...allOff, chime: true, haptics: true })).toBe(true);
+    expect(hasEnabledAudio({ ...allOff, completion: true, haptics: true })).toBe(true);
+  });
+
+  // #1176 (owner decision): haptic mode rings no minute bell.
+  it("does not count a bell that haptic mode gates out", async () => {
+    const { hasEnabledAudio, minuteChimeApplies } = await loadAudio();
+    expect(hasEnabledAudio({ ...allOff, chime: true, haptics: true })).toBe(false);
+    expect(minuteChimeApplies({ ...allOff, haptics: true })).toBe(false);
+    expect(minuteChimeApplies({ ...allOff, tick: true })).toBe(true);
+    expect(minuteChimeApplies({ ...allOff, voiceCountdown: true })).toBe(true);
   });
 
   it("reports no enabled sound when every pref is off", async () => {

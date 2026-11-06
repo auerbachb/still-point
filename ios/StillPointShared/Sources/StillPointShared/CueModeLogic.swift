@@ -49,6 +49,28 @@ public enum CueModeLogic {
         applying(mode(of: prefs), to: prefs)
     }
 
+    /// #1176 (owner decision): whether the minute bell can ring under these
+    /// prefs. Haptic mode means no minute bell, whatever the stored `chime`
+    /// switch says. A gate, not a rewrite of the pref, so switching back to
+    /// tick or voice brings the sitter's bell back. The end sound stays
+    /// independent of cue mode.
+    public static func minuteChimeApplies(to prefs: AudioEngine.SoundPrefs) -> Bool {
+        mode(of: prefs) != .haptic
+    }
+
+    /// The minute bell as it will actually ring: the stored switch, gated by
+    /// `minuteChimeApplies(to:)`.
+    public static func minuteChimeEnabled(_ prefs: AudioEngine.SoundPrefs) -> Bool {
+        prefs.chime && minuteChimeApplies(to: prefs)
+    }
+
+    /// Whether any sound these prefs can actually make is on: the tick, the
+    /// bell where it applies, the end sound, or the voice countdown. Haptics is
+    /// vibration and never counts (#712).
+    public static func hasAudibleCue(_ prefs: AudioEngine.SoundPrefs) -> Bool {
+        prefs.tick || minuteChimeEnabled(prefs) || prefs.completion || prefs.voiceCountdown
+    }
+
     /// Tick, haptic, and voice are cue keys. Chime and completion are not.
     public static func mode(
         forTick isTick: Bool,
@@ -63,7 +85,11 @@ public enum CueModeLogic {
 
     /// Audio side effects of moving from one exclusive mode to another.
     ///
-    /// Haptic mode does not warm the audio session. Enabling tick or voice does.
+    /// Enabling tick or voice warms the audio session. Haptic mode warms it
+    /// only while the end sound is on (#1176): the minute bell does not ring in
+    /// haptic mode (`minuteChimeApplies`), but the end sound still does. A
+    /// haptic sit with the end sound off stays silent and never activates the
+    /// session (#712).
     /// Leaving voice cancels an in-flight clip and clears the announced-second
     /// dedup so a later re-enable in the same remaining second still speaks.
     public static func transitionEffects(
@@ -73,8 +99,9 @@ public enum CueModeLogic {
         let enabledTick = !previous.tick && next.tick
         let enabledVoice = !previous.voiceCountdown && next.voiceCountdown
         let disabledVoice = previous.voiceCountdown && !next.voiceCountdown
+        let enabledAudibleHaptic = !previous.haptics && next.haptics && next.completion
         return SoundToggleLogic.Effects(
-            warmUp: enabledTick || enabledVoice,
+            warmUp: enabledTick || enabledVoice || enabledAudibleHaptic,
             preloadVoiceCountdown: enabledVoice,
             cancelVoiceCountdown: disabledVoice,
             resetVoiceDedup: disabledVoice

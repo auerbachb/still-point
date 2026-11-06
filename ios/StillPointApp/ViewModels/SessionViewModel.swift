@@ -297,6 +297,10 @@ final class SessionViewModel {
         let voiceCountdownWasEnabled = soundPrefs.voiceCountdown
         // #712: the one toggle that governs vibration rather than sound.
         let isHapticsToggle = keyPath == \AudioEngine.SoundPrefs.haptics
+        // #1176: in haptic mode the bell switch is not applicable, so flipping
+        // it makes no sound and must not warm the session.
+        let isGatedChimeToggle = keyPath == \AudioEngine.SoundPrefs.chime
+            && !CueModeLogic.minuteChimeApplies(to: soundPrefs)
         soundPrefs[keyPath: keyPath].toggle()
         AudioEngine.savePrefs(soundPrefs)
 
@@ -305,7 +309,7 @@ final class SessionViewModel {
             toggledKeyIsEnabled: soundPrefs[keyPath: keyPath],
             voiceCountdownWasEnabled: voiceCountdownWasEnabled,
             voiceCountdownIsEnabled: soundPrefs.voiceCountdown,
-            toggledKeyUsesAudio: !isHapticsToggle
+            toggledKeyUsesAudio: !isHapticsToggle && !isGatedChimeToggle
         )
 
         if isHapticsToggle, soundPrefs.haptics {

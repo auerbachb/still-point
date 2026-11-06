@@ -9,7 +9,7 @@
  * `BlockTimer.tsx` so a new cue or a changed rule is a change here, with a
  * test, instead of another branch threaded through three clocks.
  */
-import type { SoundPrefs } from "@/lib/audio";
+import { minuteChimeApplies, type SoundPrefs } from "@/lib/audio";
 import {
   completedMinuteBlockIndex,
   countdownSeconds,
@@ -62,6 +62,13 @@ export type Cue =
   | { kind: "voice"; second: number }
   | { kind: "cancelVoice" }
   | { kind: "haptic"; cue: HapticCue };
+
+/**
+ * #1176: how late the minute bell may still strike, in seconds. Above the 50 ms
+ * clock and a background tab's 1 Hz throttling, well under the minute between
+ * bells. Mirrors iOS `CueDeliveryLogic.maxLatenessSeconds`.
+ */
+export const CHIME_MAX_LATENESS_SECONDS = 1.5;
 
 /** Before any clock has seeded it. A parent-controlled timer starts from here. */
 export const INITIAL_CUE_CURSOR: CueCursor = {
@@ -215,7 +222,15 @@ export function planCountdownCues(
       // gives way only while the countdown is active, which in practice is
       // the bell that opens the final minute, due on the update that speaks
       // "60". iOS `SessionTickLogic.advance` uses the same rule.
-      if (prefs.chime && !voiceActive && fullMinuteRemains) {
+      // #1176: on time or not at all. A bell owed long after its minute — the
+      // tab was throttled or the device slept — is dropped instead of struck
+      // at a random moment. iOS `CueDeliveryLogic.isOnTime` uses the same budget.
+      const onTime = elapsed - blockEnd <= CHIME_MAX_LATENESS_SECONDS;
+      // #1176 (owner decision): haptic mode rings no minute bell. The stored
+      // switch is left alone, so tick mode still rings. The cursor above has
+      // already moved, so leaving haptic mode replays nothing.
+      const chimeOn = prefs.chime && minuteChimeApplies(prefs);
+      if (chimeOn && !voiceActive && fullMinuteRemains && onTime) {
         cues.push({ kind: "chime" });
       }
     }
@@ -249,9 +264,20 @@ export function planCountdownCues(
  * must not silence the buzz — that is the whole reason the preference exists.
  * Planned only when the timer actually ran out, so it needs no abandon or
  * end-early guard — a discarded sit never gets here.
+ *
+ * #1176: `lateBySeconds` is how long after the sit's real end the clock first
+ * saw it (a throttled tab, a sleeping device). Past
+ * {@link CHIME_MAX_LATENESS_SECONDS} the end sound is dropped, on time or not
+ * at all. The end buzz is kept, and so is the save, which the caller owns.
+ * iOS `SessionTickLogic` drops a late completion sound by the same budget.
  */
-export function planSessionEndCues(prefs: SoundPrefs | undefined): Cue[] {
+export function planSessionEndCues(
+  prefs: SoundPrefs | undefined,
+  lateBySeconds = 0,
+): Cue[] {
   const cues: Cue[] = [{ kind: "haptic", cue: "sessionEnd" }];
-  if (prefs?.completion) cues.push({ kind: "completion" });
+  if (prefs?.completion && lateBySeconds <= CHIME_MAX_LATENESS_SECONDS) {
+    cues.push({ kind: "completion" });
+  }
   return cues;
 }

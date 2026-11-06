@@ -435,6 +435,19 @@ export function applyCueMode(prefs: SoundPrefs, mode: CueMode): SoundPrefs {
   };
 }
 
+/**
+ * #1176 (owner decision): whether the minute bell can ring under these prefs.
+ * Haptic mode means no minute bell, whatever the stored `chime` switch says.
+ * A gate, not a rewrite of the pref, so switching back to tick or voice brings
+ * the sitter's bell back. The end sound stays independent of cue mode. iOS
+ * counterpart: `CueModeLogic.minuteChimeApplies(to:)`.
+ */
+export function minuteChimeApplies(
+  prefs: Pick<SoundPrefs, "tick" | "haptics" | "voiceCountdown">,
+): boolean {
+  return cueModeOf(prefs) !== "haptic";
+}
+
 /** Returns prefs with exactly one of tick, haptics, and voiceCountdown on. */
 export function normalizeCuePrefs(prefs: SoundPrefs): SoundPrefs {
   return applyCueMode(prefs, cueModeOf(prefs));
@@ -475,10 +488,15 @@ export function soundPrefUsesAudio(key: keyof SoundPrefs): boolean {
  *
  * Use this instead of `Object.values(prefs).some(Boolean)`, which counts
  * `haptics` and so treats a silent, vibration-only sitter as having sound (#712).
+ * The bell counts only where it can ring: not in haptic mode (#1176).
  */
 export function hasEnabledAudio(prefs: SoundPrefs): boolean {
   return (Object.keys(SOUND_PREF_USES_AUDIO) as (keyof SoundPrefs)[]).some(
-    (key) => SOUND_PREF_USES_AUDIO[key] && prefs[key],
+    (key) =>
+      SOUND_PREF_USES_AUDIO[key] &&
+      prefs[key] &&
+      // #1176: a bell gated off by haptic mode makes no sound.
+      (key !== "chime" || minuteChimeApplies(prefs)),
   );
 }
 

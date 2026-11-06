@@ -248,6 +248,10 @@ struct SessionView: View {
             )
         }
         .onChange(of: vm.showIntroOverlay) { _, showIntro in
+            SessionIdleTimerController.syncLocalSession(
+                appVM: appVM,
+                isRunning: sessionTimerRunning
+            )
             if showIntro {
                 attentionStartGeneration += 1
                 attentionManager.stop()
@@ -273,7 +277,11 @@ struct SessionView: View {
                 break
             }
         }
-        .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
+        // #1176: keep-awake re-asserted wherever it could lapse — the setting
+        // itself, a cue-mode change, and an overlay over the sit (guided
+        // exercise, post-distraction capture) opening or closing. One onChange
+        // over a combined key keeps this body within the type checker's budget.
+        .onChange(of: keepAwakeTrigger) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -499,6 +507,24 @@ struct SessionView: View {
     /// intro overlay clears, so a sit restored straight into minimal view from the
     /// persisted preference still gets its "how to come back" hint — the overlay is
     /// up when the view first appears, and the hint would otherwise never flash.
+    /// #1176: every input whose change should re-assert keep-awake, observed
+    /// through a single `onChange` in `body`.
+    private struct KeepAwakeTrigger: Equatable {
+        let settingEnabled: Bool
+        let cueMode: CueMode
+        let guidedExercise: Bool
+        let postDistractionCapture: Bool
+    }
+
+    private var keepAwakeTrigger: KeepAwakeTrigger {
+        KeepAwakeTrigger(
+            settingEnabled: appVM.keepScreenAwakeDuringSession,
+            cueMode: CueModeLogic.mode(of: vm.soundPrefs),
+            guidedExercise: vm.showGuidedExercise,
+            postDistractionCapture: vm.showPostDistractionCapture
+        )
+    }
+
     private struct MinimalHintTrigger: Equatable {
         let token: Int
         let introVisible: Bool
@@ -945,8 +971,16 @@ struct SessionView: View {
         .accessibilityIdentifier("session.hapticInterval")
     }
 
+    /// #1176 (owner decision): haptic mode rings no minute bell, so the bell
+    /// switch reads as not applicable there. The stored switch is untouched,
+    /// and the pill comes back as it was in tick or voice mode.
     private var chimeToggle: some View {
-        soundToggle("chime", isOn: vm.soundPrefs.chime) { vm.toggleSound(\.chime) }
+        let applies = CueModeLogic.minuteChimeApplies(to: vm.soundPrefs)
+        return soundToggle(
+            "chime",
+            isOn: applies && vm.soundPrefs.chime,
+            isApplicable: applies
+        ) { vm.toggleSound(\.chime) }
     }
 
     private var endToggle: some View {
@@ -967,6 +1001,7 @@ struct SessionView: View {
         _ label: String,
         isOn: Bool,
         cue: SoundToggleAppearance.Cue = .audio,
+        isApplicable: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         let appearance = SoundToggleAppearance.appearance(isOn: isOn, cue: cue)
@@ -993,11 +1028,17 @@ struct SessionView: View {
             .contentShape(Capsule())
         }
         .animation(.easeInOut(duration: 0.2), value: isOn)
+        .disabled(!isApplicable)
+        .opacity(isApplicable ? 1 : 0.45)
         .accessibilityIdentifier(SoundToggleAppearance.accessibilityIdentifier(label: label))
         // VoiceOver reads "tick sound, on, button" — the state is announced, not
         // left to the colour of the pill. The haptics pill reads "haptics
         // feedback, on, button" instead, since it makes no sound.
         .accessibilityLabel(Text(SoundToggleAppearance.accessibilityLabel(label: label, cue: cue)))
-        .accessibilityValue(Text(SoundToggleAppearance.accessibilityValue(isOn: isOn)))
+        .accessibilityValue(Text(
+            isApplicable
+                ? SoundToggleAppearance.accessibilityValue(isOn: isOn)
+                : "not used in haptic mode"
+        ))
     }
 }

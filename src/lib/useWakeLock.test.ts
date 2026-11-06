@@ -44,20 +44,36 @@ function installMemoryStorage(): Storage {
 /* Fake Wake Lock API                                                          */
 /* -------------------------------------------------------------------------- */
 
-type FakeSentinel = WakeLockSentinel & { released: boolean };
+type FakeSentinel = WakeLockSentinel & {
+  released: boolean;
+  /** The browser releasing the lock on its own: sets `released`, fires `release`. */
+  browserRelease: () => void;
+};
 
 /**
- * Minimal stand-in for a real `WakeLockSentinel`: the hook only ever reads
- * `.released` and calls `.release()`, so the unused EventTarget surface is cast
- * away rather than stubbed.
+ * Minimal stand-in for a real `WakeLockSentinel`: the hook reads `.released`,
+ * calls `.release()`, and listens for `release` (#1176), so only that slice of
+ * the EventTarget surface is stubbed.
  */
 function makeSentinel(): FakeSentinel {
+  const listeners = new Set<() => void>();
   const sentinel = {
     released: false,
     type: "screen" as const,
     release: vi.fn(async () => {
       sentinel.released = true;
+      for (const listener of [...listeners]) listener();
     }),
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === "release") listeners.add(listener);
+    },
+    removeEventListener: (type: string, listener: () => void) => {
+      if (type === "release") listeners.delete(listener);
+    },
+    browserRelease: () => {
+      sentinel.released = true;
+      for (const listener of [...listeners]) listener();
+    },
   };
   return sentinel as unknown as FakeSentinel;
 }
@@ -279,6 +295,24 @@ describe("useWakeLock", () => {
     expect(wakeLock.sentinels[1].released).toBe(false);
 
     await view.unmount();
+  });
+
+  it("re-acquires when the browser releases the lock while the page stays visible (#1176)", async () => {
+    const wakeLock = installWakeLock();
+
+    const view = await renderHook((enabled: boolean) => useWakeLock(enabled), true);
+    expect(wakeLock.request).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      wakeLock.sentinels[0].browserRelease();
+    });
+
+    expect(wakeLock.request).toHaveBeenCalledTimes(2);
+    expect(wakeLock.sentinels[1].released).toBe(false);
+
+    await view.unmount();
+    // Our own release on unmount must not trigger another request.
+    expect(wakeLock.request).toHaveBeenCalledTimes(2);
   });
 
   it("does not re-request while a live sentinel is still held", async () => {

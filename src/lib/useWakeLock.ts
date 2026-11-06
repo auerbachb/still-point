@@ -36,6 +36,9 @@ export function useKeepScreenAwakePref(): boolean {
  *   or on unmount (navigation away).
  * - Browsers auto-release the lock when the page is hidden; a `visibilitychange`
  *   listener re-acquires it when the page becomes visible again.
+ * - #1176: the browser can also release it while the page stays visible (a
+ *   battery-saver change, a system dialog). The sentinel's `release` event
+ *   re-acquires it then, so a sit keeps the screen on as a video would.
  * - No-ops when the Wake Lock API is unsupported.
  */
 export function useWakeLock(enabled: boolean): void {
@@ -63,6 +66,7 @@ export function useWakeLock(enabled: boolean): void {
           return;
         }
         sentinelRef.current = sentinel;
+        sentinel.addEventListener("release", onSentinelRelease);
       } catch {
         // Best-effort: the browser can refuse (e.g. battery saver). The sit
         // continues without a wake lock — the same outcome as an explicit opt-out.
@@ -75,6 +79,12 @@ export function useWakeLock(enabled: boolean): void {
       if (document.visibilityState === "visible") void acquire();
     };
 
+    // #1176: released while the effect still wants it. `acquire` itself skips
+    // a hidden page (visibilitychange covers that) and a torn-down effect.
+    function onSentinelRelease() {
+      void acquire();
+    }
+
     void acquire();
     document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -83,6 +93,7 @@ export function useWakeLock(enabled: boolean): void {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       const sentinel = sentinelRef.current;
       sentinelRef.current = null;
+      sentinel?.removeEventListener("release", onSentinelRelease);
       if (sentinel && !sentinel.released) {
         void sentinel.release().catch(() => {});
       }

@@ -60,7 +60,9 @@ final class SessionTimerEngine {
         }
 
         startDate = Date().addingTimeInterval(-(pausedElapsed / timerMultiplier))
-        if soundPrefs.tick || soundPrefs.chime || soundPrefs.completion || soundPrefs.voiceCountdown {
+        // #1176: the bell counts only where it can ring. Haptic mode rings no
+        // minute bell, so a haptic sit with only `chime` stored on stays cold.
+        if CueModeLogic.hasAudibleCue(soundPrefs) {
             AudioEngine.shared.warmUp()
         }
         if soundPrefs.voiceCountdown {

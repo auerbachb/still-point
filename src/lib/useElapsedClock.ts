@@ -94,7 +94,8 @@ export function useElapsedClock({
           setElapsed(totalSeconds);
           pausedElapsedRef.current = totalSeconds;
           clearInterval(intervalRef.current!);
-          cues.end();
+          // #1176: how far past the end this tick landed, so a late end sound drops.
+          cues.end(newElapsed - totalSeconds);
           onCompleteRef.current();
         } else {
           setElapsed(newElapsed);
@@ -129,10 +130,8 @@ export function useElapsedClock({
       const sc = syncClockRef.current;
       if (!sc?.startedAt) return;
       const startMs = new Date(sc.startedAt).getTime();
-      const newElapsed = Math.min(
-        duration,
-        Math.max(0, (Date.now() + skewRef.current - startMs) / 1000),
-      );
+      const rawElapsed = Math.max(0, (Date.now() + skewRef.current - startMs) / 1000);
+      const newElapsed = Math.min(duration, rawElapsed);
 
       if (newElapsed >= duration) {
         setElapsed(duration);
@@ -140,7 +139,7 @@ export function useElapsedClock({
         window.clearInterval(id);
         if (!controlledCompleteFiredRef.current) {
           controlledCompleteFiredRef.current = true;
-          cues.end();
+          cues.end(rawElapsed - duration);
           onCompleteRef.current();
         }
         return;
@@ -168,7 +167,7 @@ export function useElapsedClock({
       lastControlledElapsedRef.current = totalSeconds;
       if (!controlledCompleteFiredRef.current) {
         controlledCompleteFiredRef.current = true;
-        cues.end();
+        cues.end(raw - totalSeconds);
         onCompleteRef.current();
       }
       return;

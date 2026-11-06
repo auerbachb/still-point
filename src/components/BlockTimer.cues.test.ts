@@ -68,7 +68,9 @@ describe("BlockTimer voice countdown", () => {
   });
 
   // #853: the chime keeps its own switch; only the one opening the final
-  // minute gives way to the countdown.
+  // minute gives way to the countdown. These prefs carry haptics too, which
+  // resolves to haptic mode, so no bell rings at all (#1176) and the buzz
+  // still lands on every minute.
   it("silences only the chime that opens the final minute, never the buzz", async () => {
     await mount({
       totalSeconds: 180,
@@ -78,7 +80,6 @@ describe("BlockTimer voice countdown", () => {
     await advance(121_000);
 
     expect(cues()).toEqual([
-      "60.00 chime",
       "60.00 haptic:minuteMarker",
       "120.00 voice:60",
       "120.00 haptic:minuteMarker",
