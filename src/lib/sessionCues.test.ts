@@ -340,7 +340,22 @@ describe("planCountdownCues — repeating haptic", () => {
     expect(cues).toEqual([[30, { kind: "haptic", cue: "minuteMarker" }]]);
   });
 
-  it("plays voice or tick first, then the chime, then the buzz", () => {
+  it("re-counts on a change back to minutes without buzzing for the minute behind it", () => {
+    // Seeded in ten-second intervals at 65 s, then planned in minutes.
+    const switched = planCountdownCues(seededCueCursor(65, 300, HAPTIC_TEN_SECONDS), 65.05, 300, HAPTIC);
+    expect(switched.cues).toEqual([]);
+    expect(switched.cursor).toMatchObject({ lastHapticInterval: 60, lastHapticIndex: 1 });
+  });
+
+  it("consumes the boundary an interval change lands on, keeping the other cues due there", () => {
+    // The switch lands exactly on 60 s: a ten-second and a minute boundary.
+    const switched = planCountdownCues(seededCueCursor(59.95, 300, HAPTIC), 60, 300, HAPTIC_TEN_SECONDS);
+    expect(switched.cues).toEqual([{ kind: "chime" }]);
+    expect(switched.cursor).toMatchObject({ lastHapticInterval: 10, lastHapticIndex: 6 });
+    expect(planCountdownCues(switched.cursor, 60.05, 300, HAPTIC_TEN_SECONDS).cues).toEqual([]);
+  });
+
+  it("plays the tick first, then the chime, then the buzz", () => {
     const both: SoundPrefs = { ...TICK, haptics: true };
     const planned = planFrom(59.95, 60, 300, both);
     expect(planned.cues).toEqual([
@@ -348,6 +363,61 @@ describe("planCountdownCues — repeating haptic", () => {
       { kind: "chime" },
       { kind: "haptic", cue: "minuteMarker" },
     ]);
+  });
+
+  it("plays the voice before the buzz", () => {
+    const voiceAndBuzz: SoundPrefs = { ...VOICE, haptics: true, hapticInterval: "tenSeconds" };
+    const planned = planFrom(9.95, 10, 70, voiceAndBuzz);
+    expect(planned.cues).toEqual([
+      { kind: "voice", second: 60 },
+      { kind: "haptic", cue: "minuteMarker" },
+    ]);
+  });
+
+  it("cancels a clip in flight before the chime and the buzz", () => {
+    const cursor = { ...seededCueCursor(59.95, 300, VOICE), lastVoiceSec: 12 };
+    expect(planCountdownCues(cursor, 60, 300, VOICE).cues).toEqual([
+      { kind: "cancelVoice" },
+      { kind: "chime" },
+      { kind: "haptic", cue: "minuteMarker" },
+    ]);
+  });
+});
+
+// One update reads the clock once: a jump owes what is due now, not a replay of
+// every boundary it crossed.
+describe("planCountdownCues — a jump across several boundaries", () => {
+  it("speaks only the second the digits now show", () => {
+    const planned = planFrom(80, 85.5, 100, VOICE);
+    expect(planned.cues).toEqual([{ kind: "voice", second: 15 }]);
+    expect(planned.cursor.lastVoiceSec).toBe(15);
+  });
+
+  it("owes at most one cue per channel, in the usual order", () => {
+    const planned = planFrom(30, 200.5, 600, TICK);
+    expect(planned.cues).toEqual([
+      { kind: "tick" },
+      { kind: "chime" },
+      { kind: "haptic", cue: "minuteMarker" },
+    ]);
+    // The newest block and interval passed, so the skipped ones are not owed later.
+    expect(planned.cursor).toMatchObject({
+      lastTickSec: 200,
+      lastCompletedBlockIndex: 2,
+      lastHapticIndex: 3,
+    });
+  });
+});
+
+describe("cue cursors are never mutated", () => {
+  it("returns new cursors and leaves the one passed in as it was", () => {
+    const cursor = Object.freeze({ ...seededCueCursor(59.95, 300, VOICE), lastVoiceSec: 12 });
+    const before = { ...cursor };
+    planCountdownCues(cursor, 60, 300, VOICE);
+    planCountdownCues(cursor, 290, 300, VOICE);
+    rewoundCueCursor(cursor, 0, 300, VOICE);
+    followControlledVoice(cursor, 250, 300);
+    expect(cursor).toEqual(before);
   });
 });
 

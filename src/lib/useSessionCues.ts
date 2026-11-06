@@ -185,6 +185,19 @@ export function useSessionCues({
       }
     };
 
+    /**
+     * Plans the update at `elapsed` from `from` and plays it. The cursor is
+     * committed before anything plays, so a sound that fails stays consumed
+     * and goes to the recovery path instead of replaying on the next update.
+     */
+    const advanceFrom = (from: CueCursor, elapsed: number, totalSeconds: number) => {
+      sitEndedRef.current = false;
+      const prefs = soundPrefsRef.current;
+      const planned = planCountdownCues(from, elapsed, totalSeconds, prefs);
+      cursorRef.current = planned.cursor;
+      playCues(planned.cues, prefs);
+    };
+
     return {
       reset() {
         cursorRef.current = freshCueCursor(soundPrefsRef.current);
@@ -201,20 +214,19 @@ export function useSessionCues({
         );
       },
       advance(elapsed, totalSeconds) {
-        sitEndedRef.current = false;
-        const prefs = soundPrefsRef.current;
-        const planned = planCountdownCues(cursorRef.current, elapsed, totalSeconds, prefs);
-        cursorRef.current = planned.cursor;
-        playCues(planned.cues, prefs);
+        advanceFrom(cursorRef.current, elapsed, totalSeconds);
       },
       advanceControlled(elapsed, totalSeconds) {
-        sitEndedRef.current = false;
-        const prefs = soundPrefsRef.current;
-        const followed = followControlledVoice(cursorRef.current, elapsed, totalSeconds);
-        const planned = planCountdownCues(followed, elapsed, totalSeconds, prefs);
-        cursorRef.current = planned.cursor;
-        playCues(planned.cues, prefs);
+        // Followed before planning, never after: the plan's cancel above the
+        // final minute needs the voice cursor as it was (#844).
+        advanceFrom(
+          followControlledVoice(cursorRef.current, elapsed, totalSeconds),
+          elapsed,
+          totalSeconds,
+        );
       },
+      // Not idempotent — each call plays the end cues again. The clocks in
+      // `useElapsedClock` own calling it exactly once per sit.
       end() {
         sitEndedRef.current = true;
         const prefs = soundPrefsRef.current;
