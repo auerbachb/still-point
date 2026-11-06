@@ -32,6 +32,7 @@ const TICK: SoundPrefs = {
 const VOICE: SoundPrefs = { ...TICK, tick: false, voiceCountdown: true };
 const HAPTIC: SoundPrefs = { ...TICK, tick: false, haptics: true };
 const HAPTIC_TEN_SECONDS: SoundPrefs = { ...HAPTIC, hapticInterval: "tenSeconds" };
+const HAPTIC_EVERY_SECOND: SoundPrefs = { ...HAPTIC, hapticInterval: "everySecond" };
 
 /** Every second the final minute announces, in order: 60 down to 1. */
 const FULL_COUNTDOWN = Array.from({ length: 60 }, (_, i) => 60 - i);
@@ -342,6 +343,16 @@ describe("planCountdownCues — repeating haptic", () => {
   it("buzzes every ten seconds when asked to", () => {
     const { cues } = run(freshCueCursor(HAPTIC_TEN_SECONDS), updates(0, 35), 300, HAPTIC_TEN_SECONDS);
     expect(cues.map(([elapsed]) => elapsed)).toEqual([10, 20, 30]);
+  });
+
+  it("pulses every second with the light cue and leaves the end tick to the end buzz", () => {
+    const { cues } = run(freshCueCursor(HAPTIC_EVERY_SECOND), updates(0, 5), 5, HAPTIC_EVERY_SECOND);
+    expect(cues).toEqual([
+      [1, { kind: "haptic", cue: "secondPulse" }],
+      [2, { kind: "haptic", cue: "secondPulse" }],
+      [3, { kind: "haptic", cue: "secondPulse" }],
+      [4, { kind: "haptic", cue: "secondPulse" }],
+    ]);
   });
 
   it("is planned with haptics off too — maybeFireHaptic applies that preference", () => {

@@ -287,7 +287,8 @@ public enum SessionTickLogic {
         return HapticCueLogic.repeatingCue(
             hapticsEnabled: prefs.haptics,
             crossedBoundary: hapticUpdate.crossedBoundary,
-            isAbandoned: isAbandoned
+            isAbandoned: isAbandoned,
+            interval: prefs.hapticInterval
         )
     }
 }

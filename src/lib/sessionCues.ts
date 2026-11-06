@@ -19,6 +19,7 @@ import {
   completedHapticIntervalIndex,
   hapticIntervalSeconds,
   nextRepeatingHaptic,
+  repeatingHapticCue,
   type HapticCue,
 } from "@/lib/haptics";
 
@@ -247,7 +248,7 @@ export function planCountdownCues(
   });
   next.lastHapticIndex = hapticUpdate.completedIndex;
   if (hapticUpdate.shouldFire) {
-    cues.push({ kind: "haptic", cue: "minuteMarker" });
+    cues.push({ kind: "haptic", cue: repeatingHapticCue(interval) });
   }
   return { cursor: next, cues };
 }

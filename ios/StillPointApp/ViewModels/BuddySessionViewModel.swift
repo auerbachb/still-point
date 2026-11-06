@@ -518,7 +518,8 @@ final class BuddySessionViewModel {
         if let cue = HapticCueLogic.repeatingCue(
             hapticsEnabled: soundPrefs.haptics,
             crossedBoundary: hapticUpdate.crossedBoundary,
-            isAbandoned: isAbandoned
+            isAbandoned: isAbandoned,
+            interval: soundPrefs.hapticInterval
         ) {
             hapticPlayer.fire(cue)
         }
