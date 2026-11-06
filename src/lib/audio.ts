@@ -387,7 +387,12 @@ export type SoundPrefs = {
   hapticInterval: HapticInterval;
 };
 
-export type HapticInterval = "minute" | "tenSeconds";
+export type HapticInterval = "minute" | "tenSeconds" | "everySecond";
+
+/** Narrows a stored value to a known interval; anything else is every minute. */
+export function sanitizeHapticInterval(value: unknown): HapticInterval {
+  return value === "tenSeconds" || value === "everySecond" ? value : "minute";
+}
 
 const STORAGE_KEY = "stillpoint_sound_prefs";
 
@@ -492,7 +497,7 @@ export function loadSoundPrefs(): SoundPrefs {
       completion: stored.completion ?? DEFAULTS.completion,
       voiceCountdown: stored.voiceCountdown ?? false,
       haptics: stored.haptics ?? false,
-      hapticInterval: stored.hapticInterval === "tenSeconds" ? "tenSeconds" : "minute",
+      hapticInterval: sanitizeHapticInterval(stored.hapticInterval),
     };
     const merged = normalizeCuePrefs(decoded);
     if (

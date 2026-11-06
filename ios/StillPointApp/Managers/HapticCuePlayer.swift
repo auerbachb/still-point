@@ -23,14 +23,19 @@ import StillPointShared
 /// No actor isolation, like `SessionTimerEngine`. Both owners call it on the
 /// main thread, and the engine's reset handler hops back to main.
 final class HapticCuePlayer {
-    /// #712: the two generators behind `HapticCueLogic.Intensity`. Held for the
-    /// owner's life rather than built per cue — a generator has to be
-    /// `prepare()`d to fire promptly, and one created at the moment of the
-    /// marker arrives noticeably after it.
-    private let gentleHaptic = UIImpactFeedbackGenerator(style: .light)
-    private let pronouncedHaptic = UINotificationFeedbackGenerator()
+    /// #712: the generators behind `HapticCueLogic.Intensity`, per
+    /// `HapticPlayback.fallback(for:)`. Held for the owner's life rather than
+    /// built per cue — a generator has to be `prepare()`d to fire promptly, and
+    /// one created at the moment of the marker arrives noticeably after it.
+    /// #1175: the every-second pulse makes per-fire allocation a real cost too.
+    private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let notificationHaptic = UINotificationFeedbackGenerator()
     private let isAutoShutdownEnabled: Bool
     private var coreHapticEngine: CHHapticEngine?
+    /// #1175: built once per strength, not per cue, so an every-second pulse
+    /// does not rebuild the same pattern sixty times a minute.
+    private var patternCache: [HapticCueLogic.Intensity: CHHapticPattern] = [:]
 
     /// - Parameter isAutoShutdownEnabled: Lets Core Haptics stop the engine's
     ///   hardware while it sits idle between cues. No default, so each owner
@@ -43,8 +48,9 @@ final class HapticCuePlayer {
     /// generator fires late enough that the tap no longer reads as marking the
     /// minute it belongs to.
     func prepare() {
-        gentleHaptic.prepare()
-        pronouncedHaptic.prepare()
+        lightHaptic.prepare()
+        heavyHaptic.prepare()
+        notificationHaptic.prepare()
         startCoreHapticsIfNeeded()
     }
 
@@ -54,13 +60,17 @@ final class HapticCuePlayer {
         if coreHapticEngine == nil {
             startCoreHapticsIfNeeded()
         }
-        if playCoreHaptic(cue) { return }
-        switch HapticCueLogic.intensity(for: cue) {
-        case .gentle:
-            gentleHaptic.impactOccurred()
-            gentleHaptic.prepare()
-        case .pronounced:
-            pronouncedHaptic.notificationOccurred(.success)
+        let intensity = HapticCueLogic.intensity(for: cue)
+        if playCoreHaptic(intensity) { return }
+        switch HapticPlayback.fallback(for: intensity) {
+        case .lightImpact:
+            lightHaptic.impactOccurred()
+            lightHaptic.prepare()
+        case .heavyImpact:
+            heavyHaptic.impactOccurred()
+            heavyHaptic.prepare()
+        case .successNotification:
+            notificationHaptic.notificationOccurred(.success)
         }
     }
 
@@ -96,21 +106,12 @@ final class HapticCuePlayer {
         }
     }
 
-    private func playCoreHaptic(_ cue: HapticCueLogic.Cue) -> Bool {
-        guard let coreHapticEngine else { return false }
-        let events = HapticPlayback.transients(for: HapticCueLogic.intensity(for: cue)).map { tap in
-            CHHapticEvent(
-                eventType: .hapticTransient,
-                parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
-                ],
-                relativeTime: tap.relativeTime
-            )
-        }
+    private func playCoreHaptic(_ intensity: HapticCueLogic.Intensity) -> Bool {
+        guard let coreHapticEngine,
+              let pattern = try? pattern(for: intensity)
+        else { return false }
         do {
             try coreHapticEngine.start()
-            let pattern = try CHHapticPattern(events: events, parameters: [])
             let player = try coreHapticEngine.makePlayer(with: pattern)
             try player.start(atTime: CHHapticTimeImmediate)
             return true
@@ -120,5 +121,35 @@ final class HapticCuePlayer {
             self.coreHapticEngine = nil
             return false
         }
+    }
+
+    /// The cached pattern for `intensity`, built on first use. Patterns are
+    /// engine-independent, so a rebuilt engine reuses them.
+    private func pattern(for intensity: HapticCueLogic.Intensity) throws -> CHHapticPattern {
+        if let cached = patternCache[intensity] { return cached }
+        let events = HapticPlayback.events(for: intensity).map { spec -> CHHapticEvent in
+            let parameters = [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: spec.intensity),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: spec.sharpness),
+            ]
+            switch spec.kind {
+            case .transient:
+                return CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: parameters,
+                    relativeTime: spec.relativeTime
+                )
+            case .continuous(let duration):
+                return CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: parameters,
+                    relativeTime: spec.relativeTime,
+                    duration: duration
+                )
+            }
+        }
+        let pattern = try CHHapticPattern(events: events, parameters: [])
+        patternCache[intensity] = pattern
+        return pattern
     }
 }

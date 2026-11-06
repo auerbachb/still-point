@@ -102,9 +102,10 @@ export function CueModeControl({
 const INTERVALS: { value: HapticInterval; label: string }[] = [
   { value: "minute", label: "Every minute" },
   { value: "tenSeconds", label: "Every 10 sec" },
+  { value: "everySecond", label: "Every second" },
 ];
 
-/** Two-way haptic spacing. Shown while haptic mode is the active cue. */
+/** Three-way haptic spacing. Shown while haptic mode is the active cue. */
 export function HapticIntervalControl({
   value,
   onChange,

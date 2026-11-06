@@ -126,9 +126,16 @@ struct HapticCueLogicTests {
         #expect(HapticCueLogic.intensity(for: .minuteMarker) != HapticCueLogic.intensity(for: .sessionEnd))
     }
 
-    @Test func testMinuteMarkersAreTheGentlerOfTheTwo() {
-        #expect(HapticCueLogic.intensity(for: .minuteMarker) == .gentle)
+    @Test func testEachCueHasItsOwnStrength() {
+        #expect(HapticCueLogic.intensity(for: .secondPulse) == .pulse)
+        #expect(HapticCueLogic.intensity(for: .minuteMarker) == .marker)
         #expect(HapticCueLogic.intensity(for: .sessionEnd) == .pronounced)
+    }
+
+    /// #1175: pulse, marker and end are pairwise distinct.
+    @Test func testNoTwoCuesShareAStrength() {
+        let strengths = HapticCueLogic.Cue.allCases.map(HapticCueLogic.intensity(for:))
+        #expect(Set(strengths.map(\.rawValue)).count == HapticCueLogic.Cue.allCases.count)
     }
 
     /// Every cue must resolve to an intensity — a new case added without a

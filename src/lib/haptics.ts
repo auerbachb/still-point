@@ -3,7 +3,7 @@
  * than by sound.
  *
  * The web half of `ios/StillPointShared/Sources/StillPointShared/HapticCueLogic.swift`;
- * keep the cue names and the gentle/pronounced split in step with it.
+ * keep the cue names and the pulse/marker/pronounced split in step with it.
  *
  * **Reach is narrow, deliberately so.** The Vibration API is absent from Safari
  * on every platform — so also from an iOS home-screen PWA — and from desktop
@@ -18,19 +18,21 @@
  * `sessionCues.ts`), so a discarded sit never reaches them.
  */
 
-/** The two moments a sit announces by feel. Mirrors `HapticCueLogic.Cue`. */
-export type HapticCue = "minuteMarker" | "sessionEnd";
+/** The moments a sit announces by feel. Mirrors `HapticCueLogic.Cue`. */
+export type HapticCue = "minuteMarker" | "secondPulse" | "sessionEnd";
 
 /**
  * Vibration patterns in milliseconds; even indices buzz, odd indices pause.
  *
- * The web stand-ins for the two iOS generators. The end of a sit has to be
- * tellable from a minute marker with your eyes shut, so the two never share a
- * shape: one short tap versus two firmer beats.
+ * The web stand-ins for the iOS strengths. The end of a sit has to be tellable
+ * from a marker with your eyes shut, and the every-second pulse from both, so
+ * no two share a shape (#1175): a tiny tap each second, one firm buzz per
+ * minute or ten-second mark, two long beats for the end.
  */
 export const HAPTIC_PATTERNS: Record<HapticCue, readonly number[]> = {
-  minuteMarker: [40],
-  sessionEnd: [90, 80, 90],
+  secondPulse: [30],
+  minuteMarker: [120],
+  sessionEnd: [150, 90, 150],
 };
 
 /** Whether this browser can vibrate at all. */
@@ -67,12 +69,27 @@ export function fireHaptic(cue: HapticCue): boolean {
  * reads false. An opt-in that promises stillness has to fail closed, so anything
  * that is not literally `true` means no.
  */
-/** The only two repeating intervals. Anything else falls back to every minute. */
-export const HAPTIC_INTERVAL_SECONDS = [10, 60] as const;
+/** The only three repeating intervals. Anything else falls back to every minute. */
+export const HAPTIC_INTERVAL_SECONDS = [1, 10, 60] as const;
 export type HapticIntervalSeconds = (typeof HAPTIC_INTERVAL_SECONDS)[number];
 
 export function hapticIntervalSeconds(value: unknown): HapticIntervalSeconds {
-  return value === 10 || value === "tenSeconds" ? 10 : 60;
+  if (value === 1 || value === "everySecond") return 1;
+  if (value === 10 || value === "tenSeconds") return 10;
+  return 60;
+}
+
+function isHapticIntervalSeconds(value: number): value is HapticIntervalSeconds {
+  return (HAPTIC_INTERVAL_SECONDS as readonly number[]).includes(value);
+}
+
+/**
+ * #1175: the cue each repeating boundary plays. Every second plays the tiny
+ * pulse; every minute and every 10 sec play the firm marker. Mirrors
+ * `HapticCueLogic.Interval.cue`.
+ */
+export function repeatingHapticCue(intervalSeconds: number): HapticCue {
+  return intervalSeconds === 1 ? "secondPulse" : "minuteMarker";
 }
 
 /**
@@ -84,7 +101,7 @@ export function completedHapticIntervalIndex(
   durationSeconds: number,
   intervalSeconds: number,
 ): number {
-  if (intervalSeconds !== 10 && intervalSeconds !== 60) return 0;
+  if (!isHapticIntervalSeconds(intervalSeconds)) return 0;
   if (elapsedSeconds < 0 || durationSeconds <= 0) return 0;
   const capped = Math.min(elapsedSeconds, durationSeconds - 1e-9);
   return Math.floor(Math.max(0, capped) / intervalSeconds);
@@ -101,7 +118,7 @@ export function nextRepeatingHaptic(input: {
   lastCompletedIndex: number;
 }): { completedIndex: number; shouldFire: boolean } {
   const { elapsedSeconds, durationSeconds, intervalSeconds, lastCompletedIndex } = input;
-  if (intervalSeconds !== 10 && intervalSeconds !== 60) {
+  if (!isHapticIntervalSeconds(intervalSeconds)) {
     return { completedIndex: lastCompletedIndex, shouldFire: false };
   }
   if (!(durationSeconds > intervalSeconds) || elapsedSeconds < 0) {
