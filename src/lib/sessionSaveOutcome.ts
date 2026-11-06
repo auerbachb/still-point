@@ -5,8 +5,8 @@ import {
 import type { SavedSessionResult } from "@/lib/offlineSessionQueue/types";
 
 /**
- * #703: what actually happened to a finished sit, as three states the UI can
- * tell apart.
+ * #703: what actually happened to a finished sit, as states the UI can tell
+ * apart.
  *
  * Before this existed the caller collapsed a thrown save into `isPendingSync`,
  * the same value a *successful* offline queue write produces — so a sit that
@@ -15,6 +15,9 @@ import type { SavedSessionResult } from "@/lib/offlineSessionQueue/types";
  *
  * - `synced`   — the server has it.
  * - `pending`  — it is durably on this device and will upload on reconnect.
+ * - `parked`   — #982: it is on this device, but the server turned it down for
+ *                good (#978), so no flush will send it. `message` is the
+ *                server's answer; only its owner's retry sends it again.
  * - `notStored`— it is nowhere. No session id, because there is no session to
  *                point at: handing back the client id here is what made the
  *                failure look like a success.
@@ -22,6 +25,7 @@ import type { SavedSessionResult } from "@/lib/offlineSessionQueue/types";
 export type SessionSaveOutcome =
   | { status: "synced"; sessionId: string }
   | { status: "pending"; sessionId: string }
+  | { status: "parked"; sessionId: string; message: string }
   | { status: "notStored"; sessionId: null };
 
 /**
@@ -38,10 +42,10 @@ export type SessionSaveOutcome =
  *   queue write succeeded, so the entry is durably on this device and
  *   `flushPending` will retry it on reconnect. Calling it `notStored` is the
  *   same false report as #703, only inverted: it hides a sit that is safe and
- *   withdraws a promise the queue is in fact keeping. #978: only a 401 or 403
- *   is retried. Any other permanent answer parks the entry, kept on the device
- *   but never sent again, and it is still `pending` here until the UI has a
- *   state for it (#982).
+ *   withdraws a promise the queue is in fact keeping. #982: since #978 only a
+ *   401 or 403 is rethrown like this, and that entry is retried. Any other
+ *   permanent answer parks the entry, and the coordinator resolves with a
+ *   `parked` result instead of rejecting.
  *
  * `clientSessionId` is the sit's #557 idempotency key, which is exactly what a
  * durable-but-unsent entry is keyed by — the same provisional id the
@@ -60,6 +64,9 @@ export function resolveSessionSaveOutcome(
   }
 
   const result = settled.value;
+  if (result.parked) {
+    return { status: "parked", sessionId: result.sessionId, message: result.parked.message };
+  }
   return result.isPendingSync
     ? { status: "pending", sessionId: result.sessionId }
     : { status: "synced", sessionId: result.sessionId };

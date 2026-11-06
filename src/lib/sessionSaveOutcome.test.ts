@@ -93,4 +93,24 @@ describe("resolveSessionSaveOutcome (#703)", () => {
     expect(outcome.sessionId).toBe("server-session-703");
     expect(isSessionStored(outcome)).toBe(true);
   });
+
+  /** #982: parked on its first upload, the sit is on this device but no flush
+   *  will send it, so it is not reported as one that uploads on reconnect. */
+  test("a sit parked on its first upload is parked, with the server's reason, not pending", () => {
+    const outcome = resolveSessionSaveOutcome(
+      {
+        status: "fulfilled",
+        value: {
+          sessionId: clientSessionId,
+          isPendingSync: false,
+          serverSessionId: null,
+          parked: { at: "2026-11-05T12:00:00.000Z", status: 400, message: '{"error":"Invalid track"}' },
+        },
+      },
+      clientSessionId,
+    );
+
+    expect(outcome).toEqual({ status: "parked", sessionId: clientSessionId, message: '{"error":"Invalid track"}' });
+    expect(isSessionStored(outcome)).toBe(true);
+  });
 });

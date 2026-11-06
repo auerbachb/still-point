@@ -84,4 +84,21 @@ export type SavedSessionResult = {
   sessionId: string;
   isPendingSync: boolean;
   serverSessionId: string | null;
+  /** #982: the server turned the sit down for good, on this save or an earlier
+   *  one. It is kept on this device, but no flush will send it. */
+  parked?: ParkedSession;
 };
+
+/** #982: how a retry of a parked sit ended.
+ *
+ *  - `synced`  — the server took it.
+ *  - `pending` — it could not reach the server, or got a 401 or 403; it is an
+ *                ordinary queued sit again and a later flush sends it.
+ *  - `parked`  — the server gave the same kind of answer; parked again with it.
+ *  - `gone`    — this account has no such sit queued (discarded, or signed out
+ *                meanwhile). */
+export type ParkedRetryResult =
+  | { status: "synced" }
+  | { status: "pending" }
+  | { status: "parked"; parked: ParkedSession }
+  | { status: "gone" };

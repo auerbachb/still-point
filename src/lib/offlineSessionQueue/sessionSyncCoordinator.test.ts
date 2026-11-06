@@ -1185,16 +1185,23 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     const uploads = stubApi(() => ({ status: 422, text: '{"error":"Invalid session"}' }));
     const coordinator = new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
 
-    // Refused on its first upload: the save rejects, as before, so the caller
-    // still reports the sit as kept on this device (`resolveSessionSaveOutcome`).
-    await expect(coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, []))
-      .rejects.toMatchObject({ status: 422, permanent: true });
+    // #982: refused on its first upload, the save resolves as parked, so the
+    // completion screen does not promise an upload on reconnect. A re-save
+    // reports the same, without an upload.
+    const parkedSave = {
+      sessionId: rejectedSit,
+      isPendingSync: false,
+      serverSessionId: null,
+      parked: { at: expect.any(String), status: 422, message: '{"error":"Invalid session"}' },
+    };
+    expect(await coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, []))
+      .toEqual(parkedSave);
     expect((await store.loadEntries())[0]!.parked).toMatchObject({ status: 422 });
 
     expect(await coordinator.flushPending(testOwnerUserId)).toBe(0);
     await coordinator.replaceEndNote(rejectedSit, testOwnerUserId, "a note");
     expect(await coordinator.saveCompletedSession(baseRequest(), rejectedSit, testOwnerUserId, []))
-      .toEqual({ sessionId: rejectedSit, isPendingSync: true, serverSessionId: null });
+      .toEqual(parkedSave);
 
     expect(uploads).toEqual([`/api/sessions ${rejectedSit}`]);
     // The note is kept with the sit all the same.
@@ -1224,6 +1231,110 @@ describe("WebSessionSyncCoordinator permanent answers (#978)", () => {
     expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
     await coordinator.pruneCompletedEntries(testOwnerUserId);
     expect((await store.loadEntries()).map((entry) => entry.clientSessionId)).toEqual([rejectedSit, sitBehind]);
+  });
+});
+
+describe("WebSessionSyncCoordinator parked sits: list, retry, discard (#982)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const otherOwner = "user-other-982";
+  const parkedBy400 = { at: "2026-10-27T09:30:00.000Z", status: 400, message: '{"error":"Invalid track"}' };
+  const parkedBy404 = { at: "2026-10-27T09:31:00.000Z", status: 404, message: '{"error":"Session not found"}' };
+
+  function liveCoordinator(store: OfflineSessionQueueStore): WebSessionSyncCoordinator {
+    return new WebSessionSyncCoordinator(store, liveSessionSyncTransport());
+  }
+
+  test("parkedEntries lists only this account's parked sits, newest first", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([
+      { ...queuedSit(sitAhead), parked: parkedBy400 },
+      queuedSit(sitBehind),
+      { ...syncedSit(rejectedSit), enqueuedAt: "2026-10-28T09:00:00.000Z", parked: parkedBy404 },
+      { ...queuedSit("other-account"), ownerUserId: otherOwner, parked: parkedBy400 },
+    ]);
+    const coordinator = offlineCoordinator(store);
+
+    expect((await coordinator.parkedEntries(testOwnerUserId)).map((entry) => entry.clientSessionId))
+      .toEqual([rejectedSit, sitAhead]);
+    expect(await coordinator.parkedEntries("")).toEqual([]);
+  });
+
+  test("a retry clears parked and sends the sit once", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
+    const uploads = stubApi(() => undefined);
+
+    expect(await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId))
+      .toEqual({ status: "synced" });
+
+    expect(uploads).toEqual([`/api/sessions ${rejectedSit}`, `/api/thoughts/batch server-${rejectedSit}`]);
+    expect(await store.loadEntries()).toEqual([{ ...syncedSit(rejectedSit), thoughts: [] }]);
+  });
+
+  test("the same answer parks the retried sit again, with the new answer", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
+    const uploads = stubApiRefusingCreate(rejectedSit, { status: 400, text: '{"error":"Still invalid"}' });
+
+    const result = await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId);
+
+    const reparked = { at: expect.any(String), status: 400, message: '{"error":"Still invalid"}' };
+    expect(result).toEqual({ status: "parked", parked: reparked });
+    expect(uploads).toEqual([`/api/sessions ${rejectedSit}`]);
+    const [entry] = await store.loadEntries();
+    expect(entry).toEqual({ ...queuedSit(rejectedSit), parked: reparked });
+    expect(entry!.parked!.at).not.toBe(parkedBy400.at);
+  });
+
+  test("a retry of a sit parked by its thoughts sends only the batch, once", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([{ ...syncedSit(rejectedSit), parked: parkedBy404 }]);
+    const uploads = stubApi(() => undefined);
+
+    expect(await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId))
+      .toEqual({ status: "synced" });
+    expect(uploads).toEqual([`/api/thoughts/batch server-${rejectedSit}`]);
+  });
+
+  test("a retry that cannot reach the server leaves an ordinary queued sit", async () => {
+    const store = new CopyingQueueStore();
+    await store.saveEntries([{ ...queuedSit(rejectedSit), parked: parkedBy400 }]);
+    const coordinator = offlineCoordinator(store);
+
+    expect(await coordinator.retryParkedEntry(rejectedSit, testOwnerUserId)).toEqual({ status: "pending" });
+    expect(await store.loadEntries()).toEqual([queuedSit(rejectedSit)]);
+    expect(await coordinator.pendingCount(testOwnerUserId)).toBe(1);
+  });
+
+  test("a retry for a sit this account has not queued sends nothing", async () => {
+    const store = new CopyingQueueStore();
+    const theirs = { ...queuedSit(rejectedSit), ownerUserId: otherOwner, parked: parkedBy400 };
+    await store.saveEntries([theirs]);
+    const uploads = stubApi(() => undefined);
+
+    expect(await liveCoordinator(store).retryParkedEntry(rejectedSit, testOwnerUserId)).toEqual({ status: "gone" });
+    expect(uploads).toEqual([]);
+    expect(await store.loadEntries()).toEqual([theirs]);
+  });
+
+  test("a discard removes only that entry", async () => {
+    const store = new CopyingQueueStore();
+    const keptParked = { ...queuedSit(sitAhead), parked: parkedBy404 };
+    const keptQueued = queuedSit(sitBehind);
+    const keptOther = { ...queuedSit("other-account"), ownerUserId: otherOwner, parked: parkedBy400 };
+    await store.saveEntries([keptParked, { ...queuedSit(rejectedSit), parked: parkedBy400 }, keptQueued, keptOther]);
+    const coordinator = offlineCoordinator(store);
+
+    expect(await coordinator.discardParkedEntry(rejectedSit, testOwnerUserId)).toBe(true);
+    expect(await store.loadEntries()).toEqual([keptParked, keptQueued, keptOther]);
+
+    // A sit still queued, and another account's parked sit, are never discarded.
+    expect(await coordinator.discardParkedEntry(sitBehind, testOwnerUserId)).toBe(false);
+    expect(await coordinator.discardParkedEntry("other-account", testOwnerUserId)).toBe(false);
+    expect(await store.loadEntries()).toEqual([keptParked, keptQueued, keptOther]);
   });
 });
 

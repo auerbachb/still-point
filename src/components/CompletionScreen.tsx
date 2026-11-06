@@ -6,6 +6,7 @@ import { COMPLETION_RETURN_LABEL } from "@/lib/completionAutosave";
 import { CompletionSummary } from "@/components/completion/CompletionSummary";
 import { MoodShiftSection, SessionNoteField } from "@/components/completion/CompletionFields";
 import { NotStoredBanner } from "@/components/completion/NotStoredBanner";
+import { ParkedBanner } from "@/components/completion/ParkedBanner";
 import { useCompactScrollPadding } from "@/components/completion/useCompactScrollPadding";
 import { useCompletionAutosave } from "@/components/completion/useCompletionAutosave";
 
@@ -37,6 +38,10 @@ type CompletionScreenProps = {
   /** #703: the sit could not be stored on this device — not queued, not synced,
    *  nowhere. Replaces the silent "pending sync" completion this used to show. */
   notStored?: boolean;
+  /** #982: the server's answer when it turned the sit down for good on its
+   *  first upload. The sit is on this device but will not upload on
+   *  reconnect; null (the default) for every other sit. */
+  parkedReason?: string | null;
   /** #703: retry the local save from the completion screen. Idempotent — it
    *  reuses the same `clientSessionId`, so a retry never duplicates a sit.
    *  Rejects when the sit still could not be stored. */
@@ -60,6 +65,7 @@ export function CompletionScreen({
   onSaveMoodMatrix,
   onClearMoodMatrix,
   notStored = false,
+  parkedReason = null,
   onRetrySave,
   compact = false,
 }: CompletionScreenProps) {
@@ -79,6 +85,7 @@ export function CompletionScreen({
       gap: compact ? "12px" : "32px", animation: "fadeIn 0.8s ease",
     }}>
       <NotStoredBanner notStored={notStored} onRetrySave={onRetrySave} />
+      <ParkedBanner parkedReason={parkedReason} />
 
       <CompletionSummary
         dayNumber={dayNumber}

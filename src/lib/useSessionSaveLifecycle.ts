@@ -163,13 +163,15 @@ export function useSessionSaveLifecycle({
         thoughts,
       );
       outcome = resolveSessionSaveOutcome({ status: "fulfilled", value: result }, clientSessionId);
+      // #978/#982: the session row can have gone up before its thoughts were
+      // turned down for good. The row moves the server's progression, yet the
+      // sit is now parked, so no later flush reports it and no `onSynced`
+      // refresh follows. Re-read the user here instead.
+      if (outcome.status === "parked" && result.serverSessionId) refreshUserFromServer();
     } catch (error) {
       console.error(failureMessage, error);
       outcome = resolveSessionSaveOutcome({ status: "rejected", reason: error }, clientSessionId);
-      // #978: the session row can have gone up before its thoughts were turned
-      // down for good. The row moves the server's progression, yet the sit is
-      // now parked, so no later flush reports it and no `onSynced` refresh
-      // follows. Re-read the user here instead.
+      // #978: the same for a permanent answer the coordinator still rethrows.
       if (outcome.status === "pending" && (error as { permanent?: unknown } | null)?.permanent === true) {
         try {
           if (await getWebSessionSyncCoordinator().resolvedServerSessionId(clientSessionId, ownerUserId)) {
@@ -212,7 +214,9 @@ export function useSessionSaveLifecycle({
       if (outcome.status === "synced") {
         refreshUserFromServer();
         void refreshTodayTracks();
-      } else if (outcome.status === "pending") {
+      } else if (outcome.status === "pending" || outcome.status === "parked") {
+        // #982: a parked sit can have its row on the server, so the badges are
+        // re-read for it as for a pending one.
         void refreshTodayTracks();
       }
     }

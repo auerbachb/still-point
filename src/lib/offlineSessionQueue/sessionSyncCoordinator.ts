@@ -10,6 +10,7 @@ import {
   keepsEntryQueued,
   newPendingEntry,
   parkedBy,
+  parkedResult,
   pendingResult,
   provisionalSessionId,
   rejectsTheSit,
@@ -26,6 +27,8 @@ import {
   type SessionSyncTransport,
 } from "./transport";
 import type {
+  ParkedRetryResult,
+  ParkedSession,
   PendingSessionEntry,
   PendingSessionThought,
   QueuedSessionRequest,
@@ -71,6 +74,8 @@ export class WebSessionSyncCoordinator {
         if (existing.ownerUserId !== ownerUserId) {
           throw new SessionSyncError("ownerMismatch");
         }
+        // #982: re-saved, a parked sit is still parked. Only a retry sends it.
+        if (isParked(existing)) return parkedResult(existing);
         if (!awaitsSync(existing) && existing.serverSessionId) {
           return syncedResult(existing.serverSessionId);
         }
@@ -80,8 +85,87 @@ export class WebSessionSyncCoordinator {
         await requestBackgroundSync();
       }
 
-      const synced = await this.flushEntry(clientSessionId, ownerUserId);
+      let synced: PendingSessionEntry | null;
+      try {
+        synced = await this.flushEntry(clientSessionId, ownerUserId);
+      } catch (error) {
+        // #982: the server turned the sit down on this upload. It is parked on
+        // this device, so say so rather than reject: a rejection reads as a sit
+        // a later flush will send. A 401 or 403 parks nothing and still rejects.
+        const parked = await this.parkedEntryAfter(error, clientSessionId, ownerUserId);
+        if (parked) return parkedResult(parked);
+        throw error;
+      }
       return synced ? syncedResult(synced.serverSessionId!) : pendingResult(clientSessionId);
+    });
+  }
+
+  /** #982: this account's parked sits, newest first, each with the answer that
+   *  turned it down. */
+  async parkedEntries(ownerUserId: string): Promise<Array<PendingSessionEntry & { parked: ParkedSession }>> {
+    if (!ownerUserId) return [];
+    const entries = await this.queueStore.loadEntries();
+    return entries
+      .filter((entry): entry is PendingSessionEntry & { parked: ParkedSession } =>
+        entry.ownerUserId === ownerUserId && isParked(entry))
+      .sort((a, b) => b.enqueuedAt.localeCompare(a.enqueuedAt));
+  }
+
+  /**
+   * #982: sends a parked sit once more — for an answer that came from a server
+   * bug since fixed. Clears `parked` and runs one upload, in one queue turn, so
+   * no flush in another tab or the service worker sends it between the two. The
+   * same answer parks it again. The server's idempotency keys (#557, #948) keep
+   * a sit whose row already went up from being stored twice.
+   */
+  async retryParkedEntry(clientSessionId: string, ownerUserId: string): Promise<ParkedRetryResult> {
+    if (!ownerUserId) {
+      throw new SessionSyncError("missingOwnerUserId");
+    }
+
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const entry = findOwnedEntry(entries, clientSessionId, ownerUserId);
+      if (!entry) return { status: "gone" } as const;
+      // Already unparked, by a retry in another tab: an ordinary queued sit
+      // (or a synced one) that the flushes handle. This retry sends nothing.
+      if (!isParked(entry)) {
+        return awaitsSync(entry) ? { status: "pending" } as const : { status: "synced" } as const;
+      }
+      const { parked: _cleared, ...unparked } = entry;
+      entries[entries.indexOf(entry)] = unparked;
+      await this.queueStore.saveEntries(entries);
+
+      let synced: PendingSessionEntry | null;
+      try {
+        synced = await this.flushEntry(clientSessionId, ownerUserId);
+      } catch (error) {
+        const parked = await this.parkedEntryAfter(error, clientSessionId, ownerUserId);
+        if (parked) return { status: "parked", parked: parked.parked } as const;
+        if (!isPermanentFailure(error)) throw error;
+        // A 401 or 403: queued again, for a flush once signed back in.
+        await requestBackgroundSync();
+        return { status: "pending" } as const;
+      }
+      if (synced) return { status: "synced" } as const;
+      await requestBackgroundSync();
+      return { status: "pending" } as const;
+    });
+  }
+
+  /** #982: drops one parked sit for good. Only a parked sit of this account:
+   *  one still queued is never discarded. Resolves to whether one was. */
+  async discardParkedEntry(clientSessionId: string, ownerUserId: string): Promise<boolean> {
+    if (!ownerUserId) return false;
+    return withQueueMutation(async () => {
+      const entries = await this.queueStore.loadEntries();
+      const next = entries.filter(
+        (entry) =>
+          !(entry.clientSessionId === clientSessionId && entry.ownerUserId === ownerUserId && isParked(entry)),
+      );
+      if (next.length === entries.length) return false;
+      await this.queueStore.saveEntries(next);
+      return true;
     });
   }
 
@@ -383,6 +467,23 @@ export class WebSessionSyncCoordinator {
     if (keepsEntryQueued(error)) return null;
     if (rejectsTheSit(error)) await this.park(entry.clientSessionId, entry.ownerUserId, error);
     throw error;
+  }
+
+  /** #982: the entry an upload failure just parked, if it did. A queue that
+   *  cannot be read here hands back the upload failure, as before. */
+  private async parkedEntryAfter(
+    error: unknown,
+    clientSessionId: string,
+    ownerUserId: string,
+  ): Promise<(PendingSessionEntry & { parked: ParkedSession }) | null> {
+    if (!isPermanentFailure(error)) return null;
+    let entry: PendingSessionEntry | undefined;
+    try {
+      entry = findOwnedEntry(await this.queueStore.loadEntries(), clientSessionId, ownerUserId);
+    } catch {
+      return null;
+    }
+    return entry && isParked(entry) ? entry : null;
   }
 
   /** #978: keeps the sit, with the answer that turned it down, where no flush

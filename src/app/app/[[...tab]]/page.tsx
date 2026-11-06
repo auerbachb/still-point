@@ -190,8 +190,12 @@ export default function StillPoint() {
   // screen's writes settle; any other way out (sign-out, a new sit) lets it go
   // on close.
   const completionRowHold = useRef<(() => void) | null>(null);
+  // #982: a parked sit's note writes go through its row too, and a retry from
+  // another tab's History can sync it — after which a prune there would drop it.
   const heldClientSessionId =
-    overlay === "complete" && completionData?.isPendingSync ? completionData.clientSessionId : null;
+    overlay === "complete" && (completionData?.isPendingSync || completionData?.parkedReason != null)
+      ? completionData.clientSessionId
+      : null;
   useEffect(() => {
     if (!heldClientSessionId) return;
     const release = getWebSessionSyncCoordinator().holdRowOpen(heldClientSessionId);
@@ -410,6 +414,7 @@ export default function StillPoint() {
       isPendingSync: false,
       // The buddy room records this sit server-side; it never touches the queue.
       notStored: false,
+      parkedReason: null,
       dayNumber: data.dayNumber,
       sessionType: "standard",
       // Buddy sits always count toward the primary track (#240).
@@ -684,6 +689,7 @@ export default function StillPoint() {
           thoughts={completionData.thoughts}
           nextDuration={completionData.nextDuration}
           notStored={completionData.notStored}
+          parkedReason={completionData.parkedReason}
           // #703: only offered while the sit is nowhere; it reuses the original
           // client id, so a retry can never produce a second sit.
           onRetrySave={completionData.notStored ? handleRetryCompletionSave : undefined}
@@ -720,7 +726,9 @@ export default function StillPoint() {
           // #703: with nothing stored there is no queue entry to append a note to
           // and no session to post one against, so the field is not offered.
           onSaveNote={completionData.clientSessionId && user && !completionData.notStored ? async (text: string) => {
-            if (completionData.isPendingSync) {
+            // #982: a parked sit has no server row to post to either; its note
+            // is kept with it in the queue and goes up with a retry.
+            if (completionData.isPendingSync || completionData.parkedReason !== null) {
               await getWebSessionSyncCoordinator().replaceEndNote(
                 completionData.clientSessionId!,
                 user.id,
@@ -735,7 +743,9 @@ export default function StillPoint() {
           // #792: emptying a saved note deletes it. Same gate and same two paths
           // as the save: the queue while the sit is pending, the server after.
           onClearNote={completionData.clientSessionId && user && !completionData.notStored ? async () => {
-            if (completionData.isPendingSync) {
+            // #982: a parked sit has no server row to post to either; its note
+            // is kept with it in the queue and goes up with a retry.
+            if (completionData.isPendingSync || completionData.parkedReason !== null) {
               await getWebSessionSyncCoordinator().clearEndNote(
                 completionData.clientSessionId!,
                 user.id,
@@ -747,10 +757,10 @@ export default function StillPoint() {
               clearCompletionNote: true,
             });
           } : undefined}
-          onSaveMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async (matrix) => {
+          onSaveMoodMatrix={completionData.sessionId && !completionData.isPendingSync && completionData.parkedReason === null ? async (matrix) => {
             await api.updateSessionMoodMatrix(completionData.sessionId!, { moodMatrix: matrix });
           } : undefined}
-          onClearMoodMatrix={completionData.sessionId && !completionData.isPendingSync ? async () => {
+          onClearMoodMatrix={completionData.sessionId && !completionData.isPendingSync && completionData.parkedReason === null ? async () => {
             await api.updateSessionMoodMatrix(completionData.sessionId!, { moodMatrix: null });
           } : undefined}
           compact={isMobile}
@@ -825,6 +835,8 @@ export default function StillPoint() {
 
       {!overlay && tab === "history" && (
         <HistoryView
+          ownerUserId={user.id}
+          onParkedSitSynced={refreshUserFromServer}
           currentDay={user.currentDay}
           recovery={userRecovery}
           username={user.username}
