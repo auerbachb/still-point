@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { formatSessionDurationLabel } from "@/lib/historyMonthGrid";
 import {
   getWebSessionSyncCoordinator,
@@ -101,8 +101,14 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
   const latestRead = useRef(0);
   // The account shown now. A reload captured before an account change (say, by
   // a retry still in flight) must not show the previous account's rows.
+  // Set in a layout effect (render stays pure), which runs before the load
+  // effect below, so its reload sees the new owner.
   const currentOwner = useRef(ownerUserId);
-  currentOwner.current = ownerUserId;
+  useLayoutEffect(() => {
+    currentOwner.current = ownerUserId;
+  }, [ownerUserId]);
+  /** Whether this render's account is still the one shown. */
+  const stillCurrent = () => currentOwner.current === ownerUserId;
   const reload = useCallback(async () => {
     if (currentOwner.current !== ownerUserId) return;
     const read = ++latestRead.current;
@@ -134,6 +140,8 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
     setStatus(null);
     try {
       const result = await queue.retryParkedEntry(clientSessionId, ownerUserId);
+      // The account changed meanwhile: its result is not this account's news.
+      if (!stillCurrent()) return;
       setStatus(parkedRetryMessage(result));
       // A row that went up before a later part was turned down still moved
       // progression, so the caller re-reads it then too.
@@ -143,7 +151,7 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
       ) onSynced?.();
     } catch (error) {
       console.error("Failed to retry a parked sit:", error);
-      setStatus("Could not try it again. Please retry.");
+      if (stillCurrent()) setStatus("Could not try it again. Please retry.");
     } finally {
       setRowBusy(clientSessionId, false);
       await reload();
@@ -155,10 +163,10 @@ export function ParkedSitsSection({ ownerUserId, onSynced, coordinator }: Parked
     setStatus(null);
     try {
       const removed = await queue.discardParkedEntry(clientSessionId, ownerUserId);
-      setStatus(removed ? "Discarded." : "That sit is no longer on this device.");
+      if (stillCurrent()) setStatus(removed ? "Discarded." : "That sit is no longer on this device.");
     } catch (error) {
       console.error("Failed to discard a parked sit:", error);
-      setStatus("Could not discard it. Please retry.");
+      if (stillCurrent()) setStatus("Could not discard it. Please retry.");
     } finally {
       setConfirmingId(null);
       setRowBusy(clientSessionId, false);

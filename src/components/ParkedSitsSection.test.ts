@@ -177,7 +177,7 @@ describe("ParkedSitsSection (#982)", () => {
     expect(onSynced).toHaveBeenCalledTimes(1);
   });
 
-  test("a retry that finishes after an account change never shows the old account's rows", async () => {
+  test("a retry that finishes after an account change never shows the old account's rows or result", async () => {
     const otherOwner = "user-other";
     let finishRetry: (result: ParkedRetryResult) => void = () => {};
     const queue = {
@@ -203,6 +203,32 @@ describe("ParkedSitsSection (#982)", () => {
 
     expect(rows()).toHaveLength(0);
     expect(queue.parkedEntries).not.toHaveBeenLastCalledWith(owner);
+    expect(container!.querySelector('[data-testid="parked-sits"]')).toBeNull();
+  });
+
+  test("a synced retry that finishes after an account change does not refresh the new account", async () => {
+    let finishRetry: (result: ParkedRetryResult) => void = () => {};
+    const queue = {
+      parkedEntries: vi.fn(async (ownerUserId: string) =>
+        ownerUserId === owner ? [parkedEntry("a", "bad")] : []),
+      retryParkedEntry: vi.fn(
+        () => new Promise<ParkedRetryResult>((resolve) => { finishRetry = resolve; }),
+      ),
+      discardParkedEntry: vi.fn(async () => true),
+    };
+    const onSynced = vi.fn();
+    await render(queue as unknown as ReturnType<typeof fakeQueue>, onSynced);
+
+    await click(rows()[0]!.querySelector('[data-testid="parked-sit-retry"]'));
+    await act(async () => {
+      root!.render(createElement(ParkedSitsSection, { ownerUserId: "user-other", coordinator: queue, onSynced }));
+    });
+    await act(async () => {
+      finishRetry({ status: "synced" });
+    });
+
+    expect(onSynced).not.toHaveBeenCalled();
+    expect(container!.querySelector('[data-testid="parked-sits"]')).toBeNull();
   });
 
   test("Discard asks to confirm, then removes only that sit", async () => {
