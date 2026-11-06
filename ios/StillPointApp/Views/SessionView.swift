@@ -277,28 +277,11 @@ struct SessionView: View {
                 break
             }
         }
-        .onChange(of: appVM.keepScreenAwakeDuringSession) { _, _ in
-            SessionIdleTimerController.syncLocalSession(
-                appVM: appVM,
-                isRunning: sessionTimerRunning
-            )
-        }
-        // #1176: keep-awake re-asserted wherever it could lapse — a cue-mode
-        // change, and an overlay over the sit (intro, guided exercise,
-        // post-distraction capture) opening or closing. Idempotent.
-        .onChange(of: CueModeLogic.mode(of: vm.soundPrefs)) { _, _ in
-            SessionIdleTimerController.syncLocalSession(
-                appVM: appVM,
-                isRunning: sessionTimerRunning
-            )
-        }
-        .onChange(of: vm.showGuidedExercise) { _, _ in
-            SessionIdleTimerController.syncLocalSession(
-                appVM: appVM,
-                isRunning: sessionTimerRunning
-            )
-        }
-        .onChange(of: vm.showPostDistractionCapture) { _, _ in
+        // #1176: keep-awake re-asserted wherever it could lapse — the setting
+        // itself, a cue-mode change, and an overlay over the sit (guided
+        // exercise, post-distraction capture) opening or closing. One onChange
+        // over a combined key keeps this body within the type checker's budget.
+        .onChange(of: keepAwakeTrigger) { _, _ in
             SessionIdleTimerController.syncLocalSession(
                 appVM: appVM,
                 isRunning: sessionTimerRunning
@@ -524,6 +507,24 @@ struct SessionView: View {
     /// intro overlay clears, so a sit restored straight into minimal view from the
     /// persisted preference still gets its "how to come back" hint — the overlay is
     /// up when the view first appears, and the hint would otherwise never flash.
+    /// #1176: every input whose change should re-assert keep-awake, observed
+    /// through a single `onChange` in `body`.
+    private struct KeepAwakeTrigger: Equatable {
+        let settingEnabled: Bool
+        let cueMode: CueMode
+        let guidedExercise: Bool
+        let postDistractionCapture: Bool
+    }
+
+    private var keepAwakeTrigger: KeepAwakeTrigger {
+        KeepAwakeTrigger(
+            settingEnabled: appVM.keepScreenAwakeDuringSession,
+            cueMode: CueModeLogic.mode(of: vm.soundPrefs),
+            guidedExercise: vm.showGuidedExercise,
+            postDistractionCapture: vm.showPostDistractionCapture
+        )
+    }
+
     private struct MinimalHintTrigger: Equatable {
         let token: Int
         let introVisible: Bool
