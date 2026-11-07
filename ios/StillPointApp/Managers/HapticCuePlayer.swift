@@ -30,6 +30,7 @@ final class HapticCuePlayer {
     /// #1175: the every-second pulse makes per-fire allocation a real cost too.
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let rigidHaptic = UIImpactFeedbackGenerator(style: .rigid)
     private let notificationHaptic = UINotificationFeedbackGenerator()
     private let isAutoShutdownEnabled: Bool
     private var coreHapticEngine: CHHapticEngine?
@@ -38,6 +39,9 @@ final class HapticCuePlayer {
     /// the whole firing, so each minute burst's tap count gets its own pattern
     /// — at most one per minute of the sit.
     private var patternCache: [HapticCueLogic.Firing: CHHapticPattern] = [:]
+    /// #1179: bumped by `stop()`, so a fallback burst's queued taps that were
+    /// scheduled before it see a stale value and stay still.
+    private var fallbackGeneration = 0
 
     /// - Parameter isAutoShutdownEnabled: Lets Core Haptics stop the engine's
     ///   hardware while it sits idle between cues. No default, so each owner
@@ -52,6 +56,7 @@ final class HapticCuePlayer {
     func prepare() {
         lightHaptic.prepare()
         heavyHaptic.prepare()
+        rigidHaptic.prepare()
         notificationHaptic.prepare()
         startCoreHapticsIfNeeded()
     }
@@ -70,12 +75,14 @@ final class HapticCuePlayer {
             startCoreHapticsIfNeeded()
         }
         if playCoreHaptic(firing) { return }
+        let generation = fallbackGeneration
         for step in HapticPlayback.fallbackSteps(for: firing) {
             if step.delay <= 0 {
                 playFallback(step.feedback)
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + step.delay) { [weak self] in
-                    self?.playFallback(step.feedback)
+                    guard let self, self.fallbackGeneration == generation else { return }
+                    self.playFallback(step.feedback)
                 }
             }
         }
@@ -89,13 +96,18 @@ final class HapticCuePlayer {
         case .heavyImpact:
             heavyHaptic.impactOccurred()
             heavyHaptic.prepare()
+        case .rigidImpact:
+            rigidHaptic.impactOccurred()
+            rigidHaptic.prepare()
         case .successNotification:
             notificationHaptic.notificationOccurred(.success)
         }
     }
 
-    /// Stops and drops the engine. The next `prepare()` or cue builds a new one.
+    /// Stops and drops the engine, and cancels any fallback burst taps still
+    /// queued. The next `prepare()` or cue builds a new engine.
     func stop() {
+        fallbackGeneration &+= 1
         coreHapticEngine?.stop(completionHandler: nil)
         coreHapticEngine = nil
     }

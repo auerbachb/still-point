@@ -40,6 +40,9 @@ public enum HapticPlayback {
     public enum FallbackFeedback: Equatable, Sendable {
         case lightImpact
         case heavyImpact
+        /// #1179: the minute burst's taps — crisp and short, so a one-tap
+        /// burst is not the ten-second buzz's heavy thud on fallback hardware.
+        case rigidImpact
         case successNotification
     }
 
@@ -92,7 +95,7 @@ public enum HapticPlayback {
         switch intensity {
         case .pulse:      return .lightImpact
         case .marker:     return .heavyImpact
-        case .burst:      return .heavyImpact
+        case .burst:      return .rigidImpact
         case .pronounced: return .successNotification
         }
     }

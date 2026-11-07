@@ -51,7 +51,8 @@ struct HapticPlaybackTests {
         #expect(HapticPlayback.fallback(for: .pulse) == .lightImpact)
         #expect(HapticPlayback.fallback(for: .marker) == .heavyImpact)
         #expect(HapticPlayback.fallback(for: .pronounced) == .successNotification)
-        #expect(HapticPlayback.fallback(for: .burst) == .heavyImpact)
+        #expect(HapticPlayback.fallback(for: .burst) == .rigidImpact)
+        #expect(HapticPlayback.fallback(for: .burst) != HapticPlayback.fallback(for: .marker))
     }
 
     // MARK: - Minute burst (#1179)
@@ -70,7 +71,7 @@ struct HapticPlaybackTests {
     @Test func testTheFallbackBurstPlaysTheSameTapsAtTheSameSpacing() {
         let spacing = HapticCueLogic.minuteBurst.tapSpacingSeconds
         let steps = HapticPlayback.fallbackSteps(for: .minuteBurst(taps: 3))
-        #expect(steps.map(\.feedback) == [.heavyImpact, .heavyImpact, .heavyImpact])
+        #expect(steps.map(\.feedback) == [.rigidImpact, .rigidImpact, .rigidImpact])
         #expect(steps.map(\.delay) == [0, spacing, 2 * spacing])
         #expect(HapticPlayback.fallbackSteps(for: .sessionEnd) == [
             HapticPlayback.FallbackStep(feedback: .successNotification, delay: 0),
