@@ -45,7 +45,7 @@ on:
 
 jobs:
   e2e-mobile:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # #1181: Playwright has no chromium build for ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 25
     env:
       E2E_WEB_SETUP_USER: "true"
