@@ -67,9 +67,18 @@ export function minuteBurstTapCount(wholeMinutesRemaining: number): number {
   return maxTaps === null ? minutes : Math.min(minutes, Math.max(1, maxTaps));
 }
 
+/**
+ * Chromium truncates a vibration pattern to 99 entries (`kVibrationPatternLengthMax`),
+ * and a burst of n taps takes 2n - 1, so 50 taps is the most the platform plays
+ * whole. Past that the burst is clamped here rather than silently cut short by
+ * the browser. A web-only ceiling: `MINUTE_BURST.maxTaps` stays the product cap.
+ */
+export const MAX_VIBRATION_PATTERN_ENTRIES = 99;
+export const MAX_PLATFORM_BURST_TAPS = Math.floor((MAX_VIBRATION_PATTERN_ENTRIES + 1) / 2);
+
 /** The burst's vibration pattern: `taps` short taps at the tuned spacing. */
 export function minuteBurstPattern(taps: number): number[] {
-  const count = Math.max(1, Math.floor(taps));
+  const count = Math.min(Math.max(1, Math.floor(taps)), MAX_PLATFORM_BURST_TAPS);
   const pattern: number[] = [];
   for (let i = 0; i < count; i++) {
     if (i > 0) pattern.push(MINUTE_BURST.gapMs);

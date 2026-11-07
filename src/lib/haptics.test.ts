@@ -8,6 +8,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   HAPTIC_PATTERNS,
+  MAX_PLATFORM_BURST_TAPS,
+  MAX_VIBRATION_PATTERN_ENTRIES,
   MINUTE_BURST,
   fireHaptic,
   hapticIntervalSeconds,
@@ -364,6 +366,14 @@ describe("layered haptics (#1179)", () => {
       MINUTE_BURST.tapMs,
     ]);
     expect(minuteBurstPattern(1)).toEqual([MINUTE_BURST.tapMs]);
+  });
+
+  test("a long sit's burst fits the browser's vibration pattern ceiling", () => {
+    expect(MAX_PLATFORM_BURST_TAPS).toBe(50);
+    expect(minuteBurstPattern(50)).toHaveLength(MAX_VIBRATION_PATTERN_ENTRIES);
+    expect(minuteBurstPattern(120)).toHaveLength(MAX_VIBRATION_PATTERN_ENTRIES);
+    expect(minuteBurstPattern(120)).toEqual(minuteBurstPattern(50));
+    expect(minuteBurstTapCount(120)).toBe(120);
   });
 
   test("a burst vibrates its taps and stays unlike the end", () => {
