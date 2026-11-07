@@ -211,6 +211,25 @@ struct HapticIntervalTests {
         #expect(HapticCueLogic.layeredCue(boundarySeconds: 3599, durationSeconds: hour, interval: .everySecond) == .secondPulse)
     }
 
+    /// A finer cue never lands while a burst is still playing, so the count
+    /// is never muddled; the burst itself stays uncapped.
+    @Test func testFinerCuesWaitForAPlayingBurstToFinish() {
+        let hour = 3600
+        // 30 minutes left: a 30-tap burst plays for 3.6 s.
+        #expect(HapticCueLogic.minuteBurst.playingSeconds(taps: 30) > 3.5)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 1801, durationSeconds: hour, interval: .everySecond) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 1803, durationSeconds: hour, interval: .everySecond) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 1804, durationSeconds: hour, interval: .everySecond) == .secondPulse)
+        // 9 taps (1.08 s) outlast the next second; 8 taps (0.96 s) do not.
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 3061, durationSeconds: hour, interval: .everySecond) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 3121, durationSeconds: hour, interval: .everySecond) == .secondPulse)
+        // A two-hour sit: the 119-tap burst (14.3 s) swallows the :10 buzz, not the :20.
+        let twoHours = 7200
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: twoHours, interval: .tenSeconds) == .minuteBurst(taps: 119))
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 70, durationSeconds: twoHours, interval: .tenSeconds) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 80, durationSeconds: twoHours, interval: .tenSeconds) == .minuteMarker)
+    }
+
     /// 0:00 is the end cue's moment, never a 0-tap burst.
     @Test func testTheEndOfTheSitIsNeverABurst() {
         for interval in HapticCueLogic.Interval.allCases {

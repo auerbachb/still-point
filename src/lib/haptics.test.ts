@@ -16,6 +16,7 @@ import {
   layeredHapticCue,
   maybeFireHaptic,
   minuteBurstPattern,
+  minuteBurstPlayingMs,
   minuteBurstTapCount,
   nextRepeatingHaptic,
   supportsVibration,
@@ -366,6 +367,21 @@ describe("layered haptics (#1179)", () => {
       MINUTE_BURST.tapMs,
     ]);
     expect(minuteBurstPattern(1)).toEqual([MINUTE_BURST.tapMs]);
+  });
+
+  test("a finer cue waits for a playing burst, so vibrate() never cuts it short", () => {
+    // 30 minutes left: 30 taps play for 3.6 s.
+    expect(minuteBurstPlayingMs(30)).toBe(3600);
+    expect(layeredHapticCue(1801, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(1803, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(1804, 3600, 1)).toEqual({ cue: "secondPulse" });
+    // 9 taps (1.08 s) outlast the next second; 8 taps (0.96 s) do not.
+    expect(layeredHapticCue(3061, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(3121, 3600, 1)).toEqual({ cue: "secondPulse" });
+    // A two-hour sit plays the clamped 50 taps (6 s) on web, so the :10 buzz still lands.
+    expect(minuteBurstPlayingMs(119)).toBe(6000);
+    expect(layeredHapticCue(65, 7200, 1)).toBeNull();
+    expect(layeredHapticCue(70, 7200, 10)).toEqual({ cue: "minuteMarker" });
   });
 
   test("a long sit's burst fits the browser's vibration pattern ceiling", () => {

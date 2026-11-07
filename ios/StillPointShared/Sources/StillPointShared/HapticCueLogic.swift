@@ -47,6 +47,14 @@ public enum HapticCueLogic {
             guard let maxTaps else { return minutes }
             return min(minutes, max(1, maxTaps))
         }
+
+        /// How long a burst of `taps` holds the haptic engine, onset of the
+        /// first tap to one spacing past the last. A finer cue that falls
+        /// inside it is suppressed by `layeredCue`, so it cannot muddle the
+        /// count the sitter is following.
+        public func playingSeconds(taps: Int) -> Double {
+            Double(max(0, taps)) * tapSpacingSeconds
+        }
     }
 
     /// #1179: the one tunable constant behind the burst — about 120 ms apart,
@@ -246,6 +254,11 @@ public enum HapticCueLogic {
     /// minute remains — the bell's rule (#711). A mark with less left (a sit
     /// with bonus seconds) falls through to the next finer layer the interval
     /// allows, so every-minute mode stays still there.
+    ///
+    /// A finer cue (buzz or pulse) whose boundary falls while the latest
+    /// minute burst is still playing (`MinuteBurstTuning.playingSeconds`) is
+    /// suppressed: 30 minutes left is a 3.6 s burst, and a pulse each second
+    /// on top of it would muddle the count. The burst itself is never capped.
     public static func layeredCue(
         boundarySeconds: Int,
         durationSeconds: Int,
@@ -264,9 +277,27 @@ public enum HapticCueLogic {
             )
             if taps >= 1 { return .minuteBurst(taps: taps) }
         }
+        if isInsidePlayingBurst(boundarySeconds: boundarySeconds, durationSeconds: durationSeconds) {
+            return nil
+        }
         if interval != .minute, boundarySeconds % 10 == 0 { return .minuteMarker }
         if interval == .everySecond { return .secondPulse }
         return nil
+    }
+
+    /// Whether `boundarySeconds` falls while the burst from the latest
+    /// whole-minute mark before it is still playing.
+    static func isInsidePlayingBurst(boundarySeconds: Int, durationSeconds: Int) -> Bool {
+        let minuteMark = (boundarySeconds / 60) * 60
+        guard minuteMark > 0, minuteMark < boundarySeconds else { return false }
+        let taps = minuteBurst.tapCount(
+            wholeMinutesRemaining: wholeMinutesRemaining(
+                elapsedSeconds: minuteMark,
+                durationSeconds: durationSeconds
+            )
+        )
+        guard taps >= 1 else { return false }
+        return Double(boundarySeconds - minuteMark) < minuteBurst.playingSeconds(taps: taps)
     }
 
     /// The repeating cue owed by `update`, layered per `layeredCue`, or nil.

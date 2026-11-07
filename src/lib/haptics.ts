@@ -87,6 +87,28 @@ export function minuteBurstPattern(taps: number): number[] {
   return pattern;
 }
 
+/**
+ * How long the burst of `taps` this browser plays holds the motor: one
+ * tap-plus-gap per tap actually played (after the platform clamp). A finer cue
+ * inside it is suppressed by {@link layeredHapticCue}, because a new
+ * `navigator.vibrate()` call cancels the pattern still playing and would cut
+ * the count short. Mirrors iOS `MinuteBurstTuning.playingSeconds`.
+ */
+export function minuteBurstPlayingMs(taps: number): number {
+  if (!(taps >= 1)) return 0;
+  const played = Math.min(Math.floor(taps), MAX_PLATFORM_BURST_TAPS);
+  return played * (MINUTE_BURST.tapMs + MINUTE_BURST.gapMs);
+}
+
+/** Whether `boundarySeconds` falls while the latest minute mark's burst still plays. */
+function isInsidePlayingBurst(boundarySeconds: number, durationSeconds: number): boolean {
+  const minuteMark = Math.floor(boundarySeconds / 60) * 60;
+  if (!(minuteMark > 0) || !(minuteMark < boundarySeconds)) return false;
+  const taps = minuteBurstTapCount(Math.floor((durationSeconds - minuteMark) / 60));
+  if (taps < 1) return false;
+  return (boundarySeconds - minuteMark) * 1000 < minuteBurstPlayingMs(taps);
+}
+
 /** The vibration pattern one firing plays. */
 export function hapticPattern(firing: HapticFiring): number[] {
   return firing.cue === "minuteBurst"
@@ -158,6 +180,10 @@ function isHapticIntervalSeconds(value: number): value is HapticIntervalSeconds 
  * end, not a 0-tap burst. A minute mark with less than a whole minute left (a
  * sit with bonus seconds) is no burst and falls through to the finer layers the
  * interval allows.
+ *
+ * A finer cue whose boundary falls while the latest minute burst is still
+ * playing ({@link minuteBurstPlayingMs}) is suppressed: on web the new
+ * `vibrate()` would cancel the burst mid-count.
  */
 export function layeredHapticCue(
   boundarySeconds: number,
@@ -171,6 +197,7 @@ export function layeredHapticCue(
     const taps = minuteBurstTapCount(Math.floor((durationSeconds - boundarySeconds) / 60));
     if (taps >= 1) return { cue: "minuteBurst", taps };
   }
+  if (isInsidePlayingBurst(boundarySeconds, durationSeconds)) return null;
   if (intervalSeconds !== 60 && boundarySeconds % 10 === 0) return { cue: "minuteMarker" };
   if (intervalSeconds === 1) return { cue: "secondPulse" };
   return null;
