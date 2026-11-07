@@ -31,7 +31,7 @@ permissions:
 jobs:
   e2e-policy:
     name: e2e-policy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # #1181: Playwright has no chromium build for ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -56,7 +56,7 @@ jobs:
 
   web-e2e-smoke:
     name: web-e2e-smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # #1181: Playwright has no chromium build for ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 20
     needs: e2e-policy
     env:
@@ -101,7 +101,7 @@ jobs:
 
   web-e2e-critical:
     name: web-e2e-critical
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # #1181: Playwright has no chromium build for ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 25
     needs: e2e-policy
     env:
@@ -157,7 +157,7 @@ jobs:
 
   web-e2e-auth-db:
     name: web-e2e-auth-db
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # #1181: Playwright has no chromium build for ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 20
     needs: e2e-policy
     env:
