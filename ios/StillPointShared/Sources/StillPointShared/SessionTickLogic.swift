@@ -86,8 +86,9 @@ public enum SessionTickLogic {
         public let playTick: Bool
         public let playChime: Bool
         public let playCompletion: Bool
-        /// The vibration this tick owes, if any.
-        public let haptic: HapticCueLogic.Cue?
+        /// The vibration this tick owes, if any. #1179: at most one, the
+        /// highest-priority layer due on this tick.
+        public let haptic: HapticCueLogic.Firing?
     }
 
     /// One tick's result: where the clock stands, what to remember, what to play.
@@ -195,7 +196,7 @@ public enum SessionTickLogic {
                     hapticsEnabled: prefs.haptics,
                     completedNaturally: true,
                     isAbandoned: isAbandoned
-                )
+                ).map { HapticCueLogic.Firing(cue: $0) }
             )
         )
     }
@@ -277,13 +278,14 @@ public enum SessionTickLogic {
     }
 
     /// Repeating haptic — uses its own interval, not the chime's minute blocks.
+    /// #1179: layered, so a finer interval still plays the coarser cues.
     private static func hapticStep(
         elapsed: Double,
         totalSeconds: Int,
         prefs: AudioEngine.SoundPrefs,
         isAbandoned: Bool,
         cursor: inout Cursor
-    ) -> HapticCueLogic.Cue? {
+    ) -> HapticCueLogic.Firing? {
         let hapticUpdate = HapticCueLogic.repeatingHapticUpdate(
             elapsedSeconds: elapsed,
             durationSeconds: totalSeconds,
@@ -291,11 +293,13 @@ public enum SessionTickLogic {
             lastCompletedIndex: cursor.lastHapticIntervalIndex
         )
         cursor.lastHapticIntervalIndex = hapticUpdate.completedIndex
-        return HapticCueLogic.repeatingCue(
+        return HapticCueLogic.layeredRepeatingCue(
             hapticsEnabled: prefs.haptics,
-            crossedBoundary: hapticUpdate.crossedBoundary,
-            isAbandoned: isAbandoned,
-            interval: prefs.hapticInterval
+            update: hapticUpdate,
+            durationSeconds: totalSeconds,
+            interval: prefs.hapticInterval,
+            nowSeconds: elapsed,
+            isAbandoned: isAbandoned
         )
     }
 }

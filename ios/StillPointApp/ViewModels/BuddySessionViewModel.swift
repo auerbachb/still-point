@@ -521,13 +521,17 @@ final class BuddySessionViewModel {
             lastCompletedIndex: lastHapticIntervalIndex
         )
         lastHapticIntervalIndex = hapticUpdate.completedIndex
-        if let cue = HapticCueLogic.repeatingCue(
+        // #1179: layered like solo — a finer interval still plays the
+        // coarser cues, one per boundary, and a late one is dropped (#1176).
+        if let firing = HapticCueLogic.layeredRepeatingCue(
             hapticsEnabled: soundPrefs.haptics,
-            crossedBoundary: hapticUpdate.crossedBoundary,
-            isAbandoned: isAbandoned,
-            interval: soundPrefs.hapticInterval
+            update: hapticUpdate,
+            durationSeconds: duration,
+            interval: soundPrefs.hapticInterval,
+            nowSeconds: elapsed,
+            isAbandoned: isAbandoned
         ) {
-            hapticPlayer.fire(cue)
+            hapticPlayer.fire(firing)
         }
         if let cue = HapticCueLogic.sessionEndCue(
             hapticsEnabled: soundPrefs.haptics,

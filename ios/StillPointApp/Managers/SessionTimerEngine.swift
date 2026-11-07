@@ -132,8 +132,8 @@ final class SessionTimerEngine {
         if effects.playCompletion {
             AudioEngine.shared.playCompletion()
         }
-        if let cue = effects.haptic {
-            hapticPlayer.fire(cue)
+        if let firing = effects.haptic {
+            hapticPlayer.fire(firing)
         }
     }
 

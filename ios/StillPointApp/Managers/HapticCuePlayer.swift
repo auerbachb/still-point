@@ -30,12 +30,18 @@ final class HapticCuePlayer {
     /// #1175: the every-second pulse makes per-fire allocation a real cost too.
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let rigidHaptic = UIImpactFeedbackGenerator(style: .rigid)
     private let notificationHaptic = UINotificationFeedbackGenerator()
     private let isAutoShutdownEnabled: Bool
     private var coreHapticEngine: CHHapticEngine?
-    /// #1175: built once per strength, not per cue, so an every-second pulse
-    /// does not rebuild the same pattern sixty times a minute.
-    private var patternCache: [HapticCueLogic.Intensity: CHHapticPattern] = [:]
+    /// #1175: built once per firing, not per cue, so an every-second pulse
+    /// does not rebuild the same pattern sixty times a minute. #1179: keyed by
+    /// the whole firing, so each minute burst's tap count gets its own pattern
+    /// — at most one per minute of the sit.
+    private var patternCache: [HapticCueLogic.Firing: CHHapticPattern] = [:]
+    /// #1179: bumped by `stop()`, so a fallback burst's queued taps that were
+    /// scheduled before it see a stale value and stay still.
+    private var fallbackGeneration = 0
 
     /// - Parameter isAutoShutdownEnabled: Lets Core Haptics stop the engine's
     ///   hardware while it sits idle between cues. No default, so each owner
@@ -50,32 +56,58 @@ final class HapticCuePlayer {
     func prepare() {
         lightHaptic.prepare()
         heavyHaptic.prepare()
+        rigidHaptic.prepare()
         notificationHaptic.prepare()
         startCoreHapticsIfNeeded()
     }
 
-    /// Plays a cue at the strength `HapticCueLogic` assigns it. Core Haptics
-    /// first, so a sit with sound on still vibrates. UIKit is the fallback.
+    /// Plays a single cue — every cue but the minute burst, which needs its
+    /// tap count and goes through `fire(_: Firing)`.
     func fire(_ cue: HapticCueLogic.Cue) {
+        fire(HapticCueLogic.Firing(cue: cue))
+    }
+
+    /// Plays a firing at the strength `HapticCueLogic` assigns it. Core Haptics
+    /// first, so a sit with sound on still vibrates. UIKit is the fallback,
+    /// which plays a minute burst's taps at the same spacing (#1179).
+    func fire(_ firing: HapticCueLogic.Firing) {
         if coreHapticEngine == nil {
             startCoreHapticsIfNeeded()
         }
-        let intensity = HapticCueLogic.intensity(for: cue)
-        if playCoreHaptic(intensity) { return }
-        switch HapticPlayback.fallback(for: intensity) {
+        if playCoreHaptic(firing) { return }
+        let generation = fallbackGeneration
+        for step in HapticPlayback.fallbackSteps(for: firing) {
+            if step.delay <= 0 {
+                playFallback(step.feedback)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + step.delay) { [weak self] in
+                    guard let self, self.fallbackGeneration == generation else { return }
+                    self.playFallback(step.feedback)
+                }
+            }
+        }
+    }
+
+    private func playFallback(_ feedback: HapticPlayback.FallbackFeedback) {
+        switch feedback {
         case .lightImpact:
             lightHaptic.impactOccurred()
             lightHaptic.prepare()
         case .heavyImpact:
             heavyHaptic.impactOccurred()
             heavyHaptic.prepare()
+        case .rigidImpact:
+            rigidHaptic.impactOccurred()
+            rigidHaptic.prepare()
         case .successNotification:
             notificationHaptic.notificationOccurred(.success)
         }
     }
 
-    /// Stops and drops the engine. The next `prepare()` or cue builds a new one.
+    /// Stops and drops the engine, and cancels any fallback burst taps still
+    /// queued. The next `prepare()` or cue builds a new engine.
     func stop() {
+        fallbackGeneration &+= 1
         coreHapticEngine?.stop(completionHandler: nil)
         coreHapticEngine = nil
     }
@@ -106,9 +138,9 @@ final class HapticCuePlayer {
         }
     }
 
-    private func playCoreHaptic(_ intensity: HapticCueLogic.Intensity) -> Bool {
+    private func playCoreHaptic(_ firing: HapticCueLogic.Firing) -> Bool {
         guard let coreHapticEngine,
-              let pattern = try? pattern(for: intensity)
+              let pattern = try? pattern(for: firing)
         else { return false }
         do {
             try coreHapticEngine.start()
@@ -123,11 +155,11 @@ final class HapticCuePlayer {
         }
     }
 
-    /// The cached pattern for `intensity`, built on first use. Patterns are
+    /// The cached pattern for `firing`, built on first use. Patterns are
     /// engine-independent, so a rebuilt engine reuses them.
-    private func pattern(for intensity: HapticCueLogic.Intensity) throws -> CHHapticPattern {
-        if let cached = patternCache[intensity] { return cached }
-        let events = HapticPlayback.events(for: intensity).map { spec -> CHHapticEvent in
+    private func pattern(for firing: HapticCueLogic.Firing) throws -> CHHapticPattern {
+        if let cached = patternCache[firing] { return cached }
+        let events = HapticPlayback.events(for: firing).map { spec -> CHHapticEvent in
             let parameters = [
                 CHHapticEventParameter(parameterID: .hapticIntensity, value: spec.intensity),
                 CHHapticEventParameter(parameterID: .hapticSharpness, value: spec.sharpness),
@@ -149,7 +181,7 @@ final class HapticCuePlayer {
             }
         }
         let pattern = try CHHapticPattern(events: events, parameters: [])
-        patternCache[intensity] = pattern
+        patternCache[firing] = pattern
         return pattern
     }
 }

@@ -40,6 +40,9 @@ public enum HapticPlayback {
     public enum FallbackFeedback: Equatable, Sendable {
         case lightImpact
         case heavyImpact
+        /// #1179: the minute burst's taps — crisp and short, so a one-tap
+        /// burst is not the ten-second buzz's heavy thud on fallback hardware.
+        case rigidImpact
         case successNotification
     }
 
@@ -49,8 +52,10 @@ public enum HapticPlayback {
     }
 
     /// #1175: a tiny tap for every second, a firm tap-plus-buzz for each
-    /// minute or ten-second mark, two strong taps for the end of the sit.
-    /// The shapes differ so they can be told apart with eyes closed.
+    /// ten-second mark, two strong taps for the end of the sit. #1179: a
+    /// single crisp tap for one tap of the minute burst — the whole burst is
+    /// `events(for: Firing)`. The shapes differ so they can be told apart with
+    /// eyes closed.
     public static func events(for intensity: HapticCueLogic.Intensity) -> [HapticEventSpec] {
         switch intensity {
         case .pulse:
@@ -65,6 +70,8 @@ public enum HapticPlayback {
                     relativeTime: 0
                 ),
             ]
+        case .burst:
+            return [burstTap(at: 0)]
         case .pronounced:
             return [
                 HapticEventSpec(intensity: 0.95, sharpness: 0.55, relativeTime: 0),
@@ -73,12 +80,57 @@ public enum HapticPlayback {
         }
     }
 
+    /// #1179: the pattern one firing plays. A minute burst is `taps` crisp
+    /// taps, `HapticCueLogic.minuteBurst.tapSpacingSeconds` apart; every other
+    /// cue plays its strength's shape once.
+    public static func events(for firing: HapticCueLogic.Firing) -> [HapticEventSpec] {
+        guard firing.cue == .minuteBurst else {
+            return events(for: HapticCueLogic.intensity(for: firing.cue))
+        }
+        return burstOffsets(taps: firing.taps).map(burstTap(at:))
+    }
+
     /// The UIKit fallback for hardware without Core Haptics.
     public static func fallback(for intensity: HapticCueLogic.Intensity) -> FallbackFeedback {
         switch intensity {
         case .pulse:      return .lightImpact
         case .marker:     return .heavyImpact
+        case .burst:      return .rigidImpact
         case .pronounced: return .successNotification
         }
+    }
+
+    /// One fallback generator fire, `delay` seconds after the cue starts.
+    public struct FallbackStep: Equatable, Sendable {
+        public let feedback: FallbackFeedback
+        public let delay: TimeInterval
+
+        public init(feedback: FallbackFeedback, delay: TimeInterval) {
+            self.feedback = feedback
+            self.delay = delay
+        }
+    }
+
+    /// #1179: the UIKit fallback for one firing — the burst's taps at the same
+    /// spacing as its Core Haptics pattern, every other cue one fire now.
+    public static func fallbackSteps(for firing: HapticCueLogic.Firing) -> [FallbackStep] {
+        let feedback = fallback(for: HapticCueLogic.intensity(for: firing.cue))
+        guard firing.cue == .minuteBurst else {
+            return [FallbackStep(feedback: feedback, delay: 0)]
+        }
+        return burstOffsets(taps: firing.taps).map { FallbackStep(feedback: feedback, delay: $0) }
+    }
+
+    /// Onset of each burst tap, from the one tunable constant.
+    private static func burstOffsets(taps: Int) -> [TimeInterval] {
+        let spacing = HapticCueLogic.minuteBurst.tapSpacingSeconds
+        return (0..<max(1, taps)).map { Double($0) * spacing }
+    }
+
+    /// A short, crisp transient near the marker's strength — sharper and a
+    /// touch lighter than the end's taps, so a 2-tap burst does not read as
+    /// the end.
+    private static func burstTap(at relativeTime: TimeInterval) -> HapticEventSpec {
+        HapticEventSpec(intensity: 0.85, sharpness: 1.0, relativeTime: relativeTime)
     }
 }

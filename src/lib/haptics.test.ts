@@ -8,11 +8,17 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   HAPTIC_PATTERNS,
+  MAX_PLATFORM_BURST_TAPS,
+  MAX_VIBRATION_PATTERN_ENTRIES,
+  MINUTE_BURST,
   fireHaptic,
   hapticIntervalSeconds,
+  layeredHapticCue,
   maybeFireHaptic,
+  minuteBurstPattern,
+  minuteBurstPlayingMs,
+  minuteBurstTapCount,
   nextRepeatingHaptic,
-  repeatingHapticCue,
   supportsVibration,
 } from "@/lib/haptics";
 
@@ -304,9 +310,93 @@ describe("every-second interval (#1175)", () => {
     ).toEqual({ completedIndex: 4, shouldFire: false });
   });
 
-  test("every second plays the pulse; the longer intervals play the marker", () => {
-    expect(repeatingHapticCue(1)).toBe("secondPulse");
-    expect(repeatingHapticCue(10)).toBe("minuteMarker");
-    expect(repeatingHapticCue(60)).toBe("minuteMarker");
+  test("off-minute, off-ten boundaries play each interval's own finest cue", () => {
+    expect(layeredHapticCue(61, 300, 1)).toEqual({ cue: "secondPulse" });
+    expect(layeredHapticCue(70, 300, 10)).toEqual({ cue: "minuteMarker" });
+    expect(layeredHapticCue(60, 300, 60)).toEqual({ cue: "minuteBurst", taps: 4 });
+  });
+});
+
+describe("layered haptics (#1179)", () => {
+  test("a coincident boundary plays only the highest-priority cue", () => {
+    // 4:00 left in a 10-minute sit: minute, ten-second, and second at once.
+    for (const interval of [1, 10, 60]) {
+      expect(layeredHapticCue(360, 600, interval)).toEqual({ cue: "minuteBurst", taps: 4 });
+    }
+    expect(layeredHapticCue(370, 600, 1)).toEqual({ cue: "minuteMarker" });
+  });
+
+  test("a coarser interval never plays the finer cues", () => {
+    expect(layeredHapticCue(61, 600, 10)).toBeNull();
+    expect(layeredHapticCue(70, 600, 60)).toBeNull();
+    expect(layeredHapticCue(61, 600, 60)).toBeNull();
+  });
+
+  test("the burst taps once per whole minute left, uncapped, down to the final minute", () => {
+    expect(layeredHapticCue(60, 3600, 60)).toEqual({ cue: "minuteBurst", taps: 59 });
+    expect(layeredHapticCue(1800, 3600, 60)).toEqual({ cue: "minuteBurst", taps: 30 });
+    expect(layeredHapticCue(3540, 3600, 1)).toEqual({ cue: "minuteBurst", taps: 1 });
+    expect(layeredHapticCue(3550, 3600, 1)).toEqual({ cue: "minuteMarker" });
+    expect(layeredHapticCue(3599, 3600, 1)).toEqual({ cue: "secondPulse" });
+  });
+
+  test("0:00 is the end, never a 0-tap burst", () => {
+    for (const interval of [1, 10, 60]) {
+      expect(layeredHapticCue(300, 300, interval)).toBeNull();
+    }
+  });
+
+  test("a minute mark without a whole minute left falls through to the finer layers", () => {
+    expect(layeredHapticCue(60, 90, 60)).toBeNull();
+    expect(layeredHapticCue(60, 90, 10)).toEqual({ cue: "minuteMarker" });
+    expect(layeredHapticCue(60, 90, 1)).toEqual({ cue: "minuteMarker" });
+    expect(layeredHapticCue(60, 330, 60)).toEqual({ cue: "minuteBurst", taps: 4 });
+  });
+
+  test("tap count and spacing come from one tunable constant", () => {
+    expect(MINUTE_BURST.maxTaps).toBeNull();
+    expect(MINUTE_BURST.tapMs + MINUTE_BURST.gapMs).toBeGreaterThanOrEqual(100);
+    expect(MINUTE_BURST.tapMs + MINUTE_BURST.gapMs).toBeLessThanOrEqual(150);
+    expect(minuteBurstTapCount(30)).toBe(30);
+    expect(minuteBurstTapCount(0)).toBe(0);
+    expect(minuteBurstPattern(3)).toEqual([
+      MINUTE_BURST.tapMs,
+      MINUTE_BURST.gapMs,
+      MINUTE_BURST.tapMs,
+      MINUTE_BURST.gapMs,
+      MINUTE_BURST.tapMs,
+    ]);
+    expect(minuteBurstPattern(1)).toEqual([MINUTE_BURST.tapMs]);
+  });
+
+  test("a finer cue waits for a playing burst, so vibrate() never cuts it short", () => {
+    // 30 minutes left: 30 taps play for 3.6 s.
+    expect(minuteBurstPlayingMs(30)).toBe(3600);
+    expect(layeredHapticCue(1801, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(1803, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(1804, 3600, 1)).toEqual({ cue: "secondPulse" });
+    // 9 taps (1.08 s) outlast the next second; 8 taps (0.96 s) do not.
+    expect(layeredHapticCue(3061, 3600, 1)).toBeNull();
+    expect(layeredHapticCue(3121, 3600, 1)).toEqual({ cue: "secondPulse" });
+    // A two-hour sit plays the clamped 50 taps (6 s) on web, so the :10 buzz still lands.
+    expect(minuteBurstPlayingMs(119)).toBe(6000);
+    expect(layeredHapticCue(65, 7200, 1)).toBeNull();
+    expect(layeredHapticCue(70, 7200, 10)).toEqual({ cue: "minuteMarker" });
+  });
+
+  test("a long sit's burst fits the browser's vibration pattern ceiling", () => {
+    expect(MAX_PLATFORM_BURST_TAPS).toBe(50);
+    expect(minuteBurstPattern(50)).toHaveLength(MAX_VIBRATION_PATTERN_ENTRIES);
+    expect(minuteBurstPattern(120)).toHaveLength(MAX_VIBRATION_PATTERN_ENTRIES);
+    expect(minuteBurstPattern(120)).toEqual(minuteBurstPattern(50));
+    expect(minuteBurstTapCount(120)).toBe(120);
+  });
+
+  test("a burst vibrates its taps and stays unlike the end", () => {
+    const vibrate = vi.fn(() => true);
+    setVibrate(vibrate);
+    expect(maybeFireHaptic(true, { cue: "minuteBurst", taps: 2 })).toBe(true);
+    expect(vibrate).toHaveBeenCalledWith(minuteBurstPattern(2));
+    expect(minuteBurstPattern(2)).not.toEqual([...HAPTIC_PATTERNS.sessionEnd]);
   });
 });

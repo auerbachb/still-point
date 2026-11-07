@@ -183,7 +183,7 @@ export function useSessionCues({
             // #712: not routed through `playEnabledSound` — the "browser audio
             // is paused" affordance is about the audio context, which vibration
             // never touches.
-            maybeFireHaptic(prefs?.haptics, cue.cue);
+            maybeFireHaptic(prefs?.haptics, cue);
             break;
         }
       }
