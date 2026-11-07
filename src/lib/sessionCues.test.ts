@@ -350,11 +350,11 @@ describe("planCountdownCues — minute chime", () => {
 });
 
 describe("planCountdownCues — repeating haptic", () => {
-  it("buzzes at each minute that is not the end of the sit", () => {
+  it("counts down each minute that is not the end of the sit with a burst", () => {
     const { cues } = run(freshCueCursor(HAPTIC), updates(0, 180), 180, { ...HAPTIC, chime: false });
     expect(cues).toEqual([
-      [60, { kind: "haptic", cue: "minuteMarker" }],
-      [120, { kind: "haptic", cue: "minuteMarker" }],
+      [60, { kind: "haptic", cue: "minuteBurst", taps: 2 }],
+      [120, { kind: "haptic", cue: "minuteBurst", taps: 1 }],
     ]);
   });
 
@@ -375,7 +375,7 @@ describe("planCountdownCues — repeating haptic", () => {
 
   it("is planned with haptics off too — maybeFireHaptic applies that preference", () => {
     const planned = planFrom(59.95, 60, 300, { ...TICK, tick: false, chime: false });
-    expect(planned.cues).toEqual([{ kind: "haptic", cue: "minuteMarker" }]);
+    expect(planned.cues).toEqual([{ kind: "haptic", cue: "minuteBurst", taps: 4 }]);
   });
 
   it("re-counts on an interval change instead of firing for the boundaries behind it", () => {
@@ -410,7 +410,7 @@ describe("planCountdownCues — repeating haptic", () => {
     expect(planned.cues).toEqual([
       { kind: "tick" },
       { kind: "chime" },
-      { kind: "haptic", cue: "minuteMarker" },
+      { kind: "haptic", cue: "minuteBurst", taps: 4 },
     ]);
   });
 
@@ -428,8 +428,54 @@ describe("planCountdownCues — repeating haptic", () => {
     expect(planCountdownCues(cursor, 60, 300, VOICE).cues).toEqual([
       { kind: "cancelVoice" },
       { kind: "chime" },
-      { kind: "haptic", cue: "minuteMarker" },
+      { kind: "haptic", cue: "minuteBurst", taps: 4 },
     ]);
+  });
+});
+
+describe("planCountdownCues — layered haptics (#1179)", () => {
+  type Firing = Extract<Cue, { kind: "haptic" }>;
+  const firings = (cues: Array<[number, Cue]>) =>
+    cues.flatMap(([elapsed, cue]) => (cue.kind === "haptic" ? [[elapsed, cue] as [number, Firing]] : []));
+
+  it("every second: the pulse each second, the buzz on tens, the burst on minutes", () => {
+    const { cues } = run(freshCueCursor(HAPTIC_EVERY_SECOND), updates(0, 150), 150, HAPTIC_EVERY_SECOND);
+    const planned = firings(cues);
+    expect(planned).toHaveLength(149);
+    expect(planned.find(([elapsed]) => elapsed === 1)?.[1]).toEqual({ kind: "haptic", cue: "secondPulse" });
+    expect(planned.find(([elapsed]) => elapsed === 10)?.[1]).toEqual({ kind: "haptic", cue: "minuteMarker" });
+    expect(planned.find(([elapsed]) => elapsed === 60)?.[1]).toEqual({ kind: "haptic", cue: "minuteBurst", taps: 1 });
+    // 0:30 left at 120 s: no whole minute, so the buzz.
+    expect(planned.find(([elapsed]) => elapsed === 120)?.[1]).toEqual({ kind: "haptic", cue: "minuteMarker" });
+    expect(planned.filter(([, f]) => f.cue === "minuteBurst")).toHaveLength(1);
+    expect(planned.filter(([, f]) => f.cue === "minuteMarker")).toHaveLength(13);
+    expect(planned.filter(([, f]) => f.cue === "secondPulse")).toHaveLength(135);
+  });
+
+  it("every 10 seconds: the buzz plus the minute burst, nothing finer", () => {
+    const { cues } = run(freshCueCursor(HAPTIC_TEN_SECONDS), updates(0, 180), 180, HAPTIC_TEN_SECONDS);
+    const planned = firings(cues);
+    expect(planned.filter(([, f]) => f.cue === "minuteBurst")).toEqual([
+      [60, { kind: "haptic", cue: "minuteBurst", taps: 2 }],
+      [120, { kind: "haptic", cue: "minuteBurst", taps: 1 }],
+    ]);
+    expect(planned.filter(([, f]) => f.cue === "minuteMarker")).toHaveLength(15);
+    expect(planned.some(([, f]) => f.cue === "secondPulse")).toBe(false);
+  });
+
+  it("every minute: the burst only, uncapped on a long sit, never at 0:00", () => {
+    const { cues } = run(freshCueCursor(HAPTIC), updates(0, 1800), 1800, { ...HAPTIC, chime: false });
+    const planned = firings(cues);
+    expect(planned).toHaveLength(29);
+    expect(planned[0]).toEqual([60, { kind: "haptic", cue: "minuteBurst", taps: 29 }]);
+    expect(planned.at(-1)).toEqual([1740, { kind: "haptic", cue: "minuteBurst", taps: 1 }]);
+    expect(planned.every(([, f]) => f.cue === "minuteBurst")).toBe(true);
+  });
+
+  it("drops a burst first seen long after its minute (#1176)", () => {
+    const late = planFrom(30, 125, 600, HAPTIC);
+    expect(late.cues.filter(cue => cue.kind === "haptic")).toEqual([]);
+    expect(late.cursor.lastHapticIndex).toBe(2);
   });
 });
 
@@ -449,7 +495,7 @@ describe("planCountdownCues — a jump across several boundaries", () => {
     expect(planned.cues).toEqual([
       { kind: "tick" },
       { kind: "chime" },
-      { kind: "haptic", cue: "minuteMarker" },
+      { kind: "haptic", cue: "minuteBurst", taps: 7 },
     ]);
     // The newest block and interval passed, so the skipped ones are not owed later.
     expect(planned.cursor).toMatchObject({

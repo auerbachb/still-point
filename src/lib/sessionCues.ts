@@ -18,9 +18,9 @@ import {
 import {
   completedHapticIntervalIndex,
   hapticIntervalSeconds,
+  layeredHapticCue,
   nextRepeatingHaptic,
-  repeatingHapticCue,
-  type HapticCue,
+  type HapticFiring,
 } from "@/lib/haptics";
 
 /**
@@ -61,7 +61,7 @@ export type Cue =
   | { kind: "completion" }
   | { kind: "voice"; second: number }
   | { kind: "cancelVoice" }
-  | { kind: "haptic"; cue: HapticCue };
+  | ({ kind: "haptic" } & HapticFiring);
 
 /**
  * #1176: how late the minute bell may still strike, in seconds. Above the 50 ms
@@ -252,7 +252,14 @@ export function planCountdownCues(
   });
   next.lastHapticIndex = hapticUpdate.completedIndex;
   if (hapticUpdate.shouldFire) {
-    cues.push({ kind: "haptic", cue: repeatingHapticCue(interval) });
+    // #1179: layered — a finer interval still plays the coarser cues, one per
+    // boundary. #1176: a boundary first seen long after it passed is dropped,
+    // on the bell's budget.
+    const boundary = hapticUpdate.completedIndex * interval;
+    const firing = layeredHapticCue(boundary, totalSeconds, interval);
+    if (firing && elapsed - boundary <= CHIME_MAX_LATENESS_SECONDS) {
+      cues.push({ kind: "haptic", ...firing });
+    }
   }
   return { cursor: next, cues };
 }

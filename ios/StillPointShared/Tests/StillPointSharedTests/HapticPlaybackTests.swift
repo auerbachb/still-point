@@ -51,5 +51,39 @@ struct HapticPlaybackTests {
         #expect(HapticPlayback.fallback(for: .pulse) == .lightImpact)
         #expect(HapticPlayback.fallback(for: .marker) == .heavyImpact)
         #expect(HapticPlayback.fallback(for: .pronounced) == .successNotification)
+        #expect(HapticPlayback.fallback(for: .burst) == .heavyImpact)
+    }
+
+    // MARK: - Minute burst (#1179)
+
+    @Test func testTheBurstIsOneCrispTapPerMinuteAtTheTunedSpacing() {
+        let spacing = HapticCueLogic.minuteBurst.tapSpacingSeconds
+        let burst = HapticPlayback.events(for: .minuteBurst(taps: 5))
+        #expect(burst.count == 5)
+        #expect(burst.allSatisfy { $0.kind == .transient })
+        for (index, tap) in burst.enumerated() {
+            #expect(abs(tap.relativeTime - Double(index) * spacing) < 1e-9)
+        }
+        #expect((burst.map(\.intensity).min() ?? 0) >= 0.8)
+    }
+
+    @Test func testTheFallbackBurstPlaysTheSameTapsAtTheSameSpacing() {
+        let spacing = HapticCueLogic.minuteBurst.tapSpacingSeconds
+        let steps = HapticPlayback.fallbackSteps(for: .minuteBurst(taps: 3))
+        #expect(steps.map(\.feedback) == [.heavyImpact, .heavyImpact, .heavyImpact])
+        #expect(steps.map(\.delay) == [0, spacing, 2 * spacing])
+        #expect(HapticPlayback.fallbackSteps(for: .sessionEnd) == [
+            HapticPlayback.FallbackStep(feedback: .successNotification, delay: 0),
+        ])
+    }
+
+    /// Single cues play exactly their strength's shape, so the end pattern is
+    /// unchanged and a short burst still differs from it.
+    @Test func testSingleCuesKeepTheirShapeAndTheEndDiffersFromABurst() {
+        #expect(HapticPlayback.events(for: .sessionEnd) == HapticPlayback.events(for: .pronounced))
+        #expect(HapticPlayback.events(for: .minuteMarker) == HapticPlayback.events(for: .marker))
+        #expect(HapticPlayback.events(for: .secondPulse) == HapticPlayback.events(for: .pulse))
+        #expect(HapticPlayback.events(for: .minuteBurst(taps: 2)) != HapticPlayback.events(for: .pronounced))
+        #expect(HapticPlayback.events(for: .minuteBurst(taps: 1)) != HapticPlayback.events(for: .marker))
     }
 }

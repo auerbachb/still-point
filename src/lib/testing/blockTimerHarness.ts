@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
 import { BlockTimer } from "@/components/BlockTimer";
 import type { SoundPrefs } from "@/lib/audio";
-import { HAPTIC_PATTERNS } from "@/lib/haptics";
+import { HAPTIC_PATTERNS, minuteBurstPattern } from "@/lib/haptics";
 import { env, record } from "./blockTimerAudio";
 
 /**
@@ -57,6 +57,10 @@ function hapticName(pattern: VibratePattern): string {
   const shape = JSON.stringify(Array.isArray(pattern) ? pattern : [pattern]);
   for (const [cue, cuePattern] of Object.entries(HAPTIC_PATTERNS)) {
     if (JSON.stringify(cuePattern) === shape) return `haptic:${cue}`;
+  }
+  // #1179: a minute burst reads as its tap count.
+  for (let taps = 1; taps <= 120; taps++) {
+    if (JSON.stringify(minuteBurstPattern(taps)) === shape) return `haptic:minuteBurst×${taps}`;
   }
   return `haptic:${shape}`;
 }

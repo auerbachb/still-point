@@ -41,11 +41,11 @@ describe("BlockTimer local clock", () => {
 
     expect(ticks()).toEqual(["0.05", ...seconds(1, 129)]);
     // 120s leaves under a full minute to go, so only the first block chimes.
-    // The repeating buzz runs on its own interval and marks both minutes.
+    // #1179: the minute burst follows the same rule — one tap with one whole
+    // minute left at 60s, and nothing at 120s in every-minute mode.
     expect(cues()).toEqual([
       "60.00 chime",
-      "60.00 haptic:minuteMarker",
-      "120.00 haptic:minuteMarker",
+      "60.00 haptic:minuteBurst×1",
       "130.00 haptic:sessionEnd",
       "130.00 completion",
       "130.00 complete",
@@ -53,7 +53,7 @@ describe("BlockTimer local clock", () => {
     expect(log().slice(log().indexOf("60.00 tick"), log().indexOf("60.00 tick") + 3)).toEqual([
       "60.00 tick",
       "60.00 chime",
-      "60.00 haptic:minuteMarker",
+      "60.00 haptic:minuteBurst×1",
     ]);
   });
 
@@ -88,7 +88,7 @@ describe("BlockTimer local clock", () => {
       "30.50 cancelVoice",
       "50.50 cancelVoice",
       "80.00 chime",
-      "80.00 haptic:minuteMarker",
+      "80.00 haptic:minuteBurst×4",
     ]);
   });
 
@@ -144,9 +144,9 @@ describe("BlockTimer local clock", () => {
     // and two full minutes remain, so it chimes and buzzes like any other.
     expect(cues()).toEqual([
       "60.00 chime",
-      "60.00 haptic:minuteMarker",
+      "60.00 haptic:minuteBurst×2",
       "120.00 chime",
-      "120.00 haptic:minuteMarker",
+      "120.00 haptic:minuteBurst×1",
       "180.00 haptic:sessionEnd",
       "180.00 completion",
       "180.00 complete",

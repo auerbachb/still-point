@@ -22,13 +22,16 @@ struct HapticIntervalTests {
         let first = update(elapsed: 60, duration: 120, interval: 60, last: 0)
         #expect(first.crossedBoundary)
         #expect(first.completedIndex == 1)
+        // #1179: a whole minute with one minute left is a one-tap burst.
         #expect(
-            HapticCueLogic.repeatingCue(
+            HapticCueLogic.layeredRepeatingCue(
                 hapticsEnabled: true,
-                crossedBoundary: first.crossedBoundary,
-                isAbandoned: false,
-                interval: .minute
-            ) == .minuteMarker
+                update: first,
+                durationSeconds: 120,
+                interval: .minute,
+                nowSeconds: 60,
+                isAbandoned: false
+            ) == .minuteBurst(taps: 1)
         )
 
         let second = update(elapsed: 120, duration: 180, interval: 60, last: 1)
@@ -80,20 +83,26 @@ struct HapticIntervalTests {
     }
 
     @Test func testRepeatingCueStaysSilentWhenHapticsAreOffOrTheSitIsAbandoned() {
+        let crossed = HapticCueLogic.RepeatingHapticUpdate(completedIndex: 1, crossedBoundary: true)
         #expect(
-            HapticCueLogic.repeatingCue(
+            HapticCueLogic.layeredRepeatingCue(
                 hapticsEnabled: false,
-                crossedBoundary: true,
-                isAbandoned: false,
-                interval: .minute
+                update: crossed,
+                durationSeconds: 300,
+                interval: .minute,
+                nowSeconds: 60,
+                isAbandoned: false
             ) == nil
         )
+        let second = HapticCueLogic.RepeatingHapticUpdate(completedIndex: 61, crossedBoundary: true)
         #expect(
-            HapticCueLogic.repeatingCue(
+            HapticCueLogic.layeredRepeatingCue(
                 hapticsEnabled: true,
-                crossedBoundary: true,
-                isAbandoned: true,
-                interval: .everySecond
+                update: second,
+                durationSeconds: 300,
+                interval: .everySecond,
+                nowSeconds: 61,
+                isAbandoned: true
             ) == nil
         )
     }
@@ -164,22 +173,95 @@ struct HapticIntervalTests {
         #expect(seeded == 4)
     }
 
-    @Test func testEachIntervalPlaysItsOwnCue() {
-        #expect(
-            HapticCueLogic.repeatingCue(
-                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .everySecond
-            ) == .secondPulse
-        )
-        #expect(
-            HapticCueLogic.repeatingCue(
-                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .tenSeconds
-            ) == .minuteMarker
-        )
-        #expect(
-            HapticCueLogic.repeatingCue(
-                hapticsEnabled: true, crossedBoundary: true, isAbandoned: false, interval: .minute
-            ) == .minuteMarker
-        )
+    /// Off-minute, off-ten boundaries play each interval's own finest cue.
+    @Test func testEachIntervalPlaysItsOwnFinestCue() {
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 61, durationSeconds: 300, interval: .everySecond) == .secondPulse)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 70, durationSeconds: 300, interval: .tenSeconds) == .minuteMarker)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: 300, interval: .minute) == .minuteBurst(taps: 4))
+    }
+
+    // MARK: - Layering (#1179)
+
+    /// Coincident boundaries play only the coarsest cue: burst > buzz > pulse.
+    @Test func testACoincidentBoundaryPlaysOnlyTheHighestPriorityCue() {
+        // 4:00 left in a 10-minute sit: minute, ten-second and second at once.
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 360, durationSeconds: 600, interval: .everySecond) == .minuteBurst(taps: 4))
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 360, durationSeconds: 600, interval: .tenSeconds) == .minuteBurst(taps: 4))
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 360, durationSeconds: 600, interval: .minute) == .minuteBurst(taps: 4))
+        // A ten-second mark under every-second plays the buzz, not the pulse.
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 370, durationSeconds: 600, interval: .everySecond) == .minuteMarker)
+    }
+
+    /// Finer marks never play under a coarser interval.
+    @Test func testACoarserIntervalNeverPlaysTheFinerCues() {
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 61, durationSeconds: 600, interval: .tenSeconds) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 70, durationSeconds: 600, interval: .minute) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 61, durationSeconds: 600, interval: .minute) == nil)
+    }
+
+    /// The burst taps the whole minutes left, with no cap: a long sit taps 30
+    /// times at 30:00 left, and the final minute opens with a single tap.
+    @Test func testTheBurstTapsOncePerWholeMinuteRemaining() {
+        let hour = 3600
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: hour, interval: .minute) == .minuteBurst(taps: 59))
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 1800, durationSeconds: hour, interval: .minute) == .minuteBurst(taps: 30))
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 3540, durationSeconds: hour, interval: .everySecond) == .minuteBurst(taps: 1))
+        // Into the final minute: buzz and pulse only, then the end.
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 3550, durationSeconds: hour, interval: .everySecond) == .minuteMarker)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 3599, durationSeconds: hour, interval: .everySecond) == .secondPulse)
+    }
+
+    /// 0:00 is the end cue's moment, never a 0-tap burst.
+    @Test func testTheEndOfTheSitIsNeverABurst() {
+        for interval in HapticCueLogic.Interval.allCases {
+            #expect(HapticCueLogic.layeredCue(boundarySeconds: 300, durationSeconds: 300, interval: interval) == nil)
+        }
+    }
+
+    /// A minute mark with less than a whole minute left (bonus seconds) is no
+    /// burst; it falls through to the finer layers the interval allows.
+    @Test func testAMinuteMarkWithoutAWholeMinuteLeftFallsThrough() {
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: 90, interval: .minute) == nil)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: 90, interval: .tenSeconds) == .minuteMarker)
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: 90, interval: .everySecond) == .minuteMarker)
+        // 5:30 sit: 4:30 left at the first minute is four whole minutes.
+        #expect(HapticCueLogic.layeredCue(boundarySeconds: 60, durationSeconds: 330, interval: .minute) == .minuteBurst(taps: 4))
+    }
+
+    /// #1176 still applies: a boundary first seen long after it passed is dropped.
+    @Test func testALateBoundaryIsDropped() {
+        let crossed = HapticCueLogic.RepeatingHapticUpdate(completedIndex: 2, crossedBoundary: true)
+        let fire = { (now: Double) in
+            HapticCueLogic.layeredRepeatingCue(
+                hapticsEnabled: true,
+                update: crossed,
+                durationSeconds: 600,
+                interval: .minute,
+                nowSeconds: now,
+                isAbandoned: false
+            )
+        }
+        #expect(fire(120.02) == .minuteBurst(taps: 8))
+        #expect(fire(120 + CueDeliveryLogic.maxLatenessSeconds) == .minuteBurst(taps: 8))
+        #expect(fire(125) == nil)
+    }
+
+    /// The tap count and spacing come from one tunable constant.
+    @Test func testTheBurstTuningIsOneConstantAndItsCapApplies() {
+        #expect(HapticCueLogic.minuteBurst.tapSpacingSeconds >= 0.1)
+        #expect(HapticCueLogic.minuteBurst.tapSpacingSeconds <= 0.15)
+        #expect(HapticCueLogic.minuteBurst.maxTaps == nil)
+        #expect(HapticCueLogic.minuteBurst.tapCount(wholeMinutesRemaining: 30) == 30)
+        let capped = HapticCueLogic.MinuteBurstTuning(tapSpacingSeconds: 0.12, maxTaps: 10)
+        #expect(capped.tapCount(wholeMinutesRemaining: 30) == 10)
+        #expect(capped.tapCount(wholeMinutesRemaining: 3) == 3)
+        #expect(capped.tapCount(wholeMinutesRemaining: 0) == 0)
+    }
+
+    @Test func testAFiringCarriesTapsOnlyForTheBurst() {
+        #expect(HapticCueLogic.Firing(cue: .minuteMarker, taps: 5).taps == 1)
+        #expect(HapticCueLogic.Firing.minuteBurst(taps: 0).taps == 1)
+        #expect(HapticCueLogic.Firing.minuteBurst(taps: 7).taps == 7)
     }
 
     @Test func testEverySecondIntervalRoundTrips() throws {

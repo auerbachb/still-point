@@ -58,7 +58,8 @@ describe("BlockTimer buddy sync clock", () => {
 
     // Sit second N is wall second N - 65.
     expect(ticks()).toEqual(seconds(1, 56));
-    expect(cues()).toEqual(["55.00 chime", "55.00 haptic:minuteMarker"]);
+    // #1179: sit minute 2 of 10, so eight whole minutes left.
+    expect(cues()).toEqual(["55.00 chime", "55.00 haptic:minuteBurst×8"]);
   });
 
   it("follows the server clock between polls and completes once", async () => {
@@ -101,8 +102,7 @@ describe("BlockTimer controlled elapsed", () => {
     expect(ticks()).toEqual(seconds(0, 129));
     expect(cues()).toEqual([
       "60.00 chime",
-      "60.00 haptic:minuteMarker",
-      "120.00 haptic:minuteMarker",
+      "60.00 haptic:minuteBurst×1",
       "130.00 haptic:sessionEnd",
       "130.00 completion",
       "130.00 complete",
@@ -118,8 +118,7 @@ describe("BlockTimer controlled elapsed", () => {
     expect(ticks()).toEqual(seconds(1, 129));
     expect(cues()).toEqual([
       "60.00 chime",
-      "60.00 haptic:minuteMarker",
-      "120.00 haptic:minuteMarker",
+      "60.00 haptic:minuteBurst×1",
       "130.00 haptic:sessionEnd",
       "130.00 completion",
       "130.00 complete",

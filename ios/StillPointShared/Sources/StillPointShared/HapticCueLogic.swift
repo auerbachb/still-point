@@ -15,13 +15,64 @@ import Foundation
 public enum HapticCueLogic {
 
     /// The moments a sit announces by feel.
-    public enum Cue: String, Sendable, Equatable, CaseIterable {
-        /// A minute (or ten-second) mark just passed.
+    public enum Cue: String, Sendable, Hashable, CaseIterable {
+        /// A ten-second mark just passed — the firm buzz. Since #1179 a whole
+        /// minute plays `minuteBurst` instead; the name predates that.
         case minuteMarker
         /// #1175: another second of the sit passed — the every-second interval.
         case secondPulse
+        /// #1179: a whole-minute mark, as one rapid tap per whole minute left.
+        /// The tap count travels on `Firing.taps`.
+        case minuteBurst
         /// The sit ran its full length.
         case sessionEnd
+    }
+
+    /// #1179: the minute countdown burst's tuning, in one place so the owner
+    /// can retune it after a device test.
+    public struct MinuteBurstTuning: Equatable, Sendable {
+        /// Seconds from one tap's onset to the next — rapid, yet countable.
+        public let tapSpacingSeconds: Double
+        /// Most taps one burst plays, or nil for no cap (one per whole minute).
+        public let maxTaps: Int?
+
+        public init(tapSpacingSeconds: Double, maxTaps: Int?) {
+            self.tapSpacingSeconds = tapSpacingSeconds
+            self.maxTaps = maxTaps
+        }
+
+        /// The taps owed with `wholeMinutesRemaining` whole minutes left.
+        public func tapCount(wholeMinutesRemaining: Int) -> Int {
+            let minutes = max(0, wholeMinutesRemaining)
+            guard let maxTaps else { return minutes }
+            return min(minutes, max(1, maxTaps))
+        }
+    }
+
+    /// #1179: the one tunable constant behind the burst — about 120 ms apart,
+    /// no cap, so 30 minutes left is 30 taps (about 3.6 s). Web mirrors it as
+    /// `MINUTE_BURST` in `src/lib/haptics.ts`.
+    public static let minuteBurst = MinuteBurstTuning(tapSpacingSeconds: 0.12, maxTaps: nil)
+
+    /// One cue to play, with how many taps when it is a minute burst.
+    ///
+    /// Every cue but the burst plays exactly once, so `taps` is 1 for those.
+    public struct Firing: Hashable, Sendable {
+        public let cue: Cue
+        public let taps: Int
+
+        public init(cue: Cue, taps: Int = 1) {
+            self.cue = cue
+            self.taps = cue == .minuteBurst ? max(1, taps) : 1
+        }
+
+        public static let secondPulse = Firing(cue: .secondPulse)
+        public static let minuteMarker = Firing(cue: .minuteMarker)
+        public static let sessionEnd = Firing(cue: .sessionEnd)
+
+        public static func minuteBurst(taps: Int) -> Firing {
+            Firing(cue: .minuteBurst, taps: taps)
+        }
     }
 
     /// How a cue should feel.
@@ -33,8 +84,10 @@ public enum HapticCueLogic {
     public enum Intensity: String, Sendable, Equatable, CaseIterable {
         /// #1175: a single tiny tap, light enough to repeat every second.
         case pulse
-        /// A firm buzz for each minute or ten-second mark.
+        /// A firm buzz for each ten-second mark.
         case marker
+        /// #1179: the crisp, rapid taps of the minute countdown burst.
+        case burst
         /// The end of the sit — a different shape again.
         case pronounced
     }
@@ -44,6 +97,7 @@ public enum HapticCueLogic {
         switch cue {
         case .secondPulse:  return .pulse
         case .minuteMarker: return .marker
+        case .minuteBurst:  return .burst
         case .sessionEnd:   return .pronounced
         }
     }
@@ -79,7 +133,9 @@ public enum HapticCueLogic {
         return .minuteMarker
     }
 
-    /// How often the repeating haptic fires. Only these three values exist.
+    /// How often the repeating haptic fires — the *finest* cue the sitter
+    /// picked. Since #1179 every coarser cue still plays on top of it; see
+    /// `layeredCue`. Only these three values exist.
     public enum Interval: String, Codable, CaseIterable, Sendable, Equatable {
         case minute
         case tenSeconds
@@ -91,15 +147,6 @@ public enum HapticCueLogic {
             case .minute: return 60
             case .tenSeconds: return 10
             case .everySecond: return 1
-            }
-        }
-
-        /// The cue each boundary of this interval plays. The every-second
-        /// interval plays the light pulse; the others play the firm marker.
-        public var cue: Cue {
-            switch self {
-            case .everySecond: return .secondPulse
-            case .minute, .tenSeconds: return .minuteMarker
             }
         }
 
@@ -181,16 +228,70 @@ public enum HapticCueLogic {
         )
     }
 
-    /// The repeating cue for `interval`, or nil. The end cue stays on
-    /// `sessionEndCue`.
-    public static func repeatingCue(
-        hapticsEnabled: Bool,
-        crossedBoundary: Bool,
-        isAbandoned: Bool,
+    /// #1179: whole minutes still to go at `elapsedSeconds` into the sit.
+    public static func wholeMinutesRemaining(elapsedSeconds: Int, durationSeconds: Int) -> Int {
+        max(0, durationSeconds - elapsedSeconds) / 60
+    }
+
+    /// #1179: the one cue a boundary of `interval` plays at `boundarySeconds`
+    /// into the sit, or nil.
+    ///
+    /// The interval is the finest cue; every coarser one still plays, and a
+    /// boundary that is several at once plays only the coarsest: minute
+    /// burst, then ten-second buzz, then second pulse. The end of the sit
+    /// outranks them all and is never a boundary here — it stays on
+    /// `sessionEndCue`, so 0:00 is the end cue, not a 0-tap burst.
+    ///
+    /// A whole-minute mark plays the burst only while at least one whole
+    /// minute remains — the bell's rule (#711). A mark with less left (a sit
+    /// with bonus seconds) falls through to the next finer layer the interval
+    /// allows, so every-minute mode stays still there.
+    public static func layeredCue(
+        boundarySeconds: Int,
+        durationSeconds: Int,
         interval: Interval
-    ) -> Cue? {
-        guard hapticsEnabled, crossedBoundary, !isAbandoned else { return nil }
-        return interval.cue
+    ) -> Firing? {
+        guard boundarySeconds > 0,
+              boundarySeconds < durationSeconds,
+              boundarySeconds % interval.seconds == 0
+        else { return nil }
+        if boundarySeconds % 60 == 0 {
+            let taps = minuteBurst.tapCount(
+                wholeMinutesRemaining: wholeMinutesRemaining(
+                    elapsedSeconds: boundarySeconds,
+                    durationSeconds: durationSeconds
+                )
+            )
+            if taps >= 1 { return .minuteBurst(taps: taps) }
+        }
+        if interval != .minute, boundarySeconds % 10 == 0 { return .minuteMarker }
+        if interval == .everySecond { return .secondPulse }
+        return nil
+    }
+
+    /// The repeating cue owed by `update`, layered per `layeredCue`, or nil.
+    /// The end cue stays on `sessionEndCue`.
+    ///
+    /// #1176: on time or not at all. A boundary first seen more than
+    /// `CueDeliveryLogic.maxLatenessSeconds` after it passed (the app was
+    /// suspended through it) is dropped rather than buzzed at a random moment.
+    ///
+    /// - Parameters:
+    ///   - update: This tick's `repeatingHapticUpdate`; the boundary is its
+    ///     newest completed interval.
+    ///   - nowSeconds: Elapsed seconds on this tick, on the sit's clock.
+    public static func layeredRepeatingCue(
+        hapticsEnabled: Bool,
+        update: RepeatingHapticUpdate,
+        durationSeconds: Int,
+        interval: Interval,
+        nowSeconds: Double,
+        isAbandoned: Bool
+    ) -> Firing? {
+        guard hapticsEnabled, update.crossedBoundary, !isAbandoned else { return nil }
+        let boundary = update.completedIndex * interval.seconds
+        guard CueDeliveryLogic.isOnTime(dueAt: Double(boundary), now: nowSeconds) else { return nil }
+        return layeredCue(boundarySeconds: boundary, durationSeconds: durationSeconds, interval: interval)
     }
 
     /// The cue owed as the timer runs out, or nil for stillness.

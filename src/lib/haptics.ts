@@ -18,8 +18,24 @@
  * `sessionCues.ts`), so a discarded sit never reaches them.
  */
 
-/** The moments a sit announces by feel. Mirrors `HapticCueLogic.Cue`. */
-export type HapticCue = "minuteMarker" | "secondPulse" | "sessionEnd";
+/**
+ * The moments a sit announces by feel. Mirrors `HapticCueLogic.Cue`.
+ *
+ * `minuteMarker` is the ten-second buzz; since #1179 a whole minute plays the
+ * `minuteBurst` instead (the name predates that).
+ */
+export type HapticCue = "minuteMarker" | "secondPulse" | "minuteBurst" | "sessionEnd";
+
+/** The cues with one fixed shape. The burst's shape depends on its tap count. */
+export type SingleHapticCue = Exclude<HapticCue, "minuteBurst">;
+
+/**
+ * One cue to play. A minute burst carries its tap count. Mirrors
+ * `HapticCueLogic.Firing`.
+ */
+export type HapticFiring =
+  | { cue: SingleHapticCue }
+  | { cue: "minuteBurst"; taps: number };
 
 /**
  * Vibration patterns in milliseconds; even indices buzz, odd indices pause.
@@ -27,13 +43,51 @@ export type HapticCue = "minuteMarker" | "secondPulse" | "sessionEnd";
  * The web stand-ins for the iOS strengths. The end of a sit has to be tellable
  * from a marker with your eyes shut, and the every-second pulse from both, so
  * no two share a shape (#1175): a tiny tap each second, one firm buzz per
- * minute or ten-second mark, two long beats for the end.
+ * ten-second mark, two long beats for the end. The minute burst is built by
+ * {@link minuteBurstPattern}.
  */
-export const HAPTIC_PATTERNS: Record<HapticCue, readonly number[]> = {
+export const HAPTIC_PATTERNS: Record<SingleHapticCue, readonly number[]> = {
   secondPulse: [30],
   minuteMarker: [120],
   sessionEnd: [150, 90, 150],
 };
+
+/**
+ * #1179: the minute countdown burst's tuning — the one constant to retune
+ * after a device test. One short tap per whole minute left, `tapMs` long and
+ * `tapMs + gapMs` (120 ms) from onset to onset; `maxTaps` null means no cap.
+ * Mirrors iOS `HapticCueLogic.minuteBurst`.
+ */
+export const MINUTE_BURST = { tapMs: 40, gapMs: 80, maxTaps: null as number | null } as const;
+
+/** The taps owed with `wholeMinutesRemaining` whole minutes left. */
+export function minuteBurstTapCount(wholeMinutesRemaining: number): number {
+  const minutes = Math.max(0, Math.floor(wholeMinutesRemaining));
+  const { maxTaps } = MINUTE_BURST;
+  return maxTaps === null ? minutes : Math.min(minutes, Math.max(1, maxTaps));
+}
+
+/** The burst's vibration pattern: `taps` short taps at the tuned spacing. */
+export function minuteBurstPattern(taps: number): number[] {
+  const count = Math.max(1, Math.floor(taps));
+  const pattern: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (i > 0) pattern.push(MINUTE_BURST.gapMs);
+    pattern.push(MINUTE_BURST.tapMs);
+  }
+  return pattern;
+}
+
+/** The vibration pattern one firing plays. */
+export function hapticPattern(firing: HapticFiring): number[] {
+  return firing.cue === "minuteBurst"
+    ? minuteBurstPattern(firing.taps)
+    : [...HAPTIC_PATTERNS[firing.cue]];
+}
+
+function toFiring(cue: SingleHapticCue | HapticFiring): HapticFiring {
+  return typeof cue === "string" ? { cue } : cue;
+}
 
 /** Whether this browser can vibrate at all. */
 export function supportsVibration(): boolean {
@@ -46,10 +100,10 @@ export function supportsVibration(): boolean {
  * Fires a cue. Returns whether the browser accepted it — false on every browser
  * without the Vibration API, which is most of them.
  */
-export function fireHaptic(cue: HapticCue): boolean {
+export function fireHaptic(cue: SingleHapticCue | HapticFiring): boolean {
   if (!supportsVibration()) return false;
   try {
-    return navigator.vibrate([...HAPTIC_PATTERNS[cue]]);
+    return navigator.vibrate(hapticPattern(toFiring(cue)));
   } catch {
     // Some engines throw rather than return false when the page has no user
     // activation yet. A cue that cannot fire is not an error worth surfacing
@@ -84,12 +138,33 @@ function isHapticIntervalSeconds(value: number): value is HapticIntervalSeconds 
 }
 
 /**
- * #1175: the cue each repeating boundary plays. Every second plays the tiny
- * pulse; every minute and every 10 sec play the firm marker. Mirrors
- * `HapticCueLogic.Interval.cue`.
+ * #1179: the one cue a boundary of the chosen interval plays at
+ * `boundarySeconds` into the sit, or null. Mirrors iOS
+ * `HapticCueLogic.layeredCue`.
+ *
+ * The interval is the finest cue; every coarser one still plays, and a
+ * boundary that is several at once plays only the coarsest: minute burst, then
+ * ten-second buzz, then second pulse. The end of the sit outranks them all and
+ * is never a boundary here ({@link planSessionEndCues} owns it), so 0:00 is the
+ * end, not a 0-tap burst. A minute mark with less than a whole minute left (a
+ * sit with bonus seconds) is no burst and falls through to the finer layers the
+ * interval allows.
  */
-export function repeatingHapticCue(intervalSeconds: number): HapticCue {
-  return intervalSeconds === 1 ? "secondPulse" : "minuteMarker";
+export function layeredHapticCue(
+  boundarySeconds: number,
+  durationSeconds: number,
+  intervalSeconds: number,
+): HapticFiring | null {
+  if (!isHapticIntervalSeconds(intervalSeconds)) return null;
+  if (!(boundarySeconds > 0) || !(boundarySeconds < durationSeconds)) return null;
+  if (boundarySeconds % intervalSeconds !== 0) return null;
+  if (boundarySeconds % 60 === 0) {
+    const taps = minuteBurstTapCount(Math.floor((durationSeconds - boundarySeconds) / 60));
+    if (taps >= 1) return { cue: "minuteBurst", taps };
+  }
+  if (intervalSeconds !== 60 && boundarySeconds % 10 === 0) return { cue: "minuteMarker" };
+  if (intervalSeconds === 1) return { cue: "secondPulse" };
+  return null;
 }
 
 /**
@@ -149,7 +224,7 @@ export function nextRepeatingHaptic(input: {
 
 export function maybeFireHaptic(
   hapticsEnabled: boolean | undefined,
-  cue: HapticCue,
+  cue: SingleHapticCue | HapticFiring,
 ): boolean {
   if (hapticsEnabled !== true) return false;
   return fireHaptic(cue);
