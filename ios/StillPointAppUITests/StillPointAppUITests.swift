@@ -520,6 +520,26 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["guidedExercise.stepPrompt"].waitForExistence(timeout: 5))
     }
 
+    /// #1192: `SP_UI_TEST_FORCE_FOCUS_GAME` boots into the grid-tap game and starts it.
+    /// The grid, the countdown and the pinned End button must all be on screen.
+    @MainActor
+    func testFocusGameBootsIntoGridWithEndReachable() throws {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            forceFocusGame: true
+        )
+        app.launch()
+
+        waitForRoot("focusGame", in: app, failureMessage: "Focus game did not appear")
+
+        XCTAssertTrue(app.otherElements["focusGame.grid"].waitForExistence(timeout: 8), "Grid should be on screen")
+        XCTAssertTrue(app.staticTexts["focusGame.countdown"].waitForExistence(timeout: 5), "Countdown should be on screen")
+        let endButton = app.buttons["focusGame.endButton"]
+        XCTAssertTrue(endButton.waitForExistence(timeout: 5), "End button should be on screen")
+        XCTAssertTrue(endButton.isHittable, "End button should be tappable, not clipped")
+    }
+
     @MainActor
     func testJournalAndBoardTabsReachable() throws {
         let app = makeApp(seedAuthenticated: true, resetStore: true)

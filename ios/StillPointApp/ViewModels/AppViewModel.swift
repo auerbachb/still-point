@@ -59,6 +59,9 @@ final class AppViewModel {
     var breathSaveGate = GenerationOwnedGate()
     /// The same guard for `completeFocusSession` (#840).
     var focusSaveGate = GenerationOwnedGate()
+    /// #1192: true from the instant the game's Start is pressed until its End is reported.
+    /// The setup screen is not a session, so buddy invites are not held on it.
+    var focusGameInProgress = false
     /// #526: client-local progressive-unlock + hide preference for the hold-cluster controls.
     /// #1014: the snapshot seed gets an unlocked manager; see `launchTrackingControlPrefsManager`.
     var trackingControlPrefsManager = AppViewModel.launchTrackingControlPrefsManager()
@@ -351,8 +354,8 @@ final class AppViewModel {
         // from it and from the session it starts, as during breath counting.
         if case .focusPicker = currentView { return true }
         if case .focusActivity = currentView { return true }
-        // #1192: the game counts as a session too, as the focus timer does.
-        if case .focusGame = currentView { return true }
+        // #1192: the game counts as a session from Start, not on its setup screen.
+        if case .focusGame = currentView { return focusGameInProgress }
         return false
     }
 

@@ -35,13 +35,20 @@ struct FocusGameView: View {
         .background(
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { viewportHeight = Int(proxy.size.height) }
+                    .onAppear {
+                        viewportHeight = Int(proxy.size.height)
+                        // #1192: the UI-test launch flag starts the game at once.
+                        if AppViewModel.uiTestStartsFocusGame(), vm.phase == .setup {
+                            startGame()
+                        }
+                    }
                     .onChange(of: proxy.size.height) { _, height in viewportHeight = Int(height) }
             }
         )
         .accessibilityIdentifier("focusGame")
         .onDisappear {
             vm.stop()
+            appVM.focusGameInProgress = false
             syncSessionSideEffects(inProgress: false)
         }
         .onChange(of: vm.isPlaying) { _, playing in
@@ -91,7 +98,7 @@ struct FocusGameView: View {
             }
 
             Button {
-                vm.start(viewportHeight: viewportHeight, onEnd: report)
+                startGame()
             } label: {
                 Text("Start")
                     .font(SPFont.mono(13, weight: .medium))
@@ -114,6 +121,13 @@ struct FocusGameView: View {
             .padding(.top, SPSpacing.s3)
         }
         .padding(.horizontal, SPSpacing.s4)
+    }
+
+    /// Starts the game. The session is held from this instant, so a buddy invite that
+    /// lands on Start is held back rather than shown over the countdown.
+    private func startGame() {
+        appVM.focusGameInProgress = true
+        vm.start(viewportHeight: viewportHeight, onEnd: report)
     }
 
     // MARK: - Playing
@@ -220,6 +234,7 @@ struct FocusGameView: View {
     /// Hands the game's end to the save. Called in the same turn as the End tap, or the
     /// tick that found the countdown run out.
     private func report(_ result: FocusSessionResult?) {
+        appVM.focusGameInProgress = false
         // #854: read here, with the end; the save task runs a turn later.
         let generation = appVM.authGeneration
         let endedAt = Date()

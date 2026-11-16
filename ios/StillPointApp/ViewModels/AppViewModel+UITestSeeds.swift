@@ -17,6 +17,7 @@ extension AppViewModel {
         static let forceStartSession = "SP_UI_TEST_FORCE_START_SESSION"
         static let forceBreathCounting = "SP_UI_TEST_FORCE_BREATH_COUNTING"
         static let forceBuddyHub = "SP_UI_TEST_FORCE_BUDDY_HUB"
+        static let forceFocusGame = "SP_UI_TEST_FORCE_FOCUS_GAME"
     }
 
     private static let truthyValues: Set<String> = ["1", "true", "yes", "on"]
@@ -46,6 +47,9 @@ extension AppViewModel {
             (SeedKey.forceStartSession, .session(type: .standard, track: .primary, combined: false)),
             (SeedKey.forceBreathCounting, .breathCounting),
             (SeedKey.forceBuddyHub, .buddyHub),
+            // #1192: the grid-tap game, started at once (`uiTestStartsFocusGame`). Its goal
+            // counter is only read at the save, so a fixture day of 1 is enough here.
+            (SeedKey.forceFocusGame, .focusGame(focusActivityDay: 1)),
         ]
     }
 
@@ -53,6 +57,14 @@ extension AppViewModel {
     /// `authenticatedRouteSeeds` that is set, else Home.
     static func initialAuthenticatedView(from env: [String: String]) -> AppView {
         authenticatedRouteSeeds.first { flag($0.key, in: env) }?.view ?? .home
+    }
+
+    /// #1192: `SP_UI_TEST_FORCE_FOCUS_GAME` boots into the game and starts it, so a UI
+    /// test lands on the grid and End without tapping Start.
+    static func uiTestStartsFocusGame(
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        flag(SeedKey.forceFocusGame, in: env)
     }
 
     /// UserDefaults suite for the snapshot seed's tracking-control prefs (#1014).

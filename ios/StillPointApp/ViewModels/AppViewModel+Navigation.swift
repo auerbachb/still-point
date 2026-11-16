@@ -32,6 +32,7 @@ extension AppViewModel {
     /// Only from the game, so a late tap cannot leave some other screen.
     func cancelFocusGame() {
         guard case .focusGame = currentView else { return }
+        focusGameInProgress = false
         currentView = .home
         scheduleBuddyInviteConsume()
     }

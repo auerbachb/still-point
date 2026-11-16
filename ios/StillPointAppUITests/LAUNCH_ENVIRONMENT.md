@@ -27,6 +27,7 @@ Add a new knob as one row in the table that fits, naming the issue that added it
 | `SP_UI_TEST_FORCE_START_SESSION=1` | Boot an authenticated launch straight into a standard session. |
 | `SP_UI_TEST_FORCE_BREATH_COUNTING=1` | Boot directly to the breath counting screen. |
 | `SP_UI_TEST_FORCE_BUDDY_HUB=1` | Boot directly to the buddy session hub. |
+| `SP_UI_TEST_FORCE_FOCUS_GAME=1` | #1192: boot directly to the grid-tap focus game and start it (grid, countdown and End on screen). |
 | `SP_UI_TEST_FORCE_SETTINGS_TAB=1` | Boot to the Settings tab in the main shell. Wins over `SP_UI_TEST_FORCE_PROGRESS_TAB` when both are set. |
 | `SP_UI_TEST_FORCE_PROGRESS_TAB=1` | Boot to the Progress tab in the main shell. |
 | `SP_UI_TEST_APP_BLOCKING_SELECTED=1` | Report app blocking as authorized with one app selected, so app gate settings render their selected state. |

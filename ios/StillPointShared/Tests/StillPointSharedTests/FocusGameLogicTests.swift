@@ -270,4 +270,49 @@ struct FocusGameLogicTests {
         let state = FocusGameLogic.create(goalSeconds: 180, nowMs: 1000, roll: rolls.next)
         #expect(FocusGameLogic.result(state, nowMs: 1600, reason: .ended) == nil)
     }
+
+    @Test func quickEndAfterAMissStillSavesTimePlayedFromTheGameStart() {
+        // The first light comes one quiet gap (2000 ms at roll 0) after the start. It is
+        // missed, so the countdown restarts at 3500, but the save counts from the start.
+        let rolls = RollSource([0, 0, 0])
+        var state = FocusGameLogic.create(goalSeconds: 180, nowMs: 0, roll: rolls.next)
+        state = FocusGameLogic.advance(state, nowMs: 2000, roll: rolls.next, cells: 9).state
+        let missed = FocusGameLogic.advance(state, nowMs: 3500, roll: rolls.next, cells: 9)
+        #expect(missed.outcome == .reset)
+        #expect(missed.state.countdownStartMs == 3500)
+        let saved = FocusGameLogic.result(missed.state, nowMs: 3600, reason: .ended)
+        #expect(saved?.actualTime == 3)
+        #expect(saved?.completed == false)
+    }
+
+    @Test func goalElapsedBeforeALateMissIsAppliedCompletesInsteadOfResetting() {
+        // A backgrounded app resumes after both the goal and the lit square's window have
+        // passed. Completion is decided first, so the late miss does not restart the countdown.
+        let state = FocusGameLogic.State(
+            goalMs: 60_000,
+            startedAtMs: 0,
+            countdownStartMs: 0,
+            lit: FocusGameLogic.Lit(cell: 0, litAtMs: 58_000),
+            nextLightAtMs: 0,
+            lastCell: 0,
+            hits: 0,
+            wrongTaps: 0,
+            resets: 0,
+            streak: 0,
+            bestStreak: 0
+        )
+        let late = FocusGameLogic.advance(state, nowMs: 61_500, roll: { 0 }, cells: 9)
+        #expect(late.outcome == .none)
+        #expect(late.state.resets == 0)
+        let saved = FocusGameLogic.result(late.state, nowMs: 61_500, reason: .expired)
+        #expect(saved?.completed == true)
+        #expect(saved?.actualTime == 60)
+    }
+
+    @Test func endPressedAfterTheGoalElapsedBeforeTheNextTickCountsAsCompleted() {
+        let state = FocusGameLogic.create(goalSeconds: 60, nowMs: 0, roll: { 0 })
+        let saved = FocusGameLogic.result(state, nowMs: 60_400, reason: .ended)
+        #expect(saved?.completed == true)
+        #expect(saved?.actualTime == 60)
+    }
 }
