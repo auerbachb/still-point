@@ -166,7 +166,8 @@ export function BlockTimer({
         }}
       >
         {sandVisible ? (
-          <div data-session-timer-sand style={{ width: "100%", position: "relative" }}>
+          // #662: the inset keeps the carrier and piles clear of the side "sand" toggle.
+          <div data-session-timer-sand style={{ width: "100%", position: "relative", paddingInline: "72px" }}>
             <SandCarrier elapsed={elapsed} totalSeconds={totalSeconds} />
             <span
               style={{
@@ -262,7 +263,7 @@ export function BlockTimer({
             fontSize: "11px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            padding: "12px 16px",
+            padding: isMobile ? "12px 10px" : "12px 16px",
             minHeight: "44px",
             minWidth: "44px",
             transition: "opacity 0.2s, border-color 0.2s, color 0.2s",

@@ -73,8 +73,10 @@ export function sandProgress(elapsedSeconds: number, totalSeconds: number): Sand
   let carrying = false;
 
   if (complete) {
-    // The sit is over: the carrier rests at the destination pile.
-    carrierPosition = 1;
+    // The sit is over and the source is empty. The carrier has just finished its
+    // empty return leg, which ends at the source, so resting there keeps the
+    // motion continuous into completion instead of snapping across the route.
+    carrierPosition = 0;
   } else {
     const tripLength = total / sandTripCount(total);
     const local = (elapsed % tripLength) / tripLength;

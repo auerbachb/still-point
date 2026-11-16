@@ -73,10 +73,19 @@ describe("sandProgress carrier", () => {
     expect(start.carrying).toBe(true);
   });
 
-  test("carrier rests at the destination once the sit is complete", () => {
+  test("carrier rests at the source, empty-handed, once the sit is complete", () => {
     const done = sandProgress(600, 600);
-    expect(done.carrierPosition).toBe(1);
+    expect(done.carrierPosition).toBe(0);
     expect(done.carrying).toBe(false);
+  });
+
+  test("carrier position is continuous into completion (no jump on the last second)", () => {
+    const justBefore = sandProgress(599, 600);
+    const atEnd = sandProgress(600, 600);
+    // One second of the 60s final return leg moves the carrier 1/18 of the route,
+    // so the step into completion is that size, not a jump across the whole route.
+    expect(justBefore.carrierPosition).toBeCloseTo(1 / 18, 3);
+    expect(Math.abs(atEnd.carrierPosition - justBefore.carrierPosition)).toBeLessThan(0.06);
   });
 
   test("the return leg after the carry share is empty-handed", () => {
