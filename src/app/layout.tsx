@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LastAuthProviderCapture } from "@/components/LastAuthProviderCapture";
+import { ThemeSync } from "@/components/ThemeSync";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,9 +37,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* #29: apply the saved light/dark choice before first paint, so no frame
+            paints in the wrong theme. Static constant; no user input reaches it. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <LastAuthProviderCapture />
+        <ThemeSync />
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <main style={{ flex: 1 }}>{children}</main>
           <footer
