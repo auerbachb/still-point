@@ -9,7 +9,7 @@ import StillPointShared
 /// preferences, not account settings. They bind straight to `SessionScreenPrefsStore`,
 /// so they stay enabled while an account write is in flight.
 struct SettingsSessionScreenSection: View {
-    @State private var prefs = SessionScreenPrefsStore.load()
+    private var store: SessionScreenPreferenceStore { SessionScreenPreferenceStore.shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SPSpacing.s2) {
@@ -22,25 +22,25 @@ struct SettingsSessionScreenSection: View {
                 toggle(
                     "Block grid",
                     detail: "The row of boxes that fills as the sit runs.",
-                    isOn: binding(\.showBlockGrid),
+                    isOn: binding(.blockGrid),
                     identifier: "settings.sessionScreen.blockGridToggle"
                 )
                 toggle(
                     "Progress bar",
                     detail: "The thin bar that fills across each minute.",
-                    isOn: binding(\.showProgressBar),
+                    isOn: binding(.progressBar),
                     identifier: "settings.sessionScreen.progressBarToggle"
                 )
                 toggle(
                     "Mind state bar",
                     detail: "The timeline of your mind state across the sit.",
-                    isOn: binding(\.showMindStateBar),
+                    isOn: binding(.mindStateBar),
                     identifier: "settings.sessionScreen.mindStateBarToggle"
                 )
                 toggle(
                     "Status label",
-                    detail: "The line of text under the timer that names your current state.",
-                    isOn: binding(\.showStatusLabel),
+                    detail: "The line under the grid that counts minutes or blocks.",
+                    isOn: binding(.statusLabel),
                     identifier: "settings.sessionScreen.statusLabelToggle"
                 )
             }
@@ -74,15 +74,12 @@ struct SettingsSessionScreenSection: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// Writes each change straight to the store. The view's own `prefs` copy is the
-    /// source for the toggles, so there is no separate in-flight state to track.
-    private func binding(_ keyPath: WritableKeyPath<SessionScreenPrefs, Bool>) -> Binding<Bool> {
+    /// Reads through the shared store and writes only the toggled key, so a
+    /// second Settings scene cannot be overwritten by a stale copy.
+    private func binding(_ field: SessionScreenField) -> Binding<Bool> {
         Binding(
-            get: { prefs[keyPath: keyPath] },
-            set: { newValue in
-                prefs[keyPath: keyPath] = newValue
-                SessionScreenPrefsStore.save(prefs)
-            }
+            get: { field.value(in: store.prefs) },
+            set: { store.setValue($0, for: field) }
         )
     }
 }

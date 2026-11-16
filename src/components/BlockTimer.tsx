@@ -283,6 +283,7 @@ export function BlockTimer({
       {(visible.mindStateBar || visible.progressBar) && (
       <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
         {visible.mindStateBar && (
+        <div data-session-component="mind-state-bar" style={{ display: "contents" }}>
         <MindStateBar
           elapsed={elapsed}
           totalSeconds={totalSeconds}
@@ -290,9 +291,10 @@ export function BlockTimer({
           currentState={mindState}
           barWidth={boxesAreaWidth}
         />
+        </div>
         )}
         {visible.progressBar && (
-        <div style={{ borderTop: "1px solid var(--border-1)", paddingTop: "14px" }}>
+        <div data-session-component="progress-bar" style={{ borderTop: "1px solid var(--border-1)", paddingTop: "14px" }}>
           <div style={{
             height: "8px", borderRadius: "4px", overflow: "hidden",
             background: "var(--surface-2)",
@@ -314,7 +316,7 @@ export function BlockTimer({
       )}
 
       {!visible.blockGrid ? null : useMinuteBlocks ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+        <div data-session-component="block-grid" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
           <div style={{
             display: "flex", flexWrap: "wrap", gap: blockGap,
             justifyContent: "center", maxWidth: boxesAreaWidth,
@@ -342,7 +344,7 @@ export function BlockTimer({
           </div>
         </div>
       ) : (
-        <div style={{
+        <div data-session-component="block-grid" style={{
           display: "flex", flexWrap: "wrap", gap: blockGap,
           justifyContent: "center", maxWidth: boxesAreaWidth,
         }}>

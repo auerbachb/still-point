@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Which optional components the session screen shows (#75).
 ///
@@ -42,41 +43,85 @@ public struct SessionScreenPrefs: Equatable, Sendable {
     }
 }
 
-/// Persists `SessionScreenPrefs` in `UserDefaults`, one boolean key per component.
-///
-/// Follows the `MinimalSessionViewPrefs` convention: a static enum over defaults.
-/// The `defaults` parameter lets tests use an isolated suite instead of
-/// `UserDefaults.standard`.
-public enum SessionScreenPrefsStore {
-    public static let showBlockGridKey = "sp_sessionScreen_showBlockGrid"
-    public static let showProgressBarKey = "sp_sessionScreen_showProgressBar"
-    public static let showMindStateBarKey = "sp_sessionScreen_showMindStateBar"
-    public static let showStatusLabelKey = "sp_sessionScreen_showStatusLabel"
+/// One optional component, addressed by the UserDefaults key it persists under.
+public enum SessionScreenField: CaseIterable, Sendable {
+    case blockGrid
+    case progressBar
+    case mindStateBar
+    case statusLabel
 
+    public var key: String {
+        switch self {
+        case .blockGrid: return "sp_sessionScreen_showBlockGrid"
+        case .progressBar: return "sp_sessionScreen_showProgressBar"
+        case .mindStateBar: return "sp_sessionScreen_showMindStateBar"
+        case .statusLabel: return "sp_sessionScreen_showStatusLabel"
+        }
+    }
+
+    public func value(in prefs: SessionScreenPrefs) -> Bool {
+        switch self {
+        case .blockGrid: return prefs.showBlockGrid
+        case .progressBar: return prefs.showProgressBar
+        case .mindStateBar: return prefs.showMindStateBar
+        case .statusLabel: return prefs.showStatusLabel
+        }
+    }
+}
+
+/// Reads and writes the persisted `SessionScreenPrefs` in `UserDefaults`, one
+/// boolean key per component. The `defaults` parameter lets tests use an isolated
+/// suite instead of `UserDefaults.standard`.
+public enum SessionScreenPrefsStore {
     public static func load(defaults: UserDefaults = .standard) -> SessionScreenPrefs {
         SessionScreenPrefs(
-            showBlockGrid: bool(defaults, showBlockGridKey),
-            showProgressBar: bool(defaults, showProgressBarKey),
-            showMindStateBar: bool(defaults, showMindStateBarKey),
-            showStatusLabel: bool(defaults, showStatusLabelKey)
+            showBlockGrid: bool(defaults, SessionScreenField.blockGrid),
+            showProgressBar: bool(defaults, SessionScreenField.progressBar),
+            showMindStateBar: bool(defaults, SessionScreenField.mindStateBar),
+            showStatusLabel: bool(defaults, SessionScreenField.statusLabel)
         )
     }
 
-    public static func save(_ prefs: SessionScreenPrefs, defaults: UserDefaults = .standard) {
-        defaults.set(prefs.showBlockGrid, forKey: showBlockGridKey)
-        defaults.set(prefs.showProgressBar, forKey: showProgressBarKey)
-        defaults.set(prefs.showMindStateBar, forKey: showMindStateBarKey)
-        defaults.set(prefs.showStatusLabel, forKey: showStatusLabelKey)
+    /// Writes exactly one key. A whole-struct write from a stale copy is what
+    /// let one window undo another window's toggle (#75 review), so nothing
+    /// writes more than the field that changed.
+    public static func write(_ value: Bool, for field: SessionScreenField, defaults: UserDefaults = .standard) {
+        defaults.set(value, forKey: field.key)
     }
 
     /// Wipes the persisted toggles back to the defaults. Used by tests and UI-test reset paths.
     public static func resetPersistedPrefs(defaults: UserDefaults = .standard) {
-        [showBlockGridKey, showProgressBarKey, showMindStateBarKey, showStatusLabelKey]
-            .forEach { defaults.removeObject(forKey: $0) }
+        SessionScreenField.allCases.forEach { defaults.removeObject(forKey: $0.key) }
     }
 
     /// An absent key means the user never changed it, so it reads as shown.
-    private static func bool(_ defaults: UserDefaults, _ key: String) -> Bool {
-        defaults.object(forKey: key) as? Bool ?? true
+    private static func bool(_ defaults: UserDefaults, _ field: SessionScreenField) -> Bool {
+        defaults.object(forKey: field.key) as? Bool ?? true
+    }
+}
+
+/// The one shared, observable face of the session-screen toggles, as
+/// `WakeLockPreferenceStore` and `ThemeModePreferenceStore` are (#742): every
+/// scene reads and writes the same object, so SwiftUI redraws them together.
+@Observable
+@MainActor
+public final class SessionScreenPreferenceStore {
+    public static let shared = SessionScreenPreferenceStore()
+
+    /// Moves once per recorded change; reading `prefs` puts the caller on the observation graph.
+    private var revision = 0
+
+    init() {}
+
+    public var prefs: SessionScreenPrefs {
+        _ = revision
+        return SessionScreenPrefsStore.load()
+    }
+
+    /// Records one component's choice and writes nothing when it already matches.
+    public func setValue(_ value: Bool, for field: SessionScreenField) {
+        guard value != field.value(in: prefs) else { return }
+        SessionScreenPrefsStore.write(value, for: field)
+        revision &+= 1
     }
 }

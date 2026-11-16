@@ -5,47 +5,66 @@ import Testing
 /// Issue #75 — which optional session-screen components show, and whether the
 /// choice survives into the next sit.
 @Suite struct SessionScreenPrefsTests {
-    /// An isolated suite per test, so nothing leaks into `UserDefaults.standard`.
-    private func makeDefaults() -> UserDefaults {
+    /// Runs `body` against an isolated suite, then removes its persistent domain so
+    /// nothing is left behind in `UserDefaults` and nothing leaks into `.standard`.
+    private func withDefaults(_ body: (UserDefaults) -> Void) {
         let name = "SessionScreenPrefsTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
-        defaults.removePersistentDomain(forName: name)
-        return defaults
+        defer { defaults.removePersistentDomain(forName: name) }
+        body(defaults)
     }
 
     @Test func testDefaultsShowEveryComponent() {
-        let prefs = SessionScreenPrefsStore.load(defaults: makeDefaults())
-        #expect(prefs == SessionScreenPrefs())
-        #expect(prefs.showBlockGrid && prefs.showProgressBar && prefs.showMindStateBar && prefs.showStatusLabel)
+        withDefaults { defaults in
+            let prefs = SessionScreenPrefsStore.load(defaults: defaults)
+            #expect(prefs == SessionScreenPrefs())
+            #expect(prefs.showBlockGrid && prefs.showProgressBar && prefs.showMindStateBar && prefs.showStatusLabel)
+        }
     }
 
     @Test func testSavedTogglesRoundTrip() {
-        let defaults = makeDefaults()
-        let hidden = SessionScreenPrefs(
-            showBlockGrid: false,
-            showProgressBar: true,
-            showMindStateBar: false,
-            showStatusLabel: false
-        )
-        SessionScreenPrefsStore.save(hidden, defaults: defaults)
-        #expect(SessionScreenPrefsStore.load(defaults: defaults) == hidden)
+        withDefaults { defaults in
+            SessionScreenPrefsStore.write(false, for: .blockGrid, defaults: defaults)
+            SessionScreenPrefsStore.write(false, for: .mindStateBar, defaults: defaults)
+            SessionScreenPrefsStore.write(false, for: .statusLabel, defaults: defaults)
+            #expect(SessionScreenPrefsStore.load(defaults: defaults) == SessionScreenPrefs(
+                showBlockGrid: false,
+                showProgressBar: true,
+                showMindStateBar: false,
+                showStatusLabel: false
+            ))
+        }
     }
 
     @Test func testRestoringAComponentPersists() {
-        let defaults = makeDefaults()
-        SessionScreenPrefsStore.save(SessionScreenPrefs(showBlockGrid: false), defaults: defaults)
-        SessionScreenPrefsStore.save(SessionScreenPrefs(showBlockGrid: true), defaults: defaults)
-        #expect(SessionScreenPrefsStore.load(defaults: defaults).showBlockGrid)
+        withDefaults { defaults in
+            SessionScreenPrefsStore.write(false, for: .blockGrid, defaults: defaults)
+            SessionScreenPrefsStore.write(true, for: .blockGrid, defaults: defaults)
+            #expect(SessionScreenPrefsStore.load(defaults: defaults).showBlockGrid)
+        }
+    }
+
+    /// Two Settings scenes can each hold a stale copy. Each writes only its own
+    /// toggle, so neither undoes the other's change.
+    @Test func testWritingOneKeyDoesNotRevertAnother() {
+        withDefaults { defaults in
+            SessionScreenPrefsStore.write(false, for: .progressBar, defaults: defaults)
+            SessionScreenPrefsStore.write(false, for: .blockGrid, defaults: defaults)
+            let prefs = SessionScreenPrefsStore.load(defaults: defaults)
+            #expect(!prefs.showProgressBar)
+            #expect(!prefs.showBlockGrid)
+            #expect(prefs.showMindStateBar && prefs.showStatusLabel)
+        }
     }
 
     @Test func testResetRestoresDefaults() {
-        let defaults = makeDefaults()
-        SessionScreenPrefsStore.save(
-            SessionScreenPrefs(showBlockGrid: false, showProgressBar: false, showMindStateBar: false, showStatusLabel: false),
-            defaults: defaults
-        )
-        SessionScreenPrefsStore.resetPersistedPrefs(defaults: defaults)
-        #expect(SessionScreenPrefsStore.load(defaults: defaults) == SessionScreenPrefs())
+        withDefaults { defaults in
+            for field in SessionScreenField.allCases {
+                SessionScreenPrefsStore.write(false, for: field, defaults: defaults)
+            }
+            SessionScreenPrefsStore.resetPersistedPrefs(defaults: defaults)
+            #expect(SessionScreenPrefsStore.load(defaults: defaults) == SessionScreenPrefs())
+        }
     }
 
     @Test func testMinimalViewHidesEveryComponent() {
