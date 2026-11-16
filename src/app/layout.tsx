@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LastAuthProviderCapture } from "@/components/LastAuthProviderCapture";
+import { ThemeSync } from "@/components/ThemeSync";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
       </head>
       <body>
         <LastAuthProviderCapture />
+        <ThemeSync />
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <main style={{ flex: 1 }}>{children}</main>
           <footer
