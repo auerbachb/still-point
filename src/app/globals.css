@@ -76,9 +76,13 @@
   padding: 0;
 }
 
+/* #979: `clip` (not `hidden`) so body is not a scroll container. A sticky
+   return button engages only against the viewport; `hidden` on body makes
+   body its own (never-scrolling) scroller. `hidden` stays as the fallback. */
 html, body {
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {

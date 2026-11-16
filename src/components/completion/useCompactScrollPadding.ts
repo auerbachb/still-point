@@ -15,7 +15,10 @@ export function useCompactScrollPadding(compact: boolean): void {
     if (!compact) return;
     const root = document.documentElement;
     const previous = root.style.scrollPaddingBottom;
-    root.style.scrollPaddingBottom = "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))";
+    // #979: the pinned return button (44px min height + 8px top margin) sits
+    // above the nav, so scroll-into-view stops controls above it as well.
+    root.style.scrollPaddingBottom =
+      "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 52px)";
     return () => {
       root.style.scrollPaddingBottom = previous;
     };
