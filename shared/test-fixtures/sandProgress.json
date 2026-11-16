@@ -1,0 +1,237 @@
+{
+  "algorithm": "sandProgress",
+  "description": "Sand-carrier timer progress (#662 web model, iOS port #1190). Inputs are elapsedSeconds and totalSeconds; expected holds the sandProgress output plus sandTripCount. Floating-point fields compare within 1e-9. Non-finite inputs cannot be encoded in JSON and are tested per platform.",
+  "constants": {
+    "secondsPerTrip": 60,
+    "maxTrips": 12,
+    "carryShare": 0.7,
+    "walkSeconds": 2
+  },
+  "cases": [
+    {
+      "name": "zero elapsed",
+      "elapsedSeconds": 0,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0,
+        "complete": false,
+        "sourceFraction": 1,
+        "destinationFraction": 0,
+        "carrierPosition": 0,
+        "carrying": true,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "midpoint",
+      "elapsedSeconds": 300,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.5,
+        "complete": false,
+        "sourceFraction": 0.5,
+        "destinationFraction": 0.5,
+        "carrierPosition": 0,
+        "carrying": true,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "just before completion",
+      "elapsedSeconds": 599.5,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.9991666666666666,
+        "complete": false,
+        "sourceFraction": 0.0008333333333333526,
+        "destinationFraction": 0.9991666666666666,
+        "carrierPosition": 0.02777777777777768,
+        "carrying": false,
+        "walkPhase": 0.75
+      }
+    },
+    {
+      "name": "exact completion",
+      "elapsedSeconds": 600,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 1,
+        "complete": true,
+        "sourceFraction": 0,
+        "destinationFraction": 1,
+        "carrierPosition": 0,
+        "carrying": false,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "overrun clamps to complete",
+      "elapsedSeconds": 900,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 1,
+        "complete": true,
+        "sourceFraction": 0,
+        "destinationFraction": 1,
+        "carrierPosition": 0,
+        "carrying": false,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "negative elapsed treated as zero",
+      "elapsedSeconds": -5,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0,
+        "complete": false,
+        "sourceFraction": 1,
+        "destinationFraction": 0,
+        "carrierPosition": 0,
+        "carrying": true,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "fractional elapsed kept",
+      "elapsedSeconds": 123.456,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.20576,
+        "complete": false,
+        "sourceFraction": 0.7942400000000001,
+        "destinationFraction": 0.20576,
+        "carrierPosition": 0.08228571428571436,
+        "carrying": true,
+        "walkPhase": 0.7280000000000015
+      }
+    },
+    {
+      "name": "zero total is complete",
+      "elapsedSeconds": 30,
+      "totalSeconds": 0,
+      "expected": {
+        "tripCount": 1,
+        "fraction": 1,
+        "complete": true,
+        "sourceFraction": 0,
+        "destinationFraction": 1,
+        "carrierPosition": 0,
+        "carrying": false,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "half-minute threshold 90s rounds up to 2 trips",
+      "elapsedSeconds": 45,
+      "totalSeconds": 90,
+      "expected": {
+        "tripCount": 2,
+        "fraction": 0.5,
+        "complete": false,
+        "sourceFraction": 0.5,
+        "destinationFraction": 0.5,
+        "carrierPosition": 0,
+        "carrying": true,
+        "walkPhase": 0.5
+      }
+    },
+    {
+      "name": "half-minute threshold 30s rounds up to 1 trip",
+      "elapsedSeconds": 15,
+      "totalSeconds": 30,
+      "expected": {
+        "tripCount": 1,
+        "fraction": 0.5,
+        "complete": false,
+        "sourceFraction": 0.5,
+        "destinationFraction": 0.5,
+        "carrierPosition": 0.7142857142857143,
+        "carrying": true,
+        "walkPhase": 0.5
+      }
+    },
+    {
+      "name": "12-trip cap",
+      "elapsedSeconds": 1800,
+      "totalSeconds": 3600,
+      "expected": {
+        "tripCount": 12,
+        "fraction": 0.5,
+        "complete": false,
+        "sourceFraction": 0.5,
+        "destinationFraction": 0.5,
+        "carrierPosition": 0,
+        "carrying": true,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "local trip just below 0.7 still carries",
+      "elapsedSeconds": 41.4,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.06899999999999999,
+        "complete": false,
+        "sourceFraction": 0.931,
+        "destinationFraction": 0.06899999999999999,
+        "carrierPosition": 0.9857142857142857,
+        "carrying": true,
+        "walkPhase": 0.6999999999999993
+      }
+    },
+    {
+      "name": "local trip exactly 0.7 starts the empty leg",
+      "elapsedSeconds": 42,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.07,
+        "complete": false,
+        "sourceFraction": 0.9299999999999999,
+        "destinationFraction": 0.07,
+        "carrierPosition": 1,
+        "carrying": false,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "empty return leg",
+      "elapsedSeconds": 50,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.08333333333333333,
+        "complete": false,
+        "sourceFraction": 0.9166666666666666,
+        "destinationFraction": 0.08333333333333333,
+        "carrierPosition": 0.5555555555555554,
+        "carrying": false,
+        "walkPhase": 0
+      }
+    },
+    {
+      "name": "second trip repeats",
+      "elapsedSeconds": 81,
+      "totalSeconds": 600,
+      "expected": {
+        "tripCount": 10,
+        "fraction": 0.135,
+        "complete": false,
+        "sourceFraction": 0.865,
+        "destinationFraction": 0.135,
+        "carrierPosition": 0.5,
+        "carrying": true,
+        "walkPhase": 0.5
+      }
+    }
+  ]
+}

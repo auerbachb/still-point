@@ -7,6 +7,42 @@ import {
   sandProgress,
   sandTripCount,
 } from "./sandProgress";
+import { loadSharedFixture, type SandProgressFixture } from "./testing/sharedFixtures";
+
+// #1190: the golden fixture is shared with the iOS port (StillPointShared). Both
+// suites must agree on every case, so drift in either implementation fails CI.
+describe("sandProgress shared golden fixture (#1190)", () => {
+  const fixture = loadSharedFixture<SandProgressFixture>("sandProgress.json");
+
+  test("constants match the fixture", () => {
+    expect(fixture.constants).toEqual({
+      secondsPerTrip: SAND_SECONDS_PER_TRIP,
+      maxTrips: SAND_MAX_TRIPS,
+      carryShare: SAND_CARRY_SHARE,
+      walkSeconds: SAND_WALK_SECONDS,
+    });
+  });
+
+  for (const testCase of fixture.cases) {
+    test(`matches fixture: ${testCase.name}`, () => {
+      const { elapsedSeconds, totalSeconds, expected } = testCase;
+      const state = sandProgress(elapsedSeconds, totalSeconds);
+      expect(sandTripCount(totalSeconds)).toBe(expected.tripCount);
+      expect(state.complete).toBe(expected.complete);
+      expect(state.carrying).toBe(expected.carrying);
+      for (const key of [
+        "fraction",
+        "sourceFraction",
+        "destinationFraction",
+        "carrierPosition",
+        "walkPhase",
+      ] as const) {
+        // Same tolerance as the Swift port (SandProgressTests: 1e-9, strict less-than).
+        expect(Math.abs(state[key] - expected[key])).toBeLessThan(1e-9);
+      }
+    });
+  }
+});
 
 describe("sandProgress piles", () => {
   test("at 0% the source is full and the destination is empty", () => {
