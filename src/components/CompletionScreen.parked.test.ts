@@ -30,6 +30,12 @@ describe("CompletionScreen for a sit parked on its first upload (#982)", () => {
       .toBe('Reason: {"error":"Invalid track"}');
   });
 
+  test("keeps both return buttons on a parked sit (#1183)", async () => {
+    await render({ parkedReason: "Session not found" });
+
+    expect(screen().querySelectorAll('[data-testid^="completion-return-"]')).toHaveLength(2);
+  });
+
   test("does not promise an upload on reconnect", async () => {
     await render({ parkedReason: "Session not found" });
 
