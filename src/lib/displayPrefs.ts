@@ -1,11 +1,14 @@
 export type DisplayPrefs = {
   showTimer: boolean;
+  /** #662: animate the sit as sand moving between two piles instead of digits. Solo sits only. */
+  sandAnimation: boolean;
 };
 
 const STORAGE_KEY = "stillpoint_display_prefs";
 
 const DEFAULTS: DisplayPrefs = {
   showTimer: true,
+  sandAnimation: false,
 };
 
 export function loadDisplayPrefs(): DisplayPrefs {
