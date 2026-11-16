@@ -364,9 +364,19 @@ describe("focusGameResult: what a game saves", () => {
     expect(focusGameResult(state, 5_900, "ended")).toBeNull();
   });
 
-  test("time played is capped at the goal and never completed by an early end", () => {
+  test("an early end with the countdown still running is not completed", () => {
     const state = createFocusGame(60, 0, seededRng(25));
-    expect(focusGameResult(state, 200_000, "ended")).toEqual({ duration: 60, actualTime: 60, completed: false });
+    expect(focusGameResult(state, 30_000, "ended")).toEqual({ duration: 60, actualTime: 30, completed: false });
+  });
+
+  test("time played is capped at the goal", () => {
+    const state = createFocusGame(60, 0, seededRng(28));
+    expect(focusGameResult(state, 200_000, "ended")?.actualTime).toBe(60);
+  });
+
+  test("End pressed at goal plus 1ms, before any tick, still saves a completed game", () => {
+    const state = createFocusGame(60, 0, seededRng(27));
+    expect(focusGameResult(state, 60_001, "ended")).toEqual({ duration: 60, actualTime: 60, completed: true });
   });
 
   test("a countdown that ran out is always completed", () => {

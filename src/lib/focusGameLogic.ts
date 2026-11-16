@@ -165,7 +165,9 @@ export function focusGameResult(
   reason: "expired" | "ended",
 ): FocusSessionResult | null {
   const goalSeconds = state.goalMs / 1000;
-  if (reason === "expired") {
+  // A countdown that has run out is completed even if the tick that ends the game has not
+  // fired yet, so an End press in that window does not save an incomplete session.
+  if (reason === "expired" || isFocusGameFinished(state, nowMs)) {
     return { duration: goalSeconds, actualTime: goalSeconds, completed: true };
   }
   const playedSeconds = Math.min(goalSeconds, Math.floor(Math.max(0, nowMs - state.startedAtMs) / 1000));

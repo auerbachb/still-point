@@ -147,6 +147,9 @@ export function FocusGamesView({ onEnd, onPlayingChange }: FocusGamesViewProps) 
     const game = createFocusGame(durationSeconds, nowMs, Math.random);
     gameRef.current = game;
     setFrame({ state: game, nowMs, flash: null, resetAt: null });
+    // Report playing now, not after the effect runs, so a buddy invite that resolves in
+    // between sees the game as running and does not route the page away from it.
+    onPlayingChangeRef.current?.(true);
     setPhase("playing");
   };
 
