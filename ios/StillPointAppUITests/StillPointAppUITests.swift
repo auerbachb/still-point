@@ -593,6 +593,42 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
     }
 
+    /// #1190: the opt-in sand timer keeps the accessible "Time remaining" label, and minimal
+    /// view always shows digits without changing the saved sand preference.
+    @MainActor
+    func testSandTimerToggleKeepsTimerLabelAndMinimalViewDigits() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+        let beginButton = app.buttons["home.beginButton"]
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
+        tap(beginButton, thenWaitForRoot: "session", in: app)
+
+        let sandToggle = app.buttons["session.sandToggle"]
+        XCTAssertTrue(sandToggle.waitForExistence(timeout: 8))
+        sandToggle.tap()
+
+        let timerLabel = app.staticTexts["session.timerLabel"]
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Full view with sand on: the digits are transparent, so the value says "sand".
+        XCTAssertEqual(timerLabel.value as? String, "sand")
+
+        let minimalToggle = app.buttons["session.minimalViewToggle"]
+        XCTAssertTrue(minimalToggle.waitForExistence(timeout: 8))
+        minimalToggle.tap()
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Minimal view always shows digits, so the value must say "digits".
+        XCTAssertEqual(timerLabel.value as? String, "digits")
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "sand-timer-minimal-view"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     /// #957: the History error banner's Retry loads History again.
     ///
     /// Launched with the fail-once sessions mode, so the first History load fails with
