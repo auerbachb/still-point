@@ -433,7 +433,9 @@ final class StillPointAppUITests: XCTestCase {
 
         let logoutButton = app.buttons["settings.logoutButton"]
         XCTAssertTrue(logoutButton.waitForExistence(timeout: 5))
-        scrollElementIntoVisibleFrame(logoutButton, in: app)
+        // #1212: the tab bar overlays the bottom of Settings, so the button must clear it
+        // before the tap, or the tap lands on the Journal tab.
+        scrollElementAboveTabBar(logoutButton, in: app)
         tapByStableCenter(logoutButton, in: app)
 
         XCTAssertTrue(
@@ -471,7 +473,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let deleteAccountButton = app.buttons["settings.deleteAccountButton"]
         XCTAssertTrue(deleteAccountButton.waitForExistence(timeout: 5))
-        scrollElementIntoVisibleFrame(deleteAccountButton, in: app)
+        scrollElementAboveTabBar(deleteAccountButton, in: app)
         tapByStableCenter(deleteAccountButton, in: app)
 
         // Step 1: Confirmation dialog — "Delete your account?"
