@@ -15,11 +15,19 @@ extension Color {
     /// app's original appearance.
     static func adaptive(
         dark: (red: Double, green: Double, blue: Double),
-        light: (red: Double, green: Double, blue: Double)
+        light: (red: Double, green: Double, blue: Double),
+        darkOpacity: Double = 1,
+        lightOpacity: Double = 1
     ) -> Color {
         Color(uiColor: UIColor { traits in
-            let value = traits.userInterfaceStyle == .light ? light : dark
-            return UIColor(red: value.red, green: value.green, blue: value.blue, alpha: 1)
+            let isLight = traits.userInterfaceStyle == .light
+            let value = isLight ? light : dark
+            return UIColor(
+                red: value.red,
+                green: value.green,
+                blue: value.blue,
+                alpha: isLight ? lightOpacity : darkOpacity
+            )
         })
     }
 }
@@ -42,8 +50,14 @@ public enum SPColor {
     // Foreground tiers (warm ink at different opacities)
     static let fg = SPInk.base.opacity(0.92)
     static let fg2 = SPInk.base.opacity(0.70)
-    static let fg3 = SPInk.base.opacity(0.52)
-    static let fg4 = SPInk.base.opacity(0.45)
+    // Light tiers are raised so 13-point secondary text keeps 4.5:1 on the light
+    // background; the dark tiers are the original values.
+    static let fg3 = Color.adaptive(
+        dark: SPInk.dark, light: SPInk.light, darkOpacity: 0.52, lightOpacity: 0.70
+    )
+    static let fg4 = Color.adaptive(
+        dark: SPInk.dark, light: SPInk.light, darkOpacity: 0.45, lightOpacity: 0.65
+    )
 
     // Borders
     static let border1 = SPInk.base.opacity(0.08)
@@ -65,7 +79,12 @@ public enum SPColor {
         dark: (red: 34 / 255, green: 197 / 255, blue: 94 / 255),
         light: (red: 15 / 255, green: 118 / 255, blue: 55 / 255)
     )
-    static let greenText = green.opacity(0.6)
+    // Text tints are opaque on light: 0.6 opacity fell below 3:1 on the light background.
+    static let greenText = Color.adaptive(
+        dark: (red: 74 / 255, green: 222 / 255, blue: 128 / 255),
+        light: (red: 15 / 255, green: 118 / 255, blue: 55 / 255),
+        darkOpacity: 0.6
+    )
     static let greenBorder = green.opacity(0.2)
     static let greenBorderSubtle = green.opacity(0.15)
     static let greenBgSubtle = green.opacity(0.08)
@@ -80,7 +99,11 @@ public enum SPColor {
         dark: (red: 245 / 255, green: 158 / 255, blue: 11 / 255),
         light: (red: 161 / 255, green: 98 / 255, blue: 7 / 255)
     )
-    static let amberText = amber.opacity(0.6)
+    static let amberText = Color.adaptive(
+        dark: (red: 251 / 255, green: 191 / 255, blue: 36 / 255),
+        light: (red: 161 / 255, green: 98 / 255, blue: 7 / 255),
+        darkOpacity: 0.6
+    )
     static let amberDim = amber.opacity(0.5)
     static let amberBorder = amber.opacity(0.4)
     static let amberBorderSubtle = amber.opacity(0.2)
