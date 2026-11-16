@@ -13,7 +13,7 @@ const SEGMENTS = [
   { key: "clearPercent" as const, label: "aware", color: "var(--accent-green)" },
   { key: "lightDistractionPercent" as const, label: "light distraction", color: "var(--accent-amber)" },
   { key: "heavyDistractionPercent" as const, label: "heavy distraction", color: "var(--accent-danger-muted)" },
-  { key: "hyperfocusPercent" as const, label: "hyperfocus", color: "rgba(96, 165, 250, 0.95)" },
+  { key: "hyperfocusPercent" as const, label: "hyperfocus", color: "rgba(var(--accent-blue-rgb), 0.95)" },
 ];
 
 function formatDayLabel(isoDate: string): string {
@@ -43,7 +43,7 @@ export function HistoryMindStateTrends({ trends, isMobile }: HistoryMindStateTre
     {
       label: "hyperfocus",
       value: `${trends.trailing4Week.hyperfocusPercent}%`,
-      color: "rgba(96, 165, 250, 0.95)",
+      color: "rgba(var(--accent-blue-rgb), 0.95)",
     },
     {
       label: "sit time",

@@ -43,25 +43,25 @@ export function SessionMindStateStatus({
             mindState === "thinking"
               ? "var(--accent-amber)"
               : mindState === "hyperfocus"
-                ? "rgba(96, 165, 250, 0.95)"
+                ? "rgba(var(--accent-blue-rgb), 0.95)"
                 : "var(--accent-green)",
           boxShadow:
             mindState === "thinking"
               ? "0 0 12px var(--accent-amber)"
               : mindState === "hyperfocus"
-                ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                ? "0 0 12px rgba(var(--accent-blue-deep-rgb), 0.6)"
                 : "none",
           flexShrink: 0,
         }}
       />
       <span>{stateLabel}</span>
       {distractionSegmentCount > 0 && (
-        <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+        <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
           · {distractionSegmentCount} light {distractionSegmentCount === 1 ? "segment" : "segments"}
         </span>
       )}
       {capturedCount > 0 && (
-        <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+        <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
           · {capturedCount} captured {capturedCount === 1 ? "note" : "notes"}
         </span>
       )}

@@ -142,7 +142,7 @@ function MoodBox({ level, selected, disabled, onClick, ariaLabel }: MoodBoxProps
           ? "1px solid var(--accent-green-border)"
           : "1px solid var(--border-1)",
         background: selected
-          ? `rgba(74, 222, 128, ${0.08 + level * 0.07})`
+          ? `rgba(var(--accent-green-rgb), ${0.08 + level * 0.07})`
           : "var(--surface-1)",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.55 : 1,
@@ -161,7 +161,7 @@ function MoodBox({ level, selected, disabled, onClick, ariaLabel }: MoodBoxProps
             width: `${MARKER_PX}px`,
             height: `${MARKER_PX}px`,
             borderRadius: "3px",
-            background: `rgba(74, 222, 128, ${0.4 + level * 0.12})`,
+            background: `rgba(var(--accent-green-rgb), ${0.4 + level * 0.12})`,
           }}
         />
       )}
