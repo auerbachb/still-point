@@ -251,12 +251,15 @@ struct FocusGameView: View {
     /// Hands the game's end to the save. Called in the same turn as the End tap, or the
     /// tick that found the countdown run out.
     private func report(_ result: FocusSessionResult?) {
-        appVM.focusGameInProgress = false
         // #854: read here, with the end; the save task runs a turn later.
         let generation = appVM.authGeneration
         let endedAt = Date()
         let end: FocusSessionEnd = result.map { .save($0) } ?? .nothingToSave
         Task {
+            // The session stays held until the save settles: a buddy invite queued
+            // meanwhile must not replace the route the save is about to leave. Cleared
+            // on every path, success, failure, nothing-to-save and a stale generation,
+            // since `completeFocusSession` returns on all of them.
             await appVM.completeFocusSession(
                 end,
                 category: .game,
@@ -264,6 +267,9 @@ struct FocusGameView: View {
                 endedAt: endedAt,
                 startedAtGeneration: generation
             )
+            appVM.focusGameInProgress = false
+            // Retry an invite that waited on the flag. The save already routed home.
+            appVM.scheduleBuddyInviteConsume()
         }
     }
 
