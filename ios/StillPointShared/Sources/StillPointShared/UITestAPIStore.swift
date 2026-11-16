@@ -153,6 +153,18 @@ actor UITestAPIStore {
             snapshot.persist(key: defaultsKey)
             return snapshot
         }
+        // #1199: an account-state seed (dual-track, recovery ramp, focus history)
+        // replaces the persisted store, as the snapshot seed does.
+        if config.hasStateSeed {
+            let seeded = UITestStore.makeStateSeeded(
+                seedAuthenticated: config.seedAuthenticated,
+                dualTrack: config.dualTrackSeed,
+                recoveryRamp: config.recoveryRampSeed,
+                focusHistory: config.focusHistorySeed
+            )
+            seeded.persist(key: defaultsKey)
+            return seeded
+        }
         if let persisted = UITestStore.load(key: defaultsKey) {
             return persisted
         }
