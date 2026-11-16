@@ -29,7 +29,7 @@ struct FocusGameView: View {
             case .playing:
                 playing
             case .ended:
-                EmptyView()
+                finished
             }
         }
         .background(
@@ -45,7 +45,6 @@ struct FocusGameView: View {
                     .onChange(of: proxy.size.height) { _, height in viewportHeight = Int(height) }
             }
         )
-        .accessibilityIdentifier("focusGame")
         .onDisappear {
             vm.stop()
             appVM.focusGameInProgress = false
@@ -121,6 +120,24 @@ struct FocusGameView: View {
             .padding(.top, SPSpacing.s3)
         }
         .padding(.horizontal, SPSpacing.s4)
+    }
+
+    /// Shown from End until the save routes home, so the screen is never blank while
+    /// the save settles. A failed save routes home like the focus timer's; the offline
+    /// indicator carries the failure.
+    private var finished: some View {
+        VStack(spacing: SPSpacing.s4) {
+            Text("Finished")
+                .font(SPFont.serif(28, weight: .light))
+                .foregroundStyle(Color(SPColor.fg))
+                .accessibilityIdentifier("focusGame.finished")
+                .accessibilityAddTraits(.isHeader)
+            ProgressView()
+                .accessibilityLabel("Saving focus game")
+                .accessibilityIdentifier("focusGame.saving")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("focusGame.ended")
     }
 
     /// Starts the game. The session is held from this instant, so a buddy invite that
