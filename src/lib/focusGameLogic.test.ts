@@ -9,7 +9,9 @@ import {
   advanceFocusGame,
   createFocusGame,
   focusGameRemainingMs,
+  focusGameResult,
   FOCUS_GAME_COLUMNS,
+  FOCUS_GAME_GRID_GAP_PX,
   FOCUS_GAME_MAX_ROWS,
   FOCUS_GAME_MIN_ROWS,
   FOCUS_GAME_TIMING,
@@ -52,9 +54,27 @@ function runUntilLit(state: FocusGameState, startMs: number, rng: RandomSource) 
 
 describe("rowsForHeight", () => {
   test("fits as many 44px rows as the height allows, within the bounds", () => {
-    expect(rowsForHeight(44 * 6)).toBe(6);
-    expect(rowsForHeight(44 * 8)).toBe(FOCUS_GAME_MAX_ROWS);
+    // n rows need n * 44 + (n - 1) * 8 px, so the grid gaps count toward the fit.
+    expect(rowsForHeight(6 * 44 + 5 * 8)).toBe(6);
+    expect(rowsForHeight(6 * 44 + 5 * 8 - 1)).toBe(5);
+    expect(rowsForHeight(8 * 44 + 7 * 8)).toBe(FOCUS_GAME_MAX_ROWS);
     expect(rowsForHeight(10_000)).toBe(FOCUS_GAME_MAX_ROWS);
+  });
+
+  test("never picks a row count whose rows and gaps overflow the grid", () => {
+    for (let px = 0; px <= 600; px += 1) {
+      const rows = rowsForHeight(px);
+      if (rows > FOCUS_GAME_MIN_ROWS) {
+        expect(rows * 44 + (rows - 1) * FOCUS_GAME_GRID_GAP_PX).toBeLessThanOrEqual(px);
+      }
+    }
+  });
+
+  test("a 640px viewport keeps the End button clear: seven rows, not eight", () => {
+    // The view reserves 260px above and below the grid, so a 640px viewport leaves 380px
+    // minus the reserved space: 358px for the grid. Eight rows need 408px; seven need 356px.
+    expect(rowsForHeight(358)).toBe(7);
+    expect(rowsForHeight(408)).toBe(8);
   });
 
   test("never drops below the minimum row count on a very short viewport", () => {
@@ -273,6 +293,62 @@ describe("countdown", () => {
     const finished = advanceFocusGame(state, 60_000, rng, CELLS);
     expect(isFocusGameFinished(finished.state, 60_000)).toBe(true);
     expect(finished.state.resets).toBe(0);
+  });
+
+  test("completion wins over a late miss: a resumed tab does not restart an expired game", () => {
+    const rng = seededRng(20);
+    const { state: lit } = runUntilLit(createFocusGame(60, 0, rng), 0, rng);
+    const late = advanceFocusGame(lit, 60_000 + responseMs * 5, rng, CELLS);
+    expect(late.outcome).toBe("none");
+    expect(late.state).toEqual(lit);
+    expect(isFocusGameFinished(late.state, 60_000 + responseMs * 5)).toBe(true);
+  });
+
+  test("a tap after the goal has elapsed does not restart an expired game", () => {
+    const rng = seededRng(21);
+    const { state: lit } = runUntilLit(createFocusGame(60, 0, rng), 0, rng);
+    const late = tapFocusGameCell(lit, lit.lit!.cell, 60_000 + responseMs * 5, rng, CELLS);
+    expect(late.outcome).toBe("none");
+    expect(late.state.resets).toBe(0);
+    expect(isFocusGameFinished(late.state, 60_000 + responseMs * 5)).toBe(true);
+  });
+});
+
+describe("focusGameResult: what a game saves", () => {
+  test("counts the whole game across resets, not only the last countdown run", () => {
+    const rng = seededRng(22);
+    const { state: lit, nowMs: litAt } = runUntilLit(createFocusGame(300, 0, rng), 0, rng);
+    const missed = advanceFocusGame(lit, litAt + responseMs + 1, rng, CELLS);
+    expect(missed.outcome).toBe("reset");
+    const endedAt = missed.state.countdownStartMs + 400;
+    // The last run only started 400ms ago, but the game has run since time zero.
+    expect(focusGameResult(missed.state, endedAt, "ended")).toEqual({
+      duration: 300,
+      actualTime: Math.floor(endedAt / 1000),
+      completed: false,
+    });
+  });
+
+  test("a quick exit after a miss still saves, unlike the last countdown run alone", () => {
+    const rng = seededRng(23);
+    const { state: lit, nowMs: litAt } = runUntilLit(createFocusGame(300, 0, rng), 0, rng);
+    const missed = advanceFocusGame(lit, litAt + responseMs + 1, rng, CELLS);
+    expect(focusGameResult(missed.state, missed.state.countdownStartMs + 100, "ended")).not.toBeNull();
+  });
+
+  test("nothing to save when the game ends inside its first second", () => {
+    const state = createFocusGame(300, 5_000, seededRng(24));
+    expect(focusGameResult(state, 5_900, "ended")).toBeNull();
+  });
+
+  test("time played is capped at the goal and never completed by an early end", () => {
+    const state = createFocusGame(60, 0, seededRng(25));
+    expect(focusGameResult(state, 200_000, "ended")).toEqual({ duration: 60, actualTime: 60, completed: false });
+  });
+
+  test("a countdown that ran out is always completed", () => {
+    const state = createFocusGame(180, 0, seededRng(26));
+    expect(focusGameResult(state, 180_000, "expired")).toEqual({ duration: 180, actualTime: 180, completed: true });
   });
 });
 

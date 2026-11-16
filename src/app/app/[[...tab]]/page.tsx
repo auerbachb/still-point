@@ -112,12 +112,16 @@ export default function StillPoint() {
   const buddyInviteInFlight = useRef(false);
   // #990: the overlay as of the last commit, for the invite join to read after its
   // await. Synced in a layout effect so it is current before any later await resumes.
-  const overlayRef = useRef<Overlay | null>(overlay);
+  // #680: the focus game's start screen is not a sit, so it does not hold an invite.
+  // Only a game that is actually running does; the overlay alone cannot say which.
+  const [focusGamePlaying, setFocusGamePlaying] = useState(false);
+  const buddyOverlay: Overlay | null = overlay === "focusGames" && !focusGamePlaying ? null : overlay;
+  const overlayRef = useRef<Overlay | null>(buddyOverlay);
   useLayoutEffect(() => {
-    overlayRef.current = overlay;
-  }, [overlay]);
+    overlayRef.current = buddyOverlay;
+  }, [buddyOverlay]);
   // #990: a sit or its completion screen holds a `?buddy=` invite until it ends.
-  const buddyInviteHeld = overlayHoldsBuddyInvite(overlay);
+  const buddyInviteHeld = overlayHoldsBuddyInvite(buddyOverlay);
   // #666: monotonic session generation. Every async path that adopts a user
   // captures the generation it started in and drops its result if a sign-out —
   // or a *different* sign-in — happened in the meantime. A plain "cancelled"
@@ -660,7 +664,10 @@ export default function StillPoint() {
       {/* #680: the focus game saves as a focus session under the "game" category, so it
           steps the focus goal and reaches History like any focus activity. */}
       {overlay === "focusGames" && (
-        <FocusGamesView onEnd={(result) => handleFocusEnd(result, FOCUS_GAME_CATEGORY)} />
+        <FocusGamesView
+          onEnd={(result) => handleFocusEnd(result, FOCUS_GAME_CATEGORY)}
+          onPlayingChange={setFocusGamePlaying}
+        />
       )}
 
       {overlay === "focusPicker" && (

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   formatFocusCountdown,
-  resolveFocusEnd,
   type FocusEndReason,
   type FocusSessionResult,
 } from "@/lib/focusActivity";
@@ -11,9 +10,11 @@ import {
   advanceFocusGame,
   createFocusGame,
   focusGameRemainingMs,
+  focusGameResult,
   FOCUS_GAME_COLUMNS,
   FOCUS_GAME_DEFAULT_DURATION_SECONDS,
   FOCUS_GAME_DURATIONS_SECONDS,
+  FOCUS_GAME_GRID_GAP_PX,
   FOCUS_GAME_MAX_ROWS,
   isFocusGameFinished,
   rowsForHeight,
@@ -39,9 +40,12 @@ type FocusGamesViewProps = {
    *  a whole second of countdown). The result is a focus session result, saved as a
    *  focus session under the game's category. */
   onEnd: (result: FocusSessionResult | null) => void;
+  /** Reports whether a game is running (not on the start screen, not after it ended).
+   *  The page holds a pending buddy invite only while this is true. */
+  onPlayingChange?: (playing: boolean) => void;
 };
 
-type Phase = "setup" | "playing";
+type Phase = "setup" | "playing" | "ended";
 
 type Frame = {
   state: FocusGameState;
@@ -62,7 +66,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-export function FocusGamesView({ onEnd }: FocusGamesViewProps) {
+export function FocusGamesView({ onEnd, onPlayingChange }: FocusGamesViewProps) {
   const [phase, setPhase] = useState<Phase>("setup");
   const [durationSeconds, setDurationSeconds] = useState<number>(FOCUS_GAME_DEFAULT_DURATION_SECONDS);
   const [rows, setRows] = useState<number>(FOCUS_GAME_MAX_ROWS);
@@ -90,19 +94,25 @@ export function FocusGamesView({ onEnd }: FocusGamesViewProps) {
     onEndRef.current = onEnd;
   }, [onEnd]);
 
+  // Report playing state to the parent; a torn-down view always reports not playing.
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  useEffect(() => {
+    onPlayingChangeRef.current = onPlayingChange;
+  }, [onPlayingChange]);
+  useEffect(() => {
+    onPlayingChangeRef.current?.(playing);
+  }, [playing]);
+  useEffect(() => () => onPlayingChangeRef.current?.(false), []);
+
   const finish = useCallback((reason: FocusEndReason, nowMs: number) => {
     // Re-entrancy guard: a tap and the countdown can both try to end the game.
     if (endedRef.current) return;
     endedRef.current = true;
     const game = gameRef.current;
-    onEndRef.current(game
-      ? resolveFocusEnd({
-        startMs: game.countdownStartMs,
-        nowMs,
-        goalSeconds: game.goalMs / 1000,
-        reason,
-      })
-      : null);
+    // Leaving `playing` releases the wake lock and notification suppression now, not
+    // when the parent unmounts this view after the save.
+    setPhase("ended");
+    onEndRef.current(game ? focusGameResult(game, nowMs, reason) : null);
   }, []);
 
   // Advance the game on a fixed cadence: resets missed squares, lights new ones,
@@ -159,6 +169,10 @@ export function FocusGamesView({ onEnd }: FocusGamesViewProps) {
       resetAt: result.outcome === "reset" ? nowMs : prev?.resetAt ?? null,
     }));
   };
+
+  if (phase === "ended") {
+    return null;
+  }
 
   if (phase === "setup" || !frame) {
     return (
@@ -231,7 +245,7 @@ export function FocusGamesView({ onEnd }: FocusGamesViewProps) {
           display: "grid",
           gridTemplateColumns: `repeat(${FOCUS_GAME_COLUMNS}, minmax(44px, 1fr))`,
           gridTemplateRows: `repeat(${rows}, minmax(44px, 1fr))`,
-          gap: "8px",
+          gap: `${FOCUS_GAME_GRID_GAP_PX}px`,
           width: "min(86vw, 300px)",
           height: `min(${rows * 64}px, 56vh)`,
         }}

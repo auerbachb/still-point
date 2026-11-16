@@ -1,3 +1,5 @@
+import type { FocusSessionResult } from "./focusActivity";
+
 // Pure grid-tap focus game (#680, web v1). No timers, DOM or React: `FocusGamesView`
 // owns the wall clock and the random source and calls into these with timestamps,
 // so every timing and reset rule stays unit-testable with a fake clock and a seeded RNG.
@@ -7,6 +9,7 @@
 // square scores a hit. If the lit square is not tapped within the response window
 // the countdown starts over. A tap on any other square is a wrong tap: it is counted
 // and changes nothing else in v1.
+
 /** Grid width; the grid is always this many columns wide. */
 export const FOCUS_GAME_COLUMNS = 3;
 /** Rows on a tall viewport. Short viewports get fewer (`rowsForHeight`). */
@@ -34,6 +37,8 @@ export type RandomSource = () => number;
 export type FocusGameState = {
   /** The chosen duration. */
   goalMs: number;
+  /** When the whole game started. Never moves on a reset: the saved session counts from here. */
+  startedAtMs: number;
   /** When the current countdown run started: the start, or the last reset. */
   countdownStartMs: number;
   /** The lit square, or null between lights. */
@@ -53,10 +58,18 @@ export type FocusGameState = {
 /** What a call to `advanceFocusGame` or `tapFocusGameCell` did, for the view to show. */
 export type FocusGameOutcome = "none" | "lit" | "hit" | "wrong" | "reset";
 
+/** Gap between grid rows and columns, in px. The view's grid uses the same value. */
+export const FOCUS_GAME_GRID_GAP_PX = 8;
+
 /** Rows that fit a given height, clamped to [FOCUS_GAME_MIN_ROWS, FOCUS_GAME_MAX_ROWS].
- *  `cellPx` is the minimum tap target, so a shorter viewport gets fewer rows, not smaller targets. */
-export function rowsForHeight(availablePx: number, cellPx = 44): number {
-  const fit = Math.floor(Math.max(0, availablePx) / cellPx);
+ *  `cellPx` is the minimum tap target, so a shorter viewport gets fewer rows, not smaller targets.
+ *  `n` rows need `n * cellPx + (n - 1) * gapPx` px, so the gaps count toward the fit. */
+export function rowsForHeight(
+  availablePx: number,
+  cellPx = 44,
+  gapPx = FOCUS_GAME_GRID_GAP_PX,
+): number {
+  const fit = Math.floor((Math.max(0, availablePx) + gapPx) / (cellPx + gapPx));
   return Math.min(FOCUS_GAME_MAX_ROWS, Math.max(FOCUS_GAME_MIN_ROWS, fit));
 }
 
@@ -84,6 +97,7 @@ export function createFocusGame(
 ): FocusGameState {
   return {
     goalMs: goalSeconds * 1000,
+    startedAtMs: nowMs,
     countdownStartMs: nowMs,
     lit: null,
     nextLightAtMs: nowMs + nextGapMs(rng),
@@ -124,6 +138,26 @@ function resetCountdown(state: FocusGameState, nowMs: number, rng: RandomSource)
 }
 
 /**
+ * The focus session a game saves, or null when there is nothing to save. The session
+ * counts the whole game: total time played since the start, across every reset, and
+ * `duration` is the chosen goal. `expired` (the countdown ran out) is always completed.
+ * An early end is not completed; it saves the time played so far (at least one second).
+ */
+export function focusGameResult(
+  state: FocusGameState,
+  nowMs: number,
+  reason: "expired" | "ended",
+): FocusSessionResult | null {
+  const goalSeconds = state.goalMs / 1000;
+  if (reason === "expired") {
+    return { duration: goalSeconds, actualTime: goalSeconds, completed: true };
+  }
+  const playedSeconds = Math.min(goalSeconds, Math.floor(Math.max(0, nowMs - state.startedAtMs) / 1000));
+  if (playedSeconds === 0) return null;
+  return { duration: goalSeconds, actualTime: playedSeconds, completed: false };
+}
+
+/**
  * Moves the game to `nowMs` without a tap. Call it on every tick. It either resets
  * the countdown (the lit square was missed), lights a new square (the quiet gap has
  * passed and the countdown is still running), or changes nothing.
@@ -134,6 +168,10 @@ export function advanceFocusGame(
   rng: RandomSource,
   cells: number,
 ): { state: FocusGameState; outcome: FocusGameOutcome } {
+  // Completion wins: once the countdown has run out, a late miss cannot restart it.
+  if (isFocusGameFinished(state, nowMs)) {
+    return { state, outcome: "none" };
+  }
   if (expired(state, nowMs)) {
     return { state: resetCountdown(state, nowMs, rng), outcome: "reset" };
   }
@@ -159,6 +197,10 @@ export function tapFocusGameCell(
   rng: RandomSource,
   cells: number,
 ): { state: FocusGameState; outcome: FocusGameOutcome } {
+  // Completion wins over a late tap: the game ends on the next check, unchanged.
+  if (isFocusGameFinished(state, nowMs)) {
+    return { state, outcome: "none" };
+  }
   if (expired(state, nowMs)) {
     return { state: resetCountdown(state, nowMs, rng), outcome: "reset" };
   }
