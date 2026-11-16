@@ -13,6 +13,9 @@ import {
   FOCUS_GAME_COLUMNS,
   FOCUS_GAME_GRID_GAP_PX,
   FOCUS_GAME_MAX_ROWS,
+  FOCUS_GAME_RESERVED_PX,
+  gridHeightPx,
+  rowsForViewport,
   FOCUS_GAME_MIN_ROWS,
   FOCUS_GAME_TIMING,
   isFocusGameFinished,
@@ -51,6 +54,26 @@ function runUntilLit(state: FocusGameState, startMs: number, rng: RandomSource) 
   }
   throw new Error("no square lit");
 }
+
+describe("rowsForViewport: short phones keep End on screen", () => {
+  test("the grid and the reserved space together fit a 480px, 568px or 640px viewport", () => {
+    for (const viewport of [480, 568, 640]) {
+      const rows = rowsForViewport(viewport);
+      expect(gridHeightPx(rows) + FOCUS_GAME_RESERVED_PX).toBeLessThanOrEqual(viewport);
+    }
+  });
+
+  test("picks the row count the remaining height allows at each short height", () => {
+    expect(rowsForViewport(480)).toBe(4);
+    expect(rowsForViewport(568)).toBe(6);
+    expect(rowsForViewport(640)).toBe(7);
+  });
+
+  test("below the minimum grid it keeps the minimum rows and the view scrolls, never shrinks targets", () => {
+    expect(rowsForViewport(360)).toBe(FOCUS_GAME_MIN_ROWS);
+    expect(gridHeightPx(FOCUS_GAME_MIN_ROWS) + FOCUS_GAME_RESERVED_PX).toBeGreaterThan(360);
+  });
+});
 
 describe("rowsForHeight", () => {
   test("fits as many 44px rows as the height allows, within the bounds", () => {

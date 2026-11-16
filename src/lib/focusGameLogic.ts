@@ -61,6 +61,22 @@ export type FocusGameOutcome = "none" | "lit" | "hit" | "wrong" | "reset";
 /** Gap between grid rows and columns, in px. The view's grid uses the same value. */
 export const FOCUS_GAME_GRID_GAP_PX = 8;
 
+/** Space the view takes above and below the grid: countdown (up to 96px), status line,
+ *  End button, the overlay's padding and the gaps between them. Conservative on purpose. */
+export const FOCUS_GAME_RESERVED_PX = 260;
+
+/** Height in px of a grid with `rows` rows at the minimum tap target and gaps. */
+export function gridHeightPx(rows: number, cellPx = 44, gapPx = FOCUS_GAME_GRID_GAP_PX): number {
+  return rows * cellPx + Math.max(0, rows - 1) * gapPx;
+}
+
+/** Row count for a viewport of `viewportPx` height: what is left after the reserved space.
+ *  Below the minimum (`FOCUS_GAME_MIN_ROWS`, about 460px of viewport) the view scrolls
+ *  rather than shrinking the tap targets. */
+export function rowsForViewport(viewportPx: number): number {
+  return rowsForHeight(viewportPx - FOCUS_GAME_RESERVED_PX);
+}
+
 /** Rows that fit a given height, clamped to [FOCUS_GAME_MIN_ROWS, FOCUS_GAME_MAX_ROWS].
  *  `cellPx` is the minimum tap target, so a shorter viewport gets fewer rows, not smaller targets.
  *  `n` rows need `n * cellPx + (n - 1) * gapPx` px, so the gaps count toward the fit. */

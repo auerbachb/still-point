@@ -17,7 +17,7 @@ import {
   FOCUS_GAME_GRID_GAP_PX,
   FOCUS_GAME_MAX_ROWS,
   isFocusGameFinished,
-  rowsForHeight,
+  rowsForViewport,
   tapFocusGameCell,
   type FocusGameOutcome,
   type FocusGameState,
@@ -25,8 +25,6 @@ import {
 import { useSessionSuppressionRelay } from "@/lib/useSessionSuppression";
 import { useKeepScreenAwakePref, useWakeLock } from "@/lib/useWakeLock";
 
-/** Space above and below the grid: countdown, status line, End button and margins. */
-const GRID_RESERVED_PX = 260;
 /** How long a tap's colour feedback stays on a square. */
 const FLASH_MS = 300;
 /** How long the "missed it" notice stays up after a reset. */
@@ -142,7 +140,7 @@ export function FocusGamesView({ onEnd, onPlayingChange }: FocusGamesViewProps) 
   const startGame = () => {
     const nowMs = Date.now();
     // Fewer rows on a short viewport; the row count is fixed for the whole game.
-    const rowCount = rowsForHeight(window.innerHeight - GRID_RESERVED_PX);
+    const rowCount = rowsForViewport(window.innerHeight);
     cellsRef.current = FOCUS_GAME_COLUMNS * rowCount;
     setRows(rowCount);
     endedRef.current = false;
@@ -214,7 +212,8 @@ export function FocusGamesView({ onEnd, onPlayingChange }: FocusGamesViewProps) 
   const cellCount = FOCUS_GAME_COLUMNS * rows;
 
   return (
-    <div role="region" aria-label="Focus game in progress" style={overlayStyle}>
+    // Scrolls rather than pushing End off-screen on a viewport below the minimum grid.
+    <div role="region" aria-label="Focus game in progress" style={{ ...overlayStyle, overflowY: "auto", justifyContent: "safe center" }}>
       <div
         data-testid="focus-game-countdown"
         style={{
@@ -247,7 +246,6 @@ export function FocusGamesView({ onEnd, onPlayingChange }: FocusGamesViewProps) 
           gridTemplateRows: `repeat(${rows}, minmax(44px, 1fr))`,
           gap: `${FOCUS_GAME_GRID_GAP_PX}px`,
           width: "min(86vw, 300px)",
-          height: `min(${rows * 64}px, 56vh)`,
         }}
       >
         {Array.from({ length: cellCount }, (_, cell) => {
