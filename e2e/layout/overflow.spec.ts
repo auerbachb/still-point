@@ -97,6 +97,26 @@ test.describe("mobile overflow and scrolling", () => {
     expect(await pageScroll(page), "measuring should not have moved the page").toMatchObject({ atEnd: true });
   });
 
+  test("phone recap avoids horizontal overflow and keeps the page as the vertical scroller", async ({
+    page,
+    ensureLoggedIn,
+  }) => {
+    // #979: body must not be a scroll container, so the pinned return button
+    // can stick against the viewport. Horizontal overflow stays clipped.
+    await ensureLoggedIn();
+    await tap(page.getByRole("button", { name: "Begin", exact: true }));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+    await expect(page.getByTestId("completion-return-bottom")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const scroller = await page.evaluate(() => ({
+      isDocumentElement: document.scrollingElement === document.documentElement,
+      bodyOverflowY: getComputedStyle(document.body).overflowY,
+    }));
+    expect(scroller.isDocumentElement, "the document should be the vertical scroller").toBe(true);
+    expect(scroller.bodyOverflowY, "body should not compute to a scroll container").not.toBe("auto");
+  });
+
   test("critical buttons meet 44px tap target guideline", async ({ page, ensureLoggedIn }) => {
     await page.goto("/app");
     const enterButton = page.getByRole("button", { name: "Enter" });
