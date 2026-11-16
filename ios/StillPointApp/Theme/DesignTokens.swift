@@ -56,7 +56,7 @@ public enum SPColor {
         dark: SPInk.dark, light: SPInk.light, darkOpacity: 0.52, lightOpacity: 0.70
     )
     static let fg4 = Color.adaptive(
-        dark: SPInk.dark, light: SPInk.light, darkOpacity: 0.45, lightOpacity: 0.65
+        dark: SPInk.dark, light: SPInk.light, darkOpacity: 0.45, lightOpacity: 0.68
     )
 
     // Borders
@@ -73,7 +73,7 @@ public enum SPColor {
     // on a light background.
     static let green = Color.adaptive(
         dark: (red: 74 / 255, green: 222 / 255, blue: 128 / 255),
-        light: (red: 21 / 255, green: 128 / 255, blue: 61 / 255)
+        light: (red: 16 / 255, green: 110 / 255, blue: 52 / 255)
     )
     static let greenEnd = Color.adaptive(
         dark: (red: 34 / 255, green: 197 / 255, blue: 94 / 255),
@@ -82,7 +82,7 @@ public enum SPColor {
     // Text tints are opaque on light: 0.6 opacity fell below 3:1 on the light background.
     static let greenText = Color.adaptive(
         dark: (red: 74 / 255, green: 222 / 255, blue: 128 / 255),
-        light: (red: 15 / 255, green: 118 / 255, blue: 55 / 255),
+        light: (red: 16 / 255, green: 110 / 255, blue: 52 / 255),
         darkOpacity: 0.6
     )
     static let greenBorder = green.opacity(0.2)
@@ -93,15 +93,15 @@ public enum SPColor {
     // Amber / Thinking
     static let amber = Color.adaptive(
         dark: (red: 251 / 255, green: 191 / 255, blue: 36 / 255),
-        light: (red: 180 / 255, green: 110 / 255, blue: 0)
+        light: (red: 140 / 255, green: 86 / 255, blue: 0)
     )
     static let amberEnd = Color.adaptive(
         dark: (red: 245 / 255, green: 158 / 255, blue: 11 / 255),
-        light: (red: 161 / 255, green: 98 / 255, blue: 7 / 255)
+        light: (red: 125 / 255, green: 76 / 255, blue: 0)
     )
     static let amberText = Color.adaptive(
         dark: (red: 251 / 255, green: 191 / 255, blue: 36 / 255),
-        light: (red: 161 / 255, green: 98 / 255, blue: 7 / 255),
+        light: (red: 140 / 255, green: 86 / 255, blue: 0),
         darkOpacity: 0.6
     )
     static let amberDim = amber.opacity(0.5)
@@ -113,12 +113,15 @@ public enum SPColor {
     // Red / Danger (dark: Tailwind red-500 #ef4444; light: a deeper red)
     static let danger = Color.adaptive(
         dark: (red: 239 / 255, green: 68 / 255, blue: 68 / 255),
-        light: (red: 185 / 255, green: 28 / 255, blue: 28 / 255)
-    ).opacity(0.7)
+        light: (red: 185 / 255, green: 28 / 255, blue: 28 / 255),
+        darkOpacity: 0.7
+    )
     static let dangerMuted = Color.adaptive(
         dark: (red: 239 / 255, green: 68 / 255, blue: 68 / 255),
-        light: (red: 185 / 255, green: 28 / 255, blue: 28 / 255)
-    ).opacity(0.5)
+        light: (red: 153 / 255, green: 22 / 255, blue: 22 / 255),
+        darkOpacity: 0.5,
+        lightOpacity: 0.85
+    )
     static let dangerBorderSubtle = Color.adaptive(
         dark: (red: 239 / 255, green: 68 / 255, blue: 68 / 255),
         light: (red: 185 / 255, green: 28 / 255, blue: 28 / 255)
@@ -200,13 +203,34 @@ extension View {
 // MARK: - Gradient Helpers
 
 extension LinearGradient {
+    // Block fills keep their original light colours. Fills carry labels rather than
+    // text, so they are not darkened with the text tints; the labels are checked
+    // against these exact fills in the contrast table (#30).
     static let greenFill = LinearGradient(
-        colors: [SPColor.green, SPColor.greenEnd],
+        colors: [
+            Color.adaptive(
+                dark: (red: 74 / 255, green: 222 / 255, blue: 128 / 255),
+                light: (red: 21 / 255, green: 128 / 255, blue: 61 / 255)
+            ),
+            Color.adaptive(
+                dark: (red: 34 / 255, green: 197 / 255, blue: 94 / 255),
+                light: (red: 15 / 255, green: 118 / 255, blue: 55 / 255)
+            ),
+        ],
         startPoint: .bottom, endPoint: .top
     )
 
     static let amberFill = LinearGradient(
-        colors: [SPColor.amber, SPColor.amberEnd],
+        colors: [
+            Color.adaptive(
+                dark: (red: 251 / 255, green: 191 / 255, blue: 36 / 255),
+                light: (red: 180 / 255, green: 110 / 255, blue: 0)
+            ),
+            Color.adaptive(
+                dark: (red: 245 / 255, green: 158 / 255, blue: 11 / 255),
+                light: (red: 161 / 255, green: 98 / 255, blue: 7 / 255)
+            ),
+        ],
         startPoint: .bottom, endPoint: .top
     )
 
