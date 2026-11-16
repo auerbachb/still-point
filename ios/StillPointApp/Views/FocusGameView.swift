@@ -257,9 +257,7 @@ struct FocusGameView: View {
         let end: FocusSessionEnd = result.map { .save($0) } ?? .nothingToSave
         Task {
             // The session stays held until the save settles: a buddy invite queued
-            // meanwhile must not replace the route the save is about to leave. Cleared
-            // on every path, success, failure, nothing-to-save and a stale generation,
-            // since `completeFocusSession` returns on all of them.
+            // meanwhile must not replace the route the save is about to leave.
             await appVM.completeFocusSession(
                 end,
                 category: .game,
@@ -267,6 +265,11 @@ struct FocusGameView: View {
                 endedAt: endedAt,
                 startedAtGeneration: generation
             )
+            // Same generation check as the save's apply: after an identity change a new
+            // account may have started its own game, whose flag this must not clear.
+            // Leaving the flag alone is safe: the old view's onDisappear already cleared
+            // it when the route left.
+            guard appVM.authGeneration == generation else { return }
             appVM.focusGameInProgress = false
             // Retry an invite that waited on the flag. The save already routed home.
             appVM.scheduleBuddyInviteConsume()
