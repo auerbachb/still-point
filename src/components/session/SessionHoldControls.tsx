@@ -133,9 +133,9 @@ export function SessionHoldControls({
           style={{
             ...holdButtonBase,
             borderColor:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)",
             background:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.12)" : "var(--surface-1)",
             color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
           }}
         >

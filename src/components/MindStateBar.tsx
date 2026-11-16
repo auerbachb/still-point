@@ -51,7 +51,7 @@ export function MindStateBar({
             background: seg.state === "clear"
               ? "linear-gradient(to right, var(--accent-green), var(--accent-green-end))"
               : seg.state === "hyperfocus"
-                ? "linear-gradient(to right, rgba(96, 165, 250, 0.85), rgba(59, 130, 246, 0.75))"
+                ? "linear-gradient(to right, rgba(var(--accent-blue-rgb), 0.85), rgba(var(--accent-blue-deep-rgb), 0.75))"
                 : "linear-gradient(to right, var(--accent-amber), var(--accent-amber-end))",
             opacity: 0.7,
           }} />

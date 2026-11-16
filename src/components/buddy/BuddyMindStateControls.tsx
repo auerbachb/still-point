@@ -68,13 +68,13 @@ export function BuddyMindStateControls({
               mindState === "thinking"
                 ? "var(--accent-amber)"
                 : mindState === "hyperfocus"
-                  ? "rgba(96, 165, 250, 0.95)"
+                  ? "rgba(var(--accent-blue-rgb), 0.95)"
                   : "var(--accent-green)",
             boxShadow:
               mindState === "thinking"
                 ? "0 0 12px var(--accent-amber)"
                 : mindState === "hyperfocus"
-                  ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                  ? "0 0 12px rgba(var(--accent-blue-deep-rgb), 0.6)"
                   : "none",
             flexShrink: 0,
           }}
@@ -239,9 +239,9 @@ export function BuddyMindStateControls({
           }}
           style={{
             background:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.12)" : "var(--surface-1)",
             border: `1px solid ${
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)"
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)"
             }`,
             color:
               mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
