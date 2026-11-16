@@ -68,13 +68,13 @@ export function BuddyMindStateControls({
               mindState === "thinking"
                 ? "var(--accent-amber)"
                 : mindState === "hyperfocus"
-                  ? "rgba(96, 165, 250, 0.95)"
+                  ? "rgba(var(--accent-blue-rgb), 0.95)"
                   : "var(--accent-green)",
             boxShadow:
               mindState === "thinking"
                 ? "0 0 12px var(--accent-amber)"
                 : mindState === "hyperfocus"
-                  ? "0 0 12px rgba(59, 130, 246, 0.6)"
+                  ? "0 0 12px rgba(var(--accent-blue-deep-rgb), 0.6)"
                   : "none",
             flexShrink: 0,
           }}
@@ -87,13 +87,13 @@ export function BuddyMindStateControls({
               : "Aware"}
         </span>
         {distractionSegmentCount > 0 && (
-          <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+          <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
             · {distractionSegmentCount} light{" "}
             {distractionSegmentCount === 1 ? "segment" : "segments"}
           </span>
         )}
         {sessionThoughtsCount > 0 && (
-          <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+          <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
             · {sessionThoughtsCount} captured {sessionThoughtsCount === 1 ? "note" : "notes"}
           </span>
         )}
@@ -161,7 +161,7 @@ export function BuddyMindStateControls({
                 ? "var(--accent-amber-border)"
                 : "var(--accent-green-border)"
             }`,
-            color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+            color: mindState === "thinking" ? "var(--accent-amber-active-text)" : "var(--accent-green-active-text)",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.12em",
@@ -239,12 +239,12 @@ export function BuddyMindStateControls({
           }}
           style={{
             background:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.12)" : "var(--surface-1)",
             border: `1px solid ${
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)"
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)"
             }`,
             color:
-              mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+              mindState === "hyperfocus" ? "var(--accent-blue-text)" : "var(--fg-2)",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.12em",
@@ -304,7 +304,7 @@ export function BuddyMindStateControls({
       >
         <span style={{ color: "var(--accent-green-dim)" }}>{buddyAwarenessPct}% awareness</span>
         <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
-        <span style={{ color: "var(--accent-amber-border)" }}>
+        <span style={{ color: "var(--accent-amber-note)" }}>
           {Math.max(0, 100 - buddyAwarenessPct)}% distraction
         </span>
       </div>

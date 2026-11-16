@@ -26,6 +26,7 @@ The table is an index only. Each fixture's contract lives in its note under
 | `focusActivity.json` | `formatFocusGoal` / `formatFocusCountdown` / `focusCountdownFontSize` / `focusRemainingSeconds` / `resolveFocusEnd` / `focusActivityDayAfterCompletedSave` (`focusActivity.ts`); `FOCUS_ACTIVITIES` (`focusActivityContent.ts`) | `FocusActivity.formatGoal` / `countdownDisplay` / `countdownShowsHours` / `remainingSeconds` / `resolveEnd` / `focusActivityDayAfterCompletedSave`, `FocusCategory.pickerDescription` (`FocusActivityLogic.swift`); `FocusCategory.displayLabel` (`Constants.swift`) |
 | `guidedExercise.json` | `clampStepIndex` / `isLastStep` / `nextStepIndex` / `previousStepIndex` / `stepProgressFraction` / `totalDurationMs` / `exerciseSummary` (`guidedExercise.ts`) | `GuidedExerciseLogic` — the same seven functions (`GuidedExerciseLogic.swift`) |
 | `sandProgress.json` | `sandProgress` / `sandTripCount` (`sandProgress.ts`) | `SandProgress.progress(elapsed:total:)` / `SandProgress.tripCount(total:)` (`SandProgress.swift`) |
+| `focusGame.json` | `FOCUS_GAME_TIMING` / `rowsForViewport` / `rowsForHeight` / `gridHeightPx` / `nextGapMs` / `pickCell` / `createFocusGame` / `advanceFocusGame` / `tapFocusGameCell` / `focusGameResult` (`focusGameLogic.ts`) | `FocusGameLogic` — the same functions (`FocusGameLogic.swift`); #1192 |
 
 ## How each suite loads them
 

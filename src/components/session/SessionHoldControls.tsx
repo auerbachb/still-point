@@ -98,7 +98,7 @@ export function SessionHoldControls({
               mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
             background:
               mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
-            color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+            color: mindState === "thinking" ? "var(--accent-amber-active-text)" : "var(--accent-green-active-text)",
           }}
         >
           <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
@@ -133,10 +133,10 @@ export function SessionHoldControls({
           style={{
             ...holdButtonBase,
             borderColor:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.55)" : "var(--border-2)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)",
             background:
-              mindState === "hyperfocus" ? "rgba(59, 130, 246, 0.12)" : "var(--surface-1)",
-            color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+              mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.12)" : "var(--surface-1)",
+            color: mindState === "hyperfocus" ? "var(--accent-blue-text)" : "var(--fg-2)",
           }}
         >
           <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>

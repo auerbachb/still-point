@@ -32,6 +32,35 @@ import {
   type ThemePreference,
 } from "@/lib/theme";
 import { useThemePreference } from "@/lib/useThemePreference";
+import {
+  DEFAULT_DISPLAY_PREFS,
+  loadDisplayPrefs,
+  saveDisplayPrefs,
+  type DisplayPrefs,
+} from "@/lib/displayPrefs";
+
+/** #75: session-screen components that can be hidden from the Session screen group. */
+const SESSION_SCREEN_TOGGLES: ReadonlyArray<{
+  key: "showBlockGrid" | "showProgressBar" | "showMindStateBar";
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "showBlockGrid",
+    label: "Block grid",
+    description: "The row of boxes that fills as the sit runs.",
+  },
+  {
+    key: "showProgressBar",
+    label: "Progress bar",
+    description: "The thin bar that fills across each minute.",
+  },
+  {
+    key: "showMindStateBar",
+    label: "Mind state bar",
+    description: "The timeline of your mind state across the sit.",
+  },
+];
 
 type User = {
   id: string;
@@ -69,6 +98,8 @@ export function SettingsView({
   const [keepScreenAwake, setKeepScreenAwake] = useState(DEFAULT_KEEP_SCREEN_AWAKE);
   const [breathKeyBinding, setBreathKeyBinding] = useState<BreathKeyBinding>("Space");
   const [hideDistractionHyperfocusControls, setHideDistractionHyperfocusControls] = useState(false);
+  // #75: Session screen group. Seeded with defaults so SSR matches; loaded in the effect below.
+  const [sessionScreenPrefs, setSessionScreenPrefs] = useState<DisplayPrefs>(DEFAULT_DISPLAY_PREFS);
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState(user.username);
   const [savingUsername, setSavingUsername] = useState(false);
@@ -169,7 +200,16 @@ export function SettingsView({
     setHideDistractionHyperfocusControls(
       loadTrackingControlPrefs().hideDistractionHyperfocusControls,
     );
+    setSessionScreenPrefs(loadDisplayPrefs());
   }, []);
+
+  const handleSessionScreenToggle = (key: (typeof SESSION_SCREEN_TOGGLES)[number]["key"]) => {
+    // Fresh read-modify-write so the session's own display toggles are not clobbered.
+    const current = loadDisplayPrefs();
+    const next = { ...current, [key]: !current[key] };
+    saveDisplayPrefs(next);
+    setSessionScreenPrefs(next);
+  };
 
   const handleKeepScreenAwakeToggle = () => {
     const next = !keepScreenAwake;
@@ -562,6 +602,71 @@ export function SettingsView({
               transition: "all 0.3s",
             }} />
           </button>
+        </div>
+
+        {/* #75: Session screen group. Minimal view (#669) overrides these on the session screen. */}
+        <div role="group" aria-labelledby="session-screen-heading" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div
+            id="session-screen-heading"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--fg-4)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
+              padding: "0 4px",
+            }}
+          >
+            Session screen
+          </div>
+          {SESSION_SCREEN_TOGGLES.map(({ key, label, description }) => {
+            const shown = sessionScreenPrefs[key];
+            return (
+              <div key={key} style={{
+                padding: "16px 20px",
+                background: "var(--surface-1)",
+                borderRadius: "10px",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <div>
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "12px", color: "var(--fg)", marginBottom: "4px",
+                  }}>
+                    {label}
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-serif)",
+                    fontSize: "13px", fontStyle: "italic",
+                    color: "var(--fg-3)",
+                  }}>
+                    {description}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label={shown ? `Hide ${label.toLowerCase()} on session screen` : `Show ${label.toLowerCase()} on session screen`}
+                  aria-pressed={shown}
+                  onClick={() => handleSessionScreenToggle(key)}
+                  style={{
+                    width: "48px", height: "26px",
+                    borderRadius: "13px", border: "none",
+                    background: shown ? "var(--accent-green-bg)" : "var(--surface-3)",
+                    position: "relative", cursor: "pointer",
+                    transition: "background 0.3s",
+                    flexShrink: 0, marginLeft: "16px",
+                  }}
+                >
+                  <div style={{
+                    width: "20px", height: "20px",
+                    borderRadius: "10px",
+                    background: shown ? "var(--accent-green)" : "var(--border-3)",
+                    position: "absolute", top: "3px",
+                    left: shown ? "25px" : "3px",
+                    transition: "all 0.3s",
+                  }} />
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Breath counting: key binding (#376) */}

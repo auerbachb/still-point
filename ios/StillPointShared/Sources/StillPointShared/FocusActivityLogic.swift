@@ -250,6 +250,8 @@ extension FocusCategory {
         case .reading: return "One book or article, read without switching away."
         case .writing: return "One piece of writing: a draft, a journal entry, a letter."
         case .listening: return "Music with your eyes closed. Nothing to do but listen."
+        // Not a picker card: the game has its own Home entry. Copy kept for exhaustiveness.
+        case .game: return "A grid-tap attention game: tap each square when it lights up."
         }
     }
 }
