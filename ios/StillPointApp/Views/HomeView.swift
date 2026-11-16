@@ -17,6 +17,14 @@ struct HomeView: View {
         ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1"
     }
 
+    /// #1215: the dual-track UI-test seeds (`SP_UI_TEST_DUAL_TRACK`,
+    /// `SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE`) show the Combine action so tests can tap it.
+    /// Every other UI-test launch still hides it.
+    private static var showsCombineInUITests: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["SP_UI_TEST_DUAL_TRACK"] == "1" || env["SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE"] == "1"
+    }
+
     /// The primary track's cap, in whole minutes (the dual-track fork threshold).
     private static var maxDurationMinutes: Int { StillPoint.maxDuration / 60 }
 
@@ -122,8 +130,9 @@ struct HomeView: View {
             // #898: today's two sits as one, directly under Track Two.
             // Absent, not disabled, when not offered. Suppressed during
             // UI tests, as the fork card is: it would push the quick
-            // minute, breath and buddy buttons down.
-            if appVM.combineOffered && !Self.isUITestMode {
+            // minute, breath and buddy buttons down, except under the dual-track
+            // seeds (#1215), which exist to exercise it.
+            if appVM.combineOffered && (!Self.isUITestMode || Self.showsCombineInUITests) {
                 combineSitsAction
             }
         }

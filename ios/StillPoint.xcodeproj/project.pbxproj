@@ -52,6 +52,7 @@
 		3AD114B1095E5A14BABFA49B /* SPCapsuleButtonStyleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */; };
 		3B0DCBB737A17FDF8AF30A68 /* 53.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 085AB5EC3C680F94156BCA42 /* 53.mp3 */; };
 		3B9EB6E328C7AFFA6D553709 /* 45.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6F9B11790CB09A75A0B5631C /* 45.mp3 */; };
+		3C79557CEFBC030C66CD2D36 /* VerificationFlowsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E71050849F9B01DBB33C66 /* VerificationFlowsUITests.swift */; };
 		3D3782705E2C74F297F45CF1 /* 24.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 71997BDA906AB28487E78602 /* 24.mp3 */; };
 		3DD94CD008394385332E2476 /* 34.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 4E0BB1EDF1994530B03012DD /* 34.mp3 */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
@@ -277,6 +278,7 @@
 		3E69E315D37F87410DBE4B8C /* XCUIElement+TapAndType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "XCUIElement+TapAndType.swift"; sourceTree = "<group>"; };
 		407C13CECF97B6E3B783A89C /* AppViewModel+UITestSeeds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+UITestSeeds.swift"; sourceTree = "<group>"; };
 		41013DBBC777DFEDFD21C36F /* 60.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 60.mp3; sourceTree = "<group>"; };
+		41E71050849F9B01DBB33C66 /* VerificationFlowsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationFlowsUITests.swift; sourceTree = "<group>"; };
 		42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtJournalViewModel.swift; sourceTree = "<group>"; };
 		4329194D44E09BC127081EB9 /* MoodShiftSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodShiftSection.swift; sourceTree = "<group>"; };
 		4403CCBFAB0BBC4C105959AC /* PITFALLS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PITFALLS.md; sourceTree = "<group>"; };
@@ -448,6 +450,7 @@
 				45BC84AB51307C865EF7257A /* README.md */,
 				517F0317E312BF15558ABB1F /* SPCapsuleButtonStyleUITests.swift */,
 				AC0D9EC50BFCE181AA8F6E7E /* StillPointAppUITests.swift */,
+				41E71050849F9B01DBB33C66 /* VerificationFlowsUITests.swift */,
 				54D40F602F07E94E9BD6CF37 /* Helpers */,
 				F0FD78DD2EB1220358FB4672 /* Snapshots */,
 			);
@@ -1043,6 +1046,7 @@
 				E636EACFC27E6022A80898FC /* SnapshotTests.swift in Sources */,
 				2E66D8164CD85111E583C3E8 /* StillPointAppUITests+Interaction.swift in Sources */,
 				A564D3891222DA735A7F96B7 /* StillPointAppUITests.swift in Sources */,
+				3C79557CEFBC030C66CD2D36 /* VerificationFlowsUITests.swift in Sources */,
 				8CBA97A1F31F84D0E9F4C9A9 /* XCTestCase+StillPointUITest.swift in Sources */,
 				63EC131F3FAD3DFAFDE698B6 /* XCUIDevice+Portrait.swift in Sources */,
 				6E8830D16FED5FBB78B6DF34 /* XCUIElement+TapAndType.swift in Sources */,
