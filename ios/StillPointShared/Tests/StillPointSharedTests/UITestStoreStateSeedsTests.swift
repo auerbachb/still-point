@@ -16,15 +16,26 @@ struct UITestStoreStateSeedsTests {
     private static func seeded(
         dualTrack: UITestDualTrackSeed = .none,
         recoveryRamp: Bool = false,
-        focusHistory: Bool = false
+        focusHistory: Bool = false,
+        now: Date = fixedNow
     ) -> UITestStore {
         UITestStore.makeStateSeeded(
             seedAuthenticated: true,
             dualTrack: dualTrack,
             recoveryRamp: recoveryRamp,
             focusHistory: focusHistory,
-            now: fixedNow
+            now: now
         )
+    }
+
+    /// A local wall-clock time on 15 January 2027, for the before-6:00 cases.
+    private static func localTime(hour: Int) -> Date {
+        var components = DateComponents()
+        components.year = 2027
+        components.month = 1
+        components.day = 15
+        components.hour = hour
+        return Calendar.current.date(from: components) ?? fixedNow
     }
 
     private static func completedStandardToday(in store: UITestStore, track: Track) -> Bool {
@@ -51,7 +62,17 @@ struct UITestStoreStateSeedsTests {
         #expect(store.user.dualTrackEnabled)
         #expect(Self.completedStandardToday(in: store, track: .primary))
         #expect(!Self.completedStandardToday(in: store, track: .second))
-        #expect(store.user.currentDay == 4)
+        // Dual track opts in past the fork (day 55), so the account sits on
+        // forkDay + 2 once today's Track One sit is done.
+        #expect(store.user.currentDay == StillPoint.forkDay + 2)
+        #expect(StillPoint.isDualTrackEligible(currentDay: store.user.currentDay))
+    }
+
+    @Test func bothDueSeedSitsOnTheDayAfterTheFork() {
+        let store = Self.seeded(dualTrack: .bothDue)
+
+        #expect(store.user.currentDay == StillPoint.forkDay + 1)
+        #expect(StillPoint.isDualTrackEligible(currentDay: store.user.currentDay))
     }
 
     @Test func singleTrackSeedKeepsDualTrackOff() {
@@ -72,11 +93,59 @@ struct UITestStoreStateSeedsTests {
         #expect(ramp.recoveryCurrentStep == 2)
         #expect(ramp.recoveryTotalSteps == 3)
 
+        let practice = SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: Self.fixedNow)
         let lastPrimaryDate = store.sessions
             .filter { $0.sessionType == .standard && $0.completed }
             .map(\.sessionDate)
             .max()
-        #expect(lastPrimaryDate == SessionCalendar.localIsoDate(now: Self.fixedNow, offsetDays: -4))
+        #expect(lastPrimaryDate == SessionCalendar.addDays(toIsoDate: practice, deltaDays: -4))
+    }
+
+    /// Both flags together: the ramp freezes `currentDay` at its target, so the
+    /// final step completing advances to target + 1, not past it.
+    @Test func combinedDualTrackAndRecoveryRampFreezesCurrentDayAtTheTarget() throws {
+        let store = Self.seeded(dualTrack: .primaryDone, recoveryRamp: true)
+
+        let ramp = try #require(DurationRecovery.activeRecovery(DurationRecovery.recoveryFields(from: store.user)))
+        #expect(ramp.recoveryTargetDay == store.user.currentDay)
+        #expect(store.user.currentDay == StillPoint.forkDay + 1)
+        #expect(store.user.dualTrackEnabled)
+        #expect(store.sessions.filter { $0.sessionType == .standard && $0.track != .second }
+            .allSatisfy { $0.dayNumber <= store.user.currentDay })
+    }
+
+    @Test func combinedBothDueAndRampLeavesBothTracksDue() {
+        let store = Self.seeded(dualTrack: .bothDue, recoveryRamp: true)
+
+        #expect(!Self.completedStandardToday(in: store, track: .primary))
+        #expect(!Self.completedStandardToday(in: store, track: .second))
+    }
+
+    // MARK: - Before 6:00 (grace rule)
+
+    /// Before 6:00 with yesterday unfinished, the app's practice day is yesterday.
+    /// A done-today seed must land on that day, or Track One reads as due.
+    @Test func beforeSixPrimaryDoneStampsTheDayTheAppRequests() {
+        let now = Self.localTime(hour: 3)
+        let store = Self.seeded(dualTrack: .primaryDone, recoveryRamp: true, now: now)
+
+        let practice = SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false, now: now)
+        #expect(practice == SessionCalendar.localIsoDate(now: now, offsetDays: -1))
+        let doneSit = store.sessions.first { $0.id == "ui-seed-primary-today" }
+        #expect(doneSit?.sessionDate == practice)
+        #expect(doneSit?.completed == true)
+    }
+
+    /// Before 6:00 with yesterday complete, the practice day is today, so the
+    /// done-today sit stays on the calendar day and yesterday's sits still count.
+    @Test func beforeSixWithYesterdayCompleteStampsToday() {
+        let now = Self.localTime(hour: 3)
+        let store = Self.seeded(dualTrack: .primaryDone, now: now)
+
+        let practice = SessionCalendar.effectiveLocalIsoDate(previousDayComplete: true, now: now)
+        #expect(practice == SessionCalendar.localIsoDate(now: now))
+        let doneSit = store.sessions.first { $0.id == "ui-seed-primary-today" }
+        #expect(doneSit?.sessionDate == practice)
     }
 
     // MARK: - Focus history
@@ -146,13 +215,14 @@ struct UITestStoreStateSeedsTests {
             defaultsKey: key
         ))
 
-        // The launch path seeds from the device clock, so the day to ask about is the real today.
-        let realToday = SessionCalendar.localTodayIsoDate()
+        // The launch path seeds from the device clock. With a ramp, yesterday is
+        // open, so the practice day is the one the seed stamps (before 6:00 it is yesterday).
+        let realToday = SessionCalendar.effectiveLocalIsoDate(previousDayComplete: false)
         let tracks = try await store.getTracksDoneToday(date: realToday)
         #expect(tracks.primary)
         #expect(!tracks.second)
 
         let user = try #require(try await store.me(today: realToday))
-        #expect(user.recoveryTargetDay == 3)
+        #expect(user.recoveryTargetDay == StillPoint.forkDay + 1)
     }
 }
