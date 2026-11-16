@@ -60,6 +60,16 @@ const SUSPENDED_AUDIO_CONTEXT = `
 })();
 `;
 
+/** Makes every IndexedDB open fail, the way a browser with storage refused
+ *  presents it. The offline queue then cannot store a finished sit (#723). */
+const REFUSE_INDEXED_DB = `
+(() => {
+  IDBFactory.prototype.open = function () {
+    throw new DOMException("IndexedDB refused in test", "UnknownError");
+  };
+})();
+`;
+
 /** Records every wake lock request and release on `window.__wake`. */
 const STUB_WAKE_LOCK = `
 (() => {
@@ -226,7 +236,7 @@ test.describe("#688 sound toggle pills @320px", () => {
 
   // #688 acceptance: all four pills on one line at 320px. The two data-sound-toggle
   // pills wrap onto two rows here (measured tops 421px and 472px at 320px on
-  // mobile-chromium-narrow), so this stays fixme until the layout is fixed.
+  // mobile-chromium-narrow). Tracked in Issue #1211; stays fixme until the layout is fixed.
   test.fixme("pills stay on one row at 320px (#688 acceptance, currently wraps)", async ({ page, ensureLoggedIn }) => {
     await ensureLoggedIn();
     await tap(beginButton(page));
@@ -253,5 +263,20 @@ test.describe("#688 sound toggle pills @320px", () => {
     await tapWithControlReveal(page, first);
     await expect(first).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
     await expect(first).toHaveAttribute("data-state", before === "true" ? "off" : "on");
+  });
+});
+
+test.describe("#723 sit not saved when IndexedDB is refused", () => {
+  test("a finished sit shows the not-saved banner and nothing reaches the server", async ({ page, ensureLoggedIn, mockApiState }) => {
+    await page.addInitScript(REFUSE_INDEXED_DB);
+    await ensureLoggedIn();
+    await tap(beginButton(page));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+
+    const banner = page.getByTestId("completion-not-stored");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("this sit was not saved");
+    await expect(page.getByRole("button", { name: "retry save" })).toBeVisible();
+    expect(mockApiState.sessions.length, "a sit the device refused is not uploaded").toBe(0);
   });
 });
