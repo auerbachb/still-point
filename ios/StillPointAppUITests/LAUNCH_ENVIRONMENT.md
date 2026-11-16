@@ -54,6 +54,8 @@ These replace the persisted store with a fixture in the named state, so the seed
 | `SP_UI_TEST_RECOVERY_RAMP=1` | Active recovery ramp (step 2 of 3) back to the open day: day 3, or day 56 with dual track. The last completed Track One sit is four days back, so it reads as a missed-day gap. |
 | `SP_UI_TEST_FOCUS_HISTORY=1` | Three completed web-logged focus sessions over the last three days, numbered from focus day 1: reading, writing, and one with no category. |
 
+With `SP_UI_TEST_DUAL_TRACK=1` or `SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE=1` (exactly `1`), Home also shows the "Combine today's sits" action when the account is offered it (#1215). Every other UI-test launch still hides it, as before, so it cannot push the Begin buttons off screen in existing tests. No new flag: the seeds above are the switch.
+
 The seed code is `UITestStore+StateSeeds.swift` in `StillPointShared`. It is read only when `SP_UI_TEST_MODE=1`, the same guard as every other `SP_UI_TEST_*` flag.
 
 ## Account switching
@@ -66,6 +68,21 @@ The seed code is `UITestStore+StateSeeds.swift` in `StillPointShared`. It is rea
 ## UI-test-only markers
 
 `RootView` shows a UI-test-only marker, `uiTest.settingsRequestCount`, whose accessibility value is the number of Settings requests the fake backend has received since launch (#887).
+
+`SessionView` carries `session.screenComponentsMarker` (#1215), a 1pt clear element present only when `SP_UI_TEST_MODE=1`, whose accessibility value lists the optional components the session screen renders, from the same resolved visibility that gates them: `blockGrid,progressBar,mindStateBar,statusLabel` in that order with hidden ones left out, or `none`. The status label also has the identifier `session.statusLabel`. These are plain accessibility identifiers, read by `VerificationFlowsUITests`; they change nothing outside UI tests.
+
+## Verification tests (#1215)
+
+`VerificationFlowsUITests.swift` holds the tap-dependent checks of Issues #1076, #754, #949 and #1201 (`testIssue<N>_...`). No CI lane lists them, so run them by name:
+
+```bash
+xcodebuild test -project ios/StillPoint.xcodeproj -scheme StillPoint \
+  -destination 'platform=iOS Simulator,id=<udid>' \
+  -only-testing:StillPointAppUITests/StillPointAppUITests/testIssue1201_sessionScreenTogglesHideRestoreAndPersistAcrossRelaunch \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+Each attaches a screenshot at every asserted state (`XCTAttachment`, kept always). `testIssue754_...` toggles the ambient-sound setting, which asks for the microphone; its interruption monitor taps Allow, or grant it first with `xcrun simctl privacy <udid> grant microphone com.brettonauerbach.stillpoint`.
 
 ## Fixture login account
 

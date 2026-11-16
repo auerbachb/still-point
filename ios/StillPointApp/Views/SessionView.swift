@@ -67,6 +67,17 @@ struct SessionView: View {
         ZStack {
             SPColor.bg.ignoresSafeArea()
 
+            // #1215: which optional components render, read from the same resolved
+            // visibility that gates them below, so UI tests can assert on it. Present
+            // only in UI test mode, so production's accessibility tree is unchanged.
+            if ProcessInfo.processInfo.environment["SP_UI_TEST_MODE"] == "1" {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("session.screenComponentsMarker")
+                    .accessibilityValue(screenComponentsSummary)
+            }
+
             GeometryReader { geo in
                 let contentHeight = max(0, geo.size.height - bottomOverlayReserve)
 
@@ -143,6 +154,7 @@ struct SessionView: View {
                                     .font(SPFont.mono(14))
                                     .foregroundStyle(Color(SPColor.fg3))
                                     .tracking(2)
+                                    .accessibilityIdentifier("session.statusLabel")
                             }
                         }
                     }
@@ -634,6 +646,19 @@ struct SessionView: View {
             .opacity(minimalHintVisible ? 1 : 0)
             .accessibilityIdentifier("session.minimalViewHint")
             .accessibilityHidden(!minimalHintVisible)
+    }
+
+    /// Comma-separated names of the optional components currently shown (#1215), or
+    /// "none". Accessibility value of `session.screenComponentsMarker`.
+    private var screenComponentsSummary: String {
+        let visibility = screenVisibility
+        let shown = [
+            visibility.showBlockGrid ? "blockGrid" : nil,
+            visibility.showProgressBar ? "progressBar" : nil,
+            visibility.showMindStateBar ? "mindStateBar" : nil,
+            visibility.showStatusLabel ? "statusLabel" : nil
+        ].compactMap { $0 }
+        return shown.isEmpty ? "none" : shown.joined(separator: ",")
     }
 
     private var secondaryChromeDimmed: Bool {
