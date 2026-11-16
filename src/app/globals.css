@@ -69,6 +69,8 @@
   --accent-green-rgb: 74, 222, 128;
   --accent-blue-rgb: 96, 165, 250;
   --accent-blue-deep-rgb: 59, 130, 246;
+  /* Active hyperfocus label (#1195): dark value is the old literal, light value reads on cream. */
+  --accent-blue-text: rgba(147, 197, 253, 0.95);
 
   /* Layout */
   --bg-rgb: 26, 24, 22;
@@ -101,7 +103,7 @@
   --accent-green-end: #166534;
   --accent-green-strong: rgba(21, 128, 61, 0.85);
   --accent-green-text: rgb(21, 128, 61);
-  --accent-green-dim: rgba(21, 128, 61, 0.7);
+  --accent-green-dim: rgb(21, 128, 61);
   --accent-green-bg: rgba(21, 128, 61, 0.3);
   --accent-green-glow: rgba(21, 128, 61, 0.3);
   --accent-green-muted: rgba(21, 128, 61, 0.25);
@@ -120,7 +122,7 @@
   --accent-amber-bg: rgba(217, 119, 6, 0.16);
   --accent-amber-bg-faint: rgba(217, 119, 6, 0.08);
   --accent-danger: rgba(185, 28, 28, 0.85);
-  --accent-danger-muted: rgba(185, 28, 28, 0.75);
+  --accent-danger-muted: rgba(185, 28, 28, 0.85);
   --accent-danger-border: rgba(185, 28, 28, 0.35);
   --accent-danger-border-subtle: rgba(185, 28, 28, 0.25);
   --overlay-text: rgba(255, 255, 255, 0.96);
@@ -129,6 +131,7 @@
   --accent-green-rgb: 21, 128, 61;
   --accent-blue-rgb: 29, 78, 216;
   --accent-blue-deep-rgb: 30, 64, 175;
+  --accent-blue-text: rgb(30, 64, 175);
   --bg-rgb: 250, 247, 242;
   color-scheme: light;
 }
@@ -149,7 +152,7 @@
     --accent-green-end: #166534;
     --accent-green-strong: rgba(21, 128, 61, 0.85);
     --accent-green-text: rgb(21, 128, 61);
-    --accent-green-dim: rgba(21, 128, 61, 0.7);
+    --accent-green-dim: rgb(21, 128, 61);
     --accent-green-bg: rgba(21, 128, 61, 0.3);
     --accent-green-glow: rgba(21, 128, 61, 0.3);
     --accent-green-muted: rgba(21, 128, 61, 0.25);
@@ -168,7 +171,7 @@
     --accent-amber-bg: rgba(217, 119, 6, 0.16);
     --accent-amber-bg-faint: rgba(217, 119, 6, 0.08);
     --accent-danger: rgba(185, 28, 28, 0.85);
-    --accent-danger-muted: rgba(185, 28, 28, 0.75);
+    --accent-danger-muted: rgba(185, 28, 28, 0.85);
     --accent-danger-border: rgba(185, 28, 28, 0.35);
     --accent-danger-border-subtle: rgba(185, 28, 28, 0.25);
     --overlay-text: rgba(255, 255, 255, 0.96);
@@ -176,6 +179,7 @@
     --accent-green-rgb: 21, 128, 61;
     --accent-blue-rgb: 29, 78, 216;
     --accent-blue-deep-rgb: 30, 64, 175;
+  --accent-blue-text: rgb(30, 64, 175);
     --bg-rgb: 250, 247, 242;
     color-scheme: light;
   }

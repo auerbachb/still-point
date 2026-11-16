@@ -3,10 +3,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // #1195: WCAG AA contrast guard for the light palette (#29). The light values
-// live in globals.css under `:root[data-theme="light"]`; this reads them from the
-// file so the guard fails the moment a light token drops below the bar, without
-// a browser. Text tokens are composited over the light background first, since
-// several are translucent.
+// live in globals.css in two blocks that must stay identical: the explicit
+// choice `:root[data-theme="light"]` and the System-with-OS-light block
+// `:root:not([data-theme="dark"])` under `@media (prefers-color-scheme: light)`.
+// This reads both from the file so the guard fails the moment a light token
+// drops below the bar, without a browser. Text tokens are composited over the
+// light background first, since several are translucent.
 
 const GLOBALS_CSS = resolve(__dirname, "../app/globals.css");
 
@@ -19,13 +21,21 @@ const TEXT_TOKENS = [
   "--accent-green-text",
   "--accent-amber-text",
   "--accent-danger",
+  "--accent-danger-muted",
+  "--accent-green-dim",
+  "--accent-blue-text",
 ] as const;
+
+/** Explicit light choice: html[data-theme="light"] (Settings toggle). */
+const EXPLICIT_LIGHT = ':root[data-theme="light"] {';
+/** System with an OS light preference (no data-theme attribute). */
+const SYSTEM_LIGHT = ':root:not([data-theme="dark"]) {';
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
-function lightBlockDeclarations(css: string): Map<string, string> {
-  const start = css.indexOf(':root[data-theme="light"] {');
-  if (start < 0) throw new Error("light palette block not found in globals.css");
+function blockDeclarations(css: string, opener: string): Map<string, string> {
+  const start = css.indexOf(opener);
+  if (start < 0) throw new Error(`light palette block not found in globals.css: ${opener}`);
   const end = css.indexOf("}", start);
   const body = css.slice(start, end);
   const decls = new Map<string, string>();
@@ -78,17 +88,30 @@ function contrastRatio(a: Rgba, b: Rgba): number {
 
 describe("light palette text contrast (#1195)", () => {
   const css = readFileSync(GLOBALS_CSS, "utf8");
-  const decls = lightBlockDeclarations(css);
-  const bgTriple = decls.get("--bg-rgb");
-  if (!bgTriple) throw new Error("--bg-rgb missing from the light palette");
-  const [br, bgG, bb] = bgTriple.split(",").map((n) => Number(n.trim()));
-  const background: Rgba = { r: br, g: bgG, b: bb, a: 1 };
+  const explicit = blockDeclarations(css, EXPLICIT_LIGHT);
+  const system = blockDeclarations(css, SYSTEM_LIGHT);
 
-  it.each(TEXT_TOKENS)("%s reaches 4.5:1 on the light background", (token) => {
-    const value = decls.get(token);
-    expect(value, `${token} missing from the light palette`).toBeDefined();
-    const text = composite(parseColour(value!), background);
-    const ratio = contrastRatio(text, background);
-    expect(ratio, `${token} contrast ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+  it("the explicit and OS-driven light blocks define identical values", () => {
+    expect([...system.entries()]).toEqual([...explicit.entries()]);
   });
+
+  for (const [name, decls] of [
+    ["explicit light", explicit],
+    ["system light", system],
+  ] as const) {
+    describe(name, () => {
+      const bgTriple = decls.get("--bg-rgb");
+      if (!bgTriple) throw new Error("--bg-rgb missing from the light palette");
+      const [br, bgG, bb] = bgTriple.split(",").map((n) => Number(n.trim()));
+      const background: Rgba = { r: br, g: bgG, b: bb, a: 1 };
+
+      it.each(TEXT_TOKENS)("%s reaches 4.5:1 on the light background", (token) => {
+        const value = decls.get(token);
+        expect(value, `${token} missing from the light palette`).toBeDefined();
+        const text = composite(parseColour(value!), background);
+        const ratio = contrastRatio(text, background);
+        expect(ratio, `${token} contrast ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      });
+    });
+  }
 });

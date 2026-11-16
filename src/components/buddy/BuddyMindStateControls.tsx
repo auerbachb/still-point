@@ -244,7 +244,7 @@ export function BuddyMindStateControls({
               mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)"
             }`,
             color:
-              mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+              mindState === "hyperfocus" ? "var(--accent-blue-text)" : "var(--fg-2)",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.12em",

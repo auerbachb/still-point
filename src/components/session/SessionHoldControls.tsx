@@ -136,7 +136,7 @@ export function SessionHoldControls({
               mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.55)" : "var(--border-2)",
             background:
               mindState === "hyperfocus" ? "rgba(var(--accent-blue-deep-rgb), 0.12)" : "var(--surface-1)",
-            color: mindState === "hyperfocus" ? "rgba(147, 197, 253, 0.95)" : "var(--fg-2)",
+            color: mindState === "hyperfocus" ? "var(--accent-blue-text)" : "var(--fg-2)",
           }}
         >
           <span>{mindState === "hyperfocus" ? "Release" : "Hold"} — hyperfocus</span>

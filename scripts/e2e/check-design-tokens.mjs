@@ -68,6 +68,7 @@ const CSS_ONLY_VARS = new Set([
   "--accent-green-rgb",
   "--accent-blue-rgb",
   "--accent-blue-deep-rgb",
+  "--accent-blue-text",
   "--nav-h",
 ]);
 
