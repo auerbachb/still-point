@@ -39,13 +39,13 @@ const SYSTEM_LIGHT = ':root:not([data-theme="dark"]) {';
  * background. The fill is composited over the light background first, then the
  * text over that. Checking text against cream alone misses these (#1195).
  */
-const TEXT_ON_FILL: ReadonlyArray<readonly [text: string, fill: string, opacity?: number]> = [
-  ["--accent-green-dim", "--accent-green-bg"], // history calendar: meditated day cells
-  ["--accent-green-active-text", "--accent-green-bg-subtle"], // buddy and session active state
-  ["--accent-amber-active-text", "--accent-amber-bg"], // light-distraction active state
+const TEXT_ON_FILL: ReadonlyArray<readonly [text: string, fill: string, opacity: number]> = [
+  ["--accent-green-dim", "--accent-green-bg", 1], // history calendar: meditated day cells
+  ["--accent-green-active-text", "--accent-green-bg-subtle", 1], // buddy and session active state
+  ["--accent-amber-active-text", "--accent-amber-bg", 1], // light-distraction active state
   ["--accent-amber-active-text", "--accent-amber-bg", 0.85], // its "or hold Space" shortcut (opacity .85)
   ["--accent-green-active-text", "--accent-green-bg-subtle", 0.85], // green shortcut at the same opacity
-  ["--accent-amber-note", "--accent-amber-bg-faint"], // amber hint on tinted surfaces
+  ["--accent-amber-note", "--accent-amber-bg-faint", 1], // amber hint on tinted surfaces
 ] as const;
 
 type Rgba = { r: number; g: number; b: number; a: number };
@@ -130,7 +130,7 @@ describe("light palette text contrast (#1195)", () => {
         expect(ratio, `${token} contrast ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       });
 
-      it.each(TEXT_ON_FILL)("%s reaches 4.5:1 on %s as drawn (opacity %s)", (textToken, fillToken, opacity = 1) => {
+      it.each(TEXT_ON_FILL)("%s reaches 4.5:1 on %s as drawn (opacity %s)", (textToken, fillToken, opacity) => {
         const textValue = decls.get(textToken);
         const fillValue = decls.get(fillToken);
         expect(textValue, `${textToken} missing from the light palette`).toBeDefined();
