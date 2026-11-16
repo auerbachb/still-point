@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   DEFAULT_THEME_PREFERENCE,
   THEME_STORAGE_KEY,
@@ -12,6 +12,12 @@ import {
   type ResolvedTheme,
   type ThemePreference,
 } from "@/lib/theme";
+import { readSystemPrefersDark, subscribeSystemPrefersDark } from "@/lib/themeSync";
+
+// Module-scope so useSyncExternalStore keeps one stable subscription.
+const subscribeSystem = (onChange: () => void) => subscribeSystemPrefersDark(window, onChange);
+const readSystem = () => readSystemPrefersDark(window);
+const serverSystem = () => false;
 
 /**
  * The user's theme choice, plus the theme actually on screen. Sets `data-theme`
@@ -27,30 +33,25 @@ export function useThemePreference(): {
   // Seeded to the default so server and first client render match. The inline
   // script in the root layout has already set the real attribute by then.
   const [preference, setPreferenceState] = useState<ThemePreference>(DEFAULT_THEME_PREFERENCE);
-  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+  // useSyncExternalStore: the server snapshot is `false` so hydration matches, and the
+  // client then reads the real OS value before paint, with no flash of "light".
+  const systemPrefersDark = useSyncExternalStore(subscribeSystem, readSystem, serverSystem);
 
   useEffect(() => {
     const stored = loadThemePreference();
     setPreferenceState(stored);
     applyThemeAttribute(document.documentElement, stored);
 
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const syncSystem = () => setSystemPrefersDark(Boolean(media?.matches));
-    syncSystem();
-    media?.addEventListener?.("change", syncSystem);
-
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== THEME_STORAGE_KEY) return;
-      const next = parseThemePreference(event.newValue);
+      // key === null is localStorage.clear(): re-read the stored value.
+      if (event.key !== null && event.key !== THEME_STORAGE_KEY) return;
+      const next = event.key === null ? loadThemePreference() : parseThemePreference(event.newValue);
       setPreferenceState(next);
       applyThemeAttribute(document.documentElement, next);
     };
     window.addEventListener("storage", onStorage);
 
-    return () => {
-      media?.removeEventListener?.("change", syncSystem);
-      window.removeEventListener("storage", onStorage);
-    };
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const setPreference = useCallback((next: ThemePreference) => {

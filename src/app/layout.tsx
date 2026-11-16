@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* #29: apply the saved light/dark choice before first paint, so no frame
             paints in the wrong theme. Static constant; no user input reaches it. */}
