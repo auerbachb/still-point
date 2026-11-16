@@ -147,6 +147,7 @@
 		BD23A540968EF65ED9D78BB9 /* SPCapsuleButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8346D8CE226D10233390A50B /* SPCapsuleButtonStyle.swift */; };
 		BD77E7316F2586D24570DB43 /* StillPointModels in Frameworks */ = {isa = PBXBuildFile; productRef = 3721E56DA4F151AE3CD5DC71 /* StillPointModels */; };
 		C0FD436A962D0DC179B37D73 /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34376705757DF9CD77D013A /* NotificationsSettingsView.swift */; };
+		C10286C4BFA41824E52B9AAE /* SandCarrierView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CEF924AA8AB8BF6DDB6E3F2 /* SandCarrierView.swift */; };
 		C57D92D33ED679E23F5E2E49 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4B1423B22DD22F5B6E069 /* DesignTokens.swift */; };
 		C61186B5C40858893D8537B0 /* UsernameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6CF1C7BF6522F5CC9AAA71 /* UsernameEditView.swift */; };
 		C64F787BACC2BE769E52A7BF /* 20.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A67F4472FF0000695B602855 /* 20.mp3 */; };
@@ -260,6 +261,7 @@
 		218693B76FDAF56B6E0321DE /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		256101C55C4E5EF9CE549FCA /* 49.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 49.mp3; sourceTree = "<group>"; };
+		2CEF924AA8AB8BF6DDB6E3F2 /* SandCarrierView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SandCarrierView.swift; sourceTree = "<group>"; };
 		2E5B29D01B4C3DF0E50DF5C5 /* SessionPhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPhotoStore.swift; sourceTree = "<group>"; };
 		2F95E6E47148AEF494393FDB /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
 		2FF304356E66657666901E4F /* SessionStateBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateBadge.swift; sourceTree = "<group>"; };
@@ -530,6 +532,7 @@
 				7CB771FA099C779B2F3A86AB /* MindStateBarView.swift */,
 				C3A73516741CC23494C435D7 /* OfflineIndicatorView.swift */,
 				09DD5F417FDE26DAF6433E65 /* PathwayView.swift */,
+				2CEF924AA8AB8BF6DDB6E3F2 /* SandCarrierView.swift */,
 				5913E368765613B739CB5374 /* SessionIntroOverlayView.swift */,
 				71A71F34D9A1ED328C5438F7 /* ThoughtCaptureView.swift */,
 			);
@@ -1107,6 +1110,7 @@
 				EA20FAB8B6D3C8B249AFAF82 /* PushNotificationCoordinator.swift in Sources */,
 				15177B86F124B5A10AB03456 /* RootView.swift in Sources */,
 				BD23A540968EF65ED9D78BB9 /* SPCapsuleButtonStyle.swift in Sources */,
+				C10286C4BFA41824E52B9AAE /* SandCarrierView.swift in Sources */,
 				30AEF9D9DF3820CF00E882E3 /* SessionDeepLinkParser.swift in Sources */,
 				E72B904E4F87A91D52EBF826 /* SessionIdleTimerController.swift in Sources */,
 				13ED52B747CBA05F9C319B13 /* SessionIntroOverlayView.swift in Sources */,

@@ -21,6 +21,9 @@ struct SessionView: View {
     /// #669 "just the timer": seeded from the persisted preference so the choice
     /// carries into the next sit, and written back whenever it is toggled.
     @State private var minimalView: Bool
+    /// #1190: opt-in sand-carrier display for the full solo view, seeded from the
+    /// persisted preference at init and written back when the toggle is tapped.
+    @State private var sandAnimation: Bool
     /// Drives the fade-out "tap to come back" hint each time minimal view is entered.
     @State private var minimalHintVisible = false
     @State private var minimalHintToken = 0
@@ -52,6 +55,8 @@ struct SessionView: View {
         // #669: restore the last-used view mode before the first frame so a sit
         // that should start minimal never flashes the full screen first.
         self._minimalView = State(initialValue: MinimalSessionViewPrefs.isMinimalSessionViewEnabled)
+        // #1190: same pre-first-frame seeding for the sand display preference.
+        self._sandAnimation = State(initialValue: TimerDisplayPrefs.isSandAnimationEnabled)
     }
 
     var body: some View {
@@ -68,16 +73,27 @@ struct SessionView: View {
                             Spacer(minLength: 0)
                         }
 
-                        // Timer display
-                        Text(vm.timeString)
-                            .font(SPFont.timerDisplay)
-                            .foregroundStyle(
-                                vm.isComplete ? SPColor.green : Color(SPColor.fg)
-                            )
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                            .accessibilityIdentifier("session.timerLabel")
-                            .accessibilityLabel("Time remaining \(vm.timeString)")
+                        // Timer display. #1190: in the full view with sand on, the carrier
+                        // scene shows the sit and the digits go transparent. The Text stays
+                        // in the tree so `session.timerLabel` and its "Time remaining"
+                        // label still answer VoiceOver and UI tests.
+                        ZStack {
+                            if sandShown {
+                                SandCarrierView(elapsed: vm.elapsed, totalSeconds: Double(vm.totalSeconds))
+                            }
+                            Text(vm.timeString)
+                                .font(SPFont.timerDisplay)
+                                .foregroundStyle(
+                                    vm.isComplete ? SPColor.green : Color(SPColor.fg)
+                                )
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
+                                .opacity(sandShown ? 0 : 1)
+                                .accessibilityIdentifier("session.timerLabel")
+                                .accessibilityLabel("Time remaining \(vm.timeString)")
+                                // Visibility state for UI tests: "sand" hides the digits.
+                                .accessibilityValue(sandShown ? "sand" : "digits")
+                        }
 
                         // #669: minimal view is the countdown alone — everything below
                         // it is chrome and goes away until the user taps to come back.
@@ -85,6 +101,8 @@ struct SessionView: View {
                             minimalViewHint
                             Spacer(minLength: 0)
                         } else {
+                            sandToggleButton
+
                             // 60-second progress bar
                             progressBar
 
@@ -400,6 +418,32 @@ struct SessionView: View {
         } message: {
             Text(attentionManager.lastFailureMessage ?? "The ARKit session stopped unexpectedly. Your sit continues without gaze tracking.")
         }
+    }
+
+    // MARK: - Sand Timer Display (#1190)
+
+    /// Sand replaces the digits only in the full view. Minimal view always shows digits
+    /// and leaves the saved preference alone.
+    private var sandShown: Bool {
+        sandAnimation && !minimalView
+    }
+
+    /// Labeled switch between the sand carrier and the digits. Writes the preference, so
+    /// the choice carries into the next sit. 44 pt target, outside the hold-gesture area.
+    private var sandToggleButton: some View {
+        Button {
+            sandAnimation.toggle()
+            TimerDisplayPrefs.setSandAnimationEnabled(sandAnimation)
+        } label: {
+            Text(sandAnimation ? "Show digits" : "Show sand timer")
+                .font(SPFont.mono(13))
+                .foregroundStyle(Color(SPColor.fg2))
+                .frame(minHeight: 44)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("session.sandToggle")
     }
 
     // MARK: - Progress Bar
