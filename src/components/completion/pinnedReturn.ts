@@ -19,11 +19,25 @@ export function shouldPinReturnButton(compact: boolean, supported: boolean = ret
 }
 
 /**
- * Scroll padding for the compact recap. The nav's clearance is always
- * reserved. The pinned button's extra 52px (44px min height + 8px top margin)
- * is reserved only while the button is actually pinned above the nav.
+ * The clearance the pinned button needs above the nav: its rendered height plus
+ * its top margin. Text zoom or wrapping can make the button taller than its
+ * 44px minimum, so this is measured rather than assumed.
  */
-export function compactScrollPaddingBottom(pinned: boolean): string {
+export function pinnedClearancePx(buttonHeight: number, buttonMarginTop: number): number {
+  return Math.ceil(buttonHeight + buttonMarginTop);
+}
+
+/** Clearance used before the button has been measured: its 44px minimum plus 8px margin. */
+export const PINNED_CLEARANCE_FALLBACK_PX = 52;
+
+/**
+ * Scroll padding for the compact recap. The nav's clearance is always
+ * reserved. The pinned button's measured clearance is reserved only while the
+ * button is actually pinned above the nav.
+ */
+export function compactScrollPaddingBottom(pinned: boolean, measuredPinPx?: number): string {
   const navClearance = "var(--nav-h) + env(safe-area-inset-bottom, 0px)";
-  return pinned ? `calc(${navClearance} + 52px)` : `calc(${navClearance})`;
+  if (!pinned) return `calc(${navClearance})`;
+  const extra = measuredPinPx ?? PINNED_CLEARANCE_FALLBACK_PX;
+  return `calc(${navClearance} + ${extra}px)`;
 }

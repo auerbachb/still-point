@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   compactScrollPaddingBottom,
+  pinnedClearancePx,
   returnPinSupported,
   shouldPinReturnButton,
 } from "@/components/completion/pinnedReturn";
@@ -47,15 +48,34 @@ describe("shouldPinReturnButton (#979)", () => {
 });
 
 describe("compactScrollPaddingBottom (#979)", () => {
-  test("reserves the nav clearance plus the pinned button's 52px when pinned", () => {
+  test("falls back to the 44px minimum plus 8px margin when pinned and unmeasured", () => {
     expect(compactScrollPaddingBottom(true)).toBe(
       "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 52px)",
     );
   });
 
-  test("reserves only the nav clearance when the pin does not apply", () => {
+  test("reserves the measured clearance of a taller pinned button", () => {
+    // Text zoom makes the button 76px tall; with its 8px margin, 84px must clear.
+    const measured = pinnedClearancePx(76, 8);
+    expect(measured).toBe(84);
+    expect(compactScrollPaddingBottom(true, measured)).toBe(
+      "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 84px)",
+    );
+  });
+
+  test("ignores any measurement when the pin does not apply", () => {
     expect(compactScrollPaddingBottom(false)).toBe(
       "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))",
     );
+    expect(compactScrollPaddingBottom(false, 84)).toBe(
+      "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))",
+    );
+  });
+});
+
+describe("pinnedClearancePx (#979)", () => {
+  test("is the rendered height plus the top margin, rounded up", () => {
+    expect(pinnedClearancePx(44, 8)).toBe(52);
+    expect(pinnedClearancePx(43.2, 8)).toBe(52);
   });
 });

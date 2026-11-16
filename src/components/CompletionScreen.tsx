@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import type { SessionType } from "@/lib/constants";
 import type { MoodEntry } from "@/components/MoodMatrix";
 import { COMPLETION_RETURN_LABEL } from "@/lib/completionAutosave";
@@ -80,7 +81,8 @@ export function CompletionScreen({
   const { returning } = autosave;
   // #979: the pin is decided once here, for both the button and the scroll padding.
   const pinned = shouldPinReturnButton(compact);
-  useCompactScrollPadding(compact, pinned);
+  const bottomReturnRef = useRef<HTMLButtonElement>(null);
+  useCompactScrollPadding(compact, pinned, bottomReturnRef);
 
   // One handler and one disabled state for both copies (#1183): the top button
   // saves the same way, so the owner never has to scroll to leave.
@@ -92,6 +94,7 @@ export function CompletionScreen({
     return (
       <button
         type="button"
+        ref={position === "bottom" ? bottomReturnRef : undefined}
         data-testid={`completion-return-${position}`}
         onClick={() => { void autosave.handleReturn(); }}
         disabled={returning}
