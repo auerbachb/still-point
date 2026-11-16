@@ -70,6 +70,21 @@ const REFUSE_INDEXED_DB = `
 })();
 `;
 
+/** Refuses IndexedDB asynchronously: `open()` returns a request whose
+ *  `onerror` fires on a later task, as a real storage refusal does. */
+const REFUSE_INDEXED_DB_ASYNC = `
+(() => {
+  IDBFactory.prototype.open = function () {
+    const request = { result: undefined, error: null, onerror: null, onsuccess: null, onupgradeneeded: null };
+    setTimeout(() => {
+      request.error = new DOMException("IndexedDB refused in test", "UnknownError");
+      if (request.onerror) request.onerror({ target: request });
+    }, 0);
+    return request;
+  };
+})();
+`;
+
 /** Records every wake lock request and explicit release on `window.__wake`.
  *  `window.__wake.systemRelease()` models the browser dropping the lock while
  *  the page stays visible: it marks the sentinel released and fires its
@@ -262,6 +277,14 @@ test.describe("#725 web screen wake lock", () => {
 
     await expect(page.locator("[data-session-timer-digits]")).toBeVisible();
     await expect(page.getByRole("button", { name: /end early/i })).toBeVisible();
+    // The sit is running, not merely on screen: the pause control is in its
+    // running state and the countdown moves after the refused request.
+    await expect(page.getByRole("button", { name: "pause", exact: true })).toBeVisible();
+    const digits = page.locator("[data-session-timer-digits]");
+    const firstReading = await digits.textContent();
+    await expect
+      .poll(() => digits.textContent(), "countdown advances after the rejected lock request")
+      .not.toBe(firstReading);
     expect(pageErrors, "no uncaught error from the rejected wake lock").toEqual([]);
   });
 
@@ -371,5 +394,17 @@ test.describe("#723 sit not saved when IndexedDB is refused", () => {
     await expect(banner).toContainText("this sit was not saved");
     await expect(page.getByRole("button", { name: "retry save" })).toBeVisible();
     expect(mockApiState.sessions.length, "a sit the device refused is not uploaded").toBe(0);
+  });
+
+  test("an asynchronous IndexedDB refusal (onerror on a later task) shows the same banner", async ({ page, ensureLoggedIn, mockApiState }) => {
+    await page.addInitScript(REFUSE_INDEXED_DB_ASYNC);
+    await ensureLoggedIn();
+    await tap(beginButton(page));
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+
+    const banner = page.getByTestId("completion-not-stored");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("this sit was not saved");
+    expect(mockApiState.sessions.length, "an asynchronously refused sit is not uploaded").toBe(0);
   });
 });
