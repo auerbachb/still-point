@@ -7,6 +7,7 @@ import { CompletionSummary } from "@/components/completion/CompletionSummary";
 import { MoodShiftSection, SessionNoteField } from "@/components/completion/CompletionFields";
 import { NotStoredBanner } from "@/components/completion/NotStoredBanner";
 import { ParkedBanner } from "@/components/completion/ParkedBanner";
+import { shouldPinReturnButton } from "@/components/completion/pinnedReturn";
 import { useCompactScrollPadding } from "@/components/completion/useCompactScrollPadding";
 import { useCompletionAutosave } from "@/components/completion/useCompletionAutosave";
 
@@ -77,7 +78,9 @@ export function CompletionScreen({
     onClearMoodMatrix,
   });
   const { returning } = autosave;
-  useCompactScrollPadding(compact);
+  // #979: the pin is decided once here, for both the button and the scroll padding.
+  const pinned = shouldPinReturnButton(compact);
+  useCompactScrollPadding(compact, pinned);
 
   // One handler and one disabled state for both copies (#1183): the top button
   // saves the same way, so the owner never has to scroll to leave.
@@ -85,7 +88,7 @@ export function CompletionScreen({
   // inside the recap, so it returns to its in-flow spot at the document end).
   // The pill gets the page background so the text behind it does not show.
   const returnButton = (position: "top" | "bottom") => {
-    const pin = compact && position === "bottom";
+    const pin = pinned && position === "bottom";
     return (
       <button
         type="button"

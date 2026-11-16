@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { compactScrollPaddingBottom } from "@/components/completion/pinnedReturn";
 
 /**
  * #960: on phones the fixed bottom nav covers the bottom of the viewport, and
@@ -9,18 +10,18 @@ import { useEffect } from "react";
  * padding: anything that scrolls a recap control into view then stops it
  * above the nav. A scroll margin on the button itself (#479) was not enough,
  * because WebKit ignores it when it brings the button into view.
+ *
+ * `pinned` is whether the bottom return button is pinned above the nav (#979),
+ * which adds its extra clearance. It is false where the pin does not engage.
  */
-export function useCompactScrollPadding(compact: boolean): void {
+export function useCompactScrollPadding(compact: boolean, pinned: boolean): void {
   useEffect(() => {
     if (!compact) return;
     const root = document.documentElement;
     const previous = root.style.scrollPaddingBottom;
-    // #979: the pinned return button (44px min height + 8px top margin) sits
-    // above the nav, so scroll-into-view stops controls above it as well.
-    root.style.scrollPaddingBottom =
-      "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 52px)";
+    root.style.scrollPaddingBottom = compactScrollPaddingBottom(pinned);
     return () => {
       root.style.scrollPaddingBottom = previous;
     };
-  }, [compact]);
+  }, [compact, pinned]);
 }

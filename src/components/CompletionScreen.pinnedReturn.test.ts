@@ -4,7 +4,7 @@
  * above the bottom nav with `position: sticky`. The top button and the desktop
  * recap keep their normal flow.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   render,
   resetCompletionScreenHarness,
@@ -12,12 +12,33 @@ import {
   setUpCompletionScreenHarness,
 } from "@/lib/testing/completionScreenHarness";
 
-beforeEach(setUpCompletionScreenHarness);
-afterEach(resetCompletionScreenHarness);
+/** Whether the browser under test supports `overflow-x: clip` (the pin needs it). */
+function stubClipSupport(supported: boolean): void {
+  vi.stubGlobal("CSS", { supports: (property: string, value: string) => supported && property === "overflow-x" && value === "clip" });
+}
+
+beforeEach(() => {
+  setUpCompletionScreenHarness();
+  stubClipSupport(true);
+});
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  await resetCompletionScreenHarness();
+});
 
 const NAV_CLEARANCE = "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))";
 
 describe("CompletionScreen pinned return button (#979)", () => {
+  test("leaves the bottom button in flow where overflow-x clip is unsupported", async () => {
+    stubClipSupport(false);
+    await render({ compact: true });
+
+    const bottom = returnButton("bottom");
+    expect(bottom.style.position).toBe("");
+    expect(bottom.style.bottom).toBe("");
+    expect(bottom.style.background).toBe("none");
+  });
+
   test("pins the bottom button above the nav on compact layouts", async () => {
     await render({ compact: true });
 

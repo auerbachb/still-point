@@ -92,13 +92,11 @@ async function openRecap(page: Page, ensureLoggedIn: () => Promise<unknown>) {
 test.describe("#960 recap return button clears the bottom nav at any recap height", () => {
   for (const [name, start] of Object.entries(STARTS)) {
     test(`when it starts ${name}`, async ({ page, ensureLoggedIn }) => {
-      await ensureLoggedIn();
-      await tap(page.getByRole("button", { name: "Begin", exact: true }));
-      await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+      // One sit, completed once: openRecap is the only path that begins it.
+      await openRecap(page, ensureLoggedIn);
 
       const returnButton = page.getByTestId("completion-return-bottom");
       const navBar = page.getByTestId("app-nav");
-      await openRecap(page, ensureLoggedIn);
       await expect(navBar).toBeVisible();
 
       const button = await inFlowBoxAtTop(returnButton);
