@@ -42,6 +42,19 @@ Add a new knob as one row in the table that fits, naming the issue that added it
 | `SP_UI_TEST_FORCE_CREATE_SESSION_FAILURE=1` | #875: every `createSession` fails as a dead network does, so a completed sit stays pending sync. |
 | `SP_UI_TEST_FORCE_USERNAME_CONFLICT=1` | Simulate a username taken on Settings save. |
 
+## Account state (#1199)
+
+These replace the persisted store with a fixture in the named state, so the seed applies on every launch. They're counted back from the practice day (the device clock, with the 6:00 grace rule), and the store's `me()` answers with the seeded recovery ramp. They don't seed a clock or buddy invites; see the open follow-up in the PR.
+
+| Key | Effect |
+|-----|--------|
+| `SP_UI_TEST_DUAL_TRACK=1` | Dual-track account past the fork (day 56) with both tracks due: Track Two on, no sit today, one Track One and one Track Two sit yesterday. |
+| `SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE=1` | As above with a completed Track One sit today, so only Track Two is due. Wins over `SP_UI_TEST_DUAL_TRACK`. |
+| `SP_UI_TEST_RECOVERY_RAMP=1` | Active recovery ramp (step 2 of 3) back to the open day: day 3, or day 56 with dual track. The last completed Track One sit is four days back, so it reads as a missed-day gap. |
+| `SP_UI_TEST_FOCUS_HISTORY=1` | Three completed web-logged focus sessions over the last three days, numbered from focus day 1: reading, writing, and one with no category. |
+
+The seed code is `UITestStore+StateSeeds.swift` in `StillPointShared`. It is read only when `SP_UI_TEST_MODE=1`, the same guard as every other `SP_UI_TEST_*` flag.
+
 ## Account switching
 
 | Key | Effect |
