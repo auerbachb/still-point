@@ -74,6 +74,9 @@ struct SettingsView: View {
                     isUpdatingAmbientSound: $isUpdatingAmbientSound
                 )
 
+                // #75: device-local, so it sits outside the account-backed sections.
+                SettingsSessionScreenSection()
+
                 SettingsVisibilitySection(
                     appVM: appVM,
                     isSavingSettings: isSavingSettings,
