@@ -612,12 +612,16 @@ final class StillPointAppUITests: XCTestCase {
         let timerLabel = app.staticTexts["session.timerLabel"]
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Full view with sand on: the digits are transparent, so the value says "sand".
+        XCTAssertEqual(timerLabel.value as? String, "sand")
 
         let minimalToggle = app.buttons["session.minimalViewToggle"]
         XCTAssertTrue(minimalToggle.waitForExistence(timeout: 8))
         minimalToggle.tap()
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Minimal view always shows digits, so the value must say "digits".
+        XCTAssertEqual(timerLabel.value as? String, "digits")
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "sand-timer-minimal-view"

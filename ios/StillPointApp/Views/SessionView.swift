@@ -91,6 +91,8 @@ struct SessionView: View {
                                 .opacity(sandShown ? 0 : 1)
                                 .accessibilityIdentifier("session.timerLabel")
                                 .accessibilityLabel("Time remaining \(vm.timeString)")
+                                // Visibility state for UI tests: "sand" hides the digits.
+                                .accessibilityValue(sandShown ? "sand" : "digits")
                         }
 
                         // #669: minimal view is the countdown alone — everything below

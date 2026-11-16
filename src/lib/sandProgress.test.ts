@@ -37,7 +37,8 @@ describe("sandProgress shared golden fixture (#1190)", () => {
         "carrierPosition",
         "walkPhase",
       ] as const) {
-        expect(state[key]).toBeCloseTo(expected[key], 9);
+        // Same tolerance as the Swift port (SandProgressTests: 1e-9, strict less-than).
+        expect(Math.abs(state[key] - expected[key])).toBeLessThan(1e-9);
       }
     });
   }
