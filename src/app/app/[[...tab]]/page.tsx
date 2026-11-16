@@ -8,6 +8,7 @@ import { HomeView } from "@/components/HomeView";
 import { SessionView } from "@/components/SessionView";
 import { BreathCountView } from "@/components/BreathCountView";
 import { FocusActivityView, unlockFocusCompletionAudio } from "@/components/FocusActivityView";
+import { FocusGamesView } from "@/components/FocusGamesView";
 import { FocusCategoryPicker } from "@/components/FocusCategoryPicker";
 import { CompletionScreen } from "@/components/CompletionScreen";
 import { HistoryView } from "@/components/HistoryView";
@@ -24,6 +25,7 @@ import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { suppressedOfflineIndicatorState } from "@/lib/offlineIndicatorCopy";
 import { api, ApiError } from "@/lib/api";
 import { DEFAULT_TAB, isTab, pathForTab, type Tab } from "@/lib/appTabs";
+import { FOCUS_GAME_CATEGORY } from "@/lib/constants";
 import type { FocusCategory, SessionType, Track } from "@/lib/constants";
 import { combinedDurationForUser, isCombineOffered } from "@/lib/combinedSit";
 import { activeRecovery, focusSessionDuration, isDualTrackEligible } from "@/lib/duration";
@@ -432,7 +434,7 @@ export default function StillPoint() {
   }, [user, setCompletionData, refreshTodayTracks, refreshUserFromServer]);
 
   const inBuddyRoom = tab === "buddy" && !!buddySessionId;
-  const isImmersive = overlay === "session" || overlay === "breath" || overlay === "focus" || inBuddyRoom;
+  const isImmersive = overlay === "session" || overlay === "breath" || overlay === "focus" || overlay === "focusGames" || inBuddyRoom;
 
   // Loading state
   if (!authChecked) {
@@ -655,6 +657,12 @@ export default function StillPoint() {
         <BreathCountView onEnd={handleBreathEnd} />
       )}
 
+      {/* #680: the focus game saves as a focus session under the "game" category, so it
+          steps the focus goal and reaches History like any focus activity. */}
+      {overlay === "focusGames" && (
+        <FocusGamesView onEnd={(result) => handleFocusEnd(result, FOCUS_GAME_CATEGORY)} />
+      )}
+
       {overlay === "focusPicker" && (
         <FocusCategoryPicker
           goalSeconds={focusSessionDuration(user.focusActivityDay ?? 1)}
@@ -798,6 +806,7 @@ export default function StillPoint() {
           onDismissFork={() => setForkDismissed(true)}
           onQuickBegin={() => handleBegin("quick")}
           onBreath={() => setOverlay("breath")}
+          onFocusGames={() => setOverlay("focusGames")}
           focusActivityDay={user.focusActivityDay ?? 1}
           onFocusActivity={() => setOverlay("focusPicker")}
           focusActivityButtonRef={focusActivityButtonRef}

@@ -1,4 +1,4 @@
-import { isFocusCategory, type FocusCategory } from "./constants";
+import { FOCUS_GAME_CATEGORY, isFocusCategory, type FocusCategory } from "./constants";
 
 /** #837: one focus activity as the picker shows it. */
 export type FocusActivityDefinition = {
@@ -40,5 +40,7 @@ export function focusActivityById(id: FocusCategory): FocusActivityDefinition {
  * this client does not know yet, rather than failing to render.
  */
 export function focusSessionLabel(category: string | null | undefined): string {
-  return isFocusCategory(category) ? `Focus · ${focusActivityById(category).label}` : "Focus";
+  // #680: the focus game is a focus row with its own kind, not a picker card.
+  if (category === FOCUS_GAME_CATEGORY) return "Focus · Game";
+  return isFocusCategory(category) ? `Focus · ${focusActivityById(category as FocusCategory).label}` : "Focus";
 }
