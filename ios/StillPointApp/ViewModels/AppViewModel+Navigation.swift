@@ -22,6 +22,21 @@ extension AppViewModel {
 
     // MARK: - #840 Focus activity
 
+    /// Home's "Focus games" button (#1192): the game's own setup screen comes first.
+    func beginFocusGame() {
+        currentView = .focusGame(focusActivityDay: focusActivityDay)
+    }
+
+    /// The game's setup screen Back, or the game's own dismissal: nothing is saved, and
+    /// the buddy invite held back during the game is retried, as the focus picker's Cancel does.
+    /// Only from the game, so a late tap cannot leave some other screen.
+    func cancelFocusGame() {
+        guard case .focusGame = currentView else { return }
+        focusGameInProgress = false
+        currentView = .home
+        scheduleBuddyInviteConsume()
+    }
+
     /// Home's "Focus activity" button: choose a category first.
     func beginFocusActivity() {
         currentView = .focusPicker

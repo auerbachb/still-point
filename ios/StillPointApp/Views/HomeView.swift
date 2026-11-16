@@ -195,6 +195,17 @@ struct HomeView: View {
             .accessibilityIdentifier("home.breathCountingButton")
             .accessibilityLabel("Start breath counting")
 
+            // #1192: the grid-tap game (web #680), its own setup screen and category `game`.
+            Button {
+                withAnimation {
+                    appVM.beginFocusGame()
+                }
+            } label: {
+                secondaryActionLabel("Focus games", color: .neutral)
+            }
+            .accessibilityIdentifier("home.focusGameButton")
+            .accessibilityLabel("Start focus game")
+
             // #840: today's focus goal, one for every category.
             Button {
                 withAnimation {

@@ -65,6 +65,13 @@ const CSS_ONLY_VARS = new Set([
   "--accent-amber-muted",
   "--accent-danger-border",
   "--overlay-bg",
+  "--accent-green-rgb",
+  "--accent-blue-rgb",
+  "--accent-blue-deep-rgb",
+  "--accent-blue-text",
+  "--accent-amber-active-text",
+  "--accent-green-active-text",
+  "--accent-amber-note",
   "--nav-h",
 ]);
 

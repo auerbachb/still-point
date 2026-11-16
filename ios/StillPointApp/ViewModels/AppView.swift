@@ -34,6 +34,9 @@ enum AppView: Equatable {
     /// #840: a running focus session. Carries the goal counter it started on, so a
     /// refresh landing mid-session cannot move the goal being counted down to.
     case focusActivity(category: FocusCategory, focusActivityDay: Int)
+    /// #1192: the grid-tap focus game (web #680). Carries the goal counter it started
+    /// on, for the same reason as `focusActivity`.
+    case focusGame(focusActivityDay: Int)
     case logReason(date: String)
     case history
     case journal
@@ -55,6 +58,8 @@ enum AppView: Equatable {
             return lhsType == rhsType && lhsTrack == rhsTrack && lhsCombined == rhsCombined
         case let (.focusActivity(lhsCategory, lhsDay), .focusActivity(rhsCategory, rhsDay)):
             return lhsCategory == rhsCategory && lhsDay == rhsDay
+        case let (.focusGame(lhsDay), .focusGame(rhsDay)):
+            return lhsDay == rhsDay
         case let (.buddySession(lhsSessionId), .buddySession(rhsSessionId)):
             return lhsSessionId == rhsSessionId
         case let (.buddyCalendarWithBuddy(lhsId, lhsName), .buddyCalendarWithBuddy(rhsId, rhsName)):

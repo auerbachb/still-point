@@ -28,7 +28,8 @@ extension XCTestCase {
         forceBreathCounting: Bool = false,
         forceBuddyHub: Bool = false,
         holdMeSeconds: Double? = nil,
-        secondAccount: Bool = false
+        secondAccount: Bool = false,
+        forceFocusGame: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SP_UI_TEST_MODE"] = "1"
@@ -49,6 +50,7 @@ extension XCTestCase {
         app.launchEnvironment["SP_UI_TEST_FORCE_USERNAME_CONFLICT"] = forceUsernameConflict ? "1" : "0"
         app.launchEnvironment["SP_UI_TEST_HOLD_ME_SECONDS"] = holdMeSeconds.map { String($0) } ?? "0"
         app.launchEnvironment["SP_UI_TEST_SECOND_ACCOUNT"] = secondAccount ? "1" : "0"
+        app.launchEnvironment["SP_UI_TEST_FORCE_FOCUS_GAME"] = forceFocusGame ? "1" : "0"
         return app
     }
 

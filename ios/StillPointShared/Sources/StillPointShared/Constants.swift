@@ -18,14 +18,22 @@ public enum FocusCategory: String, Codable, Sendable, CaseIterable {
     case reading
     case writing
     case listening
+    /// #1192: the grid-tap focus game (web #680). Saved as a focus session under this
+    /// category, but it is not a picker card, so `pickerCases` leaves it out.
+    case game
+
+    /// The three picker cards, in order. The game is started from its own Home entry.
+    public static let pickerCases: [FocusCategory] = [.reading, .writing, .listening]
 
     /// The category's name as the picker and History show it. Mirrors web
-    /// `FOCUS_ACTIVITIES` (`src/lib/focusActivityContent.ts`).
+    /// `FOCUS_ACTIVITIES` (`src/lib/focusActivityContent.ts`) and the "Focus · Game"
+    /// label of `focusSessionLabel`.
     public var displayLabel: String {
         switch self {
         case .reading: return "Reading"
         case .writing: return "Writing"
         case .listening: return "Listening"
+        case .game: return "Game"
         }
     }
 
