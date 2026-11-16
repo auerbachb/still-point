@@ -120,9 +120,9 @@ struct FocusActivityLogicTests {
     @Test func testPickerCategoriesMatchSharedFixture() throws {
         let fixture = try loadFixture()
 
-        #expect(FocusCategory.allCases.map(\.rawValue) == fixture.categories.map(\.id))
-        #expect(FocusCategory.allCases.map(\.displayLabel) == fixture.categories.map(\.label))
-        #expect(FocusCategory.allCases.map(\.pickerDescription) == fixture.categories.map(\.description))
+        #expect(FocusCategory.pickerCases.map(\.rawValue) == fixture.categories.map(\.id))
+        #expect(FocusCategory.pickerCases.map(\.displayLabel) == fixture.categories.map(\.label))
+        #expect(FocusCategory.pickerCases.map(\.pickerDescription) == fixture.categories.map(\.description))
     }
 
     // MARK: - Text

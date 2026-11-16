@@ -121,6 +121,10 @@ struct CompletionView: View {
                         .accessibilityIdentifier("completion.durationLabel")
                 }
 
+                // #1183: the same return button at the top, so the owner does not
+                // scroll for it. Shares `saveAndReturnHome()` and `isReturning`.
+                returnHomeButton(identifier: "completion.returnButtonTop")
+
                 CompletionStatsSection(
                     clearPercent: clearPercent,
                     thoughtCount: thoughtCount,
@@ -220,15 +224,7 @@ struct CompletionView: View {
                     )
                 }
 
-                Button {
-                    Task { await saveAndReturnHome() }
-                } label: {
-                    Text("save and return to home")
-                        .font(SPFont.serifItalic(18, weight: .light))
-                        .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
-                }
-                .disabled(isReturning)
-                .accessibilityIdentifier("completion.returnButton")
+                returnHomeButton(identifier: "completion.returnButton")
 
                 Spacer().frame(height: SPSpacing.s4)
             }
@@ -245,6 +241,20 @@ struct CompletionView: View {
             await resolveQueueState()
             await loadPersistedSessionData()
         }
+    }
+
+    /// "save and return to home" (#1183). Rendered at the top and the bottom;
+    /// both copies call the same action and are disabled by the same flag.
+    private func returnHomeButton(identifier: String) -> some View {
+        Button {
+            Task { await saveAndReturnHome() }
+        } label: {
+            Text("save and return to home")
+                .font(SPFont.serifItalic(18, weight: .light))
+                .spCapsuleButtonStyle(.neutral, size: .fullWidth, prominent: true)
+        }
+        .disabled(isReturning)
+        .accessibilityIdentifier(identifier)
     }
 
     // MARK: - Mood Matrix (#472 / #635)

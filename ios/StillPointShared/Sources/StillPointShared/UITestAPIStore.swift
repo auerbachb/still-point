@@ -132,9 +132,16 @@ actor UITestAPIStore {
         // #669: a leftover minimal-view preference would start every subsequent
         // UI test with the session chrome collapsed to the countdown alone.
         MinimalSessionViewPrefs.resetPersistedPrefs()
+        // #1190: a leftover sand-carrier preference would swap the digits for the sand scene.
+        TimerDisplayPrefs.resetPersistedPrefs()
         // #730: clearing the key restores the opt-out default (on), so a test that
         // toggled the wake lock off cannot leave later runs starting opted out.
         WakeLockPrefs.resetPersistedPrefs()
+        // #30: a Light or Dark pick from one test would otherwise force that
+        // appearance on every later launch; clearing the key restores `.system`.
+        ThemePrefs.resetPersistedPrefs()
+        // #75: a hidden session-screen component would stay hidden on every later launch.
+        SessionScreenPrefsStore.resetPersistedPrefs()
         LastAuthProvider.resetPersisted()
         // Flush the in-memory cache to cfprefsd so the immediately
         // following read sees the cleared state. Issue #266 follow-up.
@@ -149,6 +156,18 @@ actor UITestAPIStore {
             let snapshot = UITestStore.makeSnapshot(seedAuthenticated: config.seedAuthenticated)
             snapshot.persist(key: defaultsKey)
             return snapshot
+        }
+        // #1199: an account-state seed (dual-track, recovery ramp, focus history)
+        // replaces the persisted store, as the snapshot seed does.
+        if config.hasStateSeed {
+            let seeded = UITestStore.makeStateSeeded(
+                seedAuthenticated: config.seedAuthenticated,
+                dualTrack: config.dualTrackSeed,
+                recoveryRamp: config.recoveryRampSeed,
+                focusHistory: config.focusHistorySeed
+            )
+            seeded.persist(key: defaultsKey)
+            return seeded
         }
         if let persisted = UITestStore.load(key: defaultsKey) {
             return persisted

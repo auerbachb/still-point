@@ -134,13 +134,16 @@ export async function tapMoodCell(label: string): Promise<void> {
   });
 }
 
-export function returnButton(): HTMLButtonElement {
-  return [...screen().querySelectorAll("button")]
-    .find((candidate) => candidate.textContent === COMPLETION_RETURN_LABEL)!;
+/** The top or bottom return button (#1183). Defaults to the bottom one. */
+export function returnButton(position: "top" | "bottom" = "bottom"): HTMLButtonElement {
+  const matches = screen().querySelectorAll<HTMLButtonElement>(`[data-testid="completion-return-${position}"]`);
+  if (matches.length !== 1) throw new Error(`expected one ${position} return button, found ${matches.length}`);
+  if (matches[0].textContent !== COMPLETION_RETURN_LABEL) throw new Error("return button has the wrong label");
+  return matches[0];
 }
 
-export async function tapReturn(): Promise<void> {
-  const button = returnButton();
+export async function tapReturn(position: "top" | "bottom" = "bottom"): Promise<void> {
+  const button = returnButton(position);
   await act(async () => {
     button.click();
   });

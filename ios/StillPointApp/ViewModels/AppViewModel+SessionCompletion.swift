@@ -107,6 +107,17 @@ extension AppViewModel {
     ///   that settles after local midnight still dates the session to its own day.
     /// - Parameter generation: `authGeneration`, read by the End tap or the expiry tick
     ///   itself, as for `completeBreathSession` (#854).
+    /// #1192: the save's route change home. Only from a focus route (the timer or the
+    /// game), so a route that changed while the save ran is not clobbered.
+    func returnFocusRouteHome() {
+        switch currentView {
+        case .focusActivity, .focusGame:
+            currentView = .home
+        default:
+            break
+        }
+    }
+
     func completeFocusSession(
         _ end: FocusSessionEnd,
         category: FocusCategory,
@@ -119,7 +130,7 @@ extension AppViewModel {
         guard generation == authGeneration else { return }
         guard case .save(let result) = end else {
             // Ended before a whole second had passed: nothing to save.
-            currentView = .home
+            returnFocusRouteHome()
             scheduleBuddyInviteConsume()
             return
         }
@@ -172,7 +183,7 @@ extension AppViewModel {
             if let failed = SessionCompletionLogic.localSaveFailed(after: saved == nil ? .notStored : .stored) {
                 localSaveFailed = failed
             }
-            currentView = .home
+            returnFocusRouteHome()
             // Focus exits skip `returnHome()`, so an invite held back by the
             // `isInSession` guard during the session is retried here.
             scheduleBuddyInviteConsume()

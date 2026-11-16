@@ -25,6 +25,8 @@ The table is an index only. Each fixture's contract lives in its note under
 | `focusDuration.json` | `FOCUS_DURATION_CONFIG` / `focusDurationForDay` / `shouldAdvanceFocusDay` (`constants.ts`); `advanceFocusActivityDay` (`duration.ts`) | `StillPoint.focusDurationConfig` / `focusDuration(forDay:)` / `shouldAdvanceFocusDay` / `advanceFocusActivityDay` (`Constants.swift`) |
 | `focusActivity.json` | `formatFocusGoal` / `formatFocusCountdown` / `focusCountdownFontSize` / `focusRemainingSeconds` / `resolveFocusEnd` / `focusActivityDayAfterCompletedSave` (`focusActivity.ts`); `FOCUS_ACTIVITIES` (`focusActivityContent.ts`) | `FocusActivity.formatGoal` / `countdownDisplay` / `countdownShowsHours` / `remainingSeconds` / `resolveEnd` / `focusActivityDayAfterCompletedSave`, `FocusCategory.pickerDescription` (`FocusActivityLogic.swift`); `FocusCategory.displayLabel` (`Constants.swift`) |
 | `guidedExercise.json` | `clampStepIndex` / `isLastStep` / `nextStepIndex` / `previousStepIndex` / `stepProgressFraction` / `totalDurationMs` / `exerciseSummary` (`guidedExercise.ts`) | `GuidedExerciseLogic` — the same seven functions (`GuidedExerciseLogic.swift`) |
+| `sandProgress.json` | `sandProgress` / `sandTripCount` (`sandProgress.ts`) | `SandProgress.progress(elapsed:total:)` / `SandProgress.tripCount(total:)` (`SandProgress.swift`) |
+| `focusGame.json` | `FOCUS_GAME_TIMING` / `rowsForViewport` / `rowsForHeight` / `gridHeightPx` / `nextGapMs` / `pickCell` / `createFocusGame` / `advanceFocusGame` / `tapFocusGameCell` / `focusGameResult` (`focusGameLogic.ts`) | `FocusGameLogic` — the same functions (`FocusGameLogic.swift`); #1192 |
 
 ## How each suite loads them
 
@@ -100,6 +102,16 @@ contract.
   Seconds inputs are whole numbers, because web floors a fractional second and
   iOS takes an `Int`; `focusActivityDayAfterCompletedSave` always has a counter,
   because only web's takes a missing one.
+- **sandProgress** — the sand-carrier timer's pure model (#1190, ported from #662). Web asserts it in
+  `src/lib/sandProgress.test.ts`; iOS in `SandProgressTests.swift`. Floating-point fields (`fraction`,
+  piles, `carrierPosition`, `walkPhase`) match within `1e-9`. Non-finite inputs (`NaN`, infinities) cannot
+  be encoded in JSON, so each platform tests them itself with the same rules: non-finite or negative elapsed
+  is zero, and a zero or non-finite total is a complete sit with one trip. Parity rules both sides follow:
+  - JS `Math.round` rounds positive `.5` up. Swift computes `(x + 0.5).rounded(.down)` for the same result.
+  - JS `%` on doubles matches Swift `truncatedRemainder(dividingBy:)`, not integer `%`.
+  - Elapsed stays fractional. Nothing truncates it to whole seconds.
+  - The clamp order is elapsed, then total, then fraction, then the strict `< 0.7` carry boundary.
+  - Trip count is clamped to 1...12 after rounding, so a huge total cannot overflow `Int`.
 - **guidedExercise** — step index math, per-step progress, total duration, and
   exercise summaries. Web asserts `stepProgressFraction` exactly; iOS within
   `0.0001`.

@@ -378,6 +378,7 @@ extension AppViewModel {
         case .breathCounting: return "breathCounting"
         case .focusPicker: return "focusPicker"
         case .focusActivity: return "focusActivity"
+        case .focusGame: return "focusGame"
         case .logReason: return "logReason"
         case .history: return "history"
         case .journal: return "journal"

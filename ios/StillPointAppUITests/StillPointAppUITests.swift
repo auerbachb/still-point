@@ -433,7 +433,9 @@ final class StillPointAppUITests: XCTestCase {
 
         let logoutButton = app.buttons["settings.logoutButton"]
         XCTAssertTrue(logoutButton.waitForExistence(timeout: 5))
-        scrollElementIntoVisibleFrame(logoutButton, in: app)
+        // #1212: the tab bar overlays the bottom of Settings, so the button must clear it
+        // before the tap, or the tap lands on the Journal tab.
+        scrollElementAboveTabBar(logoutButton, in: app)
         tapByStableCenter(logoutButton, in: app)
 
         XCTAssertTrue(
@@ -471,7 +473,7 @@ final class StillPointAppUITests: XCTestCase {
 
         let deleteAccountButton = app.buttons["settings.deleteAccountButton"]
         XCTAssertTrue(deleteAccountButton.waitForExistence(timeout: 5))
-        scrollElementIntoVisibleFrame(deleteAccountButton, in: app)
+        scrollElementAboveTabBar(deleteAccountButton, in: app)
         tapByStableCenter(deleteAccountButton, in: app)
 
         // Step 1: Confirmation dialog — "Delete your account?"
@@ -518,6 +520,26 @@ final class StillPointAppUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["guidedExercise.stepTitle"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.otherElements["guidedExercise.stepProgress"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["guidedExercise.stepPrompt"].waitForExistence(timeout: 5))
+    }
+
+    /// #1192: `SP_UI_TEST_FORCE_FOCUS_GAME` boots into the grid-tap game and starts it.
+    /// The grid, the countdown and the pinned End button must all be on screen.
+    @MainActor
+    func testFocusGameBootsIntoGridWithEndReachable() throws {
+        let app = makeApp(
+            seedAuthenticated: true,
+            resetStore: true,
+            forceFocusGame: true
+        )
+        app.launch()
+
+        waitForRoot("focusGame", in: app, failureMessage: "Focus game did not appear")
+
+        XCTAssertTrue(app.otherElements["focusGame.grid"].waitForExistence(timeout: 8), "Grid should be on screen")
+        XCTAssertTrue(app.staticTexts["focusGame.countdown"].waitForExistence(timeout: 5), "Countdown should be on screen")
+        let endButton = app.buttons["focusGame.endButton"]
+        XCTAssertTrue(endButton.waitForExistence(timeout: 5), "End button should be on screen")
+        XCTAssertTrue(endButton.isHittable, "End button should be tappable, not clipped")
     }
 
     @MainActor
@@ -591,6 +613,42 @@ final class StillPointAppUITests: XCTestCase {
         )
         XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
         XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+    }
+
+    /// #1190: the opt-in sand timer keeps the accessible "Time remaining" label, and minimal
+    /// view always shows digits without changing the saved sand preference.
+    @MainActor
+    func testSandTimerToggleKeepsTimerLabelAndMinimalViewDigits() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
+        app.launch()
+
+        waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
+        let beginButton = app.buttons["home.beginButton"]
+        XCTAssertTrue(beginButton.waitForExistence(timeout: 5))
+        tap(beginButton, thenWaitForRoot: "session", in: app)
+
+        let sandToggle = app.buttons["session.sandToggle"]
+        XCTAssertTrue(sandToggle.waitForExistence(timeout: 8))
+        sandToggle.tap()
+
+        let timerLabel = app.staticTexts["session.timerLabel"]
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Full view with sand on: the digits are transparent, so the value says "sand".
+        XCTAssertEqual(timerLabel.value as? String, "sand")
+
+        let minimalToggle = app.buttons["session.minimalViewToggle"]
+        XCTAssertTrue(minimalToggle.waitForExistence(timeout: 8))
+        minimalToggle.tap()
+        XCTAssertTrue(timerLabel.waitForExistence(timeout: 8))
+        XCTAssertTrue(timerLabel.label.localizedCaseInsensitiveContains("time remaining"))
+        // Minimal view always shows digits, so the value must say "digits".
+        XCTAssertEqual(timerLabel.value as? String, "digits")
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "sand-timer-minimal-view"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     /// #957: the History error banner's Retry loads History again.

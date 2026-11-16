@@ -134,9 +134,9 @@ struct FocusDurationTests {
     // MARK: - Categories
 
     @Test func testFocusCategoriesAndTheirLabels() {
-        #expect(FocusCategory.allCases == [.reading, .writing, .listening])
-        #expect(FocusCategory.allCases.map(\.rawValue) == ["reading", "writing", "listening"])
-        #expect(FocusCategory.allCases.map(\.displayLabel) == ["Reading", "Writing", "Listening"])
+        #expect(FocusCategory.pickerCases == [.reading, .writing, .listening])
+        #expect(FocusCategory.pickerCases.map(\.rawValue) == ["reading", "writing", "listening"])
+        #expect(FocusCategory.pickerCases.map(\.displayLabel) == ["Reading", "Writing", "Listening"])
         #expect(SessionType(rawValue: "focus") == .focus)
     }
 
