@@ -70,27 +70,59 @@ const REFUSE_INDEXED_DB = `
 })();
 `;
 
-/** Records every wake lock request and release on `window.__wake`. */
+/** Records every wake lock request and explicit release on `window.__wake`.
+ *  `window.__wake.systemRelease()` models the browser dropping the lock while
+ *  the page stays visible: it marks the sentinel released and fires its
+ *  `release` event, as the UA does (an explicit `release()` fires no event). */
 const STUB_WAKE_LOCK = `
 (() => {
-  window.__wake = { requests: [], releases: 0, rejectNext: false };
+  window.__wake = { requests: [], releases: 0, rejectNext: false, live: [] };
   const wakeLock = {
     request(type) {
       if (window.__wake.rejectNext) {
         return Promise.reject(new DOMException("Battery saver", "NotAllowedError"));
       }
       window.__wake.requests.push(type);
-      return Promise.resolve({
+      const listeners = [];
+      const sentinel = {
         released: false,
         type,
-        release() { window.__wake.releases += 1; this.released = true; return Promise.resolve(); },
-        addEventListener() {},
-      });
+        release() {
+          if (!this.released) window.__wake.releases += 1;
+          this.released = true;
+          return Promise.resolve();
+        },
+        addEventListener(name, fn) { if (name === "release") listeners.push(fn); },
+        removeEventListener(name, fn) {
+          const i = listeners.indexOf(fn);
+          if (name === "release" && i >= 0) listeners.splice(i, 1);
+        },
+        _fireSystemRelease() {
+          this.released = true;
+          listeners.slice().forEach((fn) => fn());
+        },
+      };
+      window.__wake.live.push(sentinel);
+      return Promise.resolve(sentinel);
     },
   };
   Object.defineProperty(navigator, "wakeLock", { value: wakeLock, configurable: true });
+  window.__wake.systemRelease = () => {
+    const held = window.__wake.live.filter((s) => !s.released);
+    held.forEach((s) => s._fireSystemRelease());
+    return held.length;
+  };
 })();
 `;
+
+type WakeState = { requests: string[]; releases: number };
+
+async function wakeState(page: Page): Promise<WakeState> {
+  return page.evaluate(() => {
+    const w = (window as unknown as { __wake: WakeState }).__wake;
+    return { requests: [...w.requests], releases: w.releases };
+  });
+}
 
 function beginButton(page: Page) {
   return page.getByRole("button", { name: "Begin", exact: true });
@@ -162,6 +194,60 @@ test.describe("#725 web screen wake lock", () => {
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __wake: { requests: string[] } }).__wake.requests))
       .toContain("screen");
+  });
+
+  test("the lock is released on pause and on end, and re-acquired on resume", async ({ page, ensureLoggedIn }) => {
+    await page.addInitScript(STUB_WAKE_LOCK);
+    await ensureLoggedIn();
+    await tap(beginButton(page));
+    // Counts are taken relative to a baseline: dev StrictMode runs the effect
+    // twice on mount, so the absolute request count is not the contract.
+    await expect.poll(async () => (await wakeState(page)).requests.length).toBeGreaterThan(0);
+    const requestsAtBegin = (await wakeState(page)).requests.length;
+
+    await tapWithControlReveal(page, page.getByRole("button", { name: "pause", exact: true }));
+    await expect.poll(async () => (await wakeState(page)).releases, "lock released on pause").toBeGreaterThan(0);
+    const releasesAtPause = (await wakeState(page)).releases;
+
+    await tapWithControlReveal(page, page.getByRole("button", { name: "resume", exact: true }));
+    await expect.poll(async () => (await wakeState(page)).requests.length, "lock re-acquired on resume").toBeGreaterThan(requestsAtBegin);
+
+    await tapWithControlReveal(page, page.getByRole("button", { name: /end early/i }));
+    await expect(page.getByTestId("completion-return-bottom")).toBeVisible();
+    await expect.poll(async () => (await wakeState(page)).releases, "lock released when the sit ends").toBeGreaterThan(releasesAtPause);
+    const held = await page.evaluate(() => (window as unknown as { __wake: { live: { released: boolean }[] } }).__wake.live.filter((s) => !s.released).length);
+    expect(held, "no lock is left held after the sit ends").toBe(0);
+  });
+
+  test("re-acquires after a system release, and after the tab is hidden then shown", async ({ page, ensureLoggedIn }) => {
+    await page.addInitScript(STUB_WAKE_LOCK);
+    await ensureLoggedIn();
+    await tap(beginButton(page));
+    await expect.poll(async () => (await wakeState(page)).requests.length).toBeGreaterThan(0);
+
+    // #1176: the browser drops the lock while the page stays visible.
+    const beforeSystemRelease = (await wakeState(page)).requests.length;
+    await page.evaluate(() => (window as unknown as { __wake: { systemRelease: () => number } }).__wake.systemRelease());
+    await expect.poll(async () => (await wakeState(page)).requests.length, "re-acquired after a system release").toBeGreaterThan(beforeSystemRelease);
+
+    // Tab hidden: the browser drops the lock and the hook must not ask for one.
+    const beforeHidden = (await wakeState(page)).requests.length;
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+      (window as unknown as { __wake: { systemRelease: () => number } }).__wake.systemRelease();
+    });
+    // acquire() returns before calling request() on a hidden page, so no request
+    // can be pending here; the count is read straight after the events.
+    const whileHidden = (await wakeState(page)).requests.length;
+    expect(whileHidden, "no lock requested while the tab is hidden").toBe(beforeHidden);
+
+    // Tab visible again: the lock is re-acquired.
+    await page.evaluate(() => {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect.poll(async () => (await wakeState(page)).requests.length, "re-acquired when the tab is visible again").toBeGreaterThan(whileHidden);
   });
 
   test("a rejected lock request (battery saver) does not stop the sit or raise an error", async ({ page, ensureLoggedIn }) => {
@@ -255,14 +341,21 @@ test.describe("#688 sound toggle pills @320px", () => {
     await ensureLoggedIn();
     await tap(beginButton(page));
 
-    const first = soundToggles(page).first();
-    await expect(first).toBeVisible();
-    const before = await first.getAttribute("aria-pressed");
-    expect(["true", "false"]).toContain(before);
+    const toggles = soundToggles(page);
+    await expect(toggles.first()).toBeVisible();
+    const count = await toggles.count();
+    expect(count, "sound pills rendered").toBeGreaterThanOrEqual(2);
 
-    await tapWithControlReveal(page, first);
-    await expect(first).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
-    await expect(first).toHaveAttribute("data-state", before === "true" ? "off" : "on");
+    for (let i = 0; i < count; i += 1) {
+      const pill = toggles.nth(i);
+      const label = `sound pill ${i}`;
+      const before = await pill.getAttribute("aria-pressed");
+      expect(["true", "false"], `${label} aria-pressed`).toContain(before);
+
+      await tapWithControlReveal(page, pill);
+      await expect(pill, label).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
+      await expect(pill, label).toHaveAttribute("data-state", before === "true" ? "off" : "on");
+    }
   });
 });
 
