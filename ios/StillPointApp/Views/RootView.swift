@@ -160,6 +160,9 @@ struct RootView: View {
             case .focusActivity(let category, let focusActivityDay):
                 FocusActivityView(appVM: appVM, category: category, focusActivityDay: focusActivityDay)
 
+            case .focusGame(let focusActivityDay):
+                FocusGameView(appVM: appVM, focusActivityDay: focusActivityDay)
+
             case .logReason(let date):
                 LogReasonView(appVM: appVM, targetDate: date)
 
@@ -263,6 +266,8 @@ struct RootView: View {
             return "focusPicker"
         case .focusActivity:
             return "focusActivity"
+        case .focusGame:
+            return "focusGame"
         case .logReason:
             return "logReason"
         case .history:

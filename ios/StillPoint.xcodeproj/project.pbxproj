@@ -56,6 +56,7 @@
 		3DD94CD008394385332E2476 /* 34.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 4E0BB1EDF1994530B03012DD /* 34.mp3 */; };
 		3E8960D90E815E3462FF241B /* ThoughtJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42927B68B0A976D71FE0637F /* ThoughtJournalViewModel.swift */; };
 		3F1BEE1BEA197162093263CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9311B0CBDED4DF207E799ACC /* Assets.xcassets */; };
+		3F5072C4FBC9E8E04AD1C058 /* FocusGameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F0BD194F4BD120F54F052C /* FocusGameViewModel.swift */; };
 		3F80728F64716D6C41752A83 /* TabBarAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9978D1E5B100991F2FBF53AB /* TabBarAppearance.swift */; };
 		3F857D13B6573BC89F19D5D6 /* 14.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 90E0B21C4EC373501602C81F /* 14.mp3 */; };
 		432648A182B69A2E98314B0C /* BoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D22599DCB705628A5CB6F51 /* BoardViewModel.swift */; };
@@ -75,6 +76,7 @@
 		50CD873CA594B5A6FCDBB251 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F75039BBEED880C73680860 /* HistoryViewModel.swift */; };
 		5147B5721B90EB7D83D843FF /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD56539A4822B6F632F6CEC0 /* DeviceTokenStore.swift */; };
 		51B53277A3BDDAB470D972A7 /* 13.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A4D5CDCC6607777AB0F9F27F /* 13.mp3 */; };
+		51EB6B73D8120278132E0B76 /* FocusGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B821E9D171F9C1CB2FC75A1 /* FocusGameView.swift */; };
 		541E925BE3AF12CE7B18082E /* FocusActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B6995EFA6ECE7D5ACA22CA5 /* FocusActivityViewModel.swift */; };
 		55CB825BEE151D314A4DD2FA /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218693B76FDAF56B6E0321DE /* AppViewModel.swift */; };
 		55E69CE2B979C65A530CD865 /* 22.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDB6682B1106045ACD87DE8D /* 22.mp3 */; };
@@ -309,6 +311,7 @@
 		679658232CDE2E837D3A0439 /* CompletionThoughtsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionThoughtsSection.swift; sourceTree = "<group>"; };
 		69FDE084FF9D5E20CF6725A2 /* BuddyCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyCalendarView.swift; sourceTree = "<group>"; };
 		6AC6B9115F2C05BB7EFFFA9F /* 59.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 59.mp3; sourceTree = "<group>"; };
+		6B821E9D171F9C1CB2FC75A1 /* FocusGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusGameView.swift; sourceTree = "<group>"; };
 		6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesViewModel.swift; sourceTree = "<group>"; };
 		6F9B11790CB09A75A0B5631C /* 45.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 45.mp3; sourceTree = "<group>"; };
 		6FB689884A598D7C6B1BEBE4 /* CompletionPhotoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionPhotoSection.swift; sourceTree = "<group>"; };
@@ -373,6 +376,7 @@
 		B98386F622351B6FA36A12DF /* WidgetHistoryRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHistoryRefresher.swift; sourceTree = "<group>"; };
 		BC381822F1638511A88DC85B /* AppViewModel+SessionCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+SessionCompletion.swift"; sourceTree = "<group>"; };
 		BFC2DEAB18EE99B8F596F9A9 /* AttentionTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionTrackingManager.swift; sourceTree = "<group>"; };
+		C0F0BD194F4BD120F54F052C /* FocusGameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusGameViewModel.swift; sourceTree = "<group>"; };
 		C20B7B5A94F2DE23B28B579A /* StillPointMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillPointMonitor.entitlements; sourceTree = "<group>"; };
 		C2EB81E2A5E7CD9E4586F3BE /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
 		C3A73516741CC23494C435D7 /* OfflineIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineIndicatorView.swift; sourceTree = "<group>"; };
@@ -459,6 +463,7 @@
 				7D13B1D65F99CF21AA713D32 /* CompletionView.swift */,
 				D6AB58AC12FA2FC042004ACA /* FocusActivityView.swift */,
 				81A8D4465D84DC0B443F6A4B /* FocusCategoryPickerView.swift */,
+				6B821E9D171F9C1CB2FC75A1 /* FocusGameView.swift */,
 				C7766937C968433C205A250C /* HistoryView.swift */,
 				23FA6DAE71EE23FAF8EE0F12 /* HomeView.swift */,
 				EF4338DB1EB8862D368A1AC7 /* LogReasonView.swift */,
@@ -770,6 +775,7 @@
 				0EE015F8D72AE054E6990FB3 /* BuddyCalendarViewModel.swift */,
 				48FF5BFB92C98C791296977A /* BuddySessionViewModel.swift */,
 				0B6995EFA6ECE7D5ACA22CA5 /* FocusActivityViewModel.swift */,
+				C0F0BD194F4BD120F54F052C /* FocusGameViewModel.swift */,
 				8DD1550AC197AF2F850F9C79 /* GuidedExerciseViewModel.swift */,
 				1F75039BBEED880C73680860 /* HistoryViewModel.swift */,
 				6E16CD986E277DA88A2EB6F1 /* NotificationPreferencesViewModel.swift */,
@@ -1092,6 +1098,8 @@
 				1505292FB2D8A162DD13F8CC /* FocusActivityView.swift in Sources */,
 				541E925BE3AF12CE7B18082E /* FocusActivityViewModel.swift in Sources */,
 				39B0A335763543857EC8F4C9 /* FocusCategoryPickerView.swift in Sources */,
+				51EB6B73D8120278132E0B76 /* FocusGameView.swift in Sources */,
+				3F5072C4FBC9E8E04AD1C058 /* FocusGameViewModel.swift in Sources */,
 				9CCCE26509ABB33E9472E9FE /* GoogleSignInController.swift in Sources */,
 				4A807BC7D119912827067A44 /* GuidedExerciseOverlayView.swift in Sources */,
 				70C9AB11EDB3C490788EDC91 /* GuidedExerciseViewModel.swift in Sources */,

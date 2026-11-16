@@ -351,6 +351,8 @@ final class AppViewModel {
         // from it and from the session it starts, as during breath counting.
         if case .focusPicker = currentView { return true }
         if case .focusActivity = currentView { return true }
+        // #1192: the game counts as a session too, as the focus timer does.
+        if case .focusGame = currentView { return true }
         return false
     }
 
