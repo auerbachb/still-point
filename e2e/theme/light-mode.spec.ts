@@ -252,6 +252,9 @@ for (const [widthName, viewport] of Object.entries(WIDTHS) as Array<
 
     test("reset-password page", async ({ page }) => {
       await page.goto("/reset-password");
+      // Without a token the page shows the email form; wait for it so the
+      // field-fill check below inspects a real input, not an empty page.
+      await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
       await expectLightSurface(page);
       await shoot(page, "reset-password", widthName);
     });

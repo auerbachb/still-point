@@ -87,13 +87,13 @@ export function BuddyMindStateControls({
               : "Aware"}
         </span>
         {distractionSegmentCount > 0 && (
-          <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+          <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
             · {distractionSegmentCount} light{" "}
             {distractionSegmentCount === 1 ? "segment" : "segments"}
           </span>
         )}
         {sessionThoughtsCount > 0 && (
-          <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+          <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
             · {sessionThoughtsCount} captured {sessionThoughtsCount === 1 ? "note" : "notes"}
           </span>
         )}
@@ -161,7 +161,7 @@ export function BuddyMindStateControls({
                 ? "var(--accent-amber-border)"
                 : "var(--accent-green-border)"
             }`,
-            color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+            color: mindState === "thinking" ? "var(--accent-amber-active-text)" : "var(--accent-green-active-text)",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "0.12em",
@@ -304,7 +304,7 @@ export function BuddyMindStateControls({
       >
         <span style={{ color: "var(--accent-green-dim)" }}>{buddyAwarenessPct}% awareness</span>
         <span style={{ margin: "0 6px", color: "var(--fg-4)" }}>·</span>
-        <span style={{ color: "var(--accent-amber-border)" }}>
+        <span style={{ color: "var(--accent-amber-note)" }}>
           {Math.max(0, 100 - buddyAwarenessPct)}% distraction
         </span>
       </div>

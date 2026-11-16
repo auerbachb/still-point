@@ -56,12 +56,12 @@ export function SessionMindStateStatus({
       />
       <span>{stateLabel}</span>
       {distractionSegmentCount > 0 && (
-        <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+        <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
           · {distractionSegmentCount} light {distractionSegmentCount === 1 ? "segment" : "segments"}
         </span>
       )}
       {capturedCount > 0 && (
-        <span style={{ color: "var(--accent-amber-border)", marginLeft: "4px" }}>
+        <span style={{ color: "var(--accent-amber-note)", marginLeft: "4px" }}>
           · {capturedCount} captured {capturedCount === 1 ? "note" : "notes"}
         </span>
       )}

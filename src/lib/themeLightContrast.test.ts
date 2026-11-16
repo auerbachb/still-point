@@ -24,6 +24,9 @@ const TEXT_TOKENS = [
   "--accent-danger-muted",
   "--accent-green-dim",
   "--accent-blue-text",
+  "--accent-amber-active-text",
+  "--accent-green-active-text",
+  "--accent-amber-note",
 ] as const;
 
 /** Explicit light choice: html[data-theme="light"] (Settings toggle). */

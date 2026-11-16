@@ -98,7 +98,7 @@ export function SessionHoldControls({
               mindState === "thinking" ? "var(--accent-amber-border)" : "var(--accent-green-border-subtle)",
             background:
               mindState === "thinking" ? "var(--accent-amber-bg)" : "var(--accent-green-bg-subtle)",
-            color: mindState === "thinking" ? "var(--accent-amber)" : "var(--accent-green)",
+            color: mindState === "thinking" ? "var(--accent-amber-active-text)" : "var(--accent-green-active-text)",
           }}
         >
           <span>{mindState === "thinking" ? "Release" : "Hold"} — light distraction</span>
