@@ -5,6 +5,7 @@ import { MindStateBar } from "./MindStateBar";
 import type { SoundPrefs } from "@/lib/audio";
 import { buildBlocks, countdownSeconds, usesMinuteBlocks, type BlockDef } from "@/lib/blockTimerGrid";
 import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
+import { resolveSessionComponentVisibility } from "@/lib/sessionComponentVisibility";
 import { useElapsedClock, type SyncClock } from "@/lib/useElapsedClock";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useSessionCues } from "@/lib/useSessionCues";
@@ -65,6 +66,9 @@ export function BlockTimer({
   const isMobile = useIsMobile();
   const [showTimer, setShowTimer] = useState(() => loadDisplayPrefs().showTimer);
   const [sandMode, setSandMode] = useState(() => loadDisplayPrefs().sandAnimation);
+  // #75: optional components follow the saved toggles; minimal view hides them all.
+  const [sessionPrefs] = useState(loadDisplayPrefs);
+  const visible = resolveSessionComponentVisibility(sessionPrefs, minimal);
   // #662: the sand animation is a solo-sit option; buddy sits (server-synced clocks) keep digits.
   const sandAvailable = !minimal && syncClock === undefined && controlledElapsed === undefined;
   const sandVisible = sandAvailable && sandMode;
@@ -89,7 +93,8 @@ export function BlockTimer({
   });
 
   useEffect(() => {
-    saveDisplayPrefs({ showTimer, sandAnimation: sandMode });
+    // Read-modify-write so the #75 component toggles saved from Settings survive.
+    saveDisplayPrefs({ ...loadDisplayPrefs(), showTimer, sandAnimation: sandMode });
   }, [showTimer, sandMode]);
 
   const useMinuteBlocks = usesMinuteBlocks(totalSeconds);
@@ -275,8 +280,9 @@ export function BlockTimer({
         )}
       </div>
 
-      {!minimal && (
+      {(visible.mindStateBar || visible.progressBar) && (
       <div style={{ width: boxesAreaWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+        {visible.mindStateBar && (
         <MindStateBar
           elapsed={elapsed}
           totalSeconds={totalSeconds}
@@ -284,6 +290,8 @@ export function BlockTimer({
           currentState={mindState}
           barWidth={boxesAreaWidth}
         />
+        )}
+        {visible.progressBar && (
         <div style={{ borderTop: "1px solid var(--border-1)", paddingTop: "14px" }}>
           <div style={{
             height: "8px", borderRadius: "4px", overflow: "hidden",
@@ -301,10 +309,11 @@ export function BlockTimer({
             }} />
           </div>
         </div>
+        )}
       </div>
       )}
 
-      {minimal ? null : useMinuteBlocks ? (
+      {!visible.blockGrid ? null : useMinuteBlocks ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
           <div style={{
             display: "flex", flexWrap: "wrap", gap: blockGap,
