@@ -309,7 +309,7 @@ test.describe("offline-first web PWA", () => {
       // Offline, the router's fetch of Home's route data fails, and the worker
       // answers it from its cache (#967), so the return home is an in-app move
       // in this same document rather than a full page load.
-      await tap(page.getByRole("button", { name: "save and return to home" }));
+      await tap(page.getByTestId("completion-return-bottom"));
       await expect(page).toHaveURL(new RegExp(`${pathForTab(DEFAULT_TAB)}$`));
       await expect(beginButton(page)).toBeVisible();
       await expect(offlineIndicator(page)).toBeVisible();

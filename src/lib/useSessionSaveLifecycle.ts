@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
-import type { FocusCategory } from "@/lib/constants";
+import type { SavedFocusCategory } from "@/lib/constants";
 import { focusActivityDayAfterCompletedSave, type FocusSessionResult } from "@/lib/focusActivity";
 import {
   getWebSessionSyncCoordinator,
@@ -443,7 +443,7 @@ export function useSessionSaveLifecycle({
   // #837: `focusCategory` is what the picker chose, saved as a label only.
   const handleFocusEnd = useCallback(async (
     result: FocusSessionResult | null,
-    focusCategory: FocusCategory | null = null,
+    focusCategory: SavedFocusCategory | null = null,
   ) => {
     if (!result) {
       setOverlay(null);

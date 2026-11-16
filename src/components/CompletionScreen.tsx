@@ -79,6 +79,31 @@ export function CompletionScreen({
   const { returning } = autosave;
   useCompactScrollPadding(compact);
 
+  // One handler and one disabled state for both copies (#1183): the top button
+  // saves the same way, so the owner never has to scroll to leave.
+  const returnButton = (position: "top" | "bottom") => (
+    <button
+      type="button"
+      data-testid={`completion-return-${position}`}
+      onClick={() => { void autosave.handleReturn(); }}
+      disabled={returning}
+      style={{
+        background: "none",
+        border: "1px solid var(--border-2)",
+        color: "var(--fg)",
+        fontFamily: "var(--font-serif)",
+        fontSize: "14px", fontStyle: "italic",
+        padding: "12px 36px", borderRadius: "30px",
+        minHeight: "44px",
+        cursor: returning ? "default" : "pointer",
+        opacity: returning ? 0.5 : 1,
+        marginTop: "8px",
+      }}
+    >
+      {COMPLETION_RETURN_LABEL}
+    </button>
+  );
+
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
@@ -86,6 +111,7 @@ export function CompletionScreen({
     }}>
       <NotStoredBanner notStored={notStored} onRetrySave={onRetrySave} />
       <ParkedBanner parkedReason={parkedReason} />
+      {returnButton("top")}
 
       <CompletionSummary
         dayNumber={dayNumber}
@@ -118,25 +144,7 @@ export function CompletionScreen({
         />
       )}
 
-      <button
-        type="button"
-        onClick={() => { void autosave.handleReturn(); }}
-        disabled={returning}
-        style={{
-          background: "none",
-          border: "1px solid var(--border-2)",
-          color: "var(--fg)",
-          fontFamily: "var(--font-serif)",
-          fontSize: "14px", fontStyle: "italic",
-          padding: "12px 36px", borderRadius: "30px",
-          minHeight: "44px",
-          cursor: returning ? "default" : "pointer",
-          opacity: returning ? 0.5 : 1,
-          marginTop: "8px",
-        }}
-      >
-        {COMPLETION_RETURN_LABEL}
-      </button>
+      {returnButton("bottom")}
     </div>
   );
 }

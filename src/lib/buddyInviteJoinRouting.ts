@@ -16,7 +16,7 @@
 // `StillPointShared` (iOS, #856).
 
 /** The app page's transient overlays (`Overlay` in `src/app/app/[[...tab]]/page.tsx`). */
-export type AppOverlay = "session" | "breath" | "focusPicker" | "focus" | "complete";
+export type AppOverlay = "session" | "breath" | "focusPicker" | "focus" | "focusGames" | "complete";
 
 export type BuddyInviteJoinDecision =
   /** Open the buddy room. The invite is spent. */
@@ -29,7 +29,7 @@ export type BuddyInviteJoinDecision =
 
 /** Whether `overlay` is a sit or its completion screen, which a buddy invite waits for. */
 export function overlayHoldsBuddyInvite(overlay: AppOverlay | null): boolean {
-  return overlay === "session" || overlay === "breath" || overlay === "focus" || overlay === "complete";
+  return overlay === "session" || overlay === "breath" || overlay === "focus" || overlay === "focusGames" || overlay === "complete";
 }
 
 /** Whether the invite effect may start a join now. */

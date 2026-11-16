@@ -63,8 +63,16 @@ export function parseOptionalTrack(value: unknown): Track | null {
 export const FOCUS_CATEGORIES = ["reading", "writing", "listening"] as const;
 export type FocusCategory = (typeof FOCUS_CATEGORIES)[number];
 
-export function isFocusCategory(value: unknown): value is FocusCategory {
-  return typeof value === "string" && FOCUS_CATEGORIES.includes(value as FocusCategory);
+/** #680: the focus game (`focusGameLogic.ts`) saves as a focus session under this
+ *  category. It is not a picker card (`FOCUS_ACTIVITIES`), so the picker never offers it. */
+export const FOCUS_GAME_CATEGORY = "game" as const;
+
+/** Every category a focus row can store: the picker's, plus the game's. */
+export type SavedFocusCategory = FocusCategory | typeof FOCUS_GAME_CATEGORY;
+
+export function isFocusCategory(value: unknown): value is SavedFocusCategory {
+  return typeof value === "string"
+    && (FOCUS_CATEGORIES.includes(value as FocusCategory) || value === FOCUS_GAME_CATEGORY);
 }
 
 /**
@@ -72,7 +80,7 @@ export function isFocusCategory(value: unknown): value is FocusCategory {
  * before #837, and ones still queued offline, keep saving. Any other value that
  * is not a category (wrong case, empty string, a number) is invalid: `undefined`.
  */
-export function parseOptionalFocusCategory(value: unknown): FocusCategory | null | undefined {
+export function parseOptionalFocusCategory(value: unknown): SavedFocusCategory | null | undefined {
   if (value === undefined || value === null) {
     return null;
   }

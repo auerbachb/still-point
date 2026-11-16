@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
 const GLOBALS_CSS = resolve(ROOT, "src/app/globals.css");
@@ -152,31 +153,100 @@ function rgbaEqual(left, right) {
   );
 }
 
+/** Drops `//` line comments so declarations can be scanned without comment noise. */
+function stripLineComments(swift) {
+  return swift.replace(/\/\/[^\n]*/g, "");
+}
+
+/**
+ * Collects `static let name = expr` declarations from one enum body. Each
+ * expression runs up to the next declaration, so multi-line expressions such as
+ * `Color.adaptive(` ... `)` stay whole. Whitespace is removed from the expression.
+ * @param {string} body
+ * @returns {Record<string, string>}
+ */
+function collectStaticLets(body) {
+  const starts = [...body.matchAll(/static let (\w+)\s*=/g)];
+  /** @type {Record<string, string>} */
+  const exprs = {};
+  starts.forEach((match, index) => {
+    const from = match.index + match[0].length;
+    const to = index + 1 < starts.length ? starts[index + 1].index : body.length;
+    exprs[match[1]] = body.slice(from, to).replace(/\s+/g, "");
+  });
+  return exprs;
+}
+
+/**
+ * Parses the inside of a Swift RGB tuple or initializer, e.g.
+ * `red:232.0/255,green:228.0/255,blue:222.0/255` (whitespace already removed).
+ * @param {string} args @returns {Rgba | null}
+ */
+function parseRgbArgs(args) {
+  const match = args.match(
+    /^red:([\d.]+(?:\/\d+)?),green:([\d.]+(?:\/\d+)?),blue:([\d.]+(?:\/\d+)?)$/
+  );
+  if (!match) {
+    return null;
+  }
+  return {
+    r: Math.round(evalFraction(match[1]) * 255),
+    g: Math.round(evalFraction(match[2]) * 255),
+    b: Math.round(evalFraction(match[3]) * 255),
+    a: 1,
+  };
+}
+
+/** A Color.adaptive argument: an inline tuple or a name from the private SPInk enum. */
+const ADAPTIVE_ARG = String.raw`\(red:[^()]*\)|[\w.]+`;
+// Groups: 1 dark arg, 2 light arg, 3 darkOpacity, 4 lightOpacity (unused: only dark is
+// compared), 5 trailing `.opacity(n)`. Whitespace is already removed from expressions.
+const ADAPTIVE_RE = new RegExp(
+  `^Color\\.adaptive\\(dark:(${ADAPTIVE_ARG}),light:(${ADAPTIVE_ARG})` +
+    `(?:,darkOpacity:([\\d.]+))?(?:,lightOpacity:([\\d.]+))?\\)(?:\\.opacity\\(([\\d.]+)\\))?$`
+);
+
 /**
  * @param {string} swift
  * @returns {{ colors: Record<string, Rgba>, rawExprs: Record<string, string> }}
+ *   colors holds every SPColor token resolved to its DARK value. Adaptive tokens
+ *   (`Color.adaptive(dark:, light:)`) compare by their dark value, the palette
+ *   the web CSS mirrors. The light value must still parse, but is not compared.
  */
-function parseSwiftColors(swift) {
-  const spColorBlock = swift.match(/public enum SPColor\s*\{([\s\S]*?)\n\}/);
+export function parseSwiftColors(swift) {
+  const code = stripLineComments(swift);
+  const spColorBlock = code.match(/public enum SPColor\s*\{([\s\S]*?)\n\}/);
   if (!spColorBlock) {
     throw new Error("Could not find SPColor enum in DesignTokens.swift");
   }
+  const spInkBlock = code.match(/enum SPInk\s*\{([\s\S]*?)\n\}/);
+  const inkDecls = spInkBlock ? collectStaticLets(spInkBlock[1]) : {};
+  const colorDecls = collectStaticLets(spColorBlock[1]);
+
+  // SPInk tokens are referenced as `SPInk.<name>`; the SPColor tokens use bare names.
+  /** @type {Record<string, string>} */
+  const rawExprs = { ...colorDecls };
+  for (const [name, expr] of Object.entries(inkDecls)) {
+    rawExprs[`SPInk.${name}`] = expr;
+  }
+
+  /** Resolves a tuple argument: an inline `(red:…)` literal or a named SPInk tuple. */
+  /** @param {string} ref @returns {Rgba | null} */
+  function resolveTupleRef(ref) {
+    if (ref.startsWith("(")) {
+      return parseRgbArgs(ref.slice(1, -1));
+    }
+    const expr = inkDecls[ref.replace(/^SPInk\./, "")];
+    return expr && expr.startsWith("(") ? parseRgbArgs(expr.slice(1, -1)) : null;
+  }
 
   /** @type {Record<string, Rgba>} */
-  const colors = {};
-  /** @type {Record<string, string>} */
-  const rawExprs = {};
-  const declRe = /static let (\w+) = (.+)/g;
-  let match;
-
-  while ((match = declRe.exec(spColorBlock[1])) !== null) {
-    rawExprs[match[1]] = match[2].trim();
-  }
+  const resolved = {};
 
   /** @param {string} name @returns {Rgba} */
   function resolveColor(name) {
-    if (colors[name]) {
-      return colors[name];
+    if (resolved[name]) {
+      return resolved[name];
     }
 
     const expr = rawExprs[name];
@@ -184,18 +254,30 @@ function parseSwiftColors(swift) {
       throw new Error(`Unknown Swift color token: ${name}`);
     }
 
-    const rgbMatch = expr.match(
-      /^Color\(red:\s*([\d.]+(?:\/\d+)?),\s*green:\s*([\d.]+(?:\/\d+)?),\s*blue:\s*([\d.]+(?:\/\d+)?)\)(?:\.opacity\(([\d.]+)\))?$/
-    );
-    if (rgbMatch) {
-      const color = {
-        r: Math.round(evalFraction(rgbMatch[1]) * 255),
-        g: Math.round(evalFraction(rgbMatch[2]) * 255),
-        b: Math.round(evalFraction(rgbMatch[3]) * 255),
-        a: rgbMatch[4] ? Number(rgbMatch[4]) : 1,
-      };
-      colors[name] = color;
-      return color;
+    const color = evaluateExpr(name, expr);
+    resolved[name] = color;
+    return color;
+  }
+
+  /** @param {string} name @param {string} expr @returns {Rgba} */
+  function evaluateExpr(name, expr) {
+    const ctorMatch = expr.match(/^Color\((red:[^()]*)\)(?:\.opacity\(([\d.]+)\))?$/);
+    if (ctorMatch) {
+      const rgb = parseRgbArgs(ctorMatch[1]);
+      if (rgb) {
+        return { ...rgb, a: ctorMatch[2] ? Number(ctorMatch[2]) : 1 };
+      }
+    }
+
+    const adaptiveMatch = expr.match(ADAPTIVE_RE);
+    if (adaptiveMatch) {
+      const dark = resolveTupleRef(adaptiveMatch[1]);
+      const light = resolveTupleRef(adaptiveMatch[2]);
+      if (!dark || !light) {
+        throw new Error(`Unsupported adaptive SPColor tuple for ${name}: ${expr}`);
+      }
+      const opacity = adaptiveMatch[3] ?? adaptiveMatch[5];
+      return { ...dark, a: opacity ? Number(opacity) : 1 };
     }
 
     const derivedMatch = expr.match(/^([\w.]+)\.opacity\(([\d.]+)\)$/);
@@ -207,21 +289,24 @@ function parseSwiftColors(swift) {
         );
       }
       if (baseToken === "black") {
-        const color = { r: 0, g: 0, b: 0, a: Number(derivedMatch[2]) };
-        colors[name] = color;
-        return color;
+        return { r: 0, g: 0, b: 0, a: Number(derivedMatch[2]) };
       }
-      const base = resolveColor(baseToken);
-      const color = { ...base, a: Number(derivedMatch[2]) };
-      colors[name] = color;
-      return color;
+      return { ...resolveColor(baseToken), a: Number(derivedMatch[2]) };
     }
 
+    // Adaptive tokens with a trailing opacity are matched above by ADAPTIVE_RE, so
+    // a `.opacity` suffix on a multi-line expression is not `[\w.]+` and fails here.
     throw new Error(`Unsupported SPColor expression for ${name}: ${expr}`);
   }
 
-  for (const name of Object.keys(rawExprs)) {
+  for (const name of Object.keys(colorDecls)) {
     resolveColor(name);
+  }
+
+  /** @type {Record<string, Rgba>} */
+  const colors = {};
+  for (const name of Object.keys(colorDecls)) {
+    colors[name] = resolved[name];
   }
 
   return { colors, rawExprs };
@@ -364,4 +449,7 @@ function main() {
   );
 }
 
-main();
+// Run only as the entrypoint, so the unit tests can import the parser.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  main();
+}

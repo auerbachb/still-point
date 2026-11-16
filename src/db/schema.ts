@@ -537,7 +537,7 @@ export const sessions = pgTable("sessions", {
   ),
   focusCategoryCheck: check(
     "sessions_focus_category_allowed",
-    sql`${table.focusCategory} is null or ${table.focusCategory} in ('reading', 'writing', 'listening')`,
+    sql`${table.focusCategory} is null or ${table.focusCategory} in ('reading', 'writing', 'listening', 'game')`,
   ),
   /** #240: backs "did this user complete each track's standard sit today?" —
    *  the per-track completion badges HomeView shows for the dual-track view. */

@@ -8,6 +8,7 @@ import { loadDisplayPrefs, saveDisplayPrefs } from "@/lib/displayPrefs";
 import { useElapsedClock, type SyncClock } from "@/lib/useElapsedClock";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useSessionCues } from "@/lib/useSessionCues";
+import { SandCarrier } from "./SandCarrier";
 
 type BlockTimerProps = {
   totalSeconds: number;
@@ -63,6 +64,10 @@ export function BlockTimer({
 }: BlockTimerProps) {
   const isMobile = useIsMobile();
   const [showTimer, setShowTimer] = useState(() => loadDisplayPrefs().showTimer);
+  const [sandMode, setSandMode] = useState(() => loadDisplayPrefs().sandAnimation);
+  // #662: the sand animation is a solo-sit option; buddy sits (server-synced clocks) keep digits.
+  const sandAvailable = !minimal && syncClock === undefined && controlledElapsed === undefined;
+  const sandVisible = sandAvailable && sandMode;
   const blockSize = isMobile ? 56 : 75;
   const blockLabelSize = isMobile ? 13 : 17;
   const blockGap = 11;
@@ -84,8 +89,8 @@ export function BlockTimer({
   });
 
   useEffect(() => {
-    saveDisplayPrefs({ showTimer });
-  }, [showTimer]);
+    saveDisplayPrefs({ showTimer, sandAnimation: sandMode });
+  }, [showTimer, sandMode]);
 
   const useMinuteBlocks = usesMinuteBlocks(totalSeconds);
   const blocks = buildBlocks(totalSeconds);
@@ -160,6 +165,27 @@ export function BlockTimer({
           alignItems: "center",
         }}
       >
+        {sandVisible ? (
+          // #662: the inset keeps the carrier and piles clear of the side "sand" toggle.
+          <div data-session-timer-sand style={{ width: "100%", position: "relative", paddingInline: "72px" }}>
+            <SandCarrier elapsed={elapsed} totalSeconds={totalSeconds} />
+            <span
+              style={{
+                position: "absolute",
+                width: "1px",
+                height: "1px",
+                padding: 0,
+                margin: "-1px",
+                overflow: "hidden",
+                clip: "rect(0, 0, 0, 0)",
+                whiteSpace: "nowrap",
+                border: 0,
+              }}
+            >
+              {minutes} minutes {seconds} seconds remaining
+            </span>
+          </div>
+        ) : (
         <div
           data-session-timer-digits
           aria-hidden={!digitsVisible}
@@ -178,7 +204,8 @@ export function BlockTimer({
         >
           {minutes}:{seconds.toString().padStart(2, "0")}
         </div>
-        {!minimal && (
+        )}
+        {!minimal && !sandVisible && (
         <button
           type="button"
           aria-pressed={showTimer}
@@ -206,6 +233,44 @@ export function BlockTimer({
           }}
         >
           {showTimer ? "hide" : "show"}
+        </button>
+        )}
+        {sandAvailable && (
+        <button
+          type="button"
+          aria-pressed={sandMode}
+          aria-label={sandMode ? "Show numerical timer" : "Show sand animation"}
+          onClick={() => {
+            if (sandMode) {
+              // Returning to digits always shows them, even if they were hidden before the sand view.
+              setShowTimer(true);
+              setSandMode(false);
+            } else {
+              setSandMode(true);
+            }
+          }}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            border: "1px solid var(--border-2)",
+            background: "var(--surface-1)",
+            color: "var(--fg-3)",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            letterSpacing: isMobile ? "0.04em" : "0.08em",
+            textTransform: "uppercase",
+            padding: isMobile ? "12px 6px" : "12px 16px",
+            minHeight: "44px",
+            minWidth: "44px",
+            transition: "opacity 0.2s, border-color 0.2s, color 0.2s",
+            opacity: sandMode ? 0.9 : 1,
+          }}
+        >
+          {sandMode ? "digits" : "sand"}
         </button>
         )}
       </div>
