@@ -263,6 +263,38 @@ extension StillPointAppUITests {
         }
     }
 
+    /// Swipes the screen up until `element` sits above the tab bar, not merely on
+    /// screen. `isElementInVisibleFrame` counts the area under the tab bar as
+    /// visible, so stopping there leaves a tap landing on a tab (#1212: Settings'
+    /// Log Out sat under the bar after the Appearance section was added, and the tap
+    /// selected Journal instead).
+    func scrollElementAboveTabBar(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 8,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let tabBar = app.tabBars.firstMatch
+        for _ in 0..<maxSwipes {
+            if isElementInVisibleFrame(element, in: app),
+               !tabBar.exists || element.frame.maxY <= tabBar.frame.minY {
+                return
+            }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+        if tabBar.exists {
+            XCTAssertLessThanOrEqual(
+                element.frame.maxY,
+                tabBar.frame.minY,
+                "Could not scroll the element above the tab bar",
+                file: file,
+                line: line
+            )
+        }
+    }
+
     /// Swipes the screen up until `element` sits above the on-screen keyboard. A
     /// no-op without a keyboard. `isElementInVisibleFrame` counts the area under the
     /// keyboard as visible, so a tap there lands on the keyboard instead.

@@ -12,6 +12,7 @@
 		02C84A596AC776C93BCB72CA /* AppViewModel+Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8983B9E6C5B9BEDD4CE508 /* AppViewModel+Widget.swift */; };
 		03DEBC43F06C17F8DE0AB6C0 /* 37.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 07F9F5F5BD51497B5C18B28C /* 37.mp3 */; };
 		05C9F1047CD092E08286BD0D /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCC941059B8B1A654597CC5 /* AppView.swift */; };
+		07496AA366B559951F5E4D40 /* SettingsSessionScreenSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F775875B2D74BA0E7355F7 /* SettingsSessionScreenSection.swift */; };
 		0B17114D37CC11469DEA86B2 /* 21.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 90C6C05A143348636C9A3EE4 /* 21.mp3 */; };
 		0E590C627527A50BBD5D2487 /* 42.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1C216B5EBA138904589C9092 /* 42.mp3 */; };
 		101B964A6AE9EE0D61E7C5FD /* BreathCountingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4976183C8621BCA485D0B82D /* BreathCountingView.swift */; };
@@ -395,6 +396,7 @@
 		DDFD4FE5B2BFD74718DC3CE1 /* AppBlockingShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBlockingShared.swift; sourceTree = "<group>"; };
 		E17D1E13F75A9811452B4895 /* 51.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 51.mp3; sourceTree = "<group>"; };
 		E1C10719A1709CEE1EAEBE17 /* StillPointAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillPointAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E3F775875B2D74BA0E7355F7 /* SettingsSessionScreenSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSessionScreenSection.swift; sourceTree = "<group>"; };
 		E892E8EB42C0764E814EEA26 /* 38.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = 38.mp3; sourceTree = "<group>"; };
 		E9E4EF5A9F8C90CBD9D5CA5A /* WidgetSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSyncCoordinator.swift; sourceTree = "<group>"; };
 		EABAD70B988A7C426AA9BEB4 /* CameraPermissionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPermissionHelper.swift; sourceTree = "<group>"; };
@@ -741,6 +743,7 @@
 				5610C475E8072CF5CCA4C8C8 /* SettingsAccountSection.swift */,
 				511647C82833C7665CA38B49 /* SettingsAphorismsSection.swift */,
 				932E78D5A64007E7738FFE6F /* SettingsDangerZoneSection.swift */,
+				E3F775875B2D74BA0E7355F7 /* SettingsSessionScreenSection.swift */,
 				08807D1EB18D6379ACED72A8 /* SettingsSessionSection.swift */,
 				99FA43771695183B7CDAE704 /* SettingsVisibilitySection.swift */,
 			);
@@ -1124,6 +1127,7 @@
 				7B0CD9573076A4807FDAB320 /* SettingsAccountSection.swift in Sources */,
 				6D02D1A8A6D6A077223C172A /* SettingsAphorismsSection.swift in Sources */,
 				81CCB14C028B2ED5A2FA9045 /* SettingsDangerZoneSection.swift in Sources */,
+				07496AA366B559951F5E4D40 /* SettingsSessionScreenSection.swift in Sources */,
 				214C8E0D29060034400C22BA /* SettingsSessionSection.swift in Sources */,
 				1649BE1D765A6851D5802BBA /* SettingsView.swift in Sources */,
 				DFB99FF0486CEB1EEDE70DFE /* SettingsVisibilitySection.swift in Sources */,

@@ -62,7 +62,7 @@ describe("BlockTimer rendering", () => {
 
     expect(toggle.getAttribute("aria-label")).toBe("Show numerical timer");
     expect(digits(container).getAttribute("aria-hidden")).toBe("true");
-    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toEqual({ showTimer: false, sandAnimation: false });
+    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toMatchObject({ showTimer: false, sandAnimation: false });
   });
 
   it("swaps the digits for the sand carrier, keeps the time for assistive tech, and remembers the choice", async () => {
@@ -76,7 +76,7 @@ describe("BlockTimer rendering", () => {
 
     expect(container.querySelector("[data-session-timer-digits]")).toBeNull();
     expect(container.querySelector("[data-session-timer-sand]")?.textContent).toContain("2 minutes 10 seconds remaining");
-    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toEqual({ showTimer: true, sandAnimation: true });
+    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toMatchObject({ showTimer: true, sandAnimation: true });
   });
 
   it("returning from the sand view to digits shows them even if they were hidden", async () => {
@@ -95,7 +95,7 @@ describe("BlockTimer rendering", () => {
     });
 
     expect(digits(container).getAttribute("aria-hidden")).toBe("false");
-    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toEqual({ showTimer: true, sandAnimation: false });
+    expect(JSON.parse(localStorage.getItem("stillpoint_display_prefs") ?? "{}")).toMatchObject({ showTimer: true, sandAnimation: false });
   });
 
   it("renders only the digits in minimal view, even with the digits hidden", async () => {

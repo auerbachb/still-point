@@ -29,6 +29,10 @@ final class SessionViewModel {
     /// Whether the user explicitly abandoned (discard data, don't save)
     var isAbandoned = false
 
+    /// #75: optional session-screen components the user chose to show. Read once per
+    /// sit; the Session screen applies minimal view (#669) on top of it.
+    var sessionScreenPrefs: SessionScreenPrefs = SessionScreenPrefsStore.load()
+
     // Mind state
     var mindState: String = "clear"
     var mindStateLog: [MindStateEntry] = []

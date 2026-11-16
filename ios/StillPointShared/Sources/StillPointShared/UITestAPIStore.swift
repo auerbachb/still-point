@@ -140,6 +140,8 @@ actor UITestAPIStore {
         // #30: a Light or Dark pick from one test would otherwise force that
         // appearance on every later launch; clearing the key restores `.system`.
         ThemePrefs.resetPersistedPrefs()
+        // #75: a hidden session-screen component would stay hidden on every later launch.
+        SessionScreenPrefsStore.resetPersistedPrefs()
         LastAuthProvider.resetPersisted()
         // Flush the in-memory cache to cfprefsd so the immediately
         // following read sees the cleared state. Issue #266 follow-up.

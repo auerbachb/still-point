@@ -24,6 +24,10 @@ struct SessionView: View {
     /// #1190: opt-in sand-carrier display for the full solo view, seeded from the
     /// persisted preference at init and written back when the toggle is tapped.
     @State private var sandAnimation: Bool
+    /// #75: which optional components render. Minimal view overrides the saved toggles.
+    private var screenVisibility: SessionScreenPrefs {
+        vm.sessionScreenPrefs.resolved(minimal: minimalView)
+    }
     /// Drives the fade-out "tap to come back" hint each time minimal view is entered.
     @State private var minimalHintVisible = false
     @State private var minimalHintToken = 0
@@ -103,32 +107,43 @@ struct SessionView: View {
                         } else {
                             sandToggleButton
 
+                            // #75: each optional component is dropped from the tree when hidden,
+                            // so the remaining ones reflow without empty gaps.
+
                             // 60-second progress bar
-                            progressBar
+                            if screenVisibility.showProgressBar {
+                                progressBar
+                            }
 
                             // Block grid — dynamic sizing to fill available space
-                            BlockGridView(
-                                blocks: vm.blocks,
-                                elapsed: vm.elapsed,
-                                totalSeconds: vm.totalSeconds,
-                                availableHeight: contentHeight * 0.4,
-                                availableWidth: geo.size.width - SPSpacing.s2 * 2
-                            )
-                            .padding(.horizontal, SPSpacing.s2)
+                            if screenVisibility.showBlockGrid {
+                                BlockGridView(
+                                    blocks: vm.blocks,
+                                    elapsed: vm.elapsed,
+                                    totalSeconds: vm.totalSeconds,
+                                    availableHeight: contentHeight * 0.4,
+                                    availableWidth: geo.size.width - SPSpacing.s2 * 2
+                                )
+                                .padding(.horizontal, SPSpacing.s2)
+                            }
 
                             // Mind state bar
-                            MindStateBarView(
-                                elapsed: vm.elapsed,
-                                totalSeconds: vm.totalSeconds,
-                                mindStateLog: vm.mindStateLog,
-                                currentMindState: vm.mindState
-                            )
+                            if screenVisibility.showMindStateBar {
+                                MindStateBarView(
+                                    elapsed: vm.elapsed,
+                                    totalSeconds: vm.totalSeconds,
+                                    mindStateLog: vm.mindStateLog,
+                                    currentMindState: vm.mindState
+                                )
+                            }
 
                             // Status label
-                            Text(vm.statusLabel.uppercased())
-                                .font(SPFont.mono(14))
-                                .foregroundStyle(Color(SPColor.fg3))
-                                .tracking(2)
+                            if screenVisibility.showStatusLabel {
+                                Text(vm.statusLabel.uppercased())
+                                    .font(SPFont.mono(14))
+                                    .foregroundStyle(Color(SPColor.fg3))
+                                    .tracking(2)
+                            }
                         }
                     }
                     .frame(height: contentHeight)
