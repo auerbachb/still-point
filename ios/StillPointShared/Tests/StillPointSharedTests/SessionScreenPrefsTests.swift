@@ -36,6 +36,17 @@ import Testing
         }
     }
 
+    /// Launch-argument overrides (`-key NO`) reach UserDefaults as strings; they must read as hidden.
+    @Test func testStringOverrideFromLaunchArgumentReadsAsHidden() {
+        withDefaults { defaults in
+            defaults.set("NO", forKey: SessionScreenField.progressBar.key)
+            defaults.set("YES", forKey: SessionScreenField.mindStateBar.key)
+            let prefs = SessionScreenPrefsStore.load(defaults: defaults)
+            #expect(!prefs.showProgressBar)
+            #expect(prefs.showMindStateBar)
+        }
+    }
+
     @Test func testRestoringAComponentPersists() {
         withDefaults { defaults in
             SessionScreenPrefsStore.write(false, for: .blockGrid, defaults: defaults)

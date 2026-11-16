@@ -96,7 +96,10 @@ public enum SessionScreenPrefsStore {
 
     /// An absent key means the user never changed it, so it reads as shown.
     private static func bool(_ defaults: UserDefaults, _ field: SessionScreenField) -> Bool {
-        defaults.object(forKey: field.key) as? Bool ?? true
+        // `bool(forKey:)` rather than `as? Bool`: a launch-argument domain value such as
+        // `-key NO` arrives as the string "NO", which only `bool(forKey:)` reads as false.
+        guard defaults.object(forKey: field.key) != nil else { return true }
+        return defaults.bool(forKey: field.key)
     }
 }
 
