@@ -26,7 +26,14 @@ struct ThemeModeMappingTests {
     }
 }
 
+/// Both suites below read and write `UserDefaults.standard[ThemePrefs.key]`. Nested
+/// under one serialized parent so they never interleave; separate top-level
+/// `.serialized` suites still run in parallel with each other.
 @Suite(.serialized)
+@MainActor
+struct ThemeDefaultsSuites {
+
+@Suite
 @MainActor
 struct ThemePrefsTests {
 
@@ -66,7 +73,7 @@ struct ThemePrefsTests {
     }
 }
 
-@Suite(.serialized)
+@Suite
 @MainActor
 struct ThemeModePreferenceStoreTests {
 
@@ -99,4 +106,5 @@ struct ThemeModePreferenceStoreTests {
         store.setMode(.system)
         #expect(UserDefaults.standard.object(forKey: ThemePrefs.key) == nil)
     }
+}
 }
