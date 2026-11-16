@@ -77,7 +77,7 @@ struct FocusCategoryPickerView: View {
             }
 
             VStack(spacing: SPSpacing.s2) {
-                ForEach(FocusCategory.allCases, id: \.self) { category in
+                ForEach(FocusCategory.pickerCases, id: \.self) { category in
                     card(for: category)
                 }
             }
