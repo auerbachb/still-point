@@ -68,6 +68,103 @@
   /* Layout */
   --bg-rgb: 26, 24, 22;
   --nav-h: 96px;
+
+  color-scheme: dark;
+}
+
+/*
+ * Light palette (#29). Same token names as :root above; only colour values
+ * change. Applied two ways, which is why the block is written twice:
+ *   - an explicit choice: html[data-theme="light"] (set by the Settings toggle);
+ *   - System with an OS light preference: no data-theme attribute, so the
+ *     media query matches. An explicit "dark" choice opts out of it.
+ * The design-token gate (scripts/e2e/check-design-tokens.mjs) only reads the
+ * first :root block, which stays the dark palette, so these do not affect it.
+ */
+:root[data-theme="light"] {
+  --fg:   rgba(38, 34, 30, 0.92);
+  --fg-2: rgba(38, 34, 30, 0.76);
+  --fg-3: rgba(38, 34, 30, 0.66);
+  --fg-4: rgba(38, 34, 30, 0.6);
+  --border-1: rgba(38, 34, 30, 0.1);
+  --border-2: rgba(38, 34, 30, 0.2);
+  --surface-1: rgba(38, 34, 30, 0.035);
+  --surface-2: rgba(38, 34, 30, 0.06);
+  --surface-3: rgba(38, 34, 30, 0.1);
+  --border-3: rgba(38, 34, 30, 0.4);
+  --accent-green: #16a34a;
+  --accent-green-end: #15803d;
+  --accent-green-strong: rgba(21, 128, 61, 0.85);
+  --accent-green-text: rgba(21, 128, 61, 0.95);
+  --accent-green-dim: rgba(21, 128, 61, 0.7);
+  --accent-green-bg: rgba(21, 128, 61, 0.3);
+  --accent-green-glow: rgba(21, 128, 61, 0.3);
+  --accent-green-muted: rgba(21, 128, 61, 0.25);
+  --accent-green-border: rgba(21, 128, 61, 0.35);
+  --accent-green-border-subtle: rgba(21, 128, 61, 0.25);
+  --accent-green-bg-subtle: rgba(21, 128, 61, 0.1);
+  --accent-green-bg-faint: rgba(21, 128, 61, 0.07);
+  --accent-amber: #d97706;
+  --accent-amber-end: #b45309;
+  --accent-amber-text: rgba(180, 83, 9, 0.95);
+  --accent-amber-dim: rgba(180, 83, 9, 0.75);
+  --accent-amber-border: rgba(180, 83, 9, 0.45);
+  --accent-amber-hint: rgba(180, 83, 9, 0.35);
+  --accent-amber-muted: rgba(180, 83, 9, 0.3);
+  --accent-amber-border-subtle: rgba(180, 83, 9, 0.28);
+  --accent-amber-bg: rgba(217, 119, 6, 0.16);
+  --accent-amber-bg-faint: rgba(217, 119, 6, 0.08);
+  --accent-danger: rgba(185, 28, 28, 0.85);
+  --accent-danger-muted: rgba(185, 28, 28, 0.75);
+  --accent-danger-border: rgba(185, 28, 28, 0.35);
+  --accent-danger-border-subtle: rgba(185, 28, 28, 0.25);
+  --overlay-text: rgba(255, 255, 255, 0.96);
+  --bg-rgb: 250, 247, 242;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --fg:   rgba(38, 34, 30, 0.92);
+    --fg-2: rgba(38, 34, 30, 0.76);
+    --fg-3: rgba(38, 34, 30, 0.66);
+    --fg-4: rgba(38, 34, 30, 0.6);
+    --border-1: rgba(38, 34, 30, 0.1);
+    --border-2: rgba(38, 34, 30, 0.2);
+    --surface-1: rgba(38, 34, 30, 0.035);
+    --surface-2: rgba(38, 34, 30, 0.06);
+    --surface-3: rgba(38, 34, 30, 0.1);
+    --border-3: rgba(38, 34, 30, 0.4);
+    --accent-green: #16a34a;
+    --accent-green-end: #15803d;
+    --accent-green-strong: rgba(21, 128, 61, 0.85);
+    --accent-green-text: rgba(21, 128, 61, 0.95);
+    --accent-green-dim: rgba(21, 128, 61, 0.7);
+    --accent-green-bg: rgba(21, 128, 61, 0.3);
+    --accent-green-glow: rgba(21, 128, 61, 0.3);
+    --accent-green-muted: rgba(21, 128, 61, 0.25);
+    --accent-green-border: rgba(21, 128, 61, 0.35);
+    --accent-green-border-subtle: rgba(21, 128, 61, 0.25);
+    --accent-green-bg-subtle: rgba(21, 128, 61, 0.1);
+    --accent-green-bg-faint: rgba(21, 128, 61, 0.07);
+    --accent-amber: #d97706;
+    --accent-amber-end: #b45309;
+    --accent-amber-text: rgba(180, 83, 9, 0.95);
+    --accent-amber-dim: rgba(180, 83, 9, 0.75);
+    --accent-amber-border: rgba(180, 83, 9, 0.45);
+    --accent-amber-hint: rgba(180, 83, 9, 0.35);
+    --accent-amber-muted: rgba(180, 83, 9, 0.3);
+    --accent-amber-border-subtle: rgba(180, 83, 9, 0.28);
+    --accent-amber-bg: rgba(217, 119, 6, 0.16);
+    --accent-amber-bg-faint: rgba(217, 119, 6, 0.08);
+    --accent-danger: rgba(185, 28, 28, 0.85);
+    --accent-danger-muted: rgba(185, 28, 28, 0.75);
+    --accent-danger-border: rgba(185, 28, 28, 0.35);
+    --accent-danger-border-subtle: rgba(185, 28, 28, 0.25);
+    --overlay-text: rgba(255, 255, 255, 0.96);
+    --bg-rgb: 250, 247, 242;
+    color-scheme: light;
+  }
 }
 
 * {
@@ -84,6 +181,9 @@ html, body {
 body {
   background: rgb(var(--bg-rgb));
   color: var(--fg);
+  /* Theme switch eases instead of snapping (#29). Reduced motion zeroes this
+     via the global rule below. */
+  transition: background-color 0.25s ease, color 0.25s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -26,6 +26,12 @@ import {
   loadTrackingControlPrefs,
   saveHideDistractionHyperfocusControls,
 } from "@/lib/trackingControlPrefs";
+import {
+  THEME_LABELS,
+  THEME_PREFERENCES,
+  type ThemePreference,
+} from "@/lib/theme";
+import { useThemePreference } from "@/lib/useThemePreference";
 
 type User = {
   id: string;
@@ -54,6 +60,7 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
   const [togglingAphorisms, setTogglingAphorisms] = useState(false);
+  const theme = useThemePreference();
   // `wakeLockSupported` stays false during SSR/hydration, so the Session card
   // only appears after mount — by which point the same effect has already read
   // the stored pref (#317). The seed mirrors the #730 opt-out default so the
@@ -432,6 +439,77 @@ export function SettingsView({
             </button>
           </div>
         )}
+
+        {/* #29: light / dark / system theme. System (the default) follows the OS. */}
+        <div style={{
+          padding: "16px 20px",
+          background: "var(--surface-1)",
+          borderRadius: "10px",
+          display: "flex", flexDirection: "column", gap: "12px",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px", color: "var(--fg-4)",
+            letterSpacing: "0.12em", textTransform: "uppercase",
+          }}>
+            THEME
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Theme"
+            style={{ display: "flex", gap: "8px" }}
+          >
+            {THEME_PREFERENCES.map((option: ThemePreference, index) => {
+              const selected = theme.preference === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  // Roving tabIndex: Tab reaches only the selected option; arrows move within the group.
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => theme.setPreference(option)}
+                  onKeyDown={(event) => {
+                    const step =
+                      event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+                      : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1
+                      : 0;
+                    if (step === 0) return;
+                    event.preventDefault();
+                    const count = THEME_PREFERENCES.length;
+                    const nextIndex = (index + step + count) % count;
+                    theme.setPreference(THEME_PREFERENCES[nextIndex]);
+                    event.currentTarget.parentElement
+                      ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]
+                      ?.focus();
+                  }}
+                  style={{
+                    flex: 1,
+                    background: selected ? "var(--surface-3)" : "none",
+                    border: `1px solid ${selected ? "var(--border-3)" : "var(--border-2)"}`,
+                    color: selected ? "var(--fg)" : "var(--fg-3)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px", letterSpacing: "0.12em",
+                    textTransform: "uppercase", padding: "8px 10px",
+                    borderRadius: "6px", cursor: "pointer",
+                    transition: "background-color 0.2s ease, border-color 0.2s ease",
+                  }}
+                >
+                  {THEME_LABELS[option]}
+                </button>
+              );
+            })}
+          </div>
+          {theme.preference === "system" && (
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px", color: "var(--fg-4)",
+            }}>
+              Following your device: {theme.resolved}
+            </div>
+          )}
+        </div>
 
         {/* #186: hide distraction/hyperfocus hold cluster during sessions */}
         <div style={{
