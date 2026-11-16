@@ -107,7 +107,7 @@
   --accent-green-end: #166534;
   --accent-green-strong: rgba(21, 128, 61, 0.85);
   --accent-green-text: rgb(21, 128, 61);
-  --accent-green-dim: rgb(21, 128, 61);
+  --accent-green-dim: rgb(20, 83, 45);
   --accent-green-bg: rgba(21, 128, 61, 0.3);
   --accent-green-glow: rgba(21, 128, 61, 0.3);
   --accent-green-muted: rgba(21, 128, 61, 0.25);
@@ -136,7 +136,7 @@
   --accent-blue-rgb: 29, 78, 216;
   --accent-blue-deep-rgb: 30, 64, 175;
   --accent-blue-text: rgb(30, 64, 175);
-  --accent-amber-active-text: rgb(146, 64, 14);
+  --accent-amber-active-text: rgb(120, 53, 15);
   --accent-green-active-text: rgb(20, 83, 45);
   --accent-amber-note: rgb(146, 64, 14);
   --bg-rgb: 250, 247, 242;
@@ -159,7 +159,7 @@
     --accent-green-end: #166534;
     --accent-green-strong: rgba(21, 128, 61, 0.85);
     --accent-green-text: rgb(21, 128, 61);
-    --accent-green-dim: rgb(21, 128, 61);
+    --accent-green-dim: rgb(20, 83, 45);
     --accent-green-bg: rgba(21, 128, 61, 0.3);
     --accent-green-glow: rgba(21, 128, 61, 0.3);
     --accent-green-muted: rgba(21, 128, 61, 0.25);
@@ -187,7 +187,7 @@
     --accent-blue-rgb: 29, 78, 216;
     --accent-blue-deep-rgb: 30, 64, 175;
     --accent-blue-text: rgb(30, 64, 175);
-    --accent-amber-active-text: rgb(146, 64, 14);
+    --accent-amber-active-text: rgb(120, 53, 15);
     --accent-green-active-text: rgb(20, 83, 45);
     --accent-amber-note: rgb(146, 64, 14);
     --bg-rgb: 250, 247, 242;

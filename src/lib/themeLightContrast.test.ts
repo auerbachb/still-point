@@ -34,6 +34,20 @@ const EXPLICIT_LIGHT = ':root[data-theme="light"] {';
 /** System with an OS light preference (no data-theme attribute). */
 const SYSTEM_LIGHT = ':root:not([data-theme="dark"]) {';
 
+/**
+ * Text tokens drawn over a translucent fill token rather than the bare page
+ * background. The fill is composited over the light background first, then the
+ * text over that. Checking text against cream alone misses these (#1195).
+ */
+const TEXT_ON_FILL: ReadonlyArray<readonly [text: string, fill: string, opacity?: number]> = [
+  ["--accent-green-dim", "--accent-green-bg"], // history calendar: meditated day cells
+  ["--accent-green-active-text", "--accent-green-bg-subtle"], // buddy and session active state
+  ["--accent-amber-active-text", "--accent-amber-bg"], // light-distraction active state
+  ["--accent-amber-active-text", "--accent-amber-bg", 0.85], // its "or hold Space" shortcut (opacity .85)
+  ["--accent-green-active-text", "--accent-green-bg-subtle", 0.85], // green shortcut at the same opacity
+  ["--accent-amber-note", "--accent-amber-bg-faint"], // amber hint on tinted surfaces
+] as const;
+
 type Rgba = { r: number; g: number; b: number; a: number };
 
 function blockDeclarations(css: string, opener: string): Map<string, string> {
@@ -114,6 +128,18 @@ describe("light palette text contrast (#1195)", () => {
         const text = composite(parseColour(value!), background);
         const ratio = contrastRatio(text, background);
         expect(ratio, `${token} contrast ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it.each(TEXT_ON_FILL)("%s reaches 4.5:1 on %s as drawn (opacity %s)", (textToken, fillToken, opacity = 1) => {
+        const textValue = decls.get(textToken);
+        const fillValue = decls.get(fillToken);
+        expect(textValue, `${textToken} missing from the light palette`).toBeDefined();
+        expect(fillValue, `${fillToken} missing from the light palette`).toBeDefined();
+        const surface = composite(parseColour(fillValue!), background);
+        const ink = parseColour(textValue!);
+        const text = composite({ ...ink, a: ink.a * opacity }, surface);
+        const ratio = contrastRatio(text, surface);
+        expect(ratio, `${textToken} on ${fillToken} at ${opacity}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       });
     });
   }
