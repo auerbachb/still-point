@@ -263,7 +263,7 @@ export function BlockTimer({
             fontSize: "11px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            padding: isMobile ? "12px 10px" : "12px 16px",
+            padding: isMobile ? "12px 8px" : "12px 16px",
             minHeight: "44px",
             minWidth: "44px",
             transition: "opacity 0.2s, border-color 0.2s, color 0.2s",
