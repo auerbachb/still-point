@@ -72,6 +72,16 @@ describe("parseSwiftColors", () => {
     expect(colors.border1).toEqual({ r: 232, g: 228, b: 222, a: 0.08 });
   });
 
+  test("keeps a black overlay's dark value at 0.5 when its light value is opaque", () => {
+    const swift = spColor(`
+    static let overlayText = Color.adaptive(
+        dark: (red: 0, green: 0, blue: 0),
+        light: (red: 0, green: 0, blue: 0),
+        darkOpacity: 0.5
+    )`);
+    expect(parseSwiftColors(swift).colors.overlayText).toEqual({ r: 0, g: 0, b: 0, a: 0.5 });
+  });
+
   test("ignores line comments, including ones between declarations", () => {
     const swift = spColor(`
     // Background

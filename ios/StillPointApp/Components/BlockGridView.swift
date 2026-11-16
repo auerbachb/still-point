@@ -129,7 +129,11 @@ struct BlockGridView: View {
             // Label
             Text(block.label)
                 .font(SPFont.mono(fontSize, weight: .medium))
-                .foregroundStyle(isFilled ? SPColor.overlayText : Color(SPColor.fg4))
+                .foregroundStyle(
+                    isFilled ? SPColor.overlayText
+                        : isCurrent ? SPColor.blockLabelOnFill
+                        : Color(SPColor.fg4)
+                )
 
             // Current block pulse border — uses phaseAnimator for continuous pulse
             if isCurrent {

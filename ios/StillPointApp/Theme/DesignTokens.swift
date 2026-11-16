@@ -125,7 +125,26 @@ public enum SPColor {
     ).opacity(0.15)
 
     // Overlay
-    static let overlayText = Color.black.opacity(0.5)
+    // Label drawn over a filled block. Dark stays black at 0.5 (web `--overlay-text`).
+    // Light is opaque black: 50% black over the light green fill was about 2.6:1.
+    static let overlayText = Color.adaptive(
+        dark: (red: 0, green: 0, blue: 0),
+        light: (red: 0, green: 0, blue: 0),
+        darkOpacity: 0.5
+    )
+}
+
+extension SPColor {
+    /// Label on a partly filled current block, which sits over the light amber fill.
+    /// Dark matches `fg4` exactly. Light is raised so the label keeps 4.5:1 on both
+    /// ends of the fill gradient. Block-grid only, so it has no web counterpart and
+    /// lives outside the parity-checked `SPColor` enum.
+    static let blockLabelOnFill = Color.adaptive(
+        dark: SPInk.dark,
+        light: SPInk.light,
+        darkOpacity: 0.45,
+        lightOpacity: 0.92
+    )
 }
 
 // MARK: - Spacing (matching globals.css scale)
