@@ -4,6 +4,28 @@ import StillPointShared
 import StillPointModels
 import os
 
+/// #30: applies the appearance choice at the root of every scene. Every window
+/// reads the one shared `ThemeModePreferenceStore`, so changing the mode in one
+/// iPad window re-renders all of them together.
+struct ThemedRootView: View {
+    private var themeStore: ThemeModePreferenceStore { ThemeModePreferenceStore.shared }
+
+    var body: some View {
+        RootView()
+            .preferredColorScheme(themeStore.mode.forcedScheme?.colorScheme)
+    }
+}
+
+extension ThemeScheme {
+    /// The SwiftUI scheme for this choice. `nil` leaves the choice to the device.
+    var colorScheme: ColorScheme {
+        switch self {
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
 @main
 struct StillPointApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationCoordinator.self) private var pushNotificationCoordinator
@@ -28,8 +50,7 @@ struct StillPointApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .preferredColorScheme(.dark)
+            ThemedRootView()
         }
         .modelContainer(for: [User.self, Session.self, Thought.self])
     }

@@ -13,6 +13,9 @@ import StillPointShared
 struct SettingsView: View {
     let appVM: AppViewModel
     @State private var notificationPrefs = NotificationPreferencesViewModel()
+    /// #30: the shared appearance choice. Reading it here puts this view on the
+    /// observation graph, so the segmented control tracks changes from any window.
+    private var themeStore: ThemeModePreferenceStore { ThemeModePreferenceStore.shared }
     @State private var isPublic: Bool = false
     @State private var aphorismsEnabled: Bool = false
     @State private var sessionIntroEnabled: Bool = true
@@ -54,6 +57,8 @@ struct SettingsView: View {
                 )
 
                 AppBlockingSettingsView(manager: appVM.appBlockingManager)
+
+                appearanceSection
 
                 notificationsLinkSection
 
@@ -121,6 +126,35 @@ struct SettingsView: View {
             guard appVM.currentUser != nil else { return }
             syncFromCurrentUser()
         }
+    }
+
+    /// #30: the Light / Dark / System selector. Device-local, so it is stored in
+    /// `UserDefaults` and never sent to the account. Every scene shares
+    /// `ThemeModePreferenceStore`, so the picker and every window agree.
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: SPSpacing.s2) {
+            Text("Appearance")
+                .font(SPFont.mono(13))
+                .foregroundStyle(Color(SPColor.fg))
+            Picker("Appearance", selection: Binding(
+                get: { themeStore.mode },
+                set: { themeStore.setMode($0) }
+            )) {
+                Text("Light").tag(ThemeMode.light)
+                Text("Dark").tag(ThemeMode.dark)
+                Text("System").tag(ThemeMode.system)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("settings.appearancePicker")
+        }
+        .padding(SPSpacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SPColor.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SPColor.border1)
+        )
     }
 
     private var notificationsLinkSection: some View {
