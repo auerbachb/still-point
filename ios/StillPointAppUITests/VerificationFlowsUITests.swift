@@ -233,12 +233,10 @@ extension StillPointAppUITests {
         tapByStableCenter(confirm, in: app)
         waitForRoot("session", in: app, failureMessage: "Combined sit did not start", assertColdStart: false)
 
+        // The sit runs to its natural end. Never fall back to End Early: that would credit
+        // neither track and fail the both-track assertions below for the wrong reason.
         let completionRoot = app.otherElements["root.currentView.completion"]
-        if !completionRoot.waitForExistence(timeout: 12) {
-            let endEarly = app.buttons["session.endEarlyButton"]
-            if endEarly.waitForExistence(timeout: 8) { tapByStableCenter(endEarly, in: app) }
-        }
-        XCTAssertTrue(completionRoot.waitForExistence(timeout: 35), "Completion screen did not appear")
+        XCTAssertTrue(completionRoot.waitForExistence(timeout: 90), "Combined sit did not reach its natural completion")
         attachScreenshot("1076-combined-completion", of: app)
         let returnButton = app.buttons["completion.returnButton"]
         XCTAssertTrue(returnButton.waitForExistence(timeout: 8))
@@ -288,37 +286,76 @@ extension StillPointAppUITests {
         attachScreenshot("1076-no-combine-single-track", of: single)
     }
 
-    /// Issue #1076 scenario 2: ending a combined sit early credits nothing, leaves the day
-    /// numbers alone and offers the action again.
+    /// Starts a combined sit from Home (both tracks due) and returns the day numbers
+    /// Home showed before it.
     @MainActor
-    func testIssue1076_endingCombinedSitEarlyCreditsNothing() throws {
-        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
-        app.launchEnvironment["SP_UI_TEST_DUAL_TRACK"] = "1"
-        app.launch()
+    private func startCombinedSitAndReturnDayNumbers(_ app: XCUIApplication) -> [String] {
         waitForRoot("home", in: app, failureMessage: "Home screen did not appear", assertColdStart: false)
         let combineButton = app.buttons["home.combineButton"]
         scrollElementIntoVisibleFrame(combineButton, in: app)
         XCTAssertTrue(combineButton.waitForExistence(timeout: 10))
         let dayNumbersBefore = homeDayNumbers(in: app)
-
         tapByStableCenter(combineButton, in: app)
         let confirm = app.alerts.firstMatch.buttons["Combine anyway"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         tapByStableCenter(confirm, in: app)
         waitForRoot("session", in: app, failureMessage: "Combined sit did not start", assertColdStart: false)
+        return dayNumbersBefore
+    }
 
-        let abandon = app.buttons["session.abandonButton"]
-        XCTAssertTrue(abandon.waitForExistence(timeout: 8), "Abandon control should show during the sit")
-        attachScreenshot("1076-combined-sit-running", of: app)
-        tapByStableCenter(abandon, in: app)
-        waitForRoot("home", in: app, failureMessage: "Home did not return after ending the sit early", assertColdStart: false)
-
+    private func assertNothingCreditedAndCombineOfferedAgain(
+        in app: XCUIApplication,
+        dayNumbersBefore: [String],
+        screenshot: String
+    ) {
         XCTAssertEqual(doneTodayBadgeCount(in: app), 0, "Nothing should be credited")
         XCTAssertEqual(homeDayNumbers(in: app), dayNumbersBefore, "Day numbers should be unchanged")
         let offeredAgain = app.buttons["home.combineButton"]
         scrollElementIntoVisibleFrame(offeredAgain, in: app)
         XCTAssertTrue(offeredAgain.waitForExistence(timeout: 10), "The Combine action should be offered again")
-        attachScreenshot("1076-home-after-early-end", of: app)
+        attachScreenshot(screenshot, of: app)
+    }
+
+    /// Issue #1076 scenario 2: End Early on a combined sit credits nothing, leaves the day
+    /// numbers alone and offers the action again.
+    @MainActor
+    func testIssue1076_endEarlyOnCombinedSitCreditsNothing() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
+        app.launchEnvironment["SP_UI_TEST_DUAL_TRACK"] = "1"
+        app.launch()
+        let dayNumbersBefore = startCombinedSitAndReturnDayNumbers(app)
+
+        let endEarly = app.buttons["session.endEarlyButton"]
+        XCTAssertTrue(endEarly.waitForExistence(timeout: 8), "End Early control should show during the sit")
+        attachScreenshot("1076-combined-sit-running", of: app)
+        tapByStableCenter(endEarly, in: app)
+        let completionRoot = app.otherElements["root.currentView.completion"]
+        XCTAssertTrue(completionRoot.waitForExistence(timeout: 30), "End Early should open the completion screen")
+        let returnButton = app.buttons["completion.returnButton"]
+        XCTAssertTrue(returnButton.waitForExistence(timeout: 8))
+        scrollElementIntoVisibleFrame(returnButton, in: app)
+        tap(returnButton, thenWaitForRoot: "home", in: app)
+        assertNothingCreditedAndCombineOfferedAgain(
+            in: app, dayNumbersBefore: dayNumbersBefore, screenshot: "1076-home-after-end-early"
+        )
+    }
+
+    /// Issue #1076 scenario 2, the discard path: Abandon on a combined sit credits nothing
+    /// either. Separate from End Early, which saves the sit.
+    @MainActor
+    func testIssue1076_abandoningCombinedSitCreditsNothing() throws {
+        let app = makeApp(seedAuthenticated: true, resetStore: true, sessionSeconds: 600, timerMultiplier: 0.05)
+        app.launchEnvironment["SP_UI_TEST_DUAL_TRACK"] = "1"
+        app.launch()
+        let dayNumbersBefore = startCombinedSitAndReturnDayNumbers(app)
+
+        let abandon = app.buttons["session.abandonButton"]
+        XCTAssertTrue(abandon.waitForExistence(timeout: 8), "Abandon control should show during the sit")
+        tapByStableCenter(abandon, in: app)
+        waitForRoot("home", in: app, failureMessage: "Home did not return after abandoning", assertColdStart: false)
+        assertNothingCreditedAndCombineOfferedAgain(
+            in: app, dayNumbersBefore: dayNumbersBefore, screenshot: "1076-home-after-abandon"
+        )
     }
 
     // MARK: - Issue #949
@@ -395,6 +432,13 @@ extension StillPointAppUITests {
         tapSwitch(ambient, in: app)
         app.tap()  // lets the interruption monitor answer a microphone prompt
         waitForAccessibilityValue(ambient, wasOn ? "0" : "1", timeout: 8)
+        // The toggle flips at once; the save runs behind the microphone prompt. Wait until the
+        // fake backend has received the Settings request before leaving Settings.
+        let requestCount = app.descendants(matching: .any).matching(identifier: "uiTest.settingsRequestCount").firstMatch
+        XCTAssertTrue(requestCount.waitForExistence(timeout: 5), "Settings request marker missing")
+        let saved = NSPredicate(format: "value != %@", "0")
+        expectation(for: saved, evaluatedWith: requestCount)
+        waitForExpectations(timeout: 15)
         attachScreenshot("754-settings-after-toggle", of: app)
 
         tapByStableCenter(app.tabBars.buttons.element(boundBy: 0), in: app)
