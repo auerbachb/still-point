@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import type { SessionType } from "@/lib/constants";
 import type { MoodEntry } from "@/components/MoodMatrix";
 import { COMPLETION_RETURN_LABEL } from "@/lib/completionAutosave";
@@ -7,6 +8,7 @@ import { CompletionSummary } from "@/components/completion/CompletionSummary";
 import { MoodShiftSection, SessionNoteField } from "@/components/completion/CompletionFields";
 import { NotStoredBanner } from "@/components/completion/NotStoredBanner";
 import { ParkedBanner } from "@/components/completion/ParkedBanner";
+import { shouldPinReturnButton } from "@/components/completion/pinnedReturn";
 import { useCompactScrollPadding } from "@/components/completion/useCompactScrollPadding";
 import { useCompletionAutosave } from "@/components/completion/useCompletionAutosave";
 
@@ -77,32 +79,49 @@ export function CompletionScreen({
     onClearMoodMatrix,
   });
   const { returning } = autosave;
-  useCompactScrollPadding(compact);
+  // #979: the pin is decided once here, for both the button and the scroll padding.
+  const pinned = shouldPinReturnButton(compact);
+  const bottomReturnRef = useRef<HTMLButtonElement>(null);
+  useCompactScrollPadding(compact, pinned, bottomReturnRef);
 
   // One handler and one disabled state for both copies (#1183): the top button
   // saves the same way, so the owner never has to scroll to leave.
-  const returnButton = (position: "top" | "bottom") => (
-    <button
-      type="button"
-      data-testid={`completion-return-${position}`}
-      onClick={() => { void autosave.handleReturn(); }}
-      disabled={returning}
-      style={{
-        background: "none",
-        border: "1px solid var(--border-2)",
-        color: "var(--fg)",
-        fontFamily: "var(--font-serif)",
-        fontSize: "14px", fontStyle: "italic",
-        padding: "12px 36px", borderRadius: "30px",
-        minHeight: "44px",
-        cursor: returning ? "default" : "pointer",
-        opacity: returning ? 0.5 : 1,
-        marginTop: "8px",
-      }}
-    >
-      {COMPLETION_RETURN_LABEL}
-    </button>
-  );
+  // #979: on phones the bottom copy is pinned above the bottom nav (sticky
+  // inside the recap, so it returns to its in-flow spot at the document end).
+  // The pill gets the page background so the text behind it does not show.
+  const returnButton = (position: "top" | "bottom") => {
+    const pin = pinned && position === "bottom";
+    return (
+      <button
+        type="button"
+        ref={position === "bottom" ? bottomReturnRef : undefined}
+        data-testid={`completion-return-${position}`}
+        onClick={() => { void autosave.handleReturn(); }}
+        disabled={returning}
+        style={{
+          background: pin ? "rgb(var(--bg-rgb))" : "none",
+          border: "1px solid var(--border-2)",
+          color: "var(--fg)",
+          fontFamily: "var(--font-serif)",
+          fontSize: "14px", fontStyle: "italic",
+          padding: "12px 36px", borderRadius: "30px",
+          minHeight: "44px",
+          cursor: returning ? "default" : "pointer",
+          opacity: returning ? 0.5 : 1,
+          marginTop: "8px",
+          ...(pin
+            ? {
+              position: "sticky",
+              bottom: "calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))",
+              zIndex: 10,
+            }
+            : {}),
+        }}
+      >
+        {COMPLETION_RETURN_LABEL}
+      </button>
+    );
+  };
 
   return (
     <div style={{

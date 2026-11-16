@@ -45,6 +45,8 @@ type HomeViewProps = {
   onDismissFork?: () => void;
   onQuickBegin: () => void;
   onBreath?: () => void;
+  /** #680: open the focus game (its start screen first). The button only renders when set. */
+  onFocusGames?: () => void;
   /** #836: the focus goal counter; the button shows `focusSessionDuration` of it. */
   focusActivityDay?: number;
   /** #836: open the focus activity timer (#837: its category picker first).
@@ -398,6 +400,7 @@ export function HomeView({
   onDismissFork,
   onQuickBegin,
   onBreath,
+  onFocusGames,
   focusActivityDay = 1,
   onFocusActivity,
   focusActivityButtonRef,
@@ -587,6 +590,27 @@ export function HomeView({
       >
         Quick minute &middot; {QUICK_DURATION}s
       </button>
+
+      {onFocusGames && (
+        <button
+          type="button"
+          onClick={onFocusGames}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--border-2)",
+            color: "var(--fg-2)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            padding: "12px 24px",
+            borderRadius: "40px",
+            cursor: "pointer",
+          }}
+        >
+          Focus games
+        </button>
+      )}
 
       {onBreath && (
         <button

@@ -422,3 +422,34 @@ struct CombinedSitFixture: Decodable {
     let isCombineOffered: [OfferCase]
     let tracksCredited: [CreditedCase]
 }
+
+// MARK: - sandProgress (#1190)
+
+struct SandProgressFixture: Decodable {
+    struct Constants: Decodable {
+        let secondsPerTrip: Double
+        let maxTrips: Int
+        let carryShare: Double
+        let walkSeconds: Double
+    }
+    struct Expected: Decodable {
+        let tripCount: Int
+        let fraction: Double
+        let complete: Bool
+        let sourceFraction: Double
+        let destinationFraction: Double
+        let carrierPosition: Double
+        let carrying: Bool
+        let walkPhase: Double
+    }
+    struct Case: Decodable {
+        let name: String
+        let elapsedSeconds: Double
+        let totalSeconds: Double
+        let expected: Expected
+    }
+    let algorithm: String
+    let description: String
+    let constants: Constants
+    let cases: [Case]
+}

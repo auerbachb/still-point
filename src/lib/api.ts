@@ -1,4 +1,4 @@
-import type { FocusCategory } from "@/lib/constants";
+import type { SavedFocusCategory } from "@/lib/constants";
 import type { MoodMatrixPayload } from "@/lib/moodMatrix";
 
 export class ApiError extends Error {
@@ -64,7 +64,7 @@ export type Session = {
   sessionType: "standard" | "quick" | "breath" | "focus";
   /** #837: what a focus session was for. Null for other types and for focus
    *  sessions saved before categories; omitted by a server that predates them. */
-  focusCategory?: FocusCategory | null;
+  focusCategory?: SavedFocusCategory | null;
   /** #240: which daily track this sit advanced ("primary" | "second"). */
   track?: "primary" | "second";
   /** #769: today's two sits done as one. Stored on the primary track, it counts

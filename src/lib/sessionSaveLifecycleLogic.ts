@@ -11,7 +11,7 @@
 import type { BreathSessionResult } from "@/components/BreathCountView";
 import type { User } from "@/lib/api";
 import { combinedSitField, previewNextCombinedDuration } from "@/lib/combinedSit";
-import type { FocusCategory, SessionType, Track } from "@/lib/constants";
+import type { SavedFocusCategory, SessionType, Track } from "@/lib/constants";
 import type { FocusSessionResult } from "@/lib/focusActivity";
 import type { QueuedSessionRequest } from "@/lib/offlineSessionQueue";
 import type { SessionSaveOutcome } from "@/lib/sessionSaveOutcome";
@@ -139,7 +139,7 @@ export function buildBreathSessionRequest(
 export function buildFocusSessionRequest(
   result: FocusSessionResult,
   focusActivityDay: number,
-  focusCategory: FocusCategory | null,
+  focusCategory: SavedFocusCategory | null,
   calendarDate: string,
 ): SessionSaveRequest {
   return {

@@ -254,3 +254,24 @@ export type FocusActivityFixture = {
   }>;
   categories: Array<{ id: string; label: string; description: string }>;
 };
+
+export type SandProgressFixture = {
+  algorithm: string;
+  description: string;
+  constants: { secondsPerTrip: number; maxTrips: number; carryShare: number; walkSeconds: number };
+  cases: Array<{
+    name: string;
+    elapsedSeconds: number;
+    totalSeconds: number;
+    expected: {
+      tripCount: number;
+      fraction: number;
+      complete: boolean;
+      sourceFraction: number;
+      destinationFraction: number;
+      carrierPosition: number;
+      carrying: boolean;
+      walkPhase: number;
+    };
+  }>;
+};

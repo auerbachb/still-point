@@ -132,9 +132,14 @@ actor UITestAPIStore {
         // #669: a leftover minimal-view preference would start every subsequent
         // UI test with the session chrome collapsed to the countdown alone.
         MinimalSessionViewPrefs.resetPersistedPrefs()
+        // #1190: a leftover sand-carrier preference would swap the digits for the sand scene.
+        TimerDisplayPrefs.resetPersistedPrefs()
         // #730: clearing the key restores the opt-out default (on), so a test that
         // toggled the wake lock off cannot leave later runs starting opted out.
         WakeLockPrefs.resetPersistedPrefs()
+        // #30: a Light or Dark pick from one test would otherwise force that
+        // appearance on every later launch; clearing the key restores `.system`.
+        ThemePrefs.resetPersistedPrefs()
         LastAuthProvider.resetPersisted()
         // Flush the in-memory cache to cfprefsd so the immediately
         // following read sees the cleared state. Issue #266 follow-up.
