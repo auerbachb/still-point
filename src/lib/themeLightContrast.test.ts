@@ -35,6 +35,18 @@ const EXPLICIT_LIGHT = ':root[data-theme="light"] {';
 const SYSTEM_LIGHT = ':root:not([data-theme="dark"]) {';
 
 /**
+ * Control text drawn on a fill that sits inside a surface-1 panel (the Settings
+ * theme and breath-key groups, #1217). The panel is composited over the
+ * background, then the fill over the panel, then the text over that. A
+ * transparent fill (null) means the text sits directly on the panel.
+ */
+const TEXT_IN_PANEL: ReadonlyArray<readonly [text: string, fill: string | null]> = [
+  ["--fg-3", null], // unselected "System" theme option (#1217)
+  ["--accent-green-text", "--accent-green-bg-subtle"], // selected "Space" breath key (#1217)
+  ["--fg", "--surface-3"], // selected theme option
+] as const;
+
+/**
  * Text tokens drawn over a translucent fill token rather than the bare page
  * background. The fill is composited over the light background first, then the
  * text over that. Checking text against cream alone misses these (#1195).
@@ -140,6 +152,20 @@ describe("light palette text contrast (#1195)", () => {
         const text = composite({ ...ink, a: ink.a * opacity }, surface);
         const ratio = contrastRatio(text, surface);
         expect(ratio, `${textToken} on ${fillToken} at ${opacity}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it.each(TEXT_IN_PANEL)("%s reaches 4.5:1 inside a surface-1 panel (fill %s)", (textToken, fillToken) => {
+        const textValue = decls.get(textToken);
+        const panelValue = decls.get("--surface-1");
+        expect(textValue, `${textToken} missing from the light palette`).toBeDefined();
+        expect(panelValue, "--surface-1 missing from the light palette").toBeDefined();
+        const panel = composite(parseColour(panelValue!), background);
+        const surface = fillToken
+          ? composite(parseColour(decls.get(fillToken)!), panel)
+          : panel;
+        const text = composite(parseColour(textValue!), surface);
+        const ratio = contrastRatio(text, surface);
+        expect(ratio, `${textToken} in panel on ${fillToken ?? "panel"}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       });
     });
   }
