@@ -25,6 +25,17 @@ enum UITestSessionsFailureMode: Equatable, Sendable {
     }
 }
 
+/// Which dual-track state the seeded account starts in (#1199). Read from
+/// `SP_UI_TEST_DUAL_TRACK` and `SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE`.
+enum UITestDualTrackSeed: Equatable, Sendable {
+    /// No dual-track seed: the fixture account stays single-track.
+    case none
+    /// Dual-track on with no sit yet today, so both tracks are due.
+    case bothDue
+    /// Dual-track on with a completed Track One sit today, so only Track Two is due.
+    case primaryDone
+}
+
 struct UITestConfig: Sendable {
     let seedAuthenticated: Bool
     let resetStore: Bool
@@ -44,6 +55,19 @@ struct UITestConfig: Sendable {
     /// #887: the held `me()` read answers as the second account
     /// (`SP_UI_TEST_SECOND_ACCOUNT`).
     let secondAccount: Bool
+    /// #1199: the dual-track account state the seeded store starts in.
+    let dualTrackSeed: UITestDualTrackSeed
+    /// #1199: an active miss-a-day recovery ramp on the primary track
+    /// (`SP_UI_TEST_RECOVERY_RAMP`).
+    let recoveryRampSeed: Bool
+    /// #1199: web-logged focus sessions, with and without a category
+    /// (`SP_UI_TEST_FOCUS_HISTORY`).
+    let focusHistorySeed: Bool
+
+    /// True when any #1199 state seed is set, so the store is built from the seed.
+    var hasStateSeed: Bool {
+        dualTrackSeed != .none || recoveryRampSeed || focusHistorySeed
+    }
 
     /// #896: a signed-in config with every forced failure off, for the package's
     /// unit tests of the fake server's rules.
@@ -57,7 +81,10 @@ struct UITestConfig: Sendable {
         forceUsernameConflict: false,
         snapshotSeed: false,
         holdMeSeconds: nil,
-        secondAccount: false
+        secondAccount: false,
+        dualTrackSeed: .none,
+        recoveryRampSeed: false,
+        focusHistorySeed: false
     )
 
     static func from(environment env: [String: String]) -> UITestConfig? {
@@ -72,7 +99,11 @@ struct UITestConfig: Sendable {
             forceUsernameConflict: truthy(env["SP_UI_TEST_FORCE_USERNAME_CONFLICT"]),
             snapshotSeed: truthy(env["SP_UI_TEST_SNAPSHOT_SEED"]),
             holdMeSeconds: env["SP_UI_TEST_HOLD_ME_SECONDS"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil },
-            secondAccount: truthy(env["SP_UI_TEST_SECOND_ACCOUNT"])
+            secondAccount: truthy(env["SP_UI_TEST_SECOND_ACCOUNT"]),
+            dualTrackSeed: truthy(env["SP_UI_TEST_DUAL_TRACK_PRIMARY_DONE"]) ? .primaryDone
+                : truthy(env["SP_UI_TEST_DUAL_TRACK"]) ? .bothDue : .none,
+            recoveryRampSeed: truthy(env["SP_UI_TEST_RECOVERY_RAMP"]),
+            focusHistorySeed: truthy(env["SP_UI_TEST_FOCUS_HISTORY"])
         )
     }
 
